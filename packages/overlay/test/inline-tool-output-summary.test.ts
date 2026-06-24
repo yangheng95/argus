@@ -32,6 +32,22 @@ describe("inline tool output", () => {
     expect(source).not.toContain("src={resolveResourceUrl(evidence().screenshotUrl)}")
   })
 
+  test("generic tool image attachments render through file parts", () => {
+    const source = readFileSync(INLINE_TOOL_PART, "utf8")
+    const css = readFileSync(MESSAGES_CSS, "utf8")
+
+    expect(source).toContain('import { FilePart } from "./FilePart"')
+    expect(source).toContain("function toolImageAttachments")
+    expect(source).toContain("Array.isArray(state.attachments)")
+    expect(source).toContain("Array.isArray(part?.attachments)")
+    expect(source).toContain('<section class="msg-tool-attachments">')
+    expect(source).toContain("<For each={attachmentImages()}>")
+    expect(source).toContain("<FilePart part={attachment} />")
+    expect(source).not.toContain("browser_preview_compare_regions")
+    expect(css).toContain(".msg-tool-attachments")
+    expect(css).toContain(".msg-tool-attachments .msg-img-wrap")
+  })
+
   test("tool diff file openers use the Button primitive", () => {
     const source = readFileSync(INLINE_TOOL_PART, "utf8")
     const css = readFileSync(MESSAGES_CSS, "utf8")

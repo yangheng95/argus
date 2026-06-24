@@ -12,6 +12,7 @@ import { extToLang, renderCodeBlock } from "../utils/markdown"
 import { selectedTaskDirectory } from "../store/board"
 import { TodoListPart, extractTodos } from "./TodoListPart"
 import { StaticTextPart } from "./TextPart"
+import { FilePart } from "./FilePart"
 import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-change-summary"
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
@@ -60,6 +61,53 @@ function BrowserEvidenceImage(props: { url: string; alt: string }) {
 function browserEvidenceAlt(evidence: { title: string; url: string; viewport: string }): string {
   const label = evidence.title || evidence.url || evidence.viewport
   return label ? t("tool.browser_observation_alt_with_label", { label }) : t("tool.browser_observation_alt")
+}
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return ""
+}
+
+type ToolImageAttachment = {
+  type: "file"
+  url: string
+  mime?: string
+  mediaType?: string
+  filename?: string
+}
+
+function isImageAttachment(attachment: Record<string, any>): boolean {
+  const mime = firstString(attachment.mime, attachment.mediaType).toLowerCase()
+  const url = firstString(attachment.url)
+  if (mime.startsWith("image/")) return true
+  return /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(url)
+}
+
+function toolImageAttachments(part: any, state: Record<string, any>): ToolImageAttachment[] {
+  const source = Array.isArray(state.attachments)
+    ? state.attachments
+    : Array.isArray(part?.attachments)
+      ? part.attachments
+      : []
+  return source.flatMap((attachment: unknown): ToolImageAttachment[] => {
+    if (!isRecord(attachment)) return []
+    const url = firstString(attachment.url)
+    if (!url || !isImageAttachment(attachment)) return []
+    const mime = firstString(attachment.mime)
+    const mediaType = firstString(attachment.mediaType)
+    const filename = firstString(attachment.filename, attachment.name)
+    return [
+      {
+        type: "file",
+        url,
+        ...(mime ? { mime } : {}),
+        ...(mediaType ? { mediaType } : {}),
+        ...(filename ? { filename } : {}),
+      },
+    ]
+  })
 }
 const READ_NOTE_RE = /^\((?:Showing|End of file|Output capped at)/
 
@@ -254,6 +302,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     const changes = toolFileChangesFromState(state(), selectedTaskDirectory())
     return changes.length > 0 ? changes : null
   })
+  const attachmentImages = createMemo(() => (status() === "completed" ? toolImageAttachments(props.part, state()) : []))
   const showStructuredOutput = createMemo(() => (toolDiffs()?.length ?? 0) > 0)
   const browserEvidence = createMemo(() => {
     if (status() !== "completed") return null
@@ -354,6 +403,11 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
                     </div>
                   </section>
                 )}
+              </Show>
+              <Show when={attachmentImages().length > 0}>
+                <section class="msg-tool-attachments">
+                  <For each={attachmentImages()}>{(attachment) => <FilePart part={attachment} />}</For>
+                </section>
               </Show>
               <Show when={showPlainOutput()}>
                 {(_) => {
