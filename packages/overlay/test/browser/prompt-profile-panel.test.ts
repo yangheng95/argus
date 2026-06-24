@@ -46,13 +46,13 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
 
   let config: Record<string, unknown> = {
     model: "opencorvus/gpt-5-nano",
-    prompt_profile: { active: "frontend" },
+    prompt_profile: { active: "frontend-replica" },
   }
   const patches: Record<string, unknown>[] = []
 
   const basePromptProfiles = {
-    active: "frontend",
-    project_active: "frontend",
+    active: "frontend-replica",
+    project_active: "frontend-replica",
     session_active: null,
     default: "general",
     targets: [
@@ -88,8 +88,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         agents: {},
       },
       {
-        id: "frontend",
-        label: "Frontend",
+        id: "frontend-replica",
+        label: "Frontend Replica",
         description: "Bias toward visual evidence, layout fidelity, and real UI review.",
         built_in: true,
         editable: false,
@@ -100,8 +100,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         },
       },
       {
-        id: "testing",
-        label: "Testing",
+        id: "frontend-automation-debug",
+        label: "Frontend Automation Debug",
         description: "Bias toward reproducible verification, regression coverage, and acceptance evidence.",
         built_in: true,
         editable: false,
@@ -160,8 +160,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       prompt: "Existing user append for build.",
       editable_prompt: "Existing user append for build.",
       effective_prompt:
-        "Core build prompt.\n\n[Frontend profile]\nVerify with a real browser and screenshot review before closing the task.\n\n[User append]\nExisting user append for build.",
-      active_profile: "frontend",
+        "Core build prompt.\n\n[Frontend Replica profile]\nVerify with a real browser and screenshot review before closing the task.\n\n[User append]\nExisting user append for build.",
+      active_profile: "frontend-replica",
       profile_prompt: "Verify with a real browser and screenshot review before closing the task.",
       configured_prompt: "Existing user append for build.",
       default_prompt: "Core build prompt.",
@@ -212,6 +212,15 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/mounts")
+      return send({
+        scope: "project",
+        skills: [],
+        agents: [],
+        matrix: [],
+        project_mounts: { agents: {} },
+        unmounted_count: 0,
+      })
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory") return send([])
     if (path === "/panel/knowledge/preference") return send([])
@@ -273,7 +282,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       const promptCards = document.querySelectorAll("[data-prompt-entry]").length
       return { list, readonly, editors, promptCards }
     })
-    assert.deepEqual(builtInState.list, ["General", "Frontend", "Testing", "Custom Squad"])
+    assert.deepEqual(builtInState.list, ["General", "Frontend Replica", "Frontend Automation Debug", "Custom Squad"])
     assert.match(builtInState.readonly, /read-only/i)
     assert.equal(builtInState.editors, 0)
     assert.equal(builtInState.promptCards, 0)
@@ -304,7 +313,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       }
     })
     assert.deepEqual(selectedProfileListItem, {
-      labels: ["General", "Frontend", "Testing", "Custom Squad"],
+      labels: ["General", "Frontend Replica", "Frontend Automation Debug", "Custom Squad"],
       primitiveRows: 4,
       rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON"],
       legacyRows: 0,

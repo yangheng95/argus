@@ -24,7 +24,7 @@ function resetStores(): void {
     connected: true,
     config: {
       prompt_profile: {
-        active: "frontend",
+        active: "frontend-replica",
       },
     },
   })
@@ -222,12 +222,12 @@ describe("prompt profile task session owner", () => {
           ok: true,
           headers: {},
           body: {
-            active: "frontend",
-            project_active: "frontend",
-            session_active: "frontend",
-            default: "frontend",
+            active: "frontend-replica",
+            project_active: "frontend-replica",
+            session_active: "frontend-replica",
+            default: "frontend-replica",
             targets: [],
-            profiles: [{ id: "frontend", label: "Frontend" }],
+            profiles: [{ id: "frontend-replica", label: "Frontend Replica" }],
           },
         }
       },
@@ -259,12 +259,12 @@ describe("prompt profile task session owner", () => {
       release = resolve
     })
     const responseBody = {
-      active: "frontend",
-      project_active: "frontend",
-      session_active: "frontend",
-      default: "frontend",
+      active: "frontend-replica",
+      project_active: "frontend-replica",
+      session_active: "frontend-replica",
+      default: "frontend-replica",
       targets: [],
-      profiles: [{ id: "frontend", label: "Frontend" }],
+      profiles: [{ id: "frontend-replica", label: "Frontend Replica" }],
     }
     __setHostTransportForTest({
       kind: "browser",

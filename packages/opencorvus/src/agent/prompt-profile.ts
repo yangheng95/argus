@@ -1,7 +1,7 @@
 import z from "zod"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
-export const DEFAULT_PROMPT_PROFILE_ID = "frontend"
+export const DEFAULT_PROMPT_PROFILE_ID = "frontend-replica"
 export const PROMPT_PROFILE_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
 export const PromptProfileIDSchema = z
@@ -138,38 +138,38 @@ export namespace PromptProfile {
       description: "No domain-specific expert overlay.",
       agents: {},
     },
-    frontend: {
-      label: "Frontend",
-      description: "UI, interaction, visual verification, and design-system focused expert squad.",
+    "frontend-replica": {
+      label: "Frontend Replica",
+      description: "Reference parity, webpage replication, visual evidence, and design-system focused expert squad.",
       agents: {
         coding:
-          "Prioritize layout, responsive behavior, interaction state, and visible regressions. Keep fixes inside the existing component system and verify them in the rendered UI.",
+          "Prioritize source information architecture, layout density, responsive behavior, interaction state, and visible parity. Keep fixes inside the existing component system and verify rendered UI.",
         "coding-assistant":
-          "Answer frontend questions in terms of component structure, style changes, interaction semantics, and visible regressions. Prefer guidance that can be checked in the rendered UI.",
+          "Answer replica questions in terms of source structure, component mapping, style rhythm, interaction semantics, and visible parity that can be checked in the rendered UI.",
         general:
-          "Anchor multi-step frontend work to real screens, state changes, accessibility, and user-visible behavior.",
+          "Anchor multi-step frontend replica work to reference screens, module order, state changes, accessibility, and user-visible behavior.",
         explore:
-          "Map component boundaries, styling conventions, state changes, and prior visual evidence from the source. Do not mutate the workspace.",
+          "Map reference modules, component boundaries, styling conventions, state changes, and prior visual evidence from the source. Do not mutate the workspace.",
         mission:
-          "Keep frontend work tied to the target surface, the interaction states that must work, and the evidence that shows the UI behaves correctly.",
+          "Keep frontend replica work tied to the target surface, the source-backed structure, the interaction states that must work, and rendered evidence.",
         "intent-analysis":
-          "Resolve frontend requests into concrete screen changes, interaction flows, breakpoints, accessibility expectations, and missing reference evidence.",
+          "Resolve replica requests into source page scope, module order, concrete screen changes, interaction flows, breakpoints, and missing reference evidence.",
         requirements:
-          "Write frontend requirements as observable truths: information architecture, component states, responsive rules, accessibility, and visual acceptance conditions.",
+          "Write replica requirements as observable truths: information architecture, module sequence, component states, responsive rules, and visual acceptance conditions.",
         architect:
-          "Turn frontend requirements into component boundaries, data flow, ownership, and a verification plan tied to the rendered surface.",
+          "Turn replica requirements into component boundaries, data flow, ownership, and verification tied to reference evidence and the rendered surface.",
         "frontend-design":
-          "Focus on visual structure, reference evidence, layout hierarchy, spacing, alignment, and the UI changes implementation must preserve.",
+          "Extract the reference into a source-backed replica contract: information architecture, module order, layout density, spacing, interaction semantics, and preservation evidence.",
         "frontend-research":
-          "Produce a source-backed frontend brief that separates confirmed facts from assumptions and defines the target surface, key interaction behavior, and required evidence.",
+          "Produce a source-backed replica brief that separates confirmed facts from assumptions and defines target surfaces, key interactions, and evidence gaps.",
         build:
-          "Convert the approved frontend target into working code without drifting the requested structure or behavior. Finish at a verifiable UI result, not a partial code change.",
+          "Convert the approved replica target into working code without drifting source structure, layout density, or behavior. Finish at a verifiable rendered result.",
         "visual-qa":
-          "Audit the rendered UI for layout, interaction, and state mismatches. Call out the concrete defect and keep review tied to visible evidence.",
+          "Audit rendered replica surfaces for structure, spacing, interaction, and state mismatches. Name concrete defects and tie review to visible evidence.",
         integrity:
-          "Treat frontend delivery as incomplete unless the requested surface, interaction behavior, and visual acceptance conditions are demonstrated.",
+          "Treat replica delivery as incomplete unless source structure, requested surface, interaction behavior, and visual acceptance conditions are demonstrated.",
         orchestrator:
-          "Keep frontend decisions grounded in the exact surface being changed, trustworthy reference evidence, and explicit visual acceptance.",
+          "Keep frontend replica decisions grounded in the exact reference surface, source-backed evidence, completed goal state, and explicit visual acceptance.",
       },
     },
     backend: {
@@ -236,44 +236,45 @@ export namespace PromptProfile {
           "Keep algorithm decisions grounded in the exact correctness claim, relevant constraints, and the evidence threshold required to accept the result.",
       },
     },
-    testing: {
-      label: "Testing",
-      description: "Test design, regression coverage, reproducible evidence, and acceptance-risk focused expert squad.",
+    "frontend-automation-debug": {
+      label: "Frontend Automation Debug",
+      description:
+        "Frontend automation, browser runtime debugging, visual regression, and reproducible evidence focused expert squad.",
       agents: {
         coding:
-          "Prioritize testable behavior, isolated failure modes, regression coverage, and reproducible verification. Finish changes with evidence that the behavior fails before and passes after.",
+          "Prioritize browser-reproducible frontend failures, selectors, interaction timing, screenshots, and focused fixes that prove the rendered behavior now passes.",
         "coding-assistant":
-          "Explain testing work through observable behavior, test boundaries, fixtures, assertions, and regression risk. Prefer advice that names the verification path the user can run.",
+          "Explain frontend automation debugging through observable UI behavior, selectors, fixtures, assertions, screenshots, and the exact verification path.",
         general:
-          "Anchor multi-step testing work to explicit behavior claims, failure reproduction, controlled fixtures, regression scope, and evidence that can be rerun.",
+          "Anchor multi-step frontend debug work to reproducible browser failures, controlled fixtures, interaction traces, regression scope, and rerunnable evidence.",
         explore:
-          "Map existing test structure, helpers, fixtures, owners, and uncovered behavior from source evidence. Identify where verification belongs without mutating the workspace.",
+          "Map frontend test structure, browser helpers, preview wiring, fixtures, selectors, and uncovered visible behavior from source evidence without mutating the workspace.",
         mission:
-          "Keep testing-focused missions tied to acceptance criteria, reproducible failure cases, verification ownership, and evidence that proves the delivered change stays correct.",
+          "Keep frontend automation missions tied to acceptance criteria, reproducible UI failures, verification ownership, and evidence that proves the fix remains correct.",
         "intent-analysis":
-          "Resolve testing requests into behavior under test, failure reproduction, target layer, fixtures, assertions, missing evidence, and acceptance thresholds.",
+          "Resolve frontend debug requests into browser state, reproduction steps, target layer, fixtures, selectors, missing evidence, and acceptance thresholds.",
         requirements:
-          "Write testing requirements as observable behavior, preconditions, assertions, negative cases, data fixtures, and evidence required to accept the change.",
+          "Write frontend debug requirements as observable UI behavior, preconditions, assertions, negative cases, fixture data, and screenshot evidence.",
         architect:
-          "Turn testing requirements into verification boundaries: unit, integration, runtime, and visual checks mapped to owned paths, contracts, and known failure modes.",
+          "Turn frontend debug requirements into verification boundaries across component, integration, runtime, and visual checks mapped to owned paths and failure modes.",
         "frontend-design":
-          "Define frontend handoff details that make later tests precise: visible states, interaction outcomes, data contracts, breakpoints, and screenshot evidence expectations.",
+          "Define handoff details that make automation precise: visible states, interaction outcomes, selectors, data contracts, breakpoints, and screenshot expectations.",
         "frontend-research":
-          "Produce frontend investigation packets that make tests actionable: selectors, states, user flows, data dependencies, visual risks, and evidence gaps for each source page.",
+          "Produce frontend investigation packets for automation: selectors, states, user flows, data dependencies, visual risks, and evidence gaps for each source page.",
         build:
-          "Convert the approved change into code plus focused verification. Add or update tests that expose the changed behavior and report exact commands and remaining risk.",
+          "Convert the approved frontend fix into code plus focused automation. Add or update checks that expose the visible behavior and report exact commands.",
         "visual-qa":
-          "Audit rendered surfaces as executable checks: interactions, layout states, accessibility signals, and screenshots must support any acceptance claim or defect report.",
+          "Audit rendered surfaces as executable checks: interactions, layout states, accessibility signals, and screenshots must support every acceptance claim.",
         "deep-research":
-          "Research testing tools, framework semantics, environment constraints, and current documentation only when implementation depends on them. Separate facts from assumptions.",
+          "Research browser automation tools, framework semantics, environment constraints, and current documentation only when implementation depends on them.",
         "fact-check":
-          "Check testing claims against sources: command results, library behavior, version limits, documented semantics, and whether stated evidence supports the claim.",
+          "Check frontend automation claims against command results, browser behavior, version limits, documented semantics, and whether evidence supports them.",
         "goal-workload-analyst":
-          "Challenge goals for missing verification scope, oversized test surfaces, fragile fixtures, hidden runtime dependencies, and unclear acceptance evidence before execution begins.",
+          "Challenge goals for missing frontend verification scope, oversized automation surfaces, fragile fixtures, hidden runtime dependencies, and unclear evidence.",
         integrity:
-          "Treat delivery as incomplete when changed behavior lacks targeted tests, reproduced failure evidence, or clear residual-risk notes. Verify claims against code and recorded commands.",
+          "Treat frontend delivery as incomplete when changed behavior lacks targeted automation, reproduced failure evidence, screenshots, or residual-risk notes.",
         orchestrator:
-          "Keep testing decisions grounded in the exact behavior under review, the narrowest responsible owner, and acceptance evidence that can be rerun before final completion.",
+          "Keep frontend debug decisions grounded in the exact visible failure, the narrowest responsible owner, and browser evidence that can be rerun.",
       },
     },
   }

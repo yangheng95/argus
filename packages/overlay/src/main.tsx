@@ -1301,7 +1301,7 @@ function deleteGoal(goalId: string): void {
 // via onSuggestionConsumed after it either injects or drops the value.
 const [pendingSuggestion, setPendingSuggestion] = createSignal("")
 const [promptProfiles, setPromptProfiles] = createSignal<PromptProfileOption[]>([])
-const [activePromptProfile, setActivePromptProfile] = createSignal("frontend")
+const [activePromptProfile, setActivePromptProfile] = createSignal("frontend-replica")
 // Track the previous task-busy state so we only fire once per finish edge.
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null

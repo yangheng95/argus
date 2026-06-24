@@ -13,6 +13,7 @@ import { Session } from "@/session"
 import type { AgentReport } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
+import { PromptProfile, PromptProfileIDSchema } from "@/agent/prompt-profile"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
@@ -3341,6 +3342,56 @@ export function createOrchestratorTools(input: {
   }
 
   const tools = {
+    select_expert_squad: tool({
+      description:
+        "Select the active expert squad prompt profile for this task's root session. " +
+        "This writes only `prompt_profile.active` to the root session config overlay, so future Orchestrator wakes and dispatched agents compose prompts from that expert squad. " +
+        "It does not dispatch work, reroute the workflow, change models, change tools, mutate per-agent prompt fields, or infer the profile from keywords.",
+      inputSchema: z
+        .object({
+          profile_id: PromptProfileIDSchema.describe(
+            "Exact prompt profile id from the backend prompt-profile catalog, for example `frontend-replica` or `frontend-automation-debug`.",
+          ),
+          reason: z
+            .string()
+            .min(1)
+            .describe("Concrete evidence for why this task should use that expert squad from the next turn onward."),
+        })
+        .strict(),
+      execute: async ({ profile_id, reason }) => {
+        const task = requireTask(taskID)
+        if (!task.session_id) {
+          throw new Error(`Task ${taskID} has no root session; cannot select expert squad ${profile_id}.`)
+        }
+        const baseConfig = await EffectiveConfig.base({ sessionID: task.session_id })
+        PromptProfile.assertKnownProfileID(profile_id, baseConfig)
+        const before = (await EffectiveConfig.effective({ sessionID: task.session_id })).prompt_profile.active
+        await Session.mergeConfigOverlay({
+          sessionID: task.session_id,
+          patch: { prompt_profile: { active: profile_id } },
+        })
+        return [
+          `Expert squad selected for task ${taskID}.`,
+          `- previous: ${before}`,
+          `- active: ${profile_id}`,
+          `- reason: ${reason}`,
+          "This change affects future prompt composition through the root session overlay only.",
+        ].join("\n")
+      },
+    }),
+    skill: tool({
+      description:
+        "Search or load mounted Orchestrator skills. The session loop replaces this placeholder with the canonical turn-scoped SkillTool before the model can call it.",
+      inputSchema: z
+        .object({
+          query: z.string().optional(),
+          name: z.string().optional(),
+        })
+        .strict(),
+      execute: async (_input): Promise<string> => {
+        throw new Error("Orchestrator skill tool was not rebound to the canonical SkillTool for this turn.")
+      },
+    }),
     requirements: tool({
       description:
         "OPTIONAL stage agent. Parse the user's task into REQ-N requirements plus " +

@@ -281,6 +281,37 @@ Use this skill.
     }
   })
 
+  test("orchestrator can search and load builtin expert-squad skills", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const orchestrator = await Agent.get("orchestrator")
+          expect(orchestrator).toBeDefined()
+          const tool = await SkillTool.init({ agent: orchestrator })
+          const ctx: Tool.Context = { ...baseCtx, agent: "orchestrator", ask: async () => {} }
+
+          const search = await tool.execute({ query: "frontend replica expert squad" }, ctx)
+          expect(search.output).toContain("<name>frontend-replica-expert-squad</name>")
+          expect(search.output).toContain("<required_tools>select_expert_squad</required_tools>")
+          expect(search.output).not.toContain("<name>research-report</name>")
+
+          const loaded = await tool.execute({ name: "frontend-replica-expert-squad" }, ctx)
+          expect(loaded.output).toContain('<skill_content name="frontend-replica-expert-squad">')
+          expect(loaded.output).toContain('select_expert_squad')
+          expect(loaded.output).toContain('profile_id: "frontend-replica"')
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("removed webpage-generate and ainvest design system builtins are not visible or loadable", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME

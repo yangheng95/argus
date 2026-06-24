@@ -231,16 +231,16 @@ function conversationPayload() {
 
 function promptProfileCatalog() {
   return {
-    active: "frontend",
-    project_active: "frontend",
+    active: "frontend-replica",
+    project_active: "frontend-replica",
     session_active: null,
-    default: "frontend",
+    default: "frontend-replica",
     targets: [],
     profiles: [
       {
-        id: "frontend",
-        label: "Frontend",
-        description: "Frontend profile.",
+        id: "frontend-replica",
+        label: "Frontend Replica",
+        description: "Frontend Replica profile.",
         built_in: true,
         editable: false,
         agents: {},
@@ -344,6 +344,15 @@ test(
       if (path === "/session") return json([])
       if (path === "/coding/sessions") return json({ sessions: [] })
       if (path === "/skill/installed" || path === "/skill") return json([])
+      if (path === "/skill/mounts")
+        return json({
+          scope: "project",
+          skills: [],
+          agents: [],
+          matrix: [],
+          project_mounts: { agents: {} },
+          unmounted_count: 0,
+        })
       if (path === "/skill/market") return json([])
       if (path === "/mcp") return json({})
       if (path === "/panel/knowledge/memory") return json([])

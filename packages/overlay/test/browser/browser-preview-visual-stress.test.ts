@@ -556,17 +556,17 @@ test(
       interactions: [],
     }
     const promptProfileCatalog = {
-      active: "frontend",
-      project_active: "frontend",
+      active: "frontend-replica",
+      project_active: "frontend-replica",
       session_active: null,
-      default: "frontend",
+      default: "frontend-replica",
       targets: [
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
       ],
       profiles: [
         {
-          id: "frontend",
-          label: "Frontend",
+          id: "frontend-replica",
+          label: "Frontend Replica",
           description: "Frontend implementation profile.",
           built_in: true,
           editable: false,
@@ -706,13 +706,22 @@ test(
         if (path === "/provider/auth") return json({})
         if (path === "/config/prompt-profile") return json(promptProfileCatalog)
         if (path === "/config" && req.method === "PATCH")
-          return json({ model: "", prompt_profile: { active: "frontend" } })
-        if (path === "/config") return json({ model: "", prompt_profile: { active: "frontend" } })
+          return json({ model: "", prompt_profile: { active: "frontend-replica" } })
+        if (path === "/config") return json({ model: "", prompt_profile: { active: "frontend-replica" } })
         if (path === "/log" && req.method === "POST") return json({ ok: true })
         if (path === "/channel") return json([])
         if (path === "/executor") return json([])
         if (path === "/agent") return json([])
         if (path === "/skill/installed" || path === "/skill") return json([])
+        if (path === "/skill/mounts")
+          return json({
+            scope: "project",
+            skills: [],
+            agents: [],
+            matrix: [],
+            project_mounts: { agents: {} },
+            unmounted_count: 0,
+          })
         if (path === "/skill/market") return json([])
         if (path === "/mcp") return json({})
         if (path === "/panel/knowledge/memory") return json([])

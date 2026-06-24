@@ -67,8 +67,8 @@ const promptProfileScenarios = [
         agents: {},
       },
       {
-        id: "frontend",
-        label: "Frontend",
+        id: "frontend-replica",
+        label: "Frontend Replica",
         description: "Visual UI verification squad.",
         built_in: true,
         editable: false,
@@ -91,8 +91,8 @@ const promptProfileScenarios = [
         agents: {},
       },
       {
-        id: "testing",
-        label: "Testing",
+        id: "frontend-automation-debug",
+        label: "Frontend Automation Debug",
         description: "Regression and evidence squad.",
         built_in: true,
         editable: false,
@@ -101,16 +101,16 @@ const promptProfileScenarios = [
     ],
     expectedLabels: [
       "General Baseline prompt set.",
-      "Frontend Visual UI verification squad.",
+      "Frontend Replica Visual UI verification squad.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
-      "Testing Regression and evidence squad.",
+      "Frontend Automation Debug Regression and evidence squad.",
     ],
     expectedUnselectedLabels: [
       "General Baseline prompt set.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
-      "Testing Regression and evidence squad.",
+      "Frontend Automation Debug Regression and evidence squad.",
     ],
   },
   {
@@ -127,7 +127,7 @@ const promptProfileScenarios = [
         agents: {},
       },
       {
-        id: "frontend",
+        id: "frontend-replica",
         label: "前端",
         description: "视觉界面验证专家团。",
         built_in: true,
@@ -151,7 +151,7 @@ const promptProfileScenarios = [
         agents: {},
       },
       {
-        id: "testing",
+        id: "frontend-automation-debug",
         label: "测试",
         description: "回归和证据专家团。",
         built_in: true,
@@ -209,8 +209,8 @@ for (const scenario of promptProfileScenarios) {
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const promptProfileCatalog = {
-      active: "frontend",
-      project_active: "frontend",
+      active: "frontend-replica",
+      project_active: "frontend-replica",
       session_active: null,
       default: "general",
       targets: [],
@@ -253,7 +253,7 @@ for (const scenario of promptProfileScenarios) {
       if (path === "/config" && (req.method === "GET" || req.method === "PATCH")) {
         return send({
           model: "opencorvus/gpt-5-nano",
-          prompt_profile: { active: "frontend" },
+          prompt_profile: { active: "frontend-replica" },
         })
       }
       if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
@@ -272,6 +272,15 @@ for (const scenario of promptProfileScenarios) {
         return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
       }
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts")
+        return send({
+          scope: "project",
+          skills: [],
+          agents: [],
+          matrix: [],
+          project_mounts: { agents: {} },
+          unmounted_count: 0,
+        })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])

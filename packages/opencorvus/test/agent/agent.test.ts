@@ -296,20 +296,21 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(orchestrator?.tools?.include).toContain("cancel_subagent")
       expect(orchestrator?.tools?.include).toContain("propose_task")
       expect(orchestrator?.tools?.include).toContain("add_goal")
+      expect(orchestrator?.tools?.include).toContain("select_expert_squad")
       expect(orchestrator?.tools?.include).toContain("browser_preview")
       expect(orchestrator?.tools?.include).not.toContain("browser_preview_bind_local_module")
       expect(orchestrator?.tools?.include).not.toContain("browser_preview_compare_regions")
       expect(orchestrator?.tools?.include).toContain("wait")
       expect(orchestrator?.tools?.include).not.toContain("panel")
       expect(orchestrator?.tools?.include).not.toContain("task")
-      expect(orchestrator?.tools?.include).not.toContain("skill")
+      expect(orchestrator?.tools?.include).toContain("skill")
       expect(orchestrator?.tools?.include).not.toContain("task_report")
       expect(orchestrator?.tools?.include).not.toContain("memory")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
       expect(tools.map((tool) => tool.id)).not.toContain("panel")
       expect(tools.map((tool) => tool.id)).not.toContain("task")
-      expect(tools.map((tool) => tool.id)).not.toContain("skill")
+      expect(tools.map((tool) => tool.id)).toContain("skill")
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
       expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_bind_local_module")
@@ -318,7 +319,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
   })
 })
 
-test("orchestrator does not inherit generic skill policy", async () => {
+test("orchestrator skill policy exposes only mounted expert-squad skills", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
@@ -344,7 +345,15 @@ mounted_agents:
       expect(orchestrator).toBeDefined()
       expect(requirements).toBeDefined()
 
-      expect(await SystemPrompt.skills(orchestrator!)).toBeUndefined()
+      expect(await SystemPrompt.skills(orchestrator!, { availableToolNames: ["skill"] })).toContain(
+        "- none: No enabled skills are currently mounted for this agent in this turn.",
+      )
+      const orchestratorPrompt = await SystemPrompt.skills(orchestrator!, {
+        availableToolNames: ["skill", "select_expert_squad"],
+      })
+      expect(orchestratorPrompt).toContain("frontend-replica-expert-squad")
+      expect(orchestratorPrompt).toContain("frontend-automation-debug-expert-squad")
+      expect(orchestratorPrompt).not.toContain("tool-skill")
       const prompt = await SystemPrompt.skills(requirements!)
       expect(prompt).toContain("### Mounted Skills")
       expect(prompt).toContain("already mounted for this agent in the current turn")
@@ -678,7 +687,9 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "steer_subagent",
         "cancel_subagent",
         "add_goal",
+        "select_expert_squad",
         "wait",
+        "skill",
       ]) {
         expect(include).toContain(tool)
       }

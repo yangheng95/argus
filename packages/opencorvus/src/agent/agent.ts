@@ -449,6 +449,7 @@ export namespace Agent {
           include: [
             // dispatch
             "build",
+            "select_expert_squad",
             "requirements",
             "deep_research",
             "frontend_research",
@@ -479,6 +480,7 @@ export namespace Agent {
             "browser_preview",
             "bash",
             "wait",
+            "skill",
             // user interaction
             "question",
             // own bookkeeping

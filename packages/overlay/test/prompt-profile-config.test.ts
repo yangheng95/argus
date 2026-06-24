@@ -10,32 +10,38 @@ const {
 } = await import("../src/services/config")
 
 const catalog = {
-  active: "frontend",
-  project_active: "frontend",
+  active: "frontend-replica",
+  project_active: "frontend-replica",
   session_active: null,
-  default: "frontend",
+  default: "frontend-replica",
   targets: [
     { id: "build", label: "Build", editable: true, built_in_only: false },
     { id: "requirements", label: "Requirements", editable: true, built_in_only: false },
     { id: "orchestrator", label: "Orchestrator", editable: false, built_in_only: true },
   ],
   profiles: [
-    { id: "frontend", label: "Frontend", built_in: true, editable: false, agents: {} },
-    { id: "testing", label: "Testing", built_in: true, editable: false, agents: {} },
+    { id: "frontend-replica", label: "Frontend Replica", built_in: true, editable: false, agents: {} },
+    {
+      id: "frontend-automation-debug",
+      label: "Frontend Automation Debug",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
     { id: "existing-squad", label: "Existing Squad", built_in: false, editable: true, agents: {} },
   ],
 }
 
 describe("prompt profile config helpers", () => {
   test("createPromptProfileID slugifies labels and avoids collisions", () => {
-    expect(createPromptProfileID(["frontend", "custom-squad"], "Custom Squad")).toBe("custom-squad-2")
+    expect(createPromptProfileID(["frontend-replica", "custom-squad"], "Custom Squad")).toBe("custom-squad-2")
     expect(createPromptProfileID([], "   ")).toBe("custom-squad")
   })
 
   test("upsertPromptProfileConfig writes custom profiles under prompt_profile.profiles only", () => {
     const config: Record<string, any> = {
       prompt_profile: {
-        active: "frontend",
+        active: "frontend-replica",
       },
       agent: {
         build: {
@@ -55,11 +61,11 @@ describe("prompt profile config helpers", () => {
           explore: "   ",
         },
       },
-      "frontend",
+      "frontend-replica",
     )
 
     expect(config.prompt_profile).toEqual({
-      active: "frontend",
+      active: "frontend-replica",
       profiles: {
         "custom-squad": {
           label: "Custom Squad",
@@ -92,10 +98,10 @@ describe("prompt profile config helpers", () => {
       },
     }
 
-    deletePromptProfileConfig(config, "custom-squad", "frontend", "frontend")
+    deletePromptProfileConfig(config, "custom-squad", "frontend-replica", "frontend-replica")
 
     expect(config.prompt_profile).toEqual({
-      active: "frontend",
+      active: "frontend-replica",
       profiles: {
         another: {
           label: "Another",
@@ -189,7 +195,7 @@ describe("prompt profile config helpers", () => {
   test("importPromptProfileConfig merges custom profiles without touching legacy prompt fields", () => {
     const config: Record<string, any> = {
       prompt_profile: {
-        active: "frontend",
+        active: "frontend-replica",
         profiles: {},
       },
       agent: {
@@ -245,8 +251,8 @@ describe("prompt profile config helpers", () => {
         {
           profiles: [
             {
-              id: "testing",
-              label: "Testing Override",
+              id: "frontend-automation-debug",
+              label: "Frontend Automation Debug Override",
               agents: { build: "Custom build guidance." },
             },
           ],
