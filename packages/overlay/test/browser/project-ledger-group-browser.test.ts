@@ -160,6 +160,8 @@ async function verifyProjectGroup(
       copyTone: copyButton?.dataset.tone ?? "",
       copyChrome: copyButton?.dataset.chrome ?? "",
       copyLabel: copyButton?.getAttribute("aria-label") ?? "",
+      copyWidth: copyRect?.width ?? 0,
+      copyHeight: copyRect?.height ?? 0,
       copyAfterToggle: !!headingRect && !!copyRect && copyRect.left >= headingRect.right - 0.5,
       renameExists: !!renameButton,
       renameInsideToggle: !!heading?.querySelector('[data-ui="project-group-rename"]'),
@@ -169,6 +171,8 @@ async function verifyProjectGroup(
       renameTone: renameButton?.dataset.tone ?? "",
       renameChrome: renameButton?.dataset.chrome ?? "",
       renameLabel: renameButton?.getAttribute("aria-label") ?? "",
+      renameWidth: renameRect?.width ?? 0,
+      renameHeight: renameRect?.height ?? 0,
       renameAfterCopy: !!copyRect && !!renameRect && renameRect.left >= copyRect.right - 0.5,
       deleteExists: !!deleteButton,
       deleteInsideToggle: !!heading?.querySelector('[data-ui="project-group-delete"]'),
@@ -182,6 +186,7 @@ async function verifyProjectGroup(
       deletePressed: deleteButton?.getAttribute("aria-pressed") ?? "",
       deleteVisible: !!deleteButton && deleteButton.getClientRects().length > 0,
       deleteWidth: deleteRect?.width ?? 0,
+      deleteHeight: deleteRect?.height ?? 0,
       deleteAfterRename: !!renameRect && !!deleteRect && deleteRect.left >= renameRect.right - 0.5,
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
       headingControls,
@@ -218,6 +223,9 @@ async function verifyProjectGroup(
     assert.equal(openState.copyTone, "neutral")
     assert.equal(openState.copyChrome, "icon-action")
     assert.match(openState.copyLabel, /Copy project directory/)
+    assert.ok(openState.copyWidth <= 20, `copy width should be compact, got ${openState.copyWidth}`)
+    assert.ok(openState.copyHeight <= 20, `copy height should be compact, got ${openState.copyHeight}`)
+    assert.ok(Math.abs(openState.copyWidth - openState.copyHeight) <= 0.5)
     assert.equal(openState.copyAfterToggle, true)
     assert.equal(openState.renameTag, "BUTTON")
     assert.equal(openState.renameVariant, "ghost")
@@ -225,6 +233,9 @@ async function verifyProjectGroup(
     assert.equal(openState.renameTone, "neutral")
     assert.equal(openState.renameChrome, "icon-action")
     assert.match(openState.renameLabel, /Rename project/)
+    assert.ok(openState.renameWidth <= 20, `rename width should be compact, got ${openState.renameWidth}`)
+    assert.ok(openState.renameHeight <= 20, `rename height should be compact, got ${openState.renameHeight}`)
+    assert.ok(Math.abs(openState.renameWidth - openState.renameHeight) <= 0.5)
     assert.equal(openState.renameAfterCopy, true)
     assert.equal(openState.deleteTag, "BUTTON")
     assert.equal(openState.deleteClass, "oc-button")
@@ -235,7 +246,9 @@ async function verifyProjectGroup(
     assert.match(openState.deleteLabel, /Delete this project/)
     assert.equal(openState.deletePressed, "false")
     assert.equal(openState.deleteVisible, true)
-    assert.ok(openState.deleteWidth >= 20)
+    assert.ok(openState.deleteWidth <= 20, `delete width should be compact, got ${openState.deleteWidth}`)
+    assert.ok(openState.deleteHeight <= 20, `delete height should be compact, got ${openState.deleteHeight}`)
+    assert.ok(Math.abs(openState.deleteWidth - openState.deleteHeight) <= 0.5)
     assert.equal(openState.deleteAfterRename, true)
   }
   assert.equal(openState.headingExpanded, "true")
