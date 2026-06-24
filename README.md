@@ -65,6 +65,7 @@ Open the local overlay UI at `http://127.0.0.1:7878/ui/`, then create a task ove
 ```bash
 curl -X POST http://127.0.0.1:7878/task \
   -H "content-type: application/json" \
+  -H "x-opencorvus-directory: $PWD" \
   -d '{
     "request": "Implement the requested change, run validation, and stop only when the acceptance is ready."
   }'
@@ -78,13 +79,13 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 
 Useful task endpoints:
 
-- `GET /tasks`
-- `GET /task/<task_id>`
-- `GET /task/<task_id>/board`
-- `POST /task/<task_id>/message`
-- `POST /task/<task_id>/retry`
-- `POST /task/<task_id>/replan`
-- `POST /task/<task_id>/cancel`
+- `GET /tasks` with a project directory
+- `GET /task/<task_id>` without a project directory
+- `GET /task/<task_id>/board` without a project directory
+- `POST /task/<task_id>/message` with the task's project directory
+- `POST /task/<task_id>/retry` with the task's project directory
+- `POST /task/<task_id>/replan` with the task's project directory
+- `POST /task/<task_id>/cancel` with the task's project directory
 
 > [!TIP]
 > If you expose `opencorvus serve` beyond localhost, set `OPENCORVUS_SERVER_PASSWORD` first.

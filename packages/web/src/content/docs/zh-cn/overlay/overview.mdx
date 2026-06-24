@@ -68,6 +68,8 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
    GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
    ```
 
+   任务详情流是 Task 记录读取；服务端从 `taskID` 解析项目归属，不需要 `directory`。
+
    代码：`src/services/sse.ts` `startSSE()`
    用原生 `EventSource` 绕过 WebView2 对 `fetch().body` 的缓冲延迟。
 

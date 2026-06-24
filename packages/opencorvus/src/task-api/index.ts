@@ -2185,7 +2185,8 @@ export namespace EngineService {
   }
 
   export async function getTaskOperatorModelContext(taskID: string) {
-    const task = requireTaskInCurrentProject(taskID)
+    const task = requireTask(taskID)
+    assertTaskProjectIsConcrete(task)
     if (!task.session_id) {
       throw new Error(
         `Task ${task.id} has no root session — cannot resolve operator model context; recreate the task or repair task.session_id`,

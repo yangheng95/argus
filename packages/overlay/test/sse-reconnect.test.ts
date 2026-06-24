@@ -150,6 +150,7 @@ function conversationPayload(taskID: string, lastSequence: number) {
       snapshotVersion: `board:${taskID}`,
       task: {
         id: taskID,
+        directory: TEST_DIRECTORY,
         status: "active",
         request: "tail repair",
         sessionID: `ses_${taskID}`,

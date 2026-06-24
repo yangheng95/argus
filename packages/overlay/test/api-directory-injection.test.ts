@@ -103,10 +103,21 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("stored attachment resource", () => expectDoesNotInject("attachment/project/shot.png"))
     test("stored attachment variant resource", () =>
       expectDoesNotInject(`attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`))
+    test("task record", () => expectDoesNotInject("task/abc"))
+    test("task status", () => expectDoesNotInject("task/abc/status"))
+    test("task bindings", () => expectDoesNotInject("task/abc/bindings"))
+    test("task progress", () => expectDoesNotInject("task/abc/progress"))
+    test("task events", () => expectDoesNotInject("task/abc/events"))
     test("task conversation hydrate", () => expectDoesNotInject("task/abc/conversation"))
     test("task conversation history", () => expectDoesNotInject("task/abc/conversation/history"))
     test("task conversation events", () => expectDoesNotInject("task/abc/conversation/events"))
     test("task conversation session", () => expectDoesNotInject("task/abc/conversation/session/session_123"))
+    test("task brief", () => expectDoesNotInject("task/abc/brief"))
+    test("task board", () => expectDoesNotInject("task/abc/board"))
+    test("task transcript", () => expectDoesNotInject("task/abc/transcript"))
+    test("task operator model context", () => expectDoesNotInject("task/abc/operator-model-context"))
+    test("task runs", () => expectDoesNotInject("task/abc/runs"))
+    test("task interactions", () => expectDoesNotInject("task/abc/interactions"))
   })
 
   describe("auth routes — no-inject (cross-project by design)", () => {
@@ -119,7 +130,6 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("tasks", () => expectInjects("tasks"))
     test("task create", () => expectInjects("task"))
     test("task scoped followup", () => expectInjects("task/abc/followup"))
-    test("task operator model context", () => expectInjects("task/abc/operator-model-context"))
     test("path", () => expectInjects("path"))
     test("vcs", () => expectInjects("vcs"))
     test("config", () => expectInjects("config"))
@@ -182,10 +192,21 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "global/db/mysql/import",
       "global/tasks",
       "mission",
+      "task/abc",
+      "task/abc/status",
+      "task/abc/bindings",
+      "task/abc/progress",
+      "task/abc/events",
       "task/abc/conversation",
       "task/abc/conversation/history",
       "task/abc/conversation/events",
       "task/abc/conversation/session/session_123",
+      "task/abc/brief",
+      "task/abc/board",
+      "task/abc/transcript",
+      "task/abc/operator-model-context",
+      "task/abc/runs",
+      "task/abc/interactions",
       "auth",
       "auth/login",
       "auth/logout",
@@ -198,7 +219,6 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "task",
       "task/abc/followup",
       "task/abc/message",
-      "task/abc/operator-model-context",
       "path",
       "vcs",
       "config",
@@ -222,7 +242,8 @@ describe("apiUrl directory injection (W2-V31)", () => {
     }
     expect(routeRequiresProjectDirectory("project/current", "DELETE")).toBe(true)
     expect(routeRequiresProjectDirectory("project/current", "PATCH")).toBe(true)
-    expect(routeRequiresProjectDirectory("task/abc", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("task/abc/project-archive", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("task/abc/browser-preview", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("task/abc/conversation", "POST")).toBe(true)
   })
 
