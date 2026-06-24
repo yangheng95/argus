@@ -16,13 +16,11 @@ export namespace AgentToolPool {
     "browser_preview_compare_regions",
     "web_clone_prepare_context",
     "web_clone_generate_source_project",
-    "web_clone_source_audit",
   ] as const
 
   const BUILD_PRIVATE_TOOL_IDS = [
     "browser_preview_bind_local_module",
     "browser_preview_compare_regions",
-    "web_clone_source_audit",
   ] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory", "skill"] as const
@@ -269,7 +267,6 @@ export namespace AgentToolPool {
       (await import("@/tool/web-clone-prepare-context")).WebClonePrepareContextTool,
     web_clone_generate_source_project: async () =>
       (await import("@/tool/web-clone-generate-source-project")).WebCloneGenerateSourceProjectTool,
-    web_clone_source_audit: async () => (await import("@/tool/web-clone-source-audit")).WebCloneSourceAuditTool,
     webpage_extract: async () => (await import("@/frontend-design/tools/webpage-extract")).WebpageExtractTool,
     webpage_compile: async () => (await import("@/frontend-design/tools/webpage-compile")).WebpageCompileTool,
     webpage_analyze: async () => (await import("@/frontend-design/tools/webpage-analyze")).WebpageAnalyzeTool,

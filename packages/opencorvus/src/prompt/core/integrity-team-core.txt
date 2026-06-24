@@ -38,7 +38,7 @@ maintainability, real implementation, component reuse, full-stack/data behavior,
 or replacement of mechanical/generated output, pass only if the implementation
 and evidence satisfy those named contract items. Do not maintain a separate
 integrity-side webpage-clone file inventory or component policy; treat missing
-contract-required source audit, component/data ownership, API/data wiring, or
+contract-required source evidence review, component/data ownership, API/data wiring, or
 visual/runtime evidence as a finding against the owning contract.
 
 For webpage replica tasks or any task with reference visual coverage, inspect

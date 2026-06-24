@@ -49,7 +49,6 @@ const BUILT_IN_TOOL_IDS = new Set([
   "apply_patch",
   "bash",
   "browser_preview",
-  "browser_preview_compare_regions",
   "external_code_search",
   "glob",
   "goal_report",
@@ -66,9 +65,6 @@ const BUILT_IN_TOOL_IDS = new Set([
   "todoread",
   "todowrite",
   "wait",
-  "web_clone_generate_source_project",
-  "web_clone_prepare_context",
-  "web_clone_source_audit",
   "webfetch",
   "websearch",
 ])

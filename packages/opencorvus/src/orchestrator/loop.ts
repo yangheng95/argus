@@ -31,7 +31,7 @@
 import { Log } from "@/util/log"
 import { Orchestrator, type OrchestratorEvent } from "@/orchestrator/agent"
 import { findTask } from "@/engine"
-import { isTaskQueued } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -182,6 +182,10 @@ async function runTaskLoopInner(input: { taskID: string; event?: OrchestratorEve
   const task = findTask(taskID)
   if (!task) {
     log.error("task not found, exiting loop", { taskID })
+    return
+  }
+  if (isTaskTerminal(task)) {
+    log.info("terminal task loop ignored", { taskID, status: deriveTaskStatus(task), note: event?.note })
     return
   }
 

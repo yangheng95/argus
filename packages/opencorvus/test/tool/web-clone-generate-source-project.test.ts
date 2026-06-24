@@ -4,7 +4,6 @@ import path from "node:path"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { WebCloneGenerateSourceProjectTool } from "../../src/tool/web-clone-generate-source-project"
-import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
 import { ToolRegistry } from "../../src/tool/registry"
 import { tmpdir } from "../fixture/fixture"
 
@@ -36,7 +35,7 @@ describe("tool.web_clone_generate_source_project", () => {
     })
   }, 30_000)
 
-  test("writes editable React source from source-skeleton and passes the source audit", async () => {
+  test("writes editable React source from source-skeleton and preserves source evidence", async () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
@@ -174,22 +173,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceFullCss).not.toContain("&:dir")
         expect(sourceFullCss).not.toContain(":after:dir")
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.passed).toBe(true)
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomReplacementPlanExists).toBe(true)
-        expect(audit.metadata.audit.projectStats.sourceDomIterationStateExists).toBe(true)
-        expect(audit.metadata.audit.projectStats.sourceSvgAssetGroupExists).toBe(true)
-        expect(audit.metadata.audit.projectStats.sourceFaqGroupExists).toBe(true)
       },
     })
   }, 30_000)
@@ -416,19 +399,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"nextReplacement": null')
         expect(sourceProjectManifest.semanticReplacements.count).toBe(1)
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.renderLoopCount).toBeGreaterThan(0)
       },
     })
   }, 30_000)
@@ -506,19 +476,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -596,19 +553,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "event_or_news_list_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -647,19 +591,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "card_collection_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -767,19 +698,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -832,19 +750,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -922,19 +827,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -972,19 +864,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -1030,19 +909,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(1)
       },
     })
   }, 30_000)
@@ -1080,19 +946,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 2')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
 
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute(
-          {
-            projectDir: outputDir,
-            sourcePackageDir: webpageEvidenceDir,
-            finalAcceptanceMode: "visual_baseline_allowed",
-          },
-          ctx,
-        )
-        expect(audit.title).toBe("Source-skeleton consumption audit passed")
-        expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
-        expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
-        expect(audit.metadata.audit.projectStats.semanticReplacementFileCount).toBe(2)
       },
     })
   }, 30_000)

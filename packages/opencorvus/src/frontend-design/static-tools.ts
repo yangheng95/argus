@@ -15,7 +15,6 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "create_visual_region_binding_package",
   "record_frontend_region_selection",
   "record_frontend_replacement_result",
-  "web_clone_source_audit",
   "webpage_extract",
   "webpage_compile",
   "webpage_analyze",
@@ -39,7 +38,6 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "create_visual_region_binding_package",
   "record_frontend_region_selection",
   "record_frontend_replacement_result",
-  "web_clone_source_audit",
   "webpage_extract",
   "webpage_compile",
   "webpage_analyze",
@@ -81,7 +79,6 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
   "edit",
   "write",
   "apply_patch",
-  "web_clone_source_audit",
 ] as const
 
 export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill"] as const

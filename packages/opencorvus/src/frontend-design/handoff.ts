@@ -91,7 +91,7 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
     "- Requirements: express follow-up work as completing the missing visual HTML skeleton or transcribing an accepted skeleton into maintainable source, depending on what the frontend_design report says is missing.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
     "- Build: do not treat frontend-design-skeleton as app source. Use it only as captured source evidence; create/repair the visual skeleton first if frontend_design did not provide one, or transcribe the accepted skeleton into maintainable project source in the later workflow.",
-    "- Evidence rule: keep source data extraction, structured rendered screenshot review evidence, and zero-finding web_clone_source_audit evidence visible as source-package handoff facts.",
+    "- Evidence rule: keep source data extraction, structured rendered screenshot review evidence, and source-evidence review facts visible as source-package handoff facts.",
     "- Deletion rule: do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated into the accepted downstream project source and verified against the reference evidence.",
     "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred source region.",
   ].join("\n")

@@ -19,7 +19,7 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findActiveRunForTask, findTask, type TaskRow } from "./store"
-import { isTaskActive, isTaskQueued } from "./task-status"
+import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
 import { Event } from "./model"
@@ -722,6 +722,14 @@ export async function dispatchTaskLoop(input: {
 }): Promise<DispatchTaskLoopResult> {
   let task = findTask(input.taskID)
   if (!task) return "ignored"
+  if (isTaskTerminal(task)) {
+    log.info("dispatchTaskLoop: ignoring terminal task wake", {
+      taskID: task.id,
+      status: deriveTaskStatus(task),
+      note: input.event?.note,
+    })
+    return "ignored"
+  }
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })

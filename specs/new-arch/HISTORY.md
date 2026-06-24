@@ -17,8 +17,11 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                         | Title                                     |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | [2026-06-24-agent-rail-live-message-stream.md](2026-06-24-agent-rail-live-message-stream.md) | Agent Rail Live Message Stream            |
+| [2026-06-24-remove-web-clone-source-audit.md](2026-06-24-remove-web-clone-source-audit.md) | Remove Web Clone Source Audit Tool |
+| [2026-06-24-prune-obsolete-invalid-tests.md](2026-06-24-prune-obsolete-invalid-tests.md) | Prune Obsolete Invalid Tests |
 | [2026-06-24-read-context-drilldown-only.md](2026-06-24-read-context-drilldown-only.md)       | Read Context Drilldown Only               |
 | [2026-06-24-scheduler-compact-read-context.md](2026-06-24-scheduler-compact-read-context.md) | Scheduler Compact And Read Context Repair |
+| [2026-06-24-terminal-task-no-wake-tool-ownership.md](2026-06-24-terminal-task-no-wake-tool-ownership.md) | Terminal Task No-Wake And Task Tool Ownership |
 | [2026-06-24-task-read-routes-drop-directory.md](2026-06-24-task-read-routes-drop-directory.md) | Task Read Routes Drop Directory Requirement |
 
 ## 2026-06-23

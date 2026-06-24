@@ -109,7 +109,7 @@ test("build agent has correct default properties", async () => {
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
       const ids = new Set(tools.map((tool) => tool.id))
       expect(ids.has("web_clone_prepare_context")).toBe(false)
-      expect(ids.has("web_clone_source_audit")).toBe(true)
+      expect(ids.has("web_clone_source_audit")).toBe(false)
       expect(ids.has("web_clone_generate_source_project")).toBe(false)
       expect(ids.has("browser_preview_compare_regions")).toBe(true)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
@@ -745,6 +745,23 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
   })
 })
 
+test("task lifecycle tools are exposed only to the orchestrator scheduler", () => {
+  const taskLifecycleTools = [
+    "propose_task",
+    "fail_task",
+    "cancel_task",
+    "retry_task",
+    "inject_operator_message",
+  ]
+
+  for (const [role, assignment] of Object.entries(AgentToolPool.roleAssignments)) {
+    const visible = AgentToolPool.visibleToolIDs(assignment)
+    for (const tool of taskLifecycleTools) {
+      expect(visible.has(tool), `${role} visibility for ${tool}`).toBe(role === "orchestrator")
+    }
+  }
+})
+
 test("orchestrator tool pool covers every self-built orchestrator tool", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -1188,7 +1205,7 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
       expect(visible.has("create_frontend_skeleton_project")).toBe(true)
       expect(visible.has("record_frontend_region_selection")).toBe(true)
       expect(visible.has("record_frontend_replacement_result")).toBe(true)
-      expect(visible.has("web_clone_source_audit")).toBe(true)
+      expect(visible.has("web_clone_source_audit")).toBe(false)
       expect(visible.has("webpage_render")).toBe(false)
       expect(visible.has("webpage_evaluate")).toBe(false)
       expect(visible.has("webpage_vision_judge")).toBe(false)
@@ -1224,7 +1241,7 @@ test("frontend-design statically declares webpage evidence and source refinement
       expect(designToolIds.has("create_frontend_skeleton_project")).toBe(true)
       expect(designToolIds.has("record_frontend_region_selection")).toBe(true)
       expect(designToolIds.has("record_frontend_replacement_result")).toBe(true)
-      expect(designToolIds.has("web_clone_source_audit")).toBe(true)
+      expect(designToolIds.has("web_clone_source_audit")).toBe(false)
     },
   })
 })
