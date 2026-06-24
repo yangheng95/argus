@@ -2,7 +2,9 @@ import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Agent } from "../../src/agent/agent"
+import { PromptProfile } from "../../src/agent/prompt-profile"
 import { AgentRoleContract } from "../../src/agent/role-contract"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { PromptCatalog } from "../../src/config/prompt-catalog"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -16,6 +18,10 @@ afterEach(async () => {
   Config.global.reset()
   await Instance.disposeAll()
 })
+
+function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
+  return AgentToolPool.visibleToolIDs(agent?.tools)
+}
 
 test("every role contract id has a matching registered agent (no silent missing registrations)", async () => {
   // Codex impl review round 3 §D — the original "if (!agent) continue"
@@ -65,6 +71,7 @@ test("editable native prompt catalog entries have non-empty defaults", async () 
 })
 
 test("build prompt catalog default matches the runtime build core prompt", async () => {
+  const buildOverlay = PromptProfile.builtIns["frontend-replica"].agents.build
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -77,8 +84,8 @@ test("build prompt catalog default matches the runtime build core prompt", async
       expect(build!.prompt).toBe("")
       expect(build!.editable_prompt).toBe("")
       expect(build!.effective_prompt).toContain(BUILD_CORE)
-      expect(build!.effective_prompt).toContain("Convert the approved frontend target into working code")
-      expect(build!.profile_prompt).toContain("Convert the approved frontend target into working code")
+      expect(build!.effective_prompt).toContain(buildOverlay)
+      expect(build!.profile_prompt).toBe(buildOverlay)
       expect(build!.default_prompt).toBe(BUILD_CORE)
       expect(build!.default_prompt).not.toBe(PROMPT_CODING)
     },
@@ -86,6 +93,7 @@ test("build prompt catalog default matches the runtime build core prompt", async
 })
 
 test("visual-qa prompt catalog default matches the runtime visual QA core prompt", async () => {
+  const visualQaOverlay = PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -98,8 +106,8 @@ test("visual-qa prompt catalog default matches the runtime visual QA core prompt
       expect(visualQa!.prompt).toBe("")
       expect(visualQa!.editable_prompt).toBe("")
       expect(visualQa!.effective_prompt).toContain(VISUAL_QA_CORE)
-      expect(visualQa!.effective_prompt).toContain("Audit the rendered UI for layout")
-      expect(visualQa!.profile_prompt).toContain("Audit the rendered UI for layout")
+      expect(visualQa!.effective_prompt).toContain(visualQaOverlay)
+      expect(visualQa!.profile_prompt).toBe(visualQaOverlay)
       expect(visualQa!.default_prompt).toBe(VISUAL_QA_CORE)
       expect(visualQa!.default_prompt).not.toBe(BUILD_CORE)
       expect(visualQa!.default_prompt).not.toBe(PROMPT_CODING)
@@ -108,6 +116,7 @@ test("visual-qa prompt catalog default matches the runtime visual QA core prompt
 })
 
 test("coding prompt catalog default matches the direct assistant prompt", async () => {
+  const codingOverlay = PromptProfile.builtIns["frontend-replica"].agents.coding
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -120,14 +129,16 @@ test("coding prompt catalog default matches the direct assistant prompt", async 
       expect(coding!.prompt).toBe(PROMPT_CODING)
       expect(coding!.editable_prompt).toBe(PROMPT_CODING)
       expect(coding!.effective_prompt).toContain(PROMPT_CODING)
-      expect(coding!.effective_prompt).toContain("Prioritize layout, responsive behavior")
-      expect(coding!.profile_prompt).toContain("Prioritize layout, responsive behavior")
+      expect(coding!.effective_prompt).toContain(codingOverlay)
+      expect(coding!.profile_prompt).toBe(codingOverlay)
       expect(coding!.default_prompt).toBe(PROMPT_CODING)
     },
   })
 })
 
 test("coding override and build append catalog entries stay distinct", async () => {
+  const codingOverlay = PromptProfile.builtIns["frontend-replica"].agents.coding
+  const buildOverlay = PromptProfile.builtIns["frontend-replica"].agents.build
   await using tmp = await tmpdir({
     git: true,
     config: {
@@ -150,13 +161,13 @@ test("coding override and build append catalog entries stay distinct", async () 
       expect(coding!.default_prompt).toBe(PROMPT_CODING)
       expect(coding!.prompt).toBe("Custom coding prompt")
       expect(coding!.effective_prompt).toContain("Custom coding prompt")
-      expect(coding!.effective_prompt).toContain("Prioritize layout, responsive behavior")
+      expect(coding!.effective_prompt).toContain(codingOverlay)
       expect(build!.prompt_mode).toBe("append")
       expect(build!.default_prompt).toBe(BUILD_CORE)
       expect(build!.prompt).toBe("Extra build-stage instruction")
       expect(build!.editable_prompt).toBe("Extra build-stage instruction")
       expect(build!.effective_prompt).toContain(BUILD_CORE)
-      expect(build!.effective_prompt).toContain("Convert the approved frontend target into working code")
+      expect(build!.effective_prompt).toContain(buildOverlay)
       expect(build!.effective_prompt.endsWith("\n\nExtra build-stage instruction")).toBe(true)
       expect(coding!.default_prompt).not.toBe(build!.default_prompt)
       expect(coding!.effective_prompt).not.toBe(build!.effective_prompt)
@@ -170,10 +181,11 @@ test("mission uses coordination tools without generic subagent dispatch", async 
     directory: tmp.path,
     fn: async () => {
       const mission = await Agent.get("mission")
-      expect(mission?.tools?.include).toContain("panel")
-      expect(mission?.tools?.include).toContain("mission_state")
-      expect(mission?.tools?.include).toContain("wait")
-      expect(mission?.tools?.include).not.toContain("task")
+      const missionTools = visibleToolIDs(mission)
+      expect(missionTools.has("panel")).toBe(true)
+      expect(missionTools.has("mission_state")).toBe(true)
+      expect(missionTools.has("wait")).toBe(true)
+      expect(missionTools.has("task")).toBe(false)
       expect(PermissionNext.evaluate("panel", "*", mission?.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("mission_state", "*", mission?.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("wait", "*", mission?.permission).action).toBe("allow")
@@ -187,7 +199,7 @@ test("explore has read-only panel status tools available", async () => {
     directory: tmp.path,
     fn: async () => {
       const explore = await Agent.get("explore")
-      expect(explore?.tools?.include).toContain("panel")
+      expect(visibleToolIDs(explore).has("panel")).toBe(true)
       expect(PermissionNext.evaluate("panel", "*", explore?.permission).action).toBe("allow")
     },
   })
@@ -215,7 +227,7 @@ test("compaction prompt is host-owned and not configurable", async () => {
   ).toThrow("prompt configuration is not editable")
 })
 
-test("integrity prompt is host-owned so catalog cannot diverge from team runtime", async () => {
+test("integrity prompt is code-owned so catalog cannot diverge from team runtime", async () => {
   expect(AgentRoleContract.get("integrity").promptEditable).toBe(false)
   expect(AgentRoleContract.promptMode("integrity")).toBe("none")
 
@@ -236,6 +248,21 @@ test("integrity prompt is host-owned so catalog cannot diverge from team runtime
       },
     }),
   ).toThrow("prompt configuration is not editable")
+})
+
+test("role contract keeps the agent taxonomy to host or worker and exposes explicit mountability", () => {
+  const archetypes = new Set(Object.values(AgentRoleContract.all).map((contract) => contract.archetype))
+  expect(archetypes).toEqual(new Set(["host", "worker"]))
+  expect(AgentRoleContract.get("integrity")).toMatchObject({ archetype: "worker", skillMountable: true })
+  expect(AgentRoleContract.get("orchestrator")).toMatchObject({ archetype: "host", skillMountable: false })
+  expect(AgentRoleContract.get("coding-assistant")).toMatchObject({ archetype: "worker", skillMountable: false })
+  expect(() =>
+    Config.Info.parse({
+      agent: {
+        integrity: { skill_mountable: false },
+      },
+    }),
+  ).toThrow("config.agent.integrity.skill_mountable must stay true")
 })
 
 test("deep-research and frontend-design role descriptions keep document research distinct from UI replication", () => {

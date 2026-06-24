@@ -147,18 +147,18 @@ test("session processor closes duplicate same-callID tool-call deltas with one r
   spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
     [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
-  const input = { path: "packages/opencorvus/src/session/processor.ts" }
+  const input = { filePath: "packages/opencorvus/src/session/processor.ts" }
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
       { type: "start" },
-      { type: "tool-call", toolCallId: "read_file:11", toolName: "read_file", input },
-      { type: "tool-call", toolCallId: "read_file:11", toolName: "read_file", input },
+      { type: "tool-call", toolCallId: "read:11", toolName: "read", input },
+      { type: "tool-call", toolCallId: "read:11", toolName: "read", input },
       {
         type: "tool-result",
-        toolCallId: "read_file:11",
-        toolName: "read_file",
+        toolCallId: "read:11",
+        toolName: "read",
         input,
-        output: { output: "file contents", title: "read_file" },
+        output: { output: "file contents", title: "read" },
       },
       { type: "finish", finishReason: "tool-calls" },
     ]),
@@ -184,7 +184,7 @@ test("session processor closes duplicate same-callID tool-call deltas with one r
 
   const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
   expect(toolParts).toHaveLength(1)
-  expect(toolParts[0]!.callID).toBe("read_file:11")
+  expect(toolParts[0]!.callID).toBe("read:11")
   expect(toolParts[0]!.state.status).toBe("completed")
   const openParts = toolParts.filter((part) => part.state.status === "pending" || part.state.status === "running")
   expect(openParts).toHaveLength(0)

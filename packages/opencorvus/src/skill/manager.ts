@@ -11,6 +11,7 @@ import { Glob } from "@/util/glob"
 import { Process } from "@/util/process"
 import { Discovery } from "./discovery"
 import { Skill } from "./skill"
+import { SkillRequiredTools } from "./required-tools"
 import { which } from "@/util/which"
 import { Uint8ArrayReader, Uint8ArrayWriter, ZipReader } from "@zip.js/zip.js"
 
@@ -55,7 +56,7 @@ const SkillInfo = z.object({
     })
     .optional(),
   priority: z.number().optional().default(0),
-  required_tools: z.array(z.string()).optional().default([]),
+  required_tools: SkillRequiredTools,
   agents: z.array(z.string()).optional().default([]),
   mounted_agents: z.array(z.string()).optional().default([]),
   expires_at: ExpirationTimestamp,
@@ -814,7 +815,7 @@ function parseSkillRoots(files: NormalizedSkillFile[]): ParsedSkillRoot[] {
 
 function skillFileBytesWithMountedAgent(bytes: Uint8Array, agent: string): Uint8Array {
   const parsed = matter(new TextDecoder().decode(bytes))
-  const mounted = Skill.Info.pick({ mounted_agents: true }).safeParse(parsed.data).data?.mounted_agents ?? []
+  const mounted = Skill.Info.pick({ mounted_agents: true }).parse(parsed.data).mounted_agents
   const next = matter.stringify(parsed.content, {
     ...parsed.data,
     mounted_agents: dedupe([...mounted, agent]),

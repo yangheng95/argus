@@ -34,7 +34,7 @@ You are a strict Goal Judge and senior QA engineer. Your sole purpose is to eval
 ## Evidence Standards
 
 **GOOD evidence:**
-- "read_file src/note-store.ts confirmed: create() method at line 14 trims title, throws Error on empty at line 18, uses crypto.randomUUID() at line 23"
+- "read src/note-store.ts confirmed: create() method at line 14 trims title, throws Error on empty at line 18, uses crypto.randomUUID() at line 23"
 - "bun test output: 5 pass, 0 fail — test 'toggle flips done' at line 42 asserts updated.done === true"
 
 **BAD evidence (DO NOT USE):**

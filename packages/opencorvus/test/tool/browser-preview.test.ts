@@ -14,6 +14,7 @@ import {
   browserPreviewRegionComparisonAttachmentImages,
   BrowserPreviewCompareRegionsTool,
 } from "../../src/tool/browser-preview-compare-regions"
+import { Agent } from "../../src/agent/agent"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Instance } from "../../src/project/instance"
@@ -175,15 +176,23 @@ async function seedTask(directory: string) {
 
 describe("tool.browser_preview", () => {
   test(
-    "is registered for assistant tool use",
+    "keeps shared preview entry global and repair tools agent-private",
     async () => {
       await Instance.provide({
         directory: path.join(__dirname, "../.."),
         fn: async () => {
-          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview")
-          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_bind_local_module")
-          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_compare_regions")
-          await expect(ToolRegistry.ids()).resolves.toContain("browser_preview_compare_scroll_slices")
+          const globalIDs = await ToolRegistry.ids()
+          expect(globalIDs).toContain("browser_preview")
+          expect(globalIDs).not.toContain("browser_preview_bind_local_module")
+          expect(globalIDs).not.toContain("browser_preview_compare_regions")
+          expect(globalIDs).not.toContain("browser_preview_compare_scroll_slices")
+
+          const visualQa = await Agent.get("visual-qa")
+          const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
+          const visualQaIDs = visualQaTools.map((tool) => tool.id)
+          expect(visualQaIDs).toContain("browser_preview_bind_local_module")
+          expect(visualQaIDs).toContain("browser_preview_compare_regions")
+          expect(visualQaIDs).toContain("browser_preview_compare_scroll_slices")
         },
       })
     },

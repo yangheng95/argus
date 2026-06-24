@@ -454,6 +454,7 @@ test("handles agent configuration", async () => {
             model: "test/model",
             temperature: 0.7,
             description: "test agent",
+            skill_mountable: true,
           },
         },
       })
@@ -468,8 +469,54 @@ test("handles agent configuration", async () => {
           model: "test/model",
           temperature: 0.7,
           description: "test agent",
+          skill_mountable: true,
         }),
       )
+      expect(config.agent?.["test_agent"]?.options).not.toHaveProperty("skill_mountable")
+    },
+  })
+})
+
+test("rejects legacy include/exclude tool fields for custom agents", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        agent: {
+          test_agent: {
+            description: "test agent",
+            tools: { include: ["read"] },
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow()
+    },
+  })
+})
+
+test("rejects agent-private tool fields for custom agents", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        agent: {
+          test_agent: {
+            description: "test agent",
+            tools: { private: ["browser_preview_compare_regions"] },
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow(/private/)
     },
   })
 })
@@ -579,6 +626,7 @@ test("loads agents from .opencorvus/agents (plural)", async () => {
         `---
 model: test/model
 mode: subagent
+skill_mountable: true
 ---
 Helper agent prompt`,
       )
@@ -603,8 +651,10 @@ Nested agent prompt`,
         name: "helper",
         model: "test/model",
         mode: "subagent",
+        skill_mountable: true,
         prompt: "Helper agent prompt",
       })
+      expect(config.agent?.["helper"]?.options).not.toHaveProperty("skill_mountable")
 
       expect(config.agent?.["nested/child"]).toMatchObject({
         name: "nested/child",

@@ -795,7 +795,7 @@ describe("core prompt hygiene", () => {
     expect(design).toContain(
       "frontend-design-created skeleton evidence project after `create_frontend_skeleton_project` returns",
     )
-    expect(design).toContain("use bounded `read_file` / project-structure tools")
+    expect(design).toContain("use bounded `read` / project-structure tools")
     expect(design).toContain(
       "then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and restores a static HTML/CSS visual skeleton before handoff",
     )
