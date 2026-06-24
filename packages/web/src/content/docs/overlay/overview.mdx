@@ -66,6 +66,8 @@ Settings (sidebar): General / Providers / Channels / Orchestration / Permissions
    GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
    ```
 
+   The task-detail stream is a task-record read; it resolves the project from `taskID` and does not require `directory`.
+
    Code: `src/services/sse.ts` `startSSE()`. Uses native `EventSource` to bypass WebView2's `fetch().body` buffering.
 
 2. **Global task-list stream** (app level)
