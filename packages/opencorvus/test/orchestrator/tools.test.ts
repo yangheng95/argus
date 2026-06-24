@@ -1372,6 +1372,34 @@ describe("orchestrator tools", () => {
   })
 
   test("inject_operator_message reads the current wake message without creating a second task message", async () => {
+    const now = Date.now()
+    const projectID = `project_operator_projection_${now.toString(16)}`
+    const taskID = `tsk_operator_projection_${now.toString(16)}`
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "operator projection project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Operator projection task",
+          request: "Read the current wake message.",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
     const injectMessage = spyOn(EngineService, "injectMessage").mockResolvedValue({
       appended: true,
       orchestratorWoken: true,
@@ -1379,7 +1407,7 @@ describe("orchestrator tools", () => {
       status: "active",
     })
     const { tools } = createOrchestratorTools({
-      taskID: "tsk_operator_projection",
+      taskID,
       agentSessionID: "ses_orchestrator_projection",
       signal: new AbortController().signal,
       operatorMessage: {

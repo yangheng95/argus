@@ -85,6 +85,9 @@ async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputT
   await callTool(tools, "update_frontend_iteration_note", {
     value: "Reviewed inventory coverage and maintainable handoff completeness before finalization.",
   })
+  await callTool(tools, "update_frontend_iteration_note", {
+    value: "Reviewed downstream implementation readiness against the same source-backed evidence.",
+  })
   await callTool(tools, "update_frontend_text", {
     section: "completeness_review",
     content: "The frontend result is complete enough for downstream implementation and visual verification.",
