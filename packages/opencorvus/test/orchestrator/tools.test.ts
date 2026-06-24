@@ -4456,138 +4456,6 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("read_context surfaces multiple frontend research briefs", async () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_read_context_frontend_research_${stamp}`
-    const taskID = `tsk_read_context_frontend_research_${stamp}`
-    const goalID = `gol_read_context_frontend_research_${stamp}`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "read context frontend research",
-      taskTitle: "read context frontend research",
-      request: "Surface every frontend research page in read_context",
-      goalTitle: "Read context goal",
-      goalSlug: "read-context-goal",
-      objective: "Show all frontend research briefs",
-      now,
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "read context frontend research parent" })
-        Database.use((db) =>
-          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
-        )
-        const firstArtifactID = persistTaskFrontendResearchBrief({
-          taskID,
-          brief: minimalFrontendResearchBrief({
-            taskID,
-            sessionID: `ses_frontend_research_first_${stamp}`,
-            sourceURL: "https://example.com/first",
-          }),
-          now: now + 1,
-        })
-        const secondArtifactID = persistTaskFrontendResearchBrief({
-          taskID,
-          brief: minimalFrontendResearchBrief({
-            taskID,
-            sessionID: `ses_frontend_research_second_${stamp}`,
-            sourceURL: "https://example.com/second",
-          }),
-          now: now + 2,
-        })
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-        const result = toolText(
-          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
-        )
-
-        expect(result).toContain("Frontend Research Brief 1/2")
-        expect(result).toContain("Frontend Research Brief 2/2")
-        expect(result).toContain(firstArtifactID)
-        expect(result).toContain(secondArtifactID)
-        expect(result).toContain("https://example.com/first")
-        expect(result).toContain("https://example.com/second")
-      },
-    })
-  })
-
-  test("read_context surfaces multiple deep research briefs", async () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_read_context_deep_research_${stamp}`
-    const taskID = `tsk_read_context_deep_research_${stamp}`
-    const goalID = `gol_read_context_deep_research_${stamp}`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "read context deep research",
-      taskTitle: "read context deep research",
-      request: "Surface every deep research brief in read_context",
-      goalTitle: "Read context deep goal",
-      goalSlug: "read-context-deep-goal",
-      objective: "Show all deep research briefs",
-      now,
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "read context deep research parent" })
-        Database.use((db) =>
-          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
-        )
-        const firstArtifactID = persistTaskResearchBrief({
-          taskID,
-          brief: minimalDeepResearchBrief({
-            taskID,
-            sessionID: `ses_deep_research_first_${stamp}`,
-          }),
-          now: now + 1,
-        })
-        const secondArtifactID = persistTaskResearchBrief({
-          taskID,
-          brief: minimalDeepResearchBrief({
-            taskID,
-            sessionID: `ses_deep_research_second_${stamp}`,
-          }),
-          now: now + 2,
-        })
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-        const result = toolText(
-          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
-        )
-
-        expect(result).toContain("Deep Research Brief 1/2")
-        expect(result).toContain("Deep Research Brief 2/2")
-        expect(result).toContain(firstArtifactID)
-        expect(result).toContain(secondArtifactID)
-        expect(result).toContain(`ses_deep_research_first_${stamp}`)
-        expect(result).toContain(`ses_deep_research_second_${stamp}`)
-      },
-    })
-  })
-
   test("read_context schema requires an explicit narrow scope", async () => {
     const { tools } = createOrchestratorTools({
       taskID: "tsk_read_context_schema",
@@ -4598,12 +4466,16 @@ describe("orchestrator tools", () => {
 
     expect(schema.safeParse({}).success).toBe(false)
     expect(schema.safeParse({ scope: "all" }).success).toBe(false)
-    expect(schema.safeParse({ scope: "goals" }).success).toBe(true)
-    expect(schema.safeParse({ scope: "research" }).success).toBe(true)
+    expect(schema.safeParse({ scope: "goals" }).success).toBe(false)
+    expect(schema.safeParse({ scope: "evaluations" }).success).toBe(false)
+    expect(schema.safeParse({ scope: "deliveries" }).success).toBe(false)
+    expect(schema.safeParse({ scope: "research" }).success).toBe(false)
+    expect(schema.safeParse({ scope: "decisions" }).success).toBe(true)
+    expect(schema.safeParse({ scope: "integrity_history" }).success).toBe(true)
     expect(schema.safeParse({ scope: "fact_checks" }).success).toBe(true)
   })
 
-  test("read_context explicit scopes bound large persisted context while preserving pointers", async () => {
+  test("read_context drilldown scopes bound persisted audit context while preserving pointers", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_read_context_budget_${stamp}`
@@ -4611,8 +4483,7 @@ describe("orchestrator tools", () => {
     const goalID = `gol_read_context_budget_${stamp}`
     const specID = `spec_read_context_budget_${stamp}`
     const giantReportEnd = `GIANT_INTEGRITY_REPORT_END_${stamp}`
-    const giantDeepSummaryEnd = `GIANT_DEEP_SUMMARY_END_${stamp}`
-    const giantFrontendSummaryEnd = `GIANT_FRONTEND_SUMMARY_END_${stamp}`
+    const giantDecisionEnd = `GIANT_DECISION_CONTEXT_END_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -4660,37 +4531,12 @@ describe("orchestrator tools", () => {
           now: now + 1,
         })
 
-        const deepBrief: any = minimalDeepResearchBrief({
-          taskID,
-          sessionID: `ses_deep_budget_${stamp}`,
-        })
-        deepBrief.summary = `GIANT_DEEP_SUMMARY_START_${stamp} ${"deep summary body ".repeat(2_000)} ${giantDeepSummaryEnd}`
-        const deepArtifactID = persistTaskResearchBrief({
-          taskID,
-          brief: deepBrief,
-          now: now + 2,
-        })
-
-        const frontendBrief: any = minimalFrontendResearchBrief({
-          taskID,
-          sessionID: `ses_frontend_budget_${stamp}`,
-          sourceURL: "https://example.com/budget",
-        })
-        frontendBrief.summary = `GIANT_FRONTEND_SUMMARY_START_${stamp} ${"frontend summary body ".repeat(2_000)} ${giantFrontendSummaryEnd}`
-        frontendBrief.subpage_research_tasks = Array.from({ length: 20 }, (_, index) => ({
-          id: `subpage_${index}`,
-          parent_url: "https://example.com/budget",
-          url: `https://example.com/budget/${index}/${"long-path-segment-".repeat(20)}`,
-          title: `Subpage ${index}`,
-          reason: "Large task list must stay bounded in read_context.",
-          suggested_focus: "Bounded pointer rendering.",
-          priority: "medium" as const,
-          evidence_ids: ["ev_page_reference"],
-        }))
-        const frontendArtifactID = persistTaskFrontendResearchBrief({
-          taskID,
-          brief: frontendBrief,
-          now: now + 3,
+        createDecisionLog(taskID).append({
+          phase: "architect",
+          key: `read_context_drilldown_${stamp}`,
+          value:
+            `GIANT_DECISION_CONTEXT_START_${stamp}\n` + `${"decision context body ".repeat(100)}\n` + giantDecisionEnd,
+          reason: "Decision drilldown remains available while ordinary task state stays in the task snapshot.",
         })
         recordFactCheckAttempt({
           taskID,
@@ -4719,8 +4565,8 @@ describe("orchestrator tools", () => {
             unresolved: [],
             overall_verdict: "clean",
           },
-          timeStarted: now + 4,
-          now: now + 5,
+          timeStarted: now + 2,
+          now: now + 3,
           outcome: "completed",
         })
 
@@ -4729,13 +4575,6 @@ describe("orchestrator tools", () => {
           agentSessionID: parent.id,
           signal: new AbortController().signal,
         })
-
-        const goals = toolText(await tools.read_context.execute({ scope: "goals" }, buildToolOptions("read_context")))
-        expect(goals.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
-        expect(goals).toContain(goalID)
-        expect(goals).toContain("REQ-BUDGET")
-        expect(goals).not.toContain(deepArtifactID)
-        expect(goals).not.toContain(frontendArtifactID)
 
         const integrity = toolText(
           await tools.read_context.execute({ scope: "integrity_history" }, buildToolOptions("read_context")),
@@ -4746,18 +4585,14 @@ describe("orchestrator tools", () => {
         expect(integrity).toContain("read_context omitted")
         expect(integrity).not.toContain(giantReportEnd)
 
-        const research = toolText(
-          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
+        const decisions = toolText(
+          await tools.read_context.execute({ scope: "decisions" }, buildToolOptions("read_context")),
         )
-        expect(research.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
-        expect(research).toContain(deepArtifactID)
-        expect(research).toContain(frontendArtifactID)
-        expect(research).toContain(`ses_deep_budget_${stamp}`)
-        expect(research).toContain(`ses_frontend_budget_${stamp}`)
-        expect(research).toContain("https://example.com/budget")
-        expect(research).toContain("read_context omitted")
-        expect(research).not.toContain(giantDeepSummaryEnd)
-        expect(research).not.toContain(giantFrontendSummaryEnd)
+        expect(decisions.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(decisions).toContain(`read_context_drilldown_${stamp}`)
+        expect(decisions).toContain("GIANT_DECISION_CONTEXT_START")
+        expect(decisions).toContain("task-scoped decision-log bundle")
+        expect(decisions).not.toContain(giantDecisionEnd)
 
         const factChecks = toolText(
           await tools.read_context.execute({ scope: "fact_checks" }, buildToolOptions("read_context")),
@@ -4769,243 +4604,6 @@ describe("orchestrator tools", () => {
         expect(factChecks).toContain(`session=\`ses_target_budge`)
         expect(factChecks).toContain("verified=1 corrected=0 unresolved=0")
         expect(factChecks).toContain("(completed)")
-      },
-    })
-  })
-
-  test("read_context surfaces latest goal_run and child session ids for running goals", async () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_read_context_goal_run_${stamp}`
-    const taskID = `tsk_read_context_goal_run_${stamp}`
-    const goalID = `gol_read_context_goal_run_${stamp}`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "read_context goal runtime",
-      taskTitle: "read_context goal runtime",
-      request: "Expose runtime ids for steering",
-      goalTitle: "Surface live runtime ids",
-      goalSlug: "surface-live-runtime-ids",
-      objective: "Show latest goal_run and child session ids so the orchestrator can steer the live build correctly",
-      now,
-      requirementIDs: ["REQ-1", "REQ-3"],
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "read_context parent" })
-        const child = await Session.create({
-          kind: "build",
-          parentID: parent.id,
-          goalID,
-          title: "read_context child",
-        })
-        Database.use((db) =>
-          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
-        )
-        const goalRunID = beginBuildAttempt({
-          taskID,
-          goalID,
-          sessionID: child.id,
-        })
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = toolText(await tools.read_context.execute({ scope: "goals" }, {} as any))
-
-        expect(toolText(result)).toContain("Requirement IDs: REQ-1, REQ-3")
-        expect(toolText(result)).toContain(`run=${goalRunID}`)
-        expect(toolText(result)).toContain("outcome=running")
-        expect(toolText(result)).toContain(`session=${child.id}`)
-      },
-    })
-  })
-
-  test("read_context preserves describe-layer redispatch and orphan facts", async () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_read_context_describe_facts_${stamp}`
-    const taskID = `tsk_read_context_describe_facts_${stamp}`
-    const retryGoalID = `gol_read_context_retry_${stamp}`
-    const orphanGoalID = `gol_read_context_orphan_${stamp}`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID: retryGoalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "read_context describe facts",
-      taskTitle: "read_context describe facts",
-      request: "Expose describe-layer goal facts",
-      goalTitle: "Retry goal",
-      goalSlug: "retry-goal",
-      objective: "Surface superseded terminal retry intent",
-      now,
-      requirementIDs: ["REQ-REDISPATCH"],
-    })
-
-    Database.use((db) =>
-      db
-        .insert(EngineGoalTable)
-        .values({
-          id: orphanGoalID,
-          task_id: taskID,
-          spec_snapshot_id: `spec_${retryGoalID}`,
-          title: "Owner orphan goal",
-          slug: "owner-orphan-goal",
-          objective: "Surface dead owner orphan fact",
-          acceptance_specs: [],
-          owned_paths: ["src/orphan.ts"],
-          depends_on: [],
-          exports: [],
-          imports: [],
-          kind: "feature",
-          requirement_ids: ["REQ-ORPHAN"],
-          priority: "blocking",
-          source: "test",
-          status: "pending",
-          order_index: 1,
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
-    )
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "read_context describe facts parent" })
-        Database.use((db) =>
-          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
-        )
-
-        const retryRunID = beginBuildAttempt({
-          taskID,
-          goalID: retryGoalID,
-          sessionID: `ses_retry_${stamp}`,
-          now: now + 1,
-        })
-        updateGoalRun(retryRunID, {
-          status: "failed",
-          error: "Acceptance rejected retry goal",
-          time_completed: now + 2,
-        })
-        startNewAttempt({
-          goalID: retryGoalID,
-          reason: "acceptance_rework",
-          now: now + 3,
-        })
-
-        const orphanRunID = beginBuildAttempt({
-          taskID,
-          goalID: orphanGoalID,
-          sessionID: `ses_orphan_${stamp}`,
-          now: now + 4,
-        })
-        updateGoalRun(orphanRunID, {
-          owner: "999999:zzzz:dead00",
-        })
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = toolText(await tools.read_context.execute({ scope: "goals" }, {} as any))
-
-        expect(toolText(result)).toContain("NEEDS_REDISPATCH(acceptance_rework)")
-        expect(toolText(result)).toContain("superseded_reason=acceptance_rework")
-        expect(toolText(result)).toContain(`run=${retryRunID}`)
-        expect(toolText(result)).toContain("ORPHANED(owner process restarted")
-        expect(toolText(result)).toContain(`run=${orphanRunID}`)
-        expect(toolText(result)).toContain(`session=ses_orphan_${stamp}`)
-      },
-    })
-  })
-
-  test("read_context surfaces terminal goal refill wake facts", async () => {
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_read_context_goal_refill_${stamp}`
-    const taskID = `tsk_read_context_goal_refill_${stamp}`
-    const goalID = `gol_read_context_goal_refill_${stamp}`
-    const runID = `run_read_context_goal_refill_${stamp}`
-    const terminalGoalRunID = `grun_read_context_goal_refill_one_${stamp}`
-    const liveGoalRunID = `grun_read_context_goal_refill_two_${stamp}`
-    const fingerprint = `${terminalGoalRunID}:completed`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "read_context terminal refill",
-      taskTitle: "read_context terminal refill",
-      request: "Expose terminal goal refill facts",
-      goalTitle: "Refill goal",
-      goalSlug: "refill-goal",
-      objective: "Surface terminal refill notification evidence",
-      now,
-    })
-    Database.use((db) =>
-      db
-        .insert(EngineArtifactTable)
-        .values({
-          id: `art_read_context_goal_refill_${stamp}`,
-          task_id: taskID,
-          run_id: runID,
-          goal_run_id: terminalGoalRunID,
-          kind: "goal_refill_notification",
-          label: "goal-refill-wake-dispatched",
-          payload: {
-            task_id: taskID,
-            run_id: runID,
-            fingerprint,
-            terminal_goal_run: { id: terminalGoalRunID, goal_id: goalID, status: "completed" },
-            live_sibling_goal_runs: [
-              { id: liveGoalRunID, goal_id: `gol_read_context_goal_refill_live_${stamp}`, status: "running" },
-            ],
-            dispatch_result: "started",
-            time_dispatched: now + 1,
-          },
-          time_created: now + 1,
-          time_updated: now + 1,
-        })
-        .run(),
-    )
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "read_context terminal refill parent" })
-        Database.use((db) =>
-          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
-        )
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = toolText(await tools.read_context.execute({ scope: "goals" }, {} as any))
-
-        expect(toolText(result)).toContain("Terminal goal refill wake facts")
-        expect(toolText(result)).toContain(`run=${runID}`)
-        expect(toolText(result)).toContain(fingerprint)
-        expect(toolText(result)).toContain(`${terminalGoalRunID}:completed`)
-        expect(toolText(result)).toContain(`${liveGoalRunID}:running`)
       },
     })
   })

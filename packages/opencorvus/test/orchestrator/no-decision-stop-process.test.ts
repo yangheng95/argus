@@ -289,7 +289,7 @@ describe("orchestrator no-decision stop process", () => {
     })
   }, 30_000)
 
-  test("current read_context after historical build is still no-decision", async () => {
+  test("current read_context audit after historical build is still no-decision", async () => {
     installControlModel()
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
     await Instance.provide({
@@ -314,9 +314,9 @@ describe("orchestrator no-decision stop process", () => {
             callID: "current-read-context",
             now: Date.now(),
             decisionEffect: "observation",
-            output: "current task snapshot",
+            output: "current decision audit",
           })
-          return finalAssistantText(input, "The next dispatchable goals are visible, but I am stopping.")
+          return finalAssistantText(input, "The audit note is visible, but I am stopping.")
         }) as never)
 
         await Orchestrator.processTask(taskID)

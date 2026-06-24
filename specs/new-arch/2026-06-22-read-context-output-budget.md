@@ -2,6 +2,12 @@
 
 Date: 2026-06-22
 
+Superseded on 2026-06-24 by
+[`2026-06-24-read-context-drilldown-only.md`](2026-06-24-read-context-drilldown-only.md):
+`read_context` is no longer a scheduler state refresh tool and no longer owns
+goal, research, delivery, or evaluation scopes. This note remains historical
+evidence for the output-budget bug and integrity/decision drilldown caps.
+
 ## Acronyms
 
 - DB: Database, the persisted task and artifact store.

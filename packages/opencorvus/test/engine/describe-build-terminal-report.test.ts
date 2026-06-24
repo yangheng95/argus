@@ -2,6 +2,29 @@ import { describe, expect, test } from "bun:test"
 import { renderTaskDescription, type TaskDesc } from "../../src/engine/describe"
 
 describe("describe build terminal report failure", () => {
+  test("renders workload analysis status as a compact task snapshot fact", () => {
+    const base: TaskDesc = {
+      id: "tsk_workload_snapshot",
+      title: "Workload snapshot",
+      kind: "workflow",
+      status: "active",
+      request: "Build app",
+      goals: [],
+      budget: {
+        runs_used: 0,
+        fix_count: 0,
+        max_executor_groups: 3,
+      },
+      iterations_count: 0,
+    }
+
+    expect(renderTaskDescription(base)).toContain("workload_analysis=not_run")
+    expect(renderTaskDescription({ ...base, workload_analyzed: true })).toContain("workload_analysis=current")
+    expect(renderTaskDescription({ ...base, workload_analyzed: true, workload_stale: true })).toContain(
+      "workload_analysis=stale",
+    )
+  })
+
   test("tells orchestrator to retry with explicit terminal report instructions", () => {
     const desc: TaskDesc = {
       id: "tsk_report_hint",

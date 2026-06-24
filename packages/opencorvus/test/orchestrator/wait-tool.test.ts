@@ -69,13 +69,15 @@ describe("createOrchestratorTools — wait wiring", () => {
     // The description carries prompt-level discipline. These phrases are
     // load-bearing — the orchestrator-core prompt cross-references them to
     // forbid polling and steer the LLM away from substituting `wait` for
-    // `question` / `fail_task` / `read_context`.
+    // `question`, `fail_task`, or a real workflow decision from the refreshed
+    // task snapshot.
     expect(wait.description).toMatch(/one-shot/i)
     expect(wait.description).toMatch(/NOT a polling primitive/i)
     expect(wait.description).toMatch(/external event/i)
     expect(wait.description).toMatch(/question/)
     expect(wait.description).toMatch(/fail_task/)
-    expect(wait.description).toMatch(/read_context/)
+    expect(wait.description).toMatch(/current task snapshot/)
+    expect(wait.description).not.toMatch(/read_context/)
   })
 
   test("mission and orchestrator agent tool surfaces expose wait", async () => {
@@ -112,7 +114,8 @@ describe("createOrchestratorTools — wait execute", () => {
     expect(elapsed).toBeGreaterThanOrEqual(requested - 50)
     expect(output).toMatch(/^Waited \d+ms/)
     expect(output).toContain("external CI propagation")
-    expect(output).toMatch(/read_context/)
+    expect(output).toContain("refreshed task snapshot")
+    expect(output).not.toMatch(/read_context/)
     expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
   })
 

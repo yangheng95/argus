@@ -1205,8 +1205,8 @@ describe("session.message.toModelMessage", () => {
             tool: "read_context",
             state: {
               status: "completed",
-              input: { scope: "all" },
-              output: "SNAPSHOT_OLD: goals + decisions + deliveries (4000 tokens of state)",
+              input: { scope: "decisions" },
+              output: "SNAPSHOT_OLD: decision audit drilldown (4000 tokens of evidence)",
               title: "read_context",
               metadata: {},
               time: { start: 0, end: 1 },
@@ -1228,8 +1228,8 @@ describe("session.message.toModelMessage", () => {
             tool: "read_context",
             state: {
               status: "completed",
-              input: { scope: "all" },
-              output: "SNAPSHOT_LATEST: current state",
+              input: { scope: "decisions" },
+              output: "SNAPSHOT_LATEST: current decision audit",
               title: "read_context",
               metadata: {},
               time: { start: 2, end: 3 },
@@ -1253,7 +1253,7 @@ describe("session.message.toModelMessage", () => {
     const first = toolResults.find((r) => r.toolCallId === "call-first")!
     const latest = toolResults.find((r) => r.toolCallId === "call-latest")!
     expect(first.output.value).toBe("[read_context snapshot superseded by a later call in this session]")
-    expect(latest.output.value).toBe("SNAPSHOT_LATEST: current state")
+    expect(latest.output.value).toBe("SNAPSHOT_LATEST: current decision audit")
     // Make sure we did not drop the old payload's original bytes before projection ran
     expect(first.output.value).not.toContain("SNAPSHOT_OLD")
   })

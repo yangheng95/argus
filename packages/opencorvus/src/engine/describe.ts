@@ -976,6 +976,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
     `Runtime facts: ${desc.budget.runs_used} run(s) recorded, ` +
       `${desc.budget.fix_count} fix attempt(s) on the active run, ` +
       `${desc.iterations_count} acceptance iteration(s), ` +
+      `workload_analysis=${desc.workload_stale ? "stale" : desc.workload_analyzed ? "current" : "not_run"}, ` +
       `agent_parallelism=${desc.budget.max_executor_groups}.`,
   )
   lines.push(

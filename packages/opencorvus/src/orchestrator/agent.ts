@@ -1372,9 +1372,9 @@ async function buildSystemParts(
       }
 
       const pointerHints: string[] = []
-      if (acceptance) pointerHints.push(`read_context scope=deliveries (acceptance row ${acceptance.id})`)
-      if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
-      const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
+      if (acceptance) pointerHints.push(`acceptance row ${acceptance.id}`)
+      if (evaluation) pointerHints.push(`evaluation row ${evaluation.id}`)
+      const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "latest run result"
 
       ctx.push("")
       ctx.push(
