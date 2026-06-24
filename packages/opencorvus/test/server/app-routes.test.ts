@@ -37,6 +37,14 @@ describe("app routes", () => {
     ).toBeDefined()
   })
 
+  test("Server.openapi includes goal report in the advertised SSE event payload schema", async () => {
+    const spec = await Server.openapi()
+    const schemas = spec.components?.schemas ?? {}
+
+    expect(schemas["Event.goal.report"]).toBeDefined()
+    expect(JSON.stringify(schemas.Event)).toContain("Event.goal.report")
+  })
+
   test("Server.openapi documents task operator model context conflict errors", async () => {
     const spec = await Server.openapi()
     const response = spec.paths?.["/task/{taskID}/operator-model-context"]?.get?.responses?.[409]

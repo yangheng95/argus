@@ -79,7 +79,10 @@ Instructions here.
 
 for (const fixture of [
   { legacy: "read_file", canonical: "read" },
+  { legacy: "find_files", canonical: "glob" },
+  { legacy: "list_directory", canonical: "list" },
   { legacy: "memory_search", canonical: "memory" },
+  { legacy: "memory_get", canonical: "memory" },
 ] as const) {
   test(`rejects legacy duplicate tool ID ${fixture.legacy} in skill required_tools`, async () => {
     await using tmp = await tmpdir({
@@ -111,6 +114,34 @@ required_tools:
     })
   })
 }
+
+test("rejects non-canonical skill required_tools at parse time", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".opencorvus", "skill", "retired-tool-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: retired-tool-skill
+description: Invalid retired tool ID fixture.
+required_tools:
+  - webpage_render
+---
+
+# Retired Tool Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Skill.all()).rejects.toThrow("webpage_render is not a canonical OpenCorvus tool ID")
+    },
+  })
+})
 
 test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({

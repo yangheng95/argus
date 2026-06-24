@@ -676,13 +676,13 @@ describe("skill routes", () => {
         const initialBody = (await initial.json()) as {
           agents: Array<{ name: string; skill_mountable: boolean; skill_tool_available: boolean }>
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
         expect(initialBody.agents).toContainEqual(
           expect.objectContaining({ name: "integrity", skill_mountable: true, skill_tool_available: true }),
         )
-        expect(initialBody.agents).toContainEqual(
-          expect.objectContaining({ name: "orchestrator", skill_mountable: false, skill_tool_available: true }),
-        )
+        expect(initialBody.agents.map((agent) => agent.name)).not.toContain("orchestrator")
+        expect(initialBody.matrix.map((row) => row.agent)).not.toContain("orchestrator")
         expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual(
           [],
         )

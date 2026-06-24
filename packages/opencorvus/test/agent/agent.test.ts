@@ -4,6 +4,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { AgentToolPool } from "../../src/agent/tool-pool-contract"
+import { AgentRoleContract } from "../../src/agent/role-contract"
 import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
@@ -34,6 +35,21 @@ function evalPerm(agent: Agent.Info | undefined, permission: string): Permission
 function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
   return AgentToolPool.visibleToolIDs(agent?.tools)
 }
+
+test("skill-mountable role contracts expose the canonical skill tool", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      for (const role of AgentRoleContract.ids.filter((id) => AgentRoleContract.skillMountable(id))) {
+        const agent = await Agent.get(role)
+        expect(agent, `${role} should resolve as a native skill-mountable agent`).toBeDefined()
+        expect(agent?.skill_mountable, `${role} must project skillMountable into Agent.Info`).toBe(true)
+        expect(visibleToolIDs(agent).has("skill"), `${role} must expose the skill tool if it is mountable`).toBe(true)
+      }
+    },
+  })
+})
 
 test("returns default native agents when no config", async () => {
   await using tmp = await tmpdir()
@@ -504,16 +520,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const baseReadonly = [
-        "read",
-        "glob",
-        "search_code",
-        "list",
-        "memory",
-        "skill",
-        "todoread",
-        "todowrite",
-      ]
+      const baseReadonly = ["read", "glob", "search_code", "list", "memory", "skill", "todoread", "todowrite"]
       const forbidden = [
         "bash",
         "edit",
@@ -597,6 +604,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
           "memory",
           "read",
           "search_code",
+          "skill",
           "todoread",
           "todowrite",
           "webfetch",
@@ -613,7 +621,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "deliver",
         "build",
         "propose_task",
-        "skill",
       ]) {
         expect(deepVisible.has(tool)).toBe(false)
       }
