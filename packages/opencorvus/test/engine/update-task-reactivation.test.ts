@@ -8,8 +8,8 @@ import { deriveTaskStatus } from "../../src/engine/task-status"
 import { resetDatabase } from "../fixture/db"
 
 /**
- * `restart_from_stage` (or any other reactivation path: retry_task, manual
- * un-fail) calls `updateTask({ status: "active", error: null })` against a
+ * A reactivation path such as retry_task or manual un-fail calls
+ * `updateTask({ status: "active", error: null })` against a
  * task whose terminal state was previously stamped via `fail_task` or
  * `cancelTask`. Without explicit `time_completed: null`, the row keeps the
  * old terminal timestamp, and `deriveTaskStatus` (single source per
@@ -19,7 +19,7 @@ import { resetDatabase } from "../fixture/db"
  *
  * Real incident — 2026-05-07 tsk_e0265e83b001R63v1bqRw1lFjm:
  *   12:59:42  fail_task → time_completed stamped, error set
- *   12:59:48  restart_from_stage(requirements) → cleared error only
+ *   12:59:48  manual reactivation -> cleared error only
  *   13:05:17  Requirements parsed (still status=completed)
  *   13:15:24  Goals decomposed by Architect (still status=completed)
  *   13:20:27  ... (still status=completed; user reports stuck task)
@@ -86,7 +86,7 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
     expect(failed).toBeDefined()
     expect(deriveTaskStatus(failed!)).toBe("failed")
 
-    await updateTask(failed!, { status: "active", error: null }, "restart_from_stage(requirements)")
+    await updateTask(failed!, { status: "active", error: null }, "manual reactivation")
 
     const reactivated = findTask(taskID)
     expect(reactivated).toBeDefined()

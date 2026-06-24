@@ -1,7 +1,7 @@
 /**
  * Writer/invariant primitives for terminating live execution state.
  *
- * Both process-restart recovery and operator-driven restart_from_stage need
+ * Both process-restart recovery and explicit task/goal repair paths need
  * to abort the same kinds of rows — live goal_runs and live runs — while
  * preserving per-goal workspaces. Historically each call site had its own
  * copy of the "loop + abort" logic, which drifted: error messages formatted
@@ -88,8 +88,8 @@ export interface CreateRunInput {
  *
  * Callers used to do `db.insert(EngineRunTable).values({...})` directly with
  * their own `status`/`phase`/`metadata`, which (a) bypassed event emission
- * and (b) scattered initial-state conventions across three different tools
- * (dispatch_goal, create_run, restart_from_stage). Funnel everything through
+ * and (b) scattered initial-state conventions across multiple dispatch paths.
+ * Funnel everything through
  * here so "a new run exists" is one fact with one audit trail.
  *
  * Optional `linkAsActive=true` also sets `task.active_run_id` in the same
@@ -149,7 +149,7 @@ export function createRun(input: CreateRunInput): RunRow {
 }
 
 // ---------------------------------------------------------------------------
-// Termination primitives (used by both recovery and restart_from_stage)
+// Termination primitives for recovery and explicit task/goal repair.
 // ---------------------------------------------------------------------------
 
 export interface AbortOptions {
@@ -181,7 +181,7 @@ export async function cleanupGoalWorkspaceForGoal(goalID: string): Promise<boole
     workspaceDir: null,
     workspaceBranch: null,
     // Terminal cleanup also clears the goal-scoped baseRef. A later fresh
-    // dispatch (restart_from_stage / max_retries reset / etc.) will
+    // dispatch after retry or contract repair will
     // re-capture Snapshot.track() from the new scaffold state.
     workspaceBaseRef: null,
   })
@@ -749,8 +749,8 @@ export async function abortLiveOrchestratorToolOwnership(input: {
 /**
  * Scope: all live execution state for a single task.
  *
- * Used by restart_from_stage. Filters mirror what the previous inline
- * implementation used:
+ * Used by explicit task-level abort paths. Filters mirror what earlier inline
+ * implementations used:
  *   - goal_runs with a resettable status (skips completed/aborted/failed)
  *   - runs in any live status (LIVE_RUN_STATUSES)
  *

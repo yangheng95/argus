@@ -11,6 +11,21 @@ the testing prompt profile to the frontend automation debug expert squad, and
 add built-in skills that teach the Orchestrator when and how to use those two
 expert squads.
 
+### 2026-06-24 User Clarification
+
+The scheduler must own automatic expert-squad adjustment from the user's
+request. In this architecture the scheduler is the Orchestrator wake: it reads
+the operator request and task evidence, loads only mounted Orchestrator
+expert-squad skills through the visible `skill` tool, and calls
+`select_expert_squad` before dispatching downstream specialists when the loaded
+skill names a different prompt profile.
+
+This is not a host-side keyword classifier, hidden skill injection, fallback
+profile selector, workflow branch, or per-agent prompt mutation. If no mounted
+expert-squad skill is evidence-backed for the request, the existing explicit
+`prompt_profile.active` value remains the source of truth until a later
+Orchestrator decision changes it.
+
 ## Recall
 
 | Source | Constraint |
@@ -55,6 +70,10 @@ expert squads.
   ID is gone.
 - The old `testing` built-in ID is gone and replaced by
   `frontend-automation-debug`.
+- Orchestrator prompt discipline makes request-based expert-squad selection a
+  scheduler responsibility: load the relevant mounted expert-squad skill
+  visibly, then call `select_expert_squad` before dispatch when evidence proves
+  a profile switch.
 - Orchestrator can call `select_expert_squad` to set the current task root
   session's active prompt profile; unknown profile IDs fail before writing.
 - Orchestrator receives the canonical `skill` tool in exact runtime turns and

@@ -31,7 +31,7 @@
 //
 // 2026-04-21 per-attempt isolation: step / phase card ids carry the
 // current `goal_run.id` so each retry / acceptance_rework / modify_contract
-// / restart_stage gets a fresh top-level card appended in time order.
+// / manual_retry gets a fresh top-level card appended in time order.
 // Prior attempts survive as frozen history — the renderer shows them in
 // their original position; new activity lands on the new card. The
 // `"pre"` sentinel is used when no goal_run exists yet (pre-dispatch

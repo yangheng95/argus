@@ -21,8 +21,8 @@ import { tmpdir } from "../fixture/fixture"
  * (_session-r2-glm5.out 14:47:25).
  *
  * The fix surfaces those artifacts through the describe layer so the
- * orchestrator LLM sees them on its next wake and decides retry /
- * restart_from_stage / fail itself. This test seeds the artifacts
+   * orchestrator LLM sees them on its next wake and decides retry /
+   * re-dispatch / fail itself. This test seeds the artifacts
  * directly and asserts the projection + rendering.
  */
 
@@ -261,7 +261,7 @@ describe("renderTaskDescription — stream failures section", () => {
         // Decision-aid wording — without these the LLM may not recognise
         // the section as actionable history.
         expect(md).toContain("retry_task")
-        expect(md).toContain("restart_from_stage")
+        expect(md).toContain("question")
         expect(md).toContain("fail_task")
       },
     })

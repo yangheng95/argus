@@ -78,6 +78,6 @@ describe("describe build terminal report failure", () => {
     expect(md).toContain(".opencorvus/r")
     expect(md).toContain("not primary workspace pollution")
     expect(md).toContain("Retry this goal with explicit report_build_result(files_changed[]) instructions")
-    expect(md).toContain("do not restart_from_stage solely because diagnostic worktree files exist")
+    expect(md).toContain("do not open a new workflow task solely because diagnostic worktree files exist")
   })
 })

@@ -94,8 +94,8 @@ export interface GoalAttemptSummary {
   /** Persisted status of this particular goal_run row (immutable once terminal). */
   outcome: string
   /** If non-null, this attempt was itself superseded by a newer one — the
-   *  typed reason names why (acceptance_rework / manual_retry / modify_contract /
-   *  restart_stage). Terminal + superseded_reason is retry intent evidence;
+   *  typed reason names why (acceptance_rework / manual_retry / modify_contract).
+   *  Terminal + superseded_reason is retry intent evidence;
    *  it does not make the goal scheduler-dispatchable by itself. */
   superseded_reason?: string
   superseded_at?: number
@@ -684,7 +684,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     activeRunStatus = activeRunForTask.status
     // Fact-only orphan probe from engine/orphan.ts. Phase-7 removed the
     // abort-brake-on-startup path; the LLM reads `run_orphan` and
-    // decides whether to retry / restart_from_stage / drop.
+    // decides whether to retry, re-dispatch, fail, or drop.
     runOrphan = isRunOrphan(task.project_id, activeRunForTask.id)
   }
 
@@ -870,7 +870,7 @@ export function renderTerminalGoalRefillNotifications(
 function buildAttemptRecoveryHint(error?: string): string | undefined {
   if (!error) return undefined
   if (!error.includes("report_build_result") && !error.includes("missing_terminal_report")) return undefined
-  return "Build ended without a structured report_build_result terminal call. The retained goal worktree is diagnostic under .opencorvus/r, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions; do not restart_from_stage solely because diagnostic worktree files exist."
+  return "Build ended without a structured report_build_result terminal call. The retained goal worktree is diagnostic under .opencorvus/r, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions; do not open a new workflow task solely because diagnostic worktree files exist."
 }
 
 function truncate(text: string, max: number): string {
@@ -958,8 +958,8 @@ export function renderTaskDescription(desc: TaskDesc): string {
     if (desc.run_orphan) {
       lines.push(
         `Note: this run has no live executor — the owner process was restarted. ` +
-          `The next decision should treat it as abandoned (retry, restart_from_stage, ` +
-          `or drop) rather than assuming it is still progressing.`,
+          `The next decision should treat it as abandoned (retry, re-dispatch, ` +
+          `fail_task, or drop) rather than assuming it is still progressing.`,
       )
     }
   }
@@ -1045,7 +1045,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     lines.push(
       `Other entries are upstream LLM-call failures that aborted a wake before any decision ` +
         `was made. Use those entries to decide: \`retry_task\` (transient network/idle blip), ` +
-        `\`restart_from_stage\` (config-level — wrong provider/key), or \`fail_task\` ` +
+        `\`question\` (operator-owned config/provider/key choice), or \`fail_task\` ` +
         `(permanent — quota exhausted, key revoked, model gone).`,
     )
   }
@@ -1064,7 +1064,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     lines.push(
       `Each entry is a persisted assistant tool call in this task's session tree with no terminal tool result ` +
         `and no current-process session owner. Treat it as execution evidence from a previous interrupted wake; ` +
-        `decide whether to retry_task, re-dispatch the relevant tool/work, restart_from_stage, fail_task, or ask ` +
+        `decide whether to retry_task, re-dispatch the relevant tool/work, propose_task, fail_task, or ask ` +
         `the operator from the full task context.`,
     )
   }
@@ -1095,7 +1095,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
     }
     lines.push(
       `These entries are persisted tool-call failures with the original ToolFailureCause. ` +
-        `Use them as audit evidence for retry_task, restart_from_stage, or fail_task decisions.`,
+        `Use them as audit evidence for retry_task, propose_task, or fail_task decisions.`,
     )
   }
 

@@ -146,8 +146,8 @@ orchestrator/loop.ts — runTaskLoop()
 3. **Goal 维护**：`add_goal`、`modify_goal`、`query_failed_goals`、`goal_report`
 4. **状态 / 上下文 / 预览**：`read_context`、`analytics`、`browser_preview`
 5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
-   `steer_subagent`、`cancel_subagent`（中止指定子 agent session；session 级恢复手段，
-   取消后须显式重新 dispatch 同一 goal/stage）、`restart_from_stage`、`refine`
+   `cancel_subagent`（中止指定子 agent session；session 级恢复手段，取消后须显式重新
+   dispatch 同一 goal/stage）、`restart_from_stage`、`refine`
 6. **用户交互 / 等待 / merge 修复**：`question`、`wait`、`bash`（仅项目根 git merge-state 修复）
 7. **任务繁衍**：`propose_task`（按自动确认配置创建继承 follow-up task）
 
