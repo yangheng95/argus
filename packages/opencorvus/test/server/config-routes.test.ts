@@ -108,9 +108,9 @@ describe("config prompt routes", () => {
         expect(architect?.prompt).toBe(architect?.editable_prompt)
         expect(requirements?.prompt).toBe(requirements?.editable_prompt)
         expect(frontendDesign?.prompt).toBe(frontendDesign?.editable_prompt)
-        expect(architect?.effective_prompt).toContain("verification plan")
+        expect(architect?.effective_prompt).toContain("verification tied to reference evidence")
         expect(requirements?.effective_prompt).toContain("visual acceptance conditions")
-        expect(frontendDesign?.effective_prompt).toContain("visual structure")
+        expect(frontendDesign?.effective_prompt).toContain("source-backed replica contract")
         // Distinct defaults — the pre-fix bug made several agents collapse to
         // the same empty/inherits_core placeholder.
         expect(architect!.default_prompt).not.toBe(requirements!.default_prompt)
@@ -192,7 +192,7 @@ describe("config prompt routes", () => {
         expect(body.active).toBe("custom-squad")
         expect(body.project_active).toBe("custom-squad")
         expect(body.session_active).toBe(null)
-        expect(body.default).toBe("frontend")
+        expect(body.default).toBe("frontend-replica")
         expect(body.targets.find((target) => target.id === "build")).toMatchObject({
           id: "build",
           editable: true,
@@ -205,18 +205,19 @@ describe("config prompt routes", () => {
         })
         expect(body.profiles.map((profile) => profile.id)).toEqual([
           "general",
-          "frontend",
+          "frontend-replica",
           "backend",
           "algorithm",
-          "testing",
+          "frontend-automation-debug",
           "custom-squad",
         ])
-        expect(body.profiles.find((profile) => profile.id === "frontend")).toMatchObject({
+        expect(body.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
+          label: "Frontend Replica",
           built_in: true,
           editable: false,
         })
-        expect(body.profiles.find((profile) => profile.id === "testing")).toMatchObject({
-          label: "Testing",
+        expect(body.profiles.find((profile) => profile.id === "frontend-automation-debug")).toMatchObject({
+          label: "Frontend Automation Debug",
           built_in: true,
           editable: false,
         })
@@ -273,7 +274,7 @@ describe("config prompt routes", () => {
     })
   })
 
-  test("PATCH /config accepts the built-in testing profile and prompt preview uses it", async () => {
+  test("PATCH /config accepts the built-in frontend automation debug profile and prompt preview uses it", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -286,7 +287,7 @@ describe("config prompt routes", () => {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
-          body: JSON.stringify({ prompt_profile: { active: "testing" } }),
+          body: JSON.stringify({ prompt_profile: { active: "frontend-automation-debug" } }),
         })
 
         expect(patchResponse.status).toBe(200)
@@ -304,9 +305,9 @@ describe("config prompt routes", () => {
           effective_prompt: string
         }>
         const build = body.find((item) => item.key === "build")
-        expect(build?.active_profile).toBe("testing")
-        expect(build?.profile_prompt).toContain("focused verification")
-        expect(build?.effective_prompt).toContain("focused verification")
+        expect(build?.active_profile).toBe("frontend-automation-debug")
+        expect(build?.profile_prompt).toContain("focused automation")
+        expect(build?.effective_prompt).toContain("focused automation")
       },
     })
   })
@@ -330,7 +331,7 @@ describe("config prompt routes", () => {
         expect(response.status).toBe(400)
         const body = (await response.json()) as { error?: string }
         expect(body.error).toContain("Unknown prompt profile")
-        expect((await Config.get()).prompt_profile.active).toBe("frontend")
+        expect((await Config.get()).prompt_profile.active).toBe("frontend-replica")
       },
     })
   })

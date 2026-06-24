@@ -3,7 +3,7 @@ import { PromptProfile } from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
 
 const requiredBuiltInTargetMatrix = {
-  frontend: [
+  "frontend-replica": [
     "coding",
     "coding-assistant",
     "mission",
@@ -44,7 +44,7 @@ const requiredBuiltInTargetMatrix = {
     "integrity",
     "orchestrator",
   ],
-  testing: [
+  "frontend-automation-debug": [
     "coding",
     "coding-assistant",
     "mission",
@@ -72,10 +72,10 @@ function expectConfigRejected(input: unknown, expectedMessage: string) {
 }
 
 describe("prompt profiles", () => {
-  test("Config.Info materializes frontend as the explicit default profile", () => {
+  test("Config.Info materializes frontend-replica as the explicit default profile", () => {
     const config = Config.Info.parse({})
-    expect(config.prompt_profile.active).toBe("frontend")
-    expect(PromptProfile.activeID(config)).toBe("frontend")
+    expect(config.prompt_profile.active).toBe("frontend-replica")
+    expect(PromptProfile.activeID(config)).toBe("frontend-replica")
   })
 
   test("composer orders base, profile overlay, then user append", () => {
@@ -96,30 +96,34 @@ describe("prompt profiles", () => {
   })
 
   test("built-in profiles expose direct target overlays without wrapper boilerplate", () => {
-    expect(PromptProfile.builtIns.frontend.agents["frontend-design"]).toContain("visual structure")
-    expect(PromptProfile.builtIns.frontend.agents["orchestrator"]).toContain("exact surface")
+    expect(PromptProfile.builtIns["frontend-replica"].agents["frontend-design"]).toContain(
+      "source-backed replica contract",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents["orchestrator"]).toContain("exact reference surface")
     expect(PromptProfile.builtIns.backend.agents["deep-research"]).toContain("API behavior")
     expect(PromptProfile.builtIns.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
-    expect(PromptProfile.builtIns.testing.agents["visual-qa"]).toContain("screenshots")
+    expect(PromptProfile.builtIns["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
-    expect(PromptProfile.builtIns.frontend.agents.build).not.toContain("Active prompt profile:")
-    expect(PromptProfile.builtIns.frontend.agents.mission).not.toContain("Coordinate frontend work")
-    expect(PromptProfile.builtIns.frontend.agents.orchestrator).not.toContain("bias planning and retries")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).not.toContain("Active prompt profile:")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.mission).not.toContain("Coordinate frontend work")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).not.toContain(
+      "bias planning and retries",
+    )
   })
 
   test("direct session agents also receive scene-specific overlays", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "frontend" } })
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
     expect(PromptProfile.overlayFor("coding", config)).toContain("responsive behavior")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("frontend questions")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("replica questions")
     expect(PromptProfile.overlayFor("mission", config)).toContain("target surface")
   })
 
-  test("testing profile reaches direct session agents and test-owned specialists", () => {
-    const config = Config.Info.parse({ prompt_profile: { active: "testing" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("testable behavior")
-    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("verification path")
-    expect(PromptProfile.overlayFor("build", config)).toContain("focused verification")
-    expect(PromptProfile.overlayFor("integrity", config)).toContain("targeted tests")
+  test("frontend automation debug profile reaches direct session agents and specialists", () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend-automation-debug" } })
+    expect(PromptProfile.overlayFor("coding", config)).toContain("browser-reproducible frontend failures")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("exact verification path")
+    expect(PromptProfile.overlayFor("build", config)).toContain("focused automation")
+    expect(PromptProfile.overlayFor("integrity", config)).toContain("targeted automation")
   })
 
   test("target catalog covers every built-in overlay target", () => {
@@ -136,7 +140,13 @@ describe("prompt profiles", () => {
   })
 
   test("built-in registry pressure covers required target matrices without noncanonical targets", () => {
-    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general", "frontend", "backend", "algorithm", "testing"])
+    expect(Object.keys(PromptProfile.builtIns)).toEqual([
+      "general",
+      "frontend-replica",
+      "backend",
+      "algorithm",
+      "frontend-automation-debug",
+    ])
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
     expect(PromptProfile.targets).toHaveLength(targetIDs.size)
 
@@ -148,7 +158,7 @@ describe("prompt profiles", () => {
       }
     }
 
-    expect(new Set(Object.keys(PromptProfile.builtIns.testing.agents))).toEqual(targetIDs)
+    expect(new Set(Object.keys(PromptProfile.builtIns["frontend-automation-debug"].agents))).toEqual(targetIDs)
 
     for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
       for (const targetID of Object.keys(profile.agents)) {
@@ -218,8 +228,8 @@ describe("prompt profiles", () => {
       editable: false,
       built_in_only: true,
     })
-    expect(catalog.profiles.find((profile) => profile.id === "frontend")).toMatchObject({
-      id: "frontend",
+    expect(catalog.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
+      id: "frontend-replica",
       built_in: true,
       editable: false,
     })
@@ -365,8 +375,8 @@ describe("prompt profiles", () => {
       PromptProfile.parseImportPayload({
         prompt_profile: {
           profiles: {
-            frontend: {
-              label: "Frontend Override",
+            "frontend-replica": {
+              label: "Frontend Replica Override",
               agents: { build: "Custom build guidance." },
             },
           },
@@ -412,7 +422,7 @@ describe("prompt profiles", () => {
   test("session overlay rejects inline prompt profile definitions", () => {
     const parsed = Config.Overlay.safeParse({
       prompt_profile: {
-        active: "frontend",
+        active: "frontend-replica",
         profiles: {
           custom: {
             label: "Nope",

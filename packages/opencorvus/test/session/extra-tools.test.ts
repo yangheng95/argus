@@ -541,6 +541,57 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     })
   })
 
+  test("orchestrator resolveTools preserves runtime expert-squad skill under exact wake contracts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_orchestrator_skill_exact`
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              sessionID,
+              agentKind: "orchestrator",
+              contractKind: "orchestrator-wake",
+            },
+            tools: {
+              skill: dummyTool(),
+              select_expert_squad: dummyTool(),
+            },
+          }),
+        )
+        const resolved = await SessionLoop.resolveTools({
+          agent: (await Agent.get("orchestrator"))!,
+          model: {
+            providerID: "test",
+            id: "test",
+            api: { id: "test", npm: "@ai-sdk/openai" },
+            capabilities: { input: {}, reasoning: false },
+          } as any,
+          session: { id: sessionID, kind: "orchestrator", permission: [] } as any,
+          processor: {
+            message: { id: "msg_test" },
+            partFromToolCall: () => undefined,
+            ensureToolPart: async () => undefined,
+          } as any,
+          bypassAgentCheck: false,
+          messages: [],
+          config: {} as any,
+        })
+
+        expect(Object.keys(resolved).sort()).toEqual(["select_expert_squad", "skill"])
+        const result = await (resolved.skill as any).execute(
+          { query: "frontend replica" },
+          { toolCallId: "call_orchestrator_expert_skill" },
+        )
+        expect(result.output).toContain("<name>frontend-replica-expert-squad</name>")
+        expect(result.output).toContain("<name>frontend-automation-debug-expert-squad</name>")
+        SessionLoop.clearSessionRuntimeContract(sessionID)
+      },
+    })
+  })
+
   test("frontend-research resolveTools preserves runtime skill under exact stage contracts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

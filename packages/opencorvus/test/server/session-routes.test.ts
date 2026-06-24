@@ -149,11 +149,11 @@ describe("session routes", () => {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
-          body: JSON.stringify({ prompt_profile: { active: "testing" } }),
+          body: JSON.stringify({ prompt_profile: { active: "frontend-automation-debug" } }),
         })
         expect(saved.status).toBe(200)
         const body = (await saved.json()) as { config: Config.Info; origin: any }
-        expect(body.config.prompt_profile.active).toBe("testing")
+        expect(body.config.prompt_profile.active).toBe("frontend-automation-debug")
         expect(body.origin.prompt_profile.active).toBe("session")
 
         const rejected = await app.request(`/session/${session.id}/config`, {
@@ -166,7 +166,7 @@ describe("session routes", () => {
         })
         expect(rejected.status).toBe(400)
         expect((await Session.get(session.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "testing" },
+          prompt_profile: { active: "frontend-automation-debug" },
         })
       },
     })

@@ -1236,12 +1236,86 @@ describe("orchestrator tools", () => {
   test("build integrity feedback markdown uses the task primary runtime root", async () => {
     const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
-    expect(source).toContain(
-      'ProjectRuntimePaths.taskAbsolute(taskPrimaryProjectRoot(input.taskID), input.taskID, "integrity-feedback")',
-    )
+    expect(source).toContain("runtimeMarkdownDir: ProjectRuntimePaths.taskAbsolute(")
+    expect(source).toContain("taskPrimaryProjectRoot(input.taskID),")
+    expect(source).toContain('input.taskID,\n      "integrity-feedback",')
     expect(source).not.toContain(
       'ProjectRuntimePaths.taskAbsolute(Instance.project.worktree, input.taskID, "integrity-feedback")',
     )
+  })
+
+  test("select_expert_squad writes a validated prompt profile to the task root session overlay", async () => {
+    const now = Date.now()
+    const projectID = "prj_select_expert_squad"
+    const taskID = "tsk_select_expert_squad"
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "Select expert squad project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Select expert squad",
+          request: "Use the frontend automation debug expert squad.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "root", title: "select expert squad root" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: root.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.select_expert_squad.execute(
+          {
+            profile_id: "frontend-automation-debug",
+            reason: "The current failure requires browser automation and screenshot evidence.",
+          },
+          buildToolOptions("select_expert_squad"),
+        )
+        expect(toolText(result)).toContain("- previous: frontend-replica")
+        expect(toolText(result)).toContain("- active: frontend-automation-debug")
+        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+          prompt_profile: { active: "frontend-automation-debug" },
+        })
+
+        await expect(
+          tools.select_expert_squad.execute(
+            { profile_id: "missing-profile", reason: "Unknown expert squad must not be persisted." },
+            buildToolOptions("select_expert_squad_unknown"),
+          ),
+        ).rejects.toThrow("Unknown prompt profile")
+        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+          prompt_profile: { active: "frontend-automation-debug" },
+        })
+      },
+    })
   })
 
   test("frontend_design live webpage evidence uses the task primary runtime root", async () => {

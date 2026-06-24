@@ -15,6 +15,8 @@ import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
+import frontendReplicaExpertSquadMd from "./builtin/frontend-replica-expert-squad.md" with { type: "text" }
+import frontendAutomationDebugExpertSquadMd from "./builtin/frontend-automation-debug-expert-squad.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -130,7 +132,11 @@ export namespace Skill {
         content: string
       }
 
-  const builtins = [{ skill: researchReportMd, files: {} }] as const
+  const builtins = [
+    { skill: researchReportMd, files: {} },
+    { skill: frontendReplicaExpertSquadMd, files: {} },
+    { skill: frontendAutomationDebugExpertSquadMd, files: {} },
+  ] as const
 
   function isExpired(info: Pick<Info, "expires_at">) {
     return info.expires_at !== undefined && Date.parse(info.expires_at) <= Date.now()

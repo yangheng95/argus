@@ -149,8 +149,8 @@ test(
     let hexinApiKeySaveCount = 0
     const budgetRequests: Array<{ directory: string; remaining: number }> = []
     const promptProfileCatalog = {
-      active: "frontend",
-      project_active: "frontend",
+      active: "frontend-replica",
+      project_active: "frontend-replica",
       session_active: null,
       default: "general",
       targets: [],
@@ -164,8 +164,8 @@ test(
           agents: {},
         },
         {
-          id: "frontend",
-          label: "Frontend",
+          id: "frontend-replica",
+          label: "Frontend Replica",
           description: "Visual UI verification squad.",
           built_in: true,
           editable: false,
@@ -298,6 +298,15 @@ test(
         ])
       }
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts")
+        return send({
+          scope: "project",
+          skills: [],
+          agents: [],
+          matrix: [],
+          project_mounts: { agents: {} },
+          unmounted_count: 0,
+        })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])

@@ -416,6 +416,37 @@ test("registers builtin research-report skill without stage routing metadata", a
   }
 })
 
+test("registers builtin orchestrator expert-squad skills without stage routing metadata", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const home = process.env.OPENCORVUS_TEST_HOME
+  const opencorvusHome = process.env.OPENCORVUS_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
+  process.env.OPENCORVUS_HOME = path.join(tmp.path, "portable")
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const name of ["frontend-replica-expert-squad", "frontend-automation-debug-expert-squad"] as const) {
+          const skill = await Skill.get(name)
+          expect(skill).toBeDefined()
+          expect(skill!.builtin).toBe(true)
+          expect(skill!.location).toContain(path.join("builtin-skills", name, "SKILL.md"))
+          expect(skill!.agents).toEqual(["orchestrator"])
+          expect(skill!.mounted_agents).toEqual(["orchestrator"])
+          expect(skill!.required_tools).toEqual(["select_expert_squad"])
+          expect("stage" in skill!).toBe(false)
+        }
+      },
+    })
+  } finally {
+    if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+    else process.env.OPENCORVUS_TEST_HOME = home
+    if (opencorvusHome === undefined) delete process.env.OPENCORVUS_HOME
+    else process.env.OPENCORVUS_HOME = opencorvusHome
+  }
+})
+
 test("discovers skills from .agents/skills/ directory", async () => {
   await using tmp = await tmpdir({
     git: true,

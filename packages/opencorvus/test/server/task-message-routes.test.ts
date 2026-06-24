@@ -474,15 +474,15 @@ describe("task message routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
-            text: "继续，但切换测试专家团。",
+            text: "继续，但切换前端自动化 debug 专家团。",
             source: "panel",
-            promptProfile: "testing",
+            promptProfile: "frontend-automation-debug",
           }),
         })
 
         expect(response.status).toBe(200)
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "testing" },
+          prompt_profile: { active: "frontend-automation-debug" },
         })
       },
     })
