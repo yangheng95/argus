@@ -14,6 +14,19 @@ export type TaskQueueMetadata =
       messageID: string
       input: Record<string, unknown>
     }
+  | {
+      kind: "session_compaction"
+      input: {
+        sourceUserMessageID: string
+        model?: {
+          providerID: string
+          modelID: string
+        }
+        auto: boolean
+        overflow: boolean
+        focus?: string
+      }
+    }
 
 export const TaskQueueTable = sqliteTable(
   "a2a_task_queue",

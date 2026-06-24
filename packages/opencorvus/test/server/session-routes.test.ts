@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
@@ -75,6 +77,19 @@ describe("session routes", () => {
         expect(typeof requestCompleted?.duration).toBe("number")
       },
     })
+  })
+
+  test("POST /session/:id/summarize delegates compact execution to scheduler service", async () => {
+    const source = await fs.readFile(path.join(import.meta.dir, "../../src/server/routes/session.ts"), "utf8")
+    const start = source.indexOf('"/:sessionID/summarize"')
+    const end = source.indexOf("// === message read / delete / patch ===", start)
+    const routeSource = source.slice(start, end)
+
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(routeSource).toContain("TaskQueueService.executeCompaction")
+    expect(routeSource).not.toContain("SessionCompaction.create")
+    expect(routeSource).not.toContain("SessionContext.provide")
   })
 
   test("project-scoped route errors include request id and failed request log", async () => {

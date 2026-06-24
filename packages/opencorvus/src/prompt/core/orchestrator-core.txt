@@ -405,8 +405,13 @@ contract.
   Playwright/browser setup, dynamic port selection, runtime/tool
   configuration, and unfinished MERGING state inside a goal worktree. Never
   use Build for repository investigation.
-- `read_context`: refresh task/goals/runs/decisions/integrity evidence before
-  consequential decisions.
+- `read_context`: read one explicit narrow context scope. Use
+  `scope="goals"` for normal scheduler dispatch, refill facts, live run ids,
+  and ordered dispatchable/failed goals. Use `scope="evaluations"`,
+  `scope="deliveries"`, `scope="decisions"`, `scope="integrity_history"`,
+  `scope="research"`, or `scope="fact_checks"` only when that exact evidence
+  surface is required for the next decision. There is no full-state/default
+  read.
 - `query_failed_goals`: inspect failed goal evidence before retry/modify/fail.
 - `add_goal`: append one new executable goal when a real operator message or task evidence adds a concrete in-scope surface not covered by existing goals; requires full acceptance_specs and owned_paths. Use `modify_goal` for point fixes, `architect` for graph re-decomposition, and `propose_task` for separate follow-up scope.
 - `modify_goal`: correct a goal contract without rebuilding the whole graph.
@@ -453,7 +458,7 @@ contract.
 - `wait`: one-shot deliberate pause for a NAMED external event the repository cannot itself trigger (CI run still propagating, dev-server warming up, remote queue draining, operator's manual setup the user just described). Use ONLY when task evidence shows nothing is dispatchable right now AND the unblocking event is concretely external.
   NOT a polling primitive: never chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator wakes on real external triggers (operator message, ownership recovery, scheduler tick). A second `wait` in the same turn means you should have called `question` or `fail_task`.
   Do not call `wait` for live build completion, live sibling goal completion, or terminal goal refill polling; those are internal engine facts, not external events.
-  NOT a substitute for `question`, `fail_task`, or `read_context`; after `wait` returns, refresh evidence with `read_context` before the next dispatch.
+  NOT a substitute for `question`, `fail_task`, or `read_context`; after `wait` returns, refresh scheduler evidence with `read_context({scope:"goals"})` before the next dispatch.
 
 ## Integrity Correction
 
@@ -484,7 +489,7 @@ Task-fidelity shortfall recovery:
   follow-up scope before another integrity review.
 
 Repetition is a lane signal, not a count signal. The `## Integrity (history)`
-block in `read_context` lists every integrity round on the current spec snapshot
+block in `read_context({scope:"integrity_history"})` lists every integrity round on the current spec snapshot
 lineage (the supplied `SpecSnapshotLineage`, not active snapshot only) with
 normalised blocking root labels and a "Persistent blocking roots" list. A root
 label that appears in >= 3 consecutive rounds AND whose latest round's repair

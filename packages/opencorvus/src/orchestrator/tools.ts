@@ -746,7 +746,6 @@ const READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP = 200
 const READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP = 1_200
 const READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP = 3_200
 const READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP = 2_400
-const READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP = 4_800
 const READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP = 16_000
 const READ_CONTEXT_DECISION_REVIEW_CHAR_CAP = 3_500
 const READ_CONTEXT_DECISION_GENERAL_CHAR_CAP = 5_500
@@ -5956,7 +5955,7 @@ export function createOrchestratorTools(input: {
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
             pointer:
-              `research_brief artifact ${artifactID}; read_context scope=all surfaces stale status and bundle paths. ` +
+              `research_brief artifact ${artifactID}; read_context scope=research surfaces stale status and bundle paths. ` +
               "This result is evidence only; choose the next tool from full task context.",
           })
         } catch (err) {
@@ -6369,12 +6368,11 @@ export function createOrchestratorTools(input: {
 
     read_context: tool({
       description:
-        "Read current task context: goal states, acceptance verdicts, Decision Log, acceptance summaries, integrity attempts, and integrity root history. Use this to gather information before making decisions. Goal/eval/acceptance sections return latest state; integrity_history renders fact-only cross-round integrity attempt history for the spec snapshot lineage.",
+        "Read current task context through one explicit narrow scope. Use goals for normal scheduler dispatch; use evaluations, deliveries, decisions, integrity_history, research, or fact_checks only when that surface is needed for the next decision.",
       inputSchema: z.object({
         scope: z
-          .enum(["goals", "evaluations", "decisions", "deliveries", "integrity_history", "all"])
-          .default("all")
-          .describe("What to read"),
+          .enum(["goals", "evaluations", "decisions", "deliveries", "integrity_history", "research", "fact_checks"])
+          .describe("Required narrow context surface to read"),
       }),
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
@@ -6388,7 +6386,7 @@ export function createOrchestratorTools(input: {
         // Caps below preserve the LATEST state per goal rather than history.
         // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
         // source — see decision-log/index.ts), consumed at the call site below.
-        if (scope === "goals" || scope === "all") {
+        if (scope === "goals") {
           const desc = await describeTask(taskID)
           const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, { autoIteration })
           if (closureLines.length > 0) {
@@ -6429,7 +6427,7 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        if (scope === "evaluations" || scope === "all") {
+        if (scope === "evaluations") {
           const { findEvaluationsByTask, listGoalRunsForTask } = await import("@/engine/store")
           const evals = findEvaluationsByTask(taskID) // desc by time_created
           if (evals.length > 0) {
@@ -6490,7 +6488,7 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        if (scope === "evaluations" || scope === "integrity_history" || scope === "all") {
+        if (scope === "integrity_history") {
           const activeSpec = findActiveSpecForTask(taskID)
           const { buildSpecSnapshotLineage, buildIntegrityRootHistory, renderIntegrityRootHistoryBlock } = await import(
             "@/integrity"
@@ -6522,7 +6520,7 @@ export function createOrchestratorTools(input: {
             })
             if (history.totalAttempts > 0) {
               const latest = history.attempts.at(-1)
-              if (scope === "all" && latest) {
+              if (latest) {
                 const teamReportMarkdown = latest.teamReportMarkdown ?? ""
                 const latestLines = [
                   `\n## Integrity (latest)`,
@@ -6546,16 +6544,13 @@ export function createOrchestratorTools(input: {
               }
               output.add(renderIntegrityRootHistoryBlock(history), {
                 pointer: "read_context scope=integrity_history",
-                sectionCap:
-                  scope === "integrity_history"
-                    ? READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP
-                    : READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP,
+                sectionCap: READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP,
               })
             }
           }
         }
 
-        if (scope === "decisions" || scope === "all") {
+        if (scope === "decisions") {
           const { createDecisionLog, DECISION_LOG_PROMPT_LIMIT } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
           // Architecture review history gets its own section with its own
@@ -6583,7 +6578,7 @@ export function createOrchestratorTools(input: {
             })
         }
 
-        if (scope === "all") {
+        if (scope === "research") {
           const researchBriefs = listResearchBriefArtifacts(taskID).slice(0, 4)
           for (const [index, artifact] of researchBriefs.entries()) {
             await appendResearchBriefContext(
@@ -6604,7 +6599,9 @@ export function createOrchestratorTools(input: {
               task.request,
             )
           }
+        }
 
+        if (scope === "fact_checks") {
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
           // via listFactCheckAttempts; surfacing summaries in read_context
@@ -6620,7 +6617,7 @@ export function createOrchestratorTools(input: {
               omitted > 0
                 ? `\n## Fact-check attempts (latest ${latest.length} of ${fcRows.length}; ${omitted} older omitted)`
                 : `\n## Fact-check attempts (${latest.length})`
-            output.add(header, { pointer: "read_context scope=all fact-check attempts" })
+            output.add(header, { pointer: "read_context scope=fact_checks" })
             for (const row of latest) {
               const r = row.payload.report
               output.add(
@@ -6630,7 +6627,7 @@ export function createOrchestratorTools(input: {
                   `unresolved=${r.unresolved.length} ` +
                   `(${row.payload.outcome})`,
                 {
-                  pointer: "read_context scope=all fact-check attempts",
+                  pointer: "read_context scope=fact_checks",
                   sectionCap: READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP,
                 },
               )
@@ -6638,7 +6635,7 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        if (scope === "deliveries" || scope === "all") {
+        if (scope === "deliveries") {
           const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
           const goalRuns = listGoalRunsForTask(taskID) // desc by time_created
           // Keep only the latest acceptance per goal. Previous runs' deliveries
@@ -7415,7 +7412,7 @@ export function createOrchestratorTools(input: {
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
         "workflow tasks. The final workflow gate is `integrity`, and it is valid only after all blocking builds " +
         "are terminal. Non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
-        "choose the next action from that evidence. If read_context surfaces integrity status=artifact_missing, " +
+        'choose the next action from that evidence. If read_context({scope:"integrity_history"}) surfaces integrity status=artifact_missing, ' +
         "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
@@ -7454,7 +7451,7 @@ export function createOrchestratorTools(input: {
                 "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
                 "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
                 "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
-                "same root error class and `read_context` shows the build session near or over its context cap; " +
+                'same root error class and `read_context({scope:"goals"})` shows the build session near or over its context cap; ' +
                 "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
                 "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
                 "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
@@ -8671,7 +8668,7 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
               `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
-              `When a goal reaches terminal status, read_context will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
+              `When a goal reaches terminal status, read_context({scope:"goals"}) will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
               `Call integrity only after all blocking builds are terminal.`
             )
           }
@@ -8829,7 +8826,7 @@ export function createOrchestratorTools(input: {
     wait: tool({
       description:
         WaitToolDescription +
-        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
+        ' In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context({scope:"goals"})` (refreshing scheduler evidence). Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, re-read scheduler evidence with `read_context({scope:"goals"})` before deciding the next dispatch.',
       inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
         const result = await executeWait({
@@ -8839,7 +8836,7 @@ export function createOrchestratorTools(input: {
           taskID,
           logPhase: "orchestrator",
         })
-        return `${result.output} Re-read task evidence with read_context before your next dispatch.`
+        return `${result.output} Re-read scheduler evidence with read_context({scope:"goals"}) before your next dispatch.`
       },
     }),
   }

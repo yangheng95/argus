@@ -10,6 +10,14 @@ import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (result && typeof result === "object" && typeof (result as { output?: unknown }).output === "string") {
+    return (result as { output: string }).output
+  }
+  throw new Error(`Expected string tool result, got ${JSON.stringify(result)}`)
+}
+
 function seedTask(input: { projectID: string; taskID: string; specIDs: string[]; now: number }) {
   Database.use((db) => {
     db.insert(ProjectTable)
@@ -184,7 +192,7 @@ describe("orchestrator integrity root history read_context", () => {
           agentSessionID: `ses_orchestrator_${now}`,
           signal: new AbortController().signal,
         }).tools
-        const output = await tools.read_context.execute({ scope: "evaluations" }, {} as any)
+        const output = toolText(await tools.read_context.execute({ scope: "integrity_history" }, {} as any))
         expect(output).toContain("## Integrity (history)")
         expect(output).toContain("Persistent blocking roots")
         expect(output).not.toBe("No context available yet.")

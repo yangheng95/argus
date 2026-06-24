@@ -92,6 +92,7 @@ import {
   markStageContinuationConsumed,
 } from "../../src/engine/stage-continuation"
 import { researchRequestHash, researchSourceDigest } from "../../src/research/schema"
+import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -4508,7 +4509,9 @@ describe("orchestrator tools", () => {
           agentSessionID: parent.id,
           signal: new AbortController().signal,
         })
-        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+        const result = toolText(
+          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
+        )
 
         expect(result).toContain("Frontend Research Brief 1/2")
         expect(result).toContain("Frontend Research Brief 2/2")
@@ -4571,7 +4574,9 @@ describe("orchestrator tools", () => {
           agentSessionID: parent.id,
           signal: new AbortController().signal,
         })
-        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+        const result = toolText(
+          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
+        )
 
         expect(result).toContain("Deep Research Brief 1/2")
         expect(result).toContain("Deep Research Brief 2/2")
@@ -4583,7 +4588,22 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("read_context scope all bounds large persisted context while preserving pointers", async () => {
+  test("read_context schema requires an explicit narrow scope", async () => {
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_read_context_schema",
+      agentSessionID: "ses_read_context_schema",
+      signal: new AbortController().signal,
+    })
+    const schema = tools.read_context.inputSchema as unknown as z.ZodTypeAny
+
+    expect(schema.safeParse({}).success).toBe(false)
+    expect(schema.safeParse({ scope: "all" }).success).toBe(false)
+    expect(schema.safeParse({ scope: "goals" }).success).toBe(true)
+    expect(schema.safeParse({ scope: "research" }).success).toBe(true)
+    expect(schema.safeParse({ scope: "fact_checks" }).success).toBe(true)
+  })
+
+  test("read_context explicit scopes bound large persisted context while preserving pointers", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_read_context_budget_${stamp}`
@@ -4672,6 +4692,37 @@ describe("orchestrator tools", () => {
           brief: frontendBrief,
           now: now + 3,
         })
+        recordFactCheckAttempt({
+          taskID,
+          factCheckSessionID: `ses_fact_check_budget_${stamp}`,
+          targetSessionID: `ses_target_budget_${stamp}`,
+          targetAgent: "build",
+          targetMessageID: `msg_target_budget_${stamp}`,
+          targetMessageContentHash: `hash_budget_${stamp}`,
+          invokedByOrchestratorSessionID: parent.id,
+          report: {
+            scope: {
+              target_session_id: `ses_target_budget_${stamp}`,
+              target_agent: "build",
+              target_message_id: `msg_target_budget_${stamp}`,
+              target_message_content_hash: `hash_budget_${stamp}`,
+              items_total: 3,
+              items_inspected: 3,
+            },
+            verified: [
+              {
+                claim: "The build changed bounded context handling.",
+                evidence: "Diff and tests show explicit scope handling.",
+              },
+            ],
+            corrected: [],
+            unresolved: [],
+            overall_verdict: "clean",
+          },
+          timeStarted: now + 4,
+          now: now + 5,
+          outcome: "completed",
+        })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -4679,21 +4730,45 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+        const goals = toolText(await tools.read_context.execute({ scope: "goals" }, buildToolOptions("read_context")))
+        expect(goals.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(goals).toContain(goalID)
+        expect(goals).toContain("REQ-BUDGET")
+        expect(goals).not.toContain(deepArtifactID)
+        expect(goals).not.toContain(frontendArtifactID)
 
-        expect(result.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
-        expect(result).toContain(goalID)
-        expect(result).toContain("REQ-BUDGET")
-        expect(result).toContain(integrityArtifactID)
-        expect(result).toContain(deepArtifactID)
-        expect(result).toContain(frontendArtifactID)
-        expect(result).toContain(`ses_deep_budget_${stamp}`)
-        expect(result).toContain(`ses_frontend_budget_${stamp}`)
-        expect(result).toContain("https://example.com/budget")
-        expect(result).toContain("read_context omitted")
-        expect(result).not.toContain(giantReportEnd)
-        expect(result).not.toContain(giantDeepSummaryEnd)
-        expect(result).not.toContain(giantFrontendSummaryEnd)
+        const integrity = toolText(
+          await tools.read_context.execute({ scope: "integrity_history" }, buildToolOptions("read_context")),
+        )
+        expect(integrity.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(integrity).toContain(integrityArtifactID)
+        expect(integrity).toContain("GIANT_INTEGRITY_REPORT_START")
+        expect(integrity).toContain("read_context omitted")
+        expect(integrity).not.toContain(giantReportEnd)
+
+        const research = toolText(
+          await tools.read_context.execute({ scope: "research" }, buildToolOptions("read_context")),
+        )
+        expect(research.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(research).toContain(deepArtifactID)
+        expect(research).toContain(frontendArtifactID)
+        expect(research).toContain(`ses_deep_budget_${stamp}`)
+        expect(research).toContain(`ses_frontend_budget_${stamp}`)
+        expect(research).toContain("https://example.com/budget")
+        expect(research).toContain("read_context omitted")
+        expect(research).not.toContain(giantDeepSummaryEnd)
+        expect(research).not.toContain(giantFrontendSummaryEnd)
+
+        const factChecks = toolText(
+          await tools.read_context.execute({ scope: "fact_checks" }, buildToolOptions("read_context")),
+        )
+        expect(factChecks.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(factChecks).toContain("## Fact-check attempts")
+        expect(factChecks).toContain("[clean]")
+        expect(factChecks).toContain("target=`build`")
+        expect(factChecks).toContain(`session=\`ses_target_budge`)
+        expect(factChecks).toContain("verified=1 corrected=0 unresolved=0")
+        expect(factChecks).toContain("(completed)")
       },
     })
   })
