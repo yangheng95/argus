@@ -503,16 +503,16 @@ function ExtensionSettingsPanel(props: {
   const builtinCount = createMemo(() => poolSkills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
-  async function refreshSkillMounts() {
+  async function refreshSkillMounts(options: { refresh?: boolean } = {}) {
     if (!currentDirectory()) return undefined
-    return await loadSkillMountMatrix()
+    return await loadSkillMountMatrix({ refresh: options.refresh })
   }
 
   async function refreshMcpStatus() {
     return (await loadMcpStatus()) as Record<string, McpItem>
   }
 
-  async function reloadCurrentPanel() {
+  async function reloadCurrentPanel(options: { refreshSkills?: boolean } = {}) {
     if (!requireActiveDirectory()) return
     setLoading(true)
     setNotice("")
@@ -520,9 +520,9 @@ function ExtensionSettingsPanel(props: {
       if (props.mode === "mcp") {
         await refreshMcpStatus()
       } else if (props.mode === "skill-market") {
-        await Promise.all([refreshSkillMounts(), loadSkillMarket()])
+        await Promise.all([refreshSkillMounts({ refresh: options.refreshSkills }), loadSkillMarket()])
       } else {
-        await refreshSkillMounts()
+        await refreshSkillMounts({ refresh: options.refreshSkills })
       }
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
@@ -772,7 +772,7 @@ function ExtensionSettingsPanel(props: {
   }
 
   async function handleReloadSkills() {
-    await reloadCurrentPanel()
+    await reloadCurrentPanel({ refreshSkills: true })
   }
 
   // Ensure market data is loaded once per active project directory.

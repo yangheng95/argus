@@ -475,6 +475,109 @@ describe("skill routes", () => {
     }
   }, 20000)
 
+  test("GET /skill/mounts refresh=true rescans disk-added project skills after discovery was cached", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const initial = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(initial.status).toBe(200)
+        const initialBody = (await initial.json()) as { skills: Array<{ name: string }> }
+        expect(initialBody.skills.some((entry) => entry.name === "manual-refresh-skill")).toBe(false)
+
+        await Filesystem.write(
+          path.join(tmp.path, ".opencorvus", "skill", "manual-refresh-skill", "SKILL.md"),
+          [
+            "---",
+            "name: manual-refresh-skill",
+            "description: Skill added directly on disk after the matrix cache was initialized.",
+            "---",
+            "",
+            "Use this skill only after explicit skill refresh.",
+          ].join("\n"),
+        )
+
+        const refreshed = await app.request("/skill/mounts?refresh=true", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(refreshed.status).toBe(200)
+        const refreshedBody = (await refreshed.json()) as {
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+        }
+        const skill = refreshedBody.skills.find((entry) => entry.name === "manual-refresh-skill")
+        expect(skill).toBeDefined()
+        expect(skill?.mounted_agents).toEqual([])
+        expect(skill?.unmounted).toBe(true)
+      },
+    })
+  }, 20000)
+
+  test("POST /skill/install invalidates discovery cache before the next mount matrix read", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const skillDir = path.join(tmp.path, "installed-after-cache")
+    await Filesystem.write(
+      path.join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: installed-after-cache",
+        "description: Skill installed after the matrix cache was initialized.",
+        "---",
+        "",
+        "Use this skill after installation.",
+      ].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const initial = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(initial.status).toBe(200)
+
+        const installed = await app.request("/skill/install", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            kind: "path",
+            value: skillDir,
+            policy: "ask",
+          }),
+        })
+        expect(installed.status).toBe(200)
+
+        const listed = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(listed.status).toBe(200)
+        const body = (await listed.json()) as {
+          skills: Array<{ name: string; source_type: string; source?: string; policy: string }>
+        }
+        const skill = body.skills.find((entry) => entry.name === "installed-after-cache")
+        expect(skill).toBeDefined()
+        expect(skill?.source_type).toBe("config_path")
+        expect(skill?.source).toBe(skillDir)
+        expect(skill?.policy).toBe("ask")
+      },
+    })
+  }, 20000)
+
   test("GET /skill/installed classifies .codex skills as external", async () => {
     await using tmp = await tmpdir({
       git: true,

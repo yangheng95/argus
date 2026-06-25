@@ -134,7 +134,10 @@ export namespace SkillMount {
     }
   }
 
-  export async function matrix(input?: { sessionID?: string }): Promise<Matrix> {
+  export async function matrix(input?: { sessionID?: string; refresh?: boolean }): Promise<Matrix> {
+    if (input?.refresh) {
+      await SkillManager.refreshDiscoveryState()
+    }
     const scope = input?.sessionID ? "session" : "project"
     const { Agent } = await import("@/agent/agent")
     const config = input?.sessionID

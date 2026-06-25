@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
-import { deleteAllSkills, loadExtensions } from "../src/services/extensions"
+import { deleteAllSkills, loadExtensions, loadSkillMountMatrix } from "../src/services/extensions"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import { appStore, setSkillMounts, setSkills } from "../src/store/app"
@@ -115,6 +115,19 @@ describe("Extension overlay service", () => {
     expect(appStore.skills.map((item) => item.name)).toEqual(["mounted-skill"])
     expect(appStore.skillMounts?.project_mounts).toEqual({ agents: { build: ["mounted-skill"] } })
     expect(appStore.mcp.docs).toEqual({ status: "connected" })
+  })
+
+  test("loadSkillMountMatrix refresh uses the matrix projection with explicit cache invalidation", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeExtensionLoadTransport(requests))
+    configure({ directory: PROJECT_DIR })
+
+    const result = await loadSkillMountMatrix({ refresh: true })
+
+    expect(requests.map((item) => `${item.method ?? "GET"} ${item.path}`)).toEqual(["GET skill/mounts"])
+    expect(requests[0]?.query).toEqual({ refresh: "true", directory: PROJECT_DIR })
+    expect(result.skills.map((item) => item.name)).toEqual(["mounted-skill"])
+    expect(appStore.skills.map((item) => item.name)).toEqual(["mounted-skill"])
   })
 
   test("deleteAllSkills refreshes installed projection after partial removal failure", async () => {
