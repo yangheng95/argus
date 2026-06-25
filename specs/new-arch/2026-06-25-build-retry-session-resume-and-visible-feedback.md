@@ -24,6 +24,13 @@ retry-feedback instructions, acceptance raw-packet JSON, and orchestrator
 send the recorded failure itself, not a second prompt envelope about how to
 retry.
 
+Scheduler prompt correction, 2026-06-25: the orchestrator must treat
+per-goal retry and continuation as one `build({ goalID })` decision. It should
+resume a resumable prior build session first. It must not implement
+"resume failed, then retry" as an implicit fallback; missing, corrupt, or
+non-resumable lineage is a structural error unless durable evidence proves the
+old worker cannot continue and justifies explicitly opening a new attempt.
+
 ## Recall
 
 | Source | Constraint |
@@ -42,6 +49,7 @@ retry.
 | `orchestrator/tools.ts::build` retry session selection | Reuses prior terminal `session_id` by default, unless `freshContext` is set. | Always reuse prior terminal `session_id` for goal retries. |
 | `engine/persist.ts::ensureBuildRetryFeedbackForGoal` | Appends terminal status, retry count, session/worktree metadata, build report, and "Required for this retry" instructions. | Persist only failure facts: terminal error and build-report error/summary when present. No retry instructions. |
 | `orchestrator/tools.ts::build` retry feedback renderer | Wraps retry entries in "previous attempt" and "required" prose, and appends decision-log `reason`. | Pass only decision-log `value` text to BuildAgent. Keep `reason` audit-only. |
+| `prompt/core/orchestrator-core.txt` per-goal retry guidance | Says goal retry resumes prior session, but does not explicitly forbid "resume failed, then retry" fallback. | State that resumable sessions are resumed first, and non-resumable lineage must be surfaced as a structural error unless durable evidence justifies a new attempt. |
 | `composeAcceptanceRetryFeedback` | Copies a raw persisted feedback packet JSON into the build prompt. | Render scoped rejection facts and manifest failure lines only. Do not inline raw artifact packets. |
 | `BuildAgent.run` attachment prompt assembly | Uses `renderVisualContractPreamble(...)` and inlines all task attachments on retry. | On `existingSessionID`, append only incremental retry feedback text. Do not repeat original visual contract, staged list, inventory, or original task file parts. |
 | `buildRetryFeedbackPrompt` | Rebuilds a mini prompt with target labels, overlays, default instructions, and terminal-report reminders. | Emit only failure facts. Use current `request` text only when no persisted failure facts exist. |
@@ -74,6 +82,9 @@ Retry prompt assembly must be incremental:
   than another synthetic wrapper;
 - external executors must receive the same incremental text through
   `provider.resume`.
+- the scheduler prompt must not describe retry as "try resume, then retry on
+  failure"; it must require explicit non-resumable evidence before opening a
+  new attempt.
 
 New acceptance-rendered retry attachments can be designed separately if needed;
 this fix closes the repeated original-context splice.
