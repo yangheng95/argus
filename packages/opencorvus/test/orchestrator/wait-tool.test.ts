@@ -145,6 +145,8 @@ describe("createOrchestratorTools — wait wiring", () => {
     // `question`, `fail_task`, or a real workflow decision from the refreshed
     // task snapshot.
     expect(wait.description).toMatch(/one-shot/i)
+    expect(wait.description).toMatch(/When executing a goal/)
+    expect(wait.description).toMatch(/default to 1200000ms \(20 minutes\)/)
     expect(wait.description).toMatch(/1200000ms \(20 minutes\)/)
     expect(wait.description).toMatch(/repeated 60000ms \(60 second\) waits/)
     expect(wait.description).toMatch(/NOT a polling primitive/i)

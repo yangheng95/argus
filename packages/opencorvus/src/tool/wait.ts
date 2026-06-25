@@ -17,7 +17,7 @@ export const WaitToolParameters = z.object({
     .max(WAIT_MAX_MS)
     .describe(
       `Pause length in milliseconds. Minimum ${WAIT_MIN_MS}, recommended ${WAIT_RECOMMENDED_MS}, maximum ${WAIT_MAX_MS}. ` +
-        "For a real external settle wait, request the recommended 20 minute duration once instead of chaining repeated 60 second waits.",
+        "When executing a goal and this wait tool is the responsible action, default to the recommended 20 minute duration once instead of chaining repeated 60 second waits.",
     ),
   reason: z
     .string()
@@ -26,7 +26,7 @@ export const WaitToolParameters = z.object({
 })
 
 export const WaitToolDescription =
-  "One-shot deliberate pause. Yields the current agent turn for the stated number of milliseconds before returning, so a NAMED external event the repository cannot itself trigger has time to settle before your NEXT tool call. Recommended deliberate external-settle duration is 1200000ms (20 minutes); use that single wait instead of repeated 60000ms (60 second) waits. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is concretely external. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
+  "One-shot deliberate pause. Yields the current agent turn for the stated number of milliseconds before returning, so a NAMED external event the repository cannot itself trigger has time to settle before your NEXT tool call. When executing a goal and this wait tool is the responsible action, default to 1200000ms (20 minutes); use that single wait instead of repeated 60000ms (60 second) waits. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is concretely external. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
 
 export async function executeWait(input: {
   duration_ms: number
