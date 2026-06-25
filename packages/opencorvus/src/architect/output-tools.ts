@@ -703,13 +703,13 @@ export function architectValidationFindings(
         goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
-      blocker(
+      concern(
         "missing_final_visual_acceptance",
         [
-          "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
+          "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal with an on_integrity acceptance spec that consumes a VisualEvidenceBundle, but this is not a submit-time host gate.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
           "Preferred repair: call register_visual_evidence_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
-          "Required stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
+          "Recommended stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },

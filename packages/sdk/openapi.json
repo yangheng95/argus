@@ -41917,31 +41917,31 @@
                 "type": "object",
                 "properties": {
                   "phash_hamming_max": {
-                    "description": "P0-B hard gate: pHash Hamming distance upper bound (structure)",
+                    "description": "P0-B visual metric: pHash Hamming distance upper bound (structure)",
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 64
                   },
                   "ssim_min": {
-                    "description": "P0-B hard gate: mean SSIM lower bound (texture/detail)",
+                    "description": "P0-B visual metric: mean SSIM lower bound (texture/detail)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "chart_region_density_min_ratio": {
-                    "description": "P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)",
+                    "description": "P0-B visual metric: chart-region non-white density ratio lower bound (anti empty-skeleton)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "unique_color_ratio_min": {
-                    "description": "P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)",
+                    "description": "P0-B visual metric: unique-color ratio lower bound (anti monochrome placeholder)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "text_hit_ratio_min": {
-                    "description": "P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)",
+                    "description": "P0-B visual metric: reference_strings hit ratio lower bound (anti placeholder copy)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1

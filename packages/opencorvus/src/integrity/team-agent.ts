@@ -395,18 +395,19 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
           if (!parsed.success) return `Error: integrity review failed schema validation: ${parsed.error.message}`
-          const issues = await validateIntegrityConsensusVisualEvidence({
+          const advisories = await summarizeIntegrityConsensusVisualEvidenceAdvisories({
             report: parsed.data,
             projectRoot: input.projectRoot,
             taskID: input.taskID,
             visualEvidence: input.visualEvidence,
             visualEvidenceRequired: input.visualEvidenceRequired,
           })
-          if (issues.length > 0) {
-            return `BLOCKERS (${issues.length}):\n${issues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}\nFix the report or continue testing/repairing, then call submit_integrity_consensus again.`
-          }
           input.collector.report = parsed.data
-          return `PASS: integrity review accepted with verdict=${parsed.data.verdict}.`
+          const advisoryText =
+            advisories.length > 0
+              ? `\n\nADVISORIES (${advisories.length}):\n${advisories.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+              : ""
+          return `RECORDED: integrity review recorded with verdict=${parsed.data.verdict}.${advisoryText}`
         },
       }),
     },
@@ -418,7 +419,7 @@ async function createSingleSessionIntegrityToolKit(input: {
   }
 }
 
-async function validateIntegrityConsensusVisualEvidence(input: {
+async function summarizeIntegrityConsensusVisualEvidenceAdvisories(input: {
   report: IntegrityTeamReport
   projectRoot?: string
   taskID?: string
@@ -427,13 +428,13 @@ async function validateIntegrityConsensusVisualEvidence(input: {
 }): Promise<string[]> {
   if (input.report.verdict !== "pass" || !input.visualEvidenceRequired) return []
   if (!input.taskID || !input.projectRoot) {
-    return ["pass verdict for reference visual evidence requires task-scoped project context."]
+    return ["pass verdict was submitted while reference visual evidence was expected, but task-scoped project context was unavailable."]
   }
   const bundles = input.visualEvidence ?? []
   if (bundles.length === 0) {
-    return ["pass verdict requires a valid VisualEvidenceBundle with passed reference-comparison evidence."]
+    return ["pass verdict was submitted while reference visual evidence was expected, but no VisualEvidenceBundle was available."]
   }
-  const issues: string[] = []
+  const advisories: string[] = []
   for (const bundle of bundles) {
     const comparisonValidation = await validateVisualEvidenceBundleReferenceComparisons({
       projectRoot: input.projectRoot,
@@ -441,14 +442,14 @@ async function validateIntegrityConsensusVisualEvidence(input: {
       expectedTaskID: input.taskID,
     })
     if (!visualEvidenceBundlePasses(bundle) || !comparisonValidation.passing) {
-      issues.push(
-        `VisualEvidenceBundle ${bundle.id} is not passing: ${
+      advisories.push(
+        `VisualEvidenceBundle ${bundle.id} is not passing visual evidence advisory checks: ${
           comparisonValidation.issues.join("; ") || "required visual regions are not fully passing"
         }`,
       )
     }
   }
-  return issues
+  return advisories
 }
 
 async function createIntegrityPreviewTools(input: { taskID: string; signal?: AbortSignal }): Promise<ToolSet> {

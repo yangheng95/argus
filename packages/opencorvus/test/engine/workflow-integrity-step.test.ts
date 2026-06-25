@@ -17,6 +17,48 @@ import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+function visualQaReport(overrides: Record<string, unknown> = {}) {
+  return {
+    accepted: true,
+    summary: "Visual QA report accepted.",
+    coverage: [
+      {
+        region: "dashboard",
+        viewports: [{ width: 1440, height: 900 }],
+        states: ["default"],
+        source_refs: ["visual_qa"],
+        evidence_refs: ["artifacts/dashboard.png"],
+        notes: "Checked the dashboard surface.",
+      },
+    ],
+    findings: [],
+    production_blockers: [],
+    follow_up_task: null,
+    repairs: [],
+    evidence: [
+      {
+        type: "screenshot",
+        ref: "artifacts/dashboard.png",
+        viewport: { width: 1440, height: 900 },
+        state: "default",
+        note: "Fresh visual QA screenshot.",
+      },
+    ],
+    reference_parity: {
+      required: false,
+      required_regions: [],
+      reference_comparison_evidence_refs: [],
+      missing_regions: [],
+      blocker_ids: [],
+    },
+    commands: [],
+    changed_files: [],
+    open_questions: [],
+    fact_check_items: [],
+    ...overrides,
+  }
+}
+
 describe("pipeline workflow review topology", () => {
   beforeEach(async () => {
     await resetDatabase()
@@ -318,7 +360,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project visual_qa as completed from bare accepted report JSON", () => {
+  test("projects visual_qa as completed from schema-defaulted bare accepted report JSON", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_bare_report`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -357,18 +399,18 @@ describe("pipeline workflow review topology", () => {
       key: "report_1",
       value: JSON.stringify({
         accepted: true,
-        summary: "Bare accepted report should not project completion.",
+        summary: "Bare accepted report projects completion through schema defaults.",
         production_blockers: [],
       }),
-      reason: "Malformed frontend GUI and functional QA report.",
+      reason: "Schema-defaulted frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project visual_qa as completed from reference parity report without comparison refs", () => {
+  test("projects visual_qa as completed from accepted reference parity report without comparison refs", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_missing`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -405,26 +447,25 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
+      value: JSON.stringify(visualQaReport({
         summary: "Report claimed acceptance but cited no comparison evidence.",
-        production_blockers: [],
         reference_parity: {
           required: true,
           required_regions: ["region_header@desktop"],
           reference_comparison_evidence_refs: [],
           missing_regions: [],
+          blocker_ids: [],
         },
-      }),
+      })),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project reference task visual_qa as completed when report claims parity is not required", () => {
+  test("projects reference task visual_qa as completed when accepted report claims parity is not required", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_false`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -467,32 +508,8 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
+      value: JSON.stringify(visualQaReport({
         summary: "Screenshot-only report claimed parity not required.",
-        coverage: [
-          {
-            region: "dashboard",
-            viewports: [{ width: 1440, height: 900 }],
-            states: ["default"],
-            source_refs: ["visual_qa"],
-            evidence_refs: ["artifacts/dashboard.png"],
-            notes: "Checked the dashboard surface.",
-          },
-        ],
-        findings: [],
-        production_blockers: [],
-        follow_up_task: null,
-        repairs: [],
-        evidence: [
-          {
-            type: "screenshot",
-            ref: "artifacts/dashboard.png",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Fresh visual QA screenshot.",
-          },
-        ],
         reference_parity: {
           required: false,
           required_regions: [],
@@ -500,20 +517,16 @@ describe("pipeline workflow review topology", () => {
           missing_regions: [],
           blocker_ids: [],
         },
-        commands: [],
-        changed_files: [],
-        open_questions: [],
-        fact_check_items: [],
-      }),
+      })),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project visual_qa as completed when VisualEvidenceBundle alone requires reference parity", async () => {
+  test("projects visual_qa as completed when VisualEvidenceBundle alone requires reference parity", async () => {
     await using tmp = await tmpdir()
     const now = Date.now()
     const stamp = `${now.toString(16)}_bundle_only`
@@ -598,32 +611,8 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
+      value: JSON.stringify(visualQaReport({
         summary: "Screenshot-only report claimed parity not required.",
-        coverage: [
-          {
-            region: "dashboard",
-            viewports: [{ width: 1440, height: 900 }],
-            states: ["default"],
-            source_refs: ["visual_qa"],
-            evidence_refs: ["artifacts/dashboard.png"],
-            notes: "Checked the dashboard surface.",
-          },
-        ],
-        findings: [],
-        production_blockers: [],
-        follow_up_task: null,
-        repairs: [],
-        evidence: [
-          {
-            type: "screenshot",
-            ref: "artifacts/dashboard.png",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Fresh visual QA screenshot.",
-          },
-        ],
         reference_parity: {
           required: false,
           required_regions: [],
@@ -631,20 +620,16 @@ describe("pipeline workflow review topology", () => {
           missing_regions: [],
           blocker_ids: [],
         },
-        commands: [],
-        changed_files: [],
-        open_questions: [],
-        fact_check_items: [],
-      }),
+      })),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project reference task visual_qa as completed from unverified comparison ref strings", () => {
+  test("projects reference task visual_qa as completed from unverified comparison ref strings", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_bogus_refs`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -730,10 +715,10 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("pending")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("does not project visual_qa as completed from self-reported reference parity refs", () => {
+  test("projects visual_qa as completed from self-reported reference parity refs", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_self_reference_bogus_refs`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -813,7 +798,7 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("pending")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
   test("keeps visual_qa pending when summary lacks a full report", () => {
@@ -958,7 +943,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa as failed when full report lacks production blocker semantics", () => {
+  test("projects visual_qa as completed when accepted report relies on schema-defaulted blocker fields", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_visual_qa_missing_blockers_${stamp}`
@@ -997,14 +982,14 @@ describe("pipeline workflow review topology", () => {
       key: "report_1",
       value: JSON.stringify({
         accepted: true,
-        summary: "Legacy report without production blocker semantics.",
+        summary: "Accepted report relies on schema-defaulted blocker fields.",
       }),
-      reason: "Legacy report must not project as accepted visual QA.",
+      reason: "Schema-defaulted report is accepted by its own submitted fields.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
   test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {

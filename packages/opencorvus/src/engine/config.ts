@@ -66,7 +66,7 @@ interface ActivityConfig {
 }
 
 /**
- * AcceptanceVisualConfig — P0-B 数值硬门阈值 + 复合 score 权重。
+ * AcceptanceVisualConfig — P0-B visual metric 阈值 + 复合 score 权重。
  *
  * 单源化：所有阈值都在 EngineConfig 下统一管理（rule 25 禁散配置文件），
  * 用户可通过 opencorvus.jsonc `assistant.acceptance_visual` 覆盖。改动阈值

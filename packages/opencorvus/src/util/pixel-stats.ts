@@ -1,6 +1,6 @@
 /**
  * 像素统计共享工具。P0-A capture-gate（reference 真实性）与 P0-B visual-metric
- * （acceptance 硬门）都要算非白密度 / 唯一色数 / top-K 调色板，必须共享实现
+ * diagnostic 都要算非白密度 / 唯一色数 / top-K 调色板，必须共享实现
  * （rule 22：禁双源），且其语义（白阈值、bucket 位宽、透明跳过）必须一致。
  */
 import { PNG } from "pngjs"

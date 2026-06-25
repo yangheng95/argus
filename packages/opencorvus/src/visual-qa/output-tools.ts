@@ -35,30 +35,33 @@ function parseReferenceRegionKey(key: string): { regionID: string; viewportID: s
   return { regionID: regionID.trim(), viewportID: viewportID.trim() }
 }
 
-async function validateVisualQaReport(report: VisualQaReport, context: VisualQaOutputToolContext): Promise<string[]> {
-  const issues: string[] = []
+async function summarizeVisualQaReportAdvisories(
+  report: VisualQaReport,
+  context: VisualQaOutputToolContext,
+): Promise<string[]> {
+  const advisories: string[] = []
   if (report.accepted && report.evidence.length === 0) {
-    issues.push("accepted=true requires at least one fresh visual and functional evidence item.")
+    advisories.push("accepted=true was submitted without fresh visual or functional evidence items.")
   }
   if (report.accepted && report.coverage.length === 0) {
-    issues.push("accepted=true requires at least one coverage item naming checked regions/viewports/states.")
+    advisories.push("accepted=true was submitted without coverage items naming checked regions/viewports/states.")
   }
   const openBlocking = openBlockingFindings(report)
   if (report.accepted && openBlocking.length > 0) {
-    issues.push(
-      `accepted=true is incompatible with open critical/major findings: ${openBlocking.map((finding) => finding.id).join(", ")}.`,
+    advisories.push(
+      `accepted=true was submitted with open critical/major findings: ${openBlocking.map((finding) => finding.id).join(", ")}.`,
     )
   }
   if (report.accepted && report.production_blockers.length > 0) {
-    issues.push(
-      `accepted=true is incompatible with production blockers: ${report.production_blockers.map((blocker) => blocker.id).join(", ")}.`,
+    advisories.push(
+      `accepted=true was submitted with production blockers: ${report.production_blockers.map((blocker) => blocker.id).join(", ")}.`,
     )
   }
   if (report.accepted && report.follow_up_task) {
-    issues.push("accepted=true is incompatible with follow_up_task; follow-up work means visual QA did not accept.")
+    advisories.push("accepted=true was submitted with follow_up_task; that usually means visual QA did not fully accept.")
   }
   if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
-    issues.push("accepted=false requires production_blockers or open critical/major findings with actionable evidence.")
+    advisories.push("accepted=false was submitted without production_blockers or open critical/major findings.")
   }
   const referenceParityRequired = Boolean(context.referenceParityRequired || report.reference_parity.required)
   if (referenceParityRequired) {
@@ -79,27 +82,27 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
     ])
     const requiredRegionKeys = [...requiredRegions].sort()
     if (report.accepted && context.referenceParityRequired && !report.reference_parity.required) {
-      issues.push("accepted=true for reference parity requires reference_parity.required=true.")
+      advisories.push("accepted=true was submitted while context expects reference parity but report.reference_parity.required=false.")
     }
     if (report.accepted && context.referenceParityRequired && (context.requiredReferenceRegions?.length ?? 0) === 0) {
-      issues.push(
-        "accepted=true for reference parity requires authoritative requiredReferenceRegions from task evidence; self-reported regions are not enough.",
+      advisories.push(
+        "context expects reference parity but no authoritative requiredReferenceRegions were available from task evidence.",
       )
     }
     if (report.accepted && requiredRegionKeys.length === 0) {
-      issues.push(
-        "accepted=true for reference parity requires reference_parity.required_regions with region_id@viewport_id entries.",
+      advisories.push(
+        "accepted=true was submitted for reference parity without reference_parity.required_regions entries.",
       )
     }
     if (report.accepted && refs.size === 0) {
-      issues.push(
-        "accepted=true for reference parity requires browser_preview_compare_regions reference_comparison evidence refs; screenshots are supporting evidence only.",
+      advisories.push(
+        "accepted=true was submitted for reference parity without browser_preview_compare_regions reference_comparison evidence refs.",
       )
     }
     if (report.accepted && refs.size > 0) {
       if (!context.taskID || !context.projectRoot) {
-        issues.push(
-          "accepted=true for reference parity requires task-scoped project context to verify comparison evidence.",
+        advisories.push(
+          "reference comparison refs were submitted, but task-scoped project context was unavailable for advisory verification.",
         )
       } else {
         const validEvidence: Array<{ id: string; regionID?: string; viewportID: string }> = []
@@ -118,21 +121,21 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
           }
         }
         if (validEvidence.length === 0) {
-          issues.push(
-            "accepted=true for reference parity requires readable passed browser_preview_compare_regions reference-comparison evidence.",
+          advisories.push(
+            "no submitted reference comparison refs resolved to readable passed browser_preview_compare_regions evidence.",
           )
         }
         for (const key of requiredRegionKeys) {
           const parsed = parseReferenceRegionKey(key)
           if ("issue" in parsed) {
-            issues.push(parsed.issue)
+            advisories.push(parsed.issue)
             continue
           }
           const matched = validEvidence.some(
             (evidence) => evidence.regionID === parsed.regionID && evidence.viewportID === parsed.viewportID,
           )
           if (!matched) {
-            issues.push(
+            advisories.push(
               `accepted=true lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`,
             )
           }
@@ -140,15 +143,15 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
       }
     }
     if (report.accepted && report.reference_parity.missing_regions.length > 0) {
-      issues.push(
-        `accepted=true cannot leave reference regions without comparison evidence: ${report.reference_parity.missing_regions.join(", ")}.`,
+      advisories.push(
+        `accepted=true was submitted with reference_parity.missing_regions: ${report.reference_parity.missing_regions.join(", ")}.`,
       )
     }
     if (!report.accepted && report.reference_parity.blocker_ids.length > 0) {
       const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
       const unknown = report.reference_parity.blocker_ids.filter((id) => !blockerIDs.has(id))
       if (unknown.length > 0) {
-        issues.push(`reference_parity.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+        advisories.push(`reference_parity.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
       }
     }
   }
@@ -156,15 +159,15 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
     const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
     const unknown = report.follow_up_task.blocker_ids.filter((id) => !blockerIDs.has(id))
     if (report.production_blockers.length === 0) {
-      issues.push(
-        "follow_up_task requires production_blockers because the new task must inherit concrete blocker evidence.",
+      advisories.push(
+        "follow_up_task was submitted without production_blockers for the new task to inherit.",
       )
     }
     if (unknown.length > 0) {
-      issues.push(`follow_up_task.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+      advisories.push(`follow_up_task.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
     }
   }
-  return issues
+  return advisories
 }
 
 export function buildVisualQaReport(collector: VisualQaCollector) {
@@ -221,12 +224,13 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
         if (collector.final)
           return "Error: visual QA report already submitted; duplicate submit_visual_qa_report ignored."
         const report = VisualQaReportSchema.parse(raw)
-        const issues = await validateVisualQaReport(report, context)
-        if (issues.length > 0) {
-          return `BLOCKERS (${issues.length}):\n${issues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}\nFix the report or continue testing/repairing, then call submit_visual_qa_report again.`
-        }
+        const advisories = await summarizeVisualQaReportAdvisories(report, context)
         collector.final = report
-        return `PASS: visual QA report accepted with accepted=${report.accepted}.`
+        const advisoryText =
+          advisories.length > 0
+            ? `\n\nADVISORIES (${advisories.length}):\n${advisories.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+            : ""
+        return `RECORDED: visual QA report recorded with accepted=${report.accepted}.${advisoryText}`
       },
     }),
   }

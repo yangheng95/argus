@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
-describe("visual metric text gate", () => {
+describe("visual metric text evidence", () => {
   test("fails when text evidence is missing even if image gates pass", async () => {
     const paths = await writeMatchingPNGs()
 
@@ -34,7 +34,7 @@ describe("visual metric text gate", () => {
       expect(result.passed).toBe(false)
       expect(textGate?.passed).toBe(false)
       expect(Number.isNaN(textGate?.value)).toBe(true)
-      expect(textGate?.note).toContain("missing required")
+      expect(textGate?.note).toContain("missing referenceStrings/renderedText evidence")
       expect(result.score).toBeLessThan(1)
     }
   })

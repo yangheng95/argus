@@ -170,7 +170,7 @@ const BuildResultBase = {
     .array(z.string().min(1))
     .optional()
     .describe(
-      "Task-scoped browser_preview_evidence refs produced by browser_preview_compare_regions. Required for passed builds only when the active build context declares structured reference parity evidence.",
+      "Optional task-scoped browser_preview_evidence refs produced by browser_preview_compare_regions when the build actually generated visual comparison evidence.",
     ),
   contract_restatement: z
     .string()

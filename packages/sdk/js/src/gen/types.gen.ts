@@ -1057,23 +1057,23 @@ export type Config = {
      */
     acceptance_visual?: {
       /**
-       * P0-B hard gate: pHash Hamming distance upper bound (structure)
+       * P0-B visual metric: pHash Hamming distance upper bound (structure)
        */
       phash_hamming_max?: number
       /**
-       * P0-B hard gate: mean SSIM lower bound (texture/detail)
+       * P0-B visual metric: mean SSIM lower bound (texture/detail)
        */
       ssim_min?: number
       /**
-       * P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)
+       * P0-B visual metric: chart-region non-white density ratio lower bound (anti empty-skeleton)
        */
       chart_region_density_min_ratio?: number
       /**
-       * P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)
+       * P0-B visual metric: unique-color ratio lower bound (anti monochrome placeholder)
        */
       unique_color_ratio_min?: number
       /**
-       * P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)
+       * P0-B visual metric: reference_strings hit ratio lower bound (anti placeholder copy)
        */
       text_hit_ratio_min?: number
       /**

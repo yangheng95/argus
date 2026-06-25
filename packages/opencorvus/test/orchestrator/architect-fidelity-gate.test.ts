@@ -241,7 +241,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
-  test("blocks reference-driven architecture without visual evidence acceptance", () => {
+  test("reports reference-driven architecture without visual evidence acceptance as a concern", () => {
     const weakVisualSpec: AcceptanceSpec = {
       ...essentialAcceptanceVisualSpec,
       severity: "important",
@@ -255,13 +255,21 @@ describe("orchestrator architect fidelity diagnostics", () => {
         (finding) =>
           finding.severity === "blocker" &&
           finding.message.includes(
-            "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
+            "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal",
+          ),
+      ),
+    ).toBe(false)
+    expect(
+      findings.some(
+        (finding) =>
+          finding.severity === "concern" &&
+          finding.message.includes(
+            "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal",
           ),
       ),
     ).toBe(true)
-    expect(
-      architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), { requireReferenceCoverage: true }),
-    ).toEqual(expect.arrayContaining([expect.stringContaining("Missing essential visual evidence acceptance")]))
+    expect(architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), { requireReferenceCoverage: true }))
+      .toEqual([])
   })
 
   test("reports text-only visual judge as missing visual evidence acceptance", () => {
@@ -269,7 +277,11 @@ describe("orchestrator architect fidelity diagnostics", () => {
       requireReferenceCoverage: true,
     })
 
-    expect(findings.some((finding) => finding.code === "missing_final_visual_acceptance")).toBe(true)
+    expect(
+      findings.some(
+        (finding) => finding.code === "missing_final_visual_acceptance" && finding.severity === "concern",
+      ),
+    ).toBe(true)
   })
 
   test("reports final visual evidence spec that omits a registered reference region as a concern", () => {

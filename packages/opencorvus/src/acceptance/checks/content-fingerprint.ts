@@ -12,8 +12,8 @@
  * 契约（CLAUDE.md）：
  *  - rule 1：锚点必须来自 manifest，缺失直接抛错，不 fallback 到关键字搜索
  *  - rule 11：禁自造 grep 规则——本模块只做"预先由 capture-gate 记录的串"的字面匹配
- *  - rule 22：不与 visual-metric.ts 的 text_hit_ratio 重复实现 OCR——那条硬门用
- *    同一 reference_strings 数组，本模块只在"软判"维度复用，计算方式相同
+ *  - rule 22：不与 visual-metric.ts 的 text_hit_ratio 重复实现 OCR——那个 visual
+ *    metric 用同一 reference_strings 数组，本模块只在"软判"维度复用，计算方式相同
  *  - rule 26：不搞近似匹配 / fuzzy；normalize 到 lowercase + collapse 空白即可，
  *    其余质量由 capture 侧的串质量保证
  *

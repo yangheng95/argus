@@ -57,7 +57,7 @@ describe("agent runner build tool scope", () => {
     expect(switches).toEqual({ submit_acceptance_verdict: true })
   })
 
-  test("build visual reference contract is a hard gate when reference bytes are filtered", () => {
+  test("build visual reference contract still fails unreadable reference bytes before guessing", () => {
     expect(
       shouldFailUnreadableBuildReference({
         kind: "build",
