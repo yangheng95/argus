@@ -590,3 +590,129 @@ test("queued task without a run exposes cancel but not retry", async () => {
     },
   })
 })
+
+test("compileBoard projects contribution and published commit refs separately", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_commit_refs_${stamp}`
+  const taskID = `tsk_board_commit_refs_${stamp}`
+  const runID = `run_board_commit_refs_${stamp}`
+  const goalID = `gol_board_commit_refs_${stamp}`
+  const goalRunID = `glr_board_commit_refs_${stamp}`
+  const acceptanceID = `acc_board_commit_refs_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board commit ref projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Commit ref projection",
+        request: "project goal refs",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+      } as any)
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: taskID,
+        title: "Evidence PRD",
+        slug: "evidence-prd",
+        objective: "Write one source-backed PRD.",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values([
+        {
+          id: goalRunID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "attempt-completed",
+          payload: {
+            goal_id: goalID,
+            status: "completed",
+            retry_count: 0,
+            time_started: now - 5_000,
+            time_completed: now - 1_000,
+          },
+          time_created: now - 1_000,
+          time_updated: now - 1_000,
+        },
+        {
+          id: acceptanceID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          acceptance_id: acceptanceID,
+          kind: "acceptance",
+          label: "acceptance-goal_run",
+          payload: {
+            status: "candidate",
+            summary: "Goal delivered one PRD.",
+            result: {
+              summary: "Goal delivered one PRD.",
+              commit_ref: "f6eef2c",
+              published_commit_ref: "a393474",
+              diff_base_ref: "a6bb0f9",
+              diff_head_ref: "a393474",
+              changed_files: ["docs/world-economy/evidence-prd.md"],
+              diffs: [
+                {
+                  file: "docs/world-economy/evidence-prd.md",
+                  status: "added",
+                  additions: 565,
+                  deletions: 0,
+                },
+              ],
+              stats: { additions: 565, deletions: 0 },
+            },
+          },
+          time_created: now,
+          time_updated: now,
+        },
+      ] as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const payloads = board.goalWorkflows?.[0]?.steps?.map((step: any) => step.payload).filter(Boolean) ?? []
+      const payload = payloads.find((item: any) => item.changedFileDiffs?.length)
+      expect(payload?.commitRef).toBe("f6eef2c")
+      expect(payload?.publishedCommitRef).toBe("a393474")
+      expect(payload?.diffBaseRef).toBe("a6bb0f9")
+      expect(payload?.diffHeadRef).toBe("a393474")
+      expect(payload?.changedFileDiffs).toEqual([
+        {
+          file: "docs/world-economy/evidence-prd.md",
+          additions: 565,
+          deletions: 0,
+          status: "added",
+        },
+      ])
+    },
+  })
+})

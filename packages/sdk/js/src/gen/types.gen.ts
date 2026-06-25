@@ -12721,6 +12721,9 @@ export type TaskConversationResponses = {
             }>
             buildSessionID?: string
             commitRef?: string
+            publishedCommitRef?: string
+            diffBaseRef?: string
+            diffHeadRef?: string
             changedFiles?: Array<string>
             changedFileDiffs?: Array<{
               file: string
@@ -13578,6 +13581,9 @@ export type TaskBoardResponses = {
           }>
           buildSessionID?: string
           commitRef?: string
+          publishedCommitRef?: string
+          diffBaseRef?: string
+          diffHeadRef?: string
           changedFiles?: Array<string>
           changedFileDiffs?: Array<{
             file: string

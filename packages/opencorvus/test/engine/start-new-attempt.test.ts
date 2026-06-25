@@ -482,6 +482,9 @@ describe("Goal.startNewAttempt — options", () => {
       runID,
       status: "completed",
       commitRef: "def5678",
+      publishedCommitRef: "a393474",
+      diffBaseRef: "a6bb0f9",
+      diffHeadRef: "a393474",
       workspaceDir: "C:/tmp/ws-runtime-filter",
       workspaceBranch: "opencorvus/ws-runtime-filter",
       workspaceBaseRef: "base123",
@@ -508,6 +511,9 @@ describe("Goal.startNewAttempt — options", () => {
 
     const acceptance = findAcceptanceByGoalRun(nextRunID)
     expect(acceptance?.result?.commit_ref).toBe("def5678")
+    expect(acceptance?.result?.published_commit_ref).toBe("a393474")
+    expect(acceptance?.result?.diff_base_ref).toBe("a6bb0f9")
+    expect(acceptance?.result?.diff_head_ref).toBe("a393474")
     expect(acceptance?.result?.changed_files).toEqual(["src/index.ts"])
     expect(acceptance?.result?.diffs).toEqual([
       { file: "src/index.ts", status: "modified", additions: 1, deletions: 1 },

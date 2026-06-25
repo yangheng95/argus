@@ -27171,6 +27171,15 @@
                                         "commitRef": {
                                           "type": "string"
                                         },
+                                        "publishedCommitRef": {
+                                          "type": "string"
+                                        },
+                                        "diffBaseRef": {
+                                          "type": "string"
+                                        },
+                                        "diffHeadRef": {
+                                          "type": "string"
+                                        },
                                         "changedFiles": {
                                           "type": "array",
                                           "items": {
@@ -30749,6 +30758,15 @@
                                       "type": "string"
                                     },
                                     "commitRef": {
+                                      "type": "string"
+                                    },
+                                    "publishedCommitRef": {
+                                      "type": "string"
+                                    },
+                                    "diffBaseRef": {
+                                      "type": "string"
+                                    },
+                                    "diffHeadRef": {
                                       "type": "string"
                                     },
                                     "changedFiles": {

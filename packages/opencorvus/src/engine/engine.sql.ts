@@ -13,6 +13,9 @@ export type AcceptanceResult = {
   diffs?: Array<{ file: string; status?: string; additions?: number; deletions?: number }>
   changed_files?: string[]
   commit_ref?: string
+  published_commit_ref?: string
+  diff_base_ref?: string
+  diff_head_ref?: string
   [key: string]: unknown
 }
 

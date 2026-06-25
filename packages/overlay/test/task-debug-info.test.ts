@@ -27,9 +27,11 @@ test("task debug info includes only the compact Files panel board projection sum
   const debugInfo = source("src/utils/debug-info.ts")
 
   expect(debugInfo).toContain("files:     ${debugGoalBoardFiles(gw)}")
-  expect(debugInfo).toContain(
-    "changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size",
-  )
+  expect(debugInfo).toContain("changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; ")
+  expect(debugInfo).toContain("contributionCommits=${commitRefs.size")
+  expect(debugInfo).toContain("publishedCommits=${publishedCommitRefs.size")
+  expect(debugInfo).toContain("diffRefs=${diffRefs.size")
+  expect(debugInfo).not.toContain("commits=${commitRefs.size")
 })
 
 test("task debug info omits the old redundant notes, HTTP probes, and SQL templates", () => {

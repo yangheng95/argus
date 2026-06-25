@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { $ } from "bun"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { collectGoalContributionDiffs } from "../../src/build/agent"
+import { collectGoalContributionDiffs, resolveGoalContributionRefs } from "../../src/build/agent"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { tmpdir } from "../fixture/fixture"
 
@@ -57,5 +57,35 @@ describe("build agent commit diff source", () => {
       deletions: 0,
       status: "added",
     })
+  })
+
+  test("reports contribution refs separately from merge publication refs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const baseRef = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+    const primaryBranch = (await $`git branch --show-current`.cwd(tmp.path).text()).trim()
+
+    await $`git checkout -b goal-branch`.cwd(tmp.path).quiet()
+    await fs.writeFile(path.join(tmp.path, "goal.md"), "goal contribution\n")
+    await $`git add goal.md`.cwd(tmp.path).quiet()
+    await $`git commit -m "goal contribution"`.cwd(tmp.path).quiet()
+    const goalCommit = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+
+    await $`git checkout ${primaryBranch}`.cwd(tmp.path).quiet()
+    await fs.writeFile(path.join(tmp.path, "primary.md"), "primary contribution\n")
+    await $`git add primary.md`.cwd(tmp.path).quiet()
+    await $`git commit -m "primary moved"`.cwd(tmp.path).quiet()
+    const primaryCommit = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+
+    await $`git checkout goal-branch`.cwd(tmp.path).quiet()
+    await $`git merge --no-edit ${primaryBranch}`.cwd(tmp.path).quiet()
+    const mergeCommit = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
+
+    const refs = await resolveGoalContributionRefs(tmp.path, baseRef)
+    expect(refs.contributionCommitRef).toBe(goalCommit)
+    expect(refs.diffBaseRef).toBe(primaryCommit)
+    expect(refs.diffHeadRef).toBe(mergeCommit)
+
+    const diffs = await collectGoalContributionDiffs(tmp.path, baseRef)
+    expect(diffs.map((diff) => diff.file)).toEqual(["goal.md"])
   })
 })

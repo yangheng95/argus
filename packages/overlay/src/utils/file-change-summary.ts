@@ -155,6 +155,9 @@ interface GoalChangeMetadata {
   goalLabel?: string
   goalTitle?: string
   commitRef?: string
+  publishedCommitRef?: string
+  diffBaseRef?: string
+  diffHeadRef?: string
   goalOrderIndex?: number
   goalRetryCount?: number
 }
@@ -173,12 +176,24 @@ function goalMetadataByID(goalWorkflows: unknown): Map<string, GoalChangeMetadat
     const commitRef = payloads
       .map((payload: any) => asText(payload?.commitRef))
       .find((value): value is string => !!value)
+    const publishedCommitRef = payloads
+      .map((payload: any) => asText(payload?.publishedCommitRef))
+      .find((value): value is string => !!value)
+    const diffBaseRef = payloads
+      .map((payload: any) => asText(payload?.diffBaseRef))
+      .find((value): value is string => !!value)
+    const diffHeadRef = payloads
+      .map((payload: any) => asText(payload?.diffHeadRef))
+      .find((value): value is string => !!value)
     map.set(goalID, {
       goalID,
       goalRunID: asText((goal as any)?.goalRunID),
       goalLabel: goalRevisionLabelFromIndexes(goalOrderIndex, goalRetryCount),
       goalTitle: asText((goal as any)?.goalTitle),
       commitRef,
+      publishedCommitRef,
+      diffBaseRef,
+      diffHeadRef,
       goalOrderIndex: Number.isFinite(goalOrderIndex) ? goalOrderIndex : undefined,
       goalRetryCount: Number.isFinite(goalRetryCount) ? goalRetryCount : undefined,
     })
@@ -276,6 +291,9 @@ export function collectAgentFileChangeGroupsFromNodes(
         goalLabel: meta?.goalLabel,
         goalTitle: meta?.goalTitle,
         commitRef: meta?.commitRef,
+        publishedCommitRef: meta?.publishedCommitRef,
+        diffBaseRef: meta?.diffBaseRef,
+        diffHeadRef: meta?.diffHeadRef,
         additions: changes.reduce((sum, item) => sum + (item.additions ?? 0), 0),
         deletions: changes.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
         changes,

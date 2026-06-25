@@ -8249,14 +8249,27 @@ export function createOrchestratorTools(input: {
                     status: currentGoalRun.status,
                   })
                 } else if (buildOutcome.kind === "ok") {
-                  const { result, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
+                  const {
+                    result,
+                    worktreeDir,
+                    worktreeBranch,
+                    worktreeBaseRef,
+                    diffs,
+                    contributionCommitRef,
+                    diffBaseRef,
+                    diffHeadRef,
+                    publishedCommitRef,
+                  } = buildOutcome.result
                   finalizeBuildAttempt({
                     goalRunID,
                     taskID,
                     goalID: attachedGoalID,
                     runID: coordinatorRunID,
                     status: result.status === "passed" ? "completed" : "failed",
-                    commitRef: result.commit_ref,
+                    commitRef: contributionCommitRef,
+                    publishedCommitRef,
+                    diffBaseRef,
+                    diffHeadRef,
                     workspaceDir: worktreeDir,
                     // Phase B (2026-05-05): the build outcome carries branch +
                     // baseRef alongside the directory. Persist them on the
@@ -8346,6 +8359,9 @@ export function createOrchestratorTools(input: {
             const lastMergeBackOutcome = buildOutcome.result.lastMergeBackOutcome
             const publishedCommitRef = buildOutcome.result.publishedCommitRef
             const worktreeHead = buildOutcome.result.worktreeHead
+            const contributionCommitRef = buildOutcome.result.contributionCommitRef
+            const diffBaseRef = buildOutcome.result.diffBaseRef
+            const diffHeadRef = buildOutcome.result.diffHeadRef
             const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
             // Architecture review is no longer triggered automatically per
             // build. Per-goal automatic review fired N times for N goals,
@@ -8432,6 +8448,13 @@ export function createOrchestratorTools(input: {
               ? `- published_commit_ref: ${publishedCommitRef} (primary HEAD after merge_back)`
               : `- published_commit_ref: (none — merge_back did not publish)`
             const worktreeHeadLine = worktreeHead ? `- worktree_head: ${worktreeHead}` : ""
+            const contributionLine = contributionCommitRef
+              ? `- contribution_commit_ref: ${contributionCommitRef}`
+              : `- contribution_commit_ref: (none)`
+            const diffRangeLine =
+              diffBaseRef && diffHeadRef
+                ? `- contribution_diff_range: ${diffBaseRef}..${diffHeadRef}`
+                : `- contribution_diff_range: (none)`
             const actualFilesLines =
               actualChangedFiles.length > 0
                 ? actualChangedFiles
@@ -8443,6 +8466,8 @@ export function createOrchestratorTools(input: {
               `${mergeBackLine}\n` +
               `${publishedLine}\n` +
               (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
+              `${contributionLine}\n` +
+              `${diffRangeLine}\n` +
               `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
 
             closeBuildOwnership(

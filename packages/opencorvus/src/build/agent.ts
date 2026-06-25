@@ -371,9 +371,20 @@ export namespace BuildAgent {
      *  compare against publishedCommitRef to see what was committed but
      *  not yet merged. */
     worktreeHead?: string
+    /** Goal-side commit (short SHA) that introduced the contribution before
+     *  merge_back reconciled primary into the goal worktree. For merge commits
+     *  this is `HEAD^1`; for non-merge goal tips it is `HEAD`. */
+    contributionCommitRef?: string
+    /** Base ref (short SHA) used for actualChangedFiles/diffs. For merge
+     *  commits this is `HEAD^2` (primary tip merged in); otherwise the goal
+     *  worktree base ref. */
+    diffBaseRef?: string
+    /** Head ref (short SHA) used for actualChangedFiles/diffs. Usually the
+     *  worktree HEAD; may equal publishedCommitRef after merge_back. */
+    diffHeadRef?: string
     /** Files that actually changed in this build's contribution range
-     *  (worktreeBaseRef..HEAD, with merge-commit second-parent unwrap
-     *  via resolveGoalContributionBaseRef). The host's ground truth that
+     *  (diffBaseRef..diffHeadRef, with merge-commit second-parent unwrap
+     *  via resolveGoalContributionRefs). The host's ground truth that
      *  the orchestrator LLM can compare to result.files_changed. */
     actualChangedFiles?: Array<{
       path: string
@@ -799,6 +810,7 @@ export namespace BuildAgent {
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
+      let contributionRefs: GoalContributionRefs | undefined
       // Dispatch fork: executor === "opencorvus" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
@@ -898,8 +910,9 @@ export namespace BuildAgent {
         // seeing what the failed build *did* touch before failing, not just
         // when it claimed passed.
         if (ownsWorktree && worktreeDir && baseRef && parsed.success) {
+          contributionRefs = await resolveGoalContributionRefs(worktreeDir, baseRef)
           diffs = await collectGoalContributionDiffs(worktreeDir, baseRef).catch((err) => {
-            log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
+            log.warn("build agent: collectGoalDiffs failed - overlay panel will show empty file list", {
               taskID: input.task.id,
               error: err instanceof Error ? err.message : String(err),
             })
@@ -1055,6 +1068,9 @@ export namespace BuildAgent {
         lastMergeBackOutcome,
         publishedCommitRef: mergedHead ? mergedHead.slice(0, 12) : undefined,
         worktreeHead,
+        contributionCommitRef: contributionRefs?.contributionCommitRef.slice(0, 12),
+        diffBaseRef: contributionRefs?.diffBaseRef.slice(0, 12),
+        diffHeadRef: contributionRefs?.diffHeadRef.slice(0, 12),
         actualChangedFiles,
       }
     })
@@ -2258,6 +2274,19 @@ function resolveOption<T>(input: T | (() => T | undefined) | undefined): T | und
 // Diff collection
 // ---------------------------------------------------------------------------
 
+export interface GoalContributionRefs {
+  contributionCommitRef: string
+  diffBaseRef: string
+  diffHeadRef: string
+}
+
+class GoalContributionHeadMissingError extends Error {
+  constructor(worktreeDir: string) {
+    super(`resolveGoalContributionRefs: could not resolve HEAD in ${worktreeDir}`)
+    this.name = "GoalContributionHeadMissingError"
+  }
+}
+
 /**
  * Collect per-file diffs for the goal's own contribution.
  *
@@ -2271,12 +2300,21 @@ function resolveOption<T>(input: T | (() => T | undefined) | undefined): T | und
  * needed.
  */
 export async function collectGoalContributionDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
-  const contributionBase = await resolveGoalContributionBaseRef(worktreeDir, baseRef)
-  return collectGoalDiffs(worktreeDir, contributionBase)
+  const refs = await resolveGoalContributionRefs(worktreeDir, baseRef).catch((err) => {
+    if (err instanceof GoalContributionHeadMissingError) return undefined
+    throw err
+  })
+  if (!refs) return []
+  return collectGoalDiffs(worktreeDir, refs.diffBaseRef)
 }
 
-export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
+export async function resolveGoalContributionRefs(worktreeDir: string, baseRef: string): Promise<GoalContributionRefs> {
   const env = gitCeilingEnvForWorktree(worktreeDir)
+  const headResult = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, env, timeoutProfile: "fast" })
+  const diffHeadRef = headResult.exitCode === 0 ? headResult.text().trim() : ""
+  if (!diffHeadRef) {
+    throw new GoalContributionHeadMissingError(worktreeDir)
+  }
   const parentsResult = await runGit(["show", "--no-patch", "--pretty=%P", "HEAD"], {
     cwd: worktreeDir,
     env,
@@ -2284,7 +2322,22 @@ export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRe
   })
   const parentsRaw = parentsResult.exitCode === 0 ? parentsResult.text().trim() : ""
   const parents = parentsRaw.split(/\s+/).filter(Boolean)
-  return parents.length >= 2 ? parents[1]! : baseRef
+  if (parents.length >= 2) {
+    return {
+      contributionCommitRef: parents[0]!,
+      diffBaseRef: parents[1]!,
+      diffHeadRef,
+    }
+  }
+  return {
+    contributionCommitRef: diffHeadRef,
+    diffBaseRef: baseRef,
+    diffHeadRef,
+  }
+}
+
+export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
+  return (await resolveGoalContributionRefs(worktreeDir, baseRef)).diffBaseRef
 }
 
 /**

@@ -1233,6 +1233,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
 
   let buildSessionID: string | undefined
   let commitRef: string | undefined
+  let publishedCommitRef: string | undefined
+  let diffBaseRef: string | undefined
+  let diffHeadRef: string | undefined
   let changedFiles: string[] | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
@@ -1255,6 +1258,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     const acceptance = findAcceptanceByGoalRun(deliveredRun.id)
     const result = acceptance?.result as {
       commit_ref?: unknown
+      published_commit_ref?: unknown
+      diff_base_ref?: unknown
+      diff_head_ref?: unknown
       changed_files?: string[]
       diffs?: {
         file?: string
@@ -1266,6 +1272,18 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     } | null
     commitRef =
       typeof result?.commit_ref === "string" && result.commit_ref.trim() ? result.commit_ref.trim() : undefined
+    publishedCommitRef =
+      typeof result?.published_commit_ref === "string" && result.published_commit_ref.trim()
+        ? result.published_commit_ref.trim()
+        : undefined
+    diffBaseRef =
+      typeof result?.diff_base_ref === "string" && result.diff_base_ref.trim()
+        ? result.diff_base_ref.trim()
+        : undefined
+    diffHeadRef =
+      typeof result?.diff_head_ref === "string" && result.diff_head_ref.trim()
+        ? result.diff_head_ref.trim()
+        : undefined
     const diffRows = Array.isArray(result?.diffs)
       ? result.diffs
           .filter(
@@ -1317,6 +1335,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     planNodes,
     buildSessionID,
     commitRef,
+    publishedCommitRef,
+    diffBaseRef,
+    diffHeadRef,
     changedFiles,
     changedFileDiffs,
     diffStats,
