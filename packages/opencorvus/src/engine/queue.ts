@@ -716,12 +716,18 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
  * Idempotent: calling advanceQueue multiple times for the same cwd is safe.
  * The atomic claim ensures only one call will actually start a loop.
  */
-export async function advanceQueue(cwd: string): Promise<TaskRow | undefined> {
+export async function advanceQueue(
+  cwd: string,
+  options?: {
+    beforeStart?: (input: { task: TaskRow; event?: OrchestratorEvent }) => void | Promise<void>
+  },
+): Promise<TaskRow | undefined> {
   if (!cwd) return undefined
   await convergeDeadOwnerActiveTasksForCwd(cwd)
   const claimed = claimNextForCwd(cwd)
   if (!claimed) return undefined
   const event = takeQueuedTaskEvent(claimed.id)
+  await options?.beforeStart?.({ task: claimed, event })
   await startLoopForTask(claimed, event, cwd)
   return claimed
 }
@@ -747,10 +753,15 @@ async function convergeDeadOwnerActiveTasksForCwd(cwd: string): Promise<void> {
 }
 
 export type DispatchTaskLoopResult = "started" | "queued" | "ignored"
+export type DispatchTaskLoopAcceptedWake = {
+  taskID: string
+  result: Exclude<DispatchTaskLoopResult, "ignored">
+}
 
 export async function dispatchTaskLoop(input: {
   taskID: string
   event?: OrchestratorEvent
+  beforeAcceptedWake?: (wake: DispatchTaskLoopAcceptedWake) => void | Promise<void>
 }): Promise<DispatchTaskLoopResult> {
   let task = findTask(input.taskID)
   if (!task) return "ignored"
@@ -777,8 +788,16 @@ export async function dispatchTaskLoop(input: {
   }
   if (isTaskQueued(task)) {
     if (input.event) enqueueTaskEvent(task.id, input.event)
-    const claimed = await advanceQueue(cwd)
-    return claimed?.id === task.id ? "started" : "queued"
+    const claimed = await advanceQueue(cwd, {
+      beforeStart: async ({ task: claimedTask }) => {
+        if (claimedTask.id === task.id) {
+          await input.beforeAcceptedWake?.({ taskID: task.id, result: "started" })
+        }
+      },
+    })
+    if (claimed?.id === task.id) return "started"
+    await input.beforeAcceptedWake?.({ taskID: task.id, result: "queued" })
+    return "queued"
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
@@ -788,6 +807,7 @@ export async function dispatchTaskLoop(input: {
       taskID: task.id,
       liveOwners: liveOwners.map((owner) => owner.ownershipID),
     })
+    await input.beforeAcceptedWake?.({ taskID: task.id, result: "queued" })
     return "queued"
   }
 
@@ -796,6 +816,7 @@ export async function dispatchTaskLoop(input: {
   // invocation might be the one that drives the task to terminal, so its
   // completion must also advance the cwd queue. Fire-and-forget: callers
   // don't want to block on task completion.
+  await input.beforeAcceptedWake?.({ taskID: task.id, result: "started" })
   attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event))
   return "started"
 }

@@ -13,9 +13,9 @@
  * iterations grew three such gates (acceptance-rejection rewake,
  * build-settled-without-deliver rewake, general orchestrator-stream-error
  * rewake); all three were FSM in disguise and have been deleted. The only
- * bounded self-wake left is an orchestrator no-decision contract failure: the
- * previous wake did not produce a workflow decision, so the same task loop is
- * re-entered with that visible fact until the stream-error fuse trips.
+ * self-wake left is an orchestrator no-decision contract failure: when a wake
+ * does not produce a workflow decision, the same task loop is re-entered with
+ * that visible fact.
  *
  * What this owns:
  *   - Per-taskID serial chain (so concurrent wakes don't double-run).

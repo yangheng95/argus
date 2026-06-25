@@ -84,19 +84,29 @@ export namespace EngineRuntime {
     }
     if (refillFacts.length === 0) return false
 
-    const { dispatchTaskLoop } = await import("@/engine/queue")
-    const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
-    if (dispatchResult !== "started" && dispatchResult !== "queued") return false
+    let factsRecorded = false
+    const recordRefillFacts = (dispatchResult: "started" | "queued") => {
+      for (const { fingerprint, terminalGoalRun, liveSiblingGoalRuns } of refillFacts) {
+        recordTerminalGoalRefillWakeFact({
+          taskID: run.task_id,
+          runID: run.id,
+          fingerprint,
+          terminalGoalRun,
+          liveSiblingGoalRuns,
+          dispatchResult,
+        })
+      }
+      factsRecorded = true
+    }
 
-    for (const { fingerprint, terminalGoalRun, liveSiblingGoalRuns } of refillFacts) {
-      recordTerminalGoalRefillWakeFact({
-        taskID: run.task_id,
-        runID: run.id,
-        fingerprint,
-        terminalGoalRun,
-        liveSiblingGoalRuns,
-        dispatchResult,
-      })
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    const dispatchResult = await dispatchTaskLoop({
+      taskID: run.task_id,
+      beforeAcceptedWake: ({ result }) => recordRefillFacts(result),
+    })
+    if (dispatchResult !== "started" && dispatchResult !== "queued") return false
+    if (!factsRecorded) {
+      throw new Error(`dispatchTaskLoop accepted terminal refill wake without recording facts: ${run.task_id}`)
     }
     return true
   }

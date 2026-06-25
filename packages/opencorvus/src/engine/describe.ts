@@ -52,6 +52,7 @@ import {
   listGoalRefillNotificationArtifacts,
   listGoalRunsByGoal,
   listGoals,
+  listOrchestratorDecisionContractFailureArtifacts,
   listOrchestratorStreamErrorArtifacts,
   listToolExecuteErrorArtifacts,
   type GoalRow,
@@ -65,6 +66,7 @@ import { researchBriefIsStale, researchRequestHashInput } from "@/research/stale
  *  A chronically failing provider can write an artifact every wake; older
  *  entries add no decision value once the LLM has seen the trend. */
 const STREAM_FAILURE_PROMPT_CAP = 5
+const DECISION_CONTRACT_FAILURE_PROMPT_CAP = 5
 const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
@@ -158,6 +160,17 @@ export interface StreamFailureDesc {
   error_name?: string
   /** Orchestrator session id active at the moment of the failure, when
    *  available. */
+  session_id?: string
+}
+
+export interface DecisionContractFailureDesc {
+  artifact_id: string
+  time_created: number
+  /** Free-text reason recorded by `recordOrchestratorDecisionContractFailure`. */
+  reason: string
+  /** Contract failure class, for example `OrchestratorNoDecisionStopError`. */
+  error_name?: string
+  /** Orchestrator session id active when the contract failure was observed. */
   session_id?: string
 }
 
@@ -274,14 +287,17 @@ export interface TaskDesc {
     max_executor_groups: number
   }
   recent_verdict?: AcceptanceVerdictDesc
+  /** Completed orchestrator wakes that violated the decision contract. These
+   *  are not provider/network stream failures and must not be counted by the
+   *  stream-error fuse. */
+  recent_decision_contract_failures?: DecisionContractFailureDesc[]
   /** Recent orchestrator-stream-error artifacts (newest first, capped at
    *  STREAM_FAILURE_PROMPT_CAP). Most entries are wakes whose LLM stream
-   *  aborted before any decision was made; OrchestratorNoDecisionStopError is
-   *  a completed stream that stopped without a workflow decision. The
-   *  orchestrator LLM reads this list on its next wake and decides from the
-   *  current task context — there is no engine state machine that auto-handles
-   *  them (rule 13). Empty / undefined when the task has had no such artifacts
-   *  since `task.time_started`. */
+   *  aborted before any decision was made. The orchestrator LLM reads this
+   *  list on its next wake and decides from the current task context — there
+   *  is no engine state machine that auto-handles them (rule 13). Empty /
+   *  undefined when the task has had no such artifacts since
+   *  `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
   recent_tool_execute_failures?: ToolExecuteFailureDesc[]
   /** Persisted tool calls in the task session tree whose state is still
@@ -719,6 +735,27 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const history = readHistory(task.id)
   const verdict = describeVerdict(task.id)
 
+  const decisionContractFailureFloor = task.time_started ?? task.time_created
+  const decisionContractFailureRows = listOrchestratorDecisionContractFailureArtifacts(
+    task.id,
+    decisionContractFailureFloor,
+    DECISION_CONTRACT_FAILURE_PROMPT_CAP,
+  )
+  const recentDecisionContractFailures: DecisionContractFailureDesc[] = decisionContractFailureRows.map((row) => {
+    const payload = (row.payload ?? {}) as {
+      reason?: string
+      errorName?: string
+      sessionID?: string
+    }
+    return {
+      artifact_id: row.id,
+      time_created: row.time_created,
+      reason: typeof payload.reason === "string" ? payload.reason : "",
+      error_name: typeof payload.errorName === "string" ? payload.errorName : undefined,
+      session_id: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+    }
+  })
+
   // Surface recent orchestrator stream errors so the LLM can read them on
   // the next user-driven wake and decide retry / restart / fail. Runtime
   // restart must not auto-wake active tasks: the overlay restores the task
@@ -828,6 +865,8 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       max_executor_groups: maxExecutorGroups,
     },
     recent_verdict: verdict,
+    recent_decision_contract_failures:
+      recentDecisionContractFailures.length > 0 ? recentDecisionContractFailures : undefined,
     recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
     recent_tool_execute_failures: recentToolExecuteFailures.length > 0 ? recentToolExecuteFailures : undefined,
     open_tool_calls_without_current_owner:
@@ -1065,27 +1104,31 @@ export function renderTaskDescription(desc: TaskDesc): string {
     }
   }
 
+  if (desc.recent_decision_contract_failures && desc.recent_decision_contract_failures.length > 0) {
+    lines.push("")
+    lines.push(`## Recent orchestrator decision-contract failures (${desc.recent_decision_contract_failures.length})`)
+    for (const f of desc.recent_decision_contract_failures) {
+      const ts = new Date(f.time_created).toISOString()
+      const tag = f.error_name ? `[${f.error_name}] ` : ""
+      lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
+    }
+    lines.push(
+      `These entries are completed orchestrator wakes that stopped without a workflow decision. ` +
+        `They are not provider/network stream failures. Read current task state and make a real workflow ` +
+        `decision; do not treat them as infrastructure failures.`,
+    )
+  }
+
   if (desc.recent_stream_failures && desc.recent_stream_failures.length > 0) {
     lines.push("")
     lines.push(`## Recent orchestrator stream failures (${desc.recent_stream_failures.length})`)
-    const hasNoDecisionFailure = desc.recent_stream_failures.some(
-      (f) => f.error_name === "OrchestratorNoDecisionStopError",
-    )
     for (const f of desc.recent_stream_failures) {
       const ts = new Date(f.time_created).toISOString()
       const tag = f.error_name ? `[${f.error_name}] ` : ""
       lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
     }
-    if (hasNoDecisionFailure) {
-      lines.push(
-        `Entries tagged \`OrchestratorNoDecisionStopError\` are decision-contract failures: ` +
-          `the stream completed, but the orchestrator stopped without a workflow decision. ` +
-          `Continue from current task state and make a real workflow decision; do not treat ` +
-          `those entries as provider/network failures.`,
-      )
-    }
     lines.push(
-      `Other entries are upstream LLM-call failures that aborted a wake before any decision ` +
+      `These entries are upstream LLM-call failures that aborted a wake before any decision ` +
         `was made. Use those entries to decide: \`retry_task\` (transient network/idle blip), ` +
         `\`question\` (operator-owned config/provider/key choice), or \`fail_task\` ` +
         `(permanent — quota exhausted, key revoked, model gone).`,

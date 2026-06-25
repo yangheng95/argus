@@ -584,7 +584,7 @@ function artifactRowToAcceptanceRow(row: typeof EngineArtifactTable.$inferSelect
     id: row.acceptance_id ?? row.id,
     task_id: row.task_id,
     // acceptance-kind artifacts always have run_id set by writeAcceptanceRow;
-    // nullable column only used for kind="orchestrator-stream-error".
+    // nullable column is used by task-scoped diagnostic artifacts.
     run_id: row.run_id!,
     goal_run_id: row.goal_run_id ?? null,
     status: payload.status ?? "candidate",
@@ -991,6 +991,32 @@ export function listOrchestratorStreamErrorArtifacts(taskID: string, sinceMs: nu
         and(
           eq(EngineArtifactTable.task_id, taskID),
           eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
+          sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(limit)
+      .all(),
+  )
+}
+
+/**
+ * Recent orchestrator decision-contract failures for a task, newest first.
+ *
+ * These rows are completed LLM wakes that failed the orchestrator decision
+ * contract, such as OrchestratorNoDecisionStopError. They are intentionally
+ * separate from orchestrator-stream-error so stream-error fuse accounting only
+ * sees provider/session stream failures.
+ */
+export function listOrchestratorDecisionContractFailureArtifacts(taskID: string, sinceMs: number, limit: number) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "orchestrator-decision-contract-failure" as EngineArtifactKind),
           sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
         ),
       )

@@ -1728,7 +1728,7 @@ export function updateEvaluationFromAcceptanceVerdict(input: {
   const evidence = persistEvidence({
     taskID: existing.task_id,
     // acceptance-kind artifacts always have run_id set by writeAcceptanceRow.
-    // run_id is nullable on the table only for kind="orchestrator-stream-error".
+    // run_id is nullable for task-scoped diagnostic artifacts.
     runID: existing.run_id!,
     acceptanceID: input.acceptanceID,
     scope: "acceptance",
@@ -2408,6 +2408,40 @@ export function recordOrchestratorStreamError(input: {
         run_id: null,
         kind: "orchestrator-stream-error",
         label: "orchestrator-stream-error",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName,
+          sessionID: input.sessionID,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+}
+
+/**
+ * Record a completed orchestrator wake that violated the workflow-decision
+ * contract. This is not a provider/session stream failure: the stream
+ * completed and the model produced an assistant turn, but the turn did not
+ * make a task lifecycle or scheduling decision.
+ */
+export function recordOrchestratorDecisionContractFailure(input: {
+  taskID: string
+  reason: string
+  errorName?: string
+  sessionID?: string
+  now: number
+}) {
+  return Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        kind: "orchestrator-decision-contract-failure",
+        label: "orchestrator-decision-contract-failure",
         payload: {
           reason: input.reason,
           errorName: input.errorName,

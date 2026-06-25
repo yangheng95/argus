@@ -54,19 +54,20 @@ Add a pure classifier in `orchestrator/agent.ts`:
   (`read_context`, `query_failed_goals`), classify as no decision.
 
 On classification, throw an `AgentRunError` whose cause is
-`OrchestratorNoDecisionStopError`. The catch path records the orchestrator error
-artifact and immediately schedules one more visible orchestrator wake for the
-same task, unless the stream-error fuse has already tripped.
+`OrchestratorNoDecisionStopError`.
 
 This is a contract-validation failure, not a routing state machine: the host
 does not choose the next workflow tool and does not synthesize a successful
 decision. It only refuses to mark a decision wake as successful when no
 decision happened, then re-enters the same task loop so the LLM sees the
-visible no-decision artifact and decides the next action itself. Repeated
-no-decision failures are bounded by the existing stream-error fuse; only the
-fuse path marks the task failed. A single no-decision must not block the active
-run or stamp `task.error`, because that just replaces the old silent hang with
-a user-waiting hard stop.
+visible no-decision artifact and decides the next action itself. A single
+no-decision must not block the active run or stamp `task.error`, because that
+just replaces the old silent hang with a user-waiting hard stop.
+
+2026-06-25 correction:
+`specs/new-arch/2026-06-25-terminal-refill-no-decision-contract-repair.md`
+supersedes the original implementation detail that routed no-decision through
+`orchestrator-stream-error` and the stream-error fuse.
 
 General stream errors, aborts, and prompt errors still use the existing hard
 error path. The self-wake is only for `OrchestratorNoDecisionStopError`, because
@@ -136,6 +137,13 @@ so the default `opencorvus` test target runs them. A wholesale
 root-cause investigation rather than being mixed into this no-decision fix.
 
 ## Acceptance
+
+2026-06-25 follow-up:
+`specs/new-arch/2026-06-25-terminal-refill-no-decision-contract-repair.md`
+supersedes the bullets that route `OrchestratorNoDecisionStopError` through
+`orchestrator-stream-error` artifacts or the stream-error fuse. The classifier
+remains strict, but no-decision contract failures now persist as
+`orchestrator-decision-contract-failure` and do not count as stream errors.
 
 - Plain `finish=stop` after only `read_context` is converted into a typed
   orchestrator failure.
