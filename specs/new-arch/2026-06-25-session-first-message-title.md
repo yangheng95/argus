@@ -13,13 +13,14 @@ their session title instead of keeping the product placeholder titles
 | `2026-06-11-coding-assistant-session-history.md` | Coding Assistant history is backed by canonical `Session` rows; title updates must use `Session.setTitle`. |
 | `2026-06-01-mission-panel-mission-list.md` | Mission records are `kind="mission"` sessions; Mission list titles come from the session row. |
 | `session/prompt/title.ts` | LLM-generated titles only apply to generic `New session - ...` defaults, not product placeholder titles. |
+| `engine/helpers.ts::deriveTitle` | Generic task title derivation already defines the first-message/request title display rule. |
 
 ## Call-Point Sweep
 
 Command:
 
 ```powershell
-rg -n "Coding assistant|Mission Control|SessionWake\.wake|prompt_async|SessionPrompt\.prompt|Session\.setTitle|createUserMessage" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md"
+rg -n "Coding assistant|Mission Control|deriveTitle|SessionWake\.wake|prompt_async|SessionPrompt\.prompt|Session\.setTitle|createUserMessage" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md"
 ```
 
 | Surface | Evidence | Decision |
@@ -29,14 +30,14 @@ rg -n "Coding assistant|Mission Control|SessionWake\.wake|prompt_async|SessionPr
 | Mission session creation | `mission/session.ts::ensureMissionSession` creates `kind="mission"` sessions with title `Mission Control`. | Keep this as the pre-message placeholder only. |
 | Mission first user message | `SessionWake.wake` persists the Mission operator text as a normal user message. | After the first wake message is persisted, replace the placeholder title with that text. |
 | Manual rename | `/coding/session/:id` and `/mission/:id/title` already call `Session.setTitle`. | Do not overwrite any non-placeholder title. |
-| Task title mechanism | `EngineService.createTask` resolves task titles at task creation; generic tasks use `input.title` or `deriveTitle(request)`, while Mission-created tasks require `create_task.title` and get a host `Phase xx:` prefix. | Keep session title projection separate. Coding Assistant and Mission Control records are sessions whose first user message is persisted after creation, and the requested title source is that exact first message text rather than the task title abbreviation rules. |
+| Task title mechanism | `EngineService.createTask` resolves generic task titles with `deriveTitle(request)` when no explicit `input.title` exists. Mission-created tasks still require `create_task.title` and get a host `Phase xx:` prefix. | Reuse the same `deriveTitle` implementation for Coding Assistant and Mission Control session titles once their first user message is persisted. Lifecycle differs, title derivation must not. |
 
 ## Contract
 
 - Only sessions still titled with the known product placeholders are eligible.
-- The title source is the first persisted user text part, normalized by trimming
-  and collapsing whitespace, capped at the existing 200-character route title
-  limit.
+- The title source is the first persisted user text part passed through the
+  same `deriveTitle` function used by generic task creation: first non-empty
+  line, 80-character display cap, `Untitled task` for blank text.
 - Later messages do not rename the session.
 - User-renamed sessions do not get overwritten.
 - Non-text first messages do not synthesize a title.

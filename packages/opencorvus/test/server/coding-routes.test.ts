@@ -10,6 +10,7 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
+import { deriveTitle } from "../../src/title/derive"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { installControlModel } from "../workspace/mock-control-model"
@@ -592,6 +593,8 @@ describe("coding assistant routes", () => {
           },
         })
         const { session } = (await created.json()) as { session: Session.Info }
+        const firstPrompt =
+          "Investigate the failing title projection across Coding Assistant and Mission Control surfaces so it matches task titles exactly"
 
         const prompted = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -600,11 +603,11 @@ describe("coding assistant routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
-            parts: [{ type: "text", text: "Investigate the failing title projection" }],
+            parts: [{ type: "text", text: firstPrompt }],
           }),
         })
         expect(prompted.status).toBe(202)
-        expect((await Session.get(session.id)).title).toBe("Investigate the failing title projection")
+        expect((await Session.get(session.id)).title).toBe(deriveTitle(firstPrompt))
 
         const manualCreated = await app.request("/coding/session", {
           method: "POST",

@@ -7,20 +7,11 @@ import { EngineInteractionRequestTable, type EngineBudget, type EngineTaskStatus
 import type { TaskRow } from "./store"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
+export { deriveTitle } from "@/title/derive"
 
 // orchestratorState moved to ./orchestrator-state — see that file's header
 // for the cycle rationale. Helpers must not run `Instance.state(...)` at
 // module-init because helpers is re-exported through the engine barrel.
-
-export function deriveTitle(request: string) {
-  const line = request
-    .split("\n")
-    .map((item) => item.trim())
-    .find(Boolean)
-  if (!line) return "Untitled task"
-  if (line.length <= 80) return line
-  return line.slice(0, 77) + "..."
-}
 
 export function buildOperatorPrompt(note: string) {
   return [

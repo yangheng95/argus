@@ -8,6 +8,7 @@ import { SessionWake } from "../../src/session/wake"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Agent } from "../../src/agent/agent"
 import { MISSION_CONTROL_DEFAULT_TITLE } from "../../src/session/first-message-title"
+import { deriveTitle } from "../../src/title/derive"
 import { resetDatabase } from "../fixture/db"
 import { Database, eq } from "../../src/storage/db"
 import { SessionControlRecordTable } from "../../src/session/session.sql"
@@ -208,16 +209,17 @@ test("wake titles Mission Control sessions from the first operator message only"
     fn: async () => {
       const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
       const session = await Session.create({ kind: "mission", title: MISSION_CONTROL_DEFAULT_TITLE })
+      const firstPrompt = "  Design the market replay mission\nKeep detailed acceptance evidence attached."
 
       await SessionWake.wake({
         sessionID: session.id,
-        prompt: "Design the market replay mission",
+        prompt: firstPrompt,
         reason: {
           source: "mission.operator",
           missionID: "mis_title",
         },
       })
-      expect((await Session.get(session.id)).title).toBe("Design the market replay mission")
+      expect((await Session.get(session.id)).title).toBe(deriveTitle(firstPrompt))
 
       await SessionWake.wake({
         sessionID: session.id,
@@ -227,7 +229,7 @@ test("wake titles Mission Control sessions from the first operator message only"
           missionID: "mis_title",
         },
       })
-      expect((await Session.get(session.id)).title).toBe("Design the market replay mission")
+      expect((await Session.get(session.id)).title).toBe(deriveTitle(firstPrompt))
       expect(loop).toHaveBeenCalledTimes(2)
     },
   })
