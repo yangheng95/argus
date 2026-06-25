@@ -10,6 +10,7 @@ import { EngineService } from "@/task-api"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import {
+  RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE,
   RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
   isRightSidebarCodingAssistantSession,
   listRightSidebarCodingAssistantSessions,
@@ -136,7 +137,7 @@ export function CodingRoutes() {
       async (c) => {
         const session = await Session.create({
           kind: "assistant",
-          title: "Coding assistant",
+          title: RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE,
           metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
         return c.json({ session }, 201)

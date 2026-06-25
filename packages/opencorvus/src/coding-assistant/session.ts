@@ -4,6 +4,7 @@ import { Instance } from "@/project/instance"
 import { Session as SessionApi } from "@/session"
 import { SessionTable } from "@/session/session.sql"
 import { Database, and, desc, eq, isNull, like, or, sql, type SQL } from "@/storage/db"
+export { RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE } from "@/session/first-message-title"
 
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA = {
   codingAssistant: {

@@ -5,6 +5,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Session } from "@/session"
 import { SessionTable } from "@/session/session.sql"
 import { Filesystem } from "@/util/filesystem"
+import { MISSION_CONTROL_DEFAULT_TITLE } from "@/session/first-message-title"
 import { MissionID } from "./schema"
 
 export type MissionSession = Session.Info & { missionID: string }
@@ -210,7 +211,7 @@ async function ensureMissionSessionInner(input: { missionID: MissionID; director
 
   const created = await Session.createNext({
     kind: "mission",
-    title: "Mission Control",
+    title: MISSION_CONTROL_DEFAULT_TITLE,
     directory: input.directory,
   })
   const updated = await Session.mergeMetadata({

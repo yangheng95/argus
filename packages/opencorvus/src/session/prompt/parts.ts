@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from "bun"
 import type { PromptInput } from "./schema"
 import { isDecodableText, decodeDataUrlBase64, decodeDataUrlText } from "../text-mime"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { setSessionTitleFromFirstUserMessage } from "../first-message-title"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -486,6 +487,11 @@ export async function createUserMessage(input: PromptInput) {
   // message if the process dies between the message row and its parts.
   await Session.persistMessage({
     info,
+    parts,
+  })
+  await setSessionTitleFromFirstUserMessage({
+    sessionID: input.sessionID,
+    messageID: info.id,
     parts,
   })
 
