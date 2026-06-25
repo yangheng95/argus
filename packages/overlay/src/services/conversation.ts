@@ -13,7 +13,11 @@ import {
 } from "../store/board"
 import { cardTreeStore, setHydratedRewindCursor } from "../store/card-tree"
 import { mergeLoadedConversationMessages } from "../store/messages"
-import { hydrateConversationAgentView, resetConversationAgentView } from "../store/conversation-agents"
+import {
+  attachConversationAgentViewTargets,
+  hydrateConversationAgentView,
+  resetConversationAgentView,
+} from "../store/conversation-agents"
 import { markSelectedMessageWatermark } from "./selected-stream-cursor"
 
 type EventReplay = {
@@ -572,6 +576,7 @@ export async function loadOlderConversationHistory(
       return false
     }
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    attachConversationAgentViewTargets(sourceKey(source), view)
     for (const event of events) {
       replayTaskEventToTree(event)
     }
@@ -614,6 +619,7 @@ export async function loadConversationSessionHistory(
     const view = requireObject(page?.view, "view")
     if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    attachConversationAgentViewTargets(sourceKey({ kind: "task", id: selectedTaskID }), view)
     for (const event of events) {
       assertActiveSessionHistory(selectedTaskID, epoch, signal)
       replayTaskEventToTree(event)

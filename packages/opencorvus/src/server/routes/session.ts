@@ -26,6 +26,7 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
 import { enrichStandaloneSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
+import { listConversationAgentSessionsForSessionTree } from "@/orchestrator/task-event"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionConversationHydration, SessionEvent } from "@/engine/model"
 import {
@@ -366,9 +367,13 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const session = await getActiveProjectSession(sessionID)
-        const transcript = enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(
-          conversationMessageHasDisplay,
+        const sessionIDs = await Session.treeInProject({ sessionID, projectID: Instance.project.id })
+        const messages = (
+          await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
         )
+          .flat()
+          .sort((left, right) => (left.info.time?.created ?? 0) - (right.info.time?.created ?? 0))
+        const transcript = enrichStandaloneSessionTranscript(messages).filter(conversationMessageHasDisplay)
         const board = {
           kind: "session" as const,
           sessionID,
@@ -377,16 +382,11 @@ export const SessionRoutes = lazy(() =>
           directory: session.directory ?? null,
         }
         const view = projectConversationView(board, transcript)
-        const agentView = projectConversationAgentView(board, transcript, [], [
-          {
-            sessionID: session.id,
-            stage: session.kind,
-            parentSessionID: session.parentID,
-            goalID: session.goalID,
-            timeCreated: session.time.created,
-            timeUpdated: session.time.updated,
-          },
-        ])
+        const agentSessions = listConversationAgentSessionsForSessionTree({
+          sessionID: session.id,
+          projectID: Instance.project.id,
+        })
+        const agentView = projectConversationAgentView(board, transcript, [], agentSessions)
         return c.json({
           board,
           transcript,

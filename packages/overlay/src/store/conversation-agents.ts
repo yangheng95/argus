@@ -52,6 +52,25 @@ export const [conversationAgentStore, setConversationAgentStore] = createStore<C
   records: [],
 })
 
+type ConversationAgentTargetRecord = Pick<
+  AgentWorkflowRecord,
+  | "sessionID"
+  | "parentSessionID"
+  | "agentName"
+  | "stage"
+  | "startedAt"
+  | "lastObservedAt"
+  | "targetMessageID"
+  | "targetObservedAt"
+  | "goalID"
+  | "stepID"
+  | "phaseID"
+  | "cardID"
+  | "renderedCardID"
+>
+
+const pendingTargetsBySource = new Map<string, Map<string, ConversationAgentTargetRecord>>()
+
 export function conversationAgentSourceKey(source: BoardSource | null): string {
   return source ? `${source.kind}:${source.id}` : ""
 }
@@ -142,12 +161,111 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
-    ...(target || {}),
+    ...(target ? { ...target, targetObservedAt: Number(session?.lastMessageTime || lastObservedAt) } : {}),
   }
 }
 
-function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]): AgentWorkflowRecord[] {
-  const bySession = new Map<string, AgentWorkflowRecord>()
+function targetHasCard(target: ConversationAgentTargetRecord): boolean {
+  return !!target.renderedCardID || !!target.cardID
+}
+
+function targetShouldReplace(
+  existing: AgentWorkflowRecord,
+  target: ConversationAgentTargetRecord,
+): boolean {
+  if (!targetHasCard(target)) return false
+  if (!existing.renderedCardID && !existing.cardID) return true
+  return target.lastObservedAt >= Number(existing.targetObservedAt || 0)
+}
+
+function mergeTargetIntoRecord(
+  existing: AgentWorkflowRecord,
+  target: ConversationAgentTargetRecord,
+): AgentWorkflowRecord {
+  const replaceTarget = targetShouldReplace(existing, target)
+  return {
+    ...existing,
+    startedAt: Math.min(existing.startedAt, target.startedAt),
+    lastObservedAt: Math.max(existing.lastObservedAt, target.lastObservedAt),
+    parentSessionID: target.parentSessionID || existing.parentSessionID,
+    agentName: target.agentName || existing.agentName,
+    stage: target.stage || existing.stage,
+    goalID: target.goalID || existing.goalID,
+    stepID: target.stepID || existing.stepID,
+    phaseID: target.phaseID || existing.phaseID,
+    ...(replaceTarget
+      ? {
+          targetMessageID: target.targetMessageID,
+          targetObservedAt: target.lastObservedAt,
+          cardID: target.cardID,
+          renderedCardID: target.renderedCardID,
+        }
+      : {}),
+  }
+}
+
+function mergeTargetRecords(
+  records: AgentWorkflowRecord[],
+  targets: ConversationAgentTargetRecord[],
+): { records: AgentWorkflowRecord[]; attachedSessionIDs: Set<string> } {
+  const attachedSessionIDs = new Set<string>()
+  let nextRecords = records.map((record) => ({ ...record }))
+  for (const target of targets) {
+    const index = nextRecords.findIndex((record) => record.sessionID === target.sessionID)
+    if (index === -1) continue
+    nextRecords[index] = mergeTargetIntoRecord(nextRecords[index]!, target)
+    attachedSessionIDs.add(target.sessionID)
+  }
+  nextRecords = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
+  return { records: applyDepth(nextRecords), attachedSessionIDs }
+}
+
+function pendingTargetsForSource(sourceKey: string): Map<string, ConversationAgentTargetRecord> {
+  const existing = pendingTargetsBySource.get(sourceKey)
+  if (existing) return existing
+  const created = new Map<string, ConversationAgentTargetRecord>()
+  pendingTargetsBySource.set(sourceKey, created)
+  return created
+}
+
+function rememberPendingTarget(sourceKey: string, target: ConversationAgentTargetRecord): void {
+  const pending = pendingTargetsForSource(sourceKey)
+  const existing = pending.get(target.sessionID)
+  if (!existing || target.lastObservedAt >= existing.lastObservedAt) pending.set(target.sessionID, target)
+}
+
+function forgetPendingTargets(sourceKey: string, sessionIDs: Set<string>): void {
+  const pending = pendingTargetsBySource.get(sourceKey)
+  if (!pending) return
+  for (const sessionID of sessionIDs) pending.delete(sessionID)
+  if (pending.size === 0) pendingTargetsBySource.delete(sourceKey)
+}
+
+function pendingTargetsForCurrentRecords(sourceKey: string, records: AgentWorkflowRecord[]): ConversationAgentTargetRecord[] {
+  const pending = pendingTargetsBySource.get(sourceKey)
+  if (!pending) return []
+  const sessionIDs = new Set(records.map((record) => record.sessionID))
+  return [...pending.values()].filter((target) => sessionIDs.has(target.sessionID))
+}
+
+function applyTargetRecordsToStore(sourceKey: string, targets: ConversationAgentTargetRecord[]): void {
+  if (conversationAgentStore.taskID !== sourceKey) {
+    for (const target of targets) rememberPendingTarget(sourceKey, target)
+    return
+  }
+  const { records, attachedSessionIDs } = mergeTargetRecords(conversationAgentStore.records, targets)
+  for (const target of targets) {
+    if (!attachedSessionIDs.has(target.sessionID)) rememberPendingTarget(sourceKey, target)
+  }
+  forgetPendingTargets(sourceKey, attachedSessionIDs)
+  setConversationAgentStore({
+    taskID: sourceKey,
+    records,
+  })
+}
+
+function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]): ConversationAgentTargetRecord[] {
+  const bySession = new Map<string, ConversationAgentTargetRecord>()
   for (const message of messages) {
     const sessionID = String(message?.sessionID || "")
     const rawStage = String(message?.stage || "")
@@ -169,17 +287,12 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
     const existing = bySession.get(sessionID)
     if (!existing) {
       bySession.set(sessionID, {
-        id: sessionID,
         sessionID,
         parentSessionID: String(message?.parentSessionID || ""),
         agentName: stage,
         stage,
-        status: "completed",
         startedAt: observedAt,
         lastObservedAt: observedAt,
-        completedAt: observedAt,
-        attempts: 1,
-        depth: 0,
         targetMessageID: String(message.messageID || ""),
         goalID: message.goalID,
         stepID: message.phase?.stepID,
@@ -190,7 +303,6 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
     }
     existing.startedAt = Math.min(existing.startedAt, observedAt)
     existing.lastObservedAt = Math.max(existing.lastObservedAt, observedAt)
-    existing.completedAt = Math.max(existing.completedAt || 0, observedAt)
     if (observedAt >= existing.lastObservedAt) {
       existing.agentName = stage
       existing.stage = stage
@@ -224,6 +336,7 @@ function applyDepth(records: AgentWorkflowRecord[]): AgentWorkflowRecord[] {
 }
 
 export function resetConversationAgentView(): void {
+  pendingTargetsBySource.clear()
   setConversationAgentStore({ taskID: "", records: [] })
 }
 
@@ -236,23 +349,27 @@ export function hydrateConversationAgentView(taskID: string, view: ConversationA
   for (const target of agentTargetRecordsFromMessages(Array.isArray(view?.messages) ? view.messages : [])) {
     const existing = recordsBySession.get(target.sessionID)
     if (!existing) continue
-    recordsBySession.set(target.sessionID, {
-      ...existing,
-      startedAt: Math.min(existing.startedAt, target.startedAt),
-      lastObservedAt: Math.max(existing.lastObservedAt, target.lastObservedAt),
-      targetMessageID: target.targetMessageID,
-      goalID: target.goalID || existing.goalID,
-      stepID: target.stepID || existing.stepID,
-      phaseID: target.phaseID || existing.phaseID,
-      cardID: target.cardID,
-      renderedCardID: target.renderedCardID,
-    })
+    recordsBySession.set(target.sessionID, mergeTargetIntoRecord(existing, target))
   }
+  const sourcePendingTargets = pendingTargetsForCurrentRecords(taskID, [...recordsBySession.values()])
+  for (const target of sourcePendingTargets) {
+    const existing = recordsBySession.get(target.sessionID)
+    if (!existing) continue
+    recordsBySession.set(target.sessionID, mergeTargetIntoRecord(existing, target))
+  }
+  forgetPendingTargets(taskID, new Set(sourcePendingTargets.map((target) => target.sessionID)))
   const records = [...recordsBySession.values()].sort((left, right) => left.startedAt - right.startedAt)
   setConversationAgentStore({
     taskID,
     records: applyDepth(records),
   })
+}
+
+export function attachConversationAgentViewTargets(sourceKeyInput: string, view: ConversationAgentView): void {
+  const sourceKey = String(sourceKeyInput || "").trim()
+  if (!sourceKey) throw new Error("conversation agent target attachment requires a source key")
+  const targets = agentTargetRecordsFromMessages(Array.isArray(view?.messages) ? view.messages : [])
+  applyTargetRecordsToStore(sourceKey, targets)
 }
 
 function liveStageFromMessageInfo(info: any): string | null {
@@ -327,32 +444,20 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
   const completedAt = Number(info?.time?.completed || 0)
   const completed = Number.isFinite(completedAt) && completedAt > 0
   const target = liveMessageRecordTarget(sessionID, messageID, stage, goalID)
-  const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
-  const nextRecords = existingRecords.map((record) => ({ ...record }))
-  const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
-  if (index === -1) return
   const nextObservedAt = completed ? Math.max(observedAt, completedAt) : observedAt
-  const existing = nextRecords[index]!
-  nextRecords[index] = {
-    ...existing,
-    startedAt: Math.min(existing.startedAt, observedAt),
-    lastObservedAt: Math.max(existing.lastObservedAt, nextObservedAt),
-    ...(nextObservedAt >= existing.lastObservedAt
-      ? {
-          parentSessionID,
-          agentName: stage,
-          stage,
-          targetMessageID: messageID,
-          goalID: goalID || undefined,
-          ...target,
-        }
-      : {}),
-  }
-  const records = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
-  setConversationAgentStore({
-    taskID: sourceKey,
-    records: applyDepth(records),
-  })
+  applyTargetRecordsToStore(sourceKey, [
+    {
+      sessionID,
+      parentSessionID,
+      agentName: stage,
+      stage,
+      startedAt: observedAt,
+      lastObservedAt: nextObservedAt,
+      targetMessageID: messageID,
+      goalID: goalID || undefined,
+      ...target,
+    },
+  ])
 }
 
 export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, event: any): void {
@@ -377,32 +482,19 @@ export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, ev
   const parentSessionID = String(properties.parentSessionID || "")
   const goalID = String(properties.goalID || "")
   const target = liveMessageRecordTarget(sessionID, messageID, stage, goalID)
-  const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
-  const nextRecords = existingRecords.map((record) => ({ ...record }))
-  const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
-  if (index === -1) return
-  const existing = nextRecords[index]!
-  const isLatest = observedAt >= existing.lastObservedAt
-  nextRecords[index] = {
-    ...existing,
-    startedAt: Math.min(existing.startedAt, observedAt),
-    lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
-    ...(isLatest
-      ? {
-          parentSessionID,
-          agentName: stage,
-          stage,
-          targetMessageID: messageID,
-          goalID: goalID || undefined,
-          ...target,
-        }
-      : {}),
-  }
-  const records = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
-  setConversationAgentStore({
-    taskID: sourceKey,
-    records: applyDepth(records),
-  })
+  applyTargetRecordsToStore(sourceKey, [
+    {
+      sessionID,
+      parentSessionID,
+      agentName: stage,
+      stage,
+      startedAt: observedAt,
+      lastObservedAt: observedAt,
+      targetMessageID: messageID,
+      goalID: goalID || undefined,
+      ...target,
+    },
+  ])
 }
 
 function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
@@ -412,7 +504,8 @@ function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
   if (type === "terminal") {
     const reason = String(status?.reason || "")
     if (reason === "error" || reason === "artifact_missing") return "error"
-    if (reason === "completed" || reason === "aborted") return "completed"
+    if (reason === "completed") return "completed"
+    if (reason === "aborted") return "skipped"
   }
   throw new Error(`conversation agent live view unknown session.status: ${JSON.stringify(status)}`)
 }
@@ -453,7 +546,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
   if (index === -1) {
     const goalID = String(properties.goalID || "")
     const target = liveSessionRecordTarget(sessionID, stage, goalID)
-    nextRecords.push({
+    const created: AgentWorkflowRecord = {
       id: sessionID,
       sessionID,
       parentSessionID: String(properties.parentSessionID || ""),
@@ -467,13 +560,15 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       depth: 0,
       targetMessageID: "",
       goalID: goalID || undefined,
-      ...(target || {}),
-    })
+      ...(target ? { ...target, targetObservedAt: observedAt } : {}),
+    }
+    const pendingTarget = pendingTargetsForSource(sourceKey).get(sessionID)
+    nextRecords.push(pendingTarget ? mergeTargetIntoRecord(created, pendingTarget) : created)
   } else {
     const existing = nextRecords[index]!
     const goalID = String(properties.goalID || existing.goalID || "")
     const target = liveSessionRecordTarget(sessionID, stage, goalID)
-    nextRecords[index] = {
+    const updated: AgentWorkflowRecord = {
       ...existing,
       parentSessionID: String(properties.parentSessionID || existing.parentSessionID || ""),
       agentName: stage,
@@ -483,11 +578,25 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
       ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
       goalID: goalID || undefined,
-      ...(target || {}),
     }
+    nextRecords[index] = target
+      ? mergeTargetIntoRecord(updated, {
+          sessionID,
+          parentSessionID: updated.parentSessionID,
+          agentName: stage,
+          stage,
+          startedAt: observedAt,
+          lastObservedAt: observedAt,
+          targetMessageID: updated.targetMessageID || "",
+          goalID: goalID || undefined,
+          ...target,
+        })
+      : updated
   }
+  const records = applyDepth(nextRecords.sort((left, right) => left.startedAt - right.startedAt))
+  forgetPendingTargets(sourceKey, new Set(records.map((record) => record.sessionID)))
   setConversationAgentStore({
     taskID: sourceKey,
-    records: applyDepth(nextRecords.sort((left, right) => left.startedAt - right.startedAt)),
+    records,
   })
 }
