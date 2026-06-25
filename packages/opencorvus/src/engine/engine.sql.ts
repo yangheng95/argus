@@ -122,6 +122,7 @@ export type EngineArtifactKind =
   | "exploration"
   | "browser_preview_target"
   | "browser_preview_evidence"
+  | "orchestrator-decision-contract-failure"
   | "orchestrator-stream-error"
   | "tool-execute-error"
   | "stage_continuation_request"
@@ -555,9 +556,9 @@ export const EngineArtifactTable = sqliteTable(
     /** Phase-6-e: plain text pointer to the logical run id (was FK to
      *  engine_run which is now deleted). Nullable post-phase-7: most artifacts
      *  still scope to a run (self-referencing for "run" kind: id === run_id),
-     *  but task-level facts emitted before any run exists (e.g.
-     *  kind="orchestrator-stream-error" raised mid-decision when runCount=0)
-     *  legitimately have no run. Per rule 23 schema does not enforce a
+     *  but task-level diagnostic facts emitted before any run exists or outside
+     *  a specific executor run legitimately have no run. Per rule 23 schema
+     *  does not enforce a
      *  state-machine invariant the orchestrator owns. */
     run_id: text(),
     /** Phase-6-d: plain text pointer to the logical goal_run id (was FK to

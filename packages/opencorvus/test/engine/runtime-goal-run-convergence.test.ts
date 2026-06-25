@@ -348,14 +348,16 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
-  test("terminal refill dispatch records a fact after starting a wake", async () => {
+  test("terminal refill dispatch records a fact before the accepted wake starts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = `task_goal_live_owner_${Date.now()}`
         const runID = `run_goal_live_owner_${Date.now()}`
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
+        })
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
           status: "running",

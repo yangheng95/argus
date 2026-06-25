@@ -139,6 +139,34 @@ function seedStreamError(input: {
   })
 }
 
+function seedDecisionContractFailure(input: {
+  artifactID: string
+  timeCreated: number
+  reason: string
+  errorName?: string
+  sessionID?: string
+}) {
+  Database.transaction((db) => {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: input.artifactID,
+        task_id: taskID,
+        run_id: null,
+        kind: "orchestrator-decision-contract-failure",
+        label: "orchestrator-decision-contract-failure",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName ?? null,
+          sessionID: input.sessionID ?? null,
+          now: input.timeCreated,
+        },
+        time_created: input.timeCreated,
+        time_updated: input.timeCreated,
+      })
+      .run()
+  })
+}
+
 beforeEach(async () => {
   await resetDatabase()
   stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -267,14 +295,14 @@ describe("renderTaskDescription — stream failures section", () => {
     })
   })
 
-  test("no-decision artifacts are rendered as decision-contract failures", async () => {
+  test("no-decision artifacts are rendered separately from stream failures", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const taskStart = Date.now()
         seedTask(taskStart)
-        seedStreamError({
+        seedDecisionContractFailure({
           artifactID: `art_no_decision_${stamp}`,
           timeCreated: taskStart + 100,
           reason: "OrchestratorNoDecisionStopError: Orchestrator stopped without calling any tool",
@@ -284,11 +312,14 @@ describe("renderTaskDescription — stream failures section", () => {
         const desc = await describeTask(taskID)
         const md = renderTaskDescription(desc)
 
+        expect(desc.recent_stream_failures).toBeUndefined()
+        expect(desc.recent_decision_contract_failures).toHaveLength(1)
         expect(md).toContain("OrchestratorNoDecisionStopError")
-        expect(md).toContain("decision-contract failures")
-        expect(md).toContain("stream completed")
+        expect(md).toContain("Recent orchestrator decision-contract failures")
+        expect(md).toContain("completed orchestrator wakes")
         expect(md).toContain("make a real workflow decision")
-        expect(md).toContain("do not treat those entries as provider/network failures")
+        expect(md).toContain("not provider/network stream failures")
+        expect(md).not.toContain("Recent orchestrator stream failures")
       },
     })
   })

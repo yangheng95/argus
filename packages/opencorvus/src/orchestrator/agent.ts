@@ -361,7 +361,7 @@ async function latestSessionMessageID(sessionID: string): Promise<string | undef
 }
 
 interface OrchestratorSessionErrorRecordResult {
-  fuse: { tripped: boolean; consecutive: number; windowMs: number }
+  streamFuse?: { tripped: boolean; consecutive: number; windowMs: number }
   selfWakeDispatched: boolean
 }
 
@@ -384,10 +384,43 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
   envelope: OrchestratorTaskErrorEnvelope
   summaryPrefix: string
 }): Promise<OrchestratorSessionErrorRecordResult> {
-  const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
   const now = Date.now()
   const reason = `${input.envelope.errorName}: ${input.envelope.message}`
   const noDecision = isOrchestratorNoDecisionEnvelope(input.envelope)
+
+  if (noDecision) {
+    const { recordOrchestratorDecisionContractFailure } = await import("@/engine/persist")
+    recordOrchestratorDecisionContractFailure({
+      taskID: input.taskID,
+      reason,
+      errorName: input.envelope.errorName,
+      sessionID: input.sessionID,
+      now,
+    })
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    const dispatchResult = await dispatchTaskLoop({
+      taskID: input.taskID,
+      event: {
+        note: OrchestratorEventNote.noDecisionRecovery({ reason }),
+      },
+    })
+    if (dispatchResult === "ignored") {
+      await blockActiveRunForTask(input.taskID, {
+        blockingReason: "orchestrator_decision_contract_failure",
+        error: reason,
+        summary: `${input.summaryPrefix}: ${reason}; recovery dispatch was ignored`,
+      })
+      log.error("orchestrator no-decision recovery dispatch ignored", { taskID: input.taskID })
+      return { selfWakeDispatched: false }
+    }
+    log.warn("orchestrator no-decision recovery wake scheduled", {
+      taskID: input.taskID,
+      dispatchResult,
+    })
+    return { selfWakeDispatched: true }
+  }
+
+  const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
   recordOrchestratorStreamError({
     taskID: input.taskID,
     reason,
@@ -406,37 +439,12 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
       error: reason,
       summary: `${input.summaryPrefix}: ${reason}`,
     })
-    log.error("orchestrator stream-error fuse tripped — task marked failed", {
+    log.error("orchestrator stream-error fuse tripped - task marked failed", {
       taskID: input.taskID,
       consecutive: fuse.consecutive,
       windowMs: fuse.windowMs,
     })
-    return { fuse, selfWakeDispatched: false }
-  }
-
-  if (noDecision) {
-    const { dispatchTaskLoop } = await import("@/engine/queue")
-    const dispatchResult = await dispatchTaskLoop({
-      taskID: input.taskID,
-      event: {
-        note: OrchestratorEventNote.noDecisionRecovery({ reason, consecutive: fuse.consecutive }),
-      },
-    })
-    if (dispatchResult === "ignored") {
-      await blockActiveRunForTask(input.taskID, {
-        blockingReason: "orchestrator_stream_error",
-        error: reason,
-        summary: `${input.summaryPrefix}: ${reason}; recovery dispatch was ignored`,
-      })
-      log.error("orchestrator no-decision recovery dispatch ignored", { taskID: input.taskID })
-      return { fuse, selfWakeDispatched: false }
-    }
-    log.warn("orchestrator no-decision recovery wake scheduled", {
-      taskID: input.taskID,
-      consecutive: fuse.consecutive,
-      dispatchResult,
-    })
-    return { fuse, selfWakeDispatched: true }
+    return { streamFuse: fuse, selfWakeDispatched: false }
   }
 
   await blockActiveRunForTask(input.taskID, {
@@ -444,7 +452,7 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
     error: reason,
     summary: `${input.summaryPrefix}: ${reason}`,
   })
-  return { fuse, selfWakeDispatched: false }
+  return { streamFuse: fuse, selfWakeDispatched: false }
 }
 
 // ---------------------------------------------------------------------------
@@ -1014,8 +1022,7 @@ export namespace Orchestrator {
           })
           noDecisionSelfWakeDispatched =
             isOrchestratorNoDecisionEnvelope(structured.envelope) &&
-            recordResult.selfWakeDispatched &&
-            !recordResult.fuse.tripped
+            recordResult.selfWakeDispatched
         } else if (wasCtrlAborted) {
           // Abort path: synthesize an envelope from the ctrl reason so the
           // artifact records the explicit cancellation reason — the next wake's
@@ -1133,11 +1140,10 @@ export const OrchestratorEventNote = {
     return `User requested retry.${previousError ? ` Previous error: ${previousError}` : ""}\nDecide how to proceed.`
   },
 
-  noDecisionRecovery(input: { reason: string; consecutive: number }): string {
+  noDecisionRecovery(input: { reason: string }): string {
     return [
       "This is a wake message, not a user-authored message.",
-      "The previous orchestrator wake ended without a workflow decision; a visible orchestrator-stream-error artifact was recorded.",
-      `Consecutive orchestrator stream-error artifacts in the fuse window: ${input.consecutive}.`,
+      "The previous orchestrator wake ended without a workflow decision; a visible orchestrator-decision-contract-failure artifact was recorded.",
       `Error: ${input.reason}`,
       "Read current task state and decide how to proceed.",
     ].join("\n")

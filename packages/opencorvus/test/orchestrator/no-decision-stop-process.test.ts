@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { recordOrchestratorStreamError } from "../../src/engine/persist"
+import { recordOrchestratorDecisionContractFailure } from "../../src/engine/persist"
 import * as EngineQueue from "../../src/engine/queue"
 import { findRun } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
@@ -68,6 +68,21 @@ function streamErrorArtifacts(taskID: string) {
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "orchestrator-stream-error")))
+      .all(),
+  )
+}
+
+function decisionContractFailureArtifacts(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "orchestrator-decision-contract-failure"),
+        ),
+      )
       .all(),
   )
 }
@@ -239,11 +254,12 @@ describe("orchestrator no-decision stop process", () => {
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(refreshed?.error ?? null).toBeNull()
-        const artifacts = streamErrorArtifacts(taskID)
+        const artifacts = decisionContractFailureArtifacts(taskID)
         expect(artifacts).toHaveLength(1)
         const payload = artifacts[0]!.payload as { errorName?: string; reason?: string }
         expect(payload.errorName).toBe("OrchestratorNoDecisionStopError")
         expect(payload.reason).toContain("OrchestratorNoDecisionStopError")
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
 
         const run = findRun(runID)
         expect(run?.status).toBe("running")
@@ -280,10 +296,11 @@ describe("orchestrator no-decision stop process", () => {
 
         await Orchestrator.processTask(taskID)
 
-        const artifacts = streamErrorArtifacts(taskID)
+        const artifacts = decisionContractFailureArtifacts(taskID)
         expect(artifacts).toHaveLength(1)
         const payload = artifacts[0]!.payload as { reason?: string }
         expect(payload.reason).toContain("without calling any tool")
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
@@ -321,10 +338,11 @@ describe("orchestrator no-decision stop process", () => {
 
         await Orchestrator.processTask(taskID)
 
-        const artifacts = streamErrorArtifacts(taskID)
+        const artifacts = decisionContractFailureArtifacts(taskID)
         expect(artifacts).toHaveLength(1)
         const payload = artifacts[0]!.payload as { reason?: string }
         expect(payload.reason).toContain("only observation or pause tools")
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
         const run = findRun(runID)
         expect(run?.status).toBe("running")
         expect(run?.blocking_reason).toBeNull()
@@ -429,7 +447,8 @@ describe("orchestrator no-decision stop process", () => {
           .join("\n")
         expect(secondText).toContain("not a user-authored message")
         expect(secondText).toContain("OrchestratorNoDecisionStopError")
-        expect(streamErrorArtifacts(taskID)).toHaveLength(1)
+        expect(decisionContractFailureArtifacts(taskID)).toHaveLength(1)
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
         const run = findRun(runID)
         expect(run?.status).toBe("running")
         expect(run?.blocking_reason).toBeNull()
@@ -437,7 +456,7 @@ describe("orchestrator no-decision stop process", () => {
     })
   }, 30_000)
 
-  test("repeated no-decision failures trip the stream-error fuse instead of self-waking forever", async () => {
+  test("repeated no-decision failures stay out of the stream-error fuse", async () => {
     installControlModel()
     await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
     await Instance.provide({
@@ -452,14 +471,14 @@ describe("orchestrator no-decision stop process", () => {
           patch: { model: "mock-control/control" },
         })
         insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
-        recordOrchestratorStreamError({
+        recordOrchestratorDecisionContractFailure({
           taskID,
           reason: "OrchestratorNoDecisionStopError: previous no-decision 1",
           errorName: "OrchestratorNoDecisionStopError",
           sessionID: root.id,
           now: now - 2_000,
         })
-        recordOrchestratorStreamError({
+        recordOrchestratorDecisionContractFailure({
           taskID,
           reason: "OrchestratorNoDecisionStopError: previous no-decision 2",
           errorName: "OrchestratorNoDecisionStopError",
@@ -476,12 +495,14 @@ describe("orchestrator no-decision stop process", () => {
         const refreshed = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(refreshed ? deriveTaskStatus(refreshed) : undefined).toBe("failed")
-        expect(refreshed?.error).toContain("Orchestrator stream failed 3 consecutive times")
+        expect(refreshed ? deriveTaskStatus(refreshed) : undefined).toBe("active")
+        expect(refreshed?.error ?? null).toBeNull()
         const run = findRun(runID)
-        expect(run?.status).toBe("failed")
-        expect(streamErrorArtifacts(taskID)).toHaveLength(3)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
+        expect(decisionContractFailureArtifacts(taskID)).toHaveLength(3)
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   }, 30_000)
