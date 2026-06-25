@@ -107,6 +107,9 @@ describe("screenshot browser panel", () => {
             type: "tool",
             tool: "browser_observe",
             state: {
+              attachments: [
+                { url: "/attachment/project/browser.png", mime: "image/png", filename: "browser-duplicate.png" },
+              ],
               metadata: {
                 browser: {
                   url: "https://example.test",

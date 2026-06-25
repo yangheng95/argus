@@ -85,7 +85,14 @@ function isImageAttachment(attachment: Record<string, any>): boolean {
   return /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(url)
 }
 
-function toolImageAttachments(part: any, state: Record<string, any>): ToolImageAttachment[] {
+function browserEvidenceScreenshotUrlFromState(state: Record<string, any>): string {
+  const metadata = isRecord(state.metadata) ? state.metadata : {}
+  const browser = isRecord(metadata.browser) ? metadata.browser : {}
+  const screenshot = isRecord(browser.screenshot) ? browser.screenshot : {}
+  return firstString(screenshot.attachmentUrl)
+}
+
+function toolImageAttachments(part: any, state: Record<string, any>, browserScreenshotUrl = ""): ToolImageAttachment[] {
   const source = Array.isArray(state.attachments)
     ? state.attachments
     : Array.isArray(part?.attachments)
@@ -95,6 +102,7 @@ function toolImageAttachments(part: any, state: Record<string, any>): ToolImageA
     if (!isRecord(attachment)) return []
     const url = firstString(attachment.url)
     if (!url || !isImageAttachment(attachment)) return []
+    if (browserScreenshotUrl && url === browserScreenshotUrl) return []
     const mime = firstString(attachment.mime)
     const mediaType = firstString(attachment.mediaType)
     const filename = firstString(attachment.filename, attachment.name)
@@ -302,7 +310,12 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     const changes = toolFileChangesFromState(state(), selectedTaskDirectory())
     return changes.length > 0 ? changes : null
   })
-  const attachmentImages = createMemo(() => (status() === "completed" ? toolImageAttachments(props.part, state()) : []))
+  const browserEvidenceScreenshotUrl = createMemo(() =>
+    status() === "completed" ? browserEvidenceScreenshotUrlFromState(state()) : "",
+  )
+  const attachmentImages = createMemo(() =>
+    status() === "completed" ? toolImageAttachments(props.part, state(), browserEvidenceScreenshotUrl()) : [],
+  )
   const showStructuredOutput = createMemo(() => (toolDiffs()?.length ?? 0) > 0)
   const browserEvidence = createMemo(() => {
     if (status() !== "completed") return null
@@ -310,7 +323,6 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     const browser = isRecord(metadata.browser) ? metadata.browser : null
     if (!browser) return null
     const viewport = isRecord(browser.viewport) ? browser.viewport : {}
-    const screenshot = isRecord(browser.screenshot) ? browser.screenshot : {}
     const diagnostics = isRecord(browser.diagnostics) ? browser.diagnostics : {}
     const diagnosticText = [
       ["console", diagnostics.consoleErrors],
@@ -327,7 +339,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
         typeof viewport.width === "number" && typeof viewport.height === "number"
           ? `${viewport.width}x${viewport.height}`
           : "",
-      screenshotUrl: typeof screenshot.attachmentUrl === "string" ? screenshot.attachmentUrl : "",
+      screenshotUrl: browserEvidenceScreenshotUrl(),
       diagnosticText,
     }
   })

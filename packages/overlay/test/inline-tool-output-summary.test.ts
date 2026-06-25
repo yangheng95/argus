@@ -38,8 +38,11 @@ describe("inline tool output", () => {
 
     expect(source).toContain('import { FilePart } from "./FilePart"')
     expect(source).toContain("function toolImageAttachments")
+    expect(source).toContain("function browserEvidenceScreenshotUrlFromState")
     expect(source).toContain("Array.isArray(state.attachments)")
     expect(source).toContain("Array.isArray(part?.attachments)")
+    expect(source).toContain("if (browserScreenshotUrl && url === browserScreenshotUrl) return []")
+    expect(source).toContain("toolImageAttachments(props.part, state(), browserEvidenceScreenshotUrl())")
     expect(source).toContain('<section class="msg-tool-attachments">')
     expect(source).toContain("<For each={attachmentImages()}>")
     expect(source).toContain("<FilePart part={attachment} />")

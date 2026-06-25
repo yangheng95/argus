@@ -196,6 +196,7 @@ function toolAttachmentItems(input: {
   role: AgentRole
   time: number
   index: number
+  excludedUrls?: ReadonlySet<string>
 }): ScreenshotBrowserItem[] {
   const attachments = Array.isArray(input.part?.state?.attachments)
     ? input.part.state.attachments
@@ -205,7 +206,10 @@ function toolAttachmentItems(input: {
   const messageID = sourceMessageID(input.message, input.part)
   const partID = firstString(input.part?.id) || String(input.index)
   return attachments
-    .filter((attachment: any) => isStoredImageReference(attachment))
+    .filter((attachment: any) => {
+      const src = firstString(attachment?.url)
+      return !input.excludedUrls?.has(src) && isStoredImageReference(attachment)
+    })
     .map((attachment: any, attachmentIndex: number) => {
       const src = firstString(attachment?.url)
       const title = firstString(attachment?.filename, attachment?.name, input.part?.tool, src)
@@ -255,7 +259,8 @@ function collectScreenshotBrowserMessage(collector: ScreenshotBrowserCollector, 
     if (part.type === "tool") {
       const browser = browserEvidenceItem({ message, part, role, time, index })
       if (browser) pushUnique(collector, browser)
-      for (const attachment of toolAttachmentItems({ message, part, role, time, index })) {
+      const excludedUrls = browser ? new Set([browser.src]) : undefined
+      for (const attachment of toolAttachmentItems({ message, part, role, time, index, excludedUrls })) {
         pushUnique(collector, attachment)
       }
     }
