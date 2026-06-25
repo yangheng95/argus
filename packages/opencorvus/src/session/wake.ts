@@ -10,6 +10,7 @@ import { SessionAgentIdentity } from "./agent-identity"
 import { SessionControl } from "./control"
 import { Database } from "@/storage/db"
 import z from "zod"
+import { setSessionTitleFromFirstUserMessage } from "./first-message-title"
 
 /**
  * Session wake mechanism.
@@ -116,6 +117,17 @@ export namespace SessionWake {
       const model = await resolveModel(agent, sessionID, input.model)
       const messageID = Identifier.ascending("message")
       const partID = Identifier.ascending("part")
+      const textPart = {
+        id: partID,
+        messageID,
+        sessionID,
+        type: "text",
+        text: input.prompt,
+        time: {
+          start: Date.now(),
+          end: Date.now(),
+        },
+      } satisfies Parameters<typeof setSessionTitleFromFirstUserMessage>[0]["parts"][number]
 
       const msg = {
         id: messageID,
@@ -129,19 +141,7 @@ export namespace SessionWake {
       Database.transaction(() => {
         Session.persistMessage({
           info: msg,
-          parts: [
-            {
-              id: partID,
-              messageID,
-              sessionID,
-              type: "text",
-              text: input.prompt,
-              time: {
-                start: Date.now(),
-                end: Date.now(),
-              },
-            },
-          ],
+          parts: [textPart],
           touchSessionID: sessionID,
         })
         SessionControl.create({
@@ -154,6 +154,11 @@ export namespace SessionWake {
             wake_reason: reason,
           },
         })
+      })
+      await setSessionTitleFromFirstUserMessage({
+        sessionID,
+        messageID,
+        parts: [textPart],
       })
 
       log.info("injected wake message", { sessionID, messageID: msg.id, wakeReason: reason.source })

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
@@ -7,6 +7,7 @@ import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
+import { SessionPrompt } from "../../src/session/prompt"
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { resetDatabase } from "../fixture/db"
@@ -571,6 +572,70 @@ describe("coding assistant routes", () => {
           tools: { panel: true },
           extra: { surface: "right-sidebar" },
         })
+      },
+    })
+  })
+
+  test("first prompt titles right sidebar sessions from user text without overwriting manual rename", async () => {
+    await using tmp = await tmpdir({ git: true, config: PROMPT_ASYNC_TEST_CONFIG })
+    installControlModel()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(SessionPrompt, "loop").mockResolvedValue({ info: {} as never, parts: [] } as never)
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const { session } = (await created.json()) as { session: Session.Info }
+
+        const prompted = await app.request(`/session/${session.id}/prompt_async`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            parts: [{ type: "text", text: "Investigate the failing title projection" }],
+          }),
+        })
+        expect(prompted.status).toBe(202)
+        expect((await Session.get(session.id)).title).toBe("Investigate the failing title projection")
+
+        const manualCreated = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const { session: manualSession } = (await manualCreated.json()) as { session: Session.Info }
+        const renamed = await app.request(`/coding/session/${manualSession.id}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ title: "Manual assistant title" }),
+        })
+        expect(renamed.status).toBe(200)
+
+        const manualPrompted = await app.request(`/session/${manualSession.id}/prompt_async`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            parts: [{ type: "text", text: "This must not replace the manual title" }],
+          }),
+        })
+        expect(manualPrompted.status).toBe(202)
+        expect((await Session.get(manualSession.id)).title).toBe("Manual assistant title")
+        await TaskQueueService.runNow()
       },
     })
   })

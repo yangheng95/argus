@@ -7,6 +7,7 @@ import { Message } from "../../src/session/message"
 import { SessionWake } from "../../src/session/wake"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Agent } from "../../src/agent/agent"
+import { MISSION_CONTROL_DEFAULT_TITLE } from "../../src/session/first-message-title"
 import { resetDatabase } from "../fixture/db"
 import { Database, eq } from "../../src/storage/db"
 import { SessionControlRecordTable } from "../../src/session/session.sql"
@@ -107,7 +108,7 @@ test("wake resolves the session agent model through the single resolver", async 
     config: {
       model: "base/default",
       agent: {
-        explore: { model: "base/explore" },
+        general: { model: "base/general" },
       },
     },
   })
@@ -121,15 +122,15 @@ test("wake resolves the session agent model through the single resolver", async 
         patch: {
           model: "overlay/default",
           agent: {
-            explore: { model: "overlay/explore" },
+            general: { model: "overlay/general" },
           },
         },
       })
 
       await SessionWake.wake({
         sessionID: session.id,
-        agent: "explore",
-        prompt: "resume explore",
+        agent: "general",
+        prompt: "resume general",
         reason: {
           source: "scheduler.event",
           jobID: "crn_evt",
@@ -147,9 +148,9 @@ test("wake resolves the session agent model through the single resolver", async 
       if (last?.info.role !== "user") throw new Error("expected user message")
       expect(last.info.model).toEqual({
         providerID: "overlay",
-        modelID: "explore",
+        modelID: "general",
       })
-      expect(last.info.agent).toBe("explore")
+      expect(last.info.agent).toBe("general")
     },
   })
 })
@@ -189,6 +190,45 @@ test("wake preserves agent-owned mission session identity", async () => {
         providerID: "base",
         modelID: "mission",
       })
+    },
+  })
+})
+
+test("wake titles Mission Control sessions from the first operator message only", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      model: "base/default",
+      agent: {
+        mission: { model: "base/mission" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+      const session = await Session.create({ kind: "mission", title: MISSION_CONTROL_DEFAULT_TITLE })
+
+      await SessionWake.wake({
+        sessionID: session.id,
+        prompt: "Design the market replay mission",
+        reason: {
+          source: "mission.operator",
+          missionID: "mis_title",
+        },
+      })
+      expect((await Session.get(session.id)).title).toBe("Design the market replay mission")
+
+      await SessionWake.wake({
+        sessionID: session.id,
+        prompt: "Continue with the remaining mission checks",
+        reason: {
+          source: "mission.operator",
+          missionID: "mis_title",
+        },
+      })
+      expect((await Session.get(session.id)).title).toBe("Design the market replay mission")
+      expect(loop).toHaveBeenCalledTimes(2)
     },
   })
 })
