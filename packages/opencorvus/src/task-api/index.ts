@@ -1073,7 +1073,7 @@ export namespace EngineService {
       for (const task of tasks) {
         await appendAndWakeTaskOperatorMessage({
           taskID: task.id,
-          text: "重启",
+          text: "请继续执行剩余任务",
           source: "server_restart",
         }).catch((error) => {
           failures.push(`${task.id}: ${error instanceof Error ? error.message : String(error)}`)

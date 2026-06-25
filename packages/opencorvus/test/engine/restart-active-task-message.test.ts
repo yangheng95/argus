@@ -31,7 +31,8 @@ async function restartMessages(sessionID: string) {
   const messages = await Session.messages({ sessionID })
   return messages.filter(
     (message) =>
-      message.info.role === "user" && message.parts.some((part) => part.type === "text" && part.text === "重启"),
+      message.info.role === "user" &&
+      message.parts.some((part) => part.type === "text" && part.text === "请继续执行剩余任务"),
   )
 }
 
@@ -120,7 +121,7 @@ describe("restart active task message", () => {
           taskID: orphanTaskID,
           event: {
             operatorMessage: {
-              text: "重启",
+              text: "请继续执行剩余任务",
               source: "server_restart",
               messageID: orphanRestartMessages[0]?.info.id,
             },
