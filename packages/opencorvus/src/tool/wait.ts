@@ -4,7 +4,8 @@ import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
 
 export const WAIT_MIN_MS = 1_000
-export const WAIT_MAX_MS = 10 * 60 * 1000
+export const WAIT_RECOMMENDED_MS = 20 * 60 * 1000
+export const WAIT_MAX_MS = WAIT_RECOMMENDED_MS
 
 const log = Log.create({ service: "wait-tool" })
 
@@ -15,8 +16,8 @@ export const WaitToolParameters = z.object({
     .min(WAIT_MIN_MS)
     .max(WAIT_MAX_MS)
     .describe(
-      `Pause length in milliseconds. Minimum ${WAIT_MIN_MS}, maximum ${WAIT_MAX_MS}. ` +
-        "Pick the smallest duration that gives the named external event a real chance to occur.",
+      `Pause length in milliseconds. Minimum ${WAIT_MIN_MS}, recommended ${WAIT_RECOMMENDED_MS}, maximum ${WAIT_MAX_MS}. ` +
+        "For a real external settle wait, request the recommended 20 minute duration once instead of chaining repeated 60 second waits.",
     ),
   reason: z
     .string()
@@ -25,7 +26,7 @@ export const WaitToolParameters = z.object({
 })
 
 export const WaitToolDescription =
-  "One-shot deliberate pause. Yields the current agent turn for the stated number of milliseconds before returning, so a NAMED external event the repository cannot itself trigger has time to settle before your NEXT tool call. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is concretely external. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
+  "One-shot deliberate pause. Yields the current agent turn for the stated number of milliseconds before returning, so a NAMED external event the repository cannot itself trigger has time to settle before your NEXT tool call. Recommended deliberate external-settle duration is 1200000ms (20 minutes); use that single wait instead of repeated 60000ms (60 second) waits. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is concretely external. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
 
 export async function executeWait(input: {
   duration_ms: number

@@ -12,6 +12,12 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md)                                   | Right Sidebar OpenCode TUI Upgrade                  |
 | [spec-vscode-extension.md](spec-vscode-extension.md)                                                                                   | spec: opencorvus VSCode 扩展                        |
 
+## 2026-06-26
+
+| File                                                                                                           | Title                                   |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| [2026-06-26-wait-tool-twenty-minute-recommendation.md](2026-06-26-wait-tool-twenty-minute-recommendation.md) | Wait Tool Twenty Minute Recommendation |
+
 ## 2026-06-25
 
 | File                                                                                                   | Title                               |

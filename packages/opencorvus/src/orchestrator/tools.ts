@@ -39,7 +39,14 @@ import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
 import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/browser-preview"
-import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
+import {
+  WAIT_MAX_MS,
+  WAIT_MIN_MS,
+  WAIT_RECOMMENDED_MS,
+  WaitToolDescription,
+  WaitToolParameters,
+  executeWait,
+} from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -203,9 +210,10 @@ export const ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS = DEFAULT_BASH_TIMEOUT_MS
 export const ORCHESTRATOR_BASH_MAX_TIMEOUT_MS = 10 * 60 * 1000
 
 // Wait tool bounds. Floor is one second so the LLM cannot use it as a
-// cheap busy-wait; ceiling matches bash so the longest deliberate idle
-// pause is still bounded by the same operator-visible budget.
+// cheap busy-wait; recommended and ceiling both come from the single
+// wait tool schema so prompt guidance cannot drift from executable bounds.
 export const ORCHESTRATOR_WAIT_MIN_MS = WAIT_MIN_MS
+export const ORCHESTRATOR_WAIT_RECOMMENDED_MS = WAIT_RECOMMENDED_MS
 export const ORCHESTRATOR_WAIT_MAX_MS = WAIT_MAX_MS
 
 const log = Log.create({ service: "task-tools" })
