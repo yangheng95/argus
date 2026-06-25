@@ -8,6 +8,8 @@ import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
 import type { SkillMount } from "@/skill/mounts"
 
+const DEFAULT_SKILL_SEARCH_RESULT_LIMIT = 5
+
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const { SkillMount } = await import("@/skill/mounts")
   const agent = ctx?.agent
@@ -36,7 +38,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "",
           "Use search before planning when the task may match a specialized workflow. Search is fuzzy across mounted skill titles and SKILL.md contents.",
           "",
-          'Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name="...">` block with the full SKILL.md body and sampled bundled files.',
+          `Search output returns up to ${DEFAULT_SKILL_SEARCH_RESULT_LIMIT} names, descriptions, required tool hints, and locations only. Loading by name returns a \`<skill_content name="...">\` block with the full SKILL.md body and sampled bundled files.`,
           disabled.length > 0
             ? `${disabled.length} mounted skill(s) are disabled and will not appear in search results.`
             : "",
@@ -63,7 +65,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       if (!params.name) {
-        const matches = searchSkills(compatible, params.query).slice(0, 20)
+        const matches = searchSkills(compatible, params.query).slice(0, DEFAULT_SKILL_SEARCH_RESULT_LIMIT)
         const query = params.query?.trim()
         return {
           title: query ? `Skill search: ${query}` : "Skill list",

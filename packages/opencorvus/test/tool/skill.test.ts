@@ -122,6 +122,62 @@ mounted_agents:
     }
   })
 
+  test("execute without name defaults list and search results to five skills", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        for (let index = 1; index <= 7; index++) {
+          const name = `default-limit-skill-${index}`
+          await Bun.write(
+            path.join(dir, ".opencorvus", "skill", name, "SKILL.md"),
+            `---
+name: ${name}
+description: Common default limit workflow ${index}.
+mounted_agents:
+  - build
+---
+
+# Default Limit Skill ${index}
+
+Common default limit workflow body ${index}.
+`,
+          )
+        }
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const tool = await SkillTool.init({ agent: build })
+          const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
+
+          const listResult = await tool.execute({}, ctx)
+          expect(listResult.metadata.count).toBe(5)
+          expect(listResult.metadata.total).toBe(7)
+          expect(listResult.metadata.names).toHaveLength(5)
+          expect(listResult.output).toContain("<matched>5</matched>")
+          expect(listResult.output).toContain("<total_compatible>7</total_compatible>")
+
+          const searchResult = await tool.execute({ query: "common default limit workflow" }, ctx)
+          expect(searchResult.metadata.count).toBe(5)
+          expect(searchResult.metadata.total).toBe(7)
+          expect(searchResult.metadata.names).toHaveLength(5)
+          expect(searchResult.output).toContain("<matched>5</matched>")
+          expect(searchResult.output).toContain("<total_compatible>7</total_compatible>")
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("execute without name fuzzy-searches skill title and content", async () => {
     await using tmp = await tmpdir({
       git: true,
