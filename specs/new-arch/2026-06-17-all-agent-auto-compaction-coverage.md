@@ -20,6 +20,11 @@ compaction outcome":
 - agent kinds that do not require live continuation queue the existing
   compaction control record
 
+2026-06-25 scheduler amendment: `orchestrator` moved out of the unsupported
+workflow partition and into a dedicated `orchestrator-wake` runtime-continuation
+partition. It queues automatic compaction only while the live scheduler wake
+runtime contract validates. `acceptance` remains explicitly disabled.
+
 ## Recall
 
 Read before implementation:
