@@ -1,9 +1,9 @@
 import { Session } from "."
 import type { Message } from "./message"
+import { deriveTitle } from "@/title/derive"
 
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE = "Coding assistant"
 export const MISSION_CONTROL_DEFAULT_TITLE = "Mission Control"
-export const FIRST_MESSAGE_SESSION_TITLE_MAX_LENGTH = 200
 
 function isRightSidebarCodingAssistant(session: Session.Info): boolean {
   const codingAssistant =
@@ -24,14 +24,9 @@ function isMissionControl(session: Session.Info): boolean {
 }
 
 function firstTextTitle(parts: Message.Part[]): string | undefined {
-  const text = parts
-    .find((part): part is Message.TextPart => part.type === "text")
-    ?.text.trim()
-    .replace(/\s+/g, " ")
-  if (!text) return undefined
-  return text.length > FIRST_MESSAGE_SESSION_TITLE_MAX_LENGTH
-    ? text.slice(0, FIRST_MESSAGE_SESSION_TITLE_MAX_LENGTH)
-    : text
+  const text = parts.find((part): part is Message.TextPart => part.type === "text")?.text
+  if (text === undefined) return undefined
+  return deriveTitle(text)
 }
 
 export async function setSessionTitleFromFirstUserMessage(input: {
