@@ -442,7 +442,10 @@ contract.
   wake; it does not create another task message and does not resume
   build/executor children. A healthy live build is not a reason to call `wait`;
   park this orchestrator wake and let terminal goal refill facts wake the next
-  decision. If a build child is stale with open ownership, call
+  decision. Do not infer stale from elapsed time alone. Do not self-initiate
+  `cancel_subagent`/`recover_stale` for a child running for less than 60 minutes
+  unless a target-scoped operator command or pending worker coordination request explicitly asks for cancellation; park the wake instead.
+  If a build child is stale with open ownership, call
   `cancel_subagent` in `recover_stale` mode, then `build({ goalID, request })`
   if the goal still needs work. If the same stale build evidence repeats after
   recovery, stop the recover/build loop and choose `fail_task`, `question`,
