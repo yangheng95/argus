@@ -35,6 +35,8 @@ Four read-only agents reviewed the current state:
 | `orchestrator/tools.ts::analyze_intent` | No `continuation_artifact_id`; catch always logs abort and rethrows. | Accept `continuation_artifact_id`, pass it to `IntentAnalysisAgent.analyze`, and create continuation artifacts on terminal StructuredOutput miss. |
 | `intent-analysis/agent.ts` | Always starts a new intent-analysis session. | Accept `AgentSessionContinuation` and pass it to `runAgentSession`. |
 | `orchestrator/tools.ts::build` retry session selection | Uses latest terminal `session_id` when present; missing session id throws. | Validate the prior session against kind, goal id, and recorded worktree. Use it when valid; otherwise omit `existingSessionID` while preserving `managedWorktree`. |
+| `SessionControl.pending(priorSessionID)` | `SessionLoop` consumes pending `compaction_request` / `manual_summarize` before the ordinary agent turn. | Treat pending compaction controls on the prior build session as non-resumable context evidence; otherwise retrying that session immediately runs compaction instead of build work. |
+| `orchestrator/tools.ts::contextUnavailableReasonFromAssistantError` | Recognizes provider context overflow, prompt-budget overflow, and compaction payload-schema failure. | Also recognize compaction `StructuredOutputError` and `MessageAbortedError`: both mean no valid compaction handoff exists for the old transcript, so build retry opens a fresh child session on the recorded worktree. |
 | `BuildAgent.run` with `managedWorktree` | Can create a new session on the supplied worktree when `existingSessionID` is omitted. | Reuse this existing primitive for fresh-context build retry. |
 | `orchestrator/tools.ts::cleanupCompletedGoalWorkspace` and `engine/writer.ts::cleanupGoalWorkspaceForGoal` | Successful goal builds can remove the completed worktree and clear workspace pointers. | Do not auto-clean completed goal worktrees at build success. Explicit task terminal cleanup may remain separate. |
 | `SessionCompaction.process` / `SessionPrompt.loop` | Failed compaction returns stop and does not create fresh sessions. Failed summaries are not valid compaction boundaries. | Keep failed summaries out of replay. Future work may expose a typed failed-context outcome, but fresh build retry must be driven by durable build/session facts, not by compactor-created sessions. |
@@ -65,5 +67,11 @@ Four read-only agents reviewed the current state:
 - Build retry with missing/unusable prior session and a valid recorded worktree
   passes no `existingSessionID`, creates a fresh build session, and keeps the
   same worktree directory.
+- Build retry when the prior build session has a pending `compaction_request`
+  or `manual_summarize` passes no `existingSessionID`, creates a fresh build
+  session, and keeps the same worktree directory.
+- Build retry after a failed compaction assistant turn (`StructuredOutputError`
+  or `MessageAbortedError`) passes no `existingSessionID`, creates a fresh
+  build session, and keeps the same worktree directory.
 - Successful goal builds leave the goal workspace pointer intact.
 - Tests prove old failed compaction summaries are not used as replay boundaries.

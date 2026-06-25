@@ -84,6 +84,7 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
+import { SessionControl } from "../../src/session/control"
 import {
   claimStageContinuationRequest,
   createStageContinuationRequest,
@@ -4920,6 +4921,253 @@ describe("orchestrator tools", () => {
         expect(observedWorktreeDir).toBe(tmp.path)
         expect(observedRetryFeedback).toContain("Terminal error: exact context overflow failure from persisted facts")
         expect(observedRetryFeedback).not.toContain("prior_latest_assistant_context_overflow")
+        expect(observedRetryFeedback).not.toContain("Build retry selected a fresh build session")
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
+        const latest = listGoalRunsByGoal(goalID).at(0)
+        expect(latest?.session_id).toBe(freshSessionID)
+      },
+    })
+  })
+
+  for (const compactionFailure of [
+    {
+      key: "compaction_aborted",
+      label: "aborted compaction",
+      error: () =>
+        new Message.AbortedError({
+          message: "external abort signal fired",
+        }).toObject(),
+      forbiddenReason: "prior_compaction_aborted",
+    },
+    {
+      key: "compaction_structured_output",
+      label: "compaction structured output miss",
+      error: () =>
+        new Message.StructuredOutputError({
+          message: "Model did not produce structured output before the compaction turn ended.",
+          retries: 0,
+        }).toObject(),
+      forbiddenReason: "prior_compaction_structured_output_missing",
+    },
+  ]) {
+    test(`goal build retry opens a fresh session on the same worktree after ${compactionFailure.label}`, async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
+
+      const now = Date.now()
+      const stamp = `${now.toString(16)}_${compactionFailure.key}`
+      const projectID = `project_retry_${stamp}`
+      const taskID = `tsk_retry_${stamp}`
+      const goalID = `gol_retry_${stamp}`
+      const priorSessionID = `ses_prior_retry_${stamp}`
+      const freshSessionID = `ses_fresh_retry_${stamp}`
+      let observedExistingSessionID: unknown = "not-observed"
+      let observedWorktreeDir = ""
+      let observedRetryFeedback = ""
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: `${compactionFailure.label} retry test` })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
+            goalID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: `${compactionFailure.label} retry test`,
+            taskTitle: `${compactionFailure.label} retry task`,
+            request: "Retry a failed goal after the prior build session compaction failed",
+            goalTitle: "Fresh retry after compaction failure",
+            goalSlug: "fresh-retry-compaction-failure",
+            objective: "Verify compaction failure opens fresh context on the same worktree",
+            now,
+            insertProject: false,
+          })
+          await Session.createNext({
+            id: priorSessionID,
+            kind: "build",
+            parentID: parent.id,
+            goalID,
+            title: "Prior build session with failed compaction",
+            directory: tmp.path,
+          })
+          const priorGoalRunID = seedTerminalFailedBuildRun({
+            taskID,
+            goalID,
+            sessionID: priorSessionID,
+            workspaceDir: tmp.path,
+            now: now + 10,
+          })
+          await seedLatestAssistantError({
+            sessionID: priorSessionID,
+            now: now + 20,
+            agent: "compaction",
+            error: compactionFailure.error(),
+          })
+          createDecisionLog(taskID).append({
+            phase: "retry",
+            goalID,
+            key: `build_retry_previous_${priorGoalRunID}`,
+            value: `Terminal error: exact ${compactionFailure.label} failure from persisted facts`,
+            reason: `${compactionFailure.key}_audit_reason`,
+          })
+
+          buildAgentRunImpl = async (input: any) => {
+            observedExistingSessionID = input.existingSessionID
+            observedWorktreeDir = input.managedWorktree.directory
+            observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+            await markBuildSlotAcquired(input, freshSessionID)
+            return {
+              result: {
+                status: "failed",
+                summary: "Fresh retry used the preserved worktree after compaction failure.",
+                files_changed: [],
+                tests: [],
+                error: "fresh retry still failed",
+              },
+              sessionID: freshSessionID,
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
+          }
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Retry in a fresh context using the same worktree.",
+              reason: `Prior build session hit ${compactionFailure.label}.`,
+            },
+            buildToolOptions(),
+          )
+
+          expectGoalBuildStarted(result)
+          await waitForGoalStatus(goalID, "failed")
+          expect(observedExistingSessionID).toBeUndefined()
+          expect(observedWorktreeDir).toBe(tmp.path)
+          expect(observedRetryFeedback).toContain(`Terminal error: exact ${compactionFailure.label} failure`)
+          expect(observedRetryFeedback).not.toContain(compactionFailure.forbiddenReason)
+          expect(observedRetryFeedback).not.toContain("Build retry selected a fresh build session")
+          expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
+          const latest = listGoalRunsByGoal(goalID).at(0)
+          expect(latest?.session_id).toBe(freshSessionID)
+        },
+      })
+    })
+  }
+
+  test("goal build retry opens a fresh session on the same worktree when prior session has pending compaction", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_pending_compaction_${stamp}`
+    const taskID = `tsk_retry_pending_compaction_${stamp}`
+    const goalID = `gol_retry_pending_compaction_${stamp}`
+    const priorSessionID = `ses_prior_pending_compaction_${stamp}`
+    const freshSessionID = `ses_fresh_pending_compaction_${stamp}`
+    let observedExistingSessionID: unknown = "not-observed"
+    let observedWorktreeDir = ""
+    let observedRetryFeedback = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "pending compaction retry test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Pending compaction retry test",
+          taskTitle: "Pending compaction retry task",
+          request: "Retry a failed goal after the prior build session queued compaction",
+          goalTitle: "Fresh retry after pending compaction",
+          goalSlug: "fresh-retry-pending-compaction",
+          objective: "Verify pending compaction opens fresh context on the same worktree",
+          now,
+          insertProject: false,
+        })
+        await Session.createNext({
+          id: priorSessionID,
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "Prior build session with pending compaction",
+          directory: tmp.path,
+        })
+        const priorGoalRunID = seedTerminalFailedBuildRun({
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          workspaceDir: tmp.path,
+          now: now + 10,
+        })
+        const sourceUserMessageID = `msg_pending_compaction_source_${stamp}`
+        SessionControl.create({
+          sessionID: priorSessionID,
+          kind: "compaction_request",
+          payload: { source_user_message_id: sourceUserMessageID, overflow: true },
+        })
+        createDecisionLog(taskID).append({
+          phase: "retry",
+          goalID,
+          key: `build_retry_previous_${priorGoalRunID}`,
+          value: "Terminal error: exact pending compaction failure from persisted facts",
+          reason: "pending_compaction_audit_reason",
+        })
+
+        buildAgentRunImpl = async (input: any) => {
+          observedExistingSessionID = input.existingSessionID
+          observedWorktreeDir = input.managedWorktree.directory
+          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          await markBuildSlotAcquired(input, freshSessionID)
+          return {
+            result: {
+              status: "failed",
+              summary: "Fresh retry used the preserved worktree after pending compaction.",
+              files_changed: [],
+              tests: [],
+              error: "fresh retry still failed",
+            },
+            sessionID: freshSessionID,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Retry in a fresh context using the same worktree.",
+            reason: "Prior build session has a pending compaction request.",
+          },
+          buildToolOptions(),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(goalID, "failed")
+        expect(observedExistingSessionID).toBeUndefined()
+        expect(observedWorktreeDir).toBe(tmp.path)
+        expect(observedRetryFeedback).toContain("Terminal error: exact pending compaction failure")
+        expect(observedRetryFeedback).not.toContain("prior_pending_compaction_request")
+        expect(observedRetryFeedback).not.toContain(sourceUserMessageID)
         expect(observedRetryFeedback).not.toContain("Build retry selected a fresh build session")
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         const latest = listGoalRunsByGoal(goalID).at(0)
