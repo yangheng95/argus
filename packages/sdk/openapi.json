@@ -43794,6 +43794,50 @@
           "data"
         ]
       },
+      "ModelImageInputTooLargeError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "ModelImageInputTooLargeError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "mime": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "maxDimension": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "message",
+              "mime",
+              "source",
+              "width",
+              "height",
+              "maxDimension"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "APIError": {
         "type": "object",
         "properties": {
@@ -43949,6 +43993,9 @@
               },
               {
                 "$ref": "#/components/schemas/ToolSchemaBudgetError"
+              },
+              {
+                "$ref": "#/components/schemas/ModelImageInputTooLargeError"
               },
               {
                 "$ref": "#/components/schemas/APIError"
@@ -46704,6 +46751,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ToolSchemaBudgetError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ModelImageInputTooLargeError"
                   },
                   {
                     "$ref": "#/components/schemas/APIError"

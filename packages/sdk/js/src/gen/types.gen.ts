@@ -1742,6 +1742,18 @@ export type ToolSchemaBudgetError = {
   }
 }
 
+export type ModelImageInputTooLargeError = {
+  name: "ModelImageInputTooLargeError"
+  data: {
+    message: string
+    mime: string
+    source: string
+    width: number
+    height: number
+    maxDimension: number
+  }
+}
+
 export type ApiError = {
   name: "APIError"
   data: {
@@ -1790,6 +1802,7 @@ export type AssistantMessage = {
     | ContextOverflowError
     | PromptBudgetOverflowError
     | ToolSchemaBudgetError
+    | ModelImageInputTooLargeError
     | ApiError
   parentID: string
   modelID: string
@@ -2581,6 +2594,7 @@ export type EventSessionError = {
       | ContextOverflowError
       | PromptBudgetOverflowError
       | ToolSchemaBudgetError
+      | ModelImageInputTooLargeError
       | ApiError
   }
 }
