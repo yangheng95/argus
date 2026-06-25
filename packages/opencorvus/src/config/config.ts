@@ -1461,31 +1461,31 @@ export namespace Config {
                 .min(0)
                 .max(64)
                 .optional()
-                .describe("P0-B hard gate: pHash Hamming distance upper bound (structure)"),
+                .describe("P0-B visual metric: pHash Hamming distance upper bound (structure)"),
               ssim_min: z
                 .number()
                 .min(0)
                 .max(1)
                 .optional()
-                .describe("P0-B hard gate: mean SSIM lower bound (texture/detail)"),
+                .describe("P0-B visual metric: mean SSIM lower bound (texture/detail)"),
               chart_region_density_min_ratio: z
                 .number()
                 .min(0)
                 .max(1)
                 .optional()
-                .describe("P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
+                .describe("P0-B visual metric: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
               unique_color_ratio_min: z
                 .number()
                 .min(0)
                 .max(1)
                 .optional()
-                .describe("P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)"),
+                .describe("P0-B visual metric: unique-color ratio lower bound (anti monochrome placeholder)"),
               text_hit_ratio_min: z
                 .number()
                 .min(0)
                 .max(1)
                 .optional()
-                .describe("P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)"),
+                .describe("P0-B visual metric: reference_strings hit ratio lower bound (anti placeholder copy)"),
               score_weights: z
                 .object({
                   phash: z.number().min(0).max(1).optional(),

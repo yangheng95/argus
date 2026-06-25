@@ -1,10 +1,11 @@
 /**
- * P0-B · Acceptance 硬数值门。
+ * P0-B · Acceptance visual metric evidence.
  *
- * LLM 无权推翻肉眼可见的差距：verdict 前先跑这里的 5 条硬门，任一 fail
- * 直接 rejected。LLM judge 只负责硬门通过后的软性瑕疵判定。
+ * This module computes visual similarity diagnostics and a composite score.
+ * Consumers may cite `passed=false` as evidence, but must not use it as a
+ * host-side delivery veto. The reviewing agent owns the final report verdict.
  *
- * 硬门清单（阈值由 EngineConfig.acceptance_visual 统一管理，单源，rule 25）：
+ * Metric checklist (thresholds are owned by EngineConfig.acceptance_visual):
  *  1. phash_hamming          — 8x8 aHash 汉明距离 ≤ T1，卡整体结构
  *  2. ssim                   — ssim.js mean SSIM ≥ T2，卡纹理/细节
  *  3. chart_region_density   — 非白像素密度 ≥ reference × 0.6，卡空骨架
@@ -12,17 +13,17 @@
  *  5. text_hit_ratio         — reference OCR 文本在 rendered 的命中率 ≥ 0.7
  *
  * 第 5 条的 OCR/anchor 来自 CaptureManifest.reference_strings。缺少 reference
- * strings 或 rendered text 表示硬门证据缺失，必须失败，不能把占位文案风险
- * 伪装成通过。
+ * strings 或 rendered text 表示 text evidence 缺失，应作为 diagnostic
+ * failure 暴露，不能把占位文案风险伪装成通过。
  *
- * 消费者：P0-B（verdict 硬门）、P0-C.4（LKG 回滚比较 score）、P2（replay 曲线）。
+ * 消费者：visual diagnostic reports, LKG score comparison, and replay curves.
  */
 import z from "zod"
 import ssim from "ssim.js"
 import { EngineConfig } from "@/engine/config"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount, type DecodedPNG } from "@/util/pixel-stats"
 
-/** 每一条硬门的判定记录。 */
+/** 每一条 visual metric threshold 的判定记录。 */
 export interface VisualGateResult {
   name: VisualGateName
   passed: boolean
@@ -146,7 +147,8 @@ function hammingDistance(a: bigint, b: bigint): number {
 /**
  * reference OCR 文本在 rendered 的命中率。Stream C 不内嵌 OCR；调用方通过
  * renderedText 传入：Stream A (P0-0) 附带 rendered 页的 innerText 即可；
- * referenceStrings 由 CaptureManifest 权威产出。两者任一缺失该硬门失败。
+ * referenceStrings 由 CaptureManifest 权威产出。两者任一缺失会让该 metric
+ * check 失败并暴露诊断。
  */
 function textHitRatio(
   referenceStrings: readonly string[] | undefined,
@@ -248,7 +250,7 @@ export async function computeVisualMetric(input: {
           passed: false,
           threshold: t.text_hit_ratio_min,
           value: Number.NaN,
-          note: "missing required referenceStrings/renderedText evidence for text_hit_ratio hard gate",
+          note: "missing referenceStrings/renderedText evidence for text_hit_ratio metric",
         }
       : {
           name: "text_hit_ratio",

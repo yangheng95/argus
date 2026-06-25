@@ -6,10 +6,6 @@ export interface BuildPromptOverlayContext {
   integrityFeedback?: string
   acceptanceFeedback?: string
   designSpecs?: readonly unknown[]
-  referenceParity?: {
-    required?: boolean
-    regions?: readonly string[]
-  }
   taskID?: string
   projectDir?: string
 }
@@ -95,24 +91,9 @@ function renderVisualReferenceOverlay(): string {
     "This overlay applies because the build context includes visual design specs or a frontend_design visual handoff. Referenced images, captures, and visual specs are binding source material for the relevant surface.",
     "",
     "- Reproduce the relevant visible surface as closely as the stack allows; do not treat screenshots or webpage captures as loose inspiration.",
-    "- If required visual evidence is missing or unreadable, fail with a blocker naming the missing evidence instead of guessing from prose.",
-    "- Verify through the real runtime path or a faithful harness before reporting success.",
+    "- If required visual evidence is missing or unreadable, name the gap or blocker in your report instead of guessing from prose.",
+    "- Verify through the real runtime path or a faithful harness, repair visible mismatches you can own, and explicitly report any remaining gap when no further safe optimization is available.",
   ].join("\n")
-}
-
-function renderReferenceComparisonEvidenceOverlay(input: { regions?: readonly string[] }): string {
-  const lines = [
-    "## Build Reference Comparison Evidence Contract",
-    "",
-    "This goal has structured reference-parity / visual-evidence acceptance. A passed `report_build_result` must include `reference_comparison_evidence_refs` with fresh `browser_preview_evidence` refs produced by `browser_preview_compare_regions` for this task. Standalone screenshots, browser observations, prose review, or `browser_preview_bind_local_module` source-binding artifacts are supporting context only; they are not final Reference vs Implementation proof.",
-  ]
-  const regions = [...(input.regions ?? [])]
-  if (regions.length > 0) {
-    lines.push("")
-    lines.push("Required comparison regions:")
-    for (const region of regions) lines.push(`- ${region}`)
-  }
-  return lines.join("\n")
 }
 
 function renderIntegrityReworkOverlay(integrityFeedback: string): string {
@@ -154,11 +135,6 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
   if (hasWebCloneSourceHandoff(frontendDesign)) {
     ids.push("webpage-clone-source-baseline")
     sections.push(renderWebCloneSourceOverlay(context?.taskID, context?.projectDir))
-  }
-
-  if (context?.referenceParity?.required) {
-    ids.push("build-reference-comparison-evidence")
-    sections.push(renderReferenceComparisonEvidenceOverlay({ regions: context.referenceParity.regions }))
   }
 
   if ((context?.designSpecs?.length ?? 0) > 0 || hasText(frontendDesign)) {

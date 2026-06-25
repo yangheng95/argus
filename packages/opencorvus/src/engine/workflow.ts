@@ -15,11 +15,8 @@
  * "推荐路径 + 当前进度" 的形式注入。
  */
 import { createDecisionLog } from "@/decision-log"
-import { browserPreviewEvidenceIDFromRef, readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
-import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { VisualQaReportSchema } from "@/visual-qa/schema"
-import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
@@ -396,7 +393,7 @@ function taskStepStatusByTool(
       return verdict === "pass" ? "completed" : "failed"
     }
     case "visual_qa":
-      return visualQaProjectedStatus(taskID, taskPrimaryProjectRoot(taskID))
+      return visualQaProjectedStatus(taskID)
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
@@ -405,29 +402,13 @@ function taskStepStatusByTool(
   }
 }
 
-function visualQaProjectedStatus(taskID: string, projectDir: string): GoalStepStatus["status"] {
+function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   const entries = createDecisionLog(taskID).readByPhase("visual_qa")
-  const activeSpec = findActiveSpecForTask(taskID)
-  const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
-  const referenceParity = deriveVisualQaReferenceParityContext({
-    taskID,
-    specSnapshotID: activeSpec?.id,
-    goals: listGoals(taskID),
-    frontendDesignEntries: createDecisionLog(taskID).readByPhase("frontend_design"),
-    visualEvidence,
-  })
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.key.startsWith("report_")) {
-      const report = parseVisualQaReportProjection(entry.value, { referenceParityRequired: referenceParity.required })
+      const report = parseVisualQaReportProjection(entry.value)
       if (!report) return "failed"
-      if (
-        report.accepted &&
-        report.productionBlockers === 0 &&
-        (referenceParity.required || report.referenceParityRequired)
-      ) {
-        return "pending"
-      }
       return report.accepted && report.productionBlockers === 0 ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
@@ -437,50 +418,15 @@ function visualQaProjectedStatus(taskID: string, projectDir: string): GoalStepSt
   return "pending"
 }
 
-function parseVisualQaReportProjection(
-  value: string,
-  context: { referenceParityRequired: boolean },
-): { accepted: boolean; productionBlockers: number; referenceParityRequired: boolean } | undefined {
+function parseVisualQaReportProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
   try {
     const parsed = VisualQaReportSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined
     const report = parsed.data
-    if (report.accepted) {
-      if (report.coverage.length === 0 || report.evidence.length === 0) return undefined
-      if (report.follow_up_task) return undefined
-      if (context.referenceParityRequired && !report.reference_parity.required) return undefined
-      if (
-        report.findings.some(
-          (finding) => finding.status === "open" && (finding.severity === "critical" || finding.severity === "major"),
-        )
-      ) {
-        return undefined
-      }
-      if (report.reference_parity.required) {
-        const referenceComparisonRefs = new Set(
-          [
-            ...report.reference_parity.reference_comparison_evidence_refs,
-            ...report.evidence.filter((item) => item.type === "reference_comparison").map((item) => item.ref),
-            ...report.coverage.flatMap((item) => item.evidence_refs),
-          ].flatMap((ref) => {
-            const evidenceID = browserPreviewEvidenceIDFromRef(ref)
-            return evidenceID ? [evidenceID] : []
-          }),
-        )
-        if (
-          report.reference_parity.required_regions.length === 0 ||
-          referenceComparisonRefs.size === 0 ||
-          report.reference_parity.missing_regions.length > 0
-        ) {
-          return undefined
-        }
-      }
-    }
     const blockers = report.production_blockers.length
     return {
       accepted: report.accepted,
       productionBlockers: blockers,
-      referenceParityRequired: report.reference_parity.required,
     }
   } catch {
     return undefined

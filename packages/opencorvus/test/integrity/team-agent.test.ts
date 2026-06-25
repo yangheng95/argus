@@ -467,42 +467,43 @@ describe("integrity team-agent replay attempts", () => {
     expect(completedEvents[0].payload.reviewers).toHaveLength(2)
   }, 20_000)
 
-  test("reviewIntegrity blocks pass verdict when required visual evidence is missing", async () => {
+  test("reviewIntegrity records pass verdict with visual evidence advisory when required evidence is missing", async () => {
     await using tmp = await tmpdir({ git: true })
     const { reviewIntegrity } = await import("../../src/integrity/team-agent")
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(
-          reviewIntegrity({
-            userRequest: "Clone a reference page",
-            taskTitle: "Reference visual parity",
-            goals: [
-              {
-                id: "goal_visual",
-                title: "Visual parity",
-                objective: "Verify reference parity",
-                acceptance_specs: [],
-                owned_paths: ["src/page.tsx"],
-                depends_on: [],
-                priority: "blocking",
-                kind: "verification",
-                requirement_ids: [],
-              },
-            ],
-            replayContext: replayContext(1),
-            taskID: "tsk_team_visual_required",
-            parentSessionID: "ses_parent",
-            projectRoot: tmp.path,
-            visualEvidenceRequired: true,
-          }),
-        ).rejects.toThrow("integrity review did not submit consensus report")
+        const result = await reviewIntegrity({
+          userRequest: "Clone a reference page",
+          taskTitle: "Reference visual parity",
+          goals: [
+            {
+              id: "goal_visual",
+              title: "Visual parity",
+              objective: "Verify reference parity",
+              acceptance_specs: [],
+              owned_paths: ["src/page.tsx"],
+              depends_on: [],
+              priority: "blocking",
+              kind: "verification",
+              requirement_ids: [],
+            },
+          ],
+          replayContext: replayContext(1),
+          taskID: "tsk_team_visual_required",
+          parentSessionID: "ses_parent",
+          projectRoot: tmp.path,
+          visualEvidenceRequired: true,
+        })
+
+        expect(result.verdict).toBe("pass")
       },
     })
 
-    expect(terminalResults.join("\n")).toContain("BLOCKERS")
+    expect(terminalResults.join("\n")).toContain("RECORDED")
+    expect(terminalResults.join("\n")).toContain("ADVISORIES")
     expect(terminalResults.join("\n")).toContain("VisualEvidenceBundle")
-    expect(completedEvents).toHaveLength(0)
+    expect(completedEvents).toHaveLength(1)
   }, 20_000)
 
   test("consensus prompt separates coverage audit status from verdict enums", async () => {

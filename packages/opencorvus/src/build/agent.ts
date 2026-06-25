@@ -67,8 +67,6 @@ import {
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
-import { browserPreviewEvidenceIDFromRef } from "@/acceptance/visual-evidence"
-import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import type { VisualSpec } from "@/frontend-design/types"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
@@ -121,104 +119,6 @@ export function createMergeBackSingleFlight<T extends { status: string }>(execut
 export type BuildReportSubmission =
   | { accepted: true; result: BuildResult; output: string }
   | { accepted: false; output: string }
-
-type BuildReferenceParityContext = {
-  required?: boolean
-  regions?: readonly string[]
-}
-
-function parseReferenceRegionKey(key: string): { regionID: string; viewportID: string } | { issue: string } {
-  const [regionID, viewportID, extra] = key.split("@")
-  if (extra !== undefined || !regionID?.trim() || !viewportID?.trim()) {
-    return {
-      issue: `reference region "${key}" must use the exact format region_id@viewport_id.`,
-    }
-  }
-  return { regionID: regionID.trim(), viewportID: viewportID.trim() }
-}
-
-export async function validateBuildReferenceComparisonEvidenceReport(input: {
-  result: BuildResult
-  referenceParity?: BuildReferenceParityContext
-  taskID?: string
-  projectRoot?: string
-}): Promise<string | undefined> {
-  if (!input.referenceParity?.required || input.result.status !== "passed") return undefined
-
-  const refs = input.result.reference_comparison_evidence_refs ?? []
-  if (refs.length === 0) {
-    return (
-      "passed build for structured reference parity requires reference_comparison_evidence_refs from " +
-      "browser_preview_compare_regions; standalone screenshots and prose review are not final proof."
-    )
-  }
-
-  const evidenceIDs = refs.map((ref) => browserPreviewEvidenceIDFromRef(ref))
-  const invalidRefs = refs.filter((_, index) => !evidenceIDs[index])
-  if (invalidRefs.length > 0) {
-    return `reference_comparison_evidence_refs must cite browser_preview_evidence artifact ids: ${invalidRefs.join(", ")}`
-  }
-  if (!input.taskID || !input.projectRoot) {
-    return "passed build for structured reference parity requires taskID and projectRoot so browser_preview_compare_regions evidence can be verified."
-  }
-
-  const validEvidence: Array<{ id: string; regionID?: string; viewportID: string }> = []
-  for (const evidenceID of evidenceIDs.filter((id): id is string => Boolean(id))) {
-    const evidence = await findReadableBrowserPreviewEvidenceByID({
-      projectRoot: input.projectRoot,
-      taskID: input.taskID,
-      evidenceID,
-    })
-    if (!evidence) {
-      return `reference_comparison_evidence_refs contains unreadable or missing browser_preview_evidence: ${evidenceID}`
-    }
-    if (evidence.operationKind !== "reference-comparison") {
-      return `browser_preview_evidence ${evidenceID} is ${evidence.operationKind}, not reference-comparison`
-    }
-    if (evidence.status !== "passed") {
-      return `browser_preview_evidence ${evidenceID} status is ${evidence.status}, not passed`
-    }
-    validEvidence.push({
-      id: evidenceID,
-      regionID: evidence.regionID,
-      viewportID: evidence.viewportID,
-    })
-  }
-
-  const requiredRegions = [...(input.referenceParity.regions ?? [])]
-  for (const key of requiredRegions) {
-    const parsed = parseReferenceRegionKey(key)
-    if ("issue" in parsed) return parsed.issue
-    const matched = validEvidence.some(
-      (evidence) => evidence.regionID === parsed.regionID && evidence.viewportID === parsed.viewportID,
-    )
-    if (!matched) {
-      return `passed build lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`
-    }
-  }
-
-  return undefined
-}
-
-export function makeReferenceComparisonEvidenceFailedResult(input: {
-  result: BuildResult
-  issue: string
-}): BuildResult {
-  const result = input.result
-  return {
-    status: "failed",
-    summary: `Reference comparison evidence rejected: ${result.summary}`,
-    files_changed: result.files_changed,
-    commit_ref: result.commit_ref,
-    tests: result.tests,
-    reference_comparison_evidence_refs: result.reference_comparison_evidence_refs,
-    contract_restatement: result.contract_restatement,
-    followup_workload_guidance: result.followup_workload_guidance,
-    repair_report: result.repair_report,
-    fact_check_items: result.fact_check_items,
-    error: input.issue,
-  }
-}
 
 export function evaluateBuildReportSubmission(input: {
   result: unknown
@@ -278,10 +178,6 @@ export namespace BuildAgent {
     /** Optional visual anchors from frontend_design. The frontend template is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
-    /** Structured reference-parity requirement for this build target. When
-     * required, a passed terminal report must cite readable
-     * browser_preview_compare_regions reference-comparison evidence. */
-    referenceParity?: BuildReferenceParityContext
     /** Compact frontend_research pointer digest rendered from the latest
      *  non-stale frontend_research_brief artifact. Build consumes it as coverage
      *  and drilldown pointers before implementing webpage/UI replica surfaces. */
@@ -831,15 +727,6 @@ export namespace BuildAgent {
               worktreeBranch,
             })
             if (!evaluated.accepted) return evaluated.output
-            const referenceIssue = await validateBuildReferenceComparisonEvidenceReport({
-              result: evaluated.result,
-              referenceParity: input.context?.referenceParity,
-              taskID: input.task.id,
-              projectRoot: input.context?.projectDir,
-            })
-            if (referenceIssue) {
-              return `REJECTED: ${referenceIssue} Fix the payload/evidence and call report_build_result again.`
-            }
             // No host-side enforcement of merge_back-before-passed and no
             // diff-coverage audit. Both facts are surfaced separately on
             // RunOutput (mergeBackStatus / actualChangedFiles) and rendered
@@ -1000,21 +887,6 @@ export namespace BuildAgent {
           })
           out = { session: { id: externalOut.sessionID }, structured: externalOut.structured }
           parsed = BuildResultSchema.safeParse(externalOut.structured)
-          if (parsed.success) {
-            const referenceIssue = await validateBuildReferenceComparisonEvidenceReport({
-              result: parsed.data,
-              referenceParity: input.context?.referenceParity,
-              taskID: input.task.id,
-              projectRoot: input.context?.projectDir,
-            })
-            if (referenceIssue) {
-              out.structured = makeReferenceComparisonEvidenceFailedResult({
-                result: parsed.data,
-                issue: referenceIssue,
-              })
-              parsed = BuildResultSchema.safeParse(out.structured)
-            }
-          }
           if (externalOut.mergedHead) mergedHead = externalOut.mergedHead
         }
 
@@ -2712,7 +2584,7 @@ function renderBuildTerminalReportContract(): string {
     "When you call `report_build_result`, include:",
     "- `contract_restatement`: a detailed restatement of the effective req/goal contract you handled, including the user request or goal objective, relevant acceptance specs, requirement ids, important source evidence, and scoped non-goals.",
     "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, and whether workload_analysis or Architect re-sizing should be revisited before more implementation.",
-    "- `reference_comparison_evidence_refs`: required when the prompt includes a Build Reference Comparison Evidence Contract; cite `browser_preview_evidence` refs from `browser_preview_compare_regions`, not standalone screenshots.",
+    "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped `browser_preview_compare_regions` artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
     "",
     "Do not shrink the report to the files you happened to touch. Weak follow-up models must be able to recover the real work surface from your terminal report without re-underestimating it.",
   ].join("\n")

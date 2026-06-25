@@ -7655,17 +7655,6 @@ export function createOrchestratorTools(input: {
               taskID,
               request: task.request,
             })
-            const referenceParity = deriveVisualQaReferenceParityContext({
-              taskID,
-              specSnapshotID: activeSpecForContext?.id,
-              goals: [
-                {
-                  spec_snapshot_id: goal.spec_snapshot_id,
-                  acceptance_specs: goal.acceptance_specs as AcceptanceSpec[],
-                },
-              ],
-            })
-
             // Retry feedback from decision log. Materialize the terminal
             // build-attempt facts before reading so this new session receives
             // the previous failure context in its first prompt.
@@ -7731,9 +7720,6 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals: collaborationGoals.length > 0 ? collaborationGoals : undefined,
               designSpecs,
-              referenceParity: referenceParity.required
-                ? { required: true, regions: referenceParity.regions }
-                : undefined,
               frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
               frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
               projectDir,
@@ -7771,29 +7757,15 @@ export function createOrchestratorTools(input: {
               taskID,
               request: task.request,
             })
-            const { createDecisionLog } = await import("@/decision-log")
-            const { listGoals } = await import("@/engine/store")
-            const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
-            const referenceParity = deriveVisualQaReferenceParityContext({
-              taskID,
-              specSnapshotID: activeSpecForContext?.id,
-              goals: listGoals(taskID),
-              frontendDesignEntries: createDecisionLog(taskID).readByPhase("frontend_design"),
-              visualEvidence,
-            })
             context =
               integrityFeedback ||
               acceptanceFeedback ||
               retryAttachments ||
               designSpecs ||
               frontendResearch.trim().length > 0 ||
-              frontendDesign.trim().length > 0 ||
-              referenceParity.required
+              frontendDesign.trim().length > 0
                 ? {
                     designSpecs,
-                    referenceParity: referenceParity.required
-                      ? { required: true, regions: referenceParity.regions }
-                      : undefined,
                     frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
                     frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
                     projectDir,

@@ -53,7 +53,7 @@ If a Visual QA report exists, treat it as the focused visual acceptance virtual
 gate. Use `inspect_integrity_evidence({ section: "visual_qa_report" })` when
 visual or GUI fidelity matters. A report with `accepted=false` or non-empty
 `production_blockers` is failing visual acceptance evidence until repaired and
-revalidated. This is not a host hard gate; it is task evidence that must be
+revalidated. This is not a host-side delivery veto; it is task evidence that must be
 reconciled before an integrity pass.
 
 Evidence requirements:

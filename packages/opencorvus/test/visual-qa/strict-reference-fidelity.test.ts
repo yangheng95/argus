@@ -57,9 +57,9 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("inspect diff artifacts only when true crop dimensions match")
     expect(normalized).toContain("request only `desktop` viewport region comparison evidence")
     expect(normalized).toContain("do not block on mobile or tablet reference evidence")
-    expect(normalized).toContain("Do not substitute standalone screenshots as the final region-parity evidence")
-    expect(normalized).toContain("A passed visual QA report for a bound reference region needs fresh")
-    expect(normalized).toContain("fail the visual QA report with the exact blocker")
+    expect(normalized).toContain("Do not substitute standalone screenshots as the strongest region-parity evidence")
+    expect(normalized).toContain("A passed visual QA report for a bound reference region should cite fresh")
+    expect(normalized).toContain("submit the visual QA report with the exact blocker or remaining evidence gap")
   })
 
   test("runtime delegation requires one-to-one reference-image acceptance evidence", () => {
@@ -70,7 +70,7 @@ describe("visual-qa final blocker-based acceptance", () => {
     })
 
     expect(prompt).toContain("final frontend visual GUI and functional product review")
-    expect(prompt).toContain("Reference/clone fidelity is enforced only when")
+    expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("professional product designer and design QA reviewer")
     expect(prompt).toContain("Do not chase visual scores or external judge verdicts")
     expect(prompt).toContain("call `browser_preview_bind_local_module`")
@@ -81,7 +81,7 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(prompt).toContain("do not block on mobile or tablet reference evidence")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
     expect(prompt).toContain(
-      "requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`",
+      "produce task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`",
     )
     expect(prompt).toContain("no production_blockers")
     expect(prompt).toContain("Product Design QA Principles")
