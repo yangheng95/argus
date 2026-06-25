@@ -117,7 +117,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"evidenceSource": "capture_viewport"')
         expect(sourceDomIterationState).not.toContain('"mobile-review"')
         expect(sourceDomIterationState).not.toContain('"referenceImage": "web-clone-source/reference-mobile.png"')
-        expect(sourceDomIterationState).toContain('"wide-review"')
+        expect(sourceDomIterationState).not.toContain('"wide-review"')
         expect(sourceProjectManifest.visualIteration.evidenceMethod).toBe("task_scoped_preview_screenshots")
         expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
@@ -127,16 +127,16 @@ describe("tool.web_clone_generate_source_project", () => {
           evidenceSource: "capture_viewport",
         })
         expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual(
-          ["desktop-reference", "wide-review"],
+          ["desktop-reference"],
         )
-        expect(sourceProjectManifest.visualIteration.viewportMatrix[1]).toMatchObject({
-          name: "wide-review",
-          width: 1920,
-          height: 1080,
-          evidenceSource: "default",
+        expect(sourceProjectManifest.visualIteration.layoutWidthContract).toMatchObject({
+          mode: "full_width",
+          viewportWidth: 1366,
         })
         expect(readme).toContain("Visual iteration viewport matrix")
         expect(readme).toContain("desktop-reference 1366x768")
+        expect(readme).toContain("Layout width contract")
+        expect(readme).toContain("full_width viewport=1366px")
         expect(readme).not.toContain("web-clone-source/reference-mobile.png")
         expect(readme).toContain("source-ir/style-profile.json")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
@@ -190,6 +190,23 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(generated.title).toBe("Web clone source project generated")
         expect(await Bun.file(path.join(outputDir, "reference.png")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "reference-mobile.png")).exists()).toBe(false)
+      },
+    })
+  }, 30_000)
+
+  test("rejects source project generation when captured viewport metadata is missing", async () => {
+    await using tmp = await tmpdir()
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
+    const outputDir = path.join(tmp.path, "generated-react")
+    await fs.rm(path.join(webpageEvidenceDir, "extracted-page.json"), { force: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const generateTool = await WebCloneGenerateSourceProjectTool.init()
+        await expect(generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)).rejects.toThrow(
+          "requires captured viewport metadata",
+        )
       },
     })
   }, 30_000)
@@ -342,8 +359,8 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceProjectManifest.visualIteration.referenceImage).toBe("reference.png")
         expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].name).toBe("desktop-reference")
-        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].width).toBe(1440)
-        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].evidenceSource).toBe("default")
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].width).toBe(1366)
+        expect(sourceProjectManifest.visualIteration.viewportMatrix[0].evidenceSource).toBe("capture_viewport")
         expect(sourceProjectManifest.sourceDomRegions.count).toBe(regionFiles.length)
         expect(sourceProjectManifest.sourceDomRegions.metricsModule).toBe("src/data/sourceDomRegions.ts")
         expect(sourceProjectManifest.sourceDomRegions.replacementPlanModule).toBe(
@@ -1035,8 +1052,17 @@ async function writeFixtureEvidence(root: string): Promise<string> {
         root: {
           id: "root",
           tag: "body",
+          layout: { bounds: { x: 0, y: 0, w: 1366, h: 768 } },
           attrs: [],
           children: [
+            {
+              id: "top-band",
+              type: "element",
+              tag: "header",
+              layout: { bounds: { x: 0, y: 0, w: 1366, h: 64 } },
+              attrs: [],
+              children: [],
+            },
             {
               id: "crumb-current",
               type: "element",
@@ -1183,6 +1209,7 @@ async function writeFixtureEvidence(root: string): Promise<string> {
 async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-regionized")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const mapPaths = Array.from({ length: 36 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="land-${index + 1}" class="positive-s"></path>`
@@ -1323,6 +1350,7 @@ async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShell?: boolean } = {}): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-news")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const cards = [
     ["Dow Jones Newswires", "Factory Activity Expands in May", "https://example.com/news/1"],
     ["dpa-AFX", "U.S. Construction Spending Increases", "https://example.com/news/2"],
@@ -1432,6 +1460,7 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
 async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-bbc-promo")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const rows = [
     [
       "Massive Russian attack on cities across Ukraine kills at least 13 people",
@@ -1574,6 +1603,7 @@ async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticTableFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-table")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -1686,6 +1716,7 @@ async function writeSemanticTableFixtureEvidence(root: string): Promise<string> 
 async function writeSemanticEventFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-events")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const cards = [
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "3-Month Bill Auction", "18:59", "—", "3.595", "%"],
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "6-Month Bill Auction", "18:59", "—", "3.65", "%"],
@@ -1807,6 +1838,7 @@ async function writeSemanticEventFixtureEvidence(root: string): Promise<string> 
 async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-ideas")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2027,6 +2059,7 @@ function renderFixtureIdeaCard(input: {
 async function writeCompositeWidgetFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-composite")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2147,6 +2180,7 @@ function renderCompositeFixtureEvents(): string {
 async function writeSemanticFooterFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-footer")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2256,6 +2290,7 @@ async function writeSemanticFooterFixtureEvidence(root: string): Promise<string>
 async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-map")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const mapPaths = Array.from({ length: 24 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     const colorClass = index % 2 === 0 ? "country-positive" : "country-neutral"
@@ -2379,6 +2414,7 @@ async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-ranking")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const rows = [
     ["India", "india", "7.80%", "3.91 T", "USD", "asset_000449.svg.txt"],
     ["Indonesia", "indonesia", "5.61%", "1.40 T", "USD", "asset_000450.svg.txt"],
@@ -2484,6 +2520,7 @@ async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<
 async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-mixed-economic-trends")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const mapPaths = Array.from({ length: 20 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-path-${index}" data-asset-d="../assets/svg/${assetId}.path.txt" id="country-${index}" class="positive-s" fill="currentColor"></path>`
@@ -2579,6 +2616,7 @@ async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<st
 async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-link-grid")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const countries = [
     ["Argentina", "argentina"],
     ["Australia", "australia"],
@@ -2675,6 +2713,7 @@ async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<strin
 async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-header")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const iconPaths = Array.from({ length: 8 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="header-icon-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" fill="currentColor"></path>`
@@ -2804,6 +2843,7 @@ async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string>
 async function writeSemanticSectionShellFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-section-shell")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   const chartPaths = Array.from({ length: 18 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="idea-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="series-${index + 1}" class="series-path" fill="currentColor"></path>`
@@ -2927,6 +2967,7 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
 async function writeGenericStructureFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-generic-structure")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await writeCapturedViewport(webpageEvidenceDir)
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -3080,4 +3121,18 @@ function minimalPngBytes(): Uint8Array {
     0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
     0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
+}
+
+async function writeCapturedViewport(webpageEvidenceDir: string, width = 1366, height = 768): Promise<void> {
+  await Bun.write(
+    path.join(webpageEvidenceDir, "extracted-page.json"),
+    JSON.stringify(
+      {
+        url: "https://example.com/markets",
+        viewport: { width, height },
+      },
+      null,
+      2,
+    ),
+  )
 }

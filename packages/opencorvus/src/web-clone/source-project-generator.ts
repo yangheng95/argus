@@ -35,26 +35,28 @@ export interface SourceProjectVisualIterationViewport {
   width: number
   height: number
   evidenceRole: "primary_reference" | "responsive_review"
-  evidenceSource: "capture_viewport" | "reference_manifest" | "matching_reference" | "default"
+  evidenceSource: "capture_viewport"
   referenceImage?: string
   comparison: string
+}
+
+export interface SourceProjectLayoutWidthContract {
+  mode: "full_width" | "centered_container" | "unknown"
+  viewportWidth: number
+  referenceImageWidth?: number
+  fullWidthElementCount: number
+  centeredElementCount: number
+  evidence: string[]
+  rule: string
 }
 
 export interface SourceProjectVisualIteration {
   referenceImage: string
   evidenceMethod: "task_scoped_preview_screenshots"
   viewportMatrix: SourceProjectVisualIterationViewport[]
+  layoutWidthContract: SourceProjectLayoutWidthContract
   rule: string
 }
-
-const DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT = {
-  width: 1440,
-  height: 900,
-  evidenceSource: "default" as const,
-}
-
-export const SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS: SourceProjectVisualIterationViewport[] =
-  buildSourceProjectVisualIterationViewports(DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT)
 
 function buildSourceProjectVisualIterationViewports(primary: {
   width: number
@@ -71,20 +73,11 @@ function buildSourceProjectVisualIterationViewports(primary: {
       comparison:
         "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
     },
-    {
-      name: "wide-review",
-      width: 1920,
-      height: 1080,
-      evidenceRole: "responsive_review",
-      evidenceSource: "default",
-      comparison:
-        "Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
-    },
   ]
 }
 
 export function renderSourceProjectVisualIterationMatrix(
-  viewports: readonly SourceProjectVisualIterationViewport[] = SOURCE_PROJECT_VISUAL_ITERATION_VIEWPORTS,
+  viewports: readonly SourceProjectVisualIterationViewport[],
 ): string {
   return viewports
     .map(
@@ -92,6 +85,12 @@ export function renderSourceProjectVisualIterationMatrix(
         `${viewport.name} ${viewport.width}x${viewport.height} (${viewport.evidenceRole}, ${viewport.evidenceSource}${viewport.referenceImage ? `, ${viewport.referenceImage}` : ""}): ${viewport.comparison}`,
     )
     .join(" ")
+}
+
+export function renderSourceProjectLayoutWidthContract(contract: SourceProjectLayoutWidthContract): string {
+  const reference = contract.referenceImageWidth ? ` reference=${contract.referenceImageWidth}px` : ""
+  const evidence = contract.evidence.length > 0 ? ` evidence=${contract.evidence.join("; ")}` : ""
+  return `${contract.mode} viewport=${contract.viewportWidth}px${reference} full_width_elements=${contract.fullWidthElementCount} centered_elements=${contract.centeredElementCount}: ${contract.rule}${evidence}`
 }
 
 interface SourceTable {
@@ -1228,8 +1227,8 @@ function asSourceBounds(value: unknown): SourceBounds | undefined {
   const row = value as Record<string, unknown>
   const x = typeof row.x === "number" ? row.x : undefined
   const y = typeof row.y === "number" ? row.y : undefined
-  const w = typeof row.w === "number" ? row.w : undefined
-  const h = typeof row.h === "number" ? row.h : undefined
+  const w = typeof row.w === "number" ? row.w : typeof row.width === "number" ? row.width : undefined
+  const h = typeof row.h === "number" ? row.h : typeof row.height === "number" ? row.height : undefined
   if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined
   return { x, y, w, h }
 }
@@ -7451,6 +7450,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- Use `src/data/sourceData.ts`, source IR, and component metadata as the maintainability/refactor material for replacing specific regions with semantic components or mature libraries.",
     "- Refine this baseline region by region while checking against `reference.png`.",
     `- Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix)}`,
+    `- Layout width contract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`,
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use source evidence review and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",
     "",
@@ -7698,29 +7698,28 @@ async function buildSourceProjectVisualIteration(webpageEvidenceDir: string): Pr
   const provenance = asRecord(manifest.provenance)
   const manifestViewport = readVisualViewport(asRecord(provenance.captureViewport))
   const extractedViewport = await readExtractedPageViewport(webpageEvidenceDir)
-  const reference = asRecord(provenance.reference)
-  const referenceWidth = readPositiveInteger(reference.width)
-  const referenceHeight = readPositiveInteger(reference.height)
-  const referenceViewport =
-    referenceWidth && referenceHeight
-      ? readVisualViewport({
-          width: referenceWidth,
-          height: inferReferenceViewportHeight(referenceWidth, referenceHeight),
-        })
-      : undefined
   const primary = manifestViewport
     ? { ...manifestViewport, evidenceSource: "capture_viewport" as const }
     : extractedViewport
       ? { ...extractedViewport, evidenceSource: "capture_viewport" as const }
-      : referenceViewport
-        ? { ...referenceViewport, evidenceSource: "reference_manifest" as const }
-        : DEFAULT_SOURCE_PROJECT_PRIMARY_VIEWPORT
+      : undefined
+  if (!primary) {
+    throw new Error(
+      "Web clone source project requires captured viewport metadata from web-clone-source-manifest.json provenance.captureViewport or extracted-page.json viewport; refusing to infer viewport dimensions from reference image size.",
+    )
+  }
   const viewportMatrix = buildSourceProjectVisualIterationViewports(primary)
+  const layoutWidthContract = await buildSourceProjectLayoutWidthContract({
+    webpageEvidenceDir,
+    viewportWidth: primary.width,
+    referenceImageWidth: readPositiveInteger(asRecord(provenance.reference).width),
+  })
   return {
     referenceImage: "reference.png",
     evidenceMethod: "task_scoped_preview_screenshots",
     viewportMatrix,
-    rule: "Use the desktop-reference viewport as the primary inspected preview screenshot after each region replacement. Use responsive-review viewports for screenshot review when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
+    layoutWidthContract,
+    rule: "Use the desktop-reference viewport as the primary inspected preview screenshot after each region replacement. Preserve the layout width contract instead of bootstrapping the page into a guessed fixed-width shell.",
   }
 }
 
@@ -7743,10 +7742,124 @@ function readPositiveInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
-function inferReferenceViewportHeight(width: number, referenceHeight: number): number {
-  if (referenceHeight <= 1200) return referenceHeight
-  if (width <= 480) return Math.min(referenceHeight, 844)
-  return 900
+interface LayoutBoundEvidence {
+  nodeId?: string
+  tag?: string
+  role?: string
+  depth?: number
+  bounds: SourceBounds
+}
+
+async function buildSourceProjectLayoutWidthContract(input: {
+  webpageEvidenceDir: string
+  viewportWidth: number
+  referenceImageWidth?: number
+}): Promise<SourceProjectLayoutWidthContract> {
+  const [layoutMap, pageIr] = await Promise.all([
+    readJsonOptional(path.join(input.webpageEvidenceDir, "source-ir", "layout-map.json")),
+    readJsonOptional(path.join(input.webpageEvidenceDir, "page.ir.json")),
+  ])
+  const layoutBounds = [
+    ...extractLayoutBoundEvidenceFromLayoutMap(layoutMap),
+    ...extractLayoutBoundEvidenceFromPageIr(pageIr),
+  ]
+  const candidates = layoutBounds.filter((item) => isLayoutWidthCandidate(item))
+  const fullWidth = candidates.filter((item) => isFullWidthLayoutBound(item.bounds, input.viewportWidth))
+  const centered = candidates.filter((item) => isCenteredLayoutBound(item.bounds, input.viewportWidth))
+  const referenceEvidence =
+    input.referenceImageWidth === undefined
+      ? []
+      : Math.abs(input.referenceImageWidth - input.viewportWidth) <= 2
+        ? [`reference.png width matches captured viewport ${input.viewportWidth}px`]
+        : [`reference.png width ${input.referenceImageWidth}px differs from captured viewport ${input.viewportWidth}px`]
+  const fullWidthEvidence = fullWidth.slice(0, 4).map((item) => formatLayoutBoundEvidence(item))
+  const centeredEvidence = centered.slice(0, 4).map((item) => formatLayoutBoundEvidence(item))
+  const rootFullWidth = fullWidth.some((item) => /^(?:html|body|main)$/i.test(item.tag ?? ""))
+  const sectionFullWidth = fullWidth.some((item) => /^(?:header|footer|nav|section|article)$/i.test(item.tag ?? ""))
+  const mode: SourceProjectLayoutWidthContract["mode"] =
+    fullWidth.length >= 2 || (rootFullWidth && sectionFullWidth)
+      ? "full_width"
+      : centered.length >= 2 && fullWidth.length === 0
+        ? "centered_container"
+        : "unknown"
+  const rule =
+    mode === "full_width"
+      ? "Treat the page canvas and major bands as viewport-width; do not wrap the whole page in a fixed max-width shell. Preserve internal gutters, columns, and cards from region evidence."
+      : mode === "centered_container"
+        ? "Treat the page as a centered content shell; preserve the measured container width and gutters from layout evidence instead of expanding all sections to the viewport."
+        : "Width mode is not proven by layout-map/page.ir evidence; inspect reference pixels and layout bounds before choosing a page container width."
+  return {
+    mode,
+    viewportWidth: input.viewportWidth,
+    referenceImageWidth: input.referenceImageWidth,
+    fullWidthElementCount: fullWidth.length,
+    centeredElementCount: centered.length,
+    evidence: [...referenceEvidence, ...(mode === "centered_container" ? centeredEvidence : fullWidthEvidence)],
+    rule,
+  }
+}
+
+function extractLayoutBoundEvidenceFromLayoutMap(value: unknown): LayoutBoundEvidence[] {
+  const elements = Array.isArray(asRecord(value).elements) ? (asRecord(value).elements as unknown[]) : []
+  return elements
+    .map((item): LayoutBoundEvidence | undefined => {
+      const row = asRecord(item)
+      const bounds = asSourceBounds(row.bounds)
+      if (!bounds) return undefined
+      return {
+        nodeId: typeof row.nodeId === "string" ? row.nodeId : undefined,
+        tag: typeof row.tag === "string" ? row.tag : undefined,
+        role: typeof row.role === "string" ? row.role : undefined,
+        bounds,
+      }
+    })
+    .filter((item): item is LayoutBoundEvidence => !!item)
+}
+
+function extractLayoutBoundEvidenceFromPageIr(value: unknown): LayoutBoundEvidence[] {
+  const out: LayoutBoundEvidence[] = []
+  function visit(item: unknown, depth: number): void {
+    if (!item || typeof item !== "object") return
+    const row = item as Record<string, unknown>
+    const bounds = asSourceBounds(asRecord(row.layout).bounds)
+    if (bounds) {
+      out.push({
+        nodeId: typeof row.id === "string" ? row.id : undefined,
+        tag: typeof row.tag === "string" ? row.tag : undefined,
+        role: typeof asRecord(row.layout).role === "string" ? (asRecord(row.layout).role as string) : undefined,
+        depth,
+        bounds,
+      })
+    }
+    visit(row.root, depth)
+    if (Array.isArray(row.children)) {
+      for (const child of row.children) visit(child, depth + 1)
+    }
+  }
+  visit(value, 0)
+  return out
+}
+
+function isLayoutWidthCandidate(item: LayoutBoundEvidence): boolean {
+  if (item.depth !== undefined && item.depth > 2) return false
+  const tag = (item.tag ?? "").toLowerCase()
+  if (/^(html|body|main|header|footer|nav|section|article|aside)$/.test(tag)) return true
+  return item.role === "main" || item.role === "banner" || item.role === "contentinfo"
+}
+
+function isFullWidthLayoutBound(bounds: SourceBounds, viewportWidth: number): boolean {
+  return bounds.x <= 4 && bounds.w >= Math.max(0, viewportWidth - 8)
+}
+
+function isCenteredLayoutBound(bounds: SourceBounds, viewportWidth: number): boolean {
+  if (bounds.w > viewportWidth * 0.92 || bounds.w < viewportWidth * 0.45) return false
+  const expectedX = (viewportWidth - bounds.w) / 2
+  return bounds.x >= 8 && Math.abs(bounds.x - expectedX) <= Math.max(24, viewportWidth * 0.04)
+}
+
+function formatLayoutBoundEvidence(item: LayoutBoundEvidence): string {
+  const label = [item.tag, item.nodeId ? `#${item.nodeId}` : undefined].filter(Boolean).join("")
+  return `${label || "element"} x=${item.bounds.x} w=${item.bounds.w}`
 }
 
 async function exists(filePath: string): Promise<boolean> {

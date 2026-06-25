@@ -71,6 +71,7 @@ import {
 } from "./static-tools"
 import {
   readHostPreparedCompactEvidence,
+  readHostPreparedVisualIterationMatrix,
   renderHostPreparedFrontendProjectSection,
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
@@ -1113,6 +1114,7 @@ async function resolveHostPreparedFrontendProject(taskID?: string): Promise<Host
     sourcePackage: paths.sourcePackageAbsolute,
     projectRoot: paths.skeletonProjectAbsolute,
   })
+  const visualIterationMatrix = await readHostPreparedVisualIterationMatrix(paths.skeletonProjectAbsolute)
   return {
     status: "created",
     projectRoot: paths.skeletonProjectAbsolute,
@@ -1129,6 +1131,7 @@ async function resolveHostPreparedFrontendProject(taskID?: string): Promise<Host
     generationTool: "host-prepared:create_frontend_skeleton_project",
     warnings: [],
     compactEvidence,
+    visualIterationMatrix,
     sourceReplacementPlan: [],
   }
 }
