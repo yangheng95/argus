@@ -70,3 +70,49 @@ rg -n "msg-browser-evidence|msg-tool-attachments|tool-browser-evidence|tool-atta
 - The screenshot browser does not list the same browser screenshot URL twice as
   both `tool-browser-evidence` and `tool-attachment`.
 - Focused overlay tests and browser visual evidence pass.
+
+## Follow-up: Compare Attachment Layout
+
+### Problem
+
+`browser_preview_compare_regions` can emit several side-by-side PNG evidence
+attachments. After the single-owner fix, those images are no longer duplicated,
+but the generic attachment surface still inherits ordinary message thumbnail
+layout: the preview trigger is an inline-flex button and the image uses the
+global Markdown thumbnail bounds. Multiple comparison screenshots with different
+intrinsic sizes therefore read as a loose collage instead of one ordered
+evidence list.
+
+### Grep Inventory
+
+Commands:
+
+```powershell
+rg -n "msg-tool-attachments|msg-img-wrap|msg-image-trigger|md-img" packages/overlay/src/styles packages/overlay/src/components packages/overlay/test -S
+rg -n "browser_preview_compare_regions|toolImageAttachments|FilePart|PreviewableImage" packages/overlay/src packages/overlay/test specs/new-arch -S -g "*.tsx" -g "*.ts" -g "*.css" -g "*.md"
+```
+
+| Surface | Finding | Decision |
+| --- | --- | --- |
+| `packages/overlay/src/components/InlineToolPart.tsx` | All generic tool images render through one `<section class="msg-tool-attachments">` and `FilePart`. | Keep this single generic renderer; do not add a `browser_preview_compare_regions` branch. |
+| `packages/overlay/src/components/FilePart.tsx` | Image file parts use `PreviewableImage`, which emits the shared image preview button and `.md-img`. | Keep shared preview/copy behavior. |
+| `packages/overlay/src/styles/surfaces/messages.css` | `.msg-tool-attachments` is only a grid shell; image triggers stay inline-flex and images inherit global thumbnail caps. | Make the tool attachment section a single-column evidence stack with full-width rows and left-aligned preview buttons. |
+| `packages/overlay/src/styles/surfaces/markdown.css` | `.md-img` remains the global Markdown/message image thumbnail contract. | Do not change the global thumbnail rule; scope larger evidence bounds to `.msg-tool-attachments .md-img`. |
+| `packages/overlay/test/browser/image-preview-copy.test.ts` | Browser fixture has one generic attachment and one browser-owned duplicate. | Expand it to multiple comparison attachments and assert no image is lost, duplicated, offset, or overlapped. |
+
+### Fix
+
+1. Keep `FilePart` as the only generic tool image renderer.
+2. Scope layout rules to `.msg-tool-attachments` so ordinary message images do
+   not change.
+3. Render tool attachments as a vertical evidence stack: full-width rows,
+   left-aligned preview triggers, block images, and larger but bounded evidence
+   thumbnails.
+4. Add browser layout assertions for multiple comparison attachments.
+
+### Acceptance
+
+- Browser-owned screenshot URLs are still excluded from generic attachments.
+- All non-browser comparison attachments remain visible in source order.
+- Tool attachment rows share the same left edge and do not overlap.
+- Image preview still opens and copies from generic tool attachment images.

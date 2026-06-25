@@ -62,7 +62,7 @@ await setLocale("en-US")
 
 function block(css: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  return css.match(new RegExp(`${escaped}\\s*\\{[^}]*\\}`, "s"))?.[0] ?? ""
+  return css.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{[^}]*\\}`, "s"))?.[0] ?? ""
 }
 
 function escapeTestAttr(value: string): string {
@@ -189,6 +189,30 @@ describe("message image preview", () => {
     expect(trigger).toContain("--oc-button-padding-x: 0;")
     expect(trigger).toContain("cursor: zoom-in;")
     expect(messagesCss).not.toMatch(/(^|\n)\.msg-image-trigger:focus-visible\s*\{/)
+  })
+
+  test("tool attachment screenshots render as one left-aligned evidence stack", () => {
+    const messagesCss = read("src/styles/surfaces/messages.css")
+    const attachments = block(messagesCss, ".msg-tool-attachments")
+    const wrap = block(messagesCss, ".msg-tool-attachments .msg-img-wrap")
+    const trigger = block(messagesCss, '.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger')
+    const image = block(messagesCss, ".msg-tool-attachments .md-img")
+
+    expect(attachments).toContain("display: flex;")
+    expect(attachments).toContain("flex-direction: column;")
+    expect(attachments).toContain("align-items: stretch;")
+    expect(attachments).toContain("width: 100%;")
+    expect(wrap).toContain("width: 100%;")
+    expect(wrap).toContain("min-width: 0;")
+    expect(wrap).toContain("margin: 0;")
+    expect(trigger).toContain("display: flex;")
+    expect(trigger).toContain("justify-content: flex-start;")
+    expect(trigger).toContain("width: fit-content;")
+    expect(trigger).toContain("max-width: 100%;")
+    expect(image).toContain("display: block;")
+    expect(image).toContain("max-width: min(100%, calc(1120px * var(--ui-scale)));")
+    expect(image).toContain("max-height: calc(640px * var(--ui-scale));")
+    expect(image).toContain("margin: 0;")
   })
 
   test("browser evidence thumbnails keep intrinsic size while capped by the evidence column", () => {
