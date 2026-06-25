@@ -940,7 +940,7 @@ describe("frontend-design prompt assembly", () => {
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: [],
         visualIterationMatrix:
-          "desktop-reference 1366x768 (primary_reference, capture_viewport): Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
+          "desktop-reference 1366x768 (primary_reference, capture_viewport): Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
         compactEvidence: [
           "## source-ir/component-tree.json",
           '{"components":[{"name":"ProductPage"}]}',
@@ -980,7 +980,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("capture_viewport")
     expect(prompt).not.toContain("mobile-review")
     expect(prompt).not.toContain("web-clone-source/reference-mobile.png")
-    expect(prompt).toContain("wide-review 1920x1080")
+    expect(prompt).not.toContain("wide-review 1920x1080")
     expect(prompt).toContain("source-region traceable visual restoration")
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
     expect(prompt).toContain("A region replacement is complete only after source content/data extraction")
@@ -1019,6 +1019,27 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).not.toContain("world-economy")
   })
 
+  test("host-prepared prompt reports missing viewport matrix instead of inventing dimensions", () => {
+    const prompt = FrontendDesignTestHooks.buildUserPrompt(
+      { title: "Reference page", request: "clone https://example.com/product" },
+      {
+        status: "created",
+        projectRoot: "frontend-design-skeleton",
+        sourcePackage: "web-clone-source",
+        projectRootRef: ProjectRuntimePaths.frontendDesignPaths("", "tsk_test").skeletonProjectRelative,
+        sourcePackageRef: ProjectRuntimePaths.frontendDesignPaths("", "tsk_test").sourcePackageRelative,
+        entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+        generationTool: "host-prepared:create_frontend_skeleton_project",
+        warnings: [],
+        compactEvidence: "",
+        sourceReplacementPlan: [],
+      },
+    )
+
+    expect(prompt).toContain("did not expose visualIteration.viewportMatrix with captured viewport dimensions")
+    expect(prompt).not.toContain("desktop-reference 1440x900")
+  })
+
   test("runtime host-prepared resolver loads compact evidence from task paths", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_frontend_runtime_evidence"
@@ -1051,8 +1072,25 @@ describe("frontend-design prompt assembly", () => {
                 referenceImage: "reference.png",
                 evidenceMethod: "task_scoped_preview_screenshots",
                 viewportMatrix: [
-                  { name: "desktop-reference", width: 1366, height: 768, evidenceRole: "primary_reference" },
+                  {
+                    name: "desktop-reference",
+                    width: 1366,
+                    height: 768,
+                    evidenceRole: "primary_reference",
+                    evidenceSource: "capture_viewport",
+                    comparison:
+                      "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
+                  },
                 ],
+                layoutWidthContract: {
+                  mode: "full_width",
+                  viewportWidth: 1366,
+                  referenceImageWidth: 1366,
+                  fullWidthElementCount: 3,
+                  centeredElementCount: 0,
+                  evidence: ["body#root x=0 w=1366", "header#top-band x=0 w=1366"],
+                  rule: "Treat the page canvas and major bands as viewport-width.",
+                },
               },
             },
             null,
@@ -1112,6 +1150,7 @@ describe("frontend-design prompt assembly", () => {
         expect(resolved?.sourcePackage).toBe(paths.sourcePackageAbsolute)
         expect(resolved?.projectRootRef).toBe(paths.skeletonProjectRelative)
         expect(resolved?.sourcePackageRef).toBe(paths.sourcePackageRelative)
+        expect(resolved?.visualIterationMatrix).toContain("desktop-reference 1366x768")
         expect(resolved?.compactEvidence).toContain("source-project-handoff-summary.md")
         expect(resolved?.compactEvidence).toContain("nextReplacement: GenericRegion -> GenericCards")
         expect(resolved?.compactEvidence).not.toContain("source-audit-supervision.md")
@@ -1173,10 +1212,20 @@ describe("frontend-design prompt assembly", () => {
                   width: 1440,
                   height: 900,
                   evidenceRole: "primary_reference",
+                  evidenceSource: "capture_viewport",
                   comparison:
                     "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
                 },
               ],
+              layoutWidthContract: {
+                mode: "full_width",
+                viewportWidth: 1440,
+                referenceImageWidth: 1440,
+                fullWidthElementCount: 4,
+                centeredElementCount: 0,
+                evidence: ["body#root x=0 w=1440", "section#hero x=0 w=1440"],
+                rule: "Treat the page canvas and major bands as viewport-width.",
+              },
               rule: "Use desktop-reference before claiming final parity.",
             },
           },
@@ -1239,7 +1288,8 @@ describe("frontend-design prompt assembly", () => {
 
       expect(summary).toContain("Source-dom region stats")
       expect(summary).toContain("Visual iteration matrix")
-      expect(summary).toContain("desktop-reference: 1440x900")
+      expect(summary).toContain("desktop-reference: 1440x900 (primary_reference, capture_viewport)")
+      expect(summary).toContain("layoutWidthContract: full_width viewport=1440px")
       expect(summary).toContain("evidenceMethod: task_scoped_preview_screenshots")
       expect(summary).toContain("largestBytes: 44123")
       expect(summary).toContain("Maintainable iteration state")
@@ -1511,6 +1561,10 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
         provenance: {
           source: "webpage-evidence",
           webpageEvidenceDir: sourcePackage,
+          captureViewport: {
+            width: 1366,
+            height: 768,
+          },
           reference: {
             path: "reference.png",
             sha256: referenceSha256,

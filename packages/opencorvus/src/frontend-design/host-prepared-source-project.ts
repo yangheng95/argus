@@ -1,7 +1,12 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
-import { renderSourceProjectVisualIterationMatrix } from "@/web-clone/source-project-generator"
+import {
+  renderSourceProjectLayoutWidthContract,
+  renderSourceProjectVisualIterationMatrix,
+  type SourceProjectLayoutWidthContract,
+  type SourceProjectVisualIterationViewport,
+} from "@/web-clone/source-project-generator"
 
 const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
   "src/components/ContentTable.tsx",
@@ -42,7 +47,10 @@ export interface HostPreparedFrontendProject {
 }
 
 function hostPreparedVisualIterationMatrix(project: HostPreparedFrontendProject): string {
-  return project.visualIterationMatrix?.trim() || renderSourceProjectVisualIterationMatrix()
+  return (
+    project.visualIterationMatrix?.trim() ||
+    "missing: frontend-design-skeleton/src/data/sourceProjectManifest.json did not expose visualIteration.viewportMatrix with captured viewport dimensions; repair source capture metadata before choosing a page width."
+  )
 }
 
 async function readHostPreparedSourceReplacementPlan(projectRoot: string): Promise<SourceReplacementPlanForSummary[]> {
@@ -143,10 +151,22 @@ interface SourceProjectManifestForSummary {
       width?: number
       height?: number
       evidenceRole?: string
+      evidenceSource?: string
       comparison?: string
     }>
+    layoutWidthContract?: SourceProjectLayoutWidthContract
     rule?: string
   }
+}
+
+export async function readHostPreparedVisualIterationMatrix(projectRoot: string): Promise<string | undefined> {
+  const manifest = await readJsonFile<SourceProjectManifestForSummary>(
+    path.join(projectRoot, "src", "data", "sourceProjectManifest.json"),
+  )
+  const viewports = manifest?.visualIteration?.viewportMatrix
+  if (!viewports?.length) return undefined
+  if (!viewports.every(isSourceProjectVisualIterationViewport)) return undefined
+  return renderSourceProjectVisualIterationMatrix(viewports)
 }
 
 interface SourceDomIterationStateForSummary {
@@ -194,8 +214,16 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
         typeof viewport.width === "number" && typeof viewport.height === "number"
           ? `${viewport.width}x${viewport.height}`
           : "unknown"
-      lines.push(`- ${viewport.name ?? "viewport"}: ${size} (${viewport.evidenceRole ?? "unknown"})`)
+      const evidenceSource = viewport.evidenceSource ? `, ${viewport.evidenceSource}` : ""
+      lines.push(`- ${viewport.name ?? "viewport"}: ${size} (${viewport.evidenceRole ?? "unknown"}${evidenceSource})`)
       if (viewport.comparison) lines.push(`  comparison: ${viewport.comparison}`)
+    }
+    if (visualIteration.layoutWidthContract) {
+      lines.push(`- layoutWidthContract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`)
+    } else {
+      lines.push(
+        "- layoutWidthContract: missing; do not infer full-width or centered layout without source layout bounds.",
+      )
     }
     if (visualIteration.rule) lines.push(`- rule: ${visualIteration.rule}`)
   }
@@ -269,6 +297,23 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     "Extraction rule: frontend_design should establish the visible page skeleton from the Frontend Research Page Skeleton Blueprint when present plus reference pixels/source evidence, then use sourceDomIterationState.ts and sourceDomReplacementPlan.ts only as per-region selection and repair metadata. They are not the page information architecture, not the section order, and not permission to demote missing major content sections into navigation/footer labels. The visual HTML skeleton remains the current source-editable deliverable; later workflow stages transcribe it into the final working project only after visual parity can be preserved.",
   )
   return lines.join("\n")
+}
+
+function isSourceProjectVisualIterationViewport(value: unknown): value is SourceProjectVisualIterationViewport {
+  if (!value || typeof value !== "object") return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.name === "string" &&
+    typeof row.width === "number" &&
+    Number.isInteger(row.width) &&
+    row.width > 0 &&
+    typeof row.height === "number" &&
+    Number.isInteger(row.height) &&
+    row.height > 0 &&
+    (row.evidenceRole === "primary_reference" || row.evidenceRole === "responsive_review") &&
+    row.evidenceSource === "capture_viewport" &&
+    typeof row.comparison === "string"
+  )
 }
 
 async function existingProjectSidecars(projectRoot: string): Promise<string[]> {
