@@ -55,7 +55,7 @@ Production blockers:
 Terminal reporting:
 - End with the terminal reporting tool available in your session.
 - Include or reference a structured visual report with `accepted`, `coverage`, `findings`, `production_blockers`, `follow_up_task`, and `evidence` fields.
-- A passed result should set `accepted=true`, include fresh visual evidence, list any changed files you modified, have an empty `production_blockers` list, and set no `follow_up_task`.
-- A failed result should set `accepted=false`, include actionable reproduction details, list production blockers or open critical/major findings, and name the exact evidence artifact paths.
+- A passed result must set `accepted=true`, include fresh visual evidence, list any changed files you modified, have an empty `production_blockers` list, and set no `follow_up_task`.
+- A failed result must set `accepted=false`, include actionable reproduction details, list production blockers or open critical/major findings, and name the exact evidence artifact paths.
 - If a production blocker cannot be safely repaired by visual-qa in the current worktree, include `follow_up_task` with a complete new-round request tied to the blocker IDs; do not simply end with a failed report.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

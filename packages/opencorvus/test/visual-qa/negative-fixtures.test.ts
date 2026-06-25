@@ -96,6 +96,7 @@ describe("visual-qa negative product-grade fixtures", () => {
     for (const item of manifest.cases) {
       const result = await callSubmit(reportForFixture(item, true))
       expect(result, item.id).toContain("RECORDED")
+      expect(result, item.id).toContain("effective_accepted=false")
       expect(result, item.id).toContain("ADVISORIES")
       expect(result, item.id).toContain("accepted=true was submitted with production blockers")
       expect(result, item.id).toContain(item.blocker.id)

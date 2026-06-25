@@ -16,6 +16,7 @@
  */
 import { createDecisionLog } from "@/decision-log"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
+import { visualQaReportAcceptanceSemantics } from "@/visual-qa/acceptance-semantics"
 import { VisualQaReportSchema } from "@/visual-qa/schema"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
@@ -409,7 +410,7 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
     if (entry.key.startsWith("report_")) {
       const report = parseVisualQaReportProjection(entry.value)
       if (!report) return "failed"
-      return report.accepted && report.productionBlockers === 0 ? "completed" : "failed"
+      return report.effectiveAccepted && report.productionBlockers === 0 ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
       continue
@@ -418,14 +419,15 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   return "pending"
 }
 
-function parseVisualQaReportProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
+function parseVisualQaReportProjection(value: string): { effectiveAccepted: boolean; productionBlockers: number } | undefined {
   try {
     const parsed = VisualQaReportSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined
     const report = parsed.data
     const blockers = report.production_blockers.length
+    const semantics = visualQaReportAcceptanceSemantics(report)
     return {
-      accepted: report.accepted,
+      effectiveAccepted: semantics.effectiveAccepted,
       productionBlockers: blockers,
     }
   } catch {

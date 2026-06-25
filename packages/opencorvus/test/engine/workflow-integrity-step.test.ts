@@ -360,7 +360,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("projects visual_qa as completed from schema-defaulted bare accepted report JSON", () => {
+  test("projects visual_qa as failed from schema-defaulted bare accepted report JSON", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_bare_report`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -407,10 +407,10 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa as completed from accepted reference parity report without comparison refs", () => {
+  test("projects visual_qa as failed from accepted reference parity report without comparison refs", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_missing`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -462,7 +462,71 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
+  })
+
+  test("projects visual_qa as failed from accepted reference parity report with missing regions", () => {
+    const now = Date.now()
+    const stamp = `${now.toString(16)}_reference_missing_regions`
+    const projectID = `proj_workflow_visual_qa_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow visual QA reference missing regions test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow visual QA missing regions status",
+          request: "Repair a frontend reference clone",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "report_1",
+      value: JSON.stringify(visualQaReport({
+        summary: "Report claimed acceptance while listing missing reference regions.",
+        evidence: [
+          {
+            type: "reference_comparison",
+            ref: "browser_preview_evidence:art_header",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Header reference comparison.",
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop", "region_footer@desktop"],
+          reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
+          missing_regions: ["region_footer@desktop"],
+          blocker_ids: [],
+        },
+      })),
+      reason: "Dedicated frontend GUI and functional QA report.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
   test("projects reference task visual_qa as completed when accepted report claims parity is not required", () => {
@@ -943,7 +1007,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa as completed when accepted report relies on schema-defaulted blocker fields", () => {
+  test("projects visual_qa as failed when accepted report relies on schema-defaulted blocker fields", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_visual_qa_missing_blockers_${stamp}`
@@ -989,7 +1053,7 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
   test("projects integrity as completed when top-level pass has advisory concerns evidence", () => {

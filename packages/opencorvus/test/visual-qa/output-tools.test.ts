@@ -121,18 +121,19 @@ async function seedReferenceComparisonEvidence(input: {
 }
 
 describe("visual-qa output tools", () => {
-  test("records accepted report with missing evidence and coverage as advisory", async () => {
+  test("records accepted report with missing evidence and coverage as effective failure", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(kit.tools, "submit_visual_qa_report", validReport({ evidence: [], coverage: [] }))
 
     expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
     expect(result).toContain("ADVISORIES")
     expect(result).toContain("without fresh visual or functional evidence")
     expect(result).toContain("without coverage items")
     expect(kit.getCollector().final?.accepted).toBe(true)
   })
 
-  test("records accepted report with blockers and follow-up as advisory", async () => {
+  test("records accepted report with blockers and follow-up as effective failure", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(
       kit.tools,
@@ -161,13 +162,14 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
     expect(result).toContain("ADVISORIES")
     expect(result).toContain("production blockers")
     expect(result).toContain("follow_up_task")
     expect(kit.getCollector().final?.production_blockers[0]?.id).toBe("blocker_map_fidelity")
   })
 
-  test("records reference parity screenshot-only report as advisory", async () => {
+  test("records reference parity screenshot-only report as effective failure", async () => {
     const kit = createVisualQaOutputTools({
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop"],
@@ -187,6 +189,7 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
     expect(result).toContain("ADVISORIES")
     expect(result).toContain("without browser_preview_compare_regions reference_comparison evidence refs")
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
@@ -234,6 +237,7 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=true")
         expect(result).toContain("ADVISORIES")
         expect(result).toContain("region_table@desktop")
         expect(kit.getCollector().final?.accepted).toBe(true)
@@ -293,6 +297,7 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=true")
         expect(result).not.toContain("ADVISORIES")
         expect(kit.getCollector().final?.accepted).toBe(true)
       },
@@ -312,6 +317,7 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
     expect(result).toContain("accepted=false was submitted without production_blockers")
     expect(kit.getCollector().final?.accepted).toBe(false)
   })
@@ -346,6 +352,7 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
     expect(kit.getCollector().final?.accepted).toBe(false)
     expect(kit.buildReport().detail).toContain("## Production Blockers")
     expect(kit.buildReport().detail).toContain("blocker_density")
@@ -353,6 +360,40 @@ describe("visual-qa output tools", () => {
     expect(kit.buildReport().detail).toContain("## Follow-up Task")
     expect(kit.buildReport().detail).toContain("Restore reference hero hierarchy")
     expect(kit.buildReport().detail).toContain("blockers=blocker_density")
+  })
+
+  test("records accepted reference parity with missing regions as effective failure", async () => {
+    const kit = createVisualQaOutputTools({
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop", "region_footer@desktop"],
+    })
+    const result = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        evidence: [
+          {
+            type: "reference_comparison",
+            ref: "browser_preview_evidence:art_header",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Header reference comparison was produced.",
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop", "region_footer@desktop"],
+          reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
+          missing_regions: ["region_footer@desktop"],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
+    expect(result).toContain("reference_parity.missing_regions")
+    expect(kit.getCollector().final?.reference_parity.missing_regions).toEqual(["region_footer@desktop"])
   })
 
   test("duplicate submit is still rejected after the report is recorded", async () => {

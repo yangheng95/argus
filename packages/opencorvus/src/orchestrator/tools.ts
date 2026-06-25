@@ -67,6 +67,7 @@ import {
   renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
+import { visualQaReportAcceptanceSemantics } from "@/visual-qa/acceptance-semantics"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -5215,6 +5216,7 @@ export function createOrchestratorTools(input: {
               runnerSessionID = id
             },
           })
+          const visualQaSemantics = visualQaReportAcceptanceSemantics(result.report)
 
           decisionLog.append({
             phase: "visual_qa",
@@ -5226,7 +5228,10 @@ export function createOrchestratorTools(input: {
             phase: "visual_qa",
             key: "latest_summary",
             value: [
-              `accepted=${result.report.accepted}`,
+              `accepted=${visualQaSemantics.effectiveAccepted}`,
+              `submitted_accepted=${visualQaSemantics.submittedAccepted}`,
+              `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
+              `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
               `summary=${result.report.summary}`,
               `coverage=${result.report.coverage.length}`,
               `findings=${result.report.findings.length}`,
@@ -5243,11 +5248,13 @@ export function createOrchestratorTools(input: {
 
           await close()
           return SubAgentProtocol.yieldResult({
-            headline: `visual_qa complete: accepted=${result.report.accepted}`,
+            headline: `visual_qa complete: effective_accepted=${visualQaSemantics.effectiveAccepted}`,
             summary: result.report.summary,
             fields: [
               ["session", result.sessionID],
-              ["accepted", String(result.report.accepted)],
+              ["accepted", String(visualQaSemantics.effectiveAccepted)],
+              ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
+              ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
               ["coverage", String(result.report.coverage.length)],
               ["findings", String(result.report.findings.length)],
               ["production_blockers", String(result.report.production_blockers.length)],
