@@ -4,8 +4,8 @@
 
 When an OpenCorvus project instance restarts and durable task facts still
 project a task as executing (`active`), the host must append a visible task
-operator message whose text is `重启` and wake the orchestrator through the
-existing task message path.
+operator message whose text is `请继续执行剩余任务` and wake the orchestrator
+through the existing task message path.
 
 ## Recall
 
@@ -41,7 +41,7 @@ rg -n "EngineService\.init\(|appendAndWakeTaskOperatorMessage\(|dispatchTaskLoop
    a current loop via `listOrphanedActiveInProject(Instance.project.id)`.
 3. For each task, call `appendAndWakeTaskOperatorMessage({
    taskID,
-   text: "重启",
+   text: "请继续执行剩余任务",
    source: "server_restart",
    })`.
 4. Do not alter task/run/goal status directly and do not add a new scheduler,
@@ -49,8 +49,8 @@ rg -n "EngineService\.init\(|appendAndWakeTaskOperatorMessage\(|dispatchTaskLoop
 
 ## Acceptance
 
-- Restart startup appends exactly one visible root-session user message `重启`
-  for each active task without an in-process loop.
+- Restart startup appends exactly one visible root-session user message
+  `请继续执行剩余任务` for each active task without an in-process loop.
 - The message carries operator-message source `server_restart`.
 - The existing dispatch path receives an `operatorMessage` event with the same
   text/message id.
