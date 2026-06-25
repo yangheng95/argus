@@ -2202,6 +2202,9 @@ export function finalizeBuildAttempt(input: {
   runID?: string
   status: "completed" | "failed"
   commitRef?: string
+  publishedCommitRef?: string
+  diffBaseRef?: string
+  diffHeadRef?: string
   workspaceDir?: string
   /** Phase B (2026-05-05): workspace branch + baseRef now ride along on the
    *  goal_run_attempt artifact (single source, was duplicated on engine_goal).
@@ -2219,7 +2222,15 @@ export function finalizeBuildAttempt(input: {
   const patch: Parameters<typeof updateGoalRun>[1] = {
     status: input.status,
     error: input.error ?? null,
-    metadata: input.commitRef ? { commit_ref: input.commitRef } : null,
+    metadata:
+      input.commitRef || input.publishedCommitRef || input.diffBaseRef || input.diffHeadRef
+        ? {
+            ...(input.commitRef ? { commit_ref: input.commitRef } : {}),
+            ...(input.publishedCommitRef ? { published_commit_ref: input.publishedCommitRef } : {}),
+            ...(input.diffBaseRef ? { diff_base_ref: input.diffBaseRef } : {}),
+            ...(input.diffHeadRef ? { diff_head_ref: input.diffHeadRef } : {}),
+          }
+        : null,
     time_completed: now,
   }
   if (input.workspaceDir !== undefined) patch.workspace_dir = input.workspaceDir
@@ -2252,6 +2263,9 @@ export function finalizeBuildAttempt(input: {
           result: {
             summary,
             commit_ref: input.commitRef,
+            published_commit_ref: input.publishedCommitRef,
+            diff_base_ref: input.diffBaseRef,
+            diff_head_ref: input.diffHeadRef,
             changed_files: acceptanceDiffSummaries.map((d) => d.file),
             file_changes: input.fileChanges ?? [],
             diffs: acceptanceDiffSummaries,

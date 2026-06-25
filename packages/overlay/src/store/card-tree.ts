@@ -87,6 +87,9 @@ export interface StepPayload {
   }>
   buildSessionID?: string
   commitRef?: string
+  publishedCommitRef?: string
+  diffBaseRef?: string
+  diffHeadRef?: string
   changedFiles?: string[]
   changedFileDiffs?: Array<{
     file: string

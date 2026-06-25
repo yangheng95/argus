@@ -55,10 +55,12 @@ describe("panel.create_task actor provenance", () => {
       missionSession?: boolean
       source?: string
       title?: string
+      request?: string
+      originalText?: string
     } = {},
   ) {
     await using tmp = await tmpdir({ git: true })
-    let captured: { metadata?: Record<string, unknown>; source?: string; title?: string } | undefined
+    let captured: { metadata?: Record<string, unknown>; source?: string; title?: string; request?: string } | undefined
     let missionID: string | undefined
     await Instance.provide({
       directory: tmp.path,
@@ -75,7 +77,7 @@ describe("panel.create_task actor provenance", () => {
         await tool.execute(
           {
             action: "create_task",
-            request: "do thing",
+            request: opts.request ?? "do thing",
             allow_create: true,
             queue: false,
             ...(opts.title ? { title: opts.title } : {}),
@@ -90,7 +92,10 @@ describe("panel.create_task actor provenance", () => {
             messages: [],
             metadata() {},
             async ask() {},
-            extra: { surface: "panel" },
+            extra: {
+              surface: "panel",
+              ...(opts.originalText ? { originalText: opts.originalText } : {}),
+            },
           },
         )
         expect(createSpy).toHaveBeenCalledTimes(1)
@@ -98,10 +103,17 @@ describe("panel.create_task actor provenance", () => {
           metadata?: Record<string, unknown>
           source?: string
           title?: string
+          request?: string
         }
       },
     })
-    return { metadata: captured?.metadata ?? {}, source: captured?.source, title: captured?.title, missionID }
+    return {
+      metadata: captured?.metadata ?? {},
+      source: captured?.source,
+      title: captured?.title,
+      request: captured?.request,
+      missionID,
+    }
   }
 
   test("control agent stamps actor=control_agent into task metadata", async () => {
@@ -167,5 +179,15 @@ describe("panel.create_task actor provenance", () => {
     // block is written; the forged client value must not survive either.
     expect(metadata.mission).toBeUndefined()
     expect(metadata.custom).toBe("preserved")
+  })
+
+  test("create_task uses params.request instead of ambient originalText", async () => {
+    const { request } = await runCreateTask("control", {
+      request: "我需要复刻网页：<https://www.tradingview.com/markets/etfs/>",
+      originalText: "我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>",
+    })
+
+    expect(request).toContain("/markets/etfs/")
+    expect(request).not.toContain("/markets/world-economy/")
   })
 })

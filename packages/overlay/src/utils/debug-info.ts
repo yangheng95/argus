@@ -18,6 +18,8 @@ function debugGoalBoardFiles(gw: any): string {
   let changedFiles = 0
   let changedFileDiffs = 0
   const commitRefs = new Set<string>()
+  const publishedCommitRefs = new Set<string>()
+  const diffRefs = new Set<string>()
   let statFiles: number | undefined
   let additions: number | undefined
   let deletions: number | undefined
@@ -27,6 +29,17 @@ function debugGoalBoardFiles(gw: any): string {
     if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
     if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
     if (typeof payload.commitRef === "string" && payload.commitRef.trim()) commitRefs.add(payload.commitRef.trim())
+    if (typeof payload.publishedCommitRef === "string" && payload.publishedCommitRef.trim()) {
+      publishedCommitRefs.add(payload.publishedCommitRef.trim())
+    }
+    if (
+      typeof payload.diffBaseRef === "string" &&
+      payload.diffBaseRef.trim() &&
+      typeof payload.diffHeadRef === "string" &&
+      payload.diffHeadRef.trim()
+    ) {
+      diffRefs.add(`${payload.diffBaseRef.trim()}..${payload.diffHeadRef.trim()}`)
+    }
     const stats = payload.diffStats
     if (stats && typeof stats === "object") {
       if (typeof stats.files === "number") statFiles = (statFiles ?? 0) + stats.files
@@ -35,7 +48,12 @@ function debugGoalBoardFiles(gw: any): string {
     }
   }
   const statText = statFiles === undefined ? "-" : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
-  return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; diffStats=${statText}`
+  return (
+    `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; ` +
+    `contributionCommits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; ` +
+    `publishedCommits=${publishedCommitRefs.size ? Array.from(publishedCommitRefs).join(",") : "none"}; ` +
+    `diffRefs=${diffRefs.size ? Array.from(diffRefs).join(",") : "-"}; diffStats=${statText}`
+  )
 }
 
 export function buildTaskDebugBlob(board: any): string {

@@ -65,7 +65,13 @@ describe("TaskBoardGoalStepPayload — step-level workspaceDir is GONE (single s
     const parsed = TaskBoardGoalStepPayload.parse({
       buildSessionID: "sid",
       commitRef: "abc123def456",
+      publishedCommitRef: "merge1234567",
+      diffBaseRef: "base12345678",
+      diffHeadRef: "head12345678",
     })
     expect(parsed.commitRef).toBe("abc123def456")
+    expect(parsed.publishedCommitRef).toBe("merge1234567")
+    expect(parsed.diffBaseRef).toBe("base12345678")
+    expect(parsed.diffHeadRef).toBe("head12345678")
   })
 })

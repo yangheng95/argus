@@ -409,9 +409,6 @@ export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", asyn
             metadata: {},
           }
         }
-        // Use original user text when available to prevent the control-plane
-        // LLM from silently summarising or truncating the user's request.
-        const originalText = typeof ctx.extra?.originalText === "string" ? ctx.extra.originalText : undefined
         // Two semantically different attachment outlets — both must run, this
         // is NOT a double-source situation:
         //   1. Text attachments (template .txt / .md / .json) → inlined into the
@@ -449,7 +446,7 @@ export const PanelTool = Tool.define<typeof PanelActionSchema, {}>("panel", asyn
             data: decodeDataUrlBase64(a.url, `panel.create_task attachment "${a.filename ?? a.mime}"`),
             ...(a.filename ? { filename: a.filename } : {}),
           }))
-        const baseRequest = originalText || params.request
+        const baseRequest = params.request
         const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
         const queue = await resolveCreateTaskQueueDecision({ queue: params.queue, ctx })
         // Mission provenance (server-derived, not client-supplied). When the

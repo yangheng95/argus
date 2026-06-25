@@ -25,6 +25,9 @@ export interface ChangeGroup {
   goalLabel?: string
   goalTitle?: string
   commitRef?: string
+  publishedCommitRef?: string
+  diffBaseRef?: string
+  diffHeadRef?: string
   runID?: string
   additions: number
   deletions: number
@@ -42,6 +45,9 @@ export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
         group.goalRunID ?? "",
         group.runID ?? "",
         group.commitRef ?? "",
+        group.publishedCommitRef ?? "",
+        group.diffBaseRef ?? "",
+        group.diffHeadRef ?? "",
         group.additions,
         group.deletions,
         ...group.changes.map((change) =>
@@ -159,6 +165,17 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
       const commitRef = payloads
         .map((payload: any) => (typeof payload?.commitRef === "string" ? payload.commitRef.trim() : ""))
         .find(Boolean)
+      const publishedCommitRef = payloads
+        .map((payload: any) =>
+          typeof payload?.publishedCommitRef === "string" ? payload.publishedCommitRef.trim() : "",
+        )
+        .find(Boolean)
+      const diffBaseRef = payloads
+        .map((payload: any) => (typeof payload?.diffBaseRef === "string" ? payload.diffBaseRef.trim() : ""))
+        .find(Boolean)
+      const diffHeadRef = payloads
+        .map((payload: any) => (typeof payload?.diffHeadRef === "string" ? payload.diffHeadRef.trim() : ""))
+        .find(Boolean)
       if (changes.length === 0 && !goalRunID) return null
       return {
         id: `goal:${String(goal?.goalID || "")}:${String(goal?.goalRunID || "pre")}`,
@@ -169,6 +186,9 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
         goalLabel: goalRevisionLabelFromIndexes(goal?.orderIndex, goal?.retryCount),
         goalTitle: typeof goal?.goalTitle === "string" ? goal.goalTitle : undefined,
         commitRef: commitRef || undefined,
+        publishedCommitRef: publishedCommitRef || undefined,
+        diffBaseRef: diffBaseRef || undefined,
+        diffHeadRef: diffHeadRef || undefined,
         additions: typeof stats?.additions === "number" ? stats.additions : 0,
         deletions: typeof stats?.deletions === "number" ? stats.deletions : 0,
         changes,

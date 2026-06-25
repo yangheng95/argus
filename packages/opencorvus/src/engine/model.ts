@@ -759,6 +759,9 @@ export const TaskBoardGoalStepPayload = z.object({
    *  on session.metadata.executor (executor/session-ref.ts). */
   buildSessionID: z.string().optional(),
   commitRef: z.string().optional(),
+  publishedCommitRef: z.string().optional(),
+  diffBaseRef: z.string().optional(),
+  diffHeadRef: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),
   /** Per-file diff stats sourced from the goal_run acceptance row. Carries
    *  additions/deletions/status so the overlay's ChangesPanel renders
