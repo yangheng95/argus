@@ -277,8 +277,14 @@ describe("EngineRuntime goal-run convergence", () => {
         const md = renderTaskDescription(desc)
         expect(md).toContain("Terminal goal refill wake facts")
         expect(md).toContain(`run=${runID}`)
-        expect(md).toContain("grun_refill_visible_one:completed")
-        expect(md).toContain("grun_refill_visible_two:running")
+        expect(md).toContain(
+          "terminal_goal_run=grun_refill_visible_one(goal=goal_grun_refill_visible_one, status=completed)",
+        )
+        expect(md).toContain(
+          "still_live_sibling_goal_runs=grun_refill_visible_two(goal=goal_grun_refill_visible_two, status=running, not_terminal)",
+        )
+        expect(md).toContain("still_live_sibling_goal_runs are explicitly not terminal")
+        expect(md).toContain("must not be treated as passed dependencies")
       },
     })
   })

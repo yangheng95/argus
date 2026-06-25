@@ -1005,15 +1005,18 @@ export function renderTerminalGoalRefillNotifications(
     const ts = new Date(refill.time_dispatched).toISOString()
     const liveSiblings =
       refill.live_sibling_goal_runs.length > 0
-        ? refill.live_sibling_goal_runs.map((goalRun) => `${goalRun.id}:${goalRun.status}`).join(", ")
+        ? refill.live_sibling_goal_runs
+            .map((goalRun) => `${goalRun.id}(goal=${goalRun.goal_id}, status=${goalRun.status}, not_terminal)`)
+            .join(", ")
         : "(none)"
     lines.push(
-      `- ${ts} run=${refill.run_id} dispatch=${refill.dispatch_result} fingerprint=${refill.fingerprint} terminal=${refill.terminal_goal_run.id}:${refill.terminal_goal_run.status} live_siblings=${liveSiblings} artifact=${refill.artifact_id}`,
+      `- ${ts} run=${refill.run_id} dispatch=${refill.dispatch_result} fingerprint=${refill.fingerprint} terminal_goal_run=${refill.terminal_goal_run.id}(goal=${refill.terminal_goal_run.goal_id}, status=${refill.terminal_goal_run.status}) still_live_sibling_goal_runs=${liveSiblings} artifact=${refill.artifact_id}`,
     )
   }
   lines.push(
-    `Each entry means a terminal goal completion already started an orchestrator refill wake. ` +
-      `Use this as current execution evidence; do not wait for sibling goals merely because the refill wake has not produced a later decision yet.`,
+    `Each entry means only terminal_goal_run reached a terminal status and already started an orchestrator refill wake. ` +
+      `still_live_sibling_goal_runs are explicitly not terminal and must not be treated as passed dependencies. ` +
+      `Use current goal status and build-tool dependency errors for dispatch decisions; when only live siblings block progress, stop this wake and let future terminal refill facts wake the next decision.`,
   )
   return lines
 }
