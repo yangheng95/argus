@@ -7252,9 +7252,7 @@ export function createOrchestratorTools(input: {
         "concrete guidance for the next attempt - the goal contract (objective / acceptance_specs / " +
         "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
         "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
-        "never costs you any architect-committed contract. For a context-wedged per-goal retry, set " +
-        "`freshContext: true` to start a new build session; restate every useful prior lesson in `request` " +
-        "because the new session will not inherit old reasoning or tool calls. `build({ request, directBuildIntent })` without goalID is a task-level " +
+        "never costs you any architect-committed contract. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
@@ -7301,22 +7299,6 @@ export function createOrchestratorTools(input: {
             .describe(
               "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
             ),
-          freshContext: z
-            .boolean()
-            .optional()
-            .describe(
-              "Optional escape hatch for context-wedged per-goal retries. When true AND `goalID` is set, " +
-                "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
-                "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
-                "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
-                "same root error class and the current task snapshot shows the build session near or over its context cap; " +
-                "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
-                "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
-                "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
-                "engine_goal row, and you MUST restate every concrete lesson the prior attempts produced inside " +
-                "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
-                "(no goalID); the host ignores it in that path.",
-            ),
           userConfirmedStaleIntegrityData: z
             .boolean()
             .optional()
@@ -7326,7 +7308,7 @@ export function createOrchestratorTools(input: {
         })
         .strict(),
       execute: async (
-        { request = "", reason, goalID, directBuildIntent, freshContext = false, userConfirmedStaleIntegrityData },
+        { request = "", reason, goalID, directBuildIntent, userConfirmedStaleIntegrityData },
         options,
       ) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
@@ -7339,7 +7321,6 @@ export function createOrchestratorTools(input: {
           requestLen: request.length,
           goalID: goalID || "",
           directBuildIntent: declaredDirectBuildIntent ?? "",
-          freshContext,
         })
 
         const missingIntegrityArtifact = findLatestIntegrityArtifactMissingStatus(taskID)
@@ -7360,13 +7341,6 @@ export function createOrchestratorTools(input: {
         if (resolvedGoalReference && !resolvedGoalReference.ok) return resolvedGoalReference.message
         const attachedGoalID = resolvedGoalReference?.goalID
         const isTaskLevelBuild = !attachedGoalID
-        if (freshContext && isTaskLevelBuild) {
-          log.info("build freshContext ignored for task-level build", {
-            taskID,
-            reason,
-            directBuildIntent: declaredDirectBuildIntent ?? "",
-          })
-        }
         if (attachedGoalID) {
           assertNoLiveGoalRunForBuild({
             taskID,
@@ -7777,47 +7751,14 @@ export function createOrchestratorTools(input: {
           }
 
           const priorGoalRunForRetry = attachedGoalID ? findLatestTipGoalRun(attachedGoalID) : undefined
-          const freshGoalContext = freshContext && !!attachedGoalID
           const existingBuildSessionID =
-            !freshGoalContext &&
             priorGoalRunForRetry &&
             !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
             priorGoalRunForRetry.session_id
               ? priorGoalRunForRetry.session_id
               : undefined
           if (
-            freshGoalContext &&
-            priorGoalRunForRetry?.session_id &&
-            !isLiveGoalRunStatus(priorGoalRunForRetry.status)
-          ) {
-            const priorSessionID = priorGoalRunForRetry.session_id
-            const priorMarker = (await Ownership.Worktree.list(Instance.worktree)).find(
-              ({ marker }) => marker.taskID === taskID && marker.sessionID === priorSessionID,
-            )
-            if (priorMarker) {
-              await Ownership.Worktree.clear({
-                primaryWorktreeDir: Instance.worktree,
-                worktreeDir: priorMarker.marker.cwd,
-              })
-              log.info("build freshContext cleared abandoned prior worktree ownership", {
-                taskID,
-                goalID: attachedGoalID,
-                priorGoalRunID: priorGoalRunForRetry.id,
-                priorSessionID,
-                worktreeDir: priorMarker.marker.cwd,
-              })
-            } else {
-              log.info("build freshContext found no prior worktree ownership marker to clear", {
-                taskID,
-                goalID: attachedGoalID,
-                priorGoalRunID: priorGoalRunForRetry.id,
-                priorSessionID,
-              })
-            }
-          }
-          if (
             attachedGoalID &&
-            !freshGoalContext &&
             priorGoalRunForRetry &&
             !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
             !priorGoalRunForRetry.session_id

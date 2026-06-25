@@ -301,9 +301,10 @@ durable corrections:
 
 - Failed goal or wrong local contract -> use `query_failed_goals`, then
   `build({ goalID, request })` or `modify_goal`.
-- Per-goal context wedge -> use `build({ goalID, freshContext: true, request })`
-  only after same-context retries are stuck: >=2 same-root failures near context cap, compaction `nothing-to-compress` / `post-compaction-still-over`, or an unrecoverable prior `session_id`.
-  Cost: prior reasoning/tool history is gone; the goal contract remains, and `request` MUST restate concrete lessons. No effect on task-level direct `build({ request })`.
+- Per-goal retry -> use `build({ goalID, request })`. Build resumes the prior
+  build session when the latest terminal attempt has a session id, installs a
+  fresh runtime contract, and appends visible incremental feedback; if lineage
+  is unrecoverable, surface that structural error instead of replacing it.
 - Missing dependency or wrong goal contract -> try the smallest same-graph
   repair. Use `modify_goal` instead of reopening the entire graph when a point
   correction is enough.
