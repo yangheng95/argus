@@ -18,6 +18,7 @@ import { PromptProfile, PromptProfileIDSchema } from "@/agent/prompt-profile"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
+import { SessionControl } from "@/session/control"
 import { Database, NotFoundError, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
@@ -627,7 +628,23 @@ function contextUnavailableReasonFromAssistantError(message: Message.Assistant |
   if (message.agent === "compaction" && Message.StructuredOutputPayloadError.Schema.safeParse(error).success) {
     return `prior_compaction_handoff_failed:${message.id}`
   }
+  if (message.agent === "compaction" && Message.StructuredOutputError.Schema.safeParse(error).success) {
+    return `prior_compaction_structured_output_missing:${message.id}`
+  }
+  if (message.agent === "compaction" && Message.AbortedError.Schema.safeParse(error).success) {
+    return `prior_compaction_aborted:${message.id}`
+  }
   return undefined
+}
+
+function pendingCompactionControlContextUnavailableReason(sessionID: string): string | undefined {
+  const control = SessionControl.pending(sessionID).find(
+    (item) => item.kind === "compaction_request" || item.kind === "manual_summarize",
+  )
+  if (!control) return undefined
+  const source =
+    typeof control.payload.source_user_message_id === "string" ? `:${control.payload.source_user_message_id}` : ""
+  return `prior_pending_${control.kind}:${control.id}${source}`
 }
 
 async function selectGoalBuildRetrySession(input: {
@@ -673,6 +690,9 @@ async function selectGoalBuildRetrySession(input: {
       contextUnavailableReason: `prior_session_directory_mismatch`,
     }
   }
+
+  const pendingCompactionReason = pendingCompactionControlContextUnavailableReason(priorSessionID)
+  if (pendingCompactionReason) return { priorSessionID, contextUnavailableReason: pendingCompactionReason }
 
   const latestAssistant = await latestAssistantMessageForSession(priorSessionID)
   const contextUnavailableReason = contextUnavailableReasonFromAssistantError(latestAssistant)
