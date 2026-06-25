@@ -1885,6 +1885,65 @@ describe("session.message.filterCompacted", () => {
       compactionSummary,
     ])
   })
+
+  test("does not compact or replay a failed compaction summary as a boundary", async () => {
+    const sourceUser = "m-source-user"
+    const failedSummary = "m-failed-compaction-summary"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: {
+          ...assistantInfo(
+            failedSummary,
+            sourceUser,
+            new Message.StructuredOutputPayloadError({
+              message: "Compaction handoff did not match the required structured contract.",
+              reason: "missing currentState.sourceUserMessage.id",
+            }).toObject(),
+          ),
+          summary: true,
+          finish: "error",
+        } as Message.Assistant,
+        parts: [
+          {
+            ...basePart(failedSummary, "p-failed-summary"),
+            type: "text",
+            text: "failed compact diagnostic should not enter model replay",
+          },
+        ],
+      },
+      {
+        info: userInfo(sourceUser),
+        parts: [
+          { ...basePart(sourceUser, "p-source-text"), type: "text", text: "original compact source" },
+          { ...basePart(sourceUser, "p-source-compaction"), type: "compaction", auto: true },
+        ],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      "m-old-user",
+      "m-old-assistant",
+      sourceUser,
+      failedSummary,
+    ])
+
+    const wire = JSON.stringify(await Message.toModelMessages(result, model))
+    expect(wire).toContain("old question")
+    expect(wire).toContain("old answer")
+    expect(wire).toContain("original compact source")
+    expect(wire).not.toContain("failed compact diagnostic")
+    expect(wire).not.toContain("compaction-handoff")
+  })
 })
 
 describe("session.message.fromError", () => {
