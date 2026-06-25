@@ -11,10 +11,12 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY } from "../../src/orchestrator/stateful-tool-names"
-import { WaitToolParameters } from "../../src/tool/wait"
-import { Database } from "../../src/storage/db"
+import { executeWait, WaitToolParameters } from "../../src/tool/wait"
+import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { resetDatabase } from "../fixture/db"
+import { CronJobTable } from "../../src/scheduler/cron.sql"
+import { Session } from "../../src/session"
 
 /**
  * Orchestrator `wait` is a one-shot deliberate pause for a NAMED external
@@ -66,7 +68,10 @@ function seedToolFixtureTask(taskID: string) {
 
 async function withSeededWaitTools(
   input: Partial<ReturnType<typeof toolFixtureInput>> & { signal?: AbortSignal },
-  fn: (tools: ReturnType<typeof createOrchestratorTools>["tools"]) => Promise<void>,
+  fn: (
+    tools: ReturnType<typeof createOrchestratorTools>["tools"],
+    fixture: ReturnType<typeof toolFixtureInput>,
+  ) => Promise<void>,
 ) {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -78,7 +83,7 @@ async function withSeededWaitTools(
       }
       seedToolFixtureTask(fixture.taskID)
       const { tools } = createOrchestratorTools(fixture)
-      await fn(tools)
+      await fn(tools, fixture)
     },
   })
 }
@@ -145,6 +150,9 @@ describe("createOrchestratorTools — wait wiring", () => {
     // `question`, `fail_task`, or a real workflow decision from the refreshed
     // task snapshot.
     expect(wait.description).toMatch(/one-shot/i)
+    expect(wait.description).toMatch(/nonblocking/i)
+    expect(wait.description).toMatch(/durable cron wake/i)
+    expect(wait.description).toMatch(/returns immediately/i)
     expect(wait.description).toMatch(/When executing a goal/)
     expect(wait.description).toMatch(/default to 1200000ms \(20 minutes\)/)
     expect(wait.description).toMatch(/1200000ms \(20 minutes\)/)
@@ -153,7 +161,7 @@ describe("createOrchestratorTools — wait wiring", () => {
     expect(wait.description).toMatch(/external event/i)
     expect(wait.description).toMatch(/question/)
     expect(wait.description).toMatch(/fail_task/)
-    expect(wait.description).toMatch(/current task snapshot/)
+    expect(wait.description).toMatch(/visible message/)
     expect(wait.description).not.toMatch(/read_context/)
   })
 
@@ -175,8 +183,8 @@ describe("createOrchestratorTools — wait wiring", () => {
 })
 
 describe("createOrchestratorTools — wait execute", () => {
-  test("waits at least the requested duration before returning", async () => {
-    await withSeededWaitTools({}, async (tools) => {
+  test("schedules a task cron wait and returns immediately", async () => {
+    await withSeededWaitTools({}, async (tools, fixture) => {
       const requested = 1_200
       const startedAt = Date.now()
       const result = await (tools as any).wait.execute(
@@ -185,46 +193,32 @@ describe("createOrchestratorTools — wait execute", () => {
       )
       const elapsed = Date.now() - startedAt
       const output = toolOutput(result)
-      // setTimeout fires no earlier than the requested ms in Bun/Node. Allow
-      // generous CI jitter on the upper bound; the floor is the load-bearing
-      // assertion.
-      expect(elapsed).toBeGreaterThanOrEqual(requested - 50)
-      expect(output).toMatch(/^Waited \d+ms/)
-      expect(output).toContain("external CI propagation")
-      expect(output).toContain("refreshed task snapshot")
-      expect(output).not.toMatch(/read_context/)
-      expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
-    })
-  })
-
-  test("returns immediately and reports `aborted` when the abort signal fires mid-wait", async () => {
-    const controller = new AbortController()
-    await withSeededWaitTools({ signal: controller.signal }, async (tools) => {
-      const requested = 60_000
-      const startedAt = Date.now()
-      const pending = (tools as any).wait.execute(
-        { duration_ms: requested, reason: "remote queue draining" },
-        toolOptions(),
-      ) as Promise<unknown>
-      // Fire abort on the next tick so the wait actually parks on setTimeout
-      // first. Without the tick, an aborted-before-await path would short
-      // circuit through the pre-loop `signal.aborted` branch instead of the
-      // abort-listener cleanup we want to verify.
-      setTimeout(() => controller.abort("test cancel"), 25)
-      const result = await pending
-      const elapsed = Date.now() - startedAt
-      const output = toolOutput(result)
       expect(elapsed).toBeLessThan(requested / 2)
-      expect(output).toMatch(/^wait aborted after \d+ms/)
-      expect(output).toContain("remote queue draining")
-      expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
+      expect(output).toMatch(/^Scheduled nonblocking task wait/)
+      expect(output).toContain("external CI propagation")
+      expect(output).toContain("scheduled wake")
+      expect(output).not.toMatch(/read_context/)
+      expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("decision")
+      const metadata = toolMetadata(result)
+      expect(metadata.mode).toBe("task")
+      expect(metadata.nonblocking).toBe(true)
+      expect(metadata.elapsedMs).toBeUndefined()
+      const row = Database.use((db) =>
+        db.select().from(CronJobTable).where(eq(CronJobTable.task_id, fixture.taskID)).get(),
+      )
+      expect(row).toBeDefined()
+      expect(row?.enabled).toBe(true)
+      expect(row?.one_shot).toBe(true)
+      expect(row?.prompt).toBe("external CI propagation")
+      expect(row?.next_run ?? 0).toBeGreaterThanOrEqual(startedAt + requested)
+      expect(row?.id).toBe(metadata.jobID)
     })
   })
 
   test("short-circuits when the abort signal is already aborted before invocation", async () => {
     const controller = new AbortController()
     controller.abort("pre-aborted")
-    await withSeededWaitTools({ signal: controller.signal }, async (tools) => {
+    await withSeededWaitTools({ signal: controller.signal }, async (tools, fixture) => {
       const startedAt = Date.now()
       const result = await (tools as any).wait.execute(
         { duration_ms: 30_000, reason: "dev server warmup" },
@@ -233,8 +227,41 @@ describe("createOrchestratorTools — wait execute", () => {
       const elapsed = Date.now() - startedAt
       const output = toolOutput(result)
       expect(elapsed).toBeLessThan(500)
-      expect(output).toMatch(/^wait aborted after \d+ms/)
-      expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
+      expect(output).toMatch(/^wait was not scheduled/)
+      expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
+      const row = Database.use((db) =>
+        db.select().from(CronJobTable).where(eq(CronJobTable.task_id, fixture.taskID)).get(),
+      )
+      expect(row).toBeUndefined()
+    })
+  })
+
+  test("non-task wait schedules a one-shot session cron instead of sleeping", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "session wait fixture" })
+        const requested = 1_200
+        const startedAt = Date.now()
+        const result = await executeWait({
+          duration_ms: requested,
+          reason: "remote webhook delivery",
+          sessionID: session.id,
+        })
+        const elapsed = Date.now() - startedAt
+        expect(elapsed).toBeLessThan(requested / 2)
+        expect(result.mode).toBe("session")
+        expect(result.aborted).toBe(false)
+        expect(result.output).toMatch(/^Scheduled nonblocking session wait/)
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, result.jobID!)).get())
+        expect(row?.session_id).toBe(session.id)
+        expect(row?.task_id).toBeNull()
+        expect(row?.enabled).toBe(true)
+        expect(row?.one_shot).toBe(true)
+        expect(row?.prompt).toContain("remote webhook delivery")
+        expect(row?.next_run ?? 0).toBeGreaterThanOrEqual(startedAt + requested)
+      },
     })
   })
 })

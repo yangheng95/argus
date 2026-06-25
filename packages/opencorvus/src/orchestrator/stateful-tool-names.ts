@@ -50,7 +50,6 @@ export type StatefulSnapshotToolName = (typeof STATEFUL_SNAPSHOT_TOOL_NAMES)[num
 export const ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES = [
   "read_context",
   "query_failed_goals",
-  "wait",
   "browser_preview",
   "bash",
 ] as const

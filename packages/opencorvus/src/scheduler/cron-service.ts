@@ -4,6 +4,7 @@ import { Cron } from "./cron"
 import { Scheduler } from "./index"
 import { SessionWake } from "@/session"
 import { SessionTable } from "@/session/session.sql"
+import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -13,6 +14,7 @@ export type CronJobView = {
   name: string
   expression: string
   prompt: string
+  taskId: string | null
   enabled: boolean
   oneShot: boolean
   lastRun: number | null
@@ -30,6 +32,22 @@ export type CreateCronJobInput = {
   oneShot?: boolean
 }
 
+export type CreateDelayedSessionWakeInput = {
+  name: string
+  prompt: string
+  projectId: string
+  sessionId: string
+  durationMs: number
+}
+
+export type CreateTaskCronWakeInput = {
+  name: string
+  reason: string
+  projectId: string
+  taskId: string
+  durationMs: number
+}
+
 /**
  * CronService polls due cron jobs and executes them with lease-based claims.
  *
@@ -42,7 +60,7 @@ export type CreateCronJobInput = {
 export namespace CronService {
   const log = Log.create({ service: "cron-service" })
 
-  const POLL_INTERVAL_MS = 60 * 1000
+  const POLL_INTERVAL_MS = 1_000
   const LEASE_MS = 2 * 60 * 1000
   const LEASE_RENEW_MS = 30 * 1000
   const MAX_BACKOFF_MS = 5 * 60 * 1000
@@ -77,6 +95,7 @@ export namespace CronService {
       name: j.name,
       expression: j.expression,
       prompt: j.prompt,
+      taskId: j.task_id ?? null,
       enabled: j.enabled,
       oneShot: j.one_shot,
       lastRun: j.last_run,
@@ -99,6 +118,17 @@ export namespace CronService {
     if (!session) throw new NotFoundError({ message: `Session not found: ${sessionId}` })
   }
 
+  function assertTaskInProject(input: { taskId: string; projectId: string }) {
+    const task = Database.use((db) =>
+      db
+        .select({ id: EngineTaskTable.id })
+        .from(EngineTaskTable)
+        .where(and(eq(EngineTaskTable.id, input.taskId), eq(EngineTaskTable.project_id, input.projectId)))
+        .get(),
+    )
+    if (!task) throw new NotFoundError({ message: `Task not found: ${input.taskId}` })
+  }
+
   export function create(input: CreateCronJobInput): { id: string; name: string; nextRun: number } {
     const parsed = Cron.parse(input.expression)
     assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
@@ -118,6 +148,60 @@ export namespace CronService {
           prompt: input.prompt,
           enabled: true,
           one_shot: oneShot,
+          next_run: nextRun,
+        })
+        .run(),
+    )
+    return { id, name: input.name, nextRun }
+  }
+
+  export function createDelayedSessionWake(input: CreateDelayedSessionWakeInput): {
+    id: string
+    name: string
+    nextRun: number
+  } {
+    assertSessionInProject({ sessionId: input.sessionId, projectId: input.projectId })
+    assertDuration(input.durationMs)
+    const now = Date.now()
+    const nextRun = now + input.durationMs
+    const id = Identifier.ascending("cron")
+    Database.use((db) =>
+      db
+        .insert(CronJobTable)
+        .values({
+          id,
+          project_id: input.projectId,
+          session_id: input.sessionId,
+          name: input.name,
+          expression: delayExpression(input.durationMs),
+          prompt: input.prompt,
+          enabled: true,
+          one_shot: true,
+          next_run: nextRun,
+        })
+        .run(),
+    )
+    return { id, name: input.name, nextRun }
+  }
+
+  export function createTaskWake(input: CreateTaskCronWakeInput): { id: string; name: string; nextRun: number } {
+    assertTaskInProject({ taskId: input.taskId, projectId: input.projectId })
+    assertDuration(input.durationMs)
+    const now = Date.now()
+    const nextRun = now + input.durationMs
+    const id = Identifier.ascending("cron")
+    Database.use((db) =>
+      db
+        .insert(CronJobTable)
+        .values({
+          id,
+          project_id: input.projectId,
+          task_id: input.taskId,
+          name: input.name,
+          expression: delayExpression(input.durationMs),
+          prompt: input.reason,
+          enabled: true,
+          one_shot: true,
           next_run: nextRun,
         })
         .run(),
@@ -246,24 +330,12 @@ export namespace CronService {
     }, LEASE_RENEW_MS)
     timer.unref()
 
-    const sessionID = await SessionWake.wake({
-      sessionID: job.session_id ?? undefined,
-      prompt: job.prompt,
-      agent: job.agent === "default" ? undefined : job.agent,
-      reason: {
-        source: "scheduler.cron",
-        jobID: job.id,
-        jobName: job.name,
-        fireID,
-        expression: job.expression,
-        oneShot: job.one_shot,
-      },
-    }).finally(() => {
+    const outcome = await executeJobWake(job, fireID).finally(() => {
       clearInterval(timer)
     })
     const committedAt = Date.now()
 
-    if (job.one_shot) {
+    if (job.one_shot || job.task_id) {
       Database.use((db) =>
         db
           .update(CronJobTable)
@@ -282,7 +354,7 @@ export namespace CronService {
         jobId: job.id,
         fireID,
         name: job.name,
-        sessionID,
+        ...outcome,
         nextRun: "disabled",
       })
       return
@@ -308,9 +380,40 @@ export namespace CronService {
       jobId: job.id,
       fireID,
       name: job.name,
-      sessionID,
+      ...outcome,
       nextRun: new Date(nextRun).toISOString(),
     })
+  }
+
+  async function executeJobWake(
+    job: typeof CronJobTable.$inferSelect,
+    fireID: string,
+  ): Promise<{ sessionID?: string; taskID?: string; dispatchResult?: string }> {
+    if (job.task_id) {
+      const { dispatchTaskLoop } = await import("@/engine/queue")
+      const dispatchResult = await dispatchTaskLoop({
+        taskID: job.task_id,
+        event: {
+          note: renderTaskWaitWakeNote(job, fireID),
+        },
+      })
+      return { taskID: job.task_id, dispatchResult }
+    }
+
+    const sessionID = await SessionWake.wake({
+      sessionID: job.session_id ?? undefined,
+      prompt: job.prompt,
+      agent: job.agent === "default" ? undefined : job.agent,
+      reason: {
+        source: "scheduler.cron",
+        jobID: job.id,
+        jobName: job.name,
+        fireID,
+        expression: job.expression,
+        oneShot: job.one_shot,
+      },
+    })
+    return { sessionID }
   }
 
   function renew(id: string, owner: string) {
@@ -352,5 +455,27 @@ export namespace CronService {
       error: msg,
       retryAt: new Date(nextRun).toISOString(),
     })
+  }
+
+  function assertDuration(durationMs: number) {
+    if (!Number.isInteger(durationMs) || durationMs <= 0) {
+      throw new Error(`Invalid delay duration: ${durationMs}`)
+    }
+  }
+
+  function delayExpression(durationMs: number) {
+    return `delay:${durationMs}ms`
+  }
+
+  function renderTaskWaitWakeNote(job: typeof CronJobTable.$inferSelect, fireID: string) {
+    return [
+      "This is a scheduled task wait wake, not a user-authored message.",
+      `wait_job_id=${job.id}`,
+      `fire_id=${fireID}`,
+      `scheduled_delay=${job.expression}`,
+      `due_at=${new Date(job.next_run).toISOString()}`,
+      `Reason: ${job.prompt}`,
+      "Read the current task snapshot and decide the next workflow action from present evidence.",
+    ].join("\n")
   }
 }
