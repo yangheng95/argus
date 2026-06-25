@@ -34,6 +34,9 @@ export namespace AgentRuntimeMetadata {
 
   export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS = [
     "acceptance",
+  ] as const satisfies readonly SessionKind[]
+
+  export const ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KINDS = [
     "orchestrator",
   ] as const satisfies readonly SessionKind[]
 
@@ -55,6 +58,9 @@ export namespace AgentRuntimeMetadata {
   )
   export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KIND_SET = new Set<SessionKind>(
     DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS,
+  )
+  export const ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KIND_SET = new Set<SessionKind>(
+    ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KINDS,
   )
   export const DIRECT_AUTOMATIC_COMPACTION_SESSION_KIND_SET = new Set<SessionKind>(
     DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS,

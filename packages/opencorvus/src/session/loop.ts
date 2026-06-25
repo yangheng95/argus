@@ -306,6 +306,32 @@ export namespace SessionLoop {
     source: Message.User
     model?: Provider.Model
   }): { decision: AutomaticCompaction.Decision; error?: unknown } {
+    if (AutomaticCompaction.requiresOrchestratorWakeContinuation(input.session.kind)) {
+      try {
+        validateSessionRuntimeContractForContinuation({
+          sessionID: input.session.id,
+          sessionKind: input.session.kind,
+          expectedAgentKind: input.source.agent,
+          expectedContractKind: "orchestrator-wake",
+          requireRuntimeContract: true,
+          requireWorkerTurnDescriptor: false,
+        })
+        return {
+          decision: AutomaticCompaction.decision({
+            sessionKind: input.session.kind,
+            runtimeContinuationReady: true,
+          }),
+        }
+      } catch (error) {
+        return {
+          decision: AutomaticCompaction.decision({
+            sessionKind: input.session.kind,
+            runtimeContinuationReady: false,
+          }),
+          error,
+        }
+      }
+    }
     if (!AutomaticCompaction.requiresLiveRuntimeContinuation(input.session.kind)) {
       return { decision: AutomaticCompaction.decision({ sessionKind: input.session.kind }) }
     }
@@ -379,6 +405,10 @@ export namespace SessionLoop {
 
   function isActionableSessionControl(control: SessionControl.Record): boolean {
     return control.kind === "compaction_request" || control.kind === "manual_summarize"
+  }
+
+  function hasPendingAutomaticCompactionControl(sessionID: string): boolean {
+    return SessionControl.pending(sessionID).some((control) => control.kind === "compaction_request")
   }
 
   export function agentKindRequiresRuntimeContract(agentKind: string | undefined): boolean {
@@ -2633,7 +2663,8 @@ export namespace SessionLoop {
             model,
             abort,
           })
-          if (runRuntimeContractTurn) consumeRuntimeContractTurn(sessionID)
+          const queuedCompaction = turn === "continue" && hasPendingAutomaticCompactionControl(sessionID)
+          if (runRuntimeContractTurn && !queuedCompaction) consumeRuntimeContractTurn(sessionID)
           // Fire the registered step hook (phase 3-a-4) — agents that
           // dispatch via a tool and want to abort the active generation
           // once the tool landed use this hook to fire their deferred-stop

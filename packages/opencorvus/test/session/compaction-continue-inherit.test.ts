@@ -52,6 +52,21 @@ describe("SessionCompaction continuation", () => {
     return descriptor
   }
 
+  function installOrchestratorWake(input: { sessionID: string }) {
+    SessionLoop.setSessionRuntimeContract(input.sessionID, {
+      identity: {
+        sessionID: input.sessionID,
+        agentKind: "orchestrator",
+        contractKind: "orchestrator-wake",
+        installedAt: Date.now(),
+      },
+      tools: { build: dummyTool() },
+      system: ["test scheduler wake"],
+      systemMode: "complete",
+      runOnce: true,
+    })
+  }
+
   test("does not expose a user-message continuation builder", () => {
     expect("buildContinueUserMessage" in SessionCompaction).toBe(false)
   })
@@ -152,6 +167,7 @@ describe("SessionCompaction continuation", () => {
     const partitions = [
       ...AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS,
       ...AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS,
+      ...AgentRuntimeMetadata.ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KINDS,
       ...AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS,
     ]
     const unique = new Set<SessionKind>(partitions)
@@ -171,6 +187,12 @@ describe("SessionCompaction continuation", () => {
         expect(AutomaticCompaction.decision({ sessionKind: kind, runtimeContinuationReady: true })).toEqual({
           enabled: true,
           reason: "runtime_continuation_ready",
+        })
+      } else if (AgentRuntimeMetadata.ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(kind)) {
+        expect(coldDecision).toEqual({ enabled: false, reason: "runtime_contract_required" })
+        expect(AutomaticCompaction.decision({ sessionKind: kind, runtimeContinuationReady: true })).toEqual({
+          enabled: true,
+          reason: "orchestrator_wake_ready",
         })
       } else if (AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(kind)) {
         expect(coldDecision).toEqual({ enabled: false, reason: "unsupported_workflow_kind" })
@@ -238,7 +260,7 @@ describe("SessionCompaction continuation", () => {
     const disabledAgentKinds = AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS.filter((kind) =>
       AgentRuntimeMetadata.AGENT_OWNED_SESSION_KIND_SET.has(kind),
     )
-    expect(disabledAgentKinds).toEqual(["acceptance", "orchestrator"])
+    expect(disabledAgentKinds).toEqual(["acceptance"])
 
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -268,6 +290,48 @@ describe("SessionCompaction continuation", () => {
 
           expect(SessionControl.pending(session.id)).toEqual([])
         }
+      },
+    })
+  })
+
+  test("queues automatic compaction for orchestrator sessions with live scheduler wake runtime", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "orchestrator", title: "scheduler auto compaction" })
+        installOrchestratorWake({ sessionID: session.id })
+        const source = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "orchestrator",
+          model: { providerID: "provider-a", modelID: "model-a" },
+        })
+        expect(source.role).toBe("user")
+        if (source.role !== "user") return
+
+        const decision = SessionLoop.automaticCompactionDecision({ session, source })
+        expect(decision).toEqual({ decision: { enabled: true, reason: "orchestrator_wake_ready" } })
+
+        await SessionCompaction.create({
+          sessionID: session.id,
+          source,
+          auto: true,
+          overflow: true,
+        })
+
+        const controls = SessionControl.pending(session.id)
+        expect(controls).toHaveLength(1)
+        expect(controls[0]).toMatchObject({
+          kind: "compaction_request",
+          payload: {
+            source_user_message_id: source.id,
+            overflow: true,
+          },
+        })
+        SessionLoop.clearSessionRuntimeContract(session.id)
       },
     })
   })
@@ -502,12 +566,12 @@ describe("SessionCompaction continuation", () => {
     })
   })
 
-  test("still rejects unsupported workflow automatic compaction", async () => {
+  test("rejects scheduler automatic compaction without a live wake runtime", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "orchestrator", title: "unsupported auto compaction" })
+        const session = await Session.create({ kind: "orchestrator", title: "scheduler cold auto compaction" })
         const source = await Session.updateMessage({
           id: Identifier.ascending("message"),
           sessionID: session.id,
@@ -519,6 +583,10 @@ describe("SessionCompaction continuation", () => {
         expect(source.role).toBe("user")
         if (source.role !== "user") return
 
+        const decision = SessionLoop.automaticCompactionDecision({ session, source })
+        expect(decision.decision).toEqual({ enabled: false, reason: "runtime_contract_required" })
+        expect(decision.error).toBeInstanceOf(Error)
+
         await expect(
           SessionCompaction.create({
             sessionID: session.id,
@@ -526,7 +594,7 @@ describe("SessionCompaction continuation", () => {
             auto: true,
             overflow: true,
           }),
-        ).rejects.toThrow("reason=unsupported_workflow_kind")
+        ).rejects.toThrow("reason=runtime_contract_required")
       },
     })
   })
