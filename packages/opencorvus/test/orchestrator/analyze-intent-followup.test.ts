@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { createDecisionLog } from "../../src/decision-log"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { AgentRunError } from "../../src/agent/runner"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { TaskContext } from "../../src/task-context"
 import { Database } from "../../src/storage/db"
+import { Message } from "../../src/session/message"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -165,6 +167,93 @@ describe("orchestrator analyze_intent dynamic follow-up questions", () => {
         const snapshot = TaskContext.snapshot(taskID)
         expect(snapshot).toContain("### Clarified Request")
         expect(snapshot).toContain("Preserve layout parity, not brand colors.")
+      },
+    })
+  })
+
+  test("continues the same intent-analysis session after terminal StructuredOutput miss", async () => {
+    let calls = 0
+    let observedContinuation: unknown
+    analyzeIntentImpl = async (input: any) => {
+      calls += 1
+      if (calls === 1) {
+        await input.onSessionCreated?.("ses_intent_structured_miss")
+        throw new AgentRunError(
+          "intent-analysis",
+          "LLM error during intent-analysis: StructuredOutputError: Model did not produce structured output",
+          {
+            nonRetryable: true,
+            cause: new Message.StructuredOutputError({
+              message: "Model did not produce structured output before the turn ended",
+              retries: 0,
+            }),
+          },
+        )
+      }
+      observedContinuation = input.continuation
+      return {
+        sessionID: "ses_intent_structured_miss",
+        result: {
+          intent_class: "bug-fix",
+          complexity: "small",
+          extracted_slots: [],
+          missing_info: [],
+          clarifications: [],
+          confidence: 0.9,
+          summary: "Recover the structured intent report in the same session.",
+        },
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: "ses_orchestrator_intent_structured",
+        })
+
+        const first = await tools.analyze_intent.execute(
+          { reason: "recover a missing structured intent report" },
+          {} as any,
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("intent-analysis: protocol finalizer missing")
+        expect(firstText).toContain("failure: StructuredOutputError")
+
+        const row = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .all()
+            .find(
+              (artifact) =>
+                artifact.task_id === taskID && artifact.kind === "stage_continuation_request",
+            ),
+        )
+        expect(row).toBeTruthy()
+        expect(row!.payload).toMatchObject({
+          stage: "intent-analysis",
+          session_id: "ses_intent_structured_miss",
+          failure_name: "StructuredOutputError",
+          finalizer_name: "StructuredOutput",
+        })
+
+        const second = await tools.analyze_intent.execute(
+          {
+            reason: "continue the exact prior intent-analysis session",
+            continuation_artifact_id: row!.id,
+          },
+          {} as any,
+        )
+
+        expect(toolText(second)).toContain("Intent: bug-fix")
+        expect(calls).toBe(2)
+        expect(observedContinuation).toMatchObject({
+          sessionID: "ses_intent_structured_miss",
+          artifactID: row!.id,
+          finalizerName: "StructuredOutput",
+        })
       },
     })
   })

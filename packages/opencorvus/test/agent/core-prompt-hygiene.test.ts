@@ -1291,7 +1291,7 @@ describe("core prompt hygiene", () => {
     expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })
 
-  test("orchestrator prompt documents same-session per-goal retry instead of freshContext", async () => {
+  test("orchestrator prompt documents ordered context recovery instead of freshContext", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("Per-goal retry/continuation -> use `build({ goalID })`")
@@ -1299,10 +1299,11 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("build reuses the prior session")
     expect(normalized).toContain("fresh runtime contract")
     expect(normalized).toContain("recorded failure facts")
-    expect(normalized).toContain('Do not implement "resume failed, then retry" as an implicit fallback')
-    expect(normalized).toContain("open a new attempt only when durable evidence proves the old worker cannot continue")
+    expect(normalized).toContain("session context is unavailable")
+    expect(normalized).toContain("fresh child session with no copied transcript")
+    expect(normalized).toContain("reusing the recorded goal worktree")
+    expect(normalized).toContain("Missing or invalid recorded worktree state is the structural error")
     expect(normalized).toContain("Use `request` only for one exact new operator/error fact")
-    expect(normalized).toContain("structural error")
     expect(normalized).not.toContain("freshContext")
   })
 

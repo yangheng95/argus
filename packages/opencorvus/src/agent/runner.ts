@@ -382,13 +382,15 @@ export function buildHardErrorFromFinalMessage(input: {
   // it through `.data.isRetryable`). Honour it so retry helpers do not
   // loop deterministically-failing requests.
   const isRetryable = (err as { data?: { isRetryable?: boolean } }).data?.isRetryable
-  // TerminalToolMissingError is deterministic: the same prompt produces the
-  // same finish=stop without the tool call. Treat it as non-retryable so
-  // outer helpers do not restart a whole child session for the same protocol
-  // miss; visible continuation handling belongs at the orchestrator boundary.
+  // Protocol finalizer misses are deterministic: the same prompt produces the
+  // same finish=stop without the required finalizer. Treat them as
+  // non-retryable so outer helpers do not restart a whole child session for
+  // the same protocol miss; visible continuation handling belongs at the
+  // orchestrator boundary.
   const isTerminalToolMissing = Message.TerminalToolMissingError.isInstance(err as Error)
+  const isStructuredOutputMissing = Message.StructuredOutputError.isInstance(err as Error)
   return new AgentRunError(kind, `LLM error during ${agentName}: ${errName}: ${errMessage}`, {
-    nonRetryable: isRetryable === false || isTerminalToolMissing,
+    nonRetryable: isRetryable === false || isTerminalToolMissing || isStructuredOutputMissing,
     // Preserve the original error as cause so downstream catch blocks
     // (e.g. build/agent.ts converting missing-terminal into a typed
     // BuildAgentContractError) can instanceof-check rather than

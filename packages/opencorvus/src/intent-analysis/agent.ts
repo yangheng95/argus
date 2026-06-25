@@ -21,6 +21,7 @@
  */
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -54,6 +55,8 @@ export namespace IntentAnalysisAgent {
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
+    continuation?: AgentSessionContinuation
+    onSessionCreated?: (sessionID: string) => void
     onStatus?: (summary: string) => void | Promise<void>
   }
 
@@ -73,6 +76,12 @@ export namespace IntentAnalysisAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
+      onSessionCreated: input.onSessionCreated
+        ? (session) => {
+            input.onSessionCreated!(session.id)
+          }
+        : undefined,
       onStatus: input.onStatus,
       toolKit: {
         tools: toolKit.tools,
