@@ -17,6 +17,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { CompactionHandoff } from "./compaction-handoff"
 import { ToolFailureCause, renderToolFailureCause } from "./tool-failure-cause"
 import { normalizeToolInput } from "./tool-input-norm"
+import { ModelImageInputTooLargeError, assertModelImageInputWithinLimits } from "./model-image-input"
 
 function replayToolInput(raw: unknown): Record<string, unknown> {
   const normalized = normalizeToolInput(raw)
@@ -488,6 +489,7 @@ export namespace Message {
         ContextOverflowError.Schema,
         PromptBudgetOverflowError.Schema,
         ToolSchemaBudgetError.Schema,
+        ModelImageInputTooLargeError.Schema,
         APIError.Schema,
       ])
       .optional(),
@@ -697,23 +699,56 @@ export namespace Message {
     //
     // Returns undefined when the URL is neither â€” the caller skips that
     // attachment rather than crashing the tool result.
+    const sourceLabel = (attachment: { filename?: string; url: string }) =>
+      attachment.filename ?? (attachment.url.startsWith("data:") ? "inline image data URL" : attachment.url)
+
+    const dataUrlBase64Payload = (url: string): string | undefined => {
+      if (!url.startsWith("data:") || !url.includes(",")) return undefined
+      return url.slice(url.indexOf(",") + 1)
+    }
+
+    const assertModelBoundImage = (attachment: { mime: string; url: string; filename?: string }, bytes: Buffer) => {
+      assertModelImageInputWithinLimits({
+        mime: attachment.mime,
+        bytes,
+        source: sourceLabel(attachment),
+      })
+    }
+
+    const modelBoundFileUrl = async (part: { mime: string; url: string; filename?: string }): Promise<string> => {
+      const located = AttachmentStore.nameFromUrl(part.url)
+      if (located) {
+        const bytes = await AttachmentStore.read(located.projectID, located.name)
+        assertModelBoundImage(part, bytes)
+        return `data:${part.mime};base64,${bytes.toString("base64")}`
+      }
+      const payload = dataUrlBase64Payload(part.url)
+      if (payload !== undefined) {
+        assertModelBoundImage(part, Buffer.from(payload, "base64"))
+      }
+      return part.url
+    }
+
     const attachmentToBase64 = async (attachment: {
       mime: string
       url: string
+      filename?: string
     }): Promise<{ mime: string; data: string } | undefined> => {
-      if (attachment.url.startsWith("data:") && attachment.url.includes(",")) {
-        const commaIndex = attachment.url.indexOf(",")
-        return { mime: attachment.mime, data: attachment.url.slice(commaIndex + 1) }
+      const payload = dataUrlBase64Payload(attachment.url)
+      if (payload !== undefined) {
+        assertModelBoundImage(attachment, Buffer.from(payload, "base64"))
+        return { mime: attachment.mime, data: payload }
       }
       const located = AttachmentStore.nameFromUrl(attachment.url)
       if (!located) return undefined
       const bytes = await AttachmentStore.read(located.projectID, located.name).catch(() => undefined)
       if (!bytes) return undefined
+      assertModelBoundImage(attachment, bytes)
       return { mime: attachment.mime, data: bytes.toString("base64") }
     }
 
     const userFileUrl = async (part: Message.FilePart): Promise<string> => {
-      return (await AttachmentStore.dataUrlFromReference(part.url, part.mime)) ?? part.url
+      return await modelBoundFileUrl(part)
     }
 
     // AI SDK v6 invokes tool.toModelOutput with an args object
@@ -848,7 +883,7 @@ export namespace Message {
         }
 
         const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
-        const media: Array<{ mime: string; url: string }> = []
+        const media: Array<{ mime: string; url: string; filename?: string }> = []
 
         const shouldSkipErroredAssistant =
           msg.info.error &&
@@ -992,6 +1027,14 @@ export namespace Message {
           // Inject pending media as a user message for providers that don't support
           // media (images, PDFs) in tool results
           if (media.length > 0) {
+            const mediaParts = await Promise.all(
+              media.map(async (attachment) => ({
+                type: "file" as const,
+                url: await modelBoundFileUrl(attachment),
+                mediaType: attachment.mime,
+                filename: attachment.filename,
+              })),
+            )
             result.push({
               id: Identifier.ascending("message"),
               role: "user",
@@ -1000,11 +1043,7 @@ export namespace Message {
                   type: "text" as const,
                   text: "Attached image(s) from tool result:",
                 },
-                ...media.map((attachment) => ({
-                  type: "file" as const,
-                  url: attachment.url,
-                  mediaType: attachment.mime,
-                })),
+                ...mediaParts,
               ],
             })
           }
@@ -1287,6 +1326,8 @@ export namespace Message {
       case Message.OutputLengthError.isInstance(e):
         return e
       case Message.StructuredOutputPayloadError.isInstance(e):
+        return e.toObject()
+      case ModelImageInputTooLargeError.isInstance(e):
         return e.toObject()
       case Snapshot.SnapshotEmptyTreeError.isInstance(e):
         return e.toObject()

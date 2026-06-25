@@ -5,6 +5,7 @@ import { Message } from "../../src/session/message"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
+import { ModelImageInputTooLargeError } from "../../src/session/model-image-input"
 import type { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
@@ -106,6 +107,16 @@ function basePart(messageID: string, id: string) {
     sessionID,
     messageID,
   }
+}
+
+function pngHeader(width: number, height: number): Buffer {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write("IHDR", 12, "ascii")
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes
 }
 
 function handoffFixture(): CompactionHandoff.Info {
@@ -439,7 +450,7 @@ describe("session.message.toModelMessage", () => {
       directory: tmp.path,
       fn: async () => {
         const messageID = "m-user-ref"
-        const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+        const bytes = pngHeader(16, 16)
         const ref = await AttachmentStore.write(Instance.project.id, bytes, "image/png", "ref.png")
 
         const input: Message.WithParts[] = [
@@ -473,6 +484,110 @@ describe("session.message.toModelMessage", () => {
       },
     })
   }, 20000)
+
+  test("rejects oversized stored user image refs before provider conversion", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const messageID = "m-user-oversized-ref"
+        const ref = await AttachmentStore.write(Instance.project.id, pngHeader(1440, 19773), "image/png", "full.png")
+        const input: Message.WithParts[] = [
+          {
+            info: userInfo(messageID),
+            parts: [
+              {
+                ...basePart(messageID, "p-ref"),
+                type: "file",
+                mime: "image/png",
+                filename: "full.png",
+                url: ref.url,
+              },
+            ] as Message.Part[],
+          },
+        ]
+
+        let caught: unknown
+        try {
+          await Message.toModelMessages(input, model)
+        } catch (error) {
+          caught = error
+        }
+
+        expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
+        expect((caught as { data: { width: number; height: number; maxDimension: number; source: string } }).data).toMatchObject({
+          width: 1440,
+          height: 19773,
+          maxDimension: 8000,
+          source: "full.png",
+        })
+        const serialized = Message.fromError(caught, { providerID: "test" })
+        expect(serialized.name).toBe("ModelImageInputTooLargeError")
+        expect(Message.Assistant.shape.error.safeParse(serialized).success).toBe(true)
+      },
+    })
+  }, 20000)
+
+  test("rejects oversized tool result data URL images before image-data replay", async () => {
+    const userID = "m-user-oversized-tool"
+    const assistantID = "m-assistant-oversized-tool"
+    const payload = pngHeader(1440, 19773).toString("base64")
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "capture the page",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-full-page",
+            tool: "url_screenshot",
+            state: {
+              status: "completed",
+              input: { url: "https://example.com" },
+              output: "",
+              title: "URL screenshot",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-full"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "full.png",
+                  url: `data:image/png;base64,${payload}`,
+                },
+              ],
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    let caught: unknown
+    try {
+      await Message.toModelMessages(input, model)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
+    expect((caught as { data: { width: number; height: number; mime: string; source: string } }).data).toMatchObject({
+      mime: "image/png",
+      source: "full.png",
+      width: 1440,
+      height: 19773,
+    })
+  })
 
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
     const userID = "m-user"
