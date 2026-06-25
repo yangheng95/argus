@@ -159,12 +159,32 @@
 
 .msg-tool-attachments {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
-  display: grid;
-  gap: calc(8px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(10px * var(--ui-scale));
+  width: 100%;
   max-width: 100%;
 }
 
 .msg-tool-attachments .msg-img-wrap {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger {
+  display: flex;
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.msg-tool-attachments .md-img {
+  display: block;
+  max-width: min(100%, calc(1120px * var(--ui-scale)));
+  max-height: calc(640px * var(--ui-scale));
   margin: 0;
 }
 

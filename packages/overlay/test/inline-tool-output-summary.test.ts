@@ -49,6 +49,8 @@ describe("inline tool output", () => {
     expect(source).not.toContain("browser_preview_compare_regions")
     expect(css).toContain(".msg-tool-attachments")
     expect(css).toContain(".msg-tool-attachments .msg-img-wrap")
+    expect(css).toContain('.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger')
+    expect(css).toContain(".msg-tool-attachments .md-img")
   })
 
   test("tool diff file openers use the Button primitive", () => {

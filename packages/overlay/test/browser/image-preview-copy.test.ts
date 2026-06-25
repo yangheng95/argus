@@ -61,7 +61,9 @@ function comparisonPngBytes(width = 240, height = 96): Buffer {
   ])
 }
 
-const comparisonPng = comparisonPngBytes()
+const comparisonPng = comparisonPngBytes(960, 260)
+const newsComparisonPng = comparisonPngBytes(720, 180)
+const faqComparisonPng = comparisonPngBytes(540, 220)
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -168,6 +170,18 @@ test(
                   mime: "image/png",
                   filename: "desktop-failed-main-side-by-side.png",
                 },
+                {
+                  type: "file",
+                  url: "/attachment/project/news-side-by-side.png",
+                  mime: "image/png",
+                  filename: "desktop-failed-news-side-by-side.png",
+                },
+                {
+                  type: "file",
+                  url: "/attachment/project/faq-side-by-side.png",
+                  mime: "image/png",
+                  filename: "desktop-failed-faq-side-by-side.png",
+                },
               ],
               metadata: {
                 browser: {
@@ -207,6 +221,12 @@ test(
       }
       if (path === "/attachment/project/compare-side-by-side.png") {
         return new Response(comparisonPng, { headers: { "content-type": "image/png" } })
+      }
+      if (path === "/attachment/project/news-side-by-side.png") {
+        return new Response(newsComparisonPng, { headers: { "content-type": "image/png" } })
+      }
+      if (path === "/attachment/project/faq-side-by-side.png") {
+        return new Response(faqComparisonPng, { headers: { "content-type": "image/png" } })
       }
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
@@ -479,8 +499,20 @@ test(
       )
       assert.equal(expandedToolHeader, "true")
       await page.waitForSelector(".msg-tool-attachments .msg-image-trigger")
+      await page.waitForFunction(() => {
+        const images = Array.from(document.querySelectorAll<HTMLImageElement>(".msg-tool-attachments .md-img"))
+        return images.length === 3 && images.every((image) => image.complete && image.naturalWidth > 0)
+      })
       const genericAttachmentCount = await page.$$eval(".msg-tool-attachments .md-img", (images) => images.length)
-      assert.equal(genericAttachmentCount, 1)
+      assert.equal(genericAttachmentCount, 3)
+      const genericAttachmentAlts = await page.$$eval(".msg-tool-attachments .md-img", (images) =>
+        images.map((image) => (image as HTMLImageElement).alt),
+      )
+      assert.deepEqual(genericAttachmentAlts, [
+        "desktop-failed-main-side-by-side.png",
+        "desktop-failed-news-side-by-side.png",
+        "desktop-failed-faq-side-by-side.png",
+      ])
       const genericAttachmentState = await page.$eval(".msg-tool-attachments .md-img", (image) => {
         const img = image as HTMLImageElement
         const trigger = img.closest<HTMLElement>(".msg-image-trigger")
@@ -501,9 +533,68 @@ test(
         dataSrc: genericAttachmentState.dataSrc,
         disabled: false,
         complete: true,
-        naturalWidth: 240,
+        naturalWidth: 960,
       })
       assert.ok(genericAttachmentState.dataSrc.startsWith("blob:"))
+      const genericAttachmentLayout = await page.$$eval(".msg-tool-attachments .msg-img-wrap", (wraps) => {
+        const section = document.querySelector<HTMLElement>(".msg-tool-attachments")
+        if (!section) throw new Error("tool attachments section missing")
+        const sectionRect = section.getBoundingClientRect()
+        return {
+          sectionWidth: sectionRect.width,
+          rows: wraps.map((wrap) => {
+            const wrapElement = wrap as HTMLElement
+            const trigger = wrapElement.querySelector<HTMLElement>(".msg-image-trigger")
+            const image = wrapElement.querySelector<HTMLImageElement>(".md-img")
+            if (!trigger || !image) throw new Error("tool attachment image row incomplete")
+            const wrapRect = wrapElement.getBoundingClientRect()
+            const triggerRect = trigger.getBoundingClientRect()
+            const imageRect = image.getBoundingClientRect()
+            return {
+              wrapLeft: wrapRect.left - sectionRect.left,
+              wrapWidth: wrapRect.width,
+              top: wrapRect.top,
+              bottom: wrapRect.bottom,
+              triggerLeft: triggerRect.left - sectionRect.left,
+              triggerWidth: triggerRect.width,
+              imageLeft: imageRect.left - sectionRect.left,
+              imageWidth: imageRect.width,
+              imageHeight: imageRect.height,
+              naturalWidth: image.naturalWidth,
+              naturalHeight: image.naturalHeight,
+              complete: image.complete,
+            }
+          }),
+        }
+      })
+      assert.ok(genericAttachmentLayout.sectionWidth > 0, JSON.stringify(genericAttachmentLayout))
+      assert.equal(genericAttachmentLayout.rows.length, 3, JSON.stringify(genericAttachmentLayout))
+      for (const [index, row] of genericAttachmentLayout.rows.entries()) {
+        assert.ok(row.complete, `expected row ${index} image to load: ${JSON.stringify(genericAttachmentLayout)}`)
+        assert.ok(Math.abs(row.wrapLeft) <= 1, `expected row ${index} wrap to share left edge`)
+        assert.ok(Math.abs(row.triggerLeft) <= 1, `expected row ${index} trigger to share left edge`)
+        assert.ok(Math.abs(row.imageLeft) <= 1, `expected row ${index} image to share left edge`)
+        assert.ok(
+          row.wrapWidth <= genericAttachmentLayout.sectionWidth + 1,
+          `expected row ${index} wrap to stay within section: ${JSON.stringify(genericAttachmentLayout)}`,
+        )
+        assert.ok(
+          row.triggerWidth <= genericAttachmentLayout.sectionWidth + 1,
+          `expected row ${index} trigger to stay within section: ${JSON.stringify(genericAttachmentLayout)}`,
+        )
+        assert.ok(
+          row.imageWidth > 0 && row.imageWidth <= genericAttachmentLayout.sectionWidth + 1,
+          `expected row ${index} image to stay within section: ${JSON.stringify(genericAttachmentLayout)}`,
+        )
+        assert.ok(row.imageHeight > 0, `expected row ${index} image height`)
+        if (index > 0) {
+          const previous = genericAttachmentLayout.rows[index - 1]!
+          assert.ok(
+            row.top >= previous.bottom,
+            `expected row ${index} not to overlap previous row: ${JSON.stringify(genericAttachmentLayout)}`,
+          )
+        }
+      }
       const toolCard = await page.$('.card[data-kind="tool"]')
       assert.ok(toolCard)
       const toolHeaderScreenshotPath = resolve(".scratch", "card-header-sibling-controls.png")
