@@ -158,6 +158,12 @@ test(
               attachments: [
                 {
                   type: "file",
+                  url: "/attachment/project/tiny.png",
+                  mime: "image/png",
+                  filename: "browser-screenshot.png",
+                },
+                {
+                  type: "file",
                   url: "/attachment/project/compare-side-by-side.png",
                   mime: "image/png",
                   filename: "desktop-failed-main-side-by-side.png",
@@ -243,6 +249,7 @@ test(
               },
             ],
           },
+          agentView: { sessions: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
           lastSequence: 0,
         })
@@ -472,6 +479,8 @@ test(
       )
       assert.equal(expandedToolHeader, "true")
       await page.waitForSelector(".msg-tool-attachments .msg-image-trigger")
+      const genericAttachmentCount = await page.$$eval(".msg-tool-attachments .md-img", (images) => images.length)
+      assert.equal(genericAttachmentCount, 1)
       const genericAttachmentState = await page.$eval(".msg-tool-attachments .md-img", (image) => {
         const img = image as HTMLImageElement
         const trigger = img.closest<HTMLElement>(".msg-image-trigger")
