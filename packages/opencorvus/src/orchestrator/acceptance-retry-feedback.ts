@@ -15,7 +15,6 @@ export function composeAcceptanceRetryFeedback(input: {
   manifestFailureDetails: string[]
   ownDetails: AcceptanceRetryFeedbackDetail[]
   scope?: "goal" | "integrated_tree"
-  rawFeedbackPacket?: unknown
 }) {
   const scope = input.scope ?? "goal"
   const detailLines = input.ownDetails.map((detail) => {
@@ -31,17 +30,8 @@ export function composeAcceptanceRetryFeedback(input: {
     scope === "goal" ? "Issues attributed to this goal:" : "Issues the integrated-tree rework must address:"
   const noIssueLine =
     scope === "goal"
-      ? "- No rejection_details entry was attributed to this goal; use the manifest evidence and the raw packet to decide whether this goal is still implicated."
+      ? "- No rejection_details entry was attributed to this goal; use the manifest evidence to decide whether this goal is still implicated."
       : "- Acceptance review did not provide scoped rejection_details; treat this as a task-scope integrated-tree blocker."
-  const rawPacket =
-    input.rawFeedbackPacket === undefined
-      ? []
-      : [
-          "Canonical acceptance feedback packet (JSON, copied from persisted artifacts):",
-          "```json",
-          JSON.stringify(input.rawFeedbackPacket, null, 2),
-          "```",
-        ]
   return [
     `Acceptance review rejected the integrated deliverable (iteration ${input.iteration}, verdict=${input.verdict}).`,
     `Task-level summary: ${input.summary}`,
@@ -50,6 +40,5 @@ export function composeAcceptanceRetryFeedback(input: {
       : []),
     issueHeading,
     ...(detailLines.length > 0 ? detailLines : [noIssueLine]),
-    ...rawPacket,
   ].join("\n")
 }

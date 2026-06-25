@@ -4693,6 +4693,7 @@ describe("orchestrator tools", () => {
     const goalID = `gol_retry_default_${stamp}`
     const priorSessionID = `ses_prior_retry_default_${stamp}`
     let observedExistingSessionID: unknown
+    let observedRetryFeedback: unknown
 
     await Instance.provide({
       directory: tmp.path,
@@ -4713,17 +4714,25 @@ describe("orchestrator tools", () => {
           now,
           insertProject: false,
         })
-        seedTerminalFailedBuildRun({
+        const priorGoalRunID = seedTerminalFailedBuildRun({
           taskID,
           goalID,
           sessionID: priorSessionID,
           workspaceDir: tmp.path,
           now: now + 10,
         })
+        createDecisionLog(taskID).append({
+          phase: "retry",
+          goalID,
+          key: `build_retry_previous_${priorGoalRunID}`,
+          value: "Terminal error: exact retry failure from persisted facts",
+          reason: "AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT",
+        })
 
         const createNextSpy = spyOn(Session, "createNext")
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
+          observedRetryFeedback = input.context?.retryFeedback
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -4758,6 +4767,8 @@ describe("orchestrator tools", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "failed")
         expect(observedExistingSessionID).toBe(priorSessionID)
+        expect(observedRetryFeedback).toBe("Terminal error: exact retry failure from persisted facts")
+        expect(String(observedRetryFeedback)).not.toContain("AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT")
         expect(createNextSpy).not.toHaveBeenCalled()
       },
     })

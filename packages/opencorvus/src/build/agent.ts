@@ -2896,70 +2896,17 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
 }
 
 export function buildRetryFeedbackPrompt(
-  target: BuildTarget,
+  _target: BuildTarget,
   context?: BuildAgent.BuildContext,
-  taskID?: string,
+  _taskID?: string,
 ): string {
-  const lines: string[] = [
-    "# Build Retry Feedback",
-    "",
-    "Continue this same build session. Do not restart from the full original prompt; use the existing conversation and files in this worktree as context.",
-    "",
-  ]
-  if (target.kind === "goal") {
-    lines.push(`Goal: ${target.id} — ${target.title}`)
-  } else {
-    lines.push("Target: direct build request")
-  }
-  lines.push("")
-  const overlays = renderBuildPromptOverlays(
-    context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
-  )
-  if (overlays.sections.length > 0) {
-    lines.push("## Task-Specific Build Overlays")
-    lines.push("")
-    lines.push(`Rendered overlays: ${overlays.ids.join(", ")}`)
-    lines.push("")
-    lines.push(overlays.sections.join("\n\n"))
-    lines.push("")
-  }
-  if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
-    lines.push("## Current Orchestrator Feedback")
-    lines.push("")
-    lines.push(context.retryGuidance.trim())
-    lines.push("")
-  }
-  if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
-    lines.push("## Prior Attempt Failure Facts")
-    lines.push("")
-    lines.push(context.retryFeedback.trim())
-    lines.push("")
-  }
-  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
-  if (acceptanceOverlay.sections.length > 0) {
-    lines.push(acceptanceOverlay.sections.join("\n\n"))
-    lines.push("")
-  }
-  if (
-    overlays.sections.length === 0 &&
-    (!context?.retryGuidance || context.retryGuidance.trim().length === 0) &&
-    (!context?.retryFeedback || context.retryFeedback.trim().length === 0)
-  ) {
-    lines.push("## Required Fix")
-    lines.push("")
-    lines.push(
-      "The previous build attempt did not pass. Inspect the current worktree state, identify the concrete blocker, fix it in place, verify, and report the result.",
-    )
-    lines.push("")
-  }
-  lines.push("## Instructions")
-  lines.push("")
-  lines.push("- Edit the existing worktree in place.")
-  lines.push("- Preserve all prior upstream contracts already present in this conversation.")
-  lines.push("- Run the relevant verification commands before reporting success.")
-  lines.push(
-    "- Restate the detailed req/goal contract and warn follow-up agents where workload may still be underestimated.",
-  )
-  lines.push("- Finish by calling report_build_result with the current attempt result.")
-  return lines.join("\n")
+  const persistedFacts = [context?.retryFeedback, context?.integrityFeedback, context?.acceptanceFeedback]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0)
+  if (persistedFacts.length > 0) return persistedFacts.join("\n\n")
+
+  const directFeedback = context?.retryGuidance?.trim()
+  if (directFeedback) return directFeedback
+
+  return "Previous build attempt failed, but no terminal error text was recorded."
 }

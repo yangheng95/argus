@@ -137,13 +137,13 @@ describe("orchestrator build feedback context", () => {
 
         const taskScopeFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
         expect(taskScopeFeedback).toContain("Acceptance review rejected the integrated deliverable")
-        expect(taskScopeFeedback).toContain("Canonical acceptance feedback packet")
         expect(taskScopeFeedback).toContain("review:contract_audit")
         expect(taskScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
-        expect(taskScopeFeedback).toContain('all_rejection_detail_count": 2')
+        expect(taskScopeFeedback).not.toContain("Canonical acceptance feedback packet")
+        expect(taskScopeFeedback).not.toContain("all_rejection_detail_count")
 
         const goalScopeFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID, goalID })
-        expect(goalScopeFeedback).toContain(`"goal_id": "${goalID}"`)
+        expect(goalScopeFeedback).toContain(`goal_id: ${goalID}`)
         expect(goalScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
         expect(goalScopeFeedback).not.toContain("contract audit found a missing exported surface")
       },

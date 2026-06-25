@@ -385,6 +385,10 @@ describe("Goal.startNewAttempt — options", () => {
     expect(retryEntries).toHaveLength(1)
     expect(retryEntries[0]?.value).toContain("Merge left worktree in MERGING state")
     expect(retryEntries[0]?.value).toContain("merge_back hit conflicts on one file")
+    expect(retryEntries[0]?.value).toContain("Resolve markers in the same worktree before retrying.")
+    expect(retryEntries[0]?.value).not.toContain("Required for this retry")
+    expect(retryEntries[0]?.value).not.toContain("Previous build session")
+    expect(retryEntries[0]?.value).not.toContain("Retry count on previous attempt")
 
     const second = ensureBuildRetryFeedbackForGoal({
       taskID,

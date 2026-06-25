@@ -1805,38 +1805,12 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
     : rejectionDetails
 
   const {
-    acceptanceManifestFailureDetails,
     findLatestAcceptanceEvidenceManifest,
     formatAcceptanceManifestFailureDetails,
   } = await import("@/acceptance/manifest")
   const acceptanceID = verdictArtifact.acceptance_id ?? undefined
   const manifest = acceptanceID ? findLatestAcceptanceEvidenceManifest({ acceptanceID }) : undefined
   const manifestFailureDetails = manifest ? formatAcceptanceManifestFailureDetails(manifest) : []
-  const failedReviewIds = new Set(manifest?.finalGate.failedReviewIds ?? [])
-  const packet = {
-    verdict_artifact_id: verdictArtifact.id,
-    acceptance_id: acceptanceID,
-    scope: input.goalID ? "goal" : "integrated_tree",
-    goal_id: input.goalID,
-    verdict: {
-      verdict: verdictPayload.verdict,
-      summary: typeof verdictPayload.summary === "string" ? verdictPayload.summary : "",
-      rejection_details: scopedDetails,
-      all_rejection_detail_count: rejectionDetails.length,
-    },
-    manifest: manifest
-      ? {
-          id: manifest.id,
-          iteration: manifest.iteration,
-          finalGate: manifest.finalGate,
-          failureDetails: acceptanceManifestFailureDetails(manifest),
-          reviewEvidence: manifest.reviewEvidence.filter(
-            (review) => review.status === "failed" || failedReviewIds.has(review.id),
-          ),
-        }
-      : undefined,
-  }
-
   return composeAcceptanceRetryFeedback({
     iteration: typeof manifest?.iteration === "number" ? manifest.iteration : 0,
     verdict: String(verdictPayload.verdict),
@@ -1852,7 +1826,6 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
       visual_spec_id: typeof detail.visual_spec_id === "string" ? detail.visual_spec_id : undefined,
     })),
     scope: input.goalID ? "goal" : "integrated_tree",
-    rawFeedbackPacket: packet,
   })
 }
 
@@ -7248,11 +7221,10 @@ export function createOrchestratorTools(input: {
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
         "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
-        "shape after architect has registered goals; on retry/rework, populate `request` with " +
-        "concrete guidance for the next attempt - the goal contract (objective / acceptance_specs / " +
-        "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
-        "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
-        "never costs you any architect-committed contract. `build({ request, directBuildIntent })` without goalID is a task-level " +
+        "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
+        "failure facts already exist; the build retry message is composed from those facts only. " +
+        "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
+        "is not already in persisted build, acceptance, or integrity evidence. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
         "acceptance rejection, and rare operator/orchestrator decisions to bypass goal decomposition for a scoped " +
         "workflow implementation task. It also owns same-task stuck-state repairs that require file edits: " +
@@ -7280,7 +7252,7 @@ export function createOrchestratorTools(input: {
             .string()
             .optional()
             .describe(
-              "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
+              "For per-goal builds: omit on normal retry when persisted build, acceptance, or integrity failure facts already identify the error. Populate only with one exact new operator/error fact not already persisted. It does not replace the goal's objective / acceptance_specs / owned_paths. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
             ),
           reason: z
             .string()
@@ -7640,19 +7612,10 @@ export function createOrchestratorTools(input: {
             const retryEntries = decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id)
             const retryFeedback =
               retryEntries.length > 0
-                ? [
-                    "## Prior Attempt Failed — Read This Before Implementing",
-                    "",
-                    "The previous attempt was rejected. The worktree still has those files; edit in place rather than start from scratch unless the failure forces a structural rewrite.",
-                    "",
-                    "### Coordinator Root-Cause + Acceptance Rejection",
-                    ...retryEntries.map((e) => `- ${e.value}${e.reason ? ` — _why: ${e.reason}_` : ""}`),
-                    "",
-                    "### Required For This Retry",
-                    "- Address each rejection above before changing anything else.",
-                    "- Do NOT repeat an approach that was already tried and rejected.",
-                    "- If the fix touches a shared file, explain the collaboration impact in files_changed[] instead of hiding the cross-goal dependency.",
-                  ].join("\n")
+                ? retryEntries
+                    .map((entry) => entry.value.trim())
+                    .filter((value) => value.length > 0)
+                    .join("\n\n") || undefined
                 : undefined
             const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({
               taskID,

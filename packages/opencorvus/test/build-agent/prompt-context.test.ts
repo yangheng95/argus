@@ -12,13 +12,14 @@ describe("build agent prompt context", () => {
       {
         acceptanceFeedback:
           "Acceptance review rejected the integrated deliverable.\n" +
-          "Canonical acceptance feedback packet (JSON, copied from persisted artifacts):\n" +
-          '```json\n{"manifest":{"finalGate":{"failedReviewIds":["review:contract_audit"]}}}\n```',
+          "Manifest evidence failures:\n" +
+          "- [check] review:contract_audit status=failed: missing calculator contract",
       },
     )
 
     expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("review:contract_audit")
+    expect(prompt).not.toContain("Canonical acceptance feedback packet")
     expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
@@ -36,14 +37,15 @@ describe("build agent prompt context", () => {
       },
       {
         retryFeedback: "Old coordinator summary.",
-        acceptanceFeedback: "Raw verdict artifact JSON with contract_audit_failure.",
+        acceptanceFeedback: "Scoped acceptance rejection: contract_audit_failure.",
       },
     )
 
     expect(prompt).toContain("Old coordinator summary.")
     expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("contract_audit_failure")
-    expect(prompt.indexOf("Raw verdict artifact JSON")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
+    expect(prompt).not.toContain("Raw verdict artifact JSON")
+    expect(prompt.indexOf("Scoped acceptance rejection")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
   })
 
   /**
@@ -244,7 +246,7 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
-  test("same-session retry prompt renders persistent integrity findings before retry facts", () => {
+  test("same-session retry prompt renders only persisted failure facts", () => {
     const prompt = buildRetryFeedbackPrompt(
       {
         kind: "request",
@@ -259,16 +261,19 @@ describe("build agent prompt context", () => {
       },
     )
 
+    expect(prompt).toContain("Prior attempt failed.")
     expect(prompt).toContain("## Persistent Integrity Findings")
     expect(prompt).toContain("BF-retry")
-    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
-      prompt.indexOf("## Prior Attempt Failure Facts"),
-    )
-    expect(prompt.indexOf("## Prior Attempt Failure Facts")).toBeLessThan(
-      prompt.indexOf("## Acceptance Repair Overlay"),
-    )
-    expect(prompt).toContain("Restate the detailed req/goal contract")
-    expect(prompt).toContain("workload may still be underestimated")
+    expect(prompt).toContain("Acceptance rejected.")
+    expect(prompt.indexOf("Prior attempt failed.")).toBeLessThan(prompt.indexOf("## Persistent Integrity Findings"))
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("Acceptance rejected."))
+    expect(prompt).not.toContain("## Task-Specific Build Overlays")
+    expect(prompt).not.toContain("## Prior Attempt Failure Facts")
+    expect(prompt).not.toContain("## Acceptance Repair Overlay")
+    expect(prompt).not.toContain("## Required Fix")
+    expect(prompt).not.toContain("## Instructions")
+    expect(prompt).not.toContain("Restate the detailed req/goal contract")
+    expect(prompt).not.toContain("workload may still be underestimated")
   })
 
   test("request-path rejects ad-hoc exploration without a concrete deliverable", () => {
