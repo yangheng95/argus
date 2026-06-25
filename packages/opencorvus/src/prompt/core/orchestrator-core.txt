@@ -301,10 +301,7 @@ durable corrections:
 
 - Failed goal or wrong local contract -> use `query_failed_goals`, then
   `build({ goalID, request })` or `modify_goal`.
-- Per-goal retry -> use `build({ goalID, request })`. Build resumes the prior
-  build session when the latest terminal attempt has a session id, installs a
-  fresh runtime contract, and appends visible incremental feedback; if lineage
-  is unrecoverable, surface that structural error instead of replacing it.
+- Per-goal retry -> use `build({ goalID })` when persisted build/acceptance/integrity evidence records the failure. Build resumes the prior session, installs a fresh runtime contract, and appends only recorded failure facts. Use `request` only for one exact new operator/error fact not already persisted; if lineage is unrecoverable, surface that structural error instead of replacing it.
 - Missing dependency or wrong goal contract -> try the smallest same-graph
   repair. Use `modify_goal` instead of reopening the entire graph when a point
   correction is enough.

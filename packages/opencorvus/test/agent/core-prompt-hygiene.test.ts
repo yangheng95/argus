@@ -1294,9 +1294,11 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt documents same-session per-goal retry instead of freshContext", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("Per-goal retry -> use `build({ goalID, request })`")
-    expect(normalized).toContain("Build resumes the prior build session")
+    expect(normalized).toContain("Per-goal retry -> use `build({ goalID })`")
+    expect(normalized).toContain("Build resumes the prior session")
     expect(normalized).toContain("fresh runtime contract")
+    expect(normalized).toContain("recorded failure facts")
+    expect(normalized).toContain("Use `request` only for one exact new operator/error fact")
     expect(normalized).toContain("structural error")
     expect(normalized).not.toContain("freshContext")
   })

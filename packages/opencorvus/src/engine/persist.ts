@@ -74,11 +74,6 @@ function terminalGoalRunStatus(status: GoalRunRow["status"]): boolean {
   return status === "failed" || status === "aborted" || status === "completed"
 }
 
-function compactRetryFeedbackText(value: string, max = 2400): string {
-  if (value.length <= max) return value
-  return `${value.slice(0, max)}... [truncated; full build report remains in decision_log phase=build]`
-}
-
 function latestBuildReportForGoal(taskID: string, goalID: string): string | undefined {
   const entry = createDecisionLog(taskID)
     .readByPhase("build")
@@ -92,13 +87,11 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
     commit_ref?: unknown
   }
   const lines = [
-    typeof parsed.status === "string" ? `Report status: ${parsed.status}` : undefined,
-    typeof parsed.summary === "string" ? `Report summary: ${compactRetryFeedbackText(parsed.summary)}` : undefined,
-    typeof parsed.error === "string" && parsed.error.length > 0
-      ? `Report error: ${compactRetryFeedbackText(parsed.error)}`
+    typeof parsed.summary === "string" && parsed.summary.trim().length > 0
+      ? `Report summary: ${parsed.summary.trim()}`
       : undefined,
-    typeof parsed.commit_ref === "string" && parsed.commit_ref.length > 0
-      ? `Report commit_ref: ${parsed.commit_ref}`
+    typeof parsed.error === "string" && parsed.error.length > 0
+      ? `Report error: ${parsed.error.trim()}`
       : undefined,
   ].filter((line): line is string => Boolean(line))
   if (lines.length === 0) {
@@ -108,30 +101,15 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
 }
 
 function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; priorRun: GoalRunRow }): string {
-  const lines = [
-    `Previous build attempt ${input.priorRun.id} ended with status=${input.priorRun.status} before this retry.`,
-    `Retry count on previous attempt: ${input.priorRun.retry_count}.`,
-  ]
-  if (input.priorRun.session_id) lines.push(`Previous build session: ${input.priorRun.session_id}.`)
-  if (input.priorRun.workspace_dir) {
-    lines.push(`Worktree to repair in place: ${input.priorRun.workspace_dir}.`)
-  }
+  const lines: string[] = []
   if (input.priorRun.error && input.priorRun.error.trim().length > 0) {
-    lines.push(`Terminal error: ${compactRetryFeedbackText(input.priorRun.error.trim())}`)
-  } else {
-    lines.push("Terminal error: none recorded on the goal_run artifact.")
+    lines.push(`Terminal error: ${input.priorRun.error.trim()}`)
   }
   const report = latestBuildReportForGoal(input.taskID, input.goalID)
   if (report) {
-    lines.push("", "Latest persisted build report:", report)
+    lines.push(report)
   }
-  lines.push(
-    "",
-    "Required for this retry:",
-    "- Address the terminal error above before implementing unrelated changes.",
-    "- Reuse and repair the preserved goal worktree when one is listed.",
-    "- Do not repeat the prior merge_back / acceptance path without resolving the recorded failure.",
-  )
+  if (lines.length === 0) lines.push(`Previous build attempt ${input.priorRun.id} recorded no terminal error; status=${input.priorRun.status}.`)
   return lines.join("\n")
 }
 
@@ -169,7 +147,7 @@ function appendBuildRetryFeedbackForPriorRun(input: {
     value: retryFeedbackValueFromGoalRun(input),
     reason:
       `${input.source}: superseding previous goal_run ${input.priorRun.id} ` +
-      `status=${input.priorRun.status}${input.priorRun.error ? ` error=${compactRetryFeedbackText(input.priorRun.error, 500)}` : ""}`,
+      `status=${input.priorRun.status}${input.priorRun.error ? ` error=${input.priorRun.error.trim()}` : ""}`,
   })
 }
 

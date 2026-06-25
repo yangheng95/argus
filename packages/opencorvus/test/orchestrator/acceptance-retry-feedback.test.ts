@@ -20,14 +20,6 @@ describe("acceptance retry feedback", () => {
           suggestion: "Fix the lint regression before changing calculator UI.",
         },
       ],
-      rawFeedbackPacket: {
-        verdict_artifact_id: "artifact_verdict",
-        manifest: {
-          finalGate: {
-            failedCheckIds: ["lint#1"],
-          },
-        },
-      },
     })
 
     expect(text).toContain("Manifest evidence failures:")
@@ -35,9 +27,9 @@ describe("acceptance retry feedback", () => {
     expect(text).toContain("[check] lint#1")
     expect(text).toContain("[quality] lint regression introduced")
     expect(text).toContain("check_id: lint#1")
-    expect(text).toContain("Canonical acceptance feedback packet")
-    expect(text).toContain('"verdict_artifact_id": "artifact_verdict"')
-    expect(text).toContain('"failedCheckIds"')
+    expect(text).not.toContain("Canonical acceptance feedback packet")
+    expect(text).not.toContain("verdict_artifact_id")
+    expect(text).not.toContain("failedCheckIds")
   })
 
   test("keeps task-scope rejection actionable for integrated-tree rework", () => {
@@ -50,19 +42,12 @@ describe("acceptance retry feedback", () => {
       ],
       ownDetails: [],
       scope: "integrated_tree",
-      rawFeedbackPacket: {
-        verdict: {
-          rejection_details: [],
-        },
-        manifest: {
-          reviewEvidence: [{ id: "specialist:security_data", status: "failed" }],
-        },
-      },
     })
 
     expect(text).toContain("Issues the integrated-tree rework must address:")
     expect(text).toContain("task-scope integrated-tree blocker")
     expect(text).toContain("hardcoded secret-like value")
-    expect(text).toContain('"specialist:security_data"')
+    expect(text).toContain("specialist:security_data")
+    expect(text).not.toContain("reviewEvidence")
   })
 })
