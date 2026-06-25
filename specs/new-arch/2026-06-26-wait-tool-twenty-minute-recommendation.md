@@ -3,8 +3,10 @@
 ## Objective
 
 Change the `wait` tool's recommended one-shot pause to 20 minutes
-(`1_200_000ms`) so unattended runs do not burn turns on repeated one-minute
-waits.
+(`1_200_000ms`) and make the tool description explicitly say that, when
+executing a goal and `wait` is the responsible action, the default wait is that
+single 20-minute pause. This prevents unattended runs from burning turns on
+repeated one-minute waits.
 
 ## Recall
 
@@ -29,7 +31,7 @@ rg -n "duration_ms\s*[:=][^\n]*(60_000|60000|1_200|30_000|1200)|60_000|60000|one
 
 | Surface | Decision |
 | --- | --- |
-| `packages/opencorvus/src/tool/wait.ts` | Add `WAIT_RECOMMENDED_MS = 20 * 60 * 1000`; set `WAIT_MAX_MS` to the same value; update schema and description to recommend one 20-minute pause for real external waits and forbid repeated 60-second waits. |
+| `packages/opencorvus/src/tool/wait.ts` | Add `WAIT_RECOMMENDED_MS = 20 * 60 * 1000`; set `WAIT_MAX_MS` to the same value; update schema and description to recommend one 20-minute pause for real external waits, explicitly default goal-execution waits to that duration, and forbid repeated 60-second waits. |
 | `packages/opencorvus/src/orchestrator/tools.ts` | Keep deriving orchestrator wait bounds from `wait.ts`; expose the recommended value only if tests need an orchestrator-level contract. Do not add a second independent duration. |
 | `packages/opencorvus/test/orchestrator/wait-tool.test.ts` | Update the bound test to 20 minutes and assert the description carries the 20-minute recommendation and anti-60-second chaining instruction. |
 | Other `duration_ms` hits | Unrelated capture metrics, test fixture waits, and browser timeout strings. Do not change. |
@@ -38,7 +40,7 @@ rg -n "duration_ms\s*[:=][^\n]*(60_000|60000|1_200|30_000|1200)|60_000|60000|one
 
 - `duration_ms=1_200_000` is inside the wait tool schema.
 - `duration_ms>1_200_000` is rejected by the wait tool schema.
-- The wait tool description tells the model the recommended deliberate pause is
-  20 minutes and not a repeated 60-second cadence.
+- The wait tool description tells the model that, during goal execution, the
+  default deliberate pause is 20 minutes and not a repeated 60-second cadence.
 - Orchestrator wait metadata remains `observation`.
 - Focused wait tool tests pass.
