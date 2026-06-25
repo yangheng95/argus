@@ -130,12 +130,13 @@ describe("buildHardErrorFromFinalMessage", () => {
     expect(result!.message).toContain("UnknownError")
   })
 
-  test("StructuredOutputError → wrapped (covers the case where loop.ts stamps it)", () => {
+  test("StructuredOutputError → wrapped as non-retryable protocol finalizer miss", () => {
     // SessionLoop stamps Message.StructuredOutputError when the model finishes
     // without calling StructuredOutput. That's a hard miss that callers must
     // see, not a silent default — so the helper must propagate it (the
     // classifier separately decides retry vs fail-fast based on session-level
-    // state). This locks in that the StructuredOutputError name flows through.
+    // state). This locks in that the StructuredOutputError name flows through
+    // and that outer retry helpers do not restart a whole child session.
     const err = new Message.StructuredOutputError({
       message: "Model did not produce structured output (finish=stop)",
       retries: 0,
@@ -146,6 +147,7 @@ describe("buildHardErrorFromFinalMessage", () => {
       finalMessage: { info: { role: "assistant", error: err } },
     })
     expect(result).not.toBeNull()
+    expect(result!.nonRetryable).toBe(true)
     expect(result!.message).toContain("StructuredOutputError")
   })
 

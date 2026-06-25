@@ -50,6 +50,10 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("build description distinguishes async goal start from direct terminal report", () => {
     expect(tools.build.description).toContain("returns after the child build session and goal_run have started")
     expect(tools.build.description).toContain("terminal refill wake")
+    expect(tools.build.description).toContain("durable prior-session evidence")
+    expect(tools.build.description).toContain("fresh child session")
+    expect(tools.build.description).toContain("same recorded goal worktree")
+    expect(tools.build.description).toContain("`freshContext` field")
     expect(tools.build.description).toContain(
       "For task-level direct builds, the tool returns the terminal build report",
     )
@@ -108,10 +112,10 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ).toBe(false)
   })
 
-  test("analyze_intent schema rejects unknown continuation-like fields", () => {
+  test("analyze_intent schema accepts continuation artifact and rejects unknown fields", () => {
     expect(tools.analyze_intent.description).toContain("clarified_user_request")
     expect(tools.analyze_intent.description).toContain("Do not ask the same blocker again")
-    expect(Object.keys(tools.analyze_intent.inputSchema!.shape)).toEqual(["reason"])
+    expect(Object.keys(tools.analyze_intent.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
     expect(
       tools.analyze_intent.inputSchema!.safeParse({
         reason: "Need a fresh intent read after an operator message.",
@@ -119,14 +123,21 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ).toBe(true)
     expect(
       tools.analyze_intent.inputSchema!.safeParse({
-        reason: "Do not strip continuation-like input into a fresh intent session.",
+        reason: "Continue the exact prior intent-analysis session.",
         continuation_artifact_id: "art_intent_continue",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.analyze_intent.inputSchema!.safeParse({
+        reason: "Do not strip unknown input into an intent session.",
+        continuation_id: "art_wrong_field",
       }).success,
     ).toBe(false)
   })
 
   test("continuation-capable stage schemas reject unknown fields instead of stripping them", () => {
     const validInputsByTool: Record<string, Record<string, unknown>> = {
+      analyze_intent: { reason: "classify intent" },
       requirements: { reason: "analyze requirements" },
       architect: { reason: "decompose goals" },
       workload_analysis: { reason: "size goals" },

@@ -18,7 +18,7 @@ import { PromptProfile, PromptProfileIDSchema } from "@/agent/prompt-profile"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
-import { Database, eq, and, inArray, sql } from "@/storage/db"
+import { Database, NotFoundError, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { EffectiveConfig } from "@/config/effective"
@@ -193,6 +193,7 @@ import {
   failNonCurrentOwnerStageContinuationClaim,
   findStageContinuationRequest,
   type AgentSessionContinuation,
+  type StageContinuationFailureName,
   type StageContinuationStage,
 } from "@/engine/stage-continuation"
 
@@ -588,13 +589,113 @@ function continuationFromArtifactOrResult(
   return { continuation: continuationFromArtifact(input) }
 }
 
-function terminalFinalizerMiss(input: { err: unknown; finalizerName: string }): { failureMessage: string } | undefined {
+function protocolFinalizerMiss(input: {
+  err: unknown
+  finalizerName: string
+}): { failureName: StageContinuationFailureName; failureMessage: string } | undefined {
   if (!(input.err instanceof AgentRunError)) return undefined
   const cause = input.err.cause
-  if (!Message.TerminalToolMissingError.isInstance(cause as Error | undefined)) return undefined
-  const data = (cause as { data?: { toolName?: string; message?: string } }).data
-  if (data?.toolName !== input.finalizerName) return undefined
-  return { failureMessage: data.message ?? input.err.message }
+  if (Message.TerminalToolMissingError.isInstance(cause as Error | undefined)) {
+    const data = (cause as { data?: { toolName?: string; message?: string } }).data
+    if (data?.toolName !== input.finalizerName) return undefined
+    return { failureName: "TerminalToolMissingError", failureMessage: data.message ?? input.err.message }
+  }
+  if (Message.StructuredOutputError.isInstance(cause as Error | undefined)) {
+    if (input.finalizerName !== "StructuredOutput") return undefined
+    const data = (cause as { data?: { message?: string } }).data
+    return { failureName: "StructuredOutputError", failureMessage: data?.message ?? input.err.message }
+  }
+  return undefined
+}
+
+async function latestAssistantMessageForSession(sessionID: string): Promise<Message.Assistant | undefined> {
+  for await (const msg of Message.stream(sessionID)) {
+    if (msg.info.role === "assistant") return msg.info
+  }
+  return undefined
+}
+
+function contextUnavailableReasonFromAssistantError(message: Message.Assistant | undefined): string | undefined {
+  const error = message?.error
+  if (!error) return undefined
+  if (Message.ContextOverflowError.Schema.safeParse(error).success) {
+    return `prior_latest_assistant_context_overflow:${message.id}`
+  }
+  if (Message.PromptBudgetOverflowError.Schema.safeParse(error).success) {
+    return `prior_latest_assistant_prompt_budget_overflow:${message.id}`
+  }
+  if (message.agent === "compaction" && Message.StructuredOutputPayloadError.Schema.safeParse(error).success) {
+    return `prior_compaction_handoff_failed:${message.id}`
+  }
+  return undefined
+}
+
+async function selectGoalBuildRetrySession(input: {
+  goalID: string
+  priorGoalRun?: NonNullable<ReturnType<typeof findLatestTipGoalRun>>
+  managedWorktree?: { directory: string; branch: string; baseRef?: string | null }
+  executor: TaskRow["executor"] | undefined
+}): Promise<{ existingSessionID?: string; priorSessionID?: string; contextUnavailableReason?: string }> {
+  const prior = input.priorGoalRun
+  if (!prior || isLiveGoalRunStatus(prior.status)) return {}
+  const priorSessionID = prior.session_id ?? undefined
+  if (!priorSessionID) {
+    return { contextUnavailableReason: `prior_terminal_goal_run_missing_session:${prior.id}` }
+  }
+
+  let session: Awaited<ReturnType<typeof Session.get>>
+  try {
+    session = await Session.get(priorSessionID)
+  } catch (error) {
+    if (!NotFoundError.isInstance(error as Error)) throw error
+    return {
+      priorSessionID,
+      contextUnavailableReason: `prior_session_row_missing:${priorSessionID}`,
+    }
+  }
+
+  const expectedDirectory = input.managedWorktree?.directory
+  if (session.kind !== "build") {
+    return {
+      priorSessionID,
+      contextUnavailableReason: `prior_session_kind_mismatch:${session.kind}`,
+    }
+  }
+  if ((session.goalID ?? undefined) !== input.goalID) {
+    return {
+      priorSessionID,
+      contextUnavailableReason: `prior_session_goal_mismatch:${session.goalID ?? "unset"}`,
+    }
+  }
+  if (expectedDirectory && session.directory !== expectedDirectory) {
+    return {
+      priorSessionID,
+      contextUnavailableReason: `prior_session_directory_mismatch`,
+    }
+  }
+
+  const latestAssistant = await latestAssistantMessageForSession(priorSessionID)
+  const contextUnavailableReason = contextUnavailableReasonFromAssistantError(latestAssistant)
+  if (contextUnavailableReason) return { priorSessionID, contextUnavailableReason }
+
+  const executor = input.executor ?? "opencorvus"
+  if (executor !== "opencorvus") {
+    const { readExecutorSessionRef } = await import("@/executor/session-ref")
+    const ref = await readExecutorSessionRef(priorSessionID)
+    if (!ref)
+      return { priorSessionID, contextUnavailableReason: `prior_executor_ref_missing:${priorSessionID}:${executor}` }
+    if (ref.provider && ref.provider !== executor) {
+      return {
+        priorSessionID,
+        contextUnavailableReason: `prior_executor_ref_provider_mismatch:${ref.provider}:${executor}`,
+      }
+    }
+    if (!ref.nativeSessionID) {
+      return { priorSessionID, contextUnavailableReason: `prior_executor_ref_missing_native_session:${executor}` }
+    }
+  }
+
+  return { existingSessionID: priorSessionID, priorSessionID }
 }
 
 function continuationToolName(stage: StageContinuationStage): string {
@@ -628,7 +729,7 @@ function continuationReason(input: {
   return `Continue ${input.stage} after missing ${input.finalizerName}.`
 }
 
-function continuationResultForTerminalFinalizerMiss(input: {
+function continuationResultForProtocolFinalizerMiss(input: {
   err: unknown
   taskID: string
   stage: StageContinuationStage
@@ -638,7 +739,7 @@ function continuationResultForTerminalFinalizerMiss(input: {
   normalizedStageInput: unknown
   pointerReason?: string | null
 }): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
-  const miss = terminalFinalizerMiss({ err: input.err, finalizerName: input.finalizerName })
+  const miss = protocolFinalizerMiss({ err: input.err, finalizerName: input.finalizerName })
   if (!miss) return undefined
   if (!input.sessionID) return undefined
   const toolName = continuationToolName(input.stage)
@@ -655,16 +756,16 @@ function continuationResultForTerminalFinalizerMiss(input: {
     parentSessionID: input.parentSessionID,
     normalizedStageInput: input.normalizedStageInput,
     inputDigest: stageInputDigest(input.normalizedStageInput),
-    failureName: "TerminalToolMissingError",
+    failureName: miss.failureName,
     failureMessage: miss.failureMessage,
     finalizerName: input.finalizerName,
     reason,
   })
   const pointerPayload = JSON.stringify({ reason, continuation_artifact_id: request.artifactID })
   return SubAgentProtocol.yieldResult({
-    headline: `${input.stage}: terminal finalizer missing; same-session continuation is ready.`,
+    headline: `${input.stage}: protocol finalizer missing; same-session continuation is ready.`,
     summary:
-      `The ${input.stage} worker session ${input.sessionID} ended without calling ${input.finalizerName}. ` +
+      `The ${input.stage} worker session ${input.sessionID} ended with ${miss.failureName} before ${input.finalizerName}. ` +
       `No fresh worker session was started. Re-dispatch ${toolName} with reason and continuation_artifact_id=${request.artifactID} to append a visible recovery message to the same child session.`,
     fields: [
       ["stage", input.stage],
@@ -672,7 +773,7 @@ function continuationResultForTerminalFinalizerMiss(input: {
       ["continuation_artifact_id", request.artifactID],
       ["continuation_call", `${toolName}(${pointerPayload})`],
       ["finalizer", input.finalizerName],
-      ["failure", "TerminalToolMissingError"],
+      ["failure", miss.failureName],
     ],
     pointer: `${toolName}(${pointerPayload})`,
   })
@@ -2229,21 +2330,6 @@ export function createOrchestratorTools(input: {
     return cleaned
   }
 
-  async function cleanupCompletedGoalWorkspace(goalID: string, goalRunID: string): Promise<string> {
-    const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-    try {
-      const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
-      if (cleaned) {
-        updateGoalRun(goalRunID, { workspace_dir: null })
-      }
-      return cleaned ? "goal worktree cleaned after successful merge" : "goal worktree already absent"
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      log.warn("goal workspace cleanup after success failed", { taskID, goalID, error: message })
-      return `goal worktree cleanup failed: ${message}`
-    }
-  }
-
   function goalDependencyDispatchState(goalID: string): string {
     const status = goalStatusByID(goalID)
     const rows = listGoalRunsByGoal(goalID)
@@ -3029,7 +3115,7 @@ export function createOrchestratorTools(input: {
       closeIntegrityOwnership("completed")
     } catch (err) {
       closeIntegrityOwnership("failed", err instanceof Error ? err.message : String(err))
-      const continuationResult = continuationResultForTerminalFinalizerMiss({
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
         err,
         taskID: task.id,
         stage: "integrity",
@@ -3642,7 +3728,7 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "requirements",
@@ -4356,7 +4442,7 @@ export function createOrchestratorTools(input: {
           await closeFrontendDesignStep(true)
           const msg = err instanceof Error ? err.message : String(err)
           log.error("frontend_design: failed", { taskID, error: msg })
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "frontend-design",
@@ -4752,7 +4838,7 @@ export function createOrchestratorTools(input: {
           }
           const { createDecisionLog } = await import("@/decision-log")
           const reason = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "architect",
@@ -4973,7 +5059,7 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "goal-workload-analyst",
@@ -5156,7 +5242,7 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           await close(true)
           const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "visual-qa",
@@ -5502,7 +5588,7 @@ export function createOrchestratorTools(input: {
               outcome,
             })
             if (outcome === "tool_error") {
-              const continuationResult = continuationResultForTerminalFinalizerMiss({
+              const continuationResult = continuationResultForProtocolFinalizerMiss({
                 err,
                 taskID: task.id,
                 stage: "fact-check",
@@ -5563,13 +5649,39 @@ export function createOrchestratorTools(input: {
             .string()
             .optional()
             .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+          continuation_artifact_id: StageContinuationArtifactIDField,
         })
         .strict(),
-      execute: async () => {
+      execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("analyze_intent")
         let out
+        let runnerSessionID: string | undefined
+        const normalizedStageInput = {
+          task: taskContinuationScope(task),
+          evidence_snapshot: continuationEvidenceSnapshot({
+            attachments: taskArrayField(task, "attachments"),
+            design_specs: taskArrayField(task, "design_specs"),
+            system_artifacts: taskArrayField(task, "system_artifacts"),
+          }),
+        }
         try {
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
+              taskID,
+              stage: "intent-analysis",
+              artifactID: continuation_artifact_id,
+              finalizerName: "StructuredOutput",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("analyze_intent")
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
+          runnerSessionID = continuation?.sessionID
           const { IntentAnalysisAgent } = await import("@/intent-analysis/agent")
           out = await IntentAnalysisAgent.analyze({
             request: task.request,
@@ -5578,10 +5690,25 @@ export function createOrchestratorTools(input: {
             attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onStatus: () => {},
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
         } catch (err) {
           await trackStepComplete("analyze_intent", undefined, true)
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
+            err,
+            taskID,
+            stage: "intent-analysis",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "StructuredOutput",
+            normalizedStageInput,
+            pointerReason: reason ?? null,
+          })
+          if (continuationResult) return continuationResult
           // P4 (rule 4 systemic — bundles intent_analysis abort with
           // frontend_design abort, both audit L7 + L3 same shape): write
           // decision_log so downstream agents see "intent analysis was
@@ -5589,11 +5716,11 @@ export function createOrchestratorTools(input: {
           // intent classification. The success path already writes (lines
           // 1722-1763 below); this commit closes the abort gap.
           const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
+          const errorReason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
             phase: "intent_analysis",
             key: "abort_intent_analysis_failed",
-            value: `Intent analysis aborted: ${reason.slice(0, 400)}`,
+            value: `Intent analysis aborted: ${errorReason.slice(0, 400)}`,
             reason: "intent_analysis_threw",
           })
           throw err
@@ -5810,7 +5937,7 @@ export function createOrchestratorTools(input: {
             })
           }
           const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "frontend-research",
@@ -5911,7 +6038,7 @@ export function createOrchestratorTools(input: {
           })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForTerminalFinalizerMiss({
+          const continuationResult = continuationResultForProtocolFinalizerMiss({
             err,
             taskID,
             stage: "deep-research",
@@ -7223,6 +7350,9 @@ export function createOrchestratorTools(input: {
         "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
         "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
         "failure facts already exist; the build retry message is composed from those facts only. " +
+        "Retry context recovery is selected from durable prior-session evidence: resumable sessions " +
+        "are resumed, while typed non-resumable context failures open a fresh child session on the same " +
+        "recorded goal worktree. Do not express this through `reason`, `request`, or a `freshContext` field. " +
         "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
         "is not already in persisted build, acceptance, or integrity evidence. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
@@ -7427,6 +7557,7 @@ export function createOrchestratorTools(input: {
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
+          let existingBuildSessionID: string | undefined
           if (attachedGoalID) {
             const { findGoal, findRequirements, listGoals, findGoalLatestWorkspace } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
@@ -7453,6 +7584,7 @@ export function createOrchestratorTools(input: {
                   "Re-run architect so dependency reasons and graph contracts are available before build.",
               )
             }
+            const priorGoalRunForRetry = findLatestTipGoalRun(attachedGoalID)
 
             const siblingGoals = listGoals(taskID)
             const contractAuditUnknownContractFindings = validateArchitectContractGraph({
@@ -7528,6 +7660,11 @@ export function createOrchestratorTools(input: {
                 }
               }
             } else {
+              if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
+                throw new Error(
+                  `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} has no recorded worktree; fresh context retry cannot reuse worktree.`,
+                )
+              }
               const info = await Worktree.create({
                 name: `goal-${goal.id.slice(-8)}`,
                 taskID,
@@ -7544,6 +7681,31 @@ export function createOrchestratorTools(input: {
               // artifact via beginBuildAttempt — the prior pre-attempt
               // updateGoalWorkspace call hit the no-tip synthetic-runID
               // branch and was a no-op once the artifact landed.
+            }
+            if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
+              const selectedBuildSession = await selectGoalBuildRetrySession({
+                goalID: attachedGoalID,
+                priorGoalRun: priorGoalRunForRetry,
+                managedWorktree,
+                executor: task.executor,
+              })
+              existingBuildSessionID = selectedBuildSession.existingSessionID
+              if (!existingBuildSessionID) {
+                if (!managedWorktree?.directory) {
+                  throw new Error(
+                    `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} cannot resume session and has no reusable worktree: ${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}`,
+                  )
+                }
+                createDecisionLog(taskID).append({
+                  phase: "orchestrator",
+                  goalID: attachedGoalID,
+                  key: `build_retry_fresh_session_${priorGoalRunForRetry.id}`,
+                  value:
+                    `Build retry selected a fresh build session because the previous build session context is unavailable ` +
+                    `(${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}); reusing worktree ${managedWorktree.directory}.`,
+                  reason: "build_retry_session_context_unavailable",
+                })
+              }
             }
             const taskFidelity = readPersistedArchitectFidelity(task)
             const dependsOn = stringArrayColumn(goal.depends_on, `engine_goal(${goal.id}).depends_on`)
@@ -7575,7 +7737,6 @@ export function createOrchestratorTools(input: {
             const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
             const requirements = scopedRequirementsForBuildGoal({ reqRows, goal })
 
-            const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
             const dependencies =
               dependsOn.length > 0
@@ -7711,24 +7872,6 @@ export function createOrchestratorTools(input: {
                     retryAttachments,
                   }
                 : undefined
-          }
-
-          const priorGoalRunForRetry = attachedGoalID ? findLatestTipGoalRun(attachedGoalID) : undefined
-          const existingBuildSessionID =
-            priorGoalRunForRetry &&
-            !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
-            priorGoalRunForRetry.session_id
-              ? priorGoalRunForRetry.session_id
-              : undefined
-          if (
-            attachedGoalID &&
-            priorGoalRunForRetry &&
-            !isLiveGoalRunStatus(priorGoalRunForRetry.status) &&
-            !priorGoalRunForRetry.session_id
-          ) {
-            throw new Error(
-              `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} has no session_id; same-session retry cannot continue`,
-            )
           }
 
           // Open the goal_run after BuildAgent has created or reopened the
@@ -7935,7 +8078,6 @@ export function createOrchestratorTools(input: {
             let buildOutcome:
               | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
               | { kind: "throw"; error: unknown }
-            let goalWorkspaceCleanup: string | undefined
             try {
               const ok = await BuildAgent.run({
                 target,
@@ -8186,9 +8328,6 @@ export function createOrchestratorTools(input: {
                     fileChanges: result.files_changed,
                     summary: result.summary,
                   })
-                  if (result.status === "passed") {
-                    goalWorkspaceCleanup = await cleanupCompletedGoalWorkspace(attachedGoalID, goalRunID)
-                  }
                 } else {
                   const errMsg =
                     buildOutcome.error instanceof Error
@@ -8340,7 +8479,6 @@ export function createOrchestratorTools(input: {
             const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
             const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
             const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
-            const cleanupLine = goalWorkspaceCleanup ? `\n- cleanup: ${goalWorkspaceCleanup}` : ""
             // Host-truth merge / diff fact block (B21). LLM may self-report
             // commit_ref / files_changed[] in `result`; below is what actually
             // happened in the worktree from the host's perspective. The
@@ -8384,7 +8522,7 @@ export function createOrchestratorTools(input: {
               `### Build report\n` +
               `- summary: ${result.summary}\n` +
               `- files_changed:\n${fileLines}\n` +
-              `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
+              `${commitLine}${errorLine}${worktreeLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
               `- repair_report:\n${repairReportLines}\n` +
               `- tests:\n${testLines}` +
               `${factBlock}\n\n` +
