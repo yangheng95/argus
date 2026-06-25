@@ -41,16 +41,16 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("only observation or pause tools")
   })
 
-  test("rejects wait-only stop because wait does not schedule a later wake", () => {
+  test("rejects wait-only stop when wait produced no task decision effect", () => {
     const reason = classifyOrchestratorDecisionStop({
       taskTerminal: false,
       finish: "stop",
-      finalText: "I waited for the external event.",
+      finalText: "I tried to wait for the external event.",
       providerVisiblePartCount: 1,
-      wakeTools: [{ name: "wait", decisionEffect: "observation" }],
+      wakeTools: [{ name: "wait", decisionEffect: "none" }],
     })
 
-    expect(reason).toContain("only observation or pause tools")
+    expect(reason).toContain("produced no task decision effect")
   })
 
   test("rejects stop when a same-wake decision is followed by state observation", () => {
@@ -68,7 +68,7 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("following the latest task decision")
   })
 
-  test("rejects stop when a same-wake build decision is followed by wait", () => {
+  test("rejects stop when a same-wake build decision is followed by an unscheduled wait", () => {
     const reason = classifyOrchestratorDecisionStop({
       taskTerminal: false,
       finish: "stop",
@@ -76,7 +76,7 @@ describe("orchestrator no-decision stop classifier", () => {
       providerVisiblePartCount: 1,
       wakeTools: [
         { name: "build", decisionEffect: "decision" },
-        { name: "wait", decisionEffect: "observation" },
+        { name: "wait", decisionEffect: "none" },
       ],
     })
 
@@ -147,6 +147,15 @@ describe("orchestrator no-decision stop classifier", () => {
         finalText: "Build dispatched.",
         providerVisiblePartCount: 1,
         wakeTools: [{ name: "build", decisionEffect: "decision" }],
+      }),
+    ).toBeUndefined()
+    expect(
+      classifyOrchestratorDecisionStop({
+        taskTerminal: false,
+        finish: "stop",
+        finalText: "Scheduled a wait for the external event.",
+        providerVisiblePartCount: 1,
+        wakeTools: [{ name: "wait", decisionEffect: "decision" }],
       }),
     ).toBeUndefined()
   })

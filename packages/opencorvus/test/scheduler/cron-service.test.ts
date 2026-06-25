@@ -6,6 +6,8 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionWake } from "../../src/session/wake"
 import { Session } from "../../src/session"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import * as EngineQueue from "../../src/engine/queue"
 
 async function waitUntil(check: () => boolean, timeout = 2000) {
   const end = Date.now() + timeout
@@ -133,6 +135,7 @@ describe("scheduler.cron-service", () => {
     let oneProjectID = ""
     let twoProjectID = ""
     let twoSessionID = ""
+    let twoTaskID = ""
 
     await Instance.provide({
       directory: one.path,
@@ -144,11 +147,26 @@ describe("scheduler.cron-service", () => {
     await Instance.provide({
       directory: two.path,
       fn: async () => {
+        const now = Date.now()
         twoProjectID = Instance.project.id
         twoSessionID = (await Session.create({ kind: "assistant", title: "foreign cron session" })).id
-        Database.use((db) =>
-          db
-            .insert(CronJobTable)
+        twoTaskID = "tsk_foreign_cron_" + Math.random().toString(36).slice(2)
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: twoTaskID,
+              project_id: twoProjectID,
+              source: "test",
+              title: "Foreign cron task",
+              request: "foreign task",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run()
+          db.insert(CronJobTable)
             .values({
               id: foreignJobID,
               project_id: twoProjectID,
@@ -160,8 +178,8 @@ describe("scheduler.cron-service", () => {
               one_shot: true,
               next_run: Date.now() + 60_000,
             })
-            .run(),
-        )
+            .run()
+        })
       },
     })
 
@@ -174,12 +192,133 @@ describe("scheduler.cron-service", () => {
         sessionId: twoSessionID,
       }),
     ).toThrow("Session not found")
+    expect(() =>
+      CronService.createTaskWake({
+        name: "bad cron task",
+        reason: "bad",
+        projectId: oneProjectID,
+        taskId: twoTaskID,
+        durationMs: 1000,
+      }),
+    ).toThrow("Task not found")
 
     expect(CronService.remove(foreignJobID, oneProjectID)).toBe(false)
     expect(
       Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, foreignJobID)).get()),
     ).toBeDefined()
   }, 30_000)
+
+  test("task cron wake dispatches the task loop and disables the one-shot row", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = "tsk_cron_wait_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Task cron wait",
+              request: "Wait for webhook",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run(),
+        )
+
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external webhook landed",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 1000,
+        })
+        Database.use((db) =>
+          db
+            .update(CronJobTable)
+            .set({ next_run: Date.now() - 1000 })
+            .where(eq(CronJobTable.id, scheduled.id))
+            .run(),
+        )
+
+        await CronService.runNow()
+
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.taskID).toBe(taskID)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.note).toContain("scheduled task wait wake")
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.note).toContain("external webhook landed")
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get())
+        expect(row?.enabled).toBe(false)
+        expect(row?.one_shot).toBe(true)
+        expect((row?.last_run ?? 0) > 0).toBe(true)
+        expect(row?.failure_count).toBe(0)
+        expect(row?.last_error).toBeNull()
+      },
+    })
+  })
+
+  test("ignored task cron wake is consumed instead of retried", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("ignored")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = "tsk_cron_wait_ignored_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Ignored task cron wait",
+              request: "Wait for terminal no-op",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now,
+            } as any)
+            .run(),
+        )
+
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "terminal passive wake",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 1000,
+        })
+        Database.use((db) =>
+          db
+            .update(CronJobTable)
+            .set({ next_run: Date.now() - 1000 })
+            .where(eq(CronJobTable.id, scheduled.id))
+            .run(),
+        )
+
+        await CronService.runNow()
+
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get())
+        expect(row?.enabled).toBe(false)
+        expect(row?.failure_count).toBe(0)
+        expect(row?.last_error).toBeNull()
+      },
+    })
+  })
 
   test("reentry guard prevents overlapping poll runs", async () => {
     await using tmp = await tmpdir({ git: true })

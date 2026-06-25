@@ -47,6 +47,7 @@ import {
   WaitToolParameters,
   executeWait,
 } from "@/tool/wait"
+import { CronJobTable } from "@/scheduler/cron.sql"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -3367,6 +3368,7 @@ export function createOrchestratorTools(input: {
         requirements: aggregate(EngineRequirementTable),
         specItems: aggregate(EngineSpecItemTable),
         specSnapshots: aggregate(EngineSpecSnapshotTable),
+        cronJobs: aggregate(CronJobTable),
       })
     })
   }
@@ -8765,10 +8767,22 @@ export function createOrchestratorTools(input: {
           duration_ms,
           reason,
           signal: input.signal,
+          sessionID: input.agentSessionID,
           taskID,
           logPhase: "orchestrator",
         })
-        return `${result.output} Decide from the refreshed task snapshot before your next dispatch.`
+        return {
+          title: result.aborted ? "Wait Not Scheduled" : "Wait Scheduled",
+          output: `${result.output} This is a scheduled park decision; do not poll with another wait.`,
+          metadata: {
+            requestedMs: result.requestedMs,
+            aborted: result.aborted,
+            jobID: result.jobID,
+            nextRun: result.nextRun,
+            mode: result.mode,
+            nonblocking: true,
+          },
+        }
       },
     }),
   }

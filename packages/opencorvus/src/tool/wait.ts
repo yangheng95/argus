@@ -2,6 +2,8 @@ import z from "zod"
 import { Tool } from "./tool"
 import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
+import { CronService } from "@/scheduler/cron-service"
+import { Instance } from "@/project/instance"
 
 export const WAIT_MIN_MS = 1_000
 export const WAIT_RECOMMENDED_MS = 20 * 60 * 1000
@@ -26,55 +28,76 @@ export const WaitToolParameters = z.object({
 })
 
 export const WaitToolDescription =
-  "One-shot deliberate pause. Yields the current agent turn for the stated number of milliseconds before returning, so a NAMED external event the repository cannot itself trigger has time to settle before your NEXT tool call. When executing a goal and this wait tool is the responsible action, default to 1200000ms (20 minutes); use that single wait instead of repeated 60000ms (60 second) waits. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is concretely external. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
+  "One-shot deliberate nonblocking pause. Schedules a durable cron wake for the stated number of milliseconds and returns immediately; the future wake re-enters the task/session with a fresh visible message. When executing a goal and this wait tool is the responsible action, default to 1200000ms (20 minutes); use that single scheduled wait instead of repeated 60000ms (60 second) waits. USE WHEN: evidence shows there is nothing dispatchable RIGHT NOW, AND the unblocking event is a concretely external event. NOT a polling primitive — never chain wait calls to re-inspect state on a fixed cadence. NOT a substitute for asking the user, reporting a blocker, or refreshing available evidence when those actions are responsible."
 
 export async function executeWait(input: {
   duration_ms: number
   reason: string
   signal?: AbortSignal
+  sessionID: string
   taskID?: string
   logPhase?: string
-}): Promise<{ elapsed: number; aborted: boolean; output: string }> {
-  const startedAt = Date.now()
+}): Promise<{
+  requestedMs: number
+  aborted: boolean
+  jobID?: string
+  nextRun?: number
+  mode?: "task" | "session"
+  output: string
+}> {
+  if (input.signal?.aborted) {
+    const output = `wait was not scheduled because the current execution was already aborted. Reason: ${input.reason}`
+    return { requestedMs: input.duration_ms, aborted: true, output }
+  }
+
+  const scheduled = input.taskID
+    ? CronService.createTaskWake({
+        name: "task wait",
+        projectId: Instance.project.id,
+        taskId: input.taskID,
+        durationMs: input.duration_ms,
+        reason: input.reason,
+      })
+    : CronService.createDelayedSessionWake({
+        name: "session wait",
+        projectId: Instance.project.id,
+        sessionId: input.sessionID,
+        durationMs: input.duration_ms,
+        prompt: [
+          "Scheduled wait completed.",
+          `Requested delay: ${input.duration_ms}ms.`,
+          `Reason: ${input.reason}`,
+          "Continue from the current visible conversation state.",
+        ].join("\n"),
+      })
+  const mode = input.taskID ? "task" : "session"
   if (input.taskID) {
     createDecisionLog(input.taskID).append({
       phase: input.logPhase ?? "wait",
-      key: `wait_${startedAt}`,
-      value: `wait ${input.duration_ms}ms`,
+      key: `wait_${Date.now()}`,
+      value: `scheduled wait ${input.duration_ms}ms cron_job=${scheduled.id}`,
       reason: input.reason,
     })
   }
-
-  let aborted = false
-  await new Promise<void>((resolve) => {
-    if (input.signal?.aborted) {
-      aborted = true
-      resolve()
-      return
-    }
-    const onAbort = () => {
-      aborted = true
-      clearTimeout(timer)
-      resolve()
-    }
-    const timer = setTimeout(() => {
-      input.signal?.removeEventListener("abort", onAbort)
-      resolve()
-    }, input.duration_ms)
-    input.signal?.addEventListener("abort", onAbort, { once: true })
-  })
-
-  const elapsed = Date.now() - startedAt
-  log.info("wait completed", {
+  log.info("wait scheduled", {
     taskID: input.taskID,
+    sessionID: input.sessionID,
     requestedMs: input.duration_ms,
-    elapsedMs: elapsed,
-    aborted,
+    jobID: scheduled.id,
+    nextRun: scheduled.nextRun,
+    mode,
   })
-  const output = aborted
-    ? `wait aborted after ${elapsed}ms (requested ${input.duration_ms}ms). Reason: ${input.reason}`
-    : `Waited ${elapsed}ms (requested ${input.duration_ms}ms). Reason: ${input.reason}. Re-read evidence before your next dispatch — the world may have changed during the pause.`
-  return { elapsed, aborted, output }
+  const output =
+    `Scheduled nonblocking ${mode} wait ${scheduled.id} for ${new Date(scheduled.nextRun).toISOString()} ` +
+    `(requested ${input.duration_ms}ms). Reason: ${input.reason}. End this turn unless another real workflow decision is immediately responsible; the scheduled wake will re-read current evidence.`
+  return {
+    requestedMs: input.duration_ms,
+    aborted: false,
+    jobID: scheduled.id,
+    nextRun: scheduled.nextRun,
+    mode,
+    output,
+  }
 }
 
 export const WaitTool = Tool.define("wait", {
@@ -86,16 +109,20 @@ export const WaitTool = Tool.define("wait", {
       duration_ms: params.duration_ms,
       reason: params.reason,
       signal: ctx.abort,
+      sessionID: ctx.sessionID,
       taskID,
       logPhase: taskID ? "agent" : undefined,
     })
     return {
-      title: result.aborted ? "Wait Aborted" : "Wait Complete",
+      title: result.aborted ? "Wait Not Scheduled" : "Wait Scheduled",
       output: result.output,
       metadata: {
         requestedMs: params.duration_ms,
-        elapsedMs: result.elapsed,
         aborted: result.aborted,
+        jobID: result.jobID,
+        nextRun: result.nextRun,
+        mode: result.mode,
+        nonblocking: true,
       },
     }
   },

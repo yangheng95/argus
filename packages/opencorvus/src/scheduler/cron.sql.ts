@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
+import { EngineTaskTable } from "@/engine/engine.sql"
 import { ProjectTable } from "../project/project.sql"
 import { SessionTable } from "../session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
@@ -11,6 +12,7 @@ export const CronJobTable = sqliteTable(
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
+    task_id: text().references(() => EngineTaskTable.id, { onDelete: "cascade" }),
     name: text().notNull(),
     expression: text().notNull(),
     prompt: text().notNull(),
@@ -27,6 +29,7 @@ export const CronJobTable = sqliteTable(
   },
   (table) => [
     index("cron_job_project_idx").on(table.project_id),
+    index("cron_job_task_idx").on(table.task_id),
     index("cron_job_next_run_idx").on(table.next_run),
     index("cron_job_lease_until_idx").on(table.lease_until),
   ],

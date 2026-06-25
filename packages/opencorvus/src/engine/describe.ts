@@ -31,7 +31,8 @@ import { isGoalRunOrphaned, isRunOrphan } from "./orphan"
 import { deriveTaskStatus } from "./task-status"
 import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
 import { SessionStatus } from "@/session/status"
-import { Database, sql } from "@/storage/db"
+import { CronJobTable } from "@/scheduler/cron.sql"
+import { Database, and, desc, eq, isNotNull, or, sql } from "@/storage/db"
 import { listPendingAgentCoordinationRequests } from "./agent-coordination"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
@@ -73,6 +74,7 @@ const OPEN_TOOL_CALL_PROMPT_CAP = 5
 const TERMINAL_GOAL_REFILL_PROMPT_CAP = 5
 const RESEARCH_BRIEF_DESC_CAP = 4
 const AGENT_COORDINATION_PROMPT_CAP = 8
+const TASK_CRON_WAIT_PROMPT_CAP = 5
 
 const TerminalGoalRefillNotificationPayloadSchema = z.object({
   task_id: z.string(),
@@ -231,6 +233,19 @@ export interface TerminalGoalRefillNotificationDesc {
   dispatch_result: "started" | "queued"
 }
 
+export interface TaskCronWaitDesc {
+  job_id: string
+  name: string
+  reason: string
+  expression: string
+  enabled: boolean
+  one_shot: boolean
+  next_run: number
+  last_run?: number
+  failure_count: number
+  last_error?: string
+}
+
 export interface AcceptanceVerdictDesc {
   iteration: number
   verdict: string
@@ -309,6 +324,10 @@ export interface TaskDesc {
    *  read here so the next model turn can distinguish "terminal completion
    *  already surfaced" from "no refill evidence." */
   recent_terminal_goal_refills?: TerminalGoalRefillNotificationDesc[]
+  /** Durable task-scoped cron waits created by the `wait` tool. These are
+   *  scheduling facts for the Large Language Model (LLM), not a host-side
+   *  flow gate. */
+  task_cron_waits?: TaskCronWaitDesc[]
   /** Recent sub-agent session failures recorded in decision_log phase
    *  "agent_error". These are the model-visible counterpart to overlay red
    *  session cards: provider quota, network, schema, and terminal session
@@ -395,6 +414,55 @@ function describeResearchBriefArtifact(input: {
 function researchBriefSourceURLs(brief: ResearchBriefArtifactRow["payload"]): string[] {
   const urls = brief.webpage_contract?.source_url ? [brief.webpage_contract.source_url] : []
   return [...new Set(urls)]
+}
+
+function describeTaskCronWaits(taskID: string, floor: number): TaskCronWaitDesc[] {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        id: CronJobTable.id,
+        name: CronJobTable.name,
+        reason: CronJobTable.prompt,
+        expression: CronJobTable.expression,
+        enabled: CronJobTable.enabled,
+        oneShot: CronJobTable.one_shot,
+        nextRun: CronJobTable.next_run,
+        lastRun: CronJobTable.last_run,
+        failureCount: CronJobTable.failure_count,
+        lastError: CronJobTable.last_error,
+      })
+      .from(CronJobTable)
+      .where(
+        and(
+          eq(CronJobTable.task_id, taskID),
+          or(
+            eq(CronJobTable.enabled, true),
+            sql`${CronJobTable.last_run} >= ${floor}`,
+            isNotNull(CronJobTable.last_error),
+          ),
+        ),
+      )
+      .orderBy(
+        sql`CASE WHEN ${CronJobTable.enabled} = 1 THEN 0 ELSE 1 END`,
+        CronJobTable.next_run,
+        desc(CronJobTable.last_run),
+        desc(CronJobTable.id),
+      )
+      .limit(TASK_CRON_WAIT_PROMPT_CAP)
+      .all(),
+  )
+  return rows.map((row) => ({
+    job_id: row.id,
+    name: row.name,
+    reason: row.reason,
+    expression: row.expression,
+    enabled: row.enabled,
+    one_shot: row.oneShot,
+    next_run: row.nextRun,
+    last_run: row.lastRun ?? undefined,
+    failure_count: row.failureCount,
+    last_error: row.lastError ?? undefined,
+  }))
 }
 
 function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDesc | undefined {
@@ -831,6 +899,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     }))
   const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
   const recentTerminalGoalRefills = describeTerminalGoalRefillNotifications(task.id)
+  const taskCronWaits = describeTaskCronWaits(task.id, task.time_started ?? task.time_created)
 
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
@@ -872,6 +941,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     open_tool_calls_without_current_owner:
       openToolCallsWithoutCurrentOwner.length > 0 ? openToolCallsWithoutCurrentOwner : undefined,
     recent_terminal_goal_refills: recentTerminalGoalRefills.length > 0 ? recentTerminalGoalRefills : undefined,
+    task_cron_waits: taskCronWaits.length > 0 ? taskCronWaits : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     pending_agent_coordination: pendingAgentCoordination.length > 0 ? pendingAgentCoordination : undefined,
     iterations_count: history.length,
@@ -948,6 +1018,27 @@ export function renderTerminalGoalRefillNotifications(
   return lines
 }
 
+export function renderTaskCronWaits(waits: TaskCronWaitDesc[] | undefined): string[] {
+  if (!waits || waits.length === 0) return []
+  const lines: string[] = []
+  lines.push(`## Scheduled task waits (${waits.length})`)
+  for (const wait of waits) {
+    const state = wait.enabled ? "pending" : wait.last_error ? "failed" : "fired"
+    const due = new Date(wait.next_run).toISOString()
+    const lastRun = wait.last_run ? ` last_run=${new Date(wait.last_run).toISOString()}` : ""
+    const error = wait.last_error ? ` error=${truncate(wait.last_error, 180)}` : ""
+    lines.push(
+      `- ${state} job=${wait.job_id} name=${wait.name} due=${due}${lastRun} delay=${wait.expression} failures=${wait.failure_count}${error}: ${truncate(wait.reason, 240)}`,
+    )
+  }
+  lines.push(
+    `These entries are durable cron waits created by \`wait\`. ` +
+      `A pending entry is the future wake source; a fired or failed entry is current evidence. ` +
+      `Do not use \`wait\` to poll live builds, sibling goals, or ordinary in-task state.`,
+  )
+  return lines
+}
+
 function buildAttemptRecoveryHint(error?: string): string | undefined {
   if (!error) return undefined
   if (!error.includes("report_build_result") && !error.includes("missing_terminal_report")) return undefined
@@ -959,10 +1050,7 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 1) + "…"
 }
 
-export function renderCollaborationClosure(
-  desc: CollaborationClosureDesc | undefined,
-  goals: GoalDesc[],
-): string[] {
+export function renderCollaborationClosure(desc: CollaborationClosureDesc | undefined, goals: GoalDesc[]): string[] {
   if (!desc) return []
 
   const lines: string[] = []
@@ -1066,6 +1154,12 @@ export function renderTaskDescription(desc: TaskDesc): string {
   if (terminalGoalRefillLines.length > 0) {
     lines.push("")
     lines.push(...terminalGoalRefillLines)
+  }
+
+  const taskCronWaitLines = renderTaskCronWaits(desc.task_cron_waits)
+  if (taskCronWaitLines.length > 0) {
+    lines.push("")
+    lines.push(...taskCronWaitLines)
   }
 
   if (desc.clarifications) {
