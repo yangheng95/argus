@@ -1291,14 +1291,14 @@ describe("core prompt hygiene", () => {
     expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })
 
-  test("orchestrator prompt documents freshContext per-goal retry triggers and cost", async () => {
+  test("orchestrator prompt documents same-session per-goal retry instead of freshContext", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("`build({ goalID, freshContext: true, request })`")
-    expect(normalized).toContain("compaction `nothing-to-compress` / `post-compaction-still-over`")
-    expect(normalized).toContain("prior reasoning/tool history is gone")
-    expect(normalized).toContain("`request` MUST restate concrete lessons")
-    expect(normalized).toContain("No effect on task-level direct `build({ request })`")
+    expect(normalized).toContain("Per-goal retry -> use `build({ goalID, request })`")
+    expect(normalized).toContain("Build resumes the prior build session")
+    expect(normalized).toContain("fresh runtime contract")
+    expect(normalized).toContain("structural error")
+    expect(normalized).not.toContain("freshContext")
   })
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {

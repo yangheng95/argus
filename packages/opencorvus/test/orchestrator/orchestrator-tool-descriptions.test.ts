@@ -83,7 +83,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       "reason",
       "goalID",
       "directBuildIntent",
-      "freshContext",
       "userConfirmedStaleIntegrityData",
     ])
     expect(
@@ -98,6 +97,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         goal_id: "gol_typo_scope",
         request: "Implement the scoped goal.",
         directBuildIntent: "modify_files",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.build.inputSchema!.safeParse({
+        reason: "Do not accept a deleted new-session retry escape hatch.",
+        goalID: "gol_valid_scope",
+        freshContext: true,
       }).success,
     ).toBe(false)
   })

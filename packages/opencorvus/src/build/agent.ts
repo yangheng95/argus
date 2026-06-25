@@ -543,6 +543,7 @@ export namespace BuildAgent {
       const runtimeGoalRunID = typeof openedGoalRunID === "string" ? openedGoalRunID : undefined
 
       const buildReferenceAttachments = collectBuildReferenceAttachments(input.task)
+      const retryingExistingBuildSession = Boolean(input.existingSessionID)
 
       // Stage authoritative visual/reference attachments into `<worktree>/references/`
       // so the build agent can pass worktree-LOCAL relative paths to tools
@@ -552,7 +553,7 @@ export namespace BuildAgent {
       // agent path just invokes it. Caller-owned worktrees (input.workDir)
       // skip — the caller is responsible for staging in that path.
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
-      if (ownsWorktree && worktreeDir && buildReferenceAttachments.length > 0) {
+      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && buildReferenceAttachments.length > 0) {
         try {
           stagedAttachments = await AttachmentStore.stageToWorktree(
             Instance.project.id,
@@ -591,10 +592,18 @@ export namespace BuildAgent {
       // the build LLM physically sees what to clone. This includes user
       // attachments and frontend-design materialized visual artifacts
       // (system_artifacts intent=visual_reference), not acceptance retry renders.
-      const taskAttachments = buildReferenceAttachments
-      const retryAttachments = (input.context?.retryAttachments ?? []).filter(
-        (a) => typeof a?.url === "string" && typeof a?.mime === "string",
-      ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+      //
+      // Same-session retry is different: the first build turn already carried
+      // the visual contract, staged reference list, attachment inventory, and
+      // inline file parts. Re-emitting that full envelope turns an incremental
+      // retry into a synthetic redispatch and can re-send oversized images.
+      // Retry therefore appends only buildRetryFeedbackPrompt(...) text.
+      const taskAttachments = retryingExistingBuildSession ? [] : buildReferenceAttachments
+      const retryAttachments = retryingExistingBuildSession
+        ? []
+        : ((input.context?.retryAttachments ?? []).filter(
+            (a) => typeof a?.url === "string" && typeof a?.mime === "string",
+          ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
       const allMultimodal = [...taskAttachments, ...retryAttachments]
       const buildUserPartsFn =
         allMultimodal.length > 0
