@@ -273,6 +273,33 @@ test("projectConversationAgentView uses lifecycle status only to update ledger s
   ])
 })
 
+test("projectConversationAgentView applies latest ledger status without replay events", () => {
+  const view = projectConversationAgentView({}, [], [], [
+    {
+      sessionID: "ses_cancelled_build",
+      stage: "build",
+      parentSessionID: "ses_orchestrator",
+      timeCreated: 1_776_000_009_000,
+      timeUpdated: 1_776_000_009_500,
+      latestStatus: {
+        type: "terminal",
+        reason: "aborted",
+      },
+      latestStatusEmittedAt: 1_776_000_011_000,
+    },
+  ])
+
+  expect(view.sessions).toEqual([
+    expect.objectContaining({
+      sessionID: "ses_cancelled_build",
+      stage: "build",
+      status: "skipped",
+      firstObservedAt: 1_776_000_009_000,
+      lastObservedAt: 1_776_000_011_000,
+    }),
+  ])
+})
+
 test("projectConversationAgentView ignores orphan lifecycle status as rail existence", () => {
   const view = projectConversationAgentView(
     {},

@@ -890,7 +890,7 @@ export const EngineRoutes = lazy(() =>
         const agentView = projectConversationAgentView(
           board,
           history.hasMore ? filteredTranscript : historyWindow.transcript,
-          eventPage.events,
+          [],
           agentSessions,
         )
         return c.json({

@@ -55,6 +55,14 @@ export interface ConversationAgentSessionLedgerRow {
   goalID?: string
   timeCreated: number
   timeUpdated: number
+  latestStatus?: ConversationAgentSessionLedgerStatus
+  latestStatusEmittedAt?: number
+}
+
+export interface ConversationAgentSessionLedgerStatus {
+  type: string
+  reason?: string
+  error?: string
 }
 
 function readSessionRow(sessionID: string) {
@@ -211,7 +219,54 @@ export function taskMessageWatermark(taskID: string): number {
   return Math.max(0, Number(row?.watermark ?? 0) || 0)
 }
 
-export function listTaskConversationAgentSessions(taskID: string): ConversationAgentSessionLedgerRow[] {
+function toConversationAgentSessionLedgerRows(
+  rows: Array<{
+    sessionID: string
+    stage: SessionKind
+    parentSessionID: string | null
+    goalID: string | null
+    timeCreated: number
+    timeUpdated: number
+    statusType: string | null
+    statusReason: string | null
+    statusError: string | null
+    statusEmittedAt: number | null
+  }>,
+): ConversationAgentSessionLedgerRow[] {
+  return rows.map((row) => {
+    const statusType = String(row.statusType || "")
+    const statusEmittedAt = Number(row.statusEmittedAt ?? 0)
+    if (!statusType && row.statusEmittedAt != null) {
+      throw new Error(`conversation agent ledger status event missing status.type for session ${row.sessionID}`)
+    }
+    if (statusType && !(statusEmittedAt > 0)) {
+      throw new Error(`conversation agent ledger status event missing emitted_at for session ${row.sessionID}`)
+    }
+    return {
+      sessionID: row.sessionID,
+      stage: row.stage,
+      parentSessionID: row.parentSessionID ?? undefined,
+      goalID: row.goalID ?? undefined,
+      timeCreated: row.timeCreated,
+      timeUpdated: row.timeUpdated,
+      ...(statusType
+        ? {
+            latestStatus: {
+              type: statusType,
+              ...(row.statusReason ? { reason: row.statusReason } : {}),
+              ...(row.statusError ? { error: row.statusError } : {}),
+            },
+            latestStatusEmittedAt: statusEmittedAt,
+          }
+        : {}),
+    }
+  })
+}
+
+export function listConversationAgentSessionsForSessionTree(input: {
+  sessionID: string
+  projectID: string
+}): ConversationAgentSessionLedgerRow[] {
   const rows = Database.use((db) =>
     db.all<{
       sessionID: string
@@ -220,11 +275,18 @@ export function listTaskConversationAgentSessions(taskID: string): ConversationA
       goalID: string | null
       timeCreated: number
       timeUpdated: number
+      statusType: string | null
+      statusReason: string | null
+      statusError: string | null
+      statusEmittedAt: number | null
     }>(sql`
       WITH RECURSIVE session_tree(id) AS (
-        SELECT session_id FROM engine_task WHERE id = ${taskID}
+        SELECT id FROM session WHERE id = ${input.sessionID} AND project_id = ${input.projectID}
         UNION ALL
-        SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+        SELECT s.id
+        FROM session s
+        JOIN session_tree st ON s.parent_id = st.id
+        WHERE s.project_id = ${input.projectID}
       )
       SELECT
         s.id AS sessionID,
@@ -232,20 +294,51 @@ export function listTaskConversationAgentSessions(taskID: string): ConversationA
         s.parent_id AS parentSessionID,
         s.goal_id AS goalID,
         s.time_created AS timeCreated,
-        s.time_updated AS timeUpdated
+        s.time_updated AS timeUpdated,
+        json_extract(pe.payload, '$.status.type') AS statusType,
+        json_extract(pe.payload, '$.status.reason') AS statusReason,
+        json_extract(pe.payload, '$.status.error') AS statusError,
+        pe.emitted_at AS statusEmittedAt
       FROM session s
       JOIN session_tree st ON st.id = s.id
+      LEFT JOIN protocol_event pe
+        ON pe.session_id = s.id
+       AND pe.type = 'session.status'
+       AND NOT EXISTS (
+         SELECT 1 FROM protocol_event pe_newer
+         WHERE pe_newer.session_id = pe.session_id
+           AND pe_newer.type = 'session.status'
+           AND (
+             pe_newer.emitted_at > pe.emitted_at
+             OR (
+               pe_newer.emitted_at = pe.emitted_at
+               AND pe_newer.seq > pe.seq
+             )
+           )
+       )
       ORDER BY s.time_created, s.id
     `),
   )
-  return rows.map((row) => ({
+  return toConversationAgentSessionLedgerRows(rows)
+}
+
+export function listTaskConversationAgentSessions(taskID: string): ConversationAgentSessionLedgerRow[] {
+  const row = Database.use((db) =>
+    db
+      .select({
+        sessionID: EngineTaskTable.session_id,
+        projectID: EngineTaskTable.project_id,
+      })
+      .from(EngineTaskTable)
+      .where(eq(EngineTaskTable.id, taskID))
+      .get(),
+  )
+  if (!row) throw new Error(`conversation agent ledger task ${taskID} does not exist`)
+  if (!row.sessionID) return []
+  return listConversationAgentSessionsForSessionTree({
     sessionID: row.sessionID,
-    stage: row.stage,
-    parentSessionID: row.parentSessionID ?? undefined,
-    goalID: row.goalID ?? undefined,
-    timeCreated: row.timeCreated,
-    timeUpdated: row.timeUpdated,
-  }))
+    projectID: row.projectID,
+  })
 }
 
 function eventSession(properties: Record<string, unknown>) {

@@ -5,6 +5,7 @@ import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { ProtocolStore } from "../../src/protocol/store"
 import {
   __taskListProjectionEventTypeForTest,
   __taskMessageWatermarkForTest,
@@ -326,6 +327,111 @@ describe("task conversation routes", () => {
             parentSessionID: root.id,
             messageIDs: [],
             status: "pending",
+          }),
+        )
+      },
+    })
+  })
+
+  test("GET /task/:taskID/conversation agentView status uses latest durable status outside replay page", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "status ledger root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "status ledger build",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "status ledger agent rail",
+              request: "status ledger agent rail",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        for (let index = 0; index < 520; index++) {
+          await ProtocolStore.appendEvent({
+            kind: "event",
+            type: "test.noop",
+            aggregate: "task",
+            aggregate_id: taskID,
+            task_id: taskID,
+            source: "test",
+            emitted_at: now + index + 1,
+            payload: {
+              index,
+            },
+          })
+        }
+        await ProtocolStore.appendEvent({
+          kind: "event",
+          type: "session.status",
+          aggregate: "session",
+          aggregate_id: build.id,
+          task_id: taskID,
+          session_id: build.id,
+          source: "test",
+          emitted_at: now + 1_000,
+          payload: {
+            sessionID: build.id,
+            channel: "build",
+            parentSessionID: root.id,
+            status: {
+              type: "terminal",
+              reason: "completed",
+            },
+          },
+        })
+
+        const response = await app.request(`/task/${taskID}/conversation`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        const body = (await response.json()) as {
+          events?: Array<{ type?: string }>
+          eventReplay?: { complete?: boolean; limit?: number }
+          agentView?: {
+            sessions?: Array<{
+              sessionID?: string
+              status?: string
+              lastObservedAt?: number
+            }>
+          }
+        }
+
+        expect(body.eventReplay).toMatchObject({ complete: false, limit: 500 })
+        expect(body.events?.some((event) => event.type === "session.status")).toBe(false)
+        expect(body.agentView?.sessions).toContainEqual(
+          expect.objectContaining({
+            sessionID: build.id,
+            status: "completed",
+            lastObservedAt: now + 1_000,
           }),
         )
       },

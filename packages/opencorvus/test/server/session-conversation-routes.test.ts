@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
@@ -182,6 +183,97 @@ describe("session conversation routes", () => {
             sessionID: session.id,
             stage: "mission",
             status: "pending",
+          }),
+        )
+      },
+    })
+  })
+
+  test("GET /session/:sessionID/conversation agentView includes child execution sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "mission", title: "Mission Root" })
+        const child = await Session.create({
+          kind: "assistant",
+          parentID: session.id,
+          title: "child assistant",
+        })
+        const childUserMessage = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: child.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "user",
+          model: { providerID: "test", modelID: "test-model" },
+        } as any)
+        const childMessage = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: child.id,
+          role: "assistant",
+          time: { created: Date.now() + 1 },
+          parentID: childUserMessage.id,
+          agent: "assistant",
+          modelID: "test-model",
+          providerID: "test",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            total: 0,
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: child.id,
+          messageID: childMessage.id,
+          type: "text",
+          text: "child assistant output",
+        })
+        const emittedAt = Date.now() + 10
+        await ProtocolStore.appendEvent({
+          kind: "event",
+          type: "session.status",
+          aggregate: "session",
+          aggregate_id: child.id,
+          session_id: child.id,
+          source: "test",
+          emitted_at: emittedAt,
+          payload: {
+            sessionID: child.id,
+            channel: "assistant",
+            parentSessionID: session.id,
+            status: { type: "streaming" },
+          },
+        })
+
+        const response = await Server.App().request(`/session/${session.id}/conversation`, {
+          headers: { "x-opencorvus-directory": tmp.path },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as any
+        expect(body.transcript.map((message: any) => message.info.id)).toEqual([childMessage.id])
+        expect(body.view.messages).toContainEqual(
+          expect.objectContaining({
+            messageID: childMessage.id,
+            sessionID: child.id,
+            stage: "assistant",
+          }),
+        )
+        expect(body.agentView.sessions).toContainEqual(
+          expect.objectContaining({
+            sessionID: child.id,
+            stage: "assistant",
+            parentSessionID: session.id,
+            messageIDs: [childMessage.id],
+            lastDisplayMessageID: childMessage.id,
+            status: "running",
+            lastObservedAt: emittedAt,
           }),
         )
       },

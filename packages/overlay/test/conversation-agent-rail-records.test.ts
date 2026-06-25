@@ -2,8 +2,10 @@ import { expect, test } from "bun:test"
 import { mergeAgentRecords, sortAgentWorkflowRecordsChronologically } from "../src/utils/agent-workflow-records"
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
+  attachConversationAgentViewTargets,
   conversationAgentStore,
   applyLiveConversationAgentMessageUpdated,
+  applyLiveConversationAgentPartUpdated,
   applyLiveConversationAgentSessionStatus,
   conversationAgentRecordsForSource,
   hydrateConversationAgentView,
@@ -303,10 +305,14 @@ test("hydrated agent records are scoped to the selected task or session source",
   ).toEqual(["ses_coding_child"])
 })
 
-function liveSessionStatus(sessionID: string, status: Record<string, any> = { type: "streaming" }) {
+function liveSessionStatus(
+  sessionID: string,
+  status: Record<string, any> = { type: "streaming" },
+  emittedAt = 1_779_099_999_000,
+) {
   return {
     type: "session.status",
-    emittedAt: 1_779_099_999_000,
+    emittedAt,
     properties: {
       sessionID,
       channel: "build",
@@ -326,6 +332,163 @@ test("live session.status creates a rail record without waiting for hydrate", ()
   expect(records[0]?.status).toBe("running")
   expect(records[0]?.renderedCardID).toBeUndefined()
   expect(records[0]?.targetMessageID).toBe("")
+})
+
+test("live message target is retained until session.status creates rail existence", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live",
+    liveMessageUpdated({
+      id: "msg_live_first",
+      sessionID: "ses_live_build",
+      channel: "build",
+      time: { created: 1_779_099_998_000 },
+    }),
+  )
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })).toEqual([])
+
+  applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.targetMessageID).toBe("msg_live_first")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_live_first")
+  expect(records[0]?.lastObservedAt).toBe(1_779_099_999_000)
+})
+
+test("live part target is retained until session.status creates rail existence", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentPartUpdated("task:tsk_live", {
+    type: "message.part.updated",
+    emittedAt: 1_779_099_998_000,
+    properties: {
+      channel: "build",
+      resolvedRole: "build",
+      parentSessionID: "ses_root",
+      part: {
+        id: "part_live_first",
+        sessionID: "ses_live_build",
+        messageID: "msg_part_first",
+        type: "text",
+        text: "first visible token",
+      },
+    },
+  })
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })).toEqual([])
+
+  applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.targetMessageID).toBe("msg_part_first")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_part_first")
+})
+
+test("older live message fills an empty target after newer session.status", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus(
+    "task:tsk_live",
+    liveSessionStatus("ses_live_build", { type: "streaming" }, 1_779_100_001_000),
+  )
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live",
+    liveMessageUpdated({
+      id: "msg_older",
+      sessionID: "ses_live_build",
+      channel: "build",
+      time: { created: 1_779_100_000_000 },
+    }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records[0]?.targetMessageID).toBe("msg_older")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_older")
+  expect(records[0]?.lastObservedAt).toBe(1_779_100_001_000)
+})
+
+test("live aborted session.status is a non-success rail status", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus(
+    "task:tsk_live",
+    liveSessionStatus("ses_live_build", { type: "terminal", reason: "aborted" }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.status).toBe("skipped")
+  expect(records[0]?.completedAt).toBe(1_779_099_999_000)
+})
+
+test("history target attachment updates existing rail records without creating existence", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk_history", {
+    sessions: [
+      {
+        sessionID: "ses_history_build",
+        stage: "build",
+        messageIDs: [],
+        firstMessageTime: 100,
+        lastMessageTime: 100,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  attachConversationAgentViewTargets("task:tsk_history", {
+    messages: [
+      {
+        sessionID: "ses_history_build",
+        stage: "build",
+        messageID: "msg_history",
+        time: 80,
+        placement: "top_level",
+      },
+      {
+        sessionID: "ses_missing",
+        stage: "build",
+        messageID: "msg_missing",
+        time: 90,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_history" })
+  expect(records.map((record) => record.sessionID)).toEqual(["ses_history_build"])
+  expect(records[0]?.targetMessageID).toBe("msg_history")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_history_build:message:msg_history")
+})
+
+test("history target attachment does not overwrite a newer target", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk_history", {
+    sessions: [
+      {
+        sessionID: "ses_history_build",
+        stage: "build",
+        messageIDs: ["msg_new"],
+        lastDisplayMessageID: "msg_new",
+        firstMessageTime: 100,
+        lastMessageTime: 200,
+        placement: "top_level",
+      },
+    ],
+  })
+  attachConversationAgentViewTargets("task:tsk_history", {
+    messages: [
+      {
+        sessionID: "ses_history_build",
+        stage: "build",
+        messageID: "msg_old",
+        time: 100,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_history" })
+  expect(records[0]?.targetMessageID).toBe("msg_new")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_history_build:message:msg_new")
 })
 
 test("live message.updated attaches target to an existing rail execution record", () => {

@@ -43,6 +43,12 @@ export interface ConversationAgentSessionLedgerEntry {
   goalID?: string
   timeCreated: number
   timeUpdated: number
+  latestStatus?: {
+    type: string
+    reason?: string
+    error?: string
+  }
+  latestStatusEmittedAt?: number
 }
 
 interface ConversationLifecycleEvent {
@@ -104,7 +110,8 @@ function statusFromLifecycleStatus(status: unknown): NonNullable<ConversationSes
   if (type === "terminal") {
     const reason = String(value.reason || "")
     if (reason === "error" || reason === "artifact_missing") return "error"
-    if (reason === "completed" || reason === "aborted") return "completed"
+    if (reason === "completed") return "completed"
+    if (reason === "aborted") return "skipped"
   }
   throw new Error(`projectConversationAgentView: unknown lifecycle status ${JSON.stringify(status)}`)
 }
@@ -163,7 +170,7 @@ function applyLedgerSession(
   const placement = placementOf(board, stage, goalID)
   const existing = bySession.get(sessionID)
   if (!existing) {
-    bySession.set(sessionID, {
+    const created: ConversationSessionView = {
       sessionID,
       stage,
       parentSessionID: parentSessionID || undefined,
@@ -176,7 +183,9 @@ function applyLedgerSession(
       status: "pending",
       placement,
       phase,
-    })
+    }
+    applyLedgerLatestStatus(created, ledger)
+    bySession.set(sessionID, created)
     return
   }
   existing.firstObservedAt = Math.min(existing.firstObservedAt ?? existing.firstMessageTime, observedAt)
@@ -184,6 +193,23 @@ function applyLedgerSession(
   existing.status = existing.status || "pending"
   if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
   if (!existing.goalID && goalID) existing.goalID = goalID
+  applyLedgerLatestStatus(existing, ledger)
+}
+
+function applyLedgerLatestStatus(session: ConversationSessionView, ledger: ConversationAgentSessionLedgerEntry): void {
+  if (!ledger.latestStatus) {
+    if (ledger.latestStatusEmittedAt != null) {
+      throw new Error(`projectConversationAgentView: ledger session ${ledger.sessionID} status missing payload`)
+    }
+    return
+  }
+  const observedAt = Number(ledger.latestStatusEmittedAt || 0)
+  if (!(observedAt > 0)) {
+    throw new Error(`projectConversationAgentView: ledger session ${ledger.sessionID} status missing emitted time`)
+  }
+  session.status = statusFromLifecycleStatus(ledger.latestStatus)
+  session.firstObservedAt = Math.min(session.firstObservedAt ?? session.firstMessageTime, observedAt)
+  session.lastObservedAt = Math.max(session.lastObservedAt ?? session.lastMessageTime, observedAt)
 }
 
 export function conversationPartHasDisplay(part: any): boolean {
