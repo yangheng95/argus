@@ -386,6 +386,33 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
+  test("marks queued compaction failure failed without automatic retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const loop = spyOn(SessionPrompt, "loop").mockRejectedValue(new Error("compact failed"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const source = await createSourceUserMessage(session.id, "compact once")
+        const id = TaskQueueService.enqueueCompaction({
+          sessionID: session.id,
+          sourceUserMessageID: source.id,
+          source: "test.compaction.failure",
+        })
+
+        const first = await waitForQueueStatus(id, "failed")
+        expect(first?.error_message).toBe("compact failed")
+
+        await TaskQueueService.runNow()
+        const second = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(second?.status).toBe("failed")
+      },
+    })
+
+    expect(loop).toHaveBeenCalledTimes(1)
+  })
+
   test("publishes session error when queued prompt reaches terminal failure", async () => {
     await using tmp = await tmpdir({ git: true })
     const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("provider rejected request"))
