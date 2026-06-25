@@ -3563,6 +3563,7 @@ export class Skill extends HeyApiClient {
     parameters?: {
       directory?: string
       sessionID?: string
+      refresh?: "true"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3573,6 +3574,7 @@ export class Skill extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "sessionID" },
+            { in: "query", key: "refresh" },
           ],
         },
       ],

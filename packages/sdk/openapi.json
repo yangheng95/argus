@@ -9652,6 +9652,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "schema": {
+              "type": "string",
+              "const": "true"
+            }
           }
         ],
         "x-codeSamples": [

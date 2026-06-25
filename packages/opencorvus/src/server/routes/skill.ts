@@ -49,6 +49,10 @@ export function SkillRoutes() {
         "query",
         z.object({
           sessionID: z.string().optional(),
+          refresh: z
+            .literal("true")
+            .optional()
+            .transform((value) => value === "true"),
         }),
       ),
       async (c) => {

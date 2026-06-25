@@ -312,6 +312,12 @@ export namespace SkillManager {
     )
   }
 
+  export async function refreshDiscoveryState() {
+    Config.global.reset()
+    await Config.state.reset()
+    await Skill.state.reset()
+  }
+
   export async function install(raw: z.input<typeof InstallInput>) {
     const input = InstallInput.parse(raw)
     if (input.kind === "path") {
@@ -324,6 +330,7 @@ export namespace SkillManager {
       if (input.policy) {
         await applyPolicyToSource(resolved, input.policy)
       }
+      await Skill.state.reset()
       return { source: resolved, kind: input.kind }
     }
 
@@ -349,6 +356,7 @@ export namespace SkillManager {
       if (input.policy) {
         await applyPolicyToNames((await Promise.all(pulled.map(listSkillNamesInDir))).flat(), input.policy)
       }
+      await Skill.state.reset()
       return { source: value, kind: input.kind }
     }
 
@@ -368,6 +376,7 @@ export namespace SkillManager {
     if (input.policy) {
       await applyPolicyToSource(target, input.policy)
     }
+    await Skill.state.reset()
     return { source, path: target, kind: input.kind }
   }
 

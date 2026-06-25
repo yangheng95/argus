@@ -81,6 +81,16 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       policy: "deny",
     },
   ]
+  const refreshedSkill = {
+    name: "fresh-manual-skill",
+    description: "Skill added on disk and surfaced by the manual refresh request.",
+    location: "D:/overlay/workspace/app/.opencorvus/skill/fresh-manual-skill/SKILL.md",
+    source_type: "config_path",
+    source: "D:/overlay/workspace/app/.opencorvus/skill/fresh-manual-skill",
+    mounted_agents: [],
+    unmounted: true,
+    warning: "unmounted",
+  }
   const visibleAgents = [
     {
       name: "coding-assistant",
@@ -233,12 +243,13 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     unmounted_count: 2,
   }
   const expectedSourceDirectories = [".opencorvus", ".claude", ".agents", ".codex"]
-  const requests: Array<{ method: string; path: string }> = []
+  const requests: Array<{ method: string; path: string; query: Record<string, string> }> = []
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
-    requests.push({ method: req.method, path })
+    const query = Object.fromEntries(url.searchParams.entries())
+    requests.push({ method: req.method, path, query })
 
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
     if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
@@ -297,7 +308,16 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/mcp") return send({})
     if (path === "/skill/installed" || path === "/skill") return send(skills)
-    if (path === "/skill/mounts") return send(mountMatrix)
+    if (path === "/skill/mounts") {
+      if (query.refresh === "true") {
+        return send({
+          ...mountMatrix,
+          skills: [...mountMatrix.skills, refreshedSkill],
+          unmounted_count: mountMatrix.unmounted_count + 1,
+        })
+      }
+      return send(mountMatrix)
+    }
     if (path === "/skill/mount" && req.method === "POST") {
       const updatedSkills = mountMatrix.skills
         .map((skill) =>
@@ -669,6 +689,43 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         `agent header should not clip full name: ${JSON.stringify(header)}`,
       )
     }
+
+    const requestsBeforeManualRefresh = requests.length
+    await page.click('#configDialog [data-config-panel="skill"] [data-ui="tool-panel-action"][aria-label="Reload"]')
+    await page.waitForFunction(() => {
+      const text = document.querySelector('#configDialog [data-config-panel="skill"]')?.textContent || ""
+      return text.includes("fresh-manual-skill")
+    })
+    const manualRefreshRequest = requests
+      .slice(requestsBeforeManualRefresh)
+      .find((item) => item.path === "/skill/mounts" && item.query.refresh === "true")
+    assert.ok(
+      manualRefreshRequest,
+      `manual skill reload must request cache invalidation: ${JSON.stringify(
+        requests.slice(requestsBeforeManualRefresh),
+      )}`,
+    )
+
+    await page.click("#btnCloseConfigDialog")
+    await page.waitForSelector("#configDialog", { visible: false })
+    const compactRefreshRequestSeen = new Promise<void>((resolve) => {
+      page.on("response", (response: any) => {
+        const url = new URL(response.url())
+        if (url.pathname === "/skill/mounts" && url.searchParams.get("refresh") === "true") resolve()
+      })
+    })
+    const requestsBeforeCompactRefresh = requests.length
+    await page.click('#leftPanelSkills [data-ui="tool-panel-action"][aria-label="Reload"]')
+    await compactRefreshRequestSeen
+    const compactRefreshRequest = requests
+      .slice(requestsBeforeCompactRefresh)
+      .find((item) => item.path === "/skill/mounts" && item.query.refresh === "true")
+    assert.ok(
+      compactRefreshRequest,
+      `compact skill reload must request cache invalidation: ${JSON.stringify(
+        requests.slice(requestsBeforeCompactRefresh),
+      )}`,
+    )
   } finally {
     await browser.close()
     await server.close()

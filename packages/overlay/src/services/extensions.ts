@@ -123,9 +123,14 @@ export async function loadInstalledSkills(): Promise<SkillDescriptor[]> {
   return skills
 }
 
-export async function loadSkillMountMatrix(sessionID?: string): Promise<AgentSkillMountMatrix> {
-  const path = sessionID ? `skill/mounts?sessionID=${encodeURIComponent(sessionID)}` : "skill/mounts"
-  const matrix = await apiJson(path)
+export async function loadSkillMountMatrix(
+  options: { sessionID?: string; refresh?: boolean } = {},
+): Promise<AgentSkillMountMatrix> {
+  const query = new URLSearchParams()
+  if (options.sessionID) query.set("sessionID", options.sessionID)
+  if (options.refresh) query.set("refresh", "true")
+  const suffix = query.toString()
+  const matrix = await apiJson(suffix ? `skill/mounts?${suffix}` : "skill/mounts")
   if (!matrix || typeof matrix !== "object" || Array.isArray(matrix)) {
     throw new Error("skill/mounts returned a non-object payload")
   }

@@ -7479,6 +7479,7 @@ export type SkillMountsData = {
      */
     directory?: string
     sessionID?: string
+    refresh?: "true"
   }
   url: "/skill/mounts"
 }
