@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { recordOrchestratorDecisionContractFailure } from "../../src/engine/persist"
+import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { beginBuildAttempt, recordOrchestratorDecisionContractFailure } from "../../src/engine/persist"
 import * as EngineQueue from "../../src/engine/queue"
 import { findRun } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
@@ -55,6 +55,47 @@ function insertActiveRun(input: { taskID: string; runID: string; rootSessionID: 
           time_started: input.now,
           time_completed: null,
         },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  })
+}
+
+function insertBlockingGoal(input: { taskID: string; goalID: string; specID: string; now: number }) {
+  Database.use((db) => {
+    db.insert(EngineSpecSnapshotTable)
+      .values({
+        id: input.specID,
+        task_id: input.taskID,
+        version: 1,
+        status: "ready",
+        summary: "Live worker park spec",
+        content: "Wait for the running build worker.",
+        scope: "scheduler park",
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: input.goalID,
+        task_id: input.taskID,
+        spec_snapshot_id: input.specID,
+        title: "Live worker goal",
+        slug: "live-worker-goal",
+        objective: "Keep a build worker running",
+        acceptance_specs: [],
+        owned_paths: ["src/index.ts"],
+        depends_on: [],
+        exports: [],
+        imports: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "test",
+        status: "pending",
+        order_index: 0,
         time_created: input.now,
         time_updated: input.now,
       })
@@ -269,6 +310,57 @@ describe("orchestrator no-decision stop process", () => {
         expect(dispatch?.taskID).toBe(taskID)
         expect(dispatch?.event?.note).toContain("not a user-authored message")
         expect(dispatch?.event?.note).toContain("OrchestratorNoDecisionStopError")
+      },
+    })
+  }, 30_000)
+
+  test("visible scheduler park with only live build work does not record no-decision or self-wake", async () => {
+    installControlModel()
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const goalID = Identifier.ascending("goal")
+        const specID = Identifier.ascending("spec")
+        const root = await Session.create({ kind: "root", title: "scheduler park root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { model: "mock-control/control" },
+        })
+        insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
+        insertBlockingGoal({ taskID, goalID, specID, now })
+        const buildSession = await Session.createNext({
+          kind: "build",
+          parentID: root.id,
+          directory: Instance.directory,
+          title: "live build child",
+        })
+        beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: buildSession.id,
+          now,
+        })
+
+        const dispatchTaskLoop = spySelfWakeDispatch()
+        spyOn(SessionPrompt, "prompt").mockImplementation((async (input) =>
+          finalAssistantText(
+            input,
+            "Only live build workers remain and no dispatchable or failed goals are present. Parking this wake until terminal refill evidence arrives.",
+          )) as never)
+
+        await Orchestrator.processTask(taskID)
+
+        expect(decisionContractFailureArtifacts(taskID)).toHaveLength(0)
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        const run = findRun(runID)
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
       },
     })
   }, 30_000)

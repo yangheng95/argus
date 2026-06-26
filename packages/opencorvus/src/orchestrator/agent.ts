@@ -91,7 +91,7 @@ import {
 } from "@/engine"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
-import { describeTask, renderTaskDescription } from "@/engine/describe"
+import { describeTask, renderTaskDescription, type TaskDesc } from "@/engine/describe"
 import { deriveTaskStatus, isTaskTerminal } from "@/engine/task-status"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
@@ -131,6 +131,7 @@ export interface OrchestratorWakeToolDecision {
 
 export function classifyOrchestratorDecisionStop(input: {
   taskTerminal: boolean
+  schedulerParkAllowed?: boolean
   finish?: string
   finalText?: string
   providerVisiblePartCount: number
@@ -168,6 +169,7 @@ export function classifyOrchestratorDecisionStop(input: {
     )
   }
   if (input.wakeTools.length === 0) {
+    if (input.schedulerParkAllowed && finalText.length > 0 && input.providerVisiblePartCount > 0) return undefined
     return `Orchestrator stopped without calling any tool. text=${JSON.stringify(snippet(finalText, 280))}`
   }
 
@@ -206,6 +208,26 @@ export function classifyOrchestratorDecisionStop(input: {
   }
 
   return undefined
+}
+
+function schedulerParkAllowedFromSnapshot(snapshot: TaskDesc): boolean {
+  if (snapshot.status !== "active") return false
+  if (snapshot.run_orphan) return false
+  if ((snapshot.pending_agent_coordination?.length ?? 0) > 0) return false
+
+  const dispatchable = new Set(snapshot.collaboration_closure?.dispatchable_goal_ids ?? [])
+  if (dispatchable.size > 0) return false
+  if ((snapshot.collaboration_closure?.failed_goal_ids.length ?? 0) > 0) return false
+
+  let hasLiveBlockingGoal = false
+  for (const goal of snapshot.goals) {
+    if (goal.priority !== "blocking") continue
+    if (goal.needs_redispatch || goal.is_terminal_fail || goal.is_aborted || goal.is_orphaned) return false
+    if (goal.never_dispatched && dispatchable.has(goal.id)) return false
+    if (goal.is_running) hasLiveBlockingGoal = true
+  }
+
+  return hasLiveBlockingGoal
 }
 
 function snippet(input: string, max: number): string {
@@ -605,7 +627,8 @@ export namespace Orchestrator {
       //    (operator text / retry reason). Internal engine wakes reuse the
       //    existing visible user message and carry fresh task state through
       //    the runtime contract instead of synthesizing another user turn.
-      const system = await buildSystemParts(task, event, workflow, workflowState)
+      const systemContext = await buildSystemParts(task, event, workflow, workflowState)
+      const system = systemContext.parts
       // INFORMATION MISSING diagnostic — single source per rule 8. The runner.ts
       // path injects this for every worker agent (build / architect / acceptance
       // / ...); the orchestrator uses its own SessionPrompt.prompt path
@@ -880,6 +903,7 @@ export namespace Orchestrator {
           finalText: finalTextFromMessage(finalMessage),
           providerVisiblePartCount: providerVisiblePartCount(finalMessage),
           wakeTools,
+          schedulerParkAllowed: schedulerParkAllowedFromSnapshot(systemContext.snapshot),
         })
         if (noDecision) {
           throw new AgentRunError("orchestrator", `No-decision orchestrator wake: ${noDecision}`, {
@@ -1212,7 +1236,7 @@ async function buildSystemParts(
   _event: OrchestratorEvent | undefined,
   workflow?: MiniWorkflow,
   workflowState?: WorkflowState,
-): Promise<string[]> {
+): Promise<{ parts: string[]; snapshot: TaskDesc }> {
   const config = task.session_id
     ? await EffectiveConfig.effective({ sessionID: task.session_id })
     : await EffectiveConfig.effective({ taskID: task.id })
@@ -1379,5 +1403,5 @@ async function buildSystemParts(
     }
   }
 
-  return [instructions, ctx.join("\n")]
+  return { parts: [instructions, ctx.join("\n")], snapshot }
 }
