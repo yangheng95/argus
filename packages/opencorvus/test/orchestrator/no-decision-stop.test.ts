@@ -95,6 +95,32 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("without calling any tool")
   })
 
+  test("allows visible no-tool park when the rendered scheduler snapshot has only live worker work", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      schedulerParkAllowed: true,
+      finish: "stop",
+      finalText: "No dispatchable or failed goals remain; live build workers are still running, so I am parking this wake.",
+      providerVisiblePartCount: 1,
+      wakeTools: [],
+    })
+
+    expect(reason).toBeUndefined()
+  })
+
+  test("rejects invisible no-tool park even when live worker facts are present", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      schedulerParkAllowed: true,
+      finish: "stop",
+      finalText: "",
+      providerVisiblePartCount: 0,
+      wakeTools: [],
+    })
+
+    expect(reason).toContain("without calling any tool")
+  })
+
   test("rejects non-stop finishes that would enter standby on an active task", () => {
     const noToolReason = classifyOrchestratorDecisionStop({
       taskTerminal: false,
