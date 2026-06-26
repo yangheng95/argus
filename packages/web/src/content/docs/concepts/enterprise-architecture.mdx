@@ -1,0 +1,16 @@
+---
+title: Enterprise architecture explorer
+description: Click-through architecture workbench for the current OpenCorvus runtime, agent, data, evidence, and overlay layers.
+---
+
+import EnterpriseArchitectureExplorer from "../../../components/EnterpriseArchitectureExplorer.astro"
+
+This page is the source-traceable architecture workbench for the current OpenCorvus codebase. It focuses on present runtime facts: the orchestrator-led task loop, artifact-backed engine state, specialist agent boundaries, goal worktree execution, verification evidence, and overlay projection.
+
+<EnterpriseArchitectureExplorer locale="en" />
+
+## Review Scope
+
+The explorer intentionally excludes retired planner/deliver/evaluation-table narratives. Current durable process evidence is represented through `engine_artifact`, task snapshots, explicit workflow tools, task-scoped browser preview evidence, visual QA, and final integrity attempts.
+
+For the compact architecture narrative, see [Architecture](./architecture.md). For the table-level model, see [Task / Run / Goal data model](./goal-run-task.md).

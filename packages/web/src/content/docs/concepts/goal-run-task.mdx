@@ -15,11 +15,12 @@ EngineTask (kind: "workflow" | "build")
  │   └─ EnginePlanNode[]
  ├─ RunRow                  reconstructed from engine_artifact kind="run"
  ├─ GoalRunRow[]            reconstructed from engine_artifact kind="goal_run_attempt"
- ├─ AcceptanceRow[]         reconstructed from engine_artifact kind="acceptance"
- └─ EvaluationRow[]         reconstructed from engine_artifact kind="verification-evidence"
+ ├─ VerificationEvidence[]  reconstructed from engine_artifact kind="verification-evidence"
+ ├─ IntegrityAttempt[]      reconstructed from engine_artifact kind="integrity_attempt"
+ └─ AgentCoordination[]     reconstructed from engine_artifact kind="agent_coordination_*"
 ```
 
-`engine_artifact` is the durable event/evidence surface for runs, goal attempts, acceptance rows, evaluations, integrity attempts, reports, diffs, images, and related records.
+`engine_artifact` is the durable event/evidence surface for runs, goal attempts, verification evidence, integrity attempts, agent-coordination records, reports, diffs, images, and related records.
 
 ## EngineTask
 
@@ -78,18 +79,20 @@ Workflow progress is rendered from artifacts and workflow tool side effects.
 
 The latest non-superseded attempt is the authoritative source for goal progress.
 
-## Acceptance and Evaluation
+## Verification, Integrity, and Coordination
 
-`AcceptanceRow` is reconstructed from `engine_artifact.kind="acceptance"` and records candidate/publishing/delivered/failed acceptance statuses.
-
-`EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"` and records task-level or goal-run evidence:
+`VerificationEvidence` is reconstructed from `engine_artifact.kind="verification-evidence"` and records task-level or goal-run evidence:
 
 | Field      | Meaning                                                 |
 | ---------- | ------------------------------------------------------- |
-| `scope`    | `goal_run` or `acceptance`                              |
+| `scope`    | Task or goal-run evidence scope                         |
 | `status`   | `pending / passed / failed / inconclusive`              |
 | `verdict`  | `accepted / rejected / inconclusive`                    |
 | `checks[]` | Check summaries, evidence pointers, and scorer metadata |
+
+`IntegrityAttempt` is reconstructed from `engine_artifact.kind="integrity_attempt"` and contains the final review facts consumed by the orchestrator before task completion.
+
+Agent-to-agent coordination is reconstructed from `engine_artifact.kind="agent_coordination_request"`, `agent_coordination_response`, and `agent_coordination_action`.
 
 ## Durable State
 
@@ -98,5 +101,6 @@ All task-domain state persists in SQLite under the configured OpenCorvus data di
 ## What's Next
 
 - [Architecture](./architecture.md)
+- [Enterprise architecture explorer](./enterprise-architecture.md)
 - [Agentic loop](./agent-loop.md)
-- [Integrity and evaluation reference](/docs/reference/evaluator/)
+- [Integrity review reference](/docs/reference/evaluator/)

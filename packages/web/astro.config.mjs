@@ -104,7 +104,12 @@ export default defineConfig({
         {
           label: "Concepts",
           translations: { en: "Concepts", "zh-CN": "概念" },
-          items: ["concepts/architecture", "concepts/agent-loop", "concepts/goal-run-task"],
+          items: [
+            "concepts/architecture",
+            "concepts/enterprise-architecture",
+            "concepts/agent-loop",
+            "concepts/goal-run-task",
+          ],
         },
         {
           label: "Usage",

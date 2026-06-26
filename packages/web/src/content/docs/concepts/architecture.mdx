@@ -5,6 +5,8 @@ description: OpenCorvus turns natural-language requests into verified code chang
 
 OpenCorvus's job is to turn a natural-language request into verified code changes. The current architecture is orchestrator-led: the orchestrator reads the task snapshot on every wake, chooses explicit workflow tools, and records durable evidence as SQLite rows and artifacts.
 
+For a click-through source map of the current runtime, see [Enterprise architecture explorer](./enterprise-architecture.md).
+
 ## HTTP API Runtime Layering
 
 The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into two real layers:
@@ -37,7 +39,7 @@ Engine task row
   ↓
 Orchestrator session
   ├─ typed workflow tools: requirements / architect / build / integrity / ...
-  ├─ durable artifacts: runs / goal_run_attempts / acceptance / evaluation / reports
+  ├─ durable artifacts: runs / goal_run_attempts / verification evidence / integrity attempts / reports
   └─ explicit user interactions: questions and permissions
   ↓
 Worker sessions
@@ -84,6 +86,7 @@ See [Task / Run / Goal data model](./goal-run-task.md).
 ## What's Next
 
 - [Task / Run / Goal data model](./goal-run-task.md)
+- [Enterprise architecture explorer](./enterprise-architecture.md)
 - [Agentic loop](./agent-loop.md)
 - [OpenCorvus configuration](/docs/config/)
-- [Integrity and evaluation reference](/docs/reference/evaluator/)
+- [Integrity review reference](/docs/reference/evaluator/)

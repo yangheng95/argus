@@ -18,7 +18,7 @@ OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、�
 | **多执行器调度** | 内置 OpenCorvus，可自动发现并调度 Codex / Claude Code                                          |
 | **完整性复核**   | build evidence、specialist checks、visual/runtime evidence 与 LLM review 由 integrity 阶段汇总 |
 | **多通道接入**   | HTTP API、Overlay 桌面端、14 个 IM channel                                                     |
-| **状态持久化**   | 任务、需求、计划、goal、run、artifact、交互、acceptance 与 evaluation 全部落 SQLite            |
+| **状态持久化**   | 任务、需求、计划、goal、run、artifact、交互、verification evidence、integrity attempt 与 coordination artifact 全部落 SQLite |
 | **人工参与**     | 权限 ask/allow/deny、follow-up 消息、手动反馈，均可在无人值守流程中无缝嵌入                    |
 
 ## 三层架构
@@ -50,6 +50,7 @@ bun "$OPENCORVUS_SOURCE" serve
 ## 文档地图
 
 - [**配置**](/docs/zh-cn/config/) — `opencorvus.jsonc`、env、优先级
+- [**企业级动态架构图**](/docs/zh-cn/concepts/enterprise-architecture/) — 当前运行架构的交互式地图
 - [**Provider**](/docs/zh-cn/providers/) — 内置与自定义 LLM provider
 - [**Permissions**](/docs/zh-cn/permissions/) — allow / ask / deny 规则
 - [**Skills**](/docs/zh-cn/skills/) 与 [**Plugins**](/docs/zh-cn/plugins/) — 扩展机制
