@@ -1,6 +1,6 @@
-import { Instance, lazyInstanceState } from "../../project/instance"
-import { State } from "../../project/state"
+import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
+import { Filesystem } from "../../util/filesystem"
 import { Message } from "../message"
 import { SessionStatus } from "../status"
 
@@ -42,17 +42,35 @@ export namespace SessionPromptState {
     return { finished, finish }
   }
 
-  const instanceState = lazyInstanceState(createPromptState)
-  const explicitStates = new Map<string, () => PromptState>()
+  const statesByDirectory = new Map<string, PromptState>()
+
+  function directoryKey(directory?: string) {
+    return Filesystem.resolve(directory ?? Instance.directory)
+  }
+
+  function stateEntry(directory?: string) {
+    const key = directoryKey(directory)
+    let promptState = statesByDirectory.get(key)
+    if (!promptState) {
+      promptState = createPromptState()
+      statesByDirectory.set(key, promptState)
+    }
+    return { key, promptState }
+  }
+
+  function existingStateEntry(directory?: string) {
+    const key = directoryKey(directory)
+    return { key, promptState: statesByDirectory.get(key) }
+  }
+
+  function deleteDirectoryIfEmpty(key: string, promptState: PromptState) {
+    if (Object.keys(promptState).length === 0 && statesByDirectory.get(key) === promptState) {
+      statesByDirectory.delete(key)
+    }
+  }
 
   export function state(directory?: string) {
-    if (!directory) return instanceState()
-    let stateForDirectory = explicitStates.get(directory)
-    if (!stateForDirectory) {
-      stateForDirectory = State.create(() => directory, createPromptState)
-      explicitStates.set(directory, stateForDirectory)
-    }
-    return stateForDirectory()
+    return stateEntry(directory).promptState
   }
 
   export function assertNotBusy(sessionID: string) {
@@ -60,7 +78,7 @@ export namespace SessionPromptState {
   }
 
   export function start(sessionID: string, directory?: string) {
-    const s = state(directory)
+    const { promptState: s } = stateEntry(directory)
     if (s[sessionID]) return
     const controller = new AbortController()
     const finished = createFinishSignal()
@@ -74,16 +92,16 @@ export namespace SessionPromptState {
   }
 
   export function isActive(sessionID: string, directory?: string): boolean {
-    return Boolean(state(directory)[sessionID])
+    return Boolean(existingStateEntry(directory).promptState?.[sessionID])
   }
 
   export function waitForFinish(sessionID: string, directory?: string): Promise<void> {
-    return state(directory)[sessionID]?.finished ?? Promise.resolve()
+    return existingStateEntry(directory).promptState?.[sessionID]?.finished ?? Promise.resolve()
   }
 
   export function resume(sessionID: string, directory?: string) {
-    const s = state(directory)
-    if (!s[sessionID]) return
+    const { promptState: s } = existingStateEntry(directory)
+    if (!s?.[sessionID]) return
 
     return s[sessionID].abort.signal
   }
@@ -91,8 +109,8 @@ export namespace SessionPromptState {
   export function cancel(sessionID: string, directory?: string): boolean {
     log.info("cancel", { sessionID })
     SessionStatus.abortActivityGate(sessionID, new DOMException("session cancelled", "AbortError"))
-    const s = state(directory)
-    const match = s[sessionID]
+    const { promptState: s } = existingStateEntry(directory)
+    const match = s?.[sessionID]
     const statusOptions = directory ? { publish: false } : undefined
     if (!match) {
       if (directory) return false
@@ -116,8 +134,8 @@ export namespace SessionPromptState {
   }
 
   export function finish(sessionID: string, abort?: AbortSignal, directory?: string) {
-    const s = state(directory)
-    const match = s[sessionID]
+    const { key, promptState: s } = existingStateEntry(directory)
+    const match = s?.[sessionID]
     if (!match) return
     if (abort && match.abort.signal !== abort) return
     const error = new Error("session prompt loop finished")
@@ -127,10 +145,11 @@ export namespace SessionPromptState {
     match.callbacks = []
     match.finish()
     delete s[sessionID]
+    deleteDirectoryIfEmpty(key, s)
   }
 
   export function flushCallbacks(sessionID: string, result: Message.WithParts, directory?: string) {
-    const s = state(directory)[sessionID]
+    const s = existingStateEntry(directory).promptState?.[sessionID]
     if (!s) return
     for (const q of s.callbacks) q.resolve(result)
     s.callbacks = []

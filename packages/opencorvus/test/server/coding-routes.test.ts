@@ -462,6 +462,58 @@ describe("coding assistant routes", () => {
     })
   })
 
+  test("coding session abort reaches live prompt state after instance disposal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let session: Session.Info | undefined
+    let abort: AbortSignal | undefined
+    let cancelled = false
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(created.status).toBe(201)
+        session = ((await created.json()) as { session: Session.Info }).session
+        abort = SessionPromptState.start(session.id, tmp.path)
+        if (!abort) throw new Error("expected active prompt state")
+        abort.addEventListener("abort", () => {
+          cancelled = true
+        })
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+      },
+    })
+
+    await Instance.disposeAll()
+
+    if (!session || !abort) throw new Error("expected coding assistant prompt state")
+    const stoppedPromise = Server.App().request(`/coding/session/${session.id}/abort`, {
+      method: "POST",
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    await waitUntil(() => cancelled, "coding session cancellation after instance disposal", 5_000)
+    const beforeFinish = await Promise.race([
+      stoppedPromise.then(() => "resolved" as const),
+      Bun.sleep(50).then(() => "pending" as const),
+    ])
+    try {
+      expect(beforeFinish).toBe("pending")
+    } finally {
+      SessionPromptState.finish(session.id, abort, tmp.path)
+    }
+    const stopped = await stoppedPromise
+    expect(stopped.status).toBe(200)
+    expect(SessionPromptState.isActive(session.id, tmp.path)).toBe(false)
+    expect(SessionStatus.get(session.id)).toEqual({ type: "terminal", reason: "aborted" })
+  })
+
   test("coding session abort reports incomplete cancellation when live prompt state is missing", async () => {
     await using tmp = await tmpdir({ git: true })
 
