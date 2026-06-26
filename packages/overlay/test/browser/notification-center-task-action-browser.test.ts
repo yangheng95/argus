@@ -74,13 +74,18 @@ function pushTaskListEvent(clients: SseClient[], sequence: number) {
   }
 }
 
-async function waitForTaskListStream(clients: SseClient[]) {
+async function waitForTaskListStream(clients: SseClient[], diagnostics: () => unknown) {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     if (clients.some((client) => !client.closed && client.path === "/task/events")) return
     await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 50))
   }
-  assert.fail(`task list SSE stream did not connect: ${JSON.stringify(clients.map((client) => client.path))}`)
+  assert.fail(
+    `task list SSE stream did not connect: ${JSON.stringify({
+      clients: clients.map((client) => client.path),
+      diagnostics: diagnostics(),
+    })}`,
+  )
 }
 
 async function notificationStructure(page: any, root: string) {
@@ -220,6 +225,60 @@ async function notificationReadability(page: any, root: string) {
   })
 }
 
+async function notificationPanelWidthState(page: any, root: string) {
+  return page.$eval(
+    "#rightPanelNotifications",
+    (node: Element, rootSelector: string) => {
+      const panel = node as HTMLElement
+      const mount = document.querySelector<HTMLElement>("#solidNotificationCenterMount")
+      const list = document.querySelector<HTMLElement>('.app-notifications[data-surface="panel"]')
+      const group = document.querySelector<HTMLElement>(".app-notification-group")
+      const groupItems = document.querySelector<HTMLElement>(".app-notification-group__items")
+      const card = document.querySelector<HTMLElement>(rootSelector)
+      if (!mount || !list || !group || !groupItems || !card) throw new Error("notification panel DOM is incomplete")
+      const portalHost = list.parentElement as HTMLElement | null
+
+      function width(element: HTMLElement): number {
+        return Math.round(element.getBoundingClientRect().width)
+      }
+
+      function styleState(element: HTMLElement) {
+        const style = getComputedStyle(element)
+        return {
+          display: style.display,
+          flex: style.flex,
+          flexBasis: style.flexBasis,
+          flexGrow: style.flexGrow,
+          flexShrink: style.flexShrink,
+          width: style.width,
+          minWidth: style.minWidth,
+          maxWidth: style.maxWidth,
+          alignSelf: style.alignSelf,
+        }
+      }
+
+      return {
+        widths: {
+          panel: width(panel),
+          mount: width(mount),
+          portalHost: portalHost ? width(portalHost) : 0,
+          list: width(list),
+          group: width(group),
+          groupItems: width(groupItems),
+          card: width(card),
+        },
+        listParentID: list.parentElement?.id || "",
+        listParentClass: list.parentElement?.className || "",
+        listMatchesPanelSelector: list.matches('.app-notifications[data-surface="panel"]'),
+        mountStyle: styleState(mount),
+        portalHostStyle: portalHost ? styleState(portalHost) : null,
+        listStyle: styleState(list),
+      }
+    },
+    root,
+  )
+}
+
 async function selectedTaskID(page: any) {
   return page.evaluate(() => {
     const source = (window as any).boardStore?.selectedSource
@@ -233,6 +292,7 @@ test("notification task action is an explicit button on toast and panel surfaces
 
   const now = Date.now()
   const errors: string[] = []
+  const requestLog: Array<{ method: string; path: string }> = []
   const clients: SseClient[] = []
   const task = {
     id: TASK_ID,
@@ -266,6 +326,7 @@ test("notification task action is an explicit button on toast and panel surfaces
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
+    requestLog.push({ method: req.method, path })
     if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
     const staticResponse = await overlayStaticResponse(path)
@@ -320,6 +381,16 @@ test("notification task action is an explicit button on toast and panel surfaces
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
     if (path === "/executor") return send([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+    if (path === "/skill/mounts") {
+      return send({
+        scope: "project",
+        skills: [],
+        agents: [],
+        matrix: [],
+        project_mounts: { agents: {} },
+        unmounted_count: 0,
+      })
+    }
     if (path === "/skill/installed" || path === "/skill") return send([])
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory") return send([])
@@ -357,11 +428,15 @@ test("notification task action is an explicit button on toast and panel surfaces
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_server_url", serverUrl)
       localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem("oc_directory", "D:/overlay/workspace/notify-action")
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
-    await waitForTaskListStream(clients)
+    await waitForTaskListStream(clients, () => ({
+      errors,
+      requests: requestLog.slice(-40),
+    }))
 
     pushTaskListEvent(clients, 1)
     await page.waitForSelector('.app-notifications[data-surface="toast"] .app-notification')
@@ -444,8 +519,19 @@ test("notification task action is an explicit button on toast and panel surfaces
       assert.ok(sample.contrast >= 4.5, `${sample.id} contrast ${sample.contrast}`)
     }
 
+    const widthState = await notificationPanelWidthState(page, panelRoot)
+    assert.ok(widthState.widths.panel > 0, JSON.stringify(widthState))
+    for (const [key, width] of Object.entries(widthState.widths)) {
+      assert.ok(
+        Math.abs(width - widthState.widths.panel) <= 2,
+        `${key} width did not fill panel: ${JSON.stringify(widthState)}`,
+      )
+    }
+
     const panelScreenshotPath = resolve(".scratch", "notification-dismissed-panel-readable.png")
     writeFileSync(panelScreenshotPath, await (await page.$("#rightPanelNotifications"))!.screenshot({}))
+    const panelWidthScreenshotPath = resolve(".scratch", "notification-panel-width-fill.png")
+    writeFileSync(panelWidthScreenshotPath, await (await page.$("#rightPanelNotifications"))!.screenshot({}))
 
     await page.focus(`${panelRoot} [data-ui="app-notification-open-task"]`)
     await page.keyboard.press("Enter")

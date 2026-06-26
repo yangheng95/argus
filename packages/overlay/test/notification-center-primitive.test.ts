@@ -31,7 +31,8 @@ test("NotificationCenter routes task notification activation through task select
   expect(SOURCE).toContain("dismissNotification(item.id)")
   expect(SOURCE).toContain('data-ui="app-notification-open-task"')
   expect(SOURCE).toContain('title={`${t("common.open")}: ${taskTitle()}`}')
-  expect(SOURCE).toContain("onClick={() => void activateTaskNotification(props.item)}")
+  expect(SOURCE).toContain("runTaskNotificationAction")
+  expect(SOURCE).toContain("onClick={() => runTaskNotificationAction(props.item)}")
   expect(SOURCE).not.toContain("data-clickable={")
   expect(SOURCE).not.toContain("tabIndex={props.item.taskID")
   expect(SOURCE).not.toContain("onKeyDown={(event)")
@@ -87,6 +88,27 @@ test("NotificationCenter separates toast visibility from task-grouped panel hist
   expect(NOTIFY).toContain("MAX_NOTIFICATION_HISTORY")
   expect(NOTIFY).toContain("visibleNotificationItems")
   expect(NOTIFY).toContain("centerHistoryNotificationItems")
+})
+
+test("notification panel stretches the shared list and cards to the panel width", () => {
+  const panelRootRule = cssRuleBody('.app-notifications[data-surface="panel"]')
+  const mountRule = cssRuleBody(".notification-center-panel")
+  const portalChildRule = cssRuleBody(".notification-center-panel > *")
+  const cardRule = cssRuleBody(".app-notification")
+  const groupRule = cssRuleBody(".app-notification-group")
+  const groupItemsRule = cssRuleBody(".app-notification-group__items")
+  const toastRule = cssRuleBody('.app-notifications[data-surface="toast"]')
+
+  for (const body of [panelRootRule, mountRule, portalChildRule, cardRule, groupRule, groupItemsRule]) {
+    expect(body).toContain("width: 100%;")
+    expect(body).toContain("max-width: 100%;")
+    expect(body).toContain("min-width: 0;")
+  }
+  expect(panelRootRule).toContain("flex: 1 1 0;")
+  expect(portalChildRule).toContain("flex: 1 1 0;")
+  expect(cardRule).toContain("box-sizing: border-box;")
+  expect(toastRule).toContain("width: min(")
+  expect(toastRule).not.toContain("width: 100%;")
 })
 
 test("dismissed notification history keeps readable text without whole-card opacity", () => {
