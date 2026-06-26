@@ -118,7 +118,6 @@ import {
   findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
-  findChildrenOfTask,
   findPlan,
   findRun,
   getGoalRetryCount,
@@ -7244,7 +7243,7 @@ export function createOrchestratorTools(input: {
         "Create one polished inheriting engine task from concrete current-task evidence. " +
         "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.auto_confirm_proposed_tasks`, " +
         "creating directly by default and asking the user first only when auto-confirm is disabled. Do not call generic `task` or control-plane `panel`. " +
-        "Create at most one inheriting child task for the parent task. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
+        "Independent child tasks may run in parallel when their scopes do not depend on each other's output, artifact state, decisions, or owned files. Dependent follow-up work must queue or wait for its prerequisite instead of starting in parallel. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
         "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by modify_goal, architect, or targeted build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
         "Use it when failed visual_qa evidence includes follow_up_task for unrepairable production blockers; translate that request into the inheriting task instead of ending with the failed report. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
@@ -7270,7 +7269,7 @@ export function createOrchestratorTools(input: {
           .boolean()
           .default(false)
           .describe(
-            "Set true when this follow-up task should wait in the directory queue; set false when it should start immediately and bypass the directory queue.",
+            "Set false only for independent follow-up work that can start immediately. Set true when this follow-up depends on prerequisite work or should otherwise wait in the directory queue.",
           ),
         kind: z
           .enum(["workflow", "build"])
@@ -7281,21 +7280,6 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)
-        const existingChildren = findChildrenOfTask(taskID)
-        if (existingChildren.length > 0) {
-          return SubAgentProtocol.yieldResult({
-            headline: "Follow-up task was not created because this parent already has an inheriting child task.",
-            summary:
-              "Each parent task can create only one inheriting follow-up task. Continue through the existing child task instead of creating a second lineage branch.",
-            fields: [
-              ["parent_task_id", taskID],
-              ["existing_child_task_ids", existingChildren.join(", ")],
-              ["proposal", title],
-              ["reason", reason],
-            ],
-            pointer: `current task ${taskID}; no new task was created`,
-          })
-        }
         const cfg = await EffectiveConfig.effective({ taskID, sessionID: input.agentSessionID })
         const autoConfirmProposedTasks = cfg.experimental?.auto_confirm_proposed_tasks === true
         log.info("propose_task requested", { taskID, title, priority, kind, autoConfirmProposedTasks })

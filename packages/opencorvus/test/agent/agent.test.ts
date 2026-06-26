@@ -1542,12 +1542,13 @@ test("mission is hidden primary with the coordinator prompt", async () => {
       expect(mission?.prompt).toContain("frontier.md")
       expect(mission?.prompt).toContain("handoff.md")
       // Task granularity convention (prompt-only rule per CLAUDE.md rule 6.1).
-      // Default is ONE task per wake bundling related frontier items; Mission
-      // must not fan out 1-bullet-=>-1-task by default. The executor's
-      // architect already decomposes a task into goals — mission-level fan-out
-      // is double-decomposition and burns the worktree + sub-agent bootstrap.
+      // Mission may fan out independent scopes, but dependent scopes must
+      // queue instead of starting in parallel. The executor's architect already
+      // decomposes a task into goals, so related frontier bullets still bundle.
       expect(mission?.prompt).toContain("TASK GRANULARITY")
-      expect(mission?.prompt).toContain("Default: ONE task per wake")
+      expect(mission?.prompt).toContain("Parallel dispatch is allowed only when")
+      expect(mission?.prompt).toContain("no dependency on each other's output")
+      expect(mission?.prompt).toContain("Dependent child work must stay queued")
       expect(mission?.prompt).toContain("double-decomposition")
       // Mission-created tasks must carry the user's real request forward,
       // not only Mission's compressed interpretation.

@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                         | Title                                  |
 | ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | [2026-06-26-task-cron-nonblocking-wait.md](2026-06-26-task-cron-nonblocking-wait.md)                         | Task Cron Nonblocking Wait             |
+| [2026-06-26-mission-task-parallel-subtasks.md](2026-06-26-mission-task-parallel-subtasks.md) | Mission And Task Parallel Subtasks |
 | [2026-06-26-wait-tool-twenty-minute-recommendation.md](2026-06-26-wait-tool-twenty-minute-recommendation.md) | Wait Tool Twenty Minute Recommendation |
 
 ## 2026-06-25

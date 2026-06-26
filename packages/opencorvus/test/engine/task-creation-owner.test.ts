@@ -26,26 +26,87 @@ describe("task creation owner serialization", () => {
     resetTaskCreationOwnerLocksForTest()
   })
 
-  test("derives mission and parent-task owner keys from creation metadata", () => {
+  test("derives serialization keys from channel binding, not mission or parent-task lineage", () => {
+    expect(
+      taskCreationOwnerKey(
+        parsed({
+          channelBinding: { platform: "slack", channel: "chan_1", thread: "thread_1", payload: {} },
+        }),
+      ),
+    ).toBe("channel:slack:chan_1:thread_1")
     expect(
       taskCreationOwnerKey(
         parsed({
           metadata: { mission: { id: "m1", session_id: "ses_m1" } },
         }),
       ),
-    ).toBe("mission:ses_m1")
+    ).toBeUndefined()
     expect(
       taskCreationOwnerKey(
         parsed({
           metadata: { parent_task_id: "tsk_parent" },
         }),
       ),
-    ).toBe("task:tsk_parent")
+    ).toBeUndefined()
     expect(taskCreationOwnerKey(parsed({ metadata: { actor: "panel_ui" } }))).toBeUndefined()
   })
 
-  test("serializes concurrent creates for the same mission owner", async () => {
+  test("does not serialize concurrent creates for the same mission owner", async () => {
     const input = parsed({ metadata: { mission: { id: "m1", session_id: "ses_m1" } } })
+    const events: string[] = []
+    let releaseFirst!: () => void
+    const firstPaused = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    const first = withTaskCreationOwnerLock(input, async () => {
+      events.push("first:start")
+      await firstPaused
+      events.push("first:end")
+      return "first"
+    })
+    const second = withTaskCreationOwnerLock(input, async () => {
+      events.push("second:start")
+      events.push("second:end")
+      return "second"
+    })
+
+    await tick()
+    expect(events).toEqual(["first:start", "second:start", "second:end"])
+    releaseFirst()
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"])
+    expect(events).toEqual(["first:start", "second:start", "second:end", "first:end"])
+  })
+
+  test("does not serialize concurrent creates for the same parent task owner", async () => {
+    const input = parsed({ metadata: { parent_task_id: "tsk_parent" } })
+    const events: string[] = []
+    let releaseFirst!: () => void
+    const firstPaused = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    const first = withTaskCreationOwnerLock(input, async () => {
+      events.push("first:start")
+      await firstPaused
+      events.push("first:end")
+      return "first"
+    })
+    const second = withTaskCreationOwnerLock(input, async () => {
+      events.push("second:start")
+      events.push("second:end")
+      return "second"
+    })
+
+    await tick()
+    expect(events).toEqual(["first:start", "second:start", "second:end"])
+    releaseFirst()
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"])
+    expect(events).toEqual(["first:start", "second:start", "second:end", "first:end"])
+  })
+
+  test("serializes duplicate channel-bound creates", async () => {
+    const input = parsed({ channelBinding: { platform: "slack", channel: "chan_1", thread: "thread_1", payload: {} } })
     const events: string[] = []
     let releaseFirst!: () => void
     const firstPaused = new Promise<void>((resolve) => {
