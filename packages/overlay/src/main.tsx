@@ -279,6 +279,15 @@ const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
   "file",
 ]
 
+const RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS: ReadonlySet<CenterWorkbenchPanel> = new Set<CenterWorkbenchPanel>([
+  "explorer",
+  "diff",
+  "browser",
+  "screenshots",
+  "inspector",
+  "notifications",
+])
+
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
   { id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow" },
   { id: "inspector", icon: "inspect", labelKey: "sections.title", tooltipKey: "activity.tooltip.inspector" },
@@ -328,6 +337,9 @@ function leftActivityDefinition(activity: LeftActivity): SideActivity<LeftActivi
 }
 
 const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
+const [initialWidthCappedCenterWorkbenchPanels, setInitialWidthCappedCenterWorkbenchPanels] = createSignal<
+  ReadonlySet<CenterWorkbenchPanel>
+>(new Set<CenterWorkbenchPanel>())
 const activeRightActivity = (): RightActivity | null => {
   const panel = selectedCenterWorkbenchPanel()
   return panel && panel !== "file" ? panel : null
@@ -447,6 +459,7 @@ function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void
   setWorkspaceOpen(false)
   closeFileEditor()
   setPrimaryCenterPanel(panel)
+  clearCenterWorkbenchInitialWidthCaps()
   setCenterWorkbenchPanels(["workflow"])
   scheduleCenterWorkbenchPanelReveal("workflow")
 }
@@ -612,13 +625,42 @@ function focusInitialRestoredTaskWorkspace(): void {
   setSelectedLeftPanelActivity("tasks")
 }
 
+function usesRightToolbarInitialWidthCap(panel: CenterWorkbenchPanel): boolean {
+  return RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS.has(panel)
+}
+
+function capCenterWorkbenchPanelInitialWidth(panel: CenterWorkbenchPanel): void {
+  if (!usesRightToolbarInitialWidthCap(panel)) return
+  setInitialWidthCappedCenterWorkbenchPanels((current) => {
+    if (current.has(panel)) return current
+    const next = new Set(current)
+    next.add(panel)
+    return next
+  })
+}
+
+function clearCenterWorkbenchPanelInitialWidthCap(...panels: CenterWorkbenchPanel[]): void {
+  setInitialWidthCappedCenterWorkbenchPanels((current) => {
+    if (!panels.some((panel) => current.has(panel))) return current
+    const next = new Set(current)
+    for (const panel of panels) next.delete(panel)
+    return next
+  })
+}
+
+function clearCenterWorkbenchInitialWidthCaps(): void {
+  setInitialWidthCappedCenterWorkbenchPanels(new Set<CenterWorkbenchPanel>())
+}
+
 function selectTaskFromTaskList(taskID: string, directory?: string): void {
   if (activeTaskID() !== taskID) focusTaskPanel()
   runMainAsync("task.select-from-list", () => selectTask(taskID, { directory }))
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
+  const alreadyOpen = untrack(centerWorkbenchPanels).includes(panel)
   setCenterWorkbenchPanels((current) => (current.includes(panel) ? current : [...current, panel]))
+  if (!alreadyOpen) capCenterWorkbenchPanelInitialWidth(panel)
   scheduleCenterWorkbenchPanelReveal(panel)
 }
 
@@ -626,6 +668,7 @@ function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   if (panel === "workflow" && focusedLeftActivityOwnsPrimaryPanel(untrack(selectedLeftActivity))) return
   if (panel === "diff") setWorkspaceOpen(false)
   if (panel === "file") closeFileEditor()
+  clearCenterWorkbenchPanelInitialWidthCap(panel)
   setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
 }
 
@@ -1787,6 +1830,7 @@ disposers.push(
     createEffect(() => {
       const panels = centerWorkbenchPanels()
       const selectedPanel = selectedCenterWorkbenchPanel(panels)
+      const initialWidthCappedPanels = initialWidthCappedCenterWorkbenchPanels()
       const workbench = document.getElementById("centerWorkbench")
       const views = getCenterWorkbenchViews()
       if (views.workflow) views.workflow.dataset.workbenchView = primaryCenterPanel()
@@ -1800,6 +1844,9 @@ disposers.push(
           body.dataset.open = String(open)
           body.dataset.active = String(open)
           body.dataset.selected = String(open && panel === selectedPanel)
+          body.dataset.initialWidthCapped = String(
+            open && initialWidthCappedPanels.has(panel as CenterWorkbenchPanel),
+          )
         }
       }
       renderCenterWorkbenchPanelLayoutOnFrame.schedule()
@@ -1970,6 +2017,7 @@ function updateCenterWorkbenchPanelWeights(metrics: CenterWorkbenchPanelResizeBa
   const leftWidth = clampCenterWorkbenchResizeWidth(metrics.range, rawLeftWidth)
   const leftWeight = metrics.totalWeight * (leftWidth / metrics.totalWidth)
   const rightWeight = metrics.totalWeight - leftWeight
+  clearCenterWorkbenchPanelInitialWidthCap(metrics.leftPanel, metrics.rightPanel)
   setSettingsStore("centerWorkbenchPanelWeights", {
     ...(settingsStore.centerWorkbenchPanelWeights ?? {}),
     [metrics.leftPanel]: leftWeight,
