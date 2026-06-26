@@ -182,7 +182,7 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     `Visual reference image: ${evidence.referenceImageRelative}`,
     `Required reference image evidence id: ${evidence.referenceImageEvidenceID}`,
     "",
-    "Use this rendered webpage evidence as the primary source for page layout, visible content, responsive behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header investigation scope.",
+    "Use this rendered webpage evidence as the primary source for page layout, visible content, scoped layout behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header investigation scope. For frontend replica tasks, non-desktop behavior is out of scope unless explicitly requested as a separate multi-end migration.",
     `Register the captured reference screenshot as research evidence with id \`${evidence.referenceImageEvidenceID}\`, pointer \`${evidence.referenceImageRelative}\`, kind \`web\`, and reliability \`primary\`.`,
     `Use \`${evidence.referenceImageEvidenceID}\` in \`webpage_contract.reference_image_evidence_ids\` and cite it from visual layout, style, fidelity acceptance, bundle sections, evidence notes, and citation entries that depend on the screenshot.`,
     `In the rendered research-bundle report, include a downstream implementation point stating that build must inspect and reference \`${evidence.referenceImageRelative}\` while writing code, using the screenshot as visual truth instead of reconstructing layout from prose alone.`,

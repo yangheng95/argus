@@ -1287,7 +1287,7 @@ describe("frontend-design prompt assembly", () => {
       const summary = await FrontendDesignTestHooks.summarizeHostPreparedSourceProject(dir)
 
       expect(summary).toContain("Source-dom region stats")
-      expect(summary).toContain("Visual iteration matrix")
+      expect(summary).toContain("Desktop visual iteration viewport")
       expect(summary).toContain("desktop-reference: 1440x900 (primary_reference, capture_viewport)")
       expect(summary).toContain("layoutWidthContract: full_width viewport=1440px")
       expect(summary).toContain("evidenceMethod: task_scoped_preview_screenshots")

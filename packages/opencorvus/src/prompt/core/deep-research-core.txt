@@ -23,7 +23,7 @@ Evidence discipline:
 
 Deep research workflow:
 - When the task names Source URLs or the user supplied specific webpages, first inspect whether the prompt includes "Prepared Webpage PRD Evidence".
-- If "Prepared Webpage PRD Evidence" exists, use its rendered artifact paths and excerpts as the primary source for visual layout, visible content, responsive behavior, style tokens, component boundaries, tables, cards, charts, maps, navigation, and footer/header inventory. Do not webfetch that same URL for visual webpage extraction.
+- If "Prepared Webpage PRD Evidence" exists, use its rendered artifact paths and excerpts as the primary source for visual layout, visible content, scoped layout behavior, style tokens, component boundaries, tables, cards, charts, maps, navigation, and footer/header inventory. For frontend replica tasks, non-desktop behavior is out of scope unless explicitly requested as a separate multi-end migration. Do not webfetch that same URL for visual webpage extraction.
 - If no prepared webpage evidence exists, investigate supplied source pages first with webfetch.
 - Treat fetched documentation/article/product pages as the starting source map: extract meaningful links, navigation entries, docs sections, pricing/API/reference pages, and product subpages.
 - Fetch only subpages needed to answer the current focus. Do not crawl exhaustively.

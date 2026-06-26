@@ -117,7 +117,8 @@ describe("prompt profiles", () => {
 
   test("direct session agents also receive scene-specific overlays", () => {
     const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("responsive behavior")
+    expect(PromptProfile.overlayFor("coding", config)).toContain("desktop source information architecture")
+    expect(PromptProfile.overlayFor("coding", config)).toContain("separate multi-end migration task")
     expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("replica questions")
     expect(PromptProfile.overlayFor("mission", config)).toContain("target surface")
   })

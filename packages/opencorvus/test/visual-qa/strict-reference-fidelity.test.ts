@@ -42,6 +42,10 @@ describe("visual-qa final blocker-based acceptance", () => {
   test("core prompt requires task-scoped region bind and comparison for clone work", () => {
     const normalized = VISUAL_QA_CORE.replace(/\s+/g, " ")
 
+    expect(normalized).toContain("prioritize screenshot comparison")
+    expect(normalized).toContain("screen by screen with viewport-sized screenshots or scroll slices")
+    expect(normalized).toContain("Do not judge the whole webpage from one full-page screenshot")
+    expect(normalized).toContain("one-shot visual judge verdict")
     expect(normalized).toContain("task-scoped preview repair chain as primary region evidence")
     expect(normalized).toContain("call `browser_preview_bind_local_module`")
     expect(normalized).toContain("pass that binding to `browser_preview_compare_regions`")
@@ -55,11 +59,13 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("Viewport width differences are not normalized away by the comparison runner")
     expect(normalized).toContain("inspect true-size source/local side-by-side artifacts")
     expect(normalized).toContain("inspect diff artifacts only when true crop dimensions match")
-    expect(normalized).toContain("request only `desktop` viewport region comparison evidence")
-    expect(normalized).toContain("do not block on mobile or tablet reference evidence")
+    expect(normalized).toContain("Request only `desktop` viewport region comparison evidence")
+    expect(normalized).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(normalized).toContain("Do not substitute standalone screenshots as the strongest region-parity evidence")
     expect(normalized).toContain("A passed visual QA report for a bound reference region should cite fresh")
     expect(normalized).toContain("submit the visual QA report with the exact blocker or remaining evidence gap")
+    expect(normalized).toContain("A single full-page screenshot or single slice cannot prove the whole page is accepted")
+    expect(normalized).toContain("list the uncovered screen as a production blocker")
   })
 
   test("runtime delegation requires one-to-one reference-image acceptance evidence", () => {
@@ -73,16 +79,20 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("professional product designer and design QA reviewer")
     expect(prompt).toContain("Do not chase visual scores or external judge verdicts")
+    expect(prompt).toContain("prioritize screenshot comparison")
+    expect(prompt).toContain("inspect the page screen by screen")
+    expect(prompt).toContain("Do not judge the whole webpage from one full-page screenshot")
     expect(prompt).toContain("call `browser_preview_bind_local_module`")
     expect(prompt).toContain("pass the binding to `browser_preview_compare_regions`")
     expect(prompt).toContain("Treat `browser_preview_bind_local_module` evidence as `source-binding`")
     expect(prompt).toContain("cannot be cited as final Reference vs Implementation proof")
     expect(prompt).toContain("request only `desktop` viewport region comparison evidence")
-    expect(prompt).toContain("do not block on mobile or tablet reference evidence")
+    expect(prompt).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
     expect(prompt).toContain(
       "produce task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`",
     )
+    expect(prompt).toContain("per-screen screenshots or scroll-slice comparisons")
     expect(prompt).toContain("no production_blockers")
     expect(prompt).toContain("Product Design QA Principles")
     expect(prompt).toContain("component-truth")

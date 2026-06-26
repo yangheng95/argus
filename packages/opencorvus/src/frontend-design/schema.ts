@@ -319,13 +319,13 @@ export const FrontendTemplateFinalSchema = z
         "Explicit acceptance mode. For webpage replica first workflows, use visual_baseline_allowed with frontend_project.role=visual_baseline_input only when the visual skeleton has rendered screenshot review evidence. Use maintainable_replacement_required when the operator explicitly asks for production-mergeable implementation, target design-system/component reuse, accessibility/component semantics, no primitive/static-image substitutes, or replacement of generated/mechanical output in the same task.",
       ),
     frontend_template: OptionalMarkdownField(
-      "Authoritative frontend template for the frontend_design-delivered visual HTML skeleton: static route/file, layout slots, source-package entrypoints, visible regions, states, viewport matrix, and acceptance anchors.",
+      "Authoritative frontend template for the frontend_design-delivered visual HTML skeleton: static route/file, layout slots, source-package entrypoints, visible regions, states, scoped viewport evidence, and acceptance anchors. For replica tasks this is desktop-only by default unless the current operator explicitly authorizes a separate multi-end migration scope.",
     ),
     frontend_template_sections: z
       .array(CompactTemplateItemSchema)
       .default([])
       .describe(
-        "Preferred compact replacement for a long frontend_template string. Use one item per route, layout slot, viewport matrix, or acceptance anchor.",
+        "Preferred compact replacement for a long frontend_template string. Use one item per route, layout slot, scoped viewport evidence item, or acceptance anchor.",
       ),
     fillable_modules: OptionalMarkdownField(
       "Modules/slots frontend_design filled or left as explicit source debt: page modules, data modules, interactions, state, adapters, and verification modules.",
@@ -404,13 +404,13 @@ export const FrontendTemplateFinalSchema = z
         "Concrete frontend-design project output. For webpage replica first workflows, identify the source-editable visual HTML skeleton root, role=visual_baseline_input, entrypoints including index.html and tokens/region CSS, source package, generation tool, completed visual-region restorations, unfinished visual debt, and any materialization defects. frontend-design-skeleton is captured source evidence and must never be the implementation_target.",
       ),
     visual_consistency_contract: OptionalMarkdownField(
-      "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
+      "Binding visual-fidelity frontend template section: desktop viewport inventory by default, pixel hierarchy, colors, typography, spacing, states, explicitly scoped layout rules, comparison criteria, and reference artifacts. Do not add non-desktop viewport rows unless the current operator explicitly authorizes a separate multi-end migration scope.",
     ),
     visual_consistency_items: z
       .array(CompactTemplateItemSchema)
       .default([])
       .describe(
-        "Preferred compact replacement for a long visual_consistency_contract string. Use one item per viewport, region, or visual rule.",
+        "Preferred compact replacement for a long visual_consistency_contract string. Use one item per scoped viewport, region, or visual rule.",
       ),
     visual_validation_evidence: z
       .array(VisualValidationEvidenceSchema)
