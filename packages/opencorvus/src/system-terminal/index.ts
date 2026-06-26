@@ -124,6 +124,17 @@ export namespace SystemTerminal {
     return argv.map(cmdQuote).join(" ")
   }
 
+  function windowsStartCommandLine(options: BuildOptions, argv: string[]): string {
+    if (argv.length === 0) {
+      throw new ConfigError({ message: "System terminal launcher target is required" })
+    }
+    return `start "" /D ${cmdQuote(options.cwd)} ${cmdCommandLine(argv)}`
+  }
+
+  function windowsConsoleLauncherArgs(options: BuildOptions, argv: string[]): string[] {
+    return [unwrapCommandQuotes(options.terminalApp), "/d", "/s", "/c", windowsStartCommandLine(options, argv)]
+  }
+
   function shellLine(options: BuildOptions): string {
     const argv = commandArgv(options)
     const prefix = `cd ${shellQuote(options.cwd)}`
@@ -155,7 +166,8 @@ export namespace SystemTerminal {
     const argv = commandArgv(options)
     if (options.platform === "win32") {
       const command = options.command ? windowsCommandProfileArgs(options, argv) : windowsInteractiveArgv(options)
-      return { command: command[0], args: command.slice(1), detached: true }
+      const launcher = windowsConsoleLauncherArgs(options, command)
+      return { command: launcher[0], args: launcher.slice(1), detached: true }
     }
 
     if (options.platform === "darwin") {

@@ -63,7 +63,12 @@ describe("coding CLI external launch", () => {
     })
 
     expect(command.command).toBe("cmd.exe")
-    expect(command.args).toEqual(["/d", "/s", "/k", '"C:\\Tools\\Codex CLI\\codex.cmd"'])
+    expect(command.args).toEqual([
+      "/d",
+      "/s",
+      "/c",
+      'start "" /D "C:\\repo" "cmd.exe" "/d" "/s" "/k" """C:\\Tools\\Codex CLI\\codex.cmd"""',
+    ])
     expect(command.detached).toBe(true)
   })
 

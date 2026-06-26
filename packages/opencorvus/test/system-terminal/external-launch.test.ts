@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { SystemTerminal } from "../../src/system-terminal"
 
 describe("system terminal external launch command", () => {
-  test("Windows opens the selected shell through the system console launcher", () => {
+  test("Windows opens the selected shell through the system console launcher with cwd binding", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
       cwd: "C:\\repo & whoami | sort",
@@ -11,15 +11,20 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command).toEqual({
-      command: "powershell.exe",
-      args: ["-NoLogo"],
+      command: "cmd.exe",
+      args: [
+        "/d",
+        "/s",
+        "/c",
+        'start "" /D "C:\\repo & whoami | sort" "powershell.exe" "-NoLogo"',
+      ],
       detached: true,
     })
-    expect(command.args).not.toContain("start")
-    expect(command.args).not.toContain("C:\\repo & whoami | sort")
+    expect(command.args.at(-1)).toContain("start")
+    expect(command.args.at(-1)).toContain('/D "C:\\repo & whoami | sort"')
   })
 
-  test("Windows coding CLI opens inside the system console without PTY", () => {
+  test("Windows coding CLI opens inside a real system console without PTY", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
       cwd: "C:\\repo",
@@ -34,8 +39,8 @@ describe("system terminal external launch command", () => {
     expect(command.args).toEqual([
       "/d",
       "/s",
-      "/k",
-      '"C:\\Tools\\Codex CLI\\codex.cmd" "--dangerously-bypass-approvals-and-sandbox"',
+      "/c",
+      'start "" /D "C:\\repo" "cmd.exe" "/d" "/s" "/k" """C:\\Tools\\Codex CLI\\codex.cmd"" ""--dangerously-bypass-approvals-and-sandbox"""',
     ])
     expect(command.detached).toBe(true)
     expect(command.args.join(" ")).not.toContain("pty")
@@ -53,10 +58,14 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command.command).toBe("cmd.exe")
-    expect(command.args).toEqual(["/d", "/s", "/k", '"C:\\Tools\\Codex & CLI\\codex%%.cmd" "--filter=a|b" "100%%"'])
+    expect(command.args).toEqual([
+      "/d",
+      "/s",
+      "/c",
+      'start "" /D "C:\\repo & whoami | sort" "cmd.exe" "/d" "/s" "/k" """C:\\Tools\\Codex & CLI\\codex%%%%.cmd"" ""--filter=a|b"" ""100%%%%"""',
+    ])
     expect(command.detached).toBe(true)
-    expect(command.args).not.toContain("start")
-    expect(command.args).not.toContain("C:\\repo & whoami | sort")
+    expect(command.args.at(-1)).toContain('/D "C:\\repo & whoami | sort"')
   })
 
   test("Windows coding CLI unwraps user-supplied executable quotes before argv handoff", () => {
@@ -70,7 +79,7 @@ describe("system terminal external launch command", () => {
       keepOpen: true,
     })
 
-    expect(command.args.at(-1)).toBe('"C:\\Users\\hengu\\.local\\bin\\claude.exe"')
+    expect(command.args.at(-1)).toContain('"""C:\\Users\\hengu\\.local\\bin\\claude.exe"""')
     expect(command.args.at(-1)).not.toContain("'")
   })
 
@@ -86,12 +95,12 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command.args).toEqual([
-      "-NoLogo",
-      "-NoExit",
-      "-Command",
-      "& 'C:\\Users\\chuan\\.local\\bin\\claude.exe' '--version'",
+      "/d",
+      "/s",
+      "/c",
+      'start "" /D "C:\\repo" "powershell.exe" "-NoLogo" "-NoExit" "-Command" "& \'C:\\Users\\chuan\\.local\\bin\\claude.exe\' \'--version\'"',
     ])
-    expect(command.command).toBe("powershell.exe")
+    expect(command.command).toBe("cmd.exe")
     expect(command.detached).toBe(true)
   })
 
