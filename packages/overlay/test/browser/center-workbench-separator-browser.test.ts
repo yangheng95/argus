@@ -61,9 +61,15 @@ async function separatorState(page: OverlayPage) {
     const style = getComputedStyle(separator)
     const accentProbe = document.createElement("span")
     accentProbe.style.color = "var(--accent)"
-    document.body.appendChild(accentProbe)
+    const initialMaxWidthProbe = document.createElement("span")
+    initialMaxWidthProbe.style.position = "fixed"
+    initialMaxWidthProbe.style.visibility = "hidden"
+    initialMaxWidthProbe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
+    document.body.append(accentProbe, initialMaxWidthProbe)
     const accentColor = getComputedStyle(accentProbe).color
+    const rightToolbarPanelInitialMaxWidth = initialMaxWidthProbe.getBoundingClientRect().width
     accentProbe.remove()
+    initialMaxWidthProbe.remove()
     return {
       hidden: separator.hidden,
       disabled: separator.dataset.disabled ?? "",
@@ -85,6 +91,8 @@ async function separatorState(page: OverlayPage) {
       outlineOffset: style.outlineOffset,
       backgroundColor: style.backgroundColor,
       accentColor,
+      inspectorInitialWidthCapped: inspector.dataset.initialWidthCapped ?? "",
+      rightToolbarPanelInitialMaxWidth,
       workflowWidth: Math.round(workflow.getBoundingClientRect().width),
       inspectorWidth: Math.round(inspector.getBoundingClientRect().width),
     }
@@ -414,7 +422,9 @@ test(
       assert.ok(initial.minValue! < initial.maxValue!)
       assert.ok(initial.nowValue! >= initial.minValue!)
       assert.ok(initial.nowValue! <= initial.maxValue!)
-      assert.ok(Math.abs(initial.workflowWidth - initial.inspectorWidth) <= 2)
+      assert.equal(initial.inspectorInitialWidthCapped, "true")
+      assert.ok(initial.inspectorWidth <= initial.rightToolbarPanelInitialMaxWidth + 1)
+      assert.ok(initial.workflowWidth > initial.inspectorWidth)
 
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
@@ -470,6 +480,12 @@ test(
         () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
       )
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolveFrame) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
+          }),
+      )
 
       const separatorPoint = await page.$eval("#centerWorkbenchSeparatorWorkflow", (node) => {
         const rect = (node as HTMLElement).getBoundingClientRect()
@@ -478,6 +494,11 @@ test(
       await page.mouse.move(separatorPoint.x, separatorPoint.y)
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.mouse.down()
+      assert.equal(
+        await page.evaluate(() => document.body.dataset.centerWorkbenchPanelResizing ?? ""),
+        "true",
+        "separator pointerdown should start center workbench resize",
+      )
       const pointerdownEvents = await collectCenterWorkbenchResizeEventsNow(page)
       assertCenterWorkbenchPointerdownHasNoPreFrameGeometryReads(pointerdownEvents, "separator pointerdown")
       await page.mouse.move(separatorPoint.x + 120, separatorPoint.y, { steps: 8 })
@@ -492,6 +513,7 @@ test(
         initial.workflowWidth,
       )
       const pointerResized = await separatorState(page)
+      assert.equal(pointerResized.inspectorInitialWidthCapped, "false")
       assert.ok(pointerResized.workflowWidth - pointerResized.inspectorWidth > 80)
 
       await page.mouse.move(20, 20)

@@ -42,9 +42,9 @@ test("default pane resizer exposes separator semantics through the pane service"
     'import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"',
   )
   expect(pane).toContain("remainingMinWidth: (layoutTokens?: LayoutTokenResolver) => number")
-  expect(pane).toContain(
-    "export function defaultRailWidth(config: PaneConfig, layoutTokens: LayoutTokenResolver = createLayoutTokenResolver())",
-  )
+  expect(pane).toContain("export function defaultRailWidth(")
+  expect(pane).toContain("config: PaneConfig,")
+  expect(pane).toContain("layoutTokens: LayoutTokenResolver = createLayoutTokenResolver(),")
   expect(pane).toContain(
     "export function defaultPanelRemainingMinWidth(layoutTokens: LayoutTokenResolver = createLayoutTokenResolver())",
   )

@@ -153,6 +153,10 @@ code .file-link:focus-visible {
   min-width: var(--ui-workbench-panel-min-width);
 }
 
+.center-workbench-view[data-open="true"][data-initial-width-capped="true"] {
+  max-width: var(--ui-right-toolbar-panel-initial-max-width);
+}
+
 .center-workbench-view[data-open="true"],
 .center-workbench-activity {
   display: flex;

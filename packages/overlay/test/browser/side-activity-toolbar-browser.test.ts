@@ -151,6 +151,49 @@ function missionListPayload(interruptible = true) {
   ]
 }
 
+const SIDE_ACTIVITY_SKILL = {
+  name: "research-report",
+  description:
+    "Produce a multi-source research report, comparison matrix, capability survey, market analysis, and recommendation document backed by web research.",
+  location: "builtin",
+  builtin: true,
+  mounted_agents: ["requirements"],
+  unmounted: false,
+}
+
+function skillMountMatrixPayload() {
+  return {
+    scope: "project",
+    skills: [SIDE_ACTIVITY_SKILL],
+    agents: [
+      {
+        name: "requirements",
+        description: "Requirements agent",
+        mode: "primary",
+        hidden: false,
+        native: true,
+        skill_mountable: true,
+        skill_tool_available: true,
+      },
+    ],
+    matrix: [
+      {
+        agent: "requirements",
+        mounted: [
+          {
+            name: SIDE_ACTIVITY_SKILL.name,
+            description: SIDE_ACTIVITY_SKILL.description,
+            location: SIDE_ACTIVITY_SKILL.location,
+            enabled: true,
+          },
+        ],
+      },
+    ],
+    project_mounts: { agents: { requirements: [SIDE_ACTIVITY_SKILL.name] } },
+    unmounted_count: 0,
+  }
+}
+
 function assertMatchObject(actual: Record<string, unknown>, expected: Record<string, unknown>) {
   for (const [key, value] of Object.entries(expected)) {
     assert.deepEqual(actual[key], value, key)
@@ -158,7 +201,7 @@ function assertMatchObject(actual: Record<string, unknown>, expected: Record<str
 }
 
 test(
-  "side activity toolbars open the focused center panel and equal-width workbench panels",
+  "side activity toolbars open the focused center panel and cap initial right panel width",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -393,16 +436,8 @@ test(
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
-      if (path === "/skill/installed" || path === "/skill")
-        return send([
-          {
-            name: "research-report",
-            description:
-              "Produce a multi-source research report, comparison matrix, capability survey, market analysis, and recommendation document backed by web research.",
-            location: "builtin",
-            builtin: true,
-          },
-        ])
+      if (path === "/skill/installed" || path === "/skill") return send([SIDE_ACTIVITY_SKILL])
+      if (path === "/skill/mounts") return send(skillMountMatrixPayload())
       if (path === "/mcp")
         return send({
           docs: {
@@ -643,11 +678,24 @@ test(
             openPanelWidths: Array.from(
               document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
             ).map((node) => Math.round(node.getBoundingClientRect().width)),
+            openPanelInitialWidthCapped: Array.from(
+              document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
+            ).map((node) => node.dataset.initialWidthCapped || ""),
             workbenchPanelMinWidth: (() => {
               const probe = document.createElement("div")
               probe.style.position = "fixed"
               probe.style.visibility = "hidden"
               probe.style.width = "var(--ui-workbench-panel-min-width)"
+              document.body.append(probe)
+              const width = probe.getBoundingClientRect().width
+              probe.remove()
+              return width
+            })(),
+            rightToolbarPanelInitialMaxWidth: (() => {
+              const probe = document.createElement("div")
+              probe.style.position = "fixed"
+              probe.style.visibility = "hidden"
+              probe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
               document.body.append(probe)
               const width = probe.getBoundingClientRect().width
               probe.remove()
@@ -1324,7 +1372,7 @@ test(
       )
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
-      await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-settings-row")
+      await page.waitForSelector("#leftPanelSkills[data-active='true'] .agent-skill-matrix-grid")
       assertMatchObject(await activeState(), {
         leftHeaderTitle: "Skills",
         leftHeaderAriaLabel: "Skills",
@@ -1346,12 +1394,11 @@ test(
             width: Math.round(node.getBoundingClientRect().width),
           }),
         )
-        const row = panel.querySelector<HTMLElement>(".extension-settings-row")!
-        const desc = row.querySelector<HTMLElement>(".s-row-desc")!
-        const path = row.querySelector<HTMLElement>(".s-row-meta")
-        const title = row.querySelector<HTMLElement>(".s-row-title")!
-        const actions = row.querySelector<HTMLElement>(".extension-settings-actions")!
-        const drop = panel.querySelector<HTMLElement>(".skill-drop-zone")!
+        const matrix = panel.querySelector<HTMLElement>(".agent-skill-matrix")!
+        const grid = panel.querySelector<HTMLElement>(".agent-skill-matrix-grid")!
+        const skill = panel.querySelector<HTMLElement>(".agent-skill-grid-skill")!
+        const skillName = panel.querySelector<HTMLElement>(".agent-skill-grid-skill__name")!
+        const mountedCells = panel.querySelectorAll<HTMLElement>('.agent-skill-grid-cell[data-state="mounted"]')
         return {
           active: panel.dataset.active,
           hasToolbar: !!toolbar,
@@ -1359,35 +1406,39 @@ test(
           buttonTexts: buttons.map((item) => item.text),
           buttonTitles: buttons.map((item) => item.title),
           buttonWidths: buttons.map((item) => item.width),
-          rowDisplay: getComputedStyle(row).display,
-          rowColumns: getComputedStyle(row).gridTemplateColumns,
-          descClamp: getComputedStyle(desc).webkitLineClamp,
-          descOverflow: getComputedStyle(desc).overflow,
-          titleWhiteSpace: getComputedStyle(title).whiteSpace,
-          pathWhiteSpace: path ? getComputedStyle(path).whiteSpace : "",
-          actionsWidth: Math.round(actions.getBoundingClientRect().width),
-          dropHeight: Math.round(drop.getBoundingClientRect().height),
+          matrixCompact: matrix.dataset.compact,
+          matrixDisplay: getComputedStyle(matrix).display,
+          gridDisplay: getComputedStyle(grid).display,
+          gridColumns: getComputedStyle(grid).gridTemplateColumns,
+          skillName: skillName.textContent || "",
+          skillNameWhiteSpace: getComputedStyle(skillName).whiteSpace,
+          skillMinWidth: Math.round(skill.getBoundingClientRect().width),
+          mountedCells: mountedCells.length,
+          sourceListVisible: !!panel.querySelector(".extension-list"),
+          dropZoneVisible: !!panel.querySelector(".skill-drop-zone"),
         }
       })
       assertMatchObject(skillPanelState, {
         active: "true",
         hasToolbar: true,
         hasInternalHeader: false,
-        buttonTexts: ["", "", ""],
-        rowDisplay: "grid",
-        descClamp: "3",
-        descOverflow: "hidden",
-        titleWhiteSpace: "nowrap",
-        pathWhiteSpace: "nowrap",
+        buttonTexts: ["", ""],
+        matrixCompact: "true",
+        matrixDisplay: "flex",
+        gridDisplay: "grid",
+        skillName: "research-report",
+        skillNameWhiteSpace: "nowrap",
+        mountedCells: 1,
+        sourceListVisible: false,
+        dropZoneVisible: false,
       })
-      assert.deepEqual(skillPanelState.buttonTitles, ["Reload", "Add Skill", "Delete All"])
+      assert.deepEqual(skillPanelState.buttonTitles, ["Reload", "Add Skill"])
       assert.equal(
         skillPanelState.buttonWidths.every((width) => width <= 32),
         true,
       )
-      assert.ok(skillPanelState.rowColumns.includes("px"))
-      assert.ok(skillPanelState.actionsWidth < 140)
-      assert.ok(skillPanelState.dropHeight < 58)
+      assert.ok(skillPanelState.gridColumns.includes("px"))
+      assert.ok(skillPanelState.skillMinWidth > 120)
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(
@@ -1504,7 +1555,23 @@ test(
         appDialogOpen: false,
       })
       assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
-      assert.ok(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!) <= 2)
+      const twoPanelWidths = twoPanelState.openPanelWidths as number[]
+      const initialWidthCapped = twoPanelState.openPanelInitialWidthCapped as string[]
+      const rightToolbarPanelInitialMaxWidth = twoPanelState.rightToolbarPanelInitialMaxWidth as number
+      assert.deepEqual(initialWidthCapped, ["false", "true"])
+      assert.ok(
+        twoPanelWidths[1]! <= rightToolbarPanelInitialMaxWidth + 1,
+        JSON.stringify({ twoPanelWidths, rightToolbarPanelInitialMaxWidth }),
+      )
+      assert.ok(
+        twoPanelWidths[0]! > twoPanelWidths[1]!,
+        JSON.stringify({ twoPanelWidths, rightToolbarPanelInitialMaxWidth }),
+      )
+      const inspectorPanel = await page.$("#centerWorkbenchInspector")
+      assert.ok(inspectorPanel, "inspector panel should exist before initial max-width screenshot")
+      const inspectorInitialMaxScreenshotPath = resolve(".scratch/right-toolbar-inspector-initial-max-width.png")
+      mkdirSync(dirname(inspectorInitialMaxScreenshotPath), { recursive: true })
+      writeFileSync(inspectorInitialMaxScreenshotPath, await inspectorPanel.screenshot({}))
       const separatorSemantics = twoPanelState.workflowSeparator as {
         hidden: boolean
         disabled: string
@@ -1535,14 +1602,16 @@ test(
       await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
       await page.mouse.up()
       const resizedTwoPanelState = await waitForState(
-        "separator pointer resize should widen the workflow panel",
+        "separator pointer resize should widen the workflow panel and clear the initial cap",
         (state) => {
           const widths = state.openPanelWidths as number[]
-          return state.openPanels instanceof Array && widths[0]! - widths[1]! > 80
+          const caps = state.openPanelInitialWidthCapped as string[]
+          return state.openPanels instanceof Array && widths[0]! - widths[1]! > 80 && caps.every((value) => value === "false")
         },
       )
       assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
+      assert.deepEqual(resizedTwoPanelState.openPanelInitialWidthCapped, ["false", "false"])
       const keyboardWidthBefore = resizedTwoPanelState.openPanelWidths[0]!
       await page.focus("#centerWorkbenchSeparatorWorkflow")
       await page.keyboard.press("ArrowLeft")
