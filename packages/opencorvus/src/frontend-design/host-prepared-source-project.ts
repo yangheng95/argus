@@ -206,7 +206,7 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
   const visualIteration = manifest?.visualIteration
   if (visualIteration) {
     lines.push("")
-    lines.push("Visual iteration matrix:")
+    lines.push("Desktop visual iteration viewport:")
     lines.push(`- referenceImage: ${visualIteration.referenceImage ?? "unknown"}`)
     lines.push(`- evidenceMethod: ${visualIteration.evidenceMethod ?? "unknown"}`)
     for (const viewport of visualIteration.viewportMatrix ?? []) {
@@ -604,7 +604,7 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "Register `frontend-design-skeleton` only as captured source evidence. Register the current workflow output as `frontend_project.role=visual_baseline_input` only when frontend_design has restored a separate static HTML/CSS visual skeleton and recorded structured `visual_validation_evidence`. When the operator requires production-mergeable implementation, strict project design-system/component reuse, real component semantics, accessibility, no primitive/static substitutes, or generated-output replacement in this same pass, register a real maintainable scaffold as `implementation_target` or report `blocked` with the missing implementation/screenshot evidence.",
     "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable. Create or populate the task-scoped visual HTML skeleton first; all screenshot inspection and parity repair commands for this workflow must target that skeleton.",
     "Use the visual HTML skeleton restoration algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per visual region, then HTML/CSS/assets/content restoration with source data/content extraction, HTML boundary, scoped style ownership, asset ownership, interaction-state visuals, and task-scoped screenshot inspection evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
-    `Visual iteration viewport matrix: ${visualIterationMatrix}`,
+    `Desktop visual iteration viewport: ${visualIterationMatrix}`,
     "For webpage clones, perform and describe source-region traceable visual restoration: every HTML boundary, content group, style rule, asset, representative state, and deferred transcription note must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source content/data extraction, HTML/CSS restoration, rendered screenshot inspection for that region, and visual iteration viewport evidence. If a region is deferred, frontend_design must label it as unfinished visual/source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     "Webpage/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `webpage-evidence/`, `references/`, or `reference.png` into the visual skeleton as app-owned deliverables; extract only the observed source structure, content, styles, and assets needed by the HTML/CSS skeleton.",

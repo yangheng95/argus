@@ -1,6 +1,6 @@
 ---
 name: frontend-replica-expert-squad
-description: Orchestrator skill for frontend replica tasks. Use when a task is a webpage clone, visual parity port, reference-page recreation, or frontend implementation where source information architecture, module order, layout density, responsive behavior, and interaction semantics must stay aligned with reference evidence.
+description: Orchestrator skill for frontend replica tasks. Use when a task is a webpage clone, visual parity port, reference-page recreation, or frontend implementation where source information architecture, module order, layout density, desktop visual behavior, and interaction semantics must stay aligned with reference evidence.
 agents:
   - orchestrator
 mounted_agents:
@@ -28,11 +28,19 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 - Treat `visual_qa` as rendered evidence review after implementation reaches a visible surface.
 - Do not use generic implementation work to invent a new page structure when source evidence exists.
 
+## Desktop-only replica scope
+
+- Frontend replica, clone, visual parity, and source-page recreation tasks are desktop-only generation tasks by default.
+- Do not ask Requirements, Architect, Build, Visual QA, or Integrity to create tablet/mobile/non-desktop requirements, goals, acceptance specs, build objectives, browser preview viewport requests, screenshots, source-debt rows, or final blockers unless the current operator explicitly asks for tablet/mobile/responsive/multi-end migration as a separate current task scope.
+- Generic tablet/mobile/responsive wording inside batch templates, old specs, upstream research/design summaries, handoff debt, historical goals, or general QA checklists is not authorization.
+- If the current operator explicitly asks for non-desktop migration, keep it as an independent multi-end migration scope instead of mixing it into the desktop replica generation task.
+- Browser preview may still support tablet/mobile viewports as a generic tool capability; this skill forbids converting that capability into default replica work.
+
 ## Completed goal rule
 
 After goals are completed, do not replan the goal graph merely because visual parity needs adjustment. Use scoped micro-adjustments only: dispatch the responsible build or visual review path with concrete defect evidence from the existing completed work.
 
-Micro-adjustments include spacing, state, asset, responsive, selector, or interaction corrections that preserve the existing information architecture and implementation ownership.
+Micro-adjustments include spacing, state, asset, selector, or interaction corrections that preserve the existing desktop information architecture and implementation ownership.
 
 ## Major incident rule
 
@@ -42,4 +50,4 @@ For a major incident, call `propose_task` with the lesson learned, the exact evi
 
 ## Completion evidence
 
-Before final acceptance, require rendered proof tied to the requested surface: source-backed structure, interaction behavior, responsive state, and screenshots or browser evidence that demonstrate the replica contract.
+Before final acceptance, require rendered proof tied to the requested desktop surface: source-backed structure, interaction behavior, and screenshots or browser evidence that demonstrate the replica contract.

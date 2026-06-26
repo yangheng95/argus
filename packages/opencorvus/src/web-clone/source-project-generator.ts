@@ -6596,7 +6596,7 @@ function sourceDomVerticalSliceSteps(
     `Render ${recommendedComponentName} as a semantic component with loops/props/states appropriate for ${kind}.`,
     "Preserve only the scoped classes or CSS variables needed by the replacement; leave unrelated source CSS untouched.",
     `Swap ${region.componentName} for ${recommendedComponentName} at the existing SourceDomPage boundary.`,
-    "Compare the same visual viewport matrix against reference.png before deleting generated DOM/CSS coverage.",
+    "Compare the same desktop visual iteration viewport against reference.png before deleting generated DOM/CSS coverage.",
   ]
 }
 
@@ -7323,10 +7323,10 @@ function renderSourceDomIterationStateTs(
       evidenceMethod: visualIteration.evidenceMethod,
       viewportMatrix,
       evidenceRule:
-        "Do not delete a source-dom region after replacement until desktop-reference has inspected preview screenshot evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
+        "Do not delete a source-dom region after replacement until desktop-reference has inspected preview screenshot evidence. Non-desktop review requires an explicitly authorized multi-end migration scope and matching source evidence.",
     },
     recommendedLoop: [
-      `Adopt the current source project as the visual baseline and compare the viewport matrix (${viewportNames}) against reference.png or matching reference artifacts.`,
+      `Adopt the current source project as the visual baseline and compare the desktop visual iteration viewport (${viewportNames}) against reference.png or matching reference artifacts.`,
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
       "Delete the replaced source-dom region only after rendered screenshot inspection is stable for the unchanged surrounding surface.",
       "Review the replacement against source evidence and rendered preview screenshots after each region replacement.",
@@ -7439,7 +7439,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- `src/data/sourceDomRegions.ts` for generated-region size, text preview, and replacement priority metrics",
     "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, sourceMap evidence, data/style/asset/visual sources, generated cleanup targets, verticalSliceSteps, and parity guards",
     "- `src/data/sourceDomIterationState.ts` for static replacement progress metadata: semantic replacements already produced, remaining source-dom debt, and the next candidate region",
-    "- `src/data/sourceProjectManifest.json` for the visual iteration viewport matrix and generated-source ownership rules",
+    "- `src/data/sourceProjectManifest.json` for the desktop visual iteration viewport and generated-source ownership rules",
     "- `src/data/sourceSvgAssetGroups.ts` for large SVG path runs that are data-driven through `SourceAssetPathGroup` instead of hand-maintained TSX repetition",
     "- `src/data/sourceFaqGroups.ts` for FAQ/disclosure content that is data-driven through `SourceFaqList` instead of repeated generated accordion JSX",
     "",
@@ -7449,7 +7449,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- Keep `src/styles/source-critical.css`, `src/styles/source-full.css`, `src/data/svgPaths.ts`, `src/data/sourceSvgAssetGroups.ts`, `src/data/sourceFaqGroups.ts`, and `public/assets/` copied together with the React entrypoints; they are required for visual parity.",
     "- Use `src/data/sourceData.ts`, source IR, and component metadata as the maintainability/refactor material for replacing specific regions with semantic components or mature libraries.",
     "- Refine this baseline region by region while checking against `reference.png`.",
-    `- Visual iteration viewport matrix: ${renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix)}`,
+    `- Desktop visual iteration viewport: ${renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix)}`,
     `- Layout width contract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`,
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use source evidence review and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",

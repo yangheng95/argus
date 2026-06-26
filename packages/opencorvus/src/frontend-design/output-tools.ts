@@ -254,7 +254,7 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
     return [
       "## Visual HTML Skeleton Workflow",
       "- Current workflow deliverable: a source-editable static HTML/CSS design skeleton whose visual fidelity is verified against the original reference artifacts.",
-      "- Token rule: `visual-html-skeleton/styles/tokens.css` should contain source-backed CSS custom properties for colors, typography, spacing/density, radii, borders, shadows, media/icon sizing, chart/table/map range colors, and responsive widths; regional CSS should consume those tokens or document source-backed exceptions.",
+      "- Token rule: `visual-html-skeleton/styles/tokens.css` should contain source-backed CSS custom properties for colors, typography, spacing/density, radii, borders, shadows, media/icon sizing, chart/table/map range colors, and source-backed desktop layout widths; regional CSS should consume those tokens or document source-backed exceptions.",
       "- This skeleton is the workflow target for Requirements, Architect, Build, and Integrity in this round; they should improve and verify HTML/CSS visual parity, not convert it into a complete application source tree in the same workflow unless the active task explicitly says to combine both rounds.",
       "- Later workflow deliverable: transcribe the accepted HTML skeleton plus source IR/content/style evidence into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and runtime verification.",
       "- Conflict rule: `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, source assets, and `web-clone-source/reference.png` remain authoritative if the HTML skeleton conflicts with source evidence or visible pixels.",
@@ -1409,7 +1409,7 @@ export function createFrontendTemplateOutputTools(
 
     register_responsive_spec: tool({
       description:
-        "Register a responsive rule — what changes at a given breakpoint. affected_layout_ids must reference registered layout specs.",
+        "Register an explicitly authorized non-desktop or breakpoint rule. Use only when the current operator asked for tablet/mobile/responsive/multi-end migration as a separate task scope; affected_layout_ids must reference registered layout specs.",
       inputSchema: ResponsiveSchema,
       execute: async (input) => {
         const existErr = assertIdFree(input.id)

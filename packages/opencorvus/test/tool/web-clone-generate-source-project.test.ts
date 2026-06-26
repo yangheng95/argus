@@ -47,7 +47,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const generated = await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         expect(generated.title).toBe("Web clone source project generated")
-        expect(generated.output).toContain("Visual iteration matrix")
+        expect(generated.output).toContain("Desktop visual iteration viewport")
         expect(generated.output).toContain("desktop-reference 1366x768")
         expect(generated.metadata.outputDir).toBe(outputDir)
         expect(await Bun.file(path.join(outputDir, "src", "components", "SourceClonePage.tsx")).exists()).toBe(true)
@@ -133,7 +133,7 @@ describe("tool.web_clone_generate_source_project", () => {
           mode: "full_width",
           viewportWidth: 1366,
         })
-        expect(readme).toContain("Visual iteration viewport matrix")
+        expect(readme).toContain("Desktop visual iteration viewport")
         expect(readme).toContain("desktop-reference 1366x768")
         expect(readme).toContain("Layout width contract")
         expect(readme).toContain("full_width viewport=1366px")
