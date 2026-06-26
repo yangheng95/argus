@@ -12,7 +12,7 @@ import {
   type ScreenshotBrowserRow,
 } from "../utils/screenshot-browser"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl } from "../services/api"
-import { fullStampWithRelative } from "../utils/time"
+import { fullStampWithRelative, stamp } from "../utils/time"
 import { t } from "../utils/i18n"
 import { roleLabel } from "../utils/message"
 import { Icon } from "./Icon"
@@ -177,10 +177,16 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
 
 function ScreenshotBrowserVirtualRow(props: { row: ScreenshotBrowserRow; columns: number }) {
   if (props.row.kind === "group") {
+    const label = () =>
+      props.row.time > 0 ? `${roleLabel(props.row.role)} · ${stamp(props.row.time)}` : roleLabel(props.row.role)
+    const labelTitle = () =>
+      props.row.time > 0
+        ? `${roleLabel(props.row.role)} · ${fullStampWithRelative(props.row.time)}`
+        : roleLabel(props.row.role)
     return (
-      <section class="screenshot-browser-group" data-agent-role={props.row.role}>
+      <section class="screenshot-browser-group" data-agent-role={props.row.role} data-owner-key={props.row.groupKey}>
         <header class="screenshot-browser-group__header">
-          <span>{roleLabel(props.row.role)}</span>
+          <span title={labelTitle()}>{label()}</span>
           <small>{t("screenshots.group_count", { count: props.row.count })}</small>
         </header>
       </section>
@@ -190,6 +196,7 @@ function ScreenshotBrowserVirtualRow(props: { row: ScreenshotBrowserRow; columns
     <div
       class="screenshot-browser-row-grid"
       data-agent-role={props.row.role}
+      data-owner-key={props.row.groupKey}
       style={`--screenshot-browser-columns: ${props.columns}`}
     >
       <For each={props.row.items}>

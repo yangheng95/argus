@@ -7,6 +7,11 @@ export const SCREENSHOT_BROWSER_ITEM_LIMIT = 120
 export interface ScreenshotBrowserItem {
   id: string
   role: AgentRole
+  ownerKey: string
+  ownerRole: AgentRole
+  ownerSessionID: string
+  ownerMessageID: string
+  ownerTime: number
   src: string
   thumbnailSrc: string
   alt: string
@@ -21,8 +26,23 @@ export interface ScreenshotBrowserItem {
 export { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT }
 
 export interface ScreenshotBrowserGroup {
+  key: string
   role: AgentRole
+  sessionID: string
+  messageID: string
+  time: number
   items: ScreenshotBrowserItem[]
+}
+
+interface ScreenshotBrowserOwnerSeed {
+  role: AgentRole
+  sessionID: string
+  messageID: string
+  time: number
+}
+
+interface ScreenshotBrowserOwner extends ScreenshotBrowserOwnerSeed {
+  key: string
 }
 
 interface ScreenshotBrowserCollector {
@@ -35,12 +55,20 @@ export type ScreenshotBrowserRow =
       kind: "group"
       key: string
       role: AgentRole
+      groupKey: string
+      sessionID: string
+      messageID: string
+      time: number
       count: number
     }
   | {
       kind: "items"
       key: string
       role: AgentRole
+      groupKey: string
+      sessionID: string
+      messageID: string
+      time: number
       items: ScreenshotBrowserItem[]
     }
 
@@ -55,21 +83,79 @@ function firstString(...values: unknown[]): string {
   return ""
 }
 
+function firstPositiveNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const n = Number(value)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
 function messageTime(message: any): number {
   const time = message?.info?.time
-  const completed = Number(time?.completed)
-  if (Number.isFinite(completed) && completed > 0) return completed
-  const updated = Number(time?.updated)
-  if (Number.isFinite(updated) && updated > 0) return updated
-  const created = Number(time?.created)
-  if (Number.isFinite(created) && created > 0) return created
-  return 0
+  return firstPositiveNumber(time?.completed, time?.updated, time?.created)
 }
 
 function messageRole(message: any): AgentRole {
   return normalizeAgentRole(
     firstString(message?.info?.resolvedRole, message?.info?.channel, message?.info?.agent, message?.info?.role),
   )
+}
+
+function ownerKey(input: { role: AgentRole; sessionID: string; messageID: string; time: number }): string {
+  if (!input.messageID && input.time <= 0) {
+    throw new Error("Screenshot browser owner requires a message id or timestamp")
+  }
+  const segments: string[] = [input.role]
+  if (input.sessionID) segments.push(`session:${input.sessionID}`)
+  if (input.messageID) segments.push(`message:${input.messageID}`)
+  if (input.time > 0) segments.push(`time:${input.time}`)
+  return segments.join(":")
+}
+
+function createOwner(input: {
+  role: AgentRole
+  sessionID?: string
+  messageID?: string
+  time?: number
+}): ScreenshotBrowserOwner {
+  const role = input.role
+  const sessionID = firstString(input.sessionID)
+  const messageID = firstString(input.messageID)
+  const time = firstPositiveNumber(input.time)
+  return {
+    key: ownerKey({ role, sessionID, messageID, time }),
+    role,
+    sessionID,
+    messageID,
+    time,
+  }
+}
+
+function messageOwnerSeed(message: any): ScreenshotBrowserOwnerSeed {
+  return {
+    role: messageRole(message),
+    sessionID: firstString(message?.info?.sessionID),
+    messageID: firstString(message?.info?.id),
+    time: messageTime(message),
+  }
+}
+
+function partEventTime(part: any): number {
+  const stateTime = part?.state?.time
+  const partTime = part?.time
+  return firstPositiveNumber(stateTime?.end, stateTime?.compacted, stateTime?.start, partTime?.end, partTime?.created)
+}
+
+function ownerFields(owner: ScreenshotBrowserOwner) {
+  return {
+    role: owner.role,
+    ownerKey: owner.key,
+    ownerRole: owner.role,
+    ownerSessionID: owner.sessionID,
+    ownerMessageID: owner.messageID,
+    ownerTime: owner.time,
+  }
 }
 
 export function isStoredAttachmentUrl(url: string): boolean {
@@ -102,7 +188,7 @@ function isStoredImageReference(input: { url?: unknown; mime?: unknown; mediaTyp
 }
 
 export function screenshotBrowserItemKey(item: ScreenshotBrowserItem): string {
-  return `${item.role}:${item.src}:${item.messageID}:${item.partID}:${item.source}`
+  return `${item.ownerKey}:${item.src}:${item.messageID}:${item.partID}:${item.source}`
 }
 
 function insertBoundedNewestFirst(items: ScreenshotBrowserItem[], item: ScreenshotBrowserItem): void {
@@ -127,17 +213,72 @@ function sourceMessageID(message: any, part: any): string {
   return firstString(part?.messageID, message.info?.id)
 }
 
+function boundaryOwnersByMessage(
+  parts: readonly any[],
+  baseOwner: ScreenshotBrowserOwnerSeed,
+): Map<string, ScreenshotBrowserOwner> {
+  const owners = new Map<string, ScreenshotBrowserOwner>()
+  for (const part of parts) {
+    if (!isRecord(part) || part.type !== "boundary") continue
+    const messageID = firstString(part.messageID)
+    if (!messageID) continue
+    owners.set(
+      messageID,
+      createOwner({
+        role: normalizeAgentRole(firstString(part.role, baseOwner.role)),
+        sessionID: firstString(part.sessionID, baseOwner.sessionID),
+        messageID,
+        time: firstPositiveNumber(part.time, baseOwner.time),
+      }),
+    )
+  }
+  return owners
+}
+
+function ownerForPart(input: {
+  message: any
+  part: any
+  baseOwner: ScreenshotBrowserOwnerSeed
+  boundaries: ReadonlyMap<string, ScreenshotBrowserOwner>
+}): ScreenshotBrowserOwner {
+  const messageID = sourceMessageID(input.message, input.part)
+  const boundary = messageID ? input.boundaries.get(messageID) : undefined
+  return createOwner({
+    role: boundary?.role ?? input.baseOwner.role,
+    sessionID: firstString(input.part?.sessionID, boundary?.sessionID, input.baseOwner.sessionID),
+    messageID: firstString(messageID, boundary?.messageID, input.baseOwner.messageID),
+    time: firstPositiveNumber(boundary?.time, input.baseOwner.time),
+  })
+}
+
+function browserEvidenceContext(part: any): { browser: Record<string, any> | undefined; src: string } {
+  const metadata = isRecord(part?.state?.metadata) ? part.state.metadata : {}
+  const browser = isRecord(metadata.browser) ? metadata.browser : undefined
+  const screenshot = isRecord(browser?.screenshot) ? browser.screenshot : undefined
+  return { browser, src: firstString(screenshot?.attachmentUrl) }
+}
+
+function toolAttachments(part: any): any[] {
+  return Array.isArray(part?.state?.attachments)
+    ? part.state.attachments
+    : Array.isArray(part?.attachments)
+      ? part.attachments
+      : []
+}
+
+function hasToolScreenshotCandidate(part: any): boolean {
+  const context = browserEvidenceContext(part)
+  if (isStoredAttachmentUrl(context.src)) return true
+  return toolAttachments(part).some((attachment) => isStoredImageReference(attachment))
+}
+
 function browserEvidenceItem(input: {
   message: any
   part: any
-  role: AgentRole
-  time: number
+  owner: ScreenshotBrowserOwner
   index: number
 }): ScreenshotBrowserItem | undefined {
-  const metadata = isRecord(input.part?.state?.metadata) ? input.part.state.metadata : {}
-  const browser = isRecord(metadata.browser) ? metadata.browser : undefined
-  const screenshot = isRecord(browser?.screenshot) ? browser.screenshot : undefined
-  const src = firstString(screenshot?.attachmentUrl)
+  const { browser, src } = browserEvidenceContext(input.part)
   if (!isStoredAttachmentUrl(src)) return undefined
   const title = firstString(browser?.title, browser?.url, input.part?.tool, "Browser screenshot")
   const messageID = sourceMessageID(input.message, input.part)
@@ -149,13 +290,13 @@ function browserEvidenceItem(input: {
       : ""
   return {
     id: `tool-browser:${messageID}:${partID}`,
-    role: input.role,
+    ...ownerFields(input.owner),
     src,
     thumbnailSrc: screenshotBrowserThumbnailUrl(src),
     alt: title,
     title,
     detail: [firstString(browser?.url), viewportText].filter(Boolean).join(" · "),
-    time: input.time,
+    time: firstPositiveNumber(partEventTime(input.part), input.owner.time),
     messageID,
     partID,
     source: "tool-browser-evidence",
@@ -165,8 +306,7 @@ function browserEvidenceItem(input: {
 function fileItem(input: {
   message: any
   part: any
-  role: AgentRole
-  time: number
+  owner: ScreenshotBrowserOwner
   index: number
 }): ScreenshotBrowserItem | undefined {
   if (!isStoredImageReference(input.part)) return undefined
@@ -177,13 +317,13 @@ function fileItem(input: {
   const partID = firstString(input.part?.id) || String(input.index)
   return {
     id: `file:${messageID}:${partID}`,
-    role: input.role,
+    ...ownerFields(input.owner),
     src,
     thumbnailSrc: screenshotBrowserThumbnailUrl(src),
     alt: title,
     title,
     detail: firstString(input.part?.mime, input.part?.mediaType),
-    time: input.time,
+    time: firstPositiveNumber(partEventTime(input.part), input.owner.time),
     messageID,
     partID,
     source: "file",
@@ -193,16 +333,11 @@ function fileItem(input: {
 function toolAttachmentItems(input: {
   message: any
   part: any
-  role: AgentRole
-  time: number
+  owner: ScreenshotBrowserOwner
   index: number
   excludedUrls?: ReadonlySet<string>
 }): ScreenshotBrowserItem[] {
-  const attachments = Array.isArray(input.part?.state?.attachments)
-    ? input.part.state.attachments
-    : Array.isArray(input.part?.attachments)
-      ? input.part.attachments
-      : []
+  const attachments = toolAttachments(input.part)
   const messageID = sourceMessageID(input.message, input.part)
   const partID = firstString(input.part?.id) || String(input.index)
   return attachments
@@ -215,13 +350,13 @@ function toolAttachmentItems(input: {
       const title = firstString(attachment?.filename, attachment?.name, input.part?.tool, src)
       return {
         id: `tool-attachment:${messageID}:${partID}:${attachmentIndex}`,
-        role: input.role,
+        ...ownerFields(input.owner),
         src,
         thumbnailSrc: screenshotBrowserThumbnailUrl(src),
         alt: title,
         title,
         detail: firstString(attachment?.mime, attachment?.mediaType, input.part?.tool),
-        time: input.time,
+        time: firstPositiveNumber(partEventTime(input.part), input.owner.time),
         messageID,
         partID,
         source: "tool-attachment" as const,
@@ -245,22 +380,27 @@ export function mergeScreenshotBrowserItemSets(
 }
 
 function collectScreenshotBrowserMessage(collector: ScreenshotBrowserCollector, message: any): void {
-  const role = messageRole(message)
-  const time = messageTime(message)
+  const baseOwner = messageOwnerSeed(message)
   const parts = Array.isArray(message?.parts) ? message.parts : []
+  const boundaries = boundaryOwnersByMessage(parts, baseOwner)
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index]
     if (!isRecord(part)) continue
+    if (part.type === "boundary") continue
     if (part.type === "file") {
-      const item = fileItem({ message, part, role, time, index })
+      if (!isStoredImageReference(part)) continue
+      const owner = ownerForPart({ message, part, baseOwner, boundaries })
+      const item = fileItem({ message, part, owner, index })
       if (item) pushUnique(collector, item)
       continue
     }
     if (part.type === "tool") {
-      const browser = browserEvidenceItem({ message, part, role, time, index })
+      if (!hasToolScreenshotCandidate(part)) continue
+      const owner = ownerForPart({ message, part, baseOwner, boundaries })
+      const browser = browserEvidenceItem({ message, part, owner, index })
       if (browser) pushUnique(collector, browser)
       const excludedUrls = browser ? new Set([browser.src]) : undefined
-      for (const attachment of toolAttachmentItems({ message, part, role, time, index, excludedUrls })) {
+      for (const attachment of toolAttachmentItems({ message, part, owner, index, excludedUrls })) {
         pushUnique(collector, attachment)
       }
     }
@@ -318,12 +458,19 @@ export function collectScreenshotBrowserItemsFromCardTree(
 }
 
 export function groupScreenshotBrowserItems(items: readonly ScreenshotBrowserItem[]): ScreenshotBrowserGroup[] {
-  const groups = new Map<AgentRole, ScreenshotBrowserGroup>()
+  const groups = new Map<string, ScreenshotBrowserGroup>()
   for (const item of items) {
-    let group = groups.get(item.role)
+    let group = groups.get(item.ownerKey)
     if (!group) {
-      group = { role: item.role, items: [] }
-      groups.set(item.role, group)
+      group = {
+        key: item.ownerKey,
+        role: item.ownerRole,
+        sessionID: item.ownerSessionID,
+        messageID: item.ownerMessageID,
+        time: item.ownerTime,
+        items: [],
+      }
+      groups.set(item.ownerKey, group)
     }
     group.items.push(item)
   }
@@ -339,15 +486,23 @@ export function buildScreenshotBrowserRows(
   for (const group of groups) {
     rows.push({
       kind: "group",
-      key: `group:${group.role}`,
+      key: `group:${group.key}`,
       role: group.role,
+      groupKey: group.key,
+      sessionID: group.sessionID,
+      messageID: group.messageID,
+      time: group.time,
       count: group.items.length,
     })
     for (let index = 0; index < group.items.length; index += columns) {
       rows.push({
         kind: "items",
-        key: `items:${group.role}:${index}`,
+        key: `items:${group.key}:${index}`,
         role: group.role,
+        groupKey: group.key,
+        sessionID: group.sessionID,
+        messageID: group.messageID,
+        time: group.time,
         items: group.items.slice(index, index + columns),
       })
     }

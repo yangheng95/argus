@@ -43,16 +43,27 @@ function screenshotItem(
   input: Partial<ScreenshotBrowserItem> & Pick<ScreenshotBrowserItem, "src" | "time">,
 ): ScreenshotBrowserItem {
   const src = input.src
+  const role = input.role ?? "visual-qa"
+  const messageID = input.messageID ?? `msg:${src}`
+  const ownerRole = input.ownerRole ?? role
+  const ownerSessionID = input.ownerSessionID ?? "ses_visual"
+  const ownerMessageID = input.ownerMessageID ?? messageID
+  const ownerTime = input.ownerTime ?? input.time
   return {
     id: input.id ?? `file:${src}`,
-    role: input.role ?? "visual-qa",
+    role,
+    ownerKey: input.ownerKey ?? `${ownerRole}:session:${ownerSessionID}:message:${ownerMessageID}:time:${ownerTime}`,
+    ownerRole,
+    ownerSessionID,
+    ownerMessageID,
+    ownerTime,
     src,
     thumbnailSrc: input.thumbnailSrc ?? screenshotBrowserThumbnailUrl(src),
     alt: input.alt ?? src,
     title: input.title ?? src,
     detail: input.detail ?? "image/png",
     time: input.time,
-    messageID: input.messageID ?? `msg:${src}`,
+    messageID,
     partID: input.partID ?? `part:${src}`,
     source: input.source ?? "file",
   }
@@ -64,6 +75,7 @@ describe("screenshot browser panel", () => {
       {
         info: {
           id: "m1",
+          sessionID: "ses_build",
           agent: "coding",
           time: { created: 100 },
         },
@@ -98,6 +110,7 @@ describe("screenshot browser panel", () => {
       {
         info: {
           id: "m2",
+          sessionID: "ses_visual",
           resolvedRole: "visual-qa",
           time: { created: 200 },
         },
@@ -188,6 +201,11 @@ describe("screenshot browser panel", () => {
       `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
     ])
     expect(groups.map((group) => group.role)).toEqual(["visual-qa", "build"])
+    expect(groups.map((group) => group.key)).toEqual([
+      "visual-qa:session:ses_visual:message:m2:time:200",
+      "build:session:ses_build:message:m1:time:100",
+    ])
+    expect(groups.map((group) => group.time)).toEqual([200, 100])
     expect(groups[0].items.map((item) => item.source)).toEqual(["tool-browser-evidence", "tool-attachment"])
     expect(groups[1].items.map((item) => item.source)).toEqual(["file"])
     expect(items.every((item) => item.src.startsWith("/attachment/"))).toBe(true)
@@ -217,6 +235,167 @@ describe("screenshot browser panel", () => {
         `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}&other=1`,
       ),
     ).toBe(false)
+  })
+
+  test("does not create screenshot owners for non-image parts", () => {
+    expect(
+      collectScreenshotBrowserItems([
+        {
+          info: { role: "assistant" },
+          parts: [
+            { id: "text_without_owner", type: "text", text: "plain text" },
+            {
+              id: "pdf_without_owner",
+              type: "file",
+              url: "/attachment/project/doc.pdf",
+              mime: "application/pdf",
+              filename: "doc.pdf",
+            },
+            {
+              id: "tool_without_owner",
+              type: "tool",
+              tool: "bash",
+              state: {
+                attachments: [{ url: "/attachment/project/data.json", mime: "application/json", filename: "data.json" }],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toEqual([])
+  })
+
+  test("groups screenshots by concrete agent turn instead of collapsing one build role", () => {
+    const messages = [
+      {
+        info: {
+          id: "msg_build_first",
+          sessionID: "ses_build",
+          channel: "build",
+          resolvedRole: "build",
+          time: { created: 1_780_000_010_000 },
+        },
+        parts: [
+          {
+            id: "part_build_first",
+            type: "tool",
+            messageID: "msg_build_first",
+            sessionID: "ses_build",
+            tool: "browser_observe",
+            state: {
+              metadata: {
+                browser: {
+                  title: "first build observe",
+                  screenshot: { attachmentUrl: "/attachment/project/build-first.png" },
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        info: {
+          id: "msg_build_second",
+          sessionID: "ses_build",
+          channel: "build",
+          resolvedRole: "build",
+          time: { created: 1_780_000_020_000 },
+        },
+        parts: [
+          {
+            id: "part_build_second",
+            type: "tool",
+            messageID: "msg_build_second",
+            sessionID: "ses_build",
+            tool: "webpage_runtime_state",
+            state: {
+              attachments: [
+                {
+                  url: "/attachment/project/build-second.png",
+                  mime: "image/png",
+                  filename: "build-second.png",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]
+
+    const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItems(messages))
+
+    expect(groups.map((group) => group.key)).toEqual([
+      "build:session:ses_build:message:msg_build_second:time:1780000020000",
+      "build:session:ses_build:message:msg_build_first:time:1780000010000",
+    ])
+    expect(groups.map((group) => group.role)).toEqual(["build", "build"])
+    expect(groups.map((group) => group.time)).toEqual([1_780_000_020_000, 1_780_000_010_000])
+    expect(groups.map((group) => group.items.map((item) => item.src))).toEqual([
+      ["/attachment/project/build-second.png"],
+      ["/attachment/project/build-first.png"],
+    ])
+  })
+
+  test("phase card screenshots inherit the boundary agent turn and time", () => {
+    const items = collectScreenshotBrowserItems([
+      {
+        info: {
+          id: "phase_card",
+          sessionID: "ses_build",
+          channel: "build",
+          resolvedRole: "build",
+          time: { created: 1_780_000_000_000 },
+        },
+        parts: [
+          {
+            type: "boundary",
+            messageID: "msg_build_first",
+            role: "build",
+            time: 1_780_000_010_000,
+          },
+          {
+            id: "part_first",
+            type: "file",
+            messageID: "msg_build_first",
+            sessionID: "ses_build",
+            url: "/attachment/project/phase-first.png",
+            mime: "image/png",
+            filename: "phase-first.png",
+          },
+          {
+            type: "boundary",
+            messageID: "msg_build_second",
+            role: "build",
+            time: 1_780_000_020_000,
+          },
+          {
+            id: "part_second",
+            type: "tool",
+            messageID: "msg_build_second",
+            sessionID: "ses_build",
+            tool: "browser_observe",
+            state: {
+              metadata: {
+                browser: {
+                  title: "phase second observe",
+                  screenshot: { attachmentUrl: "/attachment/project/phase-second.png" },
+                },
+              },
+            },
+          },
+        ],
+      },
+    ])
+    const groups = groupScreenshotBrowserItems(items)
+
+    expect(items.map((item) => item.ownerKey)).toEqual([
+      "build:session:ses_build:message:msg_build_second:time:1780000020000",
+      "build:session:ses_build:message:msg_build_first:time:1780000010000",
+    ])
+    expect(groups.map((group) => group.key)).toEqual([
+      "build:session:ses_build:message:msg_build_second:time:1780000020000",
+      "build:session:ses_build:message:msg_build_first:time:1780000010000",
+    ])
   })
 
   test("collects screenshots from hydrated card tree as the panel source", () => {
@@ -306,13 +485,18 @@ describe("screenshot browser panel", () => {
       `/attachment/project/visual.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
       `/attachment/project/build.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
     ])
-    expect(groupScreenshotBrowserItems(items).map((group) => group.role)).toEqual(["visual-qa", "build"])
+    expect(groupScreenshotBrowserItems(items).map((group) => group.key)).toEqual([
+      "visual-qa:session:ses_visual:message:msg_tool:time:250",
+      "visual-qa:session:ses_visual:message:msg_visual:time:200",
+      "build:session:ses_build:message:msg_build:time:100",
+    ])
   })
 
   test("bounds derived history before rendering", () => {
     const messages = Array.from({ length: SCREENSHOT_BROWSER_ITEM_LIMIT + 10 }, (_item, index) => ({
       info: {
         id: `m${index}`,
+        sessionID: "ses_executor",
         agent: "executor",
         time: { created: index + 1 },
       },
@@ -448,22 +632,25 @@ describe("screenshot browser panel", () => {
   })
 
   test("builds virtual rows with group headers and bounded column chunks", () => {
-    const messages = Array.from({ length: 5 }, (_item, index) => ({
-      info: {
-        id: `m${index}`,
-        agent: "visual-qa",
-        time: { created: index + 1 },
-      },
-      parts: [
-        {
+    const messages = [
+      {
+        info: {
+          id: "m_visual",
+          sessionID: "ses_visual",
+          agent: "visual-qa",
+          time: { created: 1 },
+        },
+        parts: Array.from({ length: 5 }, (_item, index) => ({
           id: `p${index}`,
           type: "file",
+          messageID: "m_visual",
+          sessionID: "ses_visual",
           url: `/attachment/project/${index}.png`,
           mime: "image/png",
           filename: `${index}.png`,
-        },
-      ],
-    }))
+        })),
+      },
+    ]
     const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItems(messages))
     const rows = buildScreenshotBrowserRows(groups, 2)
 

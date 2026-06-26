@@ -28,6 +28,7 @@ const { flushCardStats, markCardStatsDirty } = await import("../src/store/card-t
 const cardTreeUtils = await import("../src/utils/card-tree")
 const screenshotBrowserUtils = await import("../src/utils/screenshot-browser")
 const { aggregateUsageAcrossSessions } = await import("../src/utils/format-usage")
+type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
 
 const TASK_ID = "tsk_stats"
 const SID = "ses_stats"
@@ -173,6 +174,46 @@ function expectCacheMatchesWalk(): void {
   })
   expect(cardTreeStore.screenshotItems).toEqual(walkTopLevelScreenshotItems())
   expect(cardTreeStore.usageAggregate).toEqual(aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards)))
+}
+
+function screenshotCacheItem(input: {
+  src: string
+  time: number
+  id?: string
+  role?: ScreenshotBrowserItem["role"]
+  title?: string
+  detail?: string
+  messageID?: string
+  partID?: string
+  source?: ScreenshotBrowserItem["source"]
+  ownerSessionID?: string
+  ownerMessageID?: string
+  ownerTime?: number
+}): ScreenshotBrowserItem {
+  const role = input.role ?? "visual-qa"
+  const messageID = input.messageID ?? `message-${input.src}`
+  const partID = input.partID ?? `part-${input.src}`
+  const ownerSessionID = input.ownerSessionID ?? "ses_visual"
+  const ownerMessageID = input.ownerMessageID ?? messageID
+  const ownerTime = input.ownerTime ?? input.time
+  return {
+    id: input.id ?? `file:${messageID}:${partID}`,
+    role,
+    ownerKey: `${role}:session:${ownerSessionID}:message:${ownerMessageID}:time:${ownerTime}`,
+    ownerRole: role,
+    ownerSessionID,
+    ownerMessageID,
+    ownerTime,
+    src: input.src,
+    thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(input.src),
+    alt: input.title ?? input.src,
+    title: input.title ?? input.src,
+    detail: input.detail ?? "image/png",
+    time: input.time,
+    messageID,
+    partID,
+    source: input.source ?? "file",
+  }
 }
 
 // ── Cases ──
@@ -538,19 +579,13 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
     const order = Array.from({ length: rootCount }, (_item, index) => `bulk-root-${index}`)
     const cards = Object.fromEntries(
       order.map((id, index) => {
-        const item = {
-          id: `file:bulk-message-${index}:bulk-part-${index}`,
-          role: "visual-qa" as const,
+        const item = screenshotCacheItem({
           src: `/attachment/project/bulk-${index}.png`,
-          thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/bulk-${index}.png`),
-          alt: `bulk-${index}.png`,
           title: `bulk-${index}.png`,
-          detail: "image/png",
           time: index + 1,
           messageID: `bulk-message-${index}`,
           partID: `bulk-part-${index}`,
-          source: "file" as const,
-        }
+        })
         return [
           id,
           {
@@ -588,7 +623,6 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
 test("top-level screenshot cache updates one dirty root without reading unrelated root arrays", () => {
   resetWriter()
   try {
-    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
     const rootCount = 5_000
     const changedRootID = "bulk-root-2500"
     let countUnrelatedReads = false
@@ -611,19 +645,13 @@ test("top-level screenshot cache updates one dirty root without reading unrelate
     const order = Array.from({ length: rootCount }, (_item, index) => `bulk-root-${index}`)
     const cards = Object.fromEntries(
       order.map((id, index) => {
-        const item: ScreenshotBrowserItem = {
-          id: `file:bulk-message-${index}:bulk-part-${index}`,
-          role: "visual-qa",
+        const item = screenshotCacheItem({
           src: `/attachment/project/bulk-${index}.png`,
-          thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/bulk-${index}.png`),
-          alt: `bulk-${index}.png`,
           title: `bulk-${index}.png`,
-          detail: "image/png",
           time: index + 1,
           messageID: `bulk-message-${index}`,
           partID: `bulk-part-${index}`,
-          source: "file",
-        }
+        })
         return [
           id,
           {
@@ -677,7 +705,6 @@ test("top-level screenshot cache updates one dirty root without reading unrelate
 test("top-level screenshot cache appends and removes roots without reading stable root arrays", () => {
   resetWriter()
   try {
-    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
     const rootCount = 160
     let countStableReads = false
     let stableArrayReads = 0
@@ -696,18 +723,15 @@ test("top-level screenshot cache appends and removes roots without reading stabl
           return Reflect.get(target, property, receiver)
         },
       })
-    const itemFor = (id: string, index: number): ScreenshotBrowserItem => ({
-      id: `file:${id}`,
-      role: "visual-qa",
-      src: `/attachment/project/${id}.png`,
-      alt: `${id}.png`,
-      title: `${id}.png`,
-      detail: "image/png",
-      time: index + 1,
-      messageID: `message-${id}`,
-      partID: `part-${id}`,
-      source: "file",
-    })
+    const itemFor = (id: string, index: number): ScreenshotBrowserItem =>
+      screenshotCacheItem({
+        id: `file:${id}`,
+        messageID: `message-${id}`,
+        partID: `part-${id}`,
+        src: `/attachment/project/${id}.png`,
+        title: `${id}.png`,
+        time: index + 1,
+      })
     const order = Array.from({ length: rootCount }, (_item, index) => `root-${index}`)
     const cards = Object.fromEntries(
       order.map((id, index) => [
@@ -766,33 +790,24 @@ test("top-level screenshot cache appends and removes roots without reading stabl
 test("top-level screenshot cache preserves duplicate-owner and equal-time order semantics", () => {
   resetWriter()
   try {
-    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
-    const duplicate = (title: string): ScreenshotBrowserItem => ({
-      id: "file:shared-message:shared-part",
-      role: "visual-qa",
-      src: "/attachment/project/shared.png",
-      thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl("/attachment/project/shared.png"),
-      alt: "shared.png",
-      title,
-      detail: "image/png",
-      time: 100,
-      messageID: "shared-message",
-      partID: "shared-part",
-      source: "file",
-    })
-    const item = (id: string): ScreenshotBrowserItem => ({
-      id: `file:${id}`,
-      role: "visual-qa",
-      src: `/attachment/project/${id}.png`,
-      thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/${id}.png`),
-      alt: `${id}.png`,
-      title: id,
-      detail: "image/png",
-      time: 100,
-      messageID: `message-${id}`,
-      partID: `part-${id}`,
-      source: "file",
-    })
+    const duplicate = (title: string): ScreenshotBrowserItem =>
+      screenshotCacheItem({
+        id: "file:shared-message:shared-part",
+        src: "/attachment/project/shared.png",
+        title,
+        time: 100,
+        messageID: "shared-message",
+        partID: "shared-part",
+      })
+    const item = (id: string): ScreenshotBrowserItem =>
+      screenshotCacheItem({
+        id: `file:${id}`,
+        src: `/attachment/project/${id}.png`,
+        title: id,
+        time: 100,
+        messageID: `message-${id}`,
+        partID: `part-${id}`,
+      })
     setCardTreeStore("cards", {
       duplicate_a: {
         id: "duplicate_a",

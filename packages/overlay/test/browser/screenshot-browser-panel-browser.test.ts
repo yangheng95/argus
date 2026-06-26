@@ -182,7 +182,7 @@ function conversationPayload() {
       resolvedRole: "visual-qa",
       agent: "visual-qa",
       channel: "visual-qa",
-      time: { created: 1_780_000_010_000 + index, completed: 1_780_000_011_000 + index },
+      time: { created: 1_780_000_010_000 + index * 1_000, completed: 1_780_000_011_000 + index * 1_000 },
     },
     parts: [
       {
@@ -610,7 +610,15 @@ test(
         )?.dataset.active,
         title: document.querySelector<HTMLElement>(".screenshot-browser-panel .oc-surface-header__title")?.textContent,
         groupRole: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.agentRole,
+        groupOwnerKey: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.ownerKey,
         groupTitle: document.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
+        visibleGroups: Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-group"))
+          .slice(0, 3)
+          .map((group) => ({
+            role: group.dataset.agentRole,
+            ownerKey: group.dataset.ownerKey,
+            title: group.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
+          })),
         cardTitle: document.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent,
         cardCount: document.querySelectorAll(".screenshot-browser-card").length,
         virtualized: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.virtualized,
@@ -622,7 +630,20 @@ test(
       assert.equal(state.buttonActive, "true")
       assert.equal(state.title, "Screenshots")
       assert.equal(state.groupRole, "visual-qa")
-      assert.equal(state.groupTitle, "Visual QA")
+      assert.equal(state.groupOwnerKey, "visual-qa:session:ses_visual:message:msg_visual_119:time:1780000129000")
+      assert.ok(state.groupTitle?.startsWith("Visual QA · "), JSON.stringify(state))
+      assert.deepEqual(
+        state.visibleGroups.slice(0, 2).map((group) => group.ownerKey),
+        [
+          "visual-qa:session:ses_visual:message:msg_visual_119:time:1780000129000",
+          "visual-qa:session:ses_visual:message:msg_visual_118:time:1780000128000",
+        ],
+      )
+      assert.ok(
+        state.visibleGroups.every((group) => group.title?.startsWith("Visual QA · ")),
+        JSON.stringify(state.visibleGroups),
+      )
+      assert.notEqual(state.visibleGroups[0]?.title, state.visibleGroups[1]?.title, JSON.stringify(state.visibleGroups))
       assert.equal(state.cardTitle, "visual-check-119.png")
       assert.equal(state.virtualized, "true")
       assert.equal(state.virtualWindow, true)
@@ -708,22 +729,15 @@ test(
       const highZoomScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-high-zoom.png")
       writeFileSync(highZoomScreenshotPath, screenshot)
 
-      await page.$eval('.screenshot-browser-groups[data-virtualized="true"]', (node) => {
-        const scroll = node as HTMLElement
-        scroll.scrollTo({ top: Math.max(0, scroll.scrollHeight - scroll.clientHeight), behavior: "auto" })
-      })
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-          }),
-      )
       try {
-        await page.waitForFunction(() =>
-          Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card__body strong")).some(
+        await page.waitForFunction(() => {
+          const scroll = document.querySelector<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
+          if (!scroll) return false
+          scroll.scrollTo({ top: Math.max(0, scroll.scrollHeight - scroll.clientHeight), behavior: "auto" })
+          return Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card__body strong")).some(
             (node) => node.textContent === "visual-check-0.png",
-          ),
-        )
+          )
+        })
       } catch (error) {
         const scrollState = await page.evaluate(() => {
           const scroll = document.querySelector<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
@@ -731,6 +745,9 @@ test(
             scrollTop: scroll?.scrollTop ?? 0,
             scrollHeight: scroll?.scrollHeight ?? 0,
             clientHeight: scroll?.clientHeight ?? 0,
+            ownerKeys: Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-group")).map(
+              (node) => node.dataset.ownerKey,
+            ),
             titles: Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card__body strong")).map(
               (node) => node.textContent,
             ),
