@@ -3399,6 +3399,115 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("propose_task allows a second independent child task for the same parent", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_parallel_child_${stamp}`
+    const taskID = `tsk_parallel_parent_${stamp}`
+    const existingChildID = `tsk_parallel_existing_${stamp}`
+    const createSpy = spyOn(EngineService, "createTask").mockResolvedValue("tsk_parallel_new_child")
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "parallel child task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          session_id: null,
+          source: "test",
+          title: "Parent task",
+          request: "Build the initial feature.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: existingChildID,
+          project_id: projectID,
+          session_id: null,
+          source: "orchestrator:propose_task",
+          title: "Existing independent child",
+          request: "Audit the generated documentation.",
+          kind: "workflow",
+          priority: "normal",
+          metadata: { parent_task_id: taskID },
+          time_created: now + 1,
+          time_updated: now + 1,
+          time_started: now + 1,
+        })
+        .run()
+    })
+
+    await fs.writeFile(path.join(tmp.path, "opencorvus.json"), JSON.stringify({ model: "test/model" }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "parallel child parent" })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ session_id: parent.id, time_updated: Date.now() })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const result = await tools.propose_task.execute(
+          {
+            title: "Validate release notes",
+            request: "Validate release notes independently from the existing documentation audit child task.",
+            reason:
+              "The release-note validation uses a separate artifact and does not depend on the existing documentation audit child task.",
+            priority: "normal",
+            queue: false,
+            kind: "workflow",
+          },
+          buildToolOptions(),
+        )
+
+        const text = toolText(result)
+        expect(text).toContain("Follow-up task created automatically")
+        expect(text).toContain("tsk_parallel_new_child")
+        expect(text).not.toContain("no new task was created")
+        expect(createSpy).toHaveBeenCalledTimes(1)
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Validate release notes",
+            queue: false,
+            source: "orchestrator:propose_task",
+            metadata: {
+              origin: "orchestrator_proposed_task",
+              parent_task_id: taskID,
+              inheritance: "orchestrator_follow_up",
+              proposal_reason:
+                "The release-note validation uses a separate artifact and does not depend on the existing documentation audit child task.",
+            },
+          }),
+        )
+      },
+    })
+  })
+
   test("propose_task refuses a completed parent task without creating follow-up work", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

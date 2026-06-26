@@ -6,18 +6,10 @@ const createTaskOwnerLocks = new Map<string, Promise<unknown>>()
 
 export function taskCreationOwnerKeys(input: z.infer<typeof CreateTaskInput>): string[] {
   const keys: string[] = []
+  // This lock protects duplicate channel ingress, not Mission/task lineage.
+  // Lineage children may fan out in parallel when their briefs are independent.
   if (input.channelBinding) {
     keys.push(`channel:${input.channelBinding.platform}:${input.channelBinding.channel}:${input.channelBinding.thread}`)
-  }
-  const metadata = input.metadata
-  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
-    const mission = metadata.mission
-    if (mission && typeof mission === "object" && !Array.isArray(mission)) {
-      const sessionID = (mission as Record<string, unknown>).session_id
-      if (typeof sessionID === "string" && sessionID.length > 0) keys.push(`mission:${sessionID}`)
-    }
-    const parentTaskID = metadata.parent_task_id
-    if (typeof parentTaskID === "string" && parentTaskID.length > 0) keys.push(`task:${parentTaskID}`)
   }
   return [...new Set(keys)].sort()
 }

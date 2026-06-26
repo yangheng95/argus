@@ -27,7 +27,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("propose_task describes inheriting evidence-backed follow-up work", () => {
     expect(tools.propose_task.description).toContain("concrete current-task evidence")
     expect(tools.propose_task.description).toContain("artifact state")
-    expect(tools.propose_task.description).toContain("Create at most one inheriting child task")
+    expect(tools.propose_task.description).toContain("Independent child tasks may run in parallel")
+    expect(tools.propose_task.description).toContain("Dependent follow-up work must queue")
     expect(tools.propose_task.description).toContain("active workflow contract is fundamentally wrong")
     expect(tools.propose_task.description).toContain("instead of rerunning requirements/plan/executor")
     expect(tools.propose_task.description).toContain("original user request never authorised")

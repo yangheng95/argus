@@ -26,7 +26,9 @@ EVERY WAKE — the protocol
 2. Reconcile dispatched tasks: `panel query_task taskIDs=[...] includeChildren=true` for any task in tasks.md that is not yet in a terminal state (`completed | failed | cancelled`). Update tasks.md with the latest status. If a task spawned children, record them too.
 
 3. Decide the next step:
-   - If frontier has unblocked work, dispatch ONE task that bundles the related frontier items (see TASK GRANULARITY below). Do not create a second task in the same wake; write handoff.md for the next wake to continue the queue.
+   - If frontier has unblocked work, group related items into coherent task briefs and dispatch the ready work (see TASK GRANULARITY below).
+   - Parallel dispatch is allowed only when the task briefs have no dependency on each other's output, artifacts, decisions, or owned files. Record the independence reason in frontier.md / handoff.md when creating multiple tasks in one wake.
+   - If one item depends on another, keep the dependent item queued in frontier.md / handoff.md until the prerequisite task is terminal. Use `queue=true` only when a visible queued engine_task record is explicitly needed; never start dependent child work with `queue=false`.
    - If everything is in flight, write handoff.md describing what to check on the next wake, and stop.
    - If a named external event is the only responsible blocker right now (for example a remote queue is settling, an operator just said they are doing manual setup, or a service needs a short warmup you cannot trigger), use `wait` once for the shortest useful duration, then re-query the relevant task/project evidence. Do not chain `wait` calls and do not use it as polling for ordinary task completion.
    - If a task completed with a verdict that changes the plan, update frontier.md to reflect the new state.
@@ -49,14 +51,14 @@ TASK GRANULARITY — batch first, split only with cause
 
 Every dispatched engine_task pays a real cost: a fresh worktree and the full executor pipeline (for `opencorvus`: requirements → architect → build → integrity, each its own sub-agent context). The executor ALREADY decomposes within a task — architect splits a task into goals. Mission-level fan-out on top of that is double-decomposition and burns the same bootstrap N times for work that should have shared one workspace.
 
-Default: ONE task per wake. Bundle all related frontier items into a single self-contained `request` and let the executor's architect stage split it into goals.
+Default: bundle related frontier items into a single self-contained `request` and let the executor's architect stage split it into goals.
 
-Split into multiple tasks across multiple wakes only when at least one is true:
+Split into multiple tasks only when at least one is true:
 - Items target different repos / executors / worktrees that cannot share a workspace.
 - One item is large enough on its own that bundling would exceed what a single executor pipeline can finish or verify cleanly.
 - Items have NO shared context and are still better tracked as separate acceptance units.
 
-Even when split is justified, create only one new engine_task in the current wake. Record the remaining planned tasks in frontier.md / handoff.md and let the next wake create the next one after reconciling current state.
+When split is justified, you may create multiple engine_tasks in the same wake only if they are independent: no task needs another task's output, artifact path, decision, implementation, or owned files before it can make progress and pass acceptance. If there is any dependency, queue the dependent work in frontier.md / handoff.md and dispatch it only after the prerequisite task is terminal, unless a visible queued task record is explicitly needed with `queue=true`.
 
 "1 frontier bullet => 1 task" is NOT the rule. Multiple bullets on the same subsystem, surface, or investigative thread are ONE task with multiple goals — let architect split them.
 
@@ -73,7 +75,7 @@ When you dispatch a task:
 - Choose `executor` deliberately (`opencorvus` for the standard build/integrity pipeline, `codex` / `claude-code` for direct one-shot execution outside the pipeline).
 - Set `queue=false` only when you want the task to start immediately; otherwise let it queue.
 - After dispatch, append the task to tasks.md immediately (before the next tool call) so you do not lose track if the wake ends abruptly.
-- Never issue multiple `create_task` calls in one assistant turn or one wake. A mission owns one new-task start at a time; wait for the created task to be recorded and for a later wake before dispatching another.
+- Multiple `create_task` calls in one assistant turn or one wake are valid only for independent task briefs. Append each created task to tasks.md immediately. Dependent child work must stay queued in mission state or be created with `queue=true` when a visible queued record is required; do not start dependent work in parallel.
 
 ──────────────────────────────────────────────────────────────────────
 RECONCILIATION & COORDINATION — your panel surface
