@@ -1,0 +1,1674 @@
+---
+const locale = Astro.props.locale === "zh" ? "zh" : "en"
+---
+
+<section class="oc-arch-explorer" data-oc-architecture-explorer data-locale={locale}>
+  <div class="oc-arch-head">
+    <p class="oc-arch-eyebrow">
+      {locale === "zh" ? "OpenCorvus current architecture" : "OpenCorvus current architecture"}
+    </p>
+    <h2>
+      {locale === "zh" ? "企业级动态架构图" : "Enterprise Architecture Explorer"}
+    </h2>
+    <p>
+      {
+        locale === "zh"
+          ? "点击领域、组件和细分节点，逐层查看当前源码里的职责、证据、边界和运行关系。"
+          : "Click domains, components, and detail nodes to inspect current responsibilities, evidence, boundaries, and runtime relationships."
+      }
+    </p>
+  </div>
+
+  <div class="oc-arch-toolbar" aria-label={locale === "zh" ? "架构图控制栏" : "Architecture controls"}>
+    <label class="oc-arch-search">
+      <span>{locale === "zh" ? "搜索架构事实" : "Search architecture facts"}</span>
+      <input data-arch-search type="search" autocomplete="off" />
+    </label>
+    <div class="oc-arch-view-controls" data-arch-view-controls aria-label={locale === "zh" ? "视图模式" : "View mode"}>
+    </div>
+    <button class="oc-arch-reset" type="button" data-arch-reset>
+      {locale === "zh" ? "重置" : "Reset"}
+    </button>
+  </div>
+
+  <div class="oc-arch-path" data-arch-path aria-live="polite"></div>
+
+  <div class="oc-arch-workbench">
+    <nav class="oc-arch-rail" data-arch-rail aria-label={locale === "zh" ? "架构领域" : "Architecture domains"}>
+    </nav>
+
+    <div class="oc-arch-stage">
+      <div class="oc-arch-canvas" data-arch-canvas>
+        <svg class="oc-arch-links" data-arch-links aria-hidden="true"></svg>
+        <div class="oc-arch-map" data-arch-map></div>
+      </div>
+
+      <div class="oc-arch-edge-strip" data-arch-edge-strip aria-label={locale === "zh" ? "当前关系" : "Current relationships"}>
+      </div>
+
+      <div class="oc-arch-layer-panel" data-arch-layer-panel>
+      </div>
+    </div>
+
+    <aside class="oc-arch-inspector" data-arch-inspector aria-live="polite">
+    </aside>
+  </div>
+
+  <div class="oc-arch-evidence" data-arch-evidence>
+  </div>
+</section>
+
+<style is:global>
+  .oc-arch-explorer {
+    --oc-arch-ink: var(--sl-color-white);
+    --oc-arch-muted: var(--sl-color-gray-3);
+    --oc-arch-line: color-mix(in srgb, var(--sl-color-gray-5) 72%, transparent);
+    --oc-arch-panel: color-mix(in srgb, var(--sl-color-gray-6) 56%, transparent);
+    --oc-arch-panel-strong: color-mix(in srgb, var(--sl-color-gray-6) 82%, transparent);
+    --oc-arch-focus: #2fb8a6;
+    --oc-arch-data: #5a8dee;
+    --oc-arch-agent: #d29b38;
+    --oc-arch-review: #c06c84;
+    --oc-arch-runtime: #6da55f;
+    width: 100%;
+    max-width: 1180px;
+    margin: 2rem 0 2.5rem;
+    color: var(--oc-arch-ink);
+  }
+
+  .oc-arch-explorer * {
+    box-sizing: border-box;
+    letter-spacing: 0;
+  }
+
+  .oc-arch-head {
+    display: grid;
+    gap: 0.45rem;
+    max-width: 840px;
+    margin-bottom: 1rem;
+  }
+
+  .oc-arch-eyebrow {
+    margin: 0;
+    color: var(--oc-arch-focus);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .oc-arch-head h2 {
+    margin: 0;
+    font-size: clamp(1.6rem, 2.4vw, 2.35rem);
+    line-height: 1.08;
+  }
+
+  .oc-arch-head p {
+    margin: 0;
+    color: var(--oc-arch-muted);
+  }
+
+  .oc-arch-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto;
+    gap: 0.75rem;
+    align-items: end;
+    padding: 0.75rem;
+    border: 1px solid var(--oc-arch-line);
+    border-radius: 8px;
+    background: var(--oc-arch-panel);
+  }
+
+  .oc-arch-search {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    color: var(--oc-arch-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .oc-arch-search input {
+    width: 100%;
+    min-height: 2.35rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--oc-arch-line);
+    border-radius: 6px;
+    color: var(--oc-arch-ink);
+    background: color-mix(in srgb, var(--sl-color-black) 26%, transparent);
+  }
+
+  .oc-arch-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+  }
+
+  .oc-arch-view-button,
+  .oc-arch-reset,
+  .oc-arch-rail-button,
+  .oc-arch-node,
+  .oc-arch-chip,
+  .oc-arch-edge-button {
+    border: 1px solid var(--oc-arch-line);
+    border-radius: 6px;
+    color: var(--oc-arch-ink);
+    background: color-mix(in srgb, var(--sl-color-gray-6) 70%, transparent);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .oc-arch-view-button,
+  .oc-arch-reset {
+    min-height: 2.35rem;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .oc-arch-view-button[aria-pressed="true"],
+  .oc-arch-reset:hover,
+  .oc-arch-rail-button[aria-current="true"],
+  .oc-arch-node[aria-pressed="true"],
+  .oc-arch-chip[aria-pressed="true"],
+  .oc-arch-edge-button[aria-pressed="true"] {
+    border-color: var(--oc-arch-focus);
+    background: color-mix(in srgb, var(--oc-arch-focus) 18%, var(--sl-color-gray-6));
+  }
+
+  .oc-arch-rail-button[data-match="true"],
+  .oc-arch-node[data-match="true"],
+  .oc-arch-chip[data-match="true"] {
+    box-shadow: inset 0 0 0 1px var(--oc-arch-agent), 0 10px 26px rgba(0, 0, 0, 0.18);
+  }
+
+  .oc-arch-view-button:focus-visible,
+  .oc-arch-reset:focus-visible,
+  .oc-arch-rail-button:focus-visible,
+  .oc-arch-node:focus-visible,
+  .oc-arch-chip:focus-visible,
+  .oc-arch-edge-button:focus-visible,
+  .oc-arch-search input:focus-visible {
+    outline: 2px solid var(--oc-arch-focus);
+    outline-offset: 2px;
+  }
+
+  .oc-arch-path {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-height: 2.2rem;
+    align-items: center;
+    color: var(--oc-arch-muted);
+    font-size: 0.82rem;
+  }
+
+  .oc-arch-path span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .oc-arch-workbench {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) 320px;
+    gap: 0.85rem;
+    align-items: stretch;
+  }
+
+  .oc-arch-rail,
+  .oc-arch-stage,
+  .oc-arch-inspector,
+  .oc-arch-evidence {
+    border: 1px solid var(--oc-arch-line);
+    border-radius: 8px;
+    background: var(--oc-arch-panel);
+  }
+
+  .oc-arch-rail {
+    display: grid;
+    align-content: start;
+    gap: 0.45rem;
+    padding: 0.65rem;
+  }
+
+  .oc-arch-rail-button {
+    display: grid;
+    gap: 0.25rem;
+    min-height: 4.2rem;
+    padding: 0.6rem;
+  }
+
+  .oc-arch-rail-button strong,
+  .oc-arch-node-title,
+  .oc-arch-chip strong {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .oc-arch-rail-button span,
+  .oc-arch-node-meta,
+  .oc-arch-chip span {
+    color: var(--oc-arch-muted);
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .oc-arch-node-meta {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .oc-arch-stage {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem;
+  }
+
+  .oc-arch-canvas {
+    position: relative;
+    overflow-x: auto;
+    min-height: 410px;
+    border: 1px solid color-mix(in srgb, var(--oc-arch-line) 72%, transparent);
+    border-radius: 8px;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--sl-color-gray-6) 48%, transparent) 1px, transparent 1px),
+      linear-gradient(0deg, color-mix(in srgb, var(--sl-color-gray-6) 48%, transparent) 1px, transparent 1px);
+    background-size: 96px 96px;
+  }
+
+  .oc-arch-map {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(150px, 1fr));
+    grid-template-rows: repeat(4, 7.75rem);
+    gap: 0.7rem;
+    min-width: 1080px;
+    min-height: 550px;
+    padding: 1rem;
+  }
+
+  .oc-arch-links {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 1080px;
+    pointer-events: none;
+  }
+
+  .oc-arch-links path {
+    fill: none;
+    stroke: color-mix(in srgb, var(--oc-arch-focus) 70%, var(--sl-color-gray-3));
+    stroke-width: 2;
+    stroke-linecap: round;
+    opacity: 0.72;
+  }
+
+  .oc-arch-node {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 0.4rem;
+    min-height: 0;
+    padding: 0.7rem;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  }
+
+  .oc-arch-node[hidden],
+  .oc-arch-rail-button[hidden] {
+    display: none;
+  }
+
+  .oc-arch-node-kicker {
+    width: fit-content;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    color: var(--sl-color-black);
+    background: var(--oc-arch-focus);
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  .oc-arch-node[data-tone="data"] .oc-arch-node-kicker {
+    background: var(--oc-arch-data);
+  }
+
+  .oc-arch-node[data-tone="agent"] .oc-arch-node-kicker {
+    background: var(--oc-arch-agent);
+  }
+
+  .oc-arch-node[data-tone="review"] .oc-arch-node-kicker {
+    background: var(--oc-arch-review);
+  }
+
+  .oc-arch-node[data-tone="runtime"] .oc-arch-node-kicker {
+    background: var(--oc-arch-runtime);
+  }
+
+  .oc-arch-node-title {
+    font-size: 0.95rem;
+    font-weight: 750;
+    line-height: 1.2;
+  }
+
+  .oc-arch-node-count {
+    display: inline-flex;
+    width: fit-content;
+    color: var(--oc-arch-muted);
+    font-size: 0.7rem;
+  }
+
+  .oc-arch-edge-strip {
+    display: flex;
+    gap: 0.45rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
+  .oc-arch-edge-button {
+    flex: 0 0 13.5rem;
+    min-height: 4rem;
+    padding: 0.5rem;
+    font-size: 0.76rem;
+  }
+
+  .oc-arch-edge-button strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.82rem;
+  }
+
+  .oc-arch-layer-panel {
+    display: grid;
+    gap: 0.75rem;
+    min-height: 220px;
+  }
+
+  .oc-arch-layer-head,
+  .oc-arch-chip-grid,
+  .oc-arch-subpanel {
+    border: 1px solid color-mix(in srgb, var(--oc-arch-line) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--sl-color-gray-6) 44%, transparent);
+  }
+
+  .oc-arch-layer-head {
+    padding: 0.75rem;
+  }
+
+  .oc-arch-layer-head h3,
+  .oc-arch-inspector h3,
+  .oc-arch-evidence h3 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  .oc-arch-layer-head p,
+  .oc-arch-inspector p,
+  .oc-arch-evidence p {
+    margin: 0.35rem 0 0;
+    color: var(--oc-arch-muted);
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+
+  .oc-arch-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.5rem;
+    padding: 0.6rem;
+  }
+
+  .oc-arch-chip {
+    display: grid;
+    gap: 0.25rem;
+    min-height: 4.8rem;
+    padding: 0.55rem;
+  }
+
+  .oc-arch-subpanel {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.65rem;
+  }
+
+  .oc-arch-inspector {
+    display: grid;
+    align-content: start;
+    gap: 0.85rem;
+    padding: 0.75rem;
+    min-width: 0;
+  }
+
+  .oc-arch-inspector-section {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .oc-arch-inspector-section h4 {
+    margin: 0;
+    color: var(--oc-arch-focus);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+  }
+
+  .oc-arch-inspector-section ul,
+  .oc-arch-evidence ul {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding-left: 1.05rem;
+  }
+
+  .oc-arch-inspector-section li,
+  .oc-arch-evidence li {
+    color: var(--oc-arch-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .oc-arch-inspector code,
+  .oc-arch-evidence code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 0.75rem;
+  }
+
+  .oc-arch-evidence {
+    display: grid;
+    gap: 0.65rem;
+    margin-top: 0.85rem;
+    padding: 0.75rem;
+  }
+
+  .oc-arch-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.55rem;
+  }
+
+  .oc-arch-evidence-card {
+    min-width: 0;
+    padding: 0.6rem;
+    border: 1px solid color-mix(in srgb, var(--oc-arch-line) 74%, transparent);
+    border-radius: 8px;
+    background: var(--oc-arch-panel-strong);
+  }
+
+  .oc-arch-evidence-card strong {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.82rem;
+  }
+
+  @media (max-width: 1320px) {
+    .oc-arch-toolbar {
+      grid-template-columns: 1fr;
+    }
+
+    .oc-arch-view-controls {
+      justify-content: stretch;
+    }
+
+    .oc-arch-view-button,
+    .oc-arch-reset {
+      flex: 1 1 9rem;
+      text-align: center;
+    }
+
+    .oc-arch-workbench {
+      grid-template-columns: 1fr;
+    }
+
+    .oc-arch-rail {
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    }
+
+    .oc-arch-map {
+      grid-template-columns: repeat(3, minmax(150px, 1fr));
+      grid-template-rows: repeat(4, 7.75rem);
+      min-width: 0;
+      min-height: 550px;
+    }
+
+    .oc-arch-links {
+      min-width: 0;
+    }
+
+    .oc-arch-node {
+      grid-template-rows: auto auto auto;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .oc-arch-node-meta {
+      display: none;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .oc-arch-view-button,
+    .oc-arch-reset {
+      flex-basis: 100%;
+    }
+  }
+</style>
+
+<script is:inline>
+  (() => {
+    const viewModes = [
+      { id: "overview", label: { en: "Overview", zh: "总览" } },
+      { id: "runtime", label: { en: "Runtime chain", zh: "运行链路" } },
+      { id: "data", label: { en: "Data lineage", zh: "数据血缘" } },
+      { id: "a2a", label: { en: "A2A coordination", zh: "A2A 协作" } },
+      { id: "overlay", label: { en: "Overlay view", zh: "Overlay 展示" } },
+    ]
+
+    const domains = [
+      {
+        id: "input-control",
+        lane: { en: "Control", zh: "入口" },
+        title: { en: "Input & Control", zh: "入口与控制" },
+        summary: {
+          en: "Channels, local panel commands, and HTTP routes convert external intent into task records and visible control actions.",
+          zh: "Channel、Panel 控制与 HTTP 路由把外部意图转成 task 记录和可见控制操作。",
+        },
+        tone: "runtime",
+        position: { col: 1, row: 2 },
+        views: ["overview", "runtime"],
+        sources: [
+          "packages/opencorvus/src/channel/ingress.ts",
+          "packages/opencorvus/src/control/message.ts",
+          "packages/opencorvus/src/server/routes/**",
+          "specs/new-arch/03-control.md",
+        ],
+        constraints: [
+          {
+            en: "Control-plane routes work outside a project directory; project-scoped writes run inside Instance.provide.",
+            zh: "控制面路由不依赖项目目录；项目作用域写操作运行在 Instance.provide 内部。",
+          },
+          {
+            en: "Task-record reads resolve ownership from the task record instead of the active workspace.",
+            zh: "Task 记录读取从 task 记录解析归属，而不是依赖当前工作区。",
+          },
+        ],
+        components: [
+          {
+            id: "channel-ingress",
+            title: { en: "ChannelIngress", zh: "ChannelIngress" },
+            summary: { en: "Binds external channel messages to task creation and follow-up events.", zh: "把外部 channel 消息绑定到 task 创建与后续事件。" },
+            sources: ["packages/opencorvus/src/channel/ingress.ts", "specs/new-arch/03-control.md"],
+            details: [
+              { en: "Preserves channel binding rows so replies can return to the same external thread.", zh: "保留 channel binding 行，让回复回到同一个外部 thread。" },
+              { en: "Feeds the engine through task and message APIs instead of side-channel UI state.", zh: "通过 task/message API 进入 engine，而不是旁路 UI 状态。" },
+            ],
+            subsystems: [
+              { id: "channel-binding", title: { en: "engine_channel_binding", zh: "engine_channel_binding" }, summary: { en: "Thread ownership for external platforms.", zh: "外部平台 thread 归属记录。" }, sources: ["packages/opencorvus/src/engine/engine.sql.ts"] },
+              { id: "channel-runtime", title: { en: "Channel runtimes", zh: "Channel runtimes" }, summary: { en: "Slack, Discord, Feishu, DingTalk, WeCom, Telegram, and related adapters.", zh: "Slack、Discord、飞书、钉钉、企业微信、Telegram 等适配。" }, sources: ["packages/channel-runtime"] },
+            ],
+          },
+          {
+            id: "control-message",
+            title: { en: "ControlMessage", zh: "ControlMessage" },
+            summary: { en: "Routes local overlay and panel intent through declared capabilities.", zh: "通过声明式 capability 路由本地 overlay 与 panel 意图。" },
+            sources: ["packages/opencorvus/src/control/message.ts", "packages/opencorvus/src/panel/capability.ts"],
+            details: [
+              { en: "Panel capability actions are explicit operations, not hidden UI-only messages.", zh: "Panel capability action 是显式操作，不是只给界面看的隐藏消息。" },
+              { en: "Failures must remain visible to the caller and to the task stream.", zh: "失败必须对调用方和 task stream 可见。" },
+            ],
+            subsystems: [
+              { id: "panel-registry", title: { en: "PanelCapabilityRegistry", zh: "PanelCapabilityRegistry" }, summary: { en: "Declared local UI capabilities.", zh: "声明本地 UI capability。" }, sources: ["packages/opencorvus/src/panel/capability.ts"] },
+            ],
+          },
+          {
+            id: "routes",
+            title: { en: "Server routes", zh: "Server routes" },
+            summary: { en: "Hono/OpenAPI route groups expose control, project, task, browser-preview, and panel surfaces.", zh: "Hono/OpenAPI 路由组暴露控制面、项目、task、browser-preview 与 panel 表面。" },
+            sources: ["packages/opencorvus/src/server/routes/orchestrator.ts", "packages/opencorvus/src/server/routes/panel.ts", "packages/opencorvus/src/server/routes/browser-preview.ts"],
+            details: [
+              { en: "`POST /task` creates engine tasks; task event routes stream visible progress.", zh: "`POST /task` 创建 engine task；task event 路由流式展示进度。" },
+              { en: "Browser Preview routes are task-scoped and evidence-backed.", zh: "Browser Preview 路由以 task 为作用域，并由证据支撑。" },
+            ],
+            subsystems: [
+              { id: "task-routes", title: { en: "Task routes", zh: "Task routes" }, summary: { en: "Create, inspect, retry, replan, cancel, and stream tasks.", zh: "创建、查看、重试、重规划、取消和流式读取 task。" }, sources: ["packages/opencorvus/src/server/routes/orchestrator.ts"] },
+              { id: "preview-routes", title: { en: "Browser Preview routes", zh: "Browser Preview routes" }, summary: { en: "Select target, capture, compare, snapshot, and input.", zh: "选择 target、截图、比较、快照和输入。" }, sources: ["packages/opencorvus/src/server/routes/browser-preview.ts"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "engine-core",
+        lane: { en: "Engine", zh: "Engine" },
+        title: { en: "Task Engine", zh: "任务引擎" },
+        summary: {
+          en: "SQLite tables and artifact projections hold the durable task, spec, plan, goal, interaction, evidence, and event spine.",
+          zh: "SQLite 表与 artifact 投影承载 task、spec、plan、goal、interaction、evidence 与 event 主干。",
+        },
+        tone: "data",
+        position: { col: 2, row: 2 },
+        views: ["overview", "runtime", "data", "a2a", "overlay"],
+        sources: [
+          "packages/opencorvus/src/engine/engine.sql.ts",
+          "packages/opencorvus/src/task-api/index.ts",
+          "packages/opencorvus/src/engine/describe.ts",
+          "specs/new-arch/02-data.md",
+        ],
+        constraints: [
+          { en: "`engine_goal.status` and separate evaluation tables are retired; progress derives from artifacts.", zh: "`engine_goal.status` 与独立 evaluation 表已退役；进度从 artifact 派生。" },
+          { en: "`engine_artifact` carries runs, goal attempts, verification evidence, integrity attempts, reports, and A2A artifacts.", zh: "`engine_artifact` 承载 run、goal attempt、verification evidence、integrity attempt、report 与 A2A artifact。" },
+        ],
+        components: [
+          {
+            id: "engine-service",
+            title: { en: "EngineService", zh: "EngineService" },
+            summary: { en: "Creates tasks, replies to interactions, retries/replans, and projects boards.", zh: "创建 task、回复 interaction、重试/重规划，并投影 board。" },
+            sources: ["packages/opencorvus/src/task-api/index.ts"],
+            details: [
+              { en: "`createTask`, `handleTaskMessage`, `replyInteraction`, `retryTask`, and `replanTask` are the task API surface.", zh: "`createTask`、`handleTaskMessage`、`replyInteraction`、`retryTask`、`replanTask` 构成 task API 表面。" },
+              { en: "Project preparation rejects invalid workspaces instead of creating hidden auto-init behavior.", zh: "项目准备会拒绝无效工作区，不创建隐藏的自动 init 行为。" },
+            ],
+            subsystems: [
+              { id: "board-projection", title: { en: "Board projection", zh: "Board projection" }, summary: { en: "Task board and brief views are derived from persisted rows and artifacts.", zh: "Task board 与 brief 由持久行和 artifact 派生。" }, sources: ["packages/opencorvus/src/task-api/index.ts"] },
+            ],
+          },
+          {
+            id: "engine-artifact",
+            title: { en: "engine_artifact", zh: "engine_artifact" },
+            summary: { en: "Durable process and evidence surface for the workflow.", zh: "workflow 的持久过程与证据表面。" },
+            sources: ["packages/opencorvus/src/engine/engine.sql.ts", "packages/opencorvus/src/verification/persist.ts", "packages/opencorvus/src/engine/agent-coordination.ts"],
+            details: [
+              { en: "Stores `run`, `goal_run_attempt`, `verification-evidence`, `integrity_attempt`, `agent_coordination_*`, reports, diffs, and screenshots.", zh: "存储 `run`、`goal_run_attempt`、`verification-evidence`、`integrity_attempt`、`agent_coordination_*`、report、diff 与截图。" },
+              { en: "Current readers reconstruct logical rows from artifact kind and payload.", zh: "当前 reader 按 artifact kind 与 payload 重建逻辑行。" },
+            ],
+            subsystems: [
+              { id: "verification-evidence-kind", title: { en: "verification-evidence", zh: "verification-evidence" }, summary: { en: "Task or goal evidence persisted by verification writers.", zh: "verification writer 持久化的 task/goal 证据。" }, sources: ["packages/opencorvus/src/verification/persist.ts"] },
+              { id: "coordination-artifacts", title: { en: "agent_coordination_*", zh: "agent_coordination_*" }, summary: { en: "Artifact-backed A2A requests, responses, and actions.", zh: "artifact-backed A2A request、response 与 action。" }, sources: ["packages/opencorvus/src/engine/agent-coordination.ts"] },
+            ],
+          },
+          {
+            id: "decision-log",
+            title: { en: "Decision log and trace", zh: "Decision log 与 trace" },
+            summary: { en: "Records orchestration decisions, evidence references, and runtime events for replay.", zh: "记录编排决策、证据引用和运行事件，便于 replay。" },
+            sources: ["packages/opencorvus/src/decision-log", "packages/opencorvus/src/trace", "packages/opencorvus/src/bus"],
+            details: [
+              { en: "Decision entries ground downstream agent prompts in prior facts.", zh: "decision entry 用历史事实约束下游 agent prompt。" },
+              { en: "Bus events feed UI streams and task projections.", zh: "Bus event 输入 UI stream 与 task 投影。" },
+            ],
+            subsystems: [
+              { id: "event-bus", title: { en: "Bus events", zh: "Bus events" }, summary: { en: "Global event transport for task and session updates.", zh: "task/session update 的全局事件传输。" }, sources: ["packages/opencorvus/src/engine/model.ts", "packages/opencorvus/src/bus"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "orchestrator-host",
+        lane: { en: "Orch", zh: "编排" },
+        title: { en: "Orchestrator Host", zh: "Orchestrator Host" },
+        summary: {
+          en: "The orchestrator wakes on task facts, reads the snapshot, and chooses the next explicit workflow tool.",
+          zh: "Orchestrator 在 task fact 上唤醒，读取快照，并选择下一个显式 workflow tool。",
+        },
+        tone: "agent",
+        position: { col: 3, row: 2 },
+        views: ["overview", "runtime", "a2a"],
+        sources: [
+          "packages/opencorvus/src/orchestrator/agent.ts",
+          "packages/opencorvus/src/orchestrator/tools.ts",
+          "packages/opencorvus/src/agent/agent.ts",
+          "specs/new-arch/01-agents.md",
+          "specs/new-arch/13-agent-communication-matrix.md",
+        ],
+        constraints: [
+          { en: "The generic `task` tool is not an orchestrator tool; dispatch uses typed workflow tools.", zh: "通用 `task` tool 不是 orchestrator tool；派发必须走 typed workflow tools。" },
+          { en: "No retired planner/deliver/prosecutor path is part of the current architecture.", zh: "退役的 planner/deliver/prosecutor 路径不属于当前架构。" },
+        ],
+        components: [
+          {
+            id: "task-snapshot",
+            title: { en: "Task snapshot", zh: "Task snapshot" },
+            summary: { en: "Prompt input that describes requirements, plans, goals, pending coordination, and evidence.", zh: "描述 requirements、plan、goal、pending coordination 与 evidence 的 prompt 输入。" },
+            sources: ["packages/opencorvus/src/engine/describe.ts", "packages/opencorvus/src/orchestrator/agent.ts"],
+            details: [
+              { en: "Pending A2A requests are surfaced in the snapshot for explicit orchestrator decisions.", zh: "pending A2A request 会进入快照，交由 orchestrator 显式决策。" },
+              { en: "The orchestrator decides from current facts instead of polling live builds.", zh: "orchestrator 根据当前事实决策，不轮询 live build。" },
+            ],
+            subsystems: [
+              { id: "describe-task", title: { en: "describeTask", zh: "describeTask" }, summary: { en: "Current task fact renderer for the orchestrator.", zh: "orchestrator 的当前 task fact renderer。" }, sources: ["packages/opencorvus/src/engine/describe.ts"] },
+            ],
+          },
+          {
+            id: "workflow-tools",
+            title: { en: "Typed workflow tools", zh: "Typed workflow tools" },
+            summary: { en: "The orchestrator calls explicit tools for each role and lifecycle decision.", zh: "orchestrator 为每个角色与生命周期决策调用显式 tool。" },
+            sources: ["packages/opencorvus/src/orchestrator/tools.ts"],
+            details: [
+              { en: "`requirements`, `frontend_research`, `frontend_design`, `architect`, `workload_analysis`, `build`, `visual_qa`, and `integrity` are distinct responsibilities.", zh: "`requirements`、`frontend_research`、`frontend_design`、`architect`、`workload_analysis`、`build`、`visual_qa`、`integrity` 是不同职责。" },
+              { en: "`complete_task` requires the latest post-build pass integrity attempt.", zh: "`complete_task` 需要最新 post-build pass integrity attempt。" },
+            ],
+            subsystems: [
+              { id: "respond-coordination", title: { en: "respond_agent_coordination", zh: "respond_agent_coordination" }, summary: { en: "Claim and answer pending A2A requests through durable artifacts.", zh: "通过持久 artifact 认领并回答 pending A2A request。" }, sources: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+              { id: "complete-task", title: { en: "complete_task", zh: "complete_task" }, summary: { en: "Terminal workflow action after integrity pass.", zh: "integrity pass 后的终态 workflow action。" }, sources: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "worker-agents",
+        lane: { en: "Agents", zh: "Agents" },
+        title: { en: "Worker Agent Network", zh: "Worker Agent 网络" },
+        summary: {
+          en: "Specialist sessions perform scoped work, publish reports or artifacts, and return facts to the orchestrator.",
+          zh: "专家 session 执行限定工作，发布 report 或 artifact，并把事实返回 orchestrator。",
+        },
+        tone: "agent",
+        position: { col: 4, row: 1 },
+        views: ["overview", "runtime", "a2a"],
+        sources: [
+          "packages/opencorvus/src/agent/agent.ts",
+          "packages/opencorvus/src/agent/tool-pool-contract.ts",
+          "packages/opencorvus/src/orchestrator/tools.ts",
+          "specs/new-arch/08-agent-tool-adapter.md",
+        ],
+        constraints: [
+          { en: "Frontend Design owns webpage evidence tools; Build consumes persisted evidence and implements goals.", zh: "Frontend Design 拥有网页证据工具；Build 消费已持久化证据并实现 goal。" },
+          { en: "Workload analysis is read-only scope review, not implementation or acceptance.", zh: "Workload analysis 是只读规模复核，不负责实现或验收。" },
+        ],
+        components: [
+          {
+            id: "research-design",
+            title: { en: "Research and design agents", zh: "Research / Design agents" },
+            summary: { en: "Frontend Research extracts source-page facts; Frontend Design materializes implementation handoff evidence.", zh: "Frontend Research 提取源页面事实；Frontend Design 产出实现交接证据。" },
+            sources: ["packages/opencorvus/src/frontend-research", "packages/opencorvus/src/frontend-design", "packages/opencorvus/src/orchestrator/tools.ts"],
+            details: [
+              { en: "Live webpage source discovery belongs before implementation, not inside Build.", zh: "live webpage 源页面调查在实现前完成，不放进 Build。" },
+              { en: "Desktop clone evidence is currently the default scope unless the task explicitly expands it.", zh: "除非任务明确扩展，桌面复刻证据是当前默认范围。" },
+            ],
+            subsystems: [
+              { id: "frontend-research", title: { en: "frontend_research", zh: "frontend_research" }, summary: { en: "Source-backed page investigation packets.", zh: "source-backed 页面调查包。" }, sources: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+              { id: "frontend-design", title: { en: "frontend_design", zh: "frontend_design" }, summary: { en: "Visual implementation template and evidence manifest.", zh: "视觉实现模板与证据 manifest。" }, sources: ["packages/opencorvus/src/frontend-design"] },
+            ],
+          },
+          {
+            id: "requirements-architect",
+            title: { en: "Requirements and Architect", zh: "Requirements / Architect" },
+            summary: { en: "Requirements captures testable requirements; Architect creates the active goal graph.", zh: "Requirements 抽取可测试需求；Architect 创建 active goal graph。" },
+            sources: ["packages/opencorvus/src/requirements", "packages/opencorvus/src/architect", "packages/opencorvus/src/architect/contract-graph.ts"],
+            details: [
+              { en: "Requirements and architect outputs are persisted as spec snapshots, requirements, plans, goals, and contract artifacts.", zh: "Requirements 与 architect 输出会持久化为 spec snapshot、requirement、plan、goal 与 contract artifact。" },
+              { en: "Build dispatch uses durable goal ids or active-plan ordinals.", zh: "Build dispatch 使用持久 goal id 或 active-plan ordinal。" },
+            ],
+            subsystems: [
+              { id: "contract-graph", title: { en: "Contract graph", zh: "Contract graph" }, summary: { en: "Dependency and acceptance contracts for build dispatch.", zh: "build dispatch 使用的依赖与验收契约。" }, sources: ["packages/opencorvus/src/architect/contract-graph.ts"] },
+            ],
+          },
+          {
+            id: "review-agents",
+            title: { en: "Visual QA and Integrity", zh: "Visual QA / Integrity" },
+            summary: { en: "Visual QA reviews front-end/product evidence; Integrity performs final workflow review.", zh: "Visual QA 复核前端/产品证据；Integrity 做最终 workflow 复核。" },
+            sources: ["packages/opencorvus/src/visual-qa", "packages/opencorvus/src/integrity", "packages/opencorvus/src/orchestrator/tools.ts"],
+            details: [
+              { en: "Visual QA is not a replacement for final integrity acceptance.", zh: "Visual QA 不能替代最终 integrity 验收。" },
+              { en: "Integrity reads requirements, architecture contracts, goal outputs, diffs, runtime evidence, visual evidence, and prior attempts.", zh: "Integrity 读取 requirements、architecture contract、goal output、diff、runtime evidence、visual evidence 与历史 attempt。" },
+            ],
+            subsystems: [
+              { id: "visual-qa", title: { en: "visual_qa", zh: "visual_qa" }, summary: { en: "Post-build visual and product review.", zh: "post-build 视觉与产品复审。" }, sources: ["packages/opencorvus/src/visual-qa"] },
+              { id: "integrity", title: { en: "integrity", zh: "integrity" }, summary: { en: "Final workflow acceptance evidence.", zh: "最终 workflow 验收证据。" }, sources: ["packages/opencorvus/src/integrity"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "worktree-execution",
+        lane: { en: "Exec", zh: "执行" },
+        title: { en: "Goal Worktree Execution", zh: "Goal Worktree 执行" },
+        summary: {
+          en: "Build sessions run in goal-scoped worktrees and return concrete diffs, reports, runtime facts, and workspace metadata.",
+          zh: "Build session 在 goal-scoped worktree 中运行，返回具体 diff、report、runtime fact 与 workspace metadata。",
+        },
+        tone: "runtime",
+        position: { col: 4, row: 3 },
+        views: ["overview", "runtime", "data"],
+        sources: [
+          "packages/opencorvus/src/build/agent.ts",
+          "packages/opencorvus/src/executor/**",
+          "packages/opencorvus/src/worktree/**",
+          "specs/new-arch/10-worktree-lifecycle.md",
+        ],
+        constraints: [
+          { en: "Workspace facts live on goal-run attempt artifacts, not duplicated on `engine_goal`.", zh: "workspace fact 存在 goal-run attempt artifact，不复制到 `engine_goal`。" },
+          { en: "Build reports must be cross-checked against actual worktree facts.", zh: "Build report 必须和真实 worktree fact 交叉核对。" },
+        ],
+        components: [
+          {
+            id: "build-agent",
+            title: { en: "BuildAgent", zh: "BuildAgent" },
+            summary: { en: "Implements direct requests or one architect-authored goal.", zh: "实现 direct request 或一个 architect 产出的 goal。" },
+            sources: ["packages/opencorvus/src/build/agent.ts", "packages/opencorvus/src/orchestrator/tools.ts"],
+            details: [
+              { en: "Receives spec, plan, contract graph, evidence manifests, prior attempts, and integrity feedback.", zh: "接收 spec、plan、contract graph、evidence manifest、prior attempt 与 integrity feedback。" },
+              { en: "For browser-visible work, final review expects screenshot and runtime evidence.", zh: "浏览器可见工作需要截图与 runtime evidence 进入最终复核。" },
+            ],
+            subsystems: [
+              { id: "build-session-contract", title: { en: "build_session_contract", zh: "build_session_contract" }, summary: { en: "Artifact linking build session and goal-run attempt.", zh: "连接 build session 与 goal-run attempt 的 artifact。" }, sources: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+            ],
+          },
+          {
+            id: "executors",
+            title: { en: "Executors", zh: "Executors" },
+            summary: { en: "OpenCorvus kernel, Codex, Claude Code, and related process adapters.", zh: "OpenCorvus kernel、Codex、Claude Code 等进程适配。" },
+            sources: ["packages/opencorvus/src/executor/**", "packages/opencorvus/src/session/**"],
+            details: [
+              { en: "Executor selection is an agent/tool concern, separate from plugin and provider extension points.", zh: "Executor 选择属于 agent/tool 层，和 plugin/provider 扩展点分离。" },
+              { en: "LLM sessions stream tool calls and results through the session loop.", zh: "LLM session 通过 session loop 流式处理 tool call 与 result。" },
+            ],
+            subsystems: [
+              { id: "codex-executor", title: { en: "Codex executor", zh: "Codex executor" }, summary: { en: "External coding agent process integration.", zh: "外部 coding agent 进程集成。" }, sources: ["packages/opencorvus/src/executor"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "verification-evidence",
+        lane: { en: "Review", zh: "复核" },
+        title: { en: "Verification & Evidence", zh: "验证与证据" },
+        summary: {
+          en: "Runtime, visual, artifact, and integrity evidence close the loop before the task can complete.",
+          zh: "runtime、visual、artifact 与 integrity 证据在任务完成前闭环。",
+        },
+        tone: "review",
+        position: { col: 5, row: 2 },
+        views: ["overview", "runtime", "data", "a2a", "overlay"],
+        sources: [
+          "packages/opencorvus/src/verification/**",
+          "packages/opencorvus/src/browser-preview/**",
+          "packages/opencorvus/src/visual-qa/**",
+          "packages/opencorvus/src/integrity/**",
+          "specs/new-arch/09-verification-evidence.md",
+        ],
+        constraints: [
+          { en: "Build/typecheck output cannot replace real visual evidence for front-end work.", zh: "前端工作不能用 build/typecheck 输出替代真实视觉证据。" },
+          { en: "Browser Preview evidence is task-scoped backend evidence, not a local iframe substitute.", zh: "Browser Preview evidence 是 task-scoped 后端证据，不是本地 iframe 替身。" },
+        ],
+        components: [
+          {
+            id: "browser-preview",
+            title: { en: "Browser Preview evidence", zh: "Browser Preview evidence" },
+            summary: { en: "Task target selection, captures, comparisons, live snapshots, and input.", zh: "task target 选择、截图、对比、live snapshot 与输入。" },
+            sources: ["packages/opencorvus/src/server/routes/browser-preview.ts", "packages/opencorvus/src/browser-preview/**", "packages/overlay/src/components/BrowserPreviewPanel.tsx"],
+            details: [
+              { en: "Evidence paths are under the task evidence root and read back through browser-preview routes.", zh: "证据路径位于 task evidence root，并通过 browser-preview routes 读取。" },
+              { en: "Visual work must capture and inspect a real rendered page.", zh: "视觉工作必须截图并检查真实渲染页面。" },
+            ],
+            subsystems: [
+              { id: "preview-target", title: { en: "Target selection", zh: "Target selection" }, summary: { en: "Task-owned preview target is the source for inspection.", zh: "task-owned preview target 是检查源。" }, sources: ["packages/opencorvus/src/browser-preview/target.ts"] },
+              { id: "preview-capture", title: { en: "Capture and compare", zh: "Capture / compare" }, summary: { en: "Screenshots and region comparisons become evidence.", zh: "截图和 region comparison 成为证据。" }, sources: ["packages/opencorvus/src/browser-preview/region-comparison.ts"] },
+            ],
+          },
+          {
+            id: "integrity-attempt",
+            title: { en: "Integrity attempt", zh: "Integrity attempt" },
+            summary: { en: "Final review artifact consumed by `complete_task`.", zh: "`complete_task` 消费的最终复核 artifact。" },
+            sources: ["packages/opencorvus/src/integrity", "packages/opencorvus/src/orchestrator/tools.ts"],
+            details: [
+              { en: "Pass/non-pass is tied to an artifact id; completion must reference the latest post-build pass attempt.", zh: "pass/non-pass 绑定 artifact id；completion 必须引用最新 post-build pass attempt。" },
+              { en: "Review includes system integrity, requirements coverage, build evidence, runtime evidence, and visual evidence.", zh: "复核覆盖系统完整性、需求覆盖、build evidence、runtime evidence 与 visual evidence。" },
+            ],
+            subsystems: [
+              { id: "integrity-markdown", title: { en: "Rendered integrity report", zh: "Rendered integrity report" }, summary: { en: "Human-readable review result for prompt and UI consumption.", zh: "供 prompt 与 UI 消费的人类可读复核结果。" }, sources: ["packages/opencorvus/src/integrity/render-markdown.ts"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "overlay-projection",
+        lane: { en: "Overlay", zh: "Overlay" },
+        title: { en: "Overlay Projection", zh: "Overlay 投影" },
+        summary: {
+          en: "The desktop overlay consumes task streams and projects them into a single card tree, board, preview, file, and trace surface.",
+          zh: "桌面 Overlay 消费 task stream，并投影为单一卡片树、board、preview、file 与 trace 表面。",
+        },
+        tone: "runtime",
+        position: { col: 6, row: 1 },
+        views: ["overview", "overlay", "runtime"],
+        sources: [
+          "packages/overlay/src/services/events.ts",
+          "packages/overlay/src/services/tree-writer.ts",
+          "packages/overlay/src/store/card-tree.ts",
+          "packages/overlay/src/components/Conversation.tsx",
+          "specs/new-arch/12-overlay-card-system.md",
+        ],
+        constraints: [
+          { en: "`tree-writer.ts` is the single mutation entry point for `cardTreeStore`.", zh: "`tree-writer.ts` 是 `cardTreeStore` 的单一 mutation 入口。" },
+          { en: "Task switching clears and hydrates task-owned conversation state.", zh: "task 切换会清理并 hydrate 当前 task 拥有的 conversation state。" },
+        ],
+        components: [
+          {
+            id: "tree-writer",
+            title: { en: "SSE to tree writer", zh: "SSE 到 tree writer" },
+            summary: { en: "Event stream handlers project task and session events into store-backed cards.", zh: "event stream handler 把 task/session event 投影为 store-backed card。" },
+            sources: ["packages/overlay/src/services/events.ts", "packages/overlay/src/services/tree-writer.ts"],
+            details: [
+              { en: "Unhandled events throw in tree writer rather than disappearing from the transcript surface.", zh: "tree writer 对未处理 event 抛错，而不是从 transcript 表面消失。" },
+              { en: "Writer state resets on task switch and conversation hydrate.", zh: "writer state 在 task 切换和 conversation hydrate 时重置。" },
+            ],
+            subsystems: [
+              { id: "apply-event", title: { en: "applyEvent", zh: "applyEvent" }, summary: { en: "Single event projection entry point.", zh: "单一 event projection 入口。" }, sources: ["packages/overlay/src/services/tree-writer.ts"] },
+            ],
+          },
+          {
+            id: "card-tree-store",
+            title: { en: "cardTreeStore", zh: "cardTreeStore" },
+            summary: { en: "Single reactive source for rendered conversation cards.", zh: "渲染 conversation card 的单一响应式来源。" },
+            sources: ["packages/overlay/src/store/card-tree.ts", "packages/overlay/src/components/Conversation.tsx", "packages/overlay/src/components/Board.tsx"],
+            details: [
+              { en: "Cards resolve child ids through the Solid proxy so targeted writes update visible state.", zh: "card 通过 Solid proxy 解析 child id，让定向写入更新可见状态。" },
+              { en: "Board, conversation, screenshot browser, and debug views read from the same store-backed tree.", zh: "Board、conversation、screenshot browser 与 debug view 读取同一个 store-backed tree。" },
+            ],
+            subsystems: [
+              { id: "conversation", title: { en: "Conversation", zh: "Conversation" }, summary: { en: "Top-level task timeline and card rendering.", zh: "顶层 task timeline 与 card 渲染。" }, sources: ["packages/overlay/src/components/Conversation.tsx"] },
+              { id: "board", title: { en: "Board", zh: "Board" }, summary: { en: "Spec, plan, goal, and evidence board.", zh: "spec、plan、goal 与 evidence board。" }, sources: ["packages/overlay/src/components/Board.tsx"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "providers-extensions",
+        lane: { en: "Ext", zh: "扩展" },
+        title: { en: "Providers & Extensions", zh: "Provider 与扩展" },
+        summary: {
+          en: "LLM provider adapters, plugins, MCP, ACP, and channel runtimes extend the system without taking over orchestration.",
+          zh: "LLM provider adapter、plugin、MCP、ACP 与 channel runtime 扩展系统，但不接管编排。",
+        },
+        tone: "data",
+        position: { col: 3, row: 4 },
+        views: ["overview", "runtime", "data"],
+        sources: [
+          "packages/opencorvus/src/provider/**",
+          "packages/opencorvus/src/mcp/**",
+          "packages/plugin",
+          "packages/opencorvus/src/acp/**",
+          "specs/new-arch/04-extensions.md",
+          "specs/new-arch/06-provider.md",
+        ],
+        constraints: [
+          { en: "Executor, plugin, MCP, ACP, and provider are separate extension planes.", zh: "Executor、plugin、MCP、ACP、provider 是彼此分离的扩展面。" },
+          { en: "LLM interactions use streaming provider/session paths.", zh: "LLM 交互走流式 provider/session 路径。" },
+        ],
+        components: [
+          {
+            id: "provider",
+            title: { en: "Provider layer", zh: "Provider layer" },
+            summary: { en: "Model registry, SDK routing, auth, params, errors, and streaming adaptation.", zh: "模型注册、SDK 路由、认证、参数、错误与流式适配。" },
+            sources: ["packages/opencorvus/src/provider/**", "packages/opencorvus/src/session/llm.ts"],
+            details: [
+              { en: "Agent model settings live under config and are consumed through the provider surface.", zh: "Agent model 配置位于 config，并通过 provider 表面消费。" },
+              { en: "Provider concerns do not decide workflow sequencing.", zh: "Provider 层不决定 workflow 顺序。" },
+            ],
+            subsystems: [
+              { id: "vercel-ai", title: { en: "Vercel AI SDK router", zh: "Vercel AI SDK router" }, summary: { en: "Common transport for model calls.", zh: "模型调用的公共传输。" }, sources: ["packages/opencorvus/src/provider"] },
+            ],
+          },
+          {
+            id: "extension-planes",
+            title: { en: "Plugin / MCP / ACP", zh: "Plugin / MCP / ACP" },
+            summary: { en: "Code hooks, tool servers, and editor protocol surfaces.", zh: "代码 hook、tool server 与编辑器协议表面。" },
+            sources: ["packages/plugin", "packages/opencorvus/src/mcp", "packages/opencorvus/src/acp"],
+            details: [
+              { en: "Plugins add local hooks and tools; MCP supplies external tools; ACP integrates editors.", zh: "Plugin 添加本地 hook 与 tool；MCP 提供外部 tool；ACP 集成编辑器。" },
+              { en: "These planes remain subordinate to task facts and orchestrator decisions.", zh: "这些扩展面从属于 task fact 与 orchestrator 决策。" },
+            ],
+            subsystems: [
+              { id: "mcp-client-server", title: { en: "MCP client/server", zh: "MCP client/server" }, summary: { en: "Tool discovery and invocation plane.", zh: "tool discovery 与 invocation 平面。" }, sources: ["packages/opencorvus/src/mcp"] },
+              { id: "acp", title: { en: "ACP", zh: "ACP" }, summary: { en: "Editor integration protocol.", zh: "编辑器集成协议。" }, sources: ["packages/opencorvus/src/acp"] },
+            ],
+          },
+        ],
+      },
+      {
+        id: "docs-operations",
+        lane: { en: "Ops", zh: "文档" },
+        title: { en: "Docs & Operations", zh: "文档与运维" },
+        summary: {
+          en: "Starlight docs, generated API reference, benchmark probes, and project specs keep the architecture auditable.",
+          zh: "Starlight docs、生成的 API reference、benchmark probe 与项目方案让架构可审计。",
+        },
+        tone: "review",
+        position: { col: 6, row: 3 },
+        views: ["overview", "data", "overlay"],
+        sources: [
+          "packages/web/src/content/docs/**",
+          "packages/web/astro.config.mjs",
+          "script/docs/render-api-md.ts",
+          "packages/opencorvus/script/benchmark/**",
+          "specs/new-arch/**",
+        ],
+        constraints: [
+          { en: "Generated API reference comes from OpenAPI scripts, not manual edits.", zh: "生成的 API reference 来自 OpenAPI 脚本，不手写覆盖。" },
+          { en: "Architecture changes require disk plans, callpoint inventory, tests, and review evidence.", zh: "架构改动需要落盘方案、调用点清单、测试与复核证据。" },
+        ],
+        components: [
+          {
+            id: "web-docs",
+            title: { en: "Starlight docs", zh: "Starlight docs" },
+            summary: { en: "Public docs site and concept pages.", zh: "公共文档站点与概念页。" },
+            sources: ["packages/web/src/content/docs/**", "packages/web/astro.config.mjs"],
+            details: [
+              { en: "Concept pages explain current runtime facts and link source paths.", zh: "概念页解释当前 runtime facts 并链接源码路径。" },
+              { en: "This explorer is registered beside the architecture overview.", zh: "本 explorer 注册在 architecture overview 旁边。" },
+            ],
+            subsystems: [
+              { id: "api-docs", title: { en: "Generated API docs", zh: "Generated API docs" }, summary: { en: "OpenAPI render script produces reference pages.", zh: "OpenAPI render 脚本生成 reference 页面。" }, sources: ["script/docs/render-api-md.ts"] },
+            ],
+          },
+          {
+            id: "specs-benchmark",
+            title: { en: "Specs and benchmark probes", zh: "Specs / benchmark probes" },
+            summary: { en: "New-architecture decisions and benchmark tools record acceptance discipline.", zh: "new-architecture 决策与 benchmark 工具记录验收纪律。" },
+            sources: ["specs/new-arch/**", "packages/opencorvus/script/benchmark/**"],
+            details: [
+              { en: "Specs record historical constraints and current root-repair plans.", zh: "spec 记录历史约束与当前根因修复方案。" },
+              { en: "Benchmark probes are used only with real checker/evidence paths.", zh: "benchmark probe 只在真实 checker/evidence 路径上使用。" },
+            ],
+            subsystems: [
+              { id: "new-arch", title: { en: "new-arch specs", zh: "new-arch specs" }, summary: { en: "Current design and repair records.", zh: "当前设计与修复记录。" }, sources: ["specs/new-arch/**"] },
+            ],
+          },
+        ],
+      },
+    ]
+
+    const edges = [
+      { id: "ingress-engine", from: "input-control", to: "engine-core", label: { en: "create task / message", zh: "创建 task / message" }, views: ["overview", "runtime"], sources: ["packages/opencorvus/src/task-api/index.ts"] },
+      { id: "engine-orchestrator", from: "engine-core", to: "orchestrator-host", label: { en: "snapshot + wake", zh: "快照 + 唤醒" }, views: ["overview", "runtime", "data"], sources: ["packages/opencorvus/src/engine/describe.ts", "packages/opencorvus/src/orchestrator/loop.ts"] },
+      { id: "orchestrator-agents", from: "orchestrator-host", to: "worker-agents", label: { en: "typed tools", zh: "typed tools" }, views: ["overview", "runtime", "a2a"], sources: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+      { id: "agents-execution", from: "worker-agents", to: "worktree-execution", label: { en: "build dispatch", zh: "build dispatch" }, views: ["overview", "runtime"], sources: ["packages/opencorvus/src/orchestrator/tools.ts", "packages/opencorvus/src/build/agent.ts"] },
+      { id: "execution-evidence", from: "worktree-execution", to: "verification-evidence", label: { en: "diff + runtime facts", zh: "diff + runtime facts" }, views: ["overview", "runtime", "data"], sources: ["packages/opencorvus/src/verification/**"] },
+      { id: "evidence-orchestrator", from: "verification-evidence", to: "orchestrator-host", label: { en: "review verdict", zh: "复核 verdict" }, views: ["overview", "runtime", "a2a"], sources: ["packages/opencorvus/src/integrity", "packages/opencorvus/src/visual-qa"] },
+      { id: "engine-overlay", from: "engine-core", to: "overlay-projection", label: { en: "SSE + board", zh: "SSE + board" }, views: ["overview", "overlay", "data"], sources: ["packages/overlay/src/services/events.ts", "packages/overlay/src/services/tree-writer.ts"] },
+      { id: "evidence-overlay", from: "verification-evidence", to: "overlay-projection", label: { en: "screenshots + reports", zh: "截图 + report" }, views: ["overview", "overlay"], sources: ["packages/overlay/src/components/BrowserPreviewPanel.tsx", "packages/overlay/src/components/ScreenshotBrowserPanel.tsx"] },
+      { id: "providers-agents", from: "providers-extensions", to: "worker-agents", label: { en: "streaming LLM + tools", zh: "streaming LLM + tools" }, views: ["overview", "runtime", "data"], sources: ["packages/opencorvus/src/provider/**", "packages/opencorvus/src/agent/tool-pool-contract.ts"] },
+      { id: "docs-evidence", from: "docs-operations", to: "verification-evidence", label: { en: "specs + checks", zh: "specs + checks" }, views: ["overview", "data", "overlay"], sources: ["packages/web/src/content/docs/**", "specs/new-arch/**"] },
+      { id: "a2a-engine", from: "worker-agents", to: "engine-core", label: { en: "agent_coordination_* artifacts", zh: "agent_coordination_* artifacts" }, views: ["a2a", "data"], sources: ["packages/opencorvus/src/engine/agent-coordination.ts"] },
+      { id: "a2a-orchestrator", from: "engine-core", to: "orchestrator-host", label: { en: "pending coordination", zh: "pending coordination" }, views: ["a2a"], sources: ["packages/opencorvus/src/engine/describe.ts", "packages/opencorvus/src/orchestrator/tools.ts"] },
+    ]
+
+    const compactPositions = {
+      "input-control": { col: 1, row: 1 },
+      "engine-core": { col: 2, row: 1 },
+      "orchestrator-host": { col: 3, row: 1 },
+      "worker-agents": { col: 1, row: 2 },
+      "worktree-execution": { col: 2, row: 2 },
+      "verification-evidence": { col: 3, row: 2 },
+      "overlay-projection": { col: 1, row: 3 },
+      "providers-extensions": { col: 2, row: 3 },
+      "docs-operations": { col: 3, row: 3 },
+    }
+
+    const roots = document.querySelectorAll("[data-oc-architecture-explorer]")
+    for (const root of roots) initExplorer(root)
+
+    function initExplorer(root) {
+      const locale = root.dataset.locale
+      if (locale !== "en" && locale !== "zh") throw new Error(`architecture explorer: invalid locale ${String(locale)}`)
+      const domainById = new Map(domains.map((domain) => [domain.id, domain]))
+      const edgeById = new Map(edges.map((edge) => [edge.id, edge]))
+      const state = {
+        view: "overview",
+        domainID: "orchestrator-host",
+        componentID: "",
+        subsystemID: "",
+        edgeID: "",
+        query: "",
+      }
+
+      const els = {
+        search: must(root.querySelector("[data-arch-search]"), "search input"),
+        viewControls: must(root.querySelector("[data-arch-view-controls]"), "view controls"),
+        reset: must(root.querySelector("[data-arch-reset]"), "reset button"),
+        path: must(root.querySelector("[data-arch-path]"), "path"),
+        rail: must(root.querySelector("[data-arch-rail]"), "rail"),
+        canvas: must(root.querySelector("[data-arch-canvas]"), "canvas"),
+        links: must(root.querySelector("[data-arch-links]"), "links"),
+        map: must(root.querySelector("[data-arch-map]"), "map"),
+        edgeStrip: must(root.querySelector("[data-arch-edge-strip]"), "edge strip"),
+        layerPanel: must(root.querySelector("[data-arch-layer-panel]"), "layer panel"),
+        inspector: must(root.querySelector("[data-arch-inspector]"), "inspector"),
+        evidence: must(root.querySelector("[data-arch-evidence]"), "evidence"),
+      }
+
+      els.search.setAttribute("placeholder", locale === "zh" ? "例如：integrity、cardTreeStore、A2A" : "Try: integrity, cardTreeStore, A2A")
+
+      els.search.addEventListener("input", () => {
+        state.query = els.search.value.trim().toLowerCase()
+        state.edgeID = ""
+        ensureVisibleSelection()
+        render()
+      })
+
+      els.reset.addEventListener("click", () => {
+        state.view = "overview"
+        state.domainID = "orchestrator-host"
+        state.componentID = ""
+        state.subsystemID = ""
+        state.edgeID = ""
+        state.query = ""
+        els.search.value = ""
+        render()
+      })
+
+      els.viewControls.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-arch-view]")
+        if (!button) return
+        state.view = button.dataset.archView
+        state.edgeID = ""
+        ensureVisibleSelection()
+        render()
+      })
+
+      els.rail.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-arch-domain]")
+        if (!button) return
+        selectDomain(button.dataset.archDomain)
+      })
+
+      els.rail.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowLeft") return
+        const buttons = [...els.rail.querySelectorAll("[data-arch-domain]:not([hidden])")]
+        const index = buttons.indexOf(document.activeElement)
+        if (index < 0) return
+        event.preventDefault()
+        const delta = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1
+        const nextIndex = (index + delta + buttons.length) % buttons.length
+        buttons[nextIndex].focus()
+      })
+
+      els.map.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-arch-domain]")
+        if (!button) return
+        selectDomain(button.dataset.archDomain)
+      })
+
+      els.edgeStrip.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-arch-edge]")
+        if (!button) return
+        const edge = edgeById.get(button.dataset.archEdge)
+        if (!edge) throw new Error(`architecture explorer: missing edge ${button.dataset.archEdge}`)
+        state.edgeID = edge.id
+        state.componentID = ""
+        state.subsystemID = ""
+        render()
+      })
+
+      els.layerPanel.addEventListener("click", (event) => {
+        const componentButton = event.target.closest("[data-arch-component]")
+        if (componentButton) {
+          state.componentID = componentButton.dataset.archComponent
+          state.subsystemID = ""
+          state.edgeID = ""
+          render()
+          return
+        }
+        const subsystemButton = event.target.closest("[data-arch-subsystem]")
+        if (subsystemButton) {
+          state.subsystemID = subsystemButton.dataset.archSubsystem
+          state.edgeID = ""
+          render()
+        }
+      })
+
+      let resizeFrame = 0
+      window.addEventListener("resize", () => {
+        cancelAnimationFrame(resizeFrame)
+        resizeFrame = requestAnimationFrame(() => render())
+      })
+      render()
+
+      function selectDomain(domainID) {
+        if (!domainById.has(domainID)) throw new Error(`architecture explorer: missing domain ${domainID}`)
+        state.domainID = domainID
+        state.componentID = ""
+        state.subsystemID = ""
+        state.edgeID = ""
+        render()
+      }
+
+      function render() {
+        renderViewControls()
+        renderRail()
+        renderPath()
+        renderMap()
+        renderEdges()
+        renderLayerPanel()
+        renderInspector()
+        renderEvidence()
+        requestAnimationFrame(() => drawLinks())
+      }
+
+      function renderViewControls() {
+        els.viewControls.replaceChildren(
+          ...viewModes.map((mode) => {
+            const button = document.createElement("button")
+            button.type = "button"
+            button.className = "oc-arch-view-button"
+            button.dataset.archView = mode.id
+            button.setAttribute("aria-pressed", String(mode.id === state.view))
+            button.textContent = text(mode.label)
+            return button
+          }),
+        )
+      }
+
+      function renderRail() {
+        els.rail.replaceChildren(
+          ...domains.map((domain) => {
+            const button = document.createElement("button")
+            button.type = "button"
+            button.className = "oc-arch-rail-button"
+            button.dataset.archDomain = domain.id
+            button.hidden = !domainVisible(domain)
+            button.dataset.match = String(Boolean(state.query) && searchableText(domain).includes(state.query))
+            button.setAttribute("aria-current", String(domain.id === state.domainID && !state.edgeID))
+            button.append(strong(text(domain.title)))
+            button.append(span(`${text(domain.lane)} · ${domain.components.length} ${locale === "zh" ? "组件" : "components"}`))
+            return button
+          }),
+        )
+      }
+
+      function renderPath() {
+        const domain = currentDomain()
+        const parts = [text(labelFor("architecture")), text(domain.title)]
+        const component = currentComponent()
+        const subsystem = currentSubsystem()
+        const edge = state.edgeID ? requiredEdge(state.edgeID) : undefined
+        if (component) parts.push(text(component.title))
+        if (subsystem) parts.push(text(subsystem.title))
+        if (edge) parts.push(text(edge.label))
+        els.path.replaceChildren(...parts.map((part, index) => {
+          const item = document.createElement("span")
+          item.textContent = index === 0 ? part : `› ${part}`
+          return item
+        }))
+      }
+
+      function renderMap() {
+        els.map.replaceChildren(
+          ...domains.map((domain) => {
+            const button = document.createElement("button")
+            button.type = "button"
+            button.className = "oc-arch-node"
+            button.dataset.archDomain = domain.id
+            button.dataset.tone = domain.tone
+            button.dataset.nodeId = domain.id
+            button.dataset.match = String(Boolean(state.query) && searchableText(domain).includes(state.query))
+            button.hidden = !domainVisible(domain)
+            const position = positionFor(domain)
+            button.style.gridColumn = String(position.col)
+            button.style.gridRow = String(position.row)
+            button.setAttribute("aria-pressed", String(domain.id === state.domainID && !state.edgeID))
+            button.append(kicker(text(domain.lane)))
+            button.append(div("oc-arch-node-title", text(domain.title)))
+            button.append(div("oc-arch-node-meta", text(domain.summary)))
+            button.append(div("oc-arch-node-count", `${domain.components.length} ${locale === "zh" ? "components" : "components"}`))
+            return button
+          }),
+        )
+      }
+
+      function renderEdges() {
+        const visible = visibleEdges()
+        els.edgeStrip.replaceChildren(
+          ...visible.map((edge) => {
+            const from = requiredDomain(edge.from)
+            const to = requiredDomain(edge.to)
+            const button = document.createElement("button")
+            button.type = "button"
+            button.className = "oc-arch-edge-button"
+            button.dataset.archEdge = edge.id
+            button.setAttribute("aria-pressed", String(edge.id === state.edgeID))
+            button.append(strong(text(edge.label)))
+            button.append(span(`${text(from.title)} → ${text(to.title)}`))
+            return button
+          }),
+        )
+      }
+
+      function renderLayerPanel() {
+        const domain = currentDomain()
+        const head = document.createElement("div")
+        head.className = "oc-arch-layer-head"
+        head.append(heading("h3", text(domain.title)))
+        head.append(paragraph(text(domain.summary)))
+
+        const componentGrid = document.createElement("div")
+        componentGrid.className = "oc-arch-chip-grid"
+        for (const component of domain.components) {
+          if (!componentVisible(component, domain)) continue
+          const chip = document.createElement("button")
+          chip.type = "button"
+          chip.className = "oc-arch-chip"
+          chip.dataset.archComponent = component.id
+          chip.dataset.match = String(Boolean(state.query) && searchableText(component).includes(state.query))
+          chip.setAttribute("aria-pressed", String(component.id === state.componentID && !state.edgeID))
+          chip.append(strong(text(component.title)))
+          chip.append(span(text(component.summary)))
+          componentGrid.append(chip)
+        }
+
+        const selectedComponent = currentComponent()
+        const subpanel = document.createElement("div")
+        subpanel.className = "oc-arch-subpanel"
+        if (selectedComponent) {
+          subpanel.append(heading("h3", text(selectedComponent.title)))
+          subpanel.append(paragraph(text(selectedComponent.summary)))
+          const subgrid = document.createElement("div")
+          subgrid.className = "oc-arch-chip-grid"
+          for (const subsystem of selectedComponent.subsystems) {
+            const chip = document.createElement("button")
+            chip.type = "button"
+            chip.className = "oc-arch-chip"
+            chip.dataset.archSubsystem = subsystem.id
+            chip.dataset.match = String(Boolean(state.query) && searchableText(subsystem).includes(state.query))
+            chip.setAttribute("aria-pressed", String(subsystem.id === state.subsystemID && !state.edgeID))
+            chip.append(strong(text(subsystem.title)))
+            chip.append(span(text(subsystem.summary)))
+            subgrid.append(chip)
+          }
+          subpanel.append(subgrid)
+        } else {
+          subpanel.append(heading("h3", locale === "zh" ? "第二层：组件职责" : "Layer 2: component responsibilities"))
+          subpanel.append(paragraph(locale === "zh" ? "选择上方组件以展开第三层细节。" : "Select a component above to open third-layer detail."))
+        }
+
+        els.layerPanel.replaceChildren(head, componentGrid, subpanel)
+      }
+
+      function renderInspector() {
+        const edge = state.edgeID ? requiredEdge(state.edgeID) : undefined
+        if (edge) {
+          const from = requiredDomain(edge.from)
+          const to = requiredDomain(edge.to)
+          els.inspector.replaceChildren(
+            heading("h3", text(edge.label)),
+            paragraph(`${text(from.title)} → ${text(to.title)}`),
+            sectionBlock(locale === "zh" ? "关系证据" : "Relationship evidence", edge.sources.map((source) => codeLine(source))),
+            sectionBlock(locale === "zh" ? "运行语义" : "Runtime meaning", [
+              text({ en: "This edge is a current runtime relationship, not a decorative connector.", zh: "这条边是当前运行关系，不是装饰连线。" }),
+              text({ en: "The source paths listed below are the audit trail for the relationship.", zh: "下方 source path 是该关系的审计线索。" }),
+            ]),
+          )
+          return
+        }
+
+        const domain = currentDomain()
+        const component = currentComponent()
+        const subsystem = currentSubsystem()
+        const target = subsystem || component || domain
+        const responsibilities = target.details || domain.constraints
+        const sources = target.sources || domain.sources
+
+        els.inspector.replaceChildren(
+          heading("h3", text(target.title)),
+          paragraph(text(target.summary)),
+          sectionBlock(locale === "zh" ? "职责与边界" : "Responsibilities and boundaries", responsibilities.map((item) => text(item))),
+          sectionBlock(locale === "zh" ? "当前证据路径" : "Current source paths", sources.map((source) => codeLine(source))),
+          sectionBlock(locale === "zh" ? "架构约束" : "Architecture constraints", domain.constraints.map((item) => text(item))),
+        )
+      }
+
+      function renderEvidence() {
+        const domain = currentDomain()
+        const component = currentComponent()
+        const subsystem = currentSubsystem()
+        const edge = state.edgeID ? requiredEdge(state.edgeID) : undefined
+        const sources = edge
+          ? edge.sources
+          : subsystem
+            ? subsystem.sources
+            : component
+              ? component.sources
+              : domain.sources
+        const related = visibleEdges().filter((edgeItem) => edgeItem.from === domain.id || edgeItem.to === domain.id)
+
+        const title = heading("h3", locale === "zh" ? "证据抽屉" : "Evidence drawer")
+        const intro = paragraph(locale === "zh" ? "当前选择的源码、方案与运行关系证据。" : "Source, spec, and runtime relationship evidence for the current selection.")
+        const grid = document.createElement("div")
+        grid.className = "oc-arch-evidence-grid"
+        grid.append(evidenceCard(locale === "zh" ? "Source paths" : "Source paths", sources.map((source) => codeLine(source))))
+        grid.append(evidenceCard(locale === "zh" ? "Related edges" : "Related edges", related.map((edgeItem) => `${text(requiredDomain(edgeItem.from).title)} → ${text(requiredDomain(edgeItem.to).title)}: ${text(edgeItem.label)}`)))
+        grid.append(evidenceCard(locale === "zh" ? "Review guards" : "Review guards", [
+          locale === "zh" ? "只表达 current new-arch 与当前源码事实。" : "Only current new-arch and current source facts are represented.",
+          locale === "zh" ? "旧 planner/deliver/evaluation table 叙事不进入此图。" : "Retired planner/deliver/evaluation-table narratives are excluded.",
+        ]))
+        els.evidence.replaceChildren(title, intro, grid)
+      }
+
+      function drawLinks() {
+        const rect = els.canvas.getBoundingClientRect()
+        const visible = visibleEdges()
+        const paths = []
+        els.links.setAttribute("viewBox", `0 0 ${Math.max(rect.width, 860)} ${Math.max(rect.height, 410)}`)
+        for (const edge of visible) {
+          const fromNode = els.map.querySelector(`[data-node-id="${edge.from}"]`)
+          const toNode = els.map.querySelector(`[data-node-id="${edge.to}"]`)
+          if (!fromNode || !toNode || fromNode.hidden || toNode.hidden) continue
+          const fromRect = fromNode.getBoundingClientRect()
+          const toRect = toNode.getBoundingClientRect()
+          const x1 = fromRect.left + fromRect.width / 2 - rect.left
+          const y1 = fromRect.top + fromRect.height / 2 - rect.top
+          const x2 = toRect.left + toRect.width / 2 - rect.left
+          const y2 = toRect.top + toRect.height / 2 - rect.top
+          const curve = Math.max(44, Math.abs(x2 - x1) * 0.36)
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+          path.setAttribute("d", `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`)
+          path.dataset.archEdgePath = edge.id
+          if (edge.id === state.edgeID) {
+            path.style.strokeWidth = "3"
+            path.style.opacity = "1"
+          }
+          paths.push(path)
+        }
+        els.links.replaceChildren(...paths)
+      }
+
+      function positionFor(domain) {
+        if (els.canvas.getBoundingClientRect().width < 900) {
+          const position = compactPositions[domain.id]
+          if (!position) throw new Error(`architecture explorer: missing compact position for ${domain.id}`)
+          return position
+        }
+        return domain.position
+      }
+
+      function ensureVisibleSelection() {
+        const domain = domainById.get(state.domainID)
+        if (domain && domainVisible(domain)) return
+        const nextDomain = domains.find((item) => domainVisible(item))
+        if (!nextDomain) return
+        state.domainID = nextDomain.id
+        state.componentID = ""
+        state.subsystemID = ""
+      }
+
+      function domainVisible(domain) {
+        const inView = domain.views.includes(state.view) || state.view === "overview"
+        if (!inView) return false
+        if (!state.query) return true
+        return searchableText(domain).includes(state.query)
+      }
+
+      function componentVisible(component, domain) {
+        if (!state.query) return true
+        return searchableText(domain).includes(state.query) || searchableText(component).includes(state.query)
+      }
+
+      function visibleEdges() {
+        return edges.filter((edge) => edge.views.includes(state.view) || state.view === "overview").filter((edge) => {
+          const from = requiredDomain(edge.from)
+          const to = requiredDomain(edge.to)
+          return domainVisible(from) && domainVisible(to)
+        })
+      }
+
+      function searchableText(item) {
+        const values = []
+        collectSearch(item, values)
+        return values.join(" ").toLowerCase()
+      }
+
+      function collectSearch(value, values) {
+        if (typeof value === "string") {
+          values.push(value)
+          return
+        }
+        if (!value || typeof value !== "object") return
+        if (Array.isArray(value)) {
+          for (const item of value) collectSearch(item, values)
+          return
+        }
+        for (const item of Object.values(value)) collectSearch(item, values)
+      }
+
+      function currentDomain() {
+        return requiredDomain(state.domainID)
+      }
+
+      function currentComponent() {
+        if (!state.componentID) return undefined
+        const component = currentDomain().components.find((item) => item.id === state.componentID)
+        if (!component) throw new Error(`architecture explorer: missing component ${state.componentID}`)
+        return component
+      }
+
+      function currentSubsystem() {
+        const component = currentComponent()
+        if (!component || !state.subsystemID) return undefined
+        const subsystem = component.subsystems.find((item) => item.id === state.subsystemID)
+        if (!subsystem) throw new Error(`architecture explorer: missing subsystem ${state.subsystemID}`)
+        return subsystem
+      }
+
+      function requiredDomain(id) {
+        const domain = domainById.get(id)
+        if (!domain) throw new Error(`architecture explorer: missing domain ${id}`)
+        return domain
+      }
+
+      function requiredEdge(id) {
+        const edge = edgeById.get(id)
+        if (!edge) throw new Error(`architecture explorer: missing edge ${id}`)
+        return edge
+      }
+
+      function text(value) {
+        const result = value[locale]
+        if (typeof result !== "string") throw new Error(`architecture explorer: missing localized text for ${locale}`)
+        return result
+      }
+
+      function labelFor(key) {
+        const labels = {
+          architecture: { en: "Architecture", zh: "架构" },
+        }
+        const label = labels[key]
+        if (!label) throw new Error(`architecture explorer: missing label ${key}`)
+        return label
+      }
+    }
+
+    function must(value, name) {
+      if (!value) throw new Error(`architecture explorer: missing ${name}`)
+      return value
+    }
+
+    function heading(tag, value) {
+      const node = document.createElement(tag)
+      node.textContent = value
+      return node
+    }
+
+    function paragraph(value) {
+      const node = document.createElement("p")
+      node.textContent = value
+      return node
+    }
+
+    function strong(value) {
+      const node = document.createElement("strong")
+      node.textContent = value
+      return node
+    }
+
+    function span(value) {
+      const node = document.createElement("span")
+      node.textContent = value
+      return node
+    }
+
+    function div(className, value) {
+      const node = document.createElement("div")
+      node.className = className
+      node.textContent = value
+      return node
+    }
+
+    function kicker(value) {
+      const node = document.createElement("span")
+      node.className = "oc-arch-node-kicker"
+      node.textContent = value
+      return node
+    }
+
+    function sectionBlock(title, items) {
+      const section = document.createElement("section")
+      section.className = "oc-arch-inspector-section"
+      section.append(heading("h4", title))
+      const list = document.createElement("ul")
+      for (const item of items) {
+        const li = document.createElement("li")
+        if (item instanceof Node) {
+          li.append(item)
+        } else {
+          li.textContent = item
+        }
+        list.append(li)
+      }
+      section.append(list)
+      return section
+    }
+
+    function evidenceCard(title, items) {
+      const card = document.createElement("div")
+      card.className = "oc-arch-evidence-card"
+      card.append(strong(title))
+      const list = document.createElement("ul")
+      for (const item of items) {
+        const li = document.createElement("li")
+        if (item instanceof Node) {
+          li.append(item)
+        } else {
+          li.textContent = item
+        }
+        list.append(li)
+      }
+      card.append(list)
+      return card
+    }
+
+    function codeLine(value) {
+      const node = document.createElement("code")
+      node.textContent = value
+      return node
+    }
+  })()
+</script>

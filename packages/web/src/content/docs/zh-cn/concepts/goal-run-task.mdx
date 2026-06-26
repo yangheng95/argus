@@ -15,11 +15,12 @@ EngineTask (kind: "workflow" | "build")
  │   └─ EnginePlanNode[]
  ├─ RunRow                  从 engine_artifact kind="run" 重建
  ├─ GoalRunRow[]            从 engine_artifact kind="goal_run_attempt" 重建
- ├─ AcceptanceRow[]         从 engine_artifact kind="acceptance" 重建
- └─ EvaluationRow[]         从 engine_artifact kind="verification-evidence" 重建
+ ├─ VerificationEvidence[]  从 engine_artifact kind="verification-evidence" 重建
+ ├─ IntegrityAttempt[]      从 engine_artifact kind="integrity_attempt" 重建
+ └─ AgentCoordination[]     从 engine_artifact kind="agent_coordination_*" 重建
 ```
 
-`engine_artifact` 是 run、goal attempt、acceptance、evaluation、integrity attempt、report、diff、image 等证据的持久化表面。
+`engine_artifact` 是 run、goal attempt、verification evidence、integrity attempt、agent-coordination record、report、diff、image 等证据的持久化表面。
 
 ## EngineTask
 
@@ -78,18 +79,20 @@ workflow 进度从 artifacts 与 workflow tool side effects 投影。
 
 最新且未被 supersede 的 attempt 是 goal 进度的权威来源。
 
-## Acceptance 和 Evaluation
+## Verification、Integrity 与 Coordination
 
-`AcceptanceRow` 从 `engine_artifact.kind="acceptance"` 重建，记录 candidate / publishing / delivered / failed 的 acceptance statuses。
-
-`EvaluationRow` 从 `engine_artifact.kind="verification-evidence"` 重建，记录 task-level 或 goal-run 证据：
+`VerificationEvidence` 从 `engine_artifact.kind="verification-evidence"` 重建，记录 task-level 或 goal-run 证据：
 
 | 字段       | 说明                                       |
 | ---------- | ------------------------------------------ |
-| `scope`    | `goal_run` 或 `acceptance`                 |
+| `scope`    | task 或 goal-run evidence scope            |
 | `status`   | `pending / passed / failed / inconclusive` |
 | `verdict`  | `accepted / rejected / inconclusive`       |
 | `checks[]` | 检查摘要、证据指针和 scorer metadata       |
+
+`IntegrityAttempt` 从 `engine_artifact.kind="integrity_attempt"` 重建，包含 task completion 前 orchestrator 消费的最终复核事实。
+
+Agent-to-agent coordination 从 `engine_artifact.kind="agent_coordination_request"`、`agent_coordination_response` 与 `agent_coordination_action` 重建。
 
 ## 状态持久化
 
@@ -98,5 +101,6 @@ workflow 进度从 artifacts 与 workflow tool side effects 投影。
 ## 你接下来要看的
 
 - [架构总览](./architecture.md)
+- [企业级动态架构图](./enterprise-architecture.md)
 - [Agentic Loop](./agent-loop.md)
-- [Integrity / Evaluation 参考](/docs/zh-cn/reference/evaluator/)
+- [Integrity review 参考](/docs/zh-cn/reference/evaluator/)

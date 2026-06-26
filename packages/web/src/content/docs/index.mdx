@@ -18,7 +18,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evidence-driven, 
 | **Multi-executor dispatch**    | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code                                                |
 | **Integrity-driven review**    | Build evidence, specialist checks, visual/runtime evidence, and LLM review are consolidated by the integrity stage       |
 | **Multi-channel reach**        | HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                                          |
-| **Durable state**              | Tasks, requirements, plans, goals, runs, artifacts, interactions, acceptance rows, and evaluations persist to SQLite     |
+| **Durable state**              | Tasks, requirements, plans, goals, runs, artifacts, interactions, verification evidence, integrity attempts, and coordination artifacts persist to SQLite |
 | **Human-in-the-loop**          | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines                |
 
 ## Three-layer architecture
@@ -50,6 +50,7 @@ bun "$OPENCORVUS_SOURCE" serve
 ## Doc map
 
 - [**Configuration**](/docs/config/) — `opencorvus.jsonc`, env vars, precedence
+- [**Enterprise architecture explorer**](/docs/concepts/enterprise-architecture/) — interactive current-runtime architecture map
 - [**Providers**](/docs/providers/) — built-in & custom LLM providers
 - [**Permissions**](/docs/permissions/) — allow / ask / deny rules
 - [**Skills**](/docs/skills/) and [**Plugins**](/docs/plugins/) — extension mechanisms

@@ -5,6 +5,8 @@ description: OpenCorvus 通过 orchestrator 主导的 workflow 与 artifact-back
 
 OpenCorvus 的职责是把自然语言请求变成已验证的代码变更。当前架构由 orchestrator 主导：每次唤醒都读取任务快照，选择显式 workflow 工具，并把证据持久化为 SQLite 行和 artifact。
 
+如果需要可点击的当前运行架构图，见[企业级动态架构图](./enterprise-architecture.md)。
+
 ## HTTP API 运行时分层
 
 HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两个真实层：
@@ -37,7 +39,7 @@ Engine task row
   ↓
 Orchestrator session
   ├─ typed workflow tools: requirements / architect / build / integrity / ...
-  ├─ durable artifacts: runs / goal_run_attempts / acceptance / evaluation / reports
+  ├─ durable artifacts: runs / goal_run_attempts / verification evidence / integrity attempts / reports
   └─ explicit user interactions: questions and permissions
   ↓
 Worker sessions
@@ -84,6 +86,7 @@ Architect 产出的 goals 存在 `engine_goal`。每次 per-goal `build` dispatc
 ## 你接下来要看的
 
 - [Task / Run / Goal 数据模型](./goal-run-task.md)
+- [企业级动态架构图](./enterprise-architecture.md)
 - [Agentic Loop 内循环](./agent-loop.md)
 - [OpenCorvus 配置](/docs/zh-cn/config/)
-- [Integrity / Evaluation 参考](/docs/zh-cn/reference/evaluator/)
+- [Integrity review 参考](/docs/zh-cn/reference/evaluator/)
