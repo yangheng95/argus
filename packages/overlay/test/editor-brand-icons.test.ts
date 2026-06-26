@@ -109,3 +109,9 @@ test("Coding CLI launcher icon colors are owned by CSS tokens", () => {
   expect(CONVERSATION_CSS).toContain('.workspace-coding-cli-select-icon[data-coding-cli-icon="glm"]')
   expect(CONVERSATION_CSS).toContain("color: var(--text-strong);")
 })
+
+test("Terminal profile icons use distinct glyphs", () => {
+  expect(ICON_SOURCE).toContain('"terminal-powershell": { component: SquareTerminal }')
+  expect(ICON_SOURCE).toContain('"terminal-command-prompt": { component: Terminal }')
+  expect(ICON_SOURCE).toContain('"terminal-bash": { component: Shell }')
+})
