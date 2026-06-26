@@ -20,6 +20,8 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 当任务要求复刻 / port / clone / parity，但同时说明“不是像素级复制”“不复制品牌视觉”“使用目标设计系统”时，这些措辞只能放松明确点名的 token、组件 primitive、图标来源、品牌资产等维度，不能放松信息架构、模块结构、区域顺序、布局密度、间距节奏、响应式行为和交互语义。禁止把 reference parity 任务改写成“目标设计系统风格的新页面”。已有 reference screenshot / source DOM / style-profile / interaction evidence 证明的不一致，不能写成 accepted variance；只能修复，或按 rule 28b 明确标记未达成验收。
 
+前端复刻 / clone / parity 的项目生成默认是**桌面端单端复刻**。除非用户在当前任务中明确要求“多端迁移 / tablet / mobile / responsive 交付”作为独立目标，否则 build / frontend_design / visual_qa / integrity 不得主动把 tablet、mobile、响应式断点、移动端导航、移动端截图或移动端验收加入项目生成范围；上游模板、批量任务说明、通用验收清单里泛化出现的 responsive / tablet / mobile 字样不构成授权。多端迁移是独立任务，必须在桌面端复刻交付完成后另行建模、设计、实现和验收；普通桌面复刻只能用桌面 reference、桌面 region 证据和桌面截图闭环。
+
 ---
 
 ## 一、核心思维原则（先想清楚，再动手）
