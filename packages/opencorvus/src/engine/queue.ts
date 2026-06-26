@@ -791,11 +791,13 @@ export async function dispatchTaskLoop(input: {
     const claimed = await advanceQueue(cwd, {
       beforeStart: async ({ task: claimedTask }) => {
         if (claimedTask.id === task.id) {
+          await consumePendingWaitCronForAcceptedWake(task, "task wake accepted as started")
           await input.beforeAcceptedWake?.({ taskID: task.id, result: "started" })
         }
       },
     })
     if (claimed?.id === task.id) return "started"
+    await consumePendingWaitCronForAcceptedWake(task, "task wake accepted as queued")
     await input.beforeAcceptedWake?.({ taskID: task.id, result: "queued" })
     return "queued"
   }
@@ -807,6 +809,7 @@ export async function dispatchTaskLoop(input: {
       taskID: task.id,
       liveOwners: liveOwners.map((owner) => owner.ownershipID),
     })
+    await consumePendingWaitCronForAcceptedWake(task, "task wake accepted behind live orchestrator tool ownership")
     await input.beforeAcceptedWake?.({ taskID: task.id, result: "queued" })
     return "queued"
   }
@@ -816,9 +819,19 @@ export async function dispatchTaskLoop(input: {
   // invocation might be the one that drives the task to terminal, so its
   // completion must also advance the cwd queue. Fire-and-forget: callers
   // don't want to block on task completion.
+  await consumePendingWaitCronForAcceptedWake(task, "task wake accepted as active re-entry")
   await input.beforeAcceptedWake?.({ taskID: task.id, result: "started" })
   attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event))
   return "started"
+}
+
+async function consumePendingWaitCronForAcceptedWake(task: TaskRow, reason: string): Promise<void> {
+  const { CronService } = await import("@/scheduler/cron-service")
+  CronService.consumePendingTaskWaits({
+    taskId: task.id,
+    projectId: task.project_id,
+    reason,
+  })
 }
 
 /**

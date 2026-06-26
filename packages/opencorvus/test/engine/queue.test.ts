@@ -13,6 +13,8 @@ import { processOwner } from "../../src/engine/lease"
 import { beginBuildAttempt } from "../../src/engine/persist"
 import { findGoalRun, findRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { CronJobTable } from "../../src/scheduler/cron.sql"
+import { CronService } from "../../src/scheduler/cron-service"
 import { resolveConfiguredModelRef } from "../../src/agent/model"
 import {
   completeOrchestratorToolOwnership,
@@ -130,6 +132,51 @@ describe("engine queue", () => {
           event: { note: "caller-supplied note" },
         })
         expect(taskStatus(taskID)).toBe("active")
+      },
+    })
+  })
+
+  test("accepted task wake consumes pending task wait cron before launching the loop", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_queue_wait_consume_${Date.now()}`
+        const now = Date.now()
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "active wait task",
+              request: "consume pending wait before wake",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external signal",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+
+        const result = await dispatchTaskLoop({ taskID, event: { note: "external result arrived" } })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result).toBe("started")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()))
+          .toBeUndefined()
       },
     })
   })

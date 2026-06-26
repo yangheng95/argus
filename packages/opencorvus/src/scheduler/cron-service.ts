@@ -1,4 +1,4 @@
-import { Database, NotFoundError, and, eq, sql } from "@/storage/db"
+import { Database, NotFoundError, and, eq, isNull, or, sql } from "@/storage/db"
 import { CronJobTable } from "./cron.sql"
 import { Cron } from "./cron"
 import { Scheduler } from "./index"
@@ -8,6 +8,9 @@ import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Identifier } from "@/id/id"
+import { Bus } from "@/bus"
+import { Message } from "@/session/message"
+import { taskIDForSession } from "@/orchestrator/task-event"
 
 export type CronJobView = {
   id: string
@@ -48,6 +51,10 @@ export type CreateTaskCronWakeInput = {
   durationMs: number
 }
 
+export type ConsumedCronWaits = {
+  jobIDs: string[]
+}
+
 /**
  * CronService polls due cron jobs and executes them with lease-based claims.
  *
@@ -68,9 +75,15 @@ export namespace CronService {
   const CONCURRENCY_DEFAULT = 4
   const CONCURRENCY_MAX = 32
 
-  const state = lazyInstanceState(() => ({
-    running: false,
-  }))
+  const state = lazyInstanceState(
+    () => ({
+      running: false,
+      activityUnsubscribers: [] as Array<() => void>,
+    }),
+    async (entry) => {
+      for (const unsubscribe of entry.activityUnsubscribers.splice(0)) unsubscribe()
+    },
+  )
 
   export function init() {
     Scheduler.register({
@@ -79,6 +92,7 @@ export namespace CronService {
       run: poll,
       scope: "instance",
     })
+    installActivitySubscriptions()
     log.info("cron service initialized")
   }
 
@@ -220,6 +234,109 @@ export namespace CronService {
     return !!row
   }
 
+  export function consumePendingTaskWaits(input: {
+    taskId: string
+    projectId: string
+    reason: string
+    now?: number
+  }): ConsumedCronWaits {
+    const now = input.now ?? Date.now()
+    const rows = Database.use((db) =>
+      db
+        .delete(CronJobTable)
+        .where(
+          and(
+            eq(CronJobTable.project_id, input.projectId),
+            eq(CronJobTable.task_id, input.taskId),
+            eq(CronJobTable.enabled, true),
+            eq(CronJobTable.one_shot, true),
+            or(isNull(CronJobTable.lease_owner), sql`${CronJobTable.lease_until} <= ${now}`),
+          ),
+        )
+        .returning({ id: CronJobTable.id })
+        .all(),
+    )
+    const jobIDs = rows.map((row) => row.id)
+    if (jobIDs.length > 0) {
+      log.info("pending task wait cron consumed", {
+        taskID: input.taskId,
+        projectID: input.projectId,
+        jobIDs,
+        reason: input.reason,
+      })
+    }
+    return { jobIDs }
+  }
+
+  export function consumePendingSessionWaits(input: {
+    sessionId: string
+    projectId: string
+    reason: string
+    now?: number
+  }): ConsumedCronWaits {
+    const now = input.now ?? Date.now()
+    const rows = Database.use((db) =>
+      db
+        .delete(CronJobTable)
+        .where(
+          and(
+            eq(CronJobTable.project_id, input.projectId),
+            eq(CronJobTable.session_id, input.sessionId),
+            isNull(CronJobTable.task_id),
+            eq(CronJobTable.name, "session wait"),
+            eq(CronJobTable.enabled, true),
+            eq(CronJobTable.one_shot, true),
+            or(isNull(CronJobTable.lease_owner), sql`${CronJobTable.lease_until} <= ${now}`),
+          ),
+        )
+        .returning({ id: CronJobTable.id })
+        .all(),
+    )
+    const jobIDs = rows.map((row) => row.id)
+    if (jobIDs.length > 0) {
+      log.info("pending session wait cron consumed", {
+        sessionID: input.sessionId,
+        projectID: input.projectId,
+        jobIDs,
+        reason: input.reason,
+      })
+    }
+    return { jobIDs }
+  }
+
+  export async function triggerTaskWaitFromActivity(input: {
+    taskId: string
+    projectId: string
+    source: string
+    detail: string
+  }): Promise<ConsumedCronWaits & { dispatchResult?: string }> {
+    const consumed = consumePendingTaskWaits({
+      taskId: input.taskId,
+      projectId: input.projectId,
+      reason: `${input.source}: ${input.detail}`,
+    })
+    if (consumed.jobIDs.length === 0) return consumed
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    const dispatchResult = await dispatchTaskLoop({
+      taskID: input.taskId,
+      event: {
+        note: renderTaskWaitEarlyActivityNote({
+          source: input.source,
+          detail: input.detail,
+          jobIDs: consumed.jobIDs,
+        }),
+      },
+    })
+    log.info("pending task wait cron triggered early from activity", {
+      taskID: input.taskId,
+      projectID: input.projectId,
+      source: input.source,
+      jobIDs: consumed.jobIDs,
+      dispatchResult,
+    })
+    return { ...consumed, dispatchResult }
+  }
+
   async function poll(): Promise<void> {
     const s = state()
     if (s.running) {
@@ -230,6 +347,60 @@ export namespace CronService {
     await run(Date.now()).finally(() => {
       s.running = false
     })
+  }
+
+  function installActivitySubscriptions() {
+    const s = state()
+    if (s.activityUnsubscribers.length > 0) return
+    s.activityUnsubscribers.push(
+      Bus.subscribe(Message.Event.Updated, (event) => handleMessageUpdated(event.properties.info)),
+      Bus.subscribe(Message.Event.PartUpdated, (event) => handlePartUpdated(event.properties.part)),
+    )
+  }
+
+  async function handleMessageUpdated(info: Message.Info): Promise<void> {
+    if (info.role !== "user") return
+    if (isSchedulerWakeMessage(info)) return
+    consumePendingSessionWaits({
+      sessionId: info.sessionID,
+      projectId: Instance.project.id,
+      reason: "user message arrived before scheduled wait due time",
+    })
+    if (isTaskOperatorMessage(info)) return
+    const taskID = taskIDForSession(info.sessionID)
+    if (!taskID) return
+    await triggerTaskWaitFromActivity({
+      taskId: taskID,
+      projectId: Instance.project.id,
+      source: "message.updated",
+      detail: `user message ${info.id} arrived in session ${info.sessionID}`,
+    })
+  }
+
+  async function handlePartUpdated(part: Message.Part): Promise<void> {
+    if (part.type !== "tool") return
+    if (part.tool === "wait") return
+    if (part.state.status !== "completed" && part.state.status !== "error") return
+    const taskID = taskIDForSession(part.sessionID)
+    if (!taskID) return
+    await triggerTaskWaitFromActivity({
+      taskId: taskID,
+      projectId: Instance.project.id,
+      source: "message.part.updated",
+      detail: `terminal ${part.tool} tool result ${part.id} arrived in session ${part.sessionID}`,
+    })
+  }
+
+  function isSchedulerWakeMessage(info: Message.User): boolean {
+    const reason = info.extra?.wake_reason
+    if (!reason || typeof reason !== "object" || Array.isArray(reason)) return false
+    const source = (reason as Record<string, unknown>).source
+    return typeof source === "string" && source.startsWith("scheduler.")
+  }
+
+  function isTaskOperatorMessage(info: Message.User): boolean {
+    const operatorMessage = info.extra?.operator_message
+    return !!operatorMessage && typeof operatorMessage === "object" && !Array.isArray(operatorMessage)
   }
 
   async function run(now: number): Promise<void> {
@@ -475,6 +646,17 @@ export namespace CronService {
       `scheduled_delay=${job.expression}`,
       `due_at=${new Date(job.next_run).toISOString()}`,
       `Reason: ${job.prompt}`,
+      "Read the current task snapshot and decide the next workflow action from present evidence.",
+    ].join("\n")
+  }
+
+  function renderTaskWaitEarlyActivityNote(input: { source: string; detail: string; jobIDs: string[] }) {
+    return [
+      "This is an early task wait wake triggered by new task/session activity, not a user-authored message.",
+      "The pending scheduled task wait was cancelled by newer task/session activity.",
+      `activity_source=${input.source}`,
+      `activity_detail=${input.detail}`,
+      `wait_job_ids=${input.jobIDs.join(",")}`,
       "Read the current task snapshot and decide the next workflow action from present evidence.",
     ].join("\n")
   }
