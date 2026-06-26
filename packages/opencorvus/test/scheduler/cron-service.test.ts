@@ -6,8 +6,10 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionWake } from "../../src/session/wake"
 import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import * as EngineQueue from "../../src/engine/queue"
+import { Identifier } from "../../src/id/id"
 
 async function waitUntil(check: () => boolean, timeout = 2000) {
   const end = Date.now() + timeout
@@ -16,6 +18,64 @@ async function waitUntil(check: () => boolean, timeout = 2000) {
     await Bun.sleep(10)
   }
   throw new Error("timed out")
+}
+
+function seedTask(input: { taskID: string; sessionID?: string; completed?: boolean }) {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: Instance.project.id,
+        session_id: input.sessionID,
+        source: "test",
+        title: "Cron wait activity fixture",
+        request: "Wait for external activity",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+        ...(input.completed ? { time_completed: now } : {}),
+      } as any)
+      .run(),
+  )
+}
+
+async function appendTerminalToolResult(input: { sessionID: string; tool: string }) {
+  const now = Date.now()
+  const assistant = {
+    id: Identifier.ascending("message"),
+    sessionID: input.sessionID,
+    role: "assistant",
+    parentID: Identifier.ascending("message"),
+    agent: "orchestrator",
+    path: { cwd: Instance.directory, root: Instance.worktree },
+    cost: 0,
+    tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: "test-model",
+    providerID: "test-provider",
+    finish: "tool-calls",
+    time: { created: now, completed: now },
+  } satisfies Message.Assistant
+  const part = {
+    id: Identifier.ascending("part"),
+    messageID: assistant.id,
+    sessionID: input.sessionID,
+    type: "tool",
+    callID: Identifier.ascending("call"),
+    tool: input.tool,
+    state: {
+      status: "completed",
+      input: {},
+      output: "done",
+      title: "Done",
+      metadata: {},
+      time: { start: now, end: now },
+    },
+  } satisfies Message.ToolPart
+  await Session.persistMessage({ info: assistant, parts: [part], touchSessionID: input.sessionID })
 }
 
 describe("scheduler.cron-service", () => {
@@ -207,6 +267,161 @@ describe("scheduler.cron-service", () => {
       Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, foreignJobID)).get()),
     ).toBeDefined()
   }, 30_000)
+
+  test("consumePendingTaskWaits deletes unclaimed waits and preserves claimed due jobs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = "tsk_cron_consume_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID })
+        const open = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external signal",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+        const claimed = CronService.createTaskWake({
+          name: "task wait",
+          reason: "claimed due signal",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+        Database.use((db) =>
+          db
+            .update(CronJobTable)
+            .set({ lease_owner: "active-poll", lease_until: Date.now() + 60_000 })
+            .where(eq(CronJobTable.id, claimed.id))
+            .run(),
+        )
+
+        const consumed = CronService.consumePendingTaskWaits({
+          taskId: taskID,
+          projectId: Instance.project.id,
+          reason: "accepted wake",
+        })
+
+        expect(consumed.jobIDs).toEqual([open.id])
+        expect(Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, open.id)).get())).toBe(
+          undefined,
+        )
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, claimed.id)).get()),
+        ).toBeDefined()
+      },
+    })
+  })
+
+  test("normal user message consumes pending session wait cron", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "assistant", title: "session wait consume" })
+        const scheduled = CronService.createDelayedSessionWake({
+          name: "session wait",
+          prompt: "scheduled session wait",
+          projectId: Instance.project.id,
+          sessionId: session.id,
+          durationMs: 20 * 60 * 1000,
+        })
+        const messageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: messageID,
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "assistant",
+            model: { providerID: "test-provider", modelID: "test-model" },
+          },
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              messageID,
+              sessionID: session.id,
+              type: "text",
+              text: "wake before cron due",
+              kind: "user_content",
+            },
+          ],
+          touchSessionID: session.id,
+        })
+
+        await waitUntil(
+          () =>
+            Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()) ===
+            undefined,
+        )
+      },
+    })
+  })
+
+  test("terminal non-wait tool result consumes pending task wait and dispatches early", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "orchestrator", title: "wait activity root" })
+        const taskID = "tsk_cron_tool_activity_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: session.id })
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external tool output",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+
+        await appendTerminalToolResult({ sessionID: session.id, tool: "read_context" })
+        await waitUntil(() => dispatchTaskLoop.mock.calls.length === 1)
+
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.taskID).toBe(taskID)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.note).toContain("early task wait wake")
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.note).toContain("wait_job_ids=")
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()),
+        ).toBeUndefined()
+      },
+    })
+  })
+
+  test("wait tool result does not consume the cron created by wait itself", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "orchestrator", title: "wait self result root" })
+        const taskID = "tsk_cron_wait_self_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: session.id })
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external clock",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+
+        await appendTerminalToolResult({ sessionID: session.id, tool: "wait" })
+        await Bun.sleep(50)
+
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()),
+        ).toBeDefined()
+      },
+    })
+  })
 
   test("task cron wake dispatches the task loop and disables the one-shot row", async () => {
     await using tmp = await tmpdir({ git: true })
