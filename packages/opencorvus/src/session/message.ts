@@ -11,13 +11,14 @@ import { MessageTable, PartTable } from "./session.sql"
 import { ProviderError } from "@/provider/error"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
-import { isDecodableText } from "./text-mime"
+import { decodeDataUrlBase64Bytes, isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { CompactionHandoff } from "./compaction-handoff"
 import { ToolFailureCause, renderToolFailureCause } from "./tool-failure-cause"
 import { normalizeToolInput } from "./tool-input-norm"
-import { ModelImageInputTooLargeError, assertModelImageInputWithinLimits } from "./model-image-input"
+import { ModelImageInputTooLargeError, prepareModelImageInput } from "./model-image-input"
+import { timelineOrderKey } from "@/timeline/order"
 
 function replayToolInput(raw: unknown): Record<string, unknown> {
   const normalized = normalizeToolInput(raw)
@@ -144,6 +145,7 @@ export namespace Message {
     id: z.string(),
     sessionID: z.string(),
     messageID: z.string(),
+    orderKey: z.string().optional(),
   })
 
   export const SnapshotPart = PartBase.extend({
@@ -420,6 +422,7 @@ export namespace Message {
   const Base = z.object({
     id: z.string(),
     sessionID: z.string(),
+    orderKey: z.string().optional(),
   })
 
   export const User = Base.extend({
@@ -702,53 +705,84 @@ export namespace Message {
     const sourceLabel = (attachment: { filename?: string; url: string }) =>
       attachment.filename ?? (attachment.url.startsWith("data:") ? "inline image data URL" : attachment.url)
 
-    const dataUrlBase64Payload = (url: string): string | undefined => {
-      if (!url.startsWith("data:") || !url.includes(",")) return undefined
-      return url.slice(url.indexOf(",") + 1)
+    const dataUrlBytes = (url: string, context: string): Buffer | undefined => {
+      if (!url.startsWith("data:")) return undefined
+      return decodeDataUrlBase64Bytes(url, context)
     }
 
-    const assertModelBoundImage = (attachment: { mime: string; url: string; filename?: string }, bytes: Buffer) => {
-      assertModelImageInputWithinLimits({
+    const prepareModelBoundImage = async (
+      attachment: { mime: string; url: string; filename?: string },
+      bytes: Buffer,
+    ) => {
+      return await prepareModelImageInput({
         mime: attachment.mime,
         bytes,
         source: sourceLabel(attachment),
       })
     }
 
-    const modelBoundFileUrl = async (part: { mime: string; url: string; filename?: string }): Promise<string> => {
+    const modelBoundFilePart = async (part: {
+      mime: string
+      url: string
+      filename?: string
+    }): Promise<{ url: string; note?: string }> => {
       const located = AttachmentStore.nameFromUrl(part.url)
       if (located) {
         const bytes = await AttachmentStore.read(located.projectID, located.name)
-        assertModelBoundImage(part, bytes)
-        return `data:${part.mime};base64,${bytes.toString("base64")}`
+        const prepared = await prepareModelBoundImage(part, bytes)
+        return {
+          url: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
       }
-      const payload = dataUrlBase64Payload(part.url)
-      if (payload !== undefined) {
-        assertModelBoundImage(part, Buffer.from(payload, "base64"))
+      const bytes = dataUrlBytes(part.url, `Message.toModelInput file part ${part.filename ?? part.mime}`)
+      if (bytes !== undefined) {
+        const prepared = await prepareModelBoundImage(part, bytes)
+        return {
+          url: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
       }
-      return part.url
+      return { url: part.url }
     }
 
     const attachmentToBase64 = async (attachment: {
       mime: string
       url: string
       filename?: string
-    }): Promise<{ mime: string; data: string } | undefined> => {
-      const payload = dataUrlBase64Payload(attachment.url)
-      if (payload !== undefined) {
-        assertModelBoundImage(attachment, Buffer.from(payload, "base64"))
-        return { mime: attachment.mime, data: payload }
+    }): Promise<{ mime: string; data: string; note?: string } | undefined> => {
+      const bytes = dataUrlBytes(
+        attachment.url,
+        `Message.toModelOutput tool-result attachment ${attachment.filename ?? attachment.mime}`,
+      )
+      if (bytes !== undefined) {
+        const prepared = await prepareModelBoundImage(attachment, bytes)
+        return {
+          mime: prepared.mime,
+          data: prepared.bytes.toString("base64"),
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
       }
       const located = AttachmentStore.nameFromUrl(attachment.url)
       if (!located) return undefined
-      const bytes = await AttachmentStore.read(located.projectID, located.name).catch(() => undefined)
-      if (!bytes) return undefined
-      assertModelBoundImage(attachment, bytes)
-      return { mime: attachment.mime, data: bytes.toString("base64") }
+      const attachmentBytes = await AttachmentStore.read(located.projectID, located.name).catch((error) => {
+        throw new Error(
+          `Failed to read tool-result attachment ${attachment.url}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          { cause: error },
+        )
+      })
+      const prepared = await prepareModelBoundImage(attachment, attachmentBytes)
+      return {
+        mime: prepared.mime,
+        data: prepared.bytes.toString("base64"),
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
     }
 
-    const userFileUrl = async (part: Message.FilePart): Promise<string> => {
-      return await modelBoundFileUrl(part)
+    const userFilePart = async (part: Message.FilePart): Promise<{ url: string; note?: string }> => {
+      return await modelBoundFilePart(part)
     }
 
     // AI SDK v6 invokes tool.toModelOutput with an args object
@@ -778,21 +812,27 @@ export namespace Message {
         const rawAttachments = outputObject.attachments ?? []
         const resolved = await Promise.all(rawAttachments.map(attachmentToBase64))
         const attachmentParts = resolved
-          .filter((entry): entry is { mime: string; data: string } => entry !== undefined)
+          .filter((entry): entry is { mime: string; data: string; note?: string } => entry !== undefined)
           .map((entry) => ({
             type: "image-data" as const,
             mediaType: entry.mime,
             data: entry.data,
           }))
+        const cropNotes = resolved
+          .map((entry) => entry?.note)
+          .filter((note): note is string => typeof note === "string" && note.length > 0)
 
         // ToolModelOutput.content also rejects a `text` part with undefined or
         // empty text (screenshot-only outputs) â€” drop the text part when the
         // tool produced no caption. Use `image-data` (v6 preferred) over the
         // deprecated `media` discriminator for base64 image attachments.
-        const textPart =
-          typeof outputObject.text === "string" && outputObject.text.length > 0
-            ? [{ type: "text" as const, text: outputObject.text }]
-            : []
+        const text = [
+          typeof outputObject.text === "string" && outputObject.text.length > 0 ? outputObject.text : "",
+          ...cropNotes,
+        ]
+          .filter((item) => item.length > 0)
+          .join("\n\n")
+        const textPart = text.length > 0 ? [{ type: "text" as const, text }] : []
         const value = [...textPart, ...attachmentParts]
         if (value.length === 0) return { type: "json", value: outputObject as never }
         return { type: "content", value }
@@ -863,12 +903,14 @@ export namespace Message {
             const isPdf = part.mime === "application/pdf"
             const capable = (isImage && model.capabilities.input.image) || (isPdf && model.capabilities.input.pdf)
             if (capable) {
+              const file = await userFilePart(part)
               userMessage.parts.push({
                 type: "file",
-                url: await userFileUrl(part),
+                url: file.url,
                 mediaType: part.mime,
                 filename: part.filename,
               })
+              if (file.note) userMessage.parts.push({ type: "text", text: file.note })
             }
           }
 
@@ -1027,24 +1069,26 @@ export namespace Message {
           // Inject pending media as a user message for providers that don't support
           // media (images, PDFs) in tool results
           if (media.length > 0) {
-            const mediaParts = await Promise.all(
-              media.map(async (attachment) => ({
-                type: "file" as const,
-                url: await modelBoundFileUrl(attachment),
-                mediaType: attachment.mime,
-                filename: attachment.filename,
-              })),
-            )
+            const mediaParts = (
+              await Promise.all(
+                media.map(async (attachment) => {
+                  const file = await modelBoundFilePart(attachment)
+                  return [
+                    {
+                      type: "file" as const,
+                      url: file.url,
+                      mediaType: attachment.mime,
+                      filename: attachment.filename,
+                    },
+                    ...(file.note ? [{ type: "text" as const, text: file.note }] : []),
+                  ]
+                }),
+              )
+            ).flat()
             result.push({
               id: Identifier.ascending("message"),
               role: "user",
-              parts: [
-                {
-                  type: "text" as const,
-                  text: "Attached image(s) from tool result:",
-                },
-                ...mediaParts,
-              ],
+              parts: [{ type: "text" as const, text: "Attached image(s) from tool result:" }, ...mediaParts],
             })
           }
         }
@@ -1080,6 +1124,20 @@ export namespace Message {
     )
   }
 
+  function persistedPart(row: typeof PartTable.$inferSelect): Message.Part {
+    return {
+      ...row.data,
+      id: row.id,
+      sessionID: row.session_id,
+      messageID: row.message_id,
+      orderKey: timelineOrderKey({
+        domain: "part",
+        time: row.time_created,
+        id: row.id,
+      }),
+    } as Message.Part
+  }
+
   export const stream = fn(Identifier.schema("session"), async function* (sessionID) {
     const size = 50
     let offset = 0
@@ -1108,12 +1166,7 @@ export namespace Message {
             .all(),
         )
         for (const row of partRows) {
-          const part = {
-            ...row.data,
-            id: row.id,
-            sessionID: row.session_id,
-            messageID: row.message_id,
-          } as Message.Part
+          const part = persistedPart(row)
           const list = partsByMessage.get(row.message_id)
           if (list) list.push(part)
           else partsByMessage.set(row.message_id, [part])
@@ -1162,12 +1215,7 @@ export namespace Message {
             .all(),
         )
         for (const row of partRows) {
-          const part = {
-            ...row.data,
-            id: row.id,
-            sessionID: row.session_id,
-            messageID: row.message_id,
-          } as Message.Part
+          const part = persistedPart(row)
           const list = partsByMessage.get(row.message_id)
           if (list) list.push(part)
           else partsByMessage.set(row.message_id, [part])
@@ -1186,9 +1234,7 @@ export namespace Message {
     const rows = Database.use((db) =>
       db.select().from(PartTable).where(eq(PartTable.message_id, message_id)).orderBy(PartTable.id).all(),
     )
-    return rows.map(
-      (row) => ({ ...row.data, id: row.id, sessionID: row.session_id, messageID: row.message_id }) as Message.Part,
-    )
+    return rows.map(persistedPart)
   })
 
   export const get = fn(

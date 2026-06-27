@@ -13,7 +13,9 @@ mock.module("../src/utils/icon-html", () => ({
 const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification, __resetEventTimersForTest } = await import(
   "../src/services/events"
 )
-const { boardStore, loadTasks, setBoardStore } = await import("../src/store/board")
+const { boardStore, clearBoard, clearTasksForMissingDirectory, loadMoreTasks, loadTasks, setBoardStore } = await import(
+  "../src/store/board"
+)
 const { appStore, setAppStore } = await import("../src/store/app")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
@@ -112,6 +114,41 @@ async function waitForRequestCount(requests: unknown[], count: number): Promise<
   }
 }
 
+async function waitForBoardSyncIdle(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (!boardStore.boardSyncPending) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+function testOrderKey(id: string, index: number, domain: "task" | "message" | "part" | "protocol" = "message"): string {
+  const rank = domain === "task" ? 10 : domain === "message" ? 30 : domain === "part" ? 31 : 40
+  const safeID = id.replace(/:/g, "_")
+  return `v1:${String(1_776_000_000_000 + index).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${safeID}`
+}
+
+function assistantMessageInfo(id: string, index: number) {
+  const created = 1_776_000_000_000 + index
+  return {
+    id,
+    sessionID: "ses_refresh",
+    role: "assistant",
+    resolvedRole: "assistant",
+    channel: "assistant",
+    agent: "assistant",
+    orderKey: testOrderKey(id, index, "message"),
+    time: { created },
+  }
+}
+
+function assistantPartMeta(id: string, index: number) {
+  return {
+    channel: "assistant",
+    resolvedRole: "assistant",
+    orderKey: testOrderKey(id, index, "part"),
+  }
+}
+
 function selectTaskForTest(taskID: string): void {
   if (!taskID) {
     setBoardStore("selectedSource", null)
@@ -124,6 +161,7 @@ function selectTaskForTest(taskID: string): void {
 
 afterEach(() => {
   __resetEventTimersForTest()
+  clearBoard()
   mock.clearAllMocks()
   __setHostTransportForTest(undefined)
   configure({ directory: "" })
@@ -163,15 +201,7 @@ test("selected-task message events update card tree without board refresh", () =
     type: "message.updated",
     properties: {
       taskID: "tsk_refresh",
-      info: {
-        id: "msg_refresh",
-        sessionID: "ses_refresh",
-        role: "assistant",
-        resolvedRole: "assistant",
-        channel: "assistant",
-        agent: "assistant",
-        time: { created: 1_776_000_200_000 },
-      },
+      info: assistantMessageInfo("msg_refresh", 200_000),
     },
   })
 
@@ -202,15 +232,7 @@ test("selected-task message events advance the visible cursor without recovery",
       taskID: "tsk_refresh",
       sequence: 6,
       properties: {
-        info: {
-          id: "msg_refresh_seq",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_refresh_seq", 200_000),
       },
     }),
   ).toBe(true)
@@ -221,9 +243,12 @@ test("selected-task message events advance the visible cursor without recovery",
       type: "message.part.updated",
       taskID: "tsk_refresh",
       sequence: 7,
+      timestamp: 1_776_000_200_001,
       properties: {
+        ...assistantPartMeta("part_refresh_seq", 200_001),
         part: {
           id: "part_refresh_seq",
+          orderKey: testOrderKey("part_refresh_seq", 200_001, "part"),
           messageID: "msg_refresh_seq",
           sessionID: "ses_refresh",
           resolvedRole: "assistant",
@@ -264,15 +289,7 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
       task_id: "tsk_refresh",
       sequence: 6,
       properties: {
-        info: {
-          id: "msg_snake_seq",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_snake_seq", 200_000),
       },
     }),
   ).toBe(true)
@@ -283,9 +300,12 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
       type: "message.part.updated",
       task_id: "tsk_refresh",
       sequence: 7,
+      timestamp: 1_776_000_200_001,
       properties: {
+        ...assistantPartMeta("part_snake_seq", 200_001),
         part: {
           id: "part_snake_seq",
+          orderKey: testOrderKey("part_snake_seq", 200_001, "part"),
           messageID: "msg_snake_seq",
           sessionID: "ses_refresh",
           resolvedRole: "assistant",
@@ -324,15 +344,7 @@ test("selected-task part removal updates the card tree in real time", () => {
       task_id: "tsk_refresh",
       sequence: 8,
       properties: {
-        info: {
-          id: "msg_remove_part",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_remove_part", 200_000),
       },
     }),
   ).toBe(true)
@@ -341,9 +353,12 @@ test("selected-task part removal updates the card tree in real time", () => {
       type: "message.part.updated",
       task_id: "tsk_refresh",
       sequence: 9,
+      timestamp: 1_776_000_200_001,
       properties: {
+        ...assistantPartMeta("part_remove_me", 200_001),
         part: {
           id: "part_remove_me",
+          orderKey: testOrderKey("part_remove_me", 200_001, "part"),
           messageID: "msg_remove_part",
           sessionID: "ses_refresh",
           resolvedRole: "assistant",
@@ -397,15 +412,7 @@ test("selected-task message removal removes its visible card in real time", () =
       task_id: "tsk_refresh",
       sequence: 4,
       properties: {
-        info: {
-          id: "msg_remove_all",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_remove_all", 200_000),
       },
     }),
   ).toBe(true)
@@ -414,9 +421,12 @@ test("selected-task message removal removes its visible card in real time", () =
       type: "message.part.updated",
       task_id: "tsk_refresh",
       sequence: 5,
+      timestamp: 1_776_000_200_001,
       properties: {
+        ...assistantPartMeta("part_remove_all", 200_001),
         part: {
           id: "part_remove_all",
+          orderKey: testOrderKey("part_remove_all", 200_001, "part"),
           messageID: "msg_remove_all",
           sessionID: "ses_refresh",
           resolvedRole: "assistant",
@@ -469,15 +479,7 @@ test("selected-task message payload is still applied when board cursor is ahead"
       task_id: "tsk_refresh",
       sequence: 7,
       properties: {
-        info: {
-          id: "msg_late_payload",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_late_payload", 200_000),
       },
     }),
   ).toBe(true)
@@ -520,15 +522,7 @@ test("board-owned run progress advances selected-task cursor", async () => {
       task_id: "tsk_refresh",
       sequence: 7,
       properties: {
-        info: {
-          id: "msg_after_run_progress",
-          sessionID: "ses_refresh",
-          role: "assistant",
-          resolvedRole: "assistant",
-          channel: "assistant",
-          agent: "assistant",
-          time: { created: 1_776_000_200_000 },
-        },
+        info: assistantMessageInfo("msg_after_run_progress", 200_000),
       },
     }),
   ).toBe(true)
@@ -689,6 +683,8 @@ test("consumed sequenced run output advances selected cursor and avoids false re
       type: "run.output",
       taskID: "tsk_refresh",
       event_id: "evt_output_1",
+      orderKey: testOrderKey("evt_output_1", 200_000, "protocol"),
+      timestamp: 1_776_000_200_000,
       sequence: 6,
       summary: "partial output",
       properties: {
@@ -773,6 +769,7 @@ test("reset-worktree task rewound schedules authoritative board sync without fak
               sessionID: "ses_refresh",
               status: "active",
               request: "reset worktree rewind",
+              orderKey: testOrderKey("tsk_refresh", 100_000, "task"),
               time: { created: 1_776_000_000_000 },
               attachments: [],
             },
@@ -803,6 +800,7 @@ test("reset-worktree task rewound schedules authoritative board sync without fak
       sessionID: "ses_refresh",
       status: "active",
       request: "before reset",
+      orderKey: testOrderKey("tsk_refresh", 100_000, "task"),
       time: { created: 1_776_000_000_000 },
       attachments: [],
     },
@@ -831,6 +829,7 @@ test("reset-worktree task rewound schedules authoritative board sync without fak
   expect(requests[0]?.query?.sync).toBe("1")
   expect(requests[0]?.query?.directory).toBe(CONFIG_REFRESH_DIRECTORY)
   expect(boardStore.snapshotVersion).toBe("board-reset")
+  await waitForBoardSyncIdle()
   expect(boardStore.boardSyncPending).toBe(false)
 })
 
@@ -1066,6 +1065,273 @@ test("task-list reloads are single-flight across refresh triggers", async () => 
 
   release()
   await Promise.all([first, second])
+})
+
+test("required task-list reload starts after an older in-flight refresh settles", async () => {
+  let releaseFirst!: () => void
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+  const paths: string[] = []
+  let requestIndex = 0
+  const taskItem = (id: string, created: number) => ({
+    task: {
+      id,
+      title: id,
+      status: "active",
+      time: { created, updated: created },
+    },
+  })
+  const transport = {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      paths.push(req.path)
+      requestIndex += 1
+      const current = requestIndex
+      if (current === 1) await firstPending
+      const body =
+        current === 1
+          ? { tasks: [taskItem("tsk_stale_before_mutation", 1)] }
+          : { tasks: [taskItem("tsk_fresh_after_mutation", 2)] }
+      return { status: 200, ok: true, headers: {}, body: body as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport
+  __setHostTransportForTest(transport)
+
+  const stale = loadTasks()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(paths).toEqual(["global/tasks"])
+
+  const requiredFresh = loadTasks({ requireFresh: true })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(paths).toEqual(["global/tasks"])
+
+  releaseFirst()
+  await Promise.all([stale, requiredFresh])
+
+  expect(paths).toEqual(["global/tasks", "global/tasks"])
+  expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_fresh_after_mutation"])
+})
+
+test("stale pagination response cannot append after a required fresh task-list reload", async () => {
+  let releaseMore!: () => void
+  const morePending = new Promise<void>((resolve) => {
+    releaseMore = resolve
+  })
+  const requests: Array<{ path: string; query?: Record<string, string | number | boolean> }> = []
+  const taskItem = (id: string, created: number) => ({
+    task: {
+      id,
+      title: id,
+      status: "active",
+      time: { created, updated: created },
+    },
+  })
+  const transport = {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push({ path: req.path, query: req.query })
+      if (req.path !== "global/tasks") throw new Error(`unexpected route ${req.path}`)
+      if (req.query?.cursor !== undefined) {
+        await morePending
+        return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_stale_page", 3)] } as T }
+      }
+      return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_required_fresh", 4)] } as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport
+  __setHostTransportForTest(transport)
+  setBoardStore("tasks", [taskItem("tsk_first_page", 5)])
+  setBoardStore("tasksHasMore", true)
+  setBoardStore("tasksCursorCreated", 5)
+  setBoardStore("tasksCursorTaskID", "tsk_first_page")
+  setBoardStore("tasksLoadingMore", false)
+
+  const stalePage = loadMoreTasks()
+  await waitForRequestCount(requests, 1)
+  expect(requests[0]?.query).toMatchObject({ cursor: "5", cursorTaskID: "tsk_first_page" })
+
+  const requiredFresh = loadTasks({ requireFresh: true })
+  await waitForRequestCount(requests, 2)
+  await requiredFresh
+  expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_required_fresh"])
+  expect(boardStore.tasksLoadingMore).toBe(false)
+
+  releaseMore()
+  await stalePage
+
+  expect(requests.map((request) => request.path)).toEqual(["global/tasks", "global/tasks"])
+  expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_required_fresh"])
+  expect(boardStore.tasksCursorTaskID).toBe("tsk_required_fresh")
+  expect(boardStore.tasksLoadingMore).toBe(false)
+  expect(boardStore.tasksError).toBe("")
+})
+
+test("stale pagination completion cannot clear a newer pagination request loading state", async () => {
+  let releaseOldPage!: () => void
+  const oldPagePending = new Promise<void>((resolve) => {
+    releaseOldPage = resolve
+  })
+  let releaseNewPage!: () => void
+  const newPagePending = new Promise<void>((resolve) => {
+    releaseNewPage = resolve
+  })
+  const requests: Array<{ path: string; query?: Record<string, string | number | boolean> }> = []
+  const taskItem = (id: string, created: number) => ({
+    task: {
+      id,
+      title: id,
+      status: "active",
+      time: { created, updated: created },
+    },
+  })
+  const transport = {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push({ path: req.path, query: req.query })
+      if (req.path !== "global/tasks") throw new Error(`unexpected route ${req.path}`)
+      if (req.query?.cursorTaskID === "tsk_first_page") {
+        await oldPagePending
+        return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_old_page", 3)] } as T }
+      }
+      if (req.query?.cursorTaskID === "tsk_required_fresh") {
+        await newPagePending
+        return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_new_page", 6)] } as T }
+      }
+      const freshFirstPage = [
+        ...Array.from({ length: 9 }, (_, index) => taskItem(`tsk_fresh_${index + 1}`, 20 - index)),
+        taskItem("tsk_required_fresh", 11),
+        taskItem("tsk_hidden_more", 10),
+      ]
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: { tasks: freshFirstPage } as T,
+      }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport
+  __setHostTransportForTest(transport)
+  setBoardStore("tasks", [taskItem("tsk_first_page", 5)])
+  setBoardStore("tasksHasMore", true)
+  setBoardStore("tasksCursorCreated", 5)
+  setBoardStore("tasksCursorTaskID", "tsk_first_page")
+  setBoardStore("tasksLoadingMore", false)
+
+  const oldPage = loadMoreTasks()
+  await waitForRequestCount(requests, 1)
+
+  const requiredFresh = loadTasks({ requireFresh: true })
+  await waitForRequestCount(requests, 2)
+  await requiredFresh
+  expect(boardStore.tasks.map((item) => item.task.id)).toContain("tsk_required_fresh")
+  expect(boardStore.tasksLoadingMore).toBe(false)
+
+  const newPage = loadMoreTasks()
+  await waitForRequestCount(requests, 3)
+  expect(requests[2]?.query).toMatchObject({ cursor: "11", cursorTaskID: "tsk_required_fresh" })
+  expect(boardStore.tasksLoadingMore).toBe(true)
+
+  releaseOldPage()
+  await oldPage
+  expect(boardStore.tasksLoadingMore).toBe(true)
+  expect(boardStore.tasks.map((item) => item.task.id)).toContain("tsk_required_fresh")
+
+  releaseNewPage()
+  await newPage
+  expect(boardStore.tasksLoadingMore).toBe(false)
+  expect(boardStore.tasks.map((item) => item.task.id)).toContain("tsk_required_fresh")
+  expect(boardStore.tasks.map((item) => item.task.id)).toContain("tsk_new_page")
+})
+
+test("stale pagination response cannot append after missing-directory task clear", async () => {
+  let releaseMore!: () => void
+  const morePending = new Promise<void>((resolve) => {
+    releaseMore = resolve
+  })
+  const requests: Array<{ path: string; query?: Record<string, string | number | boolean> }> = []
+  const taskItem = (id: string, created: number) => ({
+    task: {
+      id,
+      title: id,
+      status: "active",
+      time: { created, updated: created },
+    },
+  })
+  const transport = {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push({ path: req.path, query: req.query })
+      if (req.path !== "global/tasks") throw new Error(`unexpected route ${req.path}`)
+      await morePending
+      return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_stale_page", 3)] } as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport
+  __setHostTransportForTest(transport)
+  setBoardStore("tasks", [taskItem("tsk_first_page", 5)])
+  setBoardStore("tasksHasMore", true)
+  setBoardStore("tasksCursorCreated", 5)
+  setBoardStore("tasksCursorTaskID", "tsk_first_page")
+  setBoardStore("tasksLoadingMore", false)
+
+  const stalePage = loadMoreTasks()
+  await waitForRequestCount(requests, 1)
+  clearTasksForMissingDirectory()
+  expect(boardStore.tasks).toEqual([])
+  expect(boardStore.tasksHasMore).toBe(false)
+  expect(boardStore.tasksCursorCreated).toBeNull()
+  expect(boardStore.tasksCursorTaskID).toBe("")
+  expect(boardStore.tasksLoadingMore).toBe(false)
+
+  releaseMore()
+  await stalePage
+
+  expect(requests[0]?.query).toMatchObject({ cursor: "5", cursorTaskID: "tsk_first_page" })
+  expect(boardStore.tasks).toEqual([])
+  expect(boardStore.tasksHasMore).toBe(false)
+  expect(boardStore.tasksCursorCreated).toBeNull()
+  expect(boardStore.tasksCursorTaskID).toBe("")
+  expect(boardStore.tasksLoadingMore).toBe(false)
+  expect(boardStore.tasksError).toBe("")
 })
 
 test("config.changed SSE burst coalesces into one config refresh", async () => {

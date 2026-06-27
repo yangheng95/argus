@@ -20,10 +20,21 @@ describe("message-bridge persistence guard", () => {
   test("persists session lifecycle and session error events", () => {
     expect(bridgeSource).toContain("function bridgeSessionLifecycle")
     expect(bridgeSource).toContain("function bridgeSessionError")
+    expect(bridgeSource).toContain("function bridgeTaskReport")
+    expect(bridgeSource).toContain("session.bridge.persist_failed")
     expect(bridgeSource).toContain("ProtocolStore.appendEvent")
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Status,[\s\S]*bridgeSessionLifecycle/)
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Idle,[\s\S]*bridgeSessionLifecycle/)
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionEvents\.Error,[\s\S]*bridgeSessionError/)
+    expect(bridgeSource).toMatch(/Bus\.subscribe\(TaskReport\.EventDef,[\s\S]*bridgeTaskReport/)
+  })
+
+  test("does not hide foreign-key bridge failures", () => {
+    expect(bridgeSource).not.toContain("FOREIGN KEY constraint failed")
+    expect(bridgeSource).toContain("appendBridgePersistFailure")
+    expect(bridgeSource).toContain("appendBridgePreparationFailure")
+    expect(bridgeSource).toContain("failed to persist cross-instance relay diagnostic")
+    expect(bridgeSource).not.toContain("bridge: dropping event after error")
   })
 
   test("uses dispatchEphemeral for every Message.Event subscription", () => {
@@ -40,8 +51,12 @@ describe("message-bridge persistence guard", () => {
     }
   })
 
-  test("does not stamp overlay route metadata into Message.Part", () => {
-    expect(bridgeSource).not.toMatch(/enriched\.part\s*=/)
+  test("stamps only part orderKey into Message.Part, never route metadata", () => {
+    expect(bridgeSource).toContain("partOrderKeyForEvent")
+    expect(bridgeSource).toContain("enriched.part = { ...partRecord(properties), orderKey: partOrderKey }")
+    expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*resolvedRole/)
+    expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*channel/)
+    expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*parentSessionID/)
   })
 
   test("dispatchEphemeral docstring records the 双源 (rule 23) rationale", () => {
@@ -49,6 +64,8 @@ describe("message-bridge persistence guard", () => {
   })
   test("cross-instance message relay is serialized instead of fire-and-forget", () => {
     expect(bridgeSource).toContain("enqueueCrossInstanceBridge")
-    expect(bridgeSource).not.toContain("void Instance.provide")
+    expect(bridgeSource).toContain("crossInstanceBridgeQueue = crossInstanceBridgeQueue")
+    expect(bridgeSource).toMatch(/\.then\(\(\) =>\s*Instance\.provide\(/)
+    expect(bridgeSource).toContain("failed to persist cross-instance relay diagnostic")
   })
 })

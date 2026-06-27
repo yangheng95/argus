@@ -1,12 +1,24 @@
 import { test, expect } from "bun:test"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import { stampTestEvent } from "./fixtures/timeline-order"
 
 installRealOverlayI18n()
-const { applyEvent, flushBufferedPartDeltas, resetWriter, hasProjectedPart } = await import(
-  "../src/services/tree-writer"
-)
+const {
+  applyEvent: applyEventRaw,
+  flushBufferedPartDeltas,
+  resetWriter,
+  hasProjectedPart,
+} = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
+
+function applyEvent(event: any): void {
+  applyEventRaw(stampTestEvent(event))
+}
+
+function applyRawEvent(event: any): void {
+  applyEventRaw(event)
+}
 
 function stampedInfo(channel: string, info: Record<string, any>) {
   return {
@@ -222,6 +234,60 @@ test("non-reconstructable message stream events stay loud for selected-task reco
       },
     }),
   ).toThrow(/message\.part\.removed: unknown part prt_missing in session ses_known/)
+
+  expect(() =>
+    applyRawEvent({
+      type: "message.part.updated",
+      emittedAt: 1_780_000_000_200,
+      properties: {
+        taskID: "tsk_projection",
+        ...stampedPartEvent("assistant", {
+          id: "prt_missing_order_key",
+          messageID: "msg_known",
+          sessionID: "ses_known",
+          type: "text",
+          text: "part event must carry its own orderKey",
+        }),
+      },
+    }),
+  ).toThrow(/message\.part\.updated msg_known missing orderKey/)
+
+  expect(() =>
+    applyRawEvent({
+      type: "message.part.updated",
+      emittedAt: 1_780_000_000_210,
+      properties: {
+        taskID: "tsk_projection",
+        orderKey: "v1:0001780000000210:0000000000000031:0000000000000000:part:prt_route_only",
+        ...stampedPartEvent("assistant", {
+          id: "prt_route_only",
+          messageID: "msg_known",
+          sessionID: "ses_known",
+          type: "text",
+          text: "part event must stamp orderKey on the part DTO",
+        }),
+      },
+    }),
+  ).toThrow(/message\.part\.updated part prt_route_only missing orderKey/)
+
+  expect(() =>
+    applyRawEvent({
+      type: "message.part.updated",
+      emittedAt: 1_780_000_000_220,
+      properties: {
+        taskID: "tsk_projection",
+        orderKey: "v1:0001780000000220:0000000000000031:0000000000000000:part:prt_mismatch_route",
+        ...stampedPartEvent("assistant", {
+          id: "prt_mismatch",
+          orderKey: "v1:0001780000000220:0000000000000031:0000000000000000:part:prt_mismatch_part",
+          messageID: "msg_known",
+          sessionID: "ses_known",
+          type: "text",
+          text: "route and part orderKey must agree",
+        }),
+      },
+    }),
+  ).toThrow(/message\.part\.updated part prt_mismatch orderKey does not match event orderKey/)
 
   expect(() =>
     applyEvent({

@@ -1,16 +1,42 @@
 import { expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 import { mergeAgentRecords, sortAgentWorkflowRecordsChronologically } from "../src/utils/agent-workflow-records"
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
-  attachConversationAgentViewTargets,
   conversationAgentStore,
   applyLiveConversationAgentMessageUpdated,
   applyLiveConversationAgentPartUpdated,
   applyLiveConversationAgentSessionStatus,
   conversationAgentRecordsForSource,
-  hydrateConversationAgentView,
+  hydrateConversationAgentView as hydrateConversationAgentViewRaw,
   resetConversationAgentView,
+  attachConversationAgentViewTargets as attachConversationAgentViewTargetsRaw,
 } from "../src/store/conversation-agents"
+import { applyEvent, resetWriter } from "../src/services/tree-writer"
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+installRealOverlayI18n()
+
+function testOrderKey(rank: number, time: number, id: string): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:test:${id}`
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return testOrderKey(30, time, id)
+}
+
+function partOrderKey(id: string, time: number): string {
+  return `v1:${String(time).padStart(16, "0")}:0000000000000031:0000000000000000:part:${id}`
+}
+
+function sessionOrderKey(id: string, time: number): string {
+  return testOrderKey(50, time, id)
+}
+
+function eventOrderKey(id: string, time: number): string {
+  return testOrderKey(40, time, id)
+}
 
 function record(sessionID: string, startedAt: number, renderedCardID?: string): AgentWorkflowRecord {
   return {
@@ -20,6 +46,7 @@ function record(sessionID: string, startedAt: number, renderedCardID?: string): 
     agentName: "build",
     stage: "build",
     status: "completed",
+    orderKey: sessionOrderKey(sessionID, startedAt),
     startedAt,
     lastObservedAt: startedAt + 10,
     completedAt: startedAt + 10,
@@ -30,10 +57,14 @@ function record(sessionID: string, startedAt: number, renderedCardID?: string): 
 }
 
 function liveMessageUpdated(info: Record<string, any>) {
+  const created = Number(info?.time?.created || 1_779_100_000_000)
+  const id = String(info?.id || "msg_live")
   return {
     type: "message.updated",
     properties: {
       info: {
+        id,
+        orderKey: info.orderKey || messageOrderKey(id, created),
         role: "assistant",
         resolvedRole: info.channel,
         agent: info.channel,
@@ -42,6 +73,56 @@ function liveMessageUpdated(info: Record<string, any>) {
       },
     },
   }
+}
+
+function stampAgentView(view: any): any {
+  return {
+    ...view,
+    messages: Array.isArray(view?.messages)
+      ? view.messages.map((message: any) => ({
+          ...message,
+          orderKey:
+            typeof message?.orderKey === "string" && message.orderKey
+              ? message.orderKey
+              : messageOrderKey(String(message?.messageID || ""), Number(message?.time || 0)),
+        }))
+      : view?.messages,
+    sessions: Array.isArray(view?.sessions)
+      ? view.sessions.map((session: any) => {
+          const observedAt = Number(session?.firstObservedAt ?? session?.firstMessageTime ?? 0)
+          return {
+            ...session,
+            orderKey:
+              typeof session?.orderKey === "string" && session.orderKey
+                ? session.orderKey
+                : sessionOrderKey(String(session?.sessionID || ""), observedAt),
+          }
+        })
+      : view?.sessions,
+  }
+}
+
+function hydrateConversationAgentView(sourceKey: string, view: any): void {
+  hydrateConversationAgentViewRaw(sourceKey, stampAgentView(view))
+}
+
+function attachConversationAgentViewTargets(sourceKey: string, view: any): void {
+  attachConversationAgentViewTargetsRaw(sourceKey, stampAgentView(view))
+}
+
+function resetRailAndProjection(): void {
+  resetConversationAgentView()
+  resetWriter()
+}
+
+function projectAndApplyLiveMessageUpdated(sourceKey: string, event: any): void {
+  applyEvent(event)
+  applyLiveConversationAgentMessageUpdated(sourceKey, event)
+}
+
+function projectAndApplyLivePartUpdated(sourceKey: string, event: any): void {
+  applyEvent(event)
+  applyLiveConversationAgentPartUpdated(sourceKey, event)
 }
 
 test("ConversationAgentRail keeps hydrated sessions with deterministic rendered card targets", () => {
@@ -60,11 +141,7 @@ test("ConversationAgentRail keeps hydrated sessions with deterministic rendered 
     ],
   )
 
-  expect(merged.map((item) => item.sessionID)).toEqual([
-    "ses_build_orphan_1",
-    "ses_build_hydrated",
-    "ses_build_live",
-  ])
+  expect(merged.map((item) => item.sessionID)).toEqual(["ses_build_orphan_1", "ses_build_hydrated", "ses_build_live"])
   expect(merged[0]?.renderedCardID).toBeUndefined()
   expect(merged[1]?.renderedCardID).toBe("build:session:ses_build_hydrated:message:msg_1")
   expect(merged[2]?.renderedCardID).toBe("step:goal_a:build")
@@ -105,8 +182,53 @@ test("ConversationAgentRail records stay in global chronological order", () => {
   expect(sorted.map((item) => item.sessionID)).toEqual(["earliest_parent_a", "early_parent_b", "later_parent_a"])
 })
 
+test("ConversationAgentRail locate failures surface through AppLog and notifications", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  expect(source).toContain("function reportLocateFailure")
+  expect(source).toContain('AppLog.error("ui", "Agent rail locate failed"')
+  expect(source).toContain("notifyWarning({")
+  expect(source).toContain("void props.onLocate(current).catch((error) => reportLocateFailure(current, error))")
+  expect(source).not.toContain('console.error("[agent-rail] card scroll request failed"')
+})
+
 test("hydrated agent records target the latest canonical display message", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_old",
+      sessionID: "ses_build",
+      channel: "build",
+      time: { created: 100 },
+    }),
+  )
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_latest",
+      sessionID: "ses_build",
+      channel: "build",
+      time: { created: 200 },
+    }),
+  )
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_goal_old",
+      sessionID: "ses_goal_build",
+      channel: "build",
+      parentSessionID: "ses_root",
+      goalID: "goal_a",
+      time: { created: 300 },
+    }),
+  )
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_goal_latest",
+      sessionID: "ses_goal_build",
+      channel: "build",
+      parentSessionID: "ses_root",
+      goalID: "goal_a",
+      time: { created: 400 },
+    }),
+  )
   hydrateConversationAgentView("task:tsk", {
     messages: [
       {
@@ -169,7 +291,7 @@ test("hydrated agent records target the latest canonical display message", () =>
     ],
   })
 
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_latest")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_old")
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
   expect(conversationAgentStore.records[1]?.renderedCardID).toBe("step:goal_a:build")
   expect(conversationAgentStore.records[1]?.targetMessageID).toBe("msg_goal_latest")
@@ -312,6 +434,7 @@ function liveSessionStatus(
 ) {
   return {
     type: "session.status",
+    orderKey: eventOrderKey(`evt_${sessionID}_${emittedAt}`, emittedAt),
     emittedAt,
     properties: {
       sessionID,
@@ -335,8 +458,8 @@ test("live session.status creates a rail record without waiting for hydrate", ()
 })
 
 test("live message target is retained until session.status creates rail existence", () => {
-  resetConversationAgentView()
-  applyLiveConversationAgentMessageUpdated(
+  resetRailAndProjection()
+  projectAndApplyLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_live_first",
@@ -357,16 +480,18 @@ test("live message target is retained until session.status creates rail existenc
 })
 
 test("live part target is retained until session.status creates rail existence", () => {
-  resetConversationAgentView()
-  applyLiveConversationAgentPartUpdated("task:tsk_live", {
+  resetRailAndProjection()
+  projectAndApplyLivePartUpdated("task:tsk_live", {
     type: "message.part.updated",
     emittedAt: 1_779_099_998_000,
     properties: {
+      orderKey: partOrderKey("part_live_first", 1_779_099_998_000),
       channel: "build",
       resolvedRole: "build",
       parentSessionID: "ses_root",
       part: {
         id: "part_live_first",
+        orderKey: partOrderKey("part_live_first", 1_779_099_998_000),
         sessionID: "ses_live_build",
         messageID: "msg_part_first",
         type: "text",
@@ -384,13 +509,37 @@ test("live part target is retained until session.status creates rail existence",
   expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_part_first")
 })
 
+test("live part target rejects missing top-level route metadata", () => {
+  resetRailAndProjection()
+  expect(() =>
+    applyLiveConversationAgentPartUpdated("task:tsk_live", {
+      type: "message.part.updated",
+      emittedAt: 1_779_099_998_000,
+      properties: {
+        orderKey: partOrderKey("part_missing_route", 1_779_099_998_000),
+        parentSessionID: "ses_root",
+        part: {
+          id: "part_missing_route",
+          orderKey: partOrderKey("part_missing_route", 1_779_099_998_000),
+          sessionID: "ses_live_build",
+          messageID: "msg_part_missing_route",
+          channel: "build",
+          resolvedRole: "build",
+          type: "text",
+          text: "visible text must not create a second routing source",
+        },
+      },
+    }),
+  ).toThrow(/missing top-level channel\/resolvedRole/)
+})
+
 test("older live message fills an empty target after newer session.status", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   applyLiveConversationAgentSessionStatus(
     "task:tsk_live",
     liveSessionStatus("ses_live_build", { type: "streaming" }, 1_779_100_001_000),
   )
-  applyLiveConversationAgentMessageUpdated(
+  projectAndApplyLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_older",
@@ -420,7 +569,7 @@ test("live aborted session.status is a non-success rail status", () => {
 })
 
 test("history target attachment updates existing rail records without creating existence", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   hydrateConversationAgentView("task:tsk_history", {
     sessions: [
       {
@@ -433,6 +582,23 @@ test("history target attachment updates existing rail records without creating e
       },
     ],
   })
+
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_history",
+      sessionID: "ses_history_build",
+      channel: "build",
+      time: { created: 80 },
+    }),
+  )
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_missing",
+      sessionID: "ses_missing",
+      channel: "build",
+      time: { created: 90 },
+    }),
+  )
 
   attachConversationAgentViewTargets("task:tsk_history", {
     messages: [
@@ -460,7 +626,15 @@ test("history target attachment updates existing rail records without creating e
 })
 
 test("history target attachment does not overwrite a newer target", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
+  applyEvent(
+    liveMessageUpdated({
+      id: "msg_new",
+      sessionID: "ses_history_build",
+      channel: "build",
+      time: { created: 200 },
+    }),
+  )
   hydrateConversationAgentView("task:tsk_history", {
     sessions: [
       {
@@ -492,9 +666,9 @@ test("history target attachment does not overwrite a newer target", () => {
 })
 
 test("live message.updated attaches target to an existing rail execution record", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
-  applyLiveConversationAgentMessageUpdated(
+  projectAndApplyLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_live",
@@ -512,8 +686,8 @@ test("live message.updated attaches target to an existing rail execution record"
 })
 
 test("live message.updated does not create rail existence without a session ledger record", () => {
-  resetConversationAgentView()
-  applyLiveConversationAgentMessageUpdated(
+  resetRailAndProjection()
+  projectAndApplyLiveMessageUpdated(
     "task:tsk_live_no_status",
     liveMessageUpdated({
       id: "msg_live",
@@ -527,9 +701,10 @@ test("live message.updated does not create rail existence without a session ledg
 })
 
 test("live message.updated retargets goal-phase records to the rendered step card", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("task:tsk_live_phase", {
     type: "session.status",
+    orderKey: eventOrderKey("evt_ses_live_plan", 1_779_100_000_100),
     emittedAt: 1_779_100_000_100,
     properties: {
       sessionID: "ses_live_plan",
@@ -540,7 +715,7 @@ test("live message.updated retargets goal-phase records to the rendered step car
       status: { type: "streaming" },
     },
   })
-  applyLiveConversationAgentMessageUpdated(
+  projectAndApplyLiveMessageUpdated(
     "task:tsk_live_phase",
     liveMessageUpdated({
       id: "msg_plan",
@@ -589,9 +764,10 @@ test("live message.updated ignores non-agent channels", () => {
 })
 
 test("live message.updated records are scoped by task and session source keys", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("session:ses_coding_live", {
     type: "session.status",
+    orderKey: eventOrderKey("evt_ses_child_live", 1_779_099_999_000),
     emittedAt: 1_779_099_999_000,
     properties: {
       sessionID: "ses_child_live",
@@ -600,7 +776,7 @@ test("live message.updated records are scoped by task and session source keys", 
       status: { type: "streaming" },
     },
   })
-  applyLiveConversationAgentMessageUpdated(
+  projectAndApplyLiveMessageUpdated(
     "session:ses_coding_live",
     liveMessageUpdated({
       id: "msg_coding_live",

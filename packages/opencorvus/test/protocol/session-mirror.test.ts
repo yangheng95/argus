@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { GlobalBus } from "../../src/bus/global"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
 import { Message, Session } from "../../src/session"
+import { SessionStatus } from "../../src/session/status"
 import { Instance } from "../../src/project/instance"
 import { ProtocolStore } from "../../src/protocol/store"
 import {
@@ -203,17 +204,16 @@ describe("session mirror", () => {
           type: Message.Event.Updated.type,
           properties: { info },
         }
+        const part = await Session.updatePart({
+          id: "prt_sidebar_assistant",
+          messageID: info.id,
+          sessionID: sidebar.id,
+          type: "text",
+          text: "stream body",
+        })
         const partUpdatedEvent = {
           type: Message.Event.PartUpdated.type,
-          properties: {
-            part: {
-              id: "prt_sidebar_assistant",
-              messageID: info.id,
-              sessionID: sidebar.id,
-              type: "text",
-              text: "stream body",
-            },
-          },
+          properties: { part },
         }
         const deltaEvent = {
           type: Message.Event.PartDelta.type,
@@ -240,6 +240,9 @@ describe("session mirror", () => {
         expect(updated?.payload.info.resolvedRole).toBe("assistant")
         expect(partUpdated?.payload.channel).toBe("assistant")
         expect(partUpdated?.payload.resolvedRole).toBe("assistant")
+        expect(partUpdated?.payload.orderKey).toContain(":part:")
+        expect(partUpdated?.payload.part.orderKey).toBe(partUpdated?.payload.orderKey)
+        expect(partUpdated?.payload.orderKey).not.toBe(updated?.payload.info.orderKey)
         expect(partUpdated?.payload.part.channel).toBeUndefined()
         expect(partUpdated?.payload.part.resolvedRole).toBeUndefined()
         expect(delta?.payload.channel).toBe("assistant")
@@ -276,6 +279,37 @@ describe("session mirror", () => {
         expect(mapped?.payload?.channel).toBe("assistant")
         expect(mapped?.payload?.resolvedRole).toBe("assistant")
         expect(mapped?.payload?.sessionID).toBe(sidebar.id)
+      },
+    })
+  })
+
+  test("stamps right sidebar assistant session status for live execution rail", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const mapped = mapSessionBusEvent(
+          {
+            type: SessionStatus.Event.Status.type,
+            properties: {
+              sessionID: sidebar.id,
+              status: { type: "streaming" },
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(mapped?.type).toBe("session.status")
+        expect(mapped?.summary).toBe("session status: streaming")
+        expect(mapped?.payload?.channel).toBe("assistant")
+        expect(mapped?.payload?.resolvedRole).toBe("assistant")
+        expect(mapped?.payload?.sessionID).toBe(sidebar.id)
+        expect(mapped?.payload?.status).toEqual({ type: "streaming" })
       },
     })
   })

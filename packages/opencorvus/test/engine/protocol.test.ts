@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
+import { GlobalBus } from "../../src/bus/global"
 import { Identifier } from "../../src/id/id"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -9,7 +10,7 @@ import { EngineProtocol } from "../../src/engine/protocol"
 import { EngineService } from "@/task-api"
 import { ProtocolStore } from "../../src/protocol/store"
 import { findTask } from "../../src/engine/store"
-import { updateTask } from "../../src/engine/state"
+import { terminalTask, updateTask } from "../../src/engine/state"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
@@ -71,6 +72,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  mock.restore()
   await Instance.disposeAll()
   await resetDatabase()
   await tmp?.[Symbol.asyncDispose]?.()
@@ -193,6 +195,33 @@ describe("orchestrator protocol", () => {
 
   test("EngineProtocol.emit validates event payloads before persistence", async () => {
     await expect(EngineProtocol.emit(Event.TaskFailed as any, { taskID })).rejects.toThrow()
+    expect(ProtocolStore.listTaskEventsAfter(taskID, 0)).toEqual([])
+  })
+
+  test("EngineProtocol.emit fails loudly for missing task and session references", async () => {
+    await expect(
+      EngineProtocol.emit(
+        Event.TaskCreated,
+        {
+          taskID: "tsk_missing_protocol_reference",
+          status: "queued",
+          summary: "Missing task must not be swallowed",
+        },
+        { source: "test.protocol" },
+      ),
+    ).rejects.toThrow(/missing task/)
+
+    await expect(
+      EngineProtocol.emit(
+        Event.TaskCreated,
+        {
+          taskID,
+          status: "queued",
+          summary: "Missing session FK must not be swallowed",
+        },
+        { source: "test.protocol", sessionID: "ses_missing_protocol_reference" },
+      ),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/)
     expect(ProtocolStore.listTaskEventsAfter(taskID, 0)).toEqual([])
   })
 
@@ -471,7 +500,7 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(
+        await terminalTask(
           row,
           {
             status: "failed",
@@ -526,7 +555,7 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(row, { status: "completed" }, "Task done")
+        await terminalTask(row, { status: "completed" }, "Task done")
 
         let events = await EngineService.listProtocolEvents(taskID)
         for (const _ of Array.from({ length: 40 })) {
@@ -546,7 +575,7 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(
+        await terminalTask(
           row,
           {
             status: "cancelled",
@@ -573,7 +602,7 @@ describe("orchestrator protocol", () => {
         const row = findTask(taskID)
         if (!row) throw new Error("missing seeded task")
 
-        await updateTask(
+        await terminalTask(
           row,
           {
             status: "failed",
@@ -691,6 +720,9 @@ describe("orchestrator protocol", () => {
         expect(rootPart).toBeTruthy()
         expect(rootMessage?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
         expect(rootPart?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
+        expect(rootPart?.payload?.orderKey).toBe((rootPart?.payload?.part as any)?.orderKey)
+        expect((rootPart?.payload?.part as any)?.orderKey).toContain(":part:")
+        expect(rootPart?.payload?.orderKey).not.toBe((rootMessage?.payload?.info as any)?.orderKey)
         const persisted = await EngineService.listProtocolEvents(taskID)
         expect(persisted.filter((item) => item.type.startsWith("message."))).toEqual([])
       },
@@ -742,6 +774,251 @@ describe("orchestrator protocol", () => {
             reason: "completed",
           },
         })
+      },
+    })
+  })
+
+  test("persists bridge diagnostics when live message event preparation fails", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "Requirements",
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        const missingMessageID = Identifier.ascending("message")
+        const partID = Identifier.ascending("part")
+        await Bus.publish(Message.Event.PartDelta, {
+          sessionID: requirements.id,
+          messageID: missingMessageID,
+          partID,
+          field: "text",
+          delta: "diagnostic must not persist message delta text",
+        })
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (events.some((item) => item.type === "session.bridge.persist_failed")) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+
+        const diagnostic = events.find((item) => item.type === "session.bridge.persist_failed")
+        expect(diagnostic).toBeTruthy()
+        expect(diagnostic?.payload).toMatchObject({
+          taskID,
+          sessionID: requirements.id,
+          failed_type: "message.part.delta",
+          error: `bridge: message ${missingMessageID} missing role in cache and DB while enriching event`,
+          original: {
+            sessionID: requirements.id,
+            messageID: missingMessageID,
+            partID,
+            field: "text",
+          },
+        })
+        expect(diagnostic?.payload?.original).not.toHaveProperty("delta")
+        expect(String(diagnostic?.summary)).toContain("Session bridge failed to persist message.part.delta")
+      },
+    })
+  })
+
+  test("persists bridge diagnostics when cross-instance relay handler fails", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "Requirements",
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        const messageID = Identifier.ascending("message")
+        const sourceDirectory = `${tmp.path}-worktree-source`
+        GlobalBus.emit("event", {
+          directory: sourceDirectory,
+          payload: {
+            type: Message.Event.Updated.type,
+            properties: {
+              info: {
+                id: messageID,
+                sessionID: requirements.id,
+                time: { created: now },
+              },
+            },
+          },
+        })
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (events.some((item) => item.type === "session.bridge.persist_failed")) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+
+        const diagnostic = events.find((item) => item.type === "session.bridge.persist_failed")
+        expect(diagnostic).toBeTruthy()
+        expect(diagnostic?.payload).toMatchObject({
+          taskID,
+          sessionID: requirements.id,
+          failed_type: "message.updated",
+          original: {
+            sourceDirectory,
+            info: {
+              id: messageID,
+              sessionID: requirements.id,
+            },
+          },
+        })
+        expect(String(diagnostic?.payload?.error)).toContain("missing info.role")
+        expect(String(diagnostic?.summary)).toContain("Session bridge failed to persist message.updated")
+      },
+    })
+  })
+
+  test("persists bridge diagnostics when session lifecycle protocol write fails", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "Requirements",
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        const appendEvent = ProtocolStore.appendEvent
+        let rejectedStatus = false
+        spyOn(ProtocolStore, "appendEvent").mockImplementation(
+          (input: Parameters<typeof ProtocolStore.appendEvent>[0]) => {
+            if (input.type === "session.status" && !rejectedStatus) {
+              rejectedStatus = true
+              return Promise.reject(new Error("FOREIGN KEY constraint failed"))
+            }
+            return appendEvent(input)
+          },
+        )
+
+        SessionStatus.set(requirements.id, { type: "terminal", reason: "completed" })
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (events.some((item) => item.type === "session.bridge.persist_failed")) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+
+        const diagnostic = events.find((item) => item.type === "session.bridge.persist_failed")
+        expect(diagnostic).toBeTruthy()
+        expect(diagnostic?.sessionID).toBeUndefined()
+        expect(diagnostic?.payload).toMatchObject({
+          taskID,
+          sessionID: requirements.id,
+          failed_type: "session.status",
+          error: "FOREIGN KEY constraint failed",
+        })
+        expect(String(diagnostic?.summary)).toContain("Session bridge failed to persist session.status")
+      },
+    })
+  })
+
+  test("persists bridge diagnostics when task report preparation fails", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "Requirements",
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        const wrongTaskID = Identifier.ascending("task")
+        await Bus.publish(Event.TaskReport, {
+          taskID: wrongTaskID,
+          sessionID: requirements.id,
+          status: "progress",
+          summary: "This report has a mismatched task id and must become a visible bridge diagnostic.",
+        })
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (events.some((item) => item.type === "session.bridge.persist_failed")) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+
+        const diagnostic = events.find((item) => item.type === "session.bridge.persist_failed")
+        expect(diagnostic).toBeTruthy()
+        expect(diagnostic?.sessionID).toBeUndefined()
+        expect(diagnostic?.payload).toMatchObject({
+          taskID,
+          sessionID: requirements.id,
+          failed_type: "task.report",
+          error: `task.report taskID ${wrongTaskID} does not own session ${requirements.id}; expected ${taskID}`,
+        })
+        expect(diagnostic?.payload?.original).toMatchObject({
+          taskID: wrongTaskID,
+          sessionID: requirements.id,
+          status: "progress",
+        })
+        expect(String(diagnostic?.summary)).toContain("Session bridge failed to persist task.report")
       },
     })
   })
@@ -823,6 +1100,8 @@ describe("orchestrator protocol", () => {
             messageID: rootMessageID,
           },
         })
+        expect(partEvent?.payload?.orderKey).toBe(partEvent?.payload?.part?.orderKey)
+        expect(partEvent?.payload?.part?.orderKey).toContain(":part:")
         expect(partEvent?.payload?.part?.resolvedRole).toBeUndefined()
         expect(partEvent?.payload?.part?.channel).toBeUndefined()
       },

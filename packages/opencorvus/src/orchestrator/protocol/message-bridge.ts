@@ -5,10 +5,12 @@ import { ProtocolStore } from "@/protocol/store"
 import { SessionEvents } from "@/session/events"
 import { Message } from "@/session/message"
 import { SessionStatus } from "@/session/status"
+import { TaskReport } from "@/tool/task-report"
 import { Log } from "@/util/log"
-import { Database, eq } from "@/storage/db"
-import { MessageTable, type SessionKind } from "@/session/session.sql"
+import { Database, and, eq } from "@/storage/db"
+import { MessageTable, PartTable, type SessionKind } from "@/session/session.sql"
 import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "../task-event"
+import { timelineMessageOrderKey, timelinePartOrderKey } from "@/timeline/order"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let globalRelayInitialized = false
@@ -23,9 +25,8 @@ let crossInstanceBridgeQueue = Promise.resolve()
 // the frontend can route without re-deriving anything.
 //
 // Routing metadata belongs to the event envelope and message info. It must not
-// be copied into Message.Part: parts are a strict persisted protocol model and
-// display-only fields there make later Message.Event.PartUpdated validation
-// fail before the task can resume.
+// be copied into Message.Part: parts are a strict persisted protocol model.
+// `orderKey` is part of that DTO projection, not overlay routing metadata.
 
 /** Display channel — which card the overlay groups this message under.
  *  "main" is the top-level conversation; the rest mirror SessionKind values
@@ -45,6 +46,7 @@ export type OverlayResolvedRole = "user" | OverlayChannel
 
 type OverlayMessageInfo = {
   role?: string
+  orderKey?: string
   extra?: Record<string, unknown>
 }
 
@@ -136,9 +138,12 @@ function sessionFromProperties(properties: Record<string, unknown>) {
   return ""
 }
 
-const messageInfoCache = new Map<string, { role: string; extra?: Record<string, unknown> }>()
+const messageInfoCache = new Map<string, { role: string; orderKey: string; extra?: Record<string, unknown> }>()
 
-function rememberMessageInfo(messageID: string, info: { role: string; extra?: Record<string, unknown> }) {
+function rememberMessageInfo(
+  messageID: string,
+  info: { role: string; orderKey: string; extra?: Record<string, unknown> },
+) {
   if (!messageID) return
   messageInfoCache.set(messageID, info)
   if (messageInfoCache.size > 500) {
@@ -158,42 +163,96 @@ function cacheMessageInfo(properties: Record<string, unknown>) {
   }
   rememberMessageInfo(info.id, {
     role: info.role,
+    orderKey: typeof info.orderKey === "string" && info.orderKey ? info.orderKey : timelineMessageOrderKey({ info }),
     ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
   })
 }
 
-function readPersistedMessageInfo(messageID: string): { role: string; extra?: Record<string, unknown> } | undefined {
+function readPersistedMessageInfo(
+  messageID: string,
+): { role: string; orderKey: string; extra?: Record<string, unknown> } | undefined {
   const row = Database.use((db) =>
-    db.select({ data: MessageTable.data }).from(MessageTable).where(eq(MessageTable.id, messageID)).get(),
+    db
+      .select({ data: MessageTable.data, timeCreated: MessageTable.time_created })
+      .from(MessageTable)
+      .where(eq(MessageTable.id, messageID))
+      .get(),
   )
+  if (!row) return undefined
   const role =
-    row?.data && typeof row.data === "object" && "role" in row.data
+    row.data && typeof row.data === "object" && "role" in row.data
       ? (row.data as Record<string, unknown>).role
       : undefined
   if (typeof role !== "string" || !role) return undefined
   const extra =
-    row?.data && typeof row.data === "object" && "extra" in row.data
+    row.data && typeof row.data === "object" && "extra" in row.data
       ? (row.data as Record<string, unknown>).extra
       : undefined
   const info = {
     role,
+    orderKey: timelineMessageOrderKey({
+      info: {
+        id: messageID,
+        time: { created: row.timeCreated },
+      },
+    }),
     ...(extra && typeof extra === "object" ? { extra: extra as Record<string, unknown> } : {}),
   }
   rememberMessageInfo(messageID, info)
   return info
 }
 
-function infoForEvent(properties: Record<string, unknown>): { role: string; extra?: Record<string, unknown> } {
+function partRecord(properties: Record<string, unknown>): Record<string, unknown> {
+  const part = properties.part
+  if (!part || typeof part !== "object" || Array.isArray(part)) {
+    throw new Error("bridge: part event missing part while enriching event")
+  }
+  return part as Record<string, unknown>
+}
+
+function partOrderKeyForEvent(properties: Record<string, unknown>): string {
+  const part = partRecord(properties)
+  const partID = typeof part.id === "string" ? part.id : ""
+  const messageID = typeof part.messageID === "string" ? part.messageID : ""
+  const sessionID = typeof part.sessionID === "string" ? part.sessionID : ""
+  if (!partID || !messageID || !sessionID) {
+    throw new Error("bridge: part event missing part id/messageID/sessionID while enriching event")
+  }
+  const row = Database.use((db) =>
+    db
+      .select({ timeCreated: PartTable.time_created })
+      .from(PartTable)
+      .where(and(eq(PartTable.id, partID), eq(PartTable.message_id, messageID), eq(PartTable.session_id, sessionID)))
+      .get(),
+  )
+  if (!row) throw new Error(`bridge: part ${partID} missing persisted row while enriching event`)
+  const orderKey = timelinePartOrderKey({ id: partID, timeCreated: row.timeCreated })
+  const provided = part.orderKey
+  if (typeof provided === "string" && provided.length > 0 && provided !== orderKey) {
+    throw new Error(`bridge: part ${partID} orderKey drift between payload and persisted row`)
+  }
+  return orderKey
+}
+
+function infoForEvent(properties: Record<string, unknown>): {
+  role: string
+  orderKey: string
+  extra?: Record<string, unknown>
+} {
   const info = properties.info as any
   if (info && typeof info === "object" && info.role) {
     return {
       role: String(info.role),
+      orderKey: typeof info.orderKey === "string" && info.orderKey ? info.orderKey : timelineMessageOrderKey({ info }),
       ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
     }
   }
   const part = properties.part as any
   if (part?.metadata?.overlay_direct_reply === true) {
-    return { role: "user", extra: { overlay_direct_reply: true } }
+    const messageID = part?.messageID || (properties as any).messageID || ""
+    const persisted = messageID ? readPersistedMessageInfo(messageID) : undefined
+    if (!persisted) throw new Error(`bridge: direct-reply part missing persisted message info for ${messageID}`)
+    return { role: "user", orderKey: persisted.orderKey, extra: { overlay_direct_reply: true } }
   }
   const messageID = part?.messageID || (properties as any).messageID || ""
   if (messageID && messageInfoCache.has(messageID)) {
@@ -212,6 +271,7 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; extr
  * Source of truth: session.kind, session.goal_id, session.parent_id.
  */
 function enrichProperties(
+  type: string,
   properties: Record<string, unknown>,
   sessionID: string,
   taskID: string,
@@ -223,14 +283,27 @@ function enrichProperties(
   const parentSessionID = sessionParentID(sessionID)
   const enriched = { ...properties }
 
-  if (enriched.info && typeof enriched.info === "object") {
-    enriched.info = {
+  if (type === Message.Event.PartUpdated.type) {
+    const partOrderKey = partOrderKeyForEvent(properties)
+    enriched.part = { ...partRecord(properties), orderKey: partOrderKey }
+    enriched.orderKey = partOrderKey
+  } else if (enriched.info && typeof enriched.info === "object") {
+    const infoWithMeta = {
       ...(enriched.info as any),
       resolvedRole: meta.resolvedRole,
       channel: meta.channel,
       ...(goalID ? { goalID } : {}),
       ...(parentSessionID ? { parentSessionID } : {}),
     }
+    enriched.info = {
+      ...infoWithMeta,
+      orderKey:
+        typeof infoWithMeta.orderKey === "string" && infoWithMeta.orderKey
+          ? infoWithMeta.orderKey
+          : timelineMessageOrderKey({ info: infoWithMeta }),
+    }
+  } else {
+    enriched.orderKey = info.orderKey
   }
   enriched.resolvedRole = meta.resolvedRole
   enriched.channel = meta.channel
@@ -265,6 +338,162 @@ function enrichLifecycleProperties(properties: Record<string, unknown>, sessionI
   return enriched
 }
 
+function bridgeFailureSummary(type: string, error: string) {
+  return `Session bridge failed to persist ${type}: ${error}`
+}
+
+function appendBridgePersistFailure(input: {
+  taskID: string
+  sessionID: string
+  type: string
+  error: string
+  properties: Record<string, unknown>
+}) {
+  const now = Date.now()
+  return ProtocolStore.appendEvent({
+    kind: "event",
+    type: "session.bridge.persist_failed",
+    aggregate: "task",
+    aggregate_id: input.taskID,
+    task_id: input.taskID,
+    run_id: null,
+    goal_run_id: null,
+    session_id: null,
+    interaction_id: null,
+    stream_id: null,
+    source: "session.bridge",
+    target: null,
+    correlation_id: null,
+    causation_id: null,
+    reply_to: null,
+    emitted_at: now,
+    payload: {
+      taskID: input.taskID,
+      sessionID: input.sessionID,
+      failed_type: input.type,
+      error: input.error,
+      summary: bridgeFailureSummary(input.type, input.error),
+      original: input.properties,
+    },
+  })
+}
+
+function appendBridgeEvent(input: {
+  type: string
+  taskID: string
+  sessionID: string
+  payload: Record<string, unknown>
+}) {
+  const now = Date.now()
+  void ProtocolStore.appendEvent({
+    kind: "event",
+    type: input.type,
+    aggregate: "task",
+    aggregate_id: input.taskID,
+    task_id: input.taskID,
+    run_id: null,
+    goal_run_id: null,
+    session_id: input.sessionID,
+    interaction_id: null,
+    stream_id: null,
+    source: "session.bridge",
+    target: null,
+    correlation_id: null,
+    causation_id: null,
+    reply_to: null,
+    emitted_at: now,
+    payload: input.payload,
+  }).catch((err) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    log.warn("bridge: session event persist failed", { type: input.type, error: detail })
+    void appendBridgePersistFailure({
+      taskID: input.taskID,
+      sessionID: input.sessionID,
+      type: input.type,
+      error: detail,
+      properties: input.payload,
+    }).catch((diagnosticError) => {
+      log.error("bridge: failed to persist bridge diagnostic event", {
+        type: input.type,
+        error: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError),
+      })
+    })
+  })
+}
+
+function appendBridgePreparationFailure(input: { type: string; properties: Record<string, unknown>; error: string }) {
+  const sessionID = sessionFromProperties(input.properties)
+  if (!sessionID) {
+    log.warn("bridge: cannot persist bridge preparation failure without session id", {
+      type: input.type,
+      error: input.error,
+    })
+    return
+  }
+  const taskID = taskIDForSession(sessionID)
+  if (!taskID) {
+    log.warn("bridge: cannot persist bridge preparation failure for non-task-owned session", {
+      type: input.type,
+      sessionID,
+      error: input.error,
+    })
+    return
+  }
+  void appendBridgePersistFailure({
+    taskID,
+    sessionID,
+    type: input.type,
+    error: input.error,
+    properties: input.properties,
+  }).catch((diagnosticError) => {
+    log.error("bridge: failed to persist bridge preparation diagnostic event", {
+      type: input.type,
+      sessionID,
+      error: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError),
+    })
+  })
+}
+
+function messageEventDiagnosticProperties(properties: Record<string, unknown>): Record<string, unknown> {
+  const diagnostic: Record<string, unknown> = {}
+  if (typeof properties.sessionID === "string" && properties.sessionID) diagnostic.sessionID = properties.sessionID
+  if (typeof properties.messageID === "string" && properties.messageID) diagnostic.messageID = properties.messageID
+  if (typeof properties.partID === "string" && properties.partID) diagnostic.partID = properties.partID
+  if (typeof properties.field === "string" && properties.field) diagnostic.field = properties.field
+
+  const info = properties.info
+  if (info && typeof info === "object") {
+    const value = info as Record<string, unknown>
+    diagnostic.info = {
+      ...(typeof value.id === "string" && value.id ? { id: value.id } : {}),
+      ...(typeof value.sessionID === "string" && value.sessionID ? { sessionID: value.sessionID } : {}),
+      ...(typeof value.role === "string" && value.role ? { role: value.role } : {}),
+    }
+  }
+
+  const part = properties.part
+  if (part && typeof part === "object") {
+    const value = part as Record<string, unknown>
+    diagnostic.part = {
+      ...(typeof value.id === "string" && value.id ? { id: value.id } : {}),
+      ...(typeof value.sessionID === "string" && value.sessionID ? { sessionID: value.sessionID } : {}),
+      ...(typeof value.messageID === "string" && value.messageID ? { messageID: value.messageID } : {}),
+      ...(typeof value.type === "string" && value.type ? { type: value.type } : {}),
+    }
+  }
+
+  return diagnostic
+}
+
+function bridgeDiagnosticPropertiesForType(
+  type: string,
+  properties: Record<string, unknown>,
+  extra?: Record<string, unknown>,
+): Record<string, unknown> {
+  const diagnostic = type.startsWith("message.") ? messageEventDiagnosticProperties(properties) : { ...properties }
+  return extra ? { ...diagnostic, ...extra } : diagnostic
+}
+
 /**
  * Push a message event through live SSE subscriptions only.
  *
@@ -293,36 +522,11 @@ function bridgeSessionLifecycle(type: string, properties: Record<string, unknown
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
     const enriched = enrichLifecycleProperties(properties, sessionID)
-    const now = Date.now()
-    void ProtocolStore.appendEvent({
-      kind: "event",
-      type,
-      aggregate: "task",
-      aggregate_id: taskID,
-      task_id: taskID,
-      run_id: null,
-      goal_run_id: null,
-      session_id: sessionID,
-      interaction_id: null,
-      stream_id: null,
-      source: "session.bridge",
-      target: null,
-      correlation_id: null,
-      causation_id: null,
-      reply_to: null,
-      emitted_at: now,
-      payload: enriched,
-    }).catch((err) => {
-      const detail = err instanceof Error ? err.message : String(err)
-      if (!detail.includes("FOREIGN KEY constraint failed")) {
-        log.warn("bridge: session lifecycle persist failed", { type, error: detail })
-      }
-    })
+    appendBridgeEvent({ type, taskID, sessionID, payload: enriched })
   } catch (err) {
-    log.warn("bridge: dropping session lifecycle event after error", {
-      type,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const error = err instanceof Error ? err.message : String(err)
+    appendBridgePreparationFailure({ type, properties, error })
+    log.warn("bridge: session lifecycle preparation failed", { type, error })
   }
 }
 
@@ -351,39 +555,48 @@ function bridgeSessionError(type: string, properties: Record<string, unknown>) {
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
     const enriched = enrichLifecycleProperties(properties, sessionID)
-    const now = Date.now()
-    void ProtocolStore.appendEvent({
-      kind: "event",
+    appendBridgeEvent({
       type,
-      aggregate: "task",
-      aggregate_id: taskID,
-      task_id: taskID,
-      run_id: null,
-      goal_run_id: null,
-      session_id: sessionID,
-      interaction_id: null,
-      stream_id: null,
-      source: "session.bridge",
-      target: null,
-      correlation_id: null,
-      causation_id: null,
-      reply_to: null,
-      emitted_at: now,
+      taskID,
+      sessionID,
       payload: {
         ...enriched,
         summary: sessionErrorSummary(properties),
       },
-    }).catch((err) => {
-      const detail = err instanceof Error ? err.message : String(err)
-      if (!detail.includes("FOREIGN KEY constraint failed")) {
-        log.warn("bridge: session error persist failed", { type, error: detail })
-      }
     })
   } catch (err) {
-    log.warn("bridge: dropping session error event after error", {
-      type,
-      error: err instanceof Error ? err.message : String(err),
+    const error = err instanceof Error ? err.message : String(err)
+    appendBridgePreparationFailure({ type, properties, error })
+    log.warn("bridge: session error preparation failed", { type, error })
+  }
+}
+
+function bridgeTaskReport(properties: Record<string, unknown>) {
+  try {
+    const sessionID = sessionFromProperties(properties)
+    if (!sessionID) throw new Error("task.report missing sessionID")
+    const resolvedTaskID = taskIDForSession(sessionID)
+    if (!resolvedTaskID) throw new Error(`task.report session ${sessionID} is not task-owned`)
+    const payloadTaskID = typeof properties.taskID === "string" && properties.taskID ? properties.taskID : undefined
+    if (payloadTaskID && payloadTaskID !== resolvedTaskID) {
+      throw new Error(
+        `task.report taskID ${payloadTaskID} does not own session ${sessionID}; expected ${resolvedTaskID}`,
+      )
+    }
+    const enriched = enrichLifecycleProperties({ ...properties, taskID: resolvedTaskID }, sessionID)
+    appendBridgeEvent({
+      type: TaskReport.EventDef.type,
+      taskID: resolvedTaskID,
+      sessionID,
+      payload: {
+        ...enriched,
+        summary: typeof properties.summary === "string" ? properties.summary : "task report",
+      },
     })
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    appendBridgePreparationFailure({ type: TaskReport.EventDef.type, properties, error })
+    log.warn("bridge: task report preparation failed", { error })
   }
 }
 
@@ -397,7 +610,7 @@ function bridgeEvent(type: string, properties: Record<string, unknown>) {
     if (!sessionID) return
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
-    const enriched = enrichProperties(properties, sessionID, taskID)
+    const enriched = enrichProperties(type, properties, sessionID, taskID)
     ProtocolStore.dispatchEphemeral({
       type,
       aggregate: "task",
@@ -407,10 +620,9 @@ function bridgeEvent(type: string, properties: Record<string, unknown>) {
       payload: enriched,
     })
   } catch (err) {
-    log.warn("bridge: dropping event after error", {
-      type,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const error = err instanceof Error ? err.message : String(err)
+    appendBridgePreparationFailure({ type, properties: messageEventDiagnosticProperties(properties), error })
+    log.warn("bridge: live message event preparation failed", { type, error })
   }
 }
 
@@ -432,10 +644,29 @@ function enqueueCrossInstanceBridge(
       }),
     )
     .catch((err) => {
+      const error = err instanceof Error ? err.message : String(err)
+      void Instance.provide({
+        directory: hostDirectory,
+        fn: () => {
+          appendBridgePreparationFailure({
+            type,
+            properties: bridgeDiagnosticPropertiesForType(type, props, {
+              ...(sourceDirectory ? { sourceDirectory } : {}),
+            }),
+            error,
+          })
+        },
+      }).catch((diagnosticError) => {
+        log.error("bridge: failed to persist cross-instance relay diagnostic", {
+          type,
+          sourceDirectory,
+          error: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError),
+        })
+      })
       log.error("bridge: cross-instance relay failed", {
         type,
         sourceDirectory,
-        error: err instanceof Error ? err.message : String(err),
+        error,
       })
     })
     .then(() => undefined)
@@ -468,6 +699,9 @@ const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) =
   },
   [SessionEvents.Error.type]: (props) => {
     bridgeSessionError(SessionEvents.Error.type, props)
+  },
+  [TaskReport.EventDef.type]: (props) => {
+    bridgeTaskReport(props)
   },
 }
 
@@ -502,6 +736,9 @@ export function ensureTaskMessageProtocolBridge() {
     })
     Bus.subscribe(SessionEvents.Error, (event) => {
       bridgeSessionError(SessionEvents.Error.type, event.properties)
+    })
+    Bus.subscribe(TaskReport.EventDef, (event) => {
+      bridgeTaskReport(event.properties)
     })
     Bus.subscribe(Bus.InstanceDisposed, (event) => {
       initializedLocalDirectories.delete(event.properties.directory)
