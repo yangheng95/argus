@@ -4,7 +4,13 @@ const apiHandlers = new Map<string, () => unknown | Promise<unknown>>()
 const apiCalls: string[] = []
 let legacySectionPhaseCalls = 0
 
+function orderKey(domain: "message" | "part", time: number, id: string): string {
+  const rank = domain === "message" ? 30 : 31
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+}
+
 mock.module("../src/services/api", () => ({
+  ApiError: class ApiError extends Error {},
   apiRequest: async (path: string) => {
     throw new Error(`unexpected apiRequest path: ${path}`)
   },
@@ -50,7 +56,13 @@ describe("loadConversation section phase ownership", () => {
     })
     apiHandlers.set("task/tsk_phase_owner/transcript", () => [
       {
-        info: { id: "msg_phase_owner", role: "assistant", sessionID: "ses_phase_owner", time: { created: 1 } },
+        info: {
+          id: "msg_phase_owner",
+          role: "assistant",
+          sessionID: "ses_phase_owner",
+          orderKey: orderKey("message", 1, "msg_phase_owner"),
+          time: { created: 1 },
+        },
         parts: [
           {
             id: "part_phase_owner",
@@ -58,16 +70,16 @@ describe("loadConversation section phase ownership", () => {
             text: "loaded transcript",
             messageID: "msg_phase_owner",
             sessionID: "ses_phase_owner",
+            orderKey: orderKey("part", 2, "part_phase_owner"),
           },
         ],
       },
     ])
-    apiHandlers.set("control/timeline?taskID=tsk_phase_owner", () => [])
 
     await messages.loadConversation()
 
     expect(legacySectionPhaseCalls).toBe(0)
     expect(messages.messageStore.messages.map((message) => message.info.id)).toEqual(["msg_phase_owner"])
-    expect(apiCalls).toEqual(["task/tsk_phase_owner/transcript", "control/timeline?taskID=tsk_phase_owner"])
+    expect(apiCalls).toEqual(["task/tsk_phase_owner/transcript"])
   })
 })
