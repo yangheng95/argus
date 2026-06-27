@@ -5,6 +5,7 @@ import {
   findActivePlanForTask,
   findActiveRunForTask,
   findActiveSpecForTask,
+  findLatestRunForTask,
   findGoalLatestWorkspace,
   findLatestTipGoalRun,
   findLatestDeliveredGoalRun,
@@ -17,6 +18,8 @@ import {
   getGoalRetryCount,
   listTaskRows,
   listGoalRunsByGoal,
+  viewTask,
+  viewInteraction,
   type AcceptanceRow,
   type EvaluationRow,
   type RunRow,
@@ -40,6 +43,7 @@ import {
 import { projectGoalSteps, projectTaskSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
+import { timelineOrderKey } from "@/timeline/order"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
@@ -72,7 +76,7 @@ function buildBoard(
   directory: string,
   lastSequence = latestTaskProtocolSequence(task.id),
 ) {
-  const run = findActiveRunForTask(task.id)
+  const run = projectedRunForBoard(task)
   const plan = findActivePlanForTask(task.id)
   // Query goals by plan if available, otherwise fall back to task_id so that
   // goals created during decomposition are visible before create_run sets
@@ -201,41 +205,7 @@ function buildBoard(
     lastSequence,
     ...workflowFields,
     spec: specSnapshot,
-    task: {
-      id: task.id,
-      projectID: task.project_id,
-      directory,
-      sessionID: task.session_id ?? undefined,
-      activePlanVersionID: plan?.id ?? undefined,
-      activeRunID: run?.id ?? undefined,
-      requestID: task.request_id ?? undefined,
-      source: task.source,
-      kind: task.kind,
-      title: task.title,
-      request: task.request,
-      status: deriveTaskStatus(task),
-      terminalReason: taskTerminalReason(task),
-      priority: task.priority,
-      // Phase-6-f-4: blocking lives on run (or none when no active run).
-      blockingReason: run?.blocking_reason ?? undefined,
-      error: task.error ?? undefined,
-      budget: task.budget
-        ? {
-            maxExecutorGroups: task.budget.max_executor_groups,
-          }
-        : undefined,
-      metadata: task.metadata ?? undefined,
-      // Attachment references (url/mime/filename/sha/size/intent/source) —
-      // the overlay's `buildUserContextMessages` appends each as a file part
-      // under the synthetic user-request bubble so images render inline.
-      attachments: Array.isArray(task.attachments) ? task.attachments : undefined,
-      time: {
-        created: task.time_created,
-        updated: task.time_updated,
-        started: task.time_started ?? undefined,
-        completed: task.time_completed ?? undefined,
-      },
-    },
+    task: viewTask(task, { directory }),
     plan: plan
       ? {
           id: plan.id,
@@ -282,24 +252,7 @@ function buildBoard(
     candidateAcceptance: viewBoardAcceptance(latestAcceptance),
     acceptedAcceptance: viewBoardAcceptance(acceptedAcceptance),
     evaluation: viewBoardEvaluation(latestEvaluation),
-    interactions: interactions.map((item) => ({
-      id: item.id,
-      taskID: item.task_id,
-      runID: item.run_id,
-      sessionID: item.session_id ?? undefined,
-      externalID: item.external_id,
-      type: item.request_type,
-      status: item.status,
-      title: item.title,
-      body: item.body,
-      payload: item.payload ?? undefined,
-      response: item.response ?? undefined,
-      time: {
-        created: item.time_created,
-        updated: item.time_updated,
-        resolved: item.time_resolved ?? undefined,
-      },
-    })),
+    interactions: interactions.map(viewInteraction),
     channels: bindings.map((item) => ({
       id: item.id,
       platform: item.platform,
@@ -347,6 +300,10 @@ function taskDirectory(task: typeof EngineTaskTable.$inferSelect) {
   return listTaskRows([task])[0]?.directory ?? ""
 }
 
+function projectedRunForBoard(task: typeof EngineTaskTable.$inferSelect) {
+  return findActiveRunForTask(task.id) ?? (taskTerminalReason(task) ? findLatestRunForTask(task.id) : undefined)
+}
+
 function latestTaskProtocolSequence(taskID: string) {
   return Database.use(
     (db) =>
@@ -359,7 +316,7 @@ function latestTaskProtocolSequence(taskID: string) {
 }
 
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
-  const run = findActiveRunForTask(task.id)
+  const run = projectedRunForBoard(task)
   const plan = findActivePlanForTask(task.id)
   const goals = Database.use((db) =>
     db
@@ -901,6 +858,11 @@ function buildWorkflowFields(
     name: workflow.name,
     steps: workflow.steps.map((step) => ({
       id: step.id,
+      orderKey: timelineOrderKey({
+        domain: "board_step",
+        time: projectedTaskSteps[step.id]?.startedAt ?? projectedTaskSteps[step.id]?.completedAt ?? task.time_created,
+        id: `${task.id}-${step.id}`,
+      }),
       label: step.label,
       tool: step.tool,
       scope: step.scope as "task" | "goal",
@@ -945,6 +907,11 @@ function buildWorkflowFields(
     const latestWorkspace = findGoalLatestWorkspace(goal.id)
     return {
       goalID: goal.id,
+      orderKey: timelineOrderKey({
+        domain: "board_goal",
+        time: goal.time_created,
+        id: goal.id,
+      }),
       goalRunID: deliveredRun?.id ?? tipRun?.id,
       goalTitle: goal.title,
       // Architect writes the goal's `objective` as a 1–2 sentence execution
@@ -980,13 +947,20 @@ function buildWorkflowFields(
           const phaseProjection = gws?.stepPhases?.[s.id]
           return {
             stepID: s.id,
+            orderKey: timelineOrderKey({
+              domain: "board_step",
+              time: gws?.steps[s.id]?.startedAt ?? gws?.steps[s.id]?.completedAt ?? goal.time_created,
+              id: `${goal.id}-${s.id}`,
+            }),
             label: s.label,
             status: stepStatus,
             startedAt: gws?.steps[s.id]?.startedAt,
             completedAt: gws?.steps[s.id]?.completedAt,
             summary: buildStepSummary(s, goal.id, stepStatus),
             payload: buildStepPayload(s, goal.id, stepStatus),
-            ...(phaseProjection && Object.keys(phaseProjection).length > 0 ? { phases: phaseProjection } : {}),
+            ...(phaseProjection && Object.keys(phaseProjection).length > 0
+              ? { phases: orderPhaseProjection(goal.id, s.id, goal.time_created, phaseProjection) }
+              : {}),
           }
         }),
     }
@@ -1006,6 +980,28 @@ function buildWorkflowFields(
 }
 
 type TaskStepProjection = Record<string, { status: string; startedAt?: number; completedAt?: number }>
+
+type GoalPhaseProjection = Record<string, { status: string; startedAt?: number; completedAt?: number }>
+
+function orderPhaseProjection(
+  goalID: string,
+  stepID: string,
+  goalCreatedAt: number,
+  phases: GoalPhaseProjection,
+): Record<string, { orderKey: string; status: string; startedAt?: number; completedAt?: number }> {
+  const out: Record<string, { orderKey: string; status: string; startedAt?: number; completedAt?: number }> = {}
+  for (const [phaseID, phase] of Object.entries(phases)) {
+    out[phaseID] = {
+      orderKey: timelineOrderKey({
+        domain: "board_phase",
+        time: phase.startedAt ?? phase.completedAt ?? goalCreatedAt,
+        id: `${goalID}-${stepID}-${phaseID}`,
+      }),
+      ...phase,
+    }
+  }
+  return out
+}
 
 function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" {
   return (
@@ -1277,13 +1273,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
         ? result.published_commit_ref.trim()
         : undefined
     diffBaseRef =
-      typeof result?.diff_base_ref === "string" && result.diff_base_ref.trim()
-        ? result.diff_base_ref.trim()
-        : undefined
+      typeof result?.diff_base_ref === "string" && result.diff_base_ref.trim() ? result.diff_base_ref.trim() : undefined
     diffHeadRef =
-      typeof result?.diff_head_ref === "string" && result.diff_head_ref.trim()
-        ? result.diff_head_ref.trim()
-        : undefined
+      typeof result?.diff_head_ref === "string" && result.diff_head_ref.trim() ? result.diff_head_ref.trim() : undefined
     const diffRows = Array.isArray(result?.diffs)
       ? result.diffs
           .filter(
