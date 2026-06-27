@@ -58,6 +58,24 @@ interface Matcher {
 }
 
 const MATCHERS: Matcher[] = [
+  // Claude Sonnet 4.6 variants: Hexin /v1/model/info reported
+  // max_input_tokens 1000000 and max_output_tokens 64000 on 2026-06-27
+  // for claude-sonnet-4-6, claude-sonnet-4-6-bak,
+  // cy-claude-sonnet-4-6, and cy-claude-sonnet-4-6-v2.
+  {
+    test: (id) => /(^|\/)(?:cy-)?claude-sonnet-4-6(?:-v2|-bak)?$/i.test(id),
+    profile: {
+      family: "claude",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: true,
+      toolcall: true,
+      context: 1_000_000,
+      input: 1_000_000,
+      output: 64_000,
+    },
+  },
   // Claude family — reasoning + vision + pdf
   {
     test: (id) => /claude-haiku/i.test(id),
@@ -97,16 +115,30 @@ const MATCHERS: Matcher[] = [
   // mini / nano / codex branches stay conservative for the same reason —
   // each one needs its own probe before flipping its flags.
   {
-    test: (id) => /^gpt-5\.4$/i.test(id),
+    test: (id) => /^gpt-5\.5$/i.test(id),
     profile: {
       family: "gpt-5",
-      reasoning: false,
+      reasoning: true,
       attachment: true,
       image_in: true,
       pdf_in: false,
       toolcall: true,
       context: 1_050_000,
-      input: 922_000,
+      input: 1_050_000,
+      output: 128_000,
+    },
+  },
+  {
+    test: (id) => /^gpt-5\.4$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      context: 1_050_000,
+      input: 1_050_000,
       output: 128_000,
     },
   },
@@ -181,6 +213,24 @@ const MATCHERS: Matcher[] = [
       toolcall: true,
       context: 1_000_000,
       output: 8_192,
+    },
+  },
+  // Kimi K2.5: Hexin /v1/model/info reported max_tokens,
+  // max_input_tokens, and max_output_tokens as 262144 on 2026-06-27.
+  {
+    test: (id) => /(^|\/)kimi-k2\.5$/i.test(id),
+    contractIDs: ["kimi-k2.5"],
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
     },
   },
   // Kimi K2.6: thinking is enabled by default; fixed sampling and
@@ -294,13 +344,14 @@ const MATCHERS: Matcher[] = [
     profile: {
       family: "qwen",
       reasoning: true,
-      attachment: false,
-      image_in: false,
+      attachment: true,
+      image_in: true,
       pdf_in: false,
       toolcall: true,
       interleaved: { field: "reasoning_content" },
-      context: 128_000,
-      output: 16_384,
+      context: 1_000_000,
+      input: 1_000_000,
+      output: 65_536,
     },
   },
   // Qwen
