@@ -8,6 +8,7 @@ import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { listActiveSessionsForTask } from "../../src/engine/store"
 import { SessionStatus } from "../../src/session/status"
 import { EngineService } from "../../src/task-api"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -263,6 +264,11 @@ describe("listActiveSessionsForTask", () => {
           {
             id: "int_project_board_pending",
             taskID: ids.taskID,
+            orderKey: timelineOrderKey({
+              domain: "interaction",
+              time: now,
+              id: "int_project_board_pending",
+            }),
             runID: "run_project_board_pending",
             sessionID: ids.sessionID,
             externalID: "perm_project_board_pending",
