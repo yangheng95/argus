@@ -77,7 +77,7 @@ At-mention the bot's first message in any channel to create a task; later messag
 ## Common pitfalls
 
 1. **Stuck in spec phase** — LLM provider is unreachable. Run `opencorvus doctor`.
-2. **Evaluator always rejected** — repo has no executable build/test commands. Evaluator walks up from `owned_paths` to find the nearest `package.json`.
+2. **Integrity review keeps failing** — repo has no executable build/test commands. Build / integrity walks up from `owned_paths` to find the nearest `package.json`.
 3. **Permission request never resolves** — built-in permissions default to `allow`; check whether project config explicitly sets `ask`, then either reply in the UI or change that rule to `allow`.
 
 Next: [Architecture](../concepts/architecture.md).

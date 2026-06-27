@@ -50,5 +50,5 @@ opencorvus models openai --verbose
 ## 选型建议
 
 - **Reasoning 模型**（Claude reasoning、o-系列、qwq）适合规划，但**必须用 `streamText` + `toolChoice: "auto"`**，详见 [Providers](/docs/zh-cn/providers/)。
-- **便宜的快模型**通常足以执行；evaluator 会捕获回归。
+- **便宜的快模型**通常足以执行；build evidence 与最终 integrity review 会捕获回归。
 - **Vision** — 把 `OPENCORVUS_VISION_MODEL` 设为多模态模型（如 `anthropic/claude-sonnet-4-6`），仅在有截图/图像输入时触发。

@@ -303,8 +303,10 @@ export const Task = z.object({
       revision: z.string().optional(),
     })
     .optional(),
-  /** "workflow" — runs the full requirements→design→architect→execute→deliver pipeline.
-   *  "build" — bypasses the pipeline and runs the build agent directly. Used for
+  /** "workflow" — uses the orchestrator's explicit tool path
+   *  (frontend evidence as needed → requirements → architect →
+   *  workload_analysis as needed → build → visual_qa as needed → integrity).
+   *  "build" — bypasses the broader workflow and runs the build agent directly. Used for
    *  one-shot edits / Q&A / quick fixes. Both kinds share the same task table
    *  and queue, so cancel/list/audit are uniform. */
   kind: z.enum(["workflow", "build"]).default("workflow"),

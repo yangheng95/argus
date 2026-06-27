@@ -52,5 +52,5 @@ Some providers expose model variants (e.g. with/without extended context). ACP's
 Practical guidance:
 
 - **Reasoning models** (Claude reasoning, o-series, qwq) are great for planning but **must be invoked via `streamText` with `toolChoice: "auto"`**. See [Providers](/docs/providers/) for the constraints.
-- **Cheap fast models** are usually fine for execution; the evaluator will catch regressions.
+- **Cheap fast models** are usually fine for execution; build evidence plus final integrity review catches regressions.
 - **Vision** — set `OPENCORVUS_VISION_MODEL` to a multimodal model (e.g. `anthropic/claude-sonnet-4-6`). It is only invoked for screenshot / image inputs.
