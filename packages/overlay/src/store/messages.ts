@@ -8,6 +8,7 @@ import { boardStore, activeTaskID } from "../store/board"
 import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui"
 import { touchReasoningPart as trackReasoningPart } from "./reasoning"
 import { normalizeToolPartRecord } from "../utils/tool"
+import { requireTimelineOrderKey } from "../utils/timeline-order"
 
 // ── Types ──
 
@@ -181,65 +182,10 @@ function record(value: unknown): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
-function stableStringify(value: unknown): string {
-  if (value == null) return "null"
-  if (typeof value === "string") return JSON.stringify(value)
-  if (typeof value === "number" || typeof value === "boolean") {
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(",")}]`
-  }
-  if (!record(value)) return JSON.stringify(String(value))
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-    .join(",")}}`
-}
-
-function hashText(value: string): string {
-  const text = String(value || "")
-  let hash = 2166136261
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return (hash >>> 0).toString(36)
-}
-
-function partSignature(part: any): string {
-  return stableStringify({
-    type: part?.type || "",
-    text: part?.text || "",
-    tool: part?.tool || "",
-    kind: part?.kind || "",
-    source: part?.source || "",
-    filename: part?.filename || "",
-    url: part?.url || "",
-    mime: part?.mime || part?.mediaType || "",
-    callID: part?.callID || "",
-    description: part?.description || "",
-    prompt: part?.prompt || "",
-    state: record(part?.state) ? part.state : (part?.state ?? null),
-    files: Array.isArray(part?.files) ? part.files : [],
-    process: record(part?.process) ? part.process : null,
-  })
-}
-
-function messageSignature(message: any): string {
-  const info = record(message?.info) ? message.info : {}
-  return stableStringify({
-    role: info.role || "",
-    agent: info.agent || "",
-    sessionID: info.sessionID || "",
-    taskID: info.taskID || "",
-    time: {
-      created: info.time?.created || 0,
-      updated: info.time?.updated || 0,
-      completed: info.time?.completed || 0,
-    },
-    parts: Array.isArray(message?.parts) ? message.parts.map((part: any) => partSignature(part)) : [],
-  })
+function requireLoadedString(value: unknown, label: string): string {
+  const text = typeof value === "string" ? value.trim() : ""
+  if (!text) throw new Error(`${label} missing`)
+  return text
 }
 
 function normalizeLoadedPart(
@@ -247,41 +193,57 @@ function normalizeLoadedPart(
   messageID: string,
   sessionID: string,
   index: number,
-  previousPart?: Part,
 ): Part {
-  const seed: Record<string, any> = record(input) ? { ...input } : { type: "text", text: String(input || "") }
-  const normalized = normalizeToolPartRecord(seed, previousPart)
-  const part: Record<string, any> = record(normalized) ? { ...normalized } : seed
-  const id =
-    typeof part.id === "string" && part.id.trim()
-      ? part.id.trim()
-      : `loaded-part:${messageID}:${index}:${hashText(partSignature(part))}`
+  if (!record(input)) throw new Error(`loaded conversation message ${messageID} part[${index}] must be an object`)
+  const raw = input as Record<string, any>
+  const id = requireLoadedString(raw.id, `loaded conversation message ${messageID} part[${index}] id`)
+  const partMessageID = requireLoadedString(
+    raw.messageID,
+    `loaded conversation message ${messageID} part ${id} messageID`,
+  )
+  const partSessionID = requireLoadedString(
+    raw.sessionID,
+    `loaded conversation message ${messageID} part ${id} sessionID`,
+  )
+  if (partMessageID !== messageID) {
+    throw new Error(`loaded conversation part ${id} messageID drift: ${partMessageID} !== ${messageID}`)
+  }
+  if (partSessionID !== sessionID) {
+    throw new Error(`loaded conversation part ${id} sessionID drift: ${partSessionID} !== ${sessionID}`)
+  }
+  const type = requireLoadedString(raw.type, `loaded conversation part ${id} type`)
+  const orderKey = requireTimelineOrderKey(raw.orderKey, `loaded conversation part ${id}`)
+  const normalized = normalizeToolPartRecord(raw)
+  const part: Record<string, any> = record(normalized) ? { ...normalized } : { ...raw }
   return {
     ...part,
     id,
-    messageID: typeof part.messageID === "string" && part.messageID.trim() ? part.messageID.trim() : messageID,
-    sessionID: typeof part.sessionID === "string" && part.sessionID.trim() ? part.sessionID.trim() : sessionID,
-  } as Part
+    type,
+    messageID,
+    sessionID,
+    orderKey,
+  }
 }
 
 function normalizeLoadedMessage(input: any): Message {
-  const message = record(input) ? input : {}
-  const info = record(message.info) ? message.info : {}
-  const explicitID = typeof info.id === "string" && info.id.trim() ? info.id.trim() : ""
-  const id = explicitID || `loaded-msg:${hashText(messageSignature(message))}`
-  const sessionID = typeof info.sessionID === "string" && info.sessionID.trim() ? info.sessionID.trim() : ""
-  const partsSource = Array.isArray(message.parts) ? message.parts : []
+  if (!record(input)) throw new Error("loaded conversation message must be an object")
+  const message = input as Record<string, any>
+  if (!record(message.info)) throw new Error("loaded conversation message missing info")
+  const info = message.info as Record<string, any>
+  const id = requireLoadedString(info.id, "loaded conversation message id")
+  const sessionID = requireLoadedString(info.sessionID, `loaded conversation message ${id} sessionID`)
+  const role = requireLoadedString(info.role, `loaded conversation message ${id} role`)
+  const orderKey = requireTimelineOrderKey(info.orderKey, `loaded conversation message ${id}`)
+  if (!Array.isArray(message.parts)) throw new Error(`loaded conversation message ${id} missing parts array`)
+  const partsSource = message.parts
   const parts: Part[] = []
   const partIndex = new Map<string, number>()
   for (let index = 0; index < partsSource.length; index += 1) {
     const rawPart = partsSource[index]
-    const rawID = typeof rawPart?.id === "string" && rawPart.id.trim() ? rawPart.id.trim() : ""
-    const previous = rawID ? parts[partIndex.get(rawID) ?? -1] : undefined
-    const normalizedPart = normalizeLoadedPart(rawPart, id, sessionID, index, previous)
+    const normalizedPart = normalizeLoadedPart(rawPart, id, sessionID, index)
     const existingIndex = partIndex.get(normalizedPart.id)
     if (existingIndex !== undefined) {
-      parts[existingIndex] = normalizedPart
-      continue
+      throw new Error(`loaded conversation message ${id} has duplicate part ${normalizedPart.id}`)
     }
     partIndex.set(normalizedPart.id, parts.length)
     parts.push(normalizedPart)
@@ -292,27 +254,24 @@ function normalizeLoadedMessage(input: any): Message {
       ...info,
       id,
       sessionID,
-      role: typeof info.role === "string" && info.role.trim() ? info.role.trim() : "assistant",
+      role,
+      orderKey,
     },
     parts,
   }
 }
 
-function normalizeLoadedMessages(messages: any[]): Message[] {
-  return (Array.isArray(messages) ? messages : []).map((message) => normalizeLoadedMessage(message))
-}
-
 export function mergeLoadedConversationMessages(left: any[], right: any[]): Message[] {
   const seen = new Set<string>()
-  const result: any[] = []
+  const result: Message[] = []
   for (const item of [...(Array.isArray(left) ? left : []), ...(Array.isArray(right) ? right : [])]) {
-    const info = record(item?.info) ? item.info : {}
-    const key = typeof info.id === "string" && info.id.trim() ? `id:${info.id.trim()}` : `sig:${messageSignature(item)}`
+    const message = normalizeLoadedMessage(item)
+    const key = message.info.id
     if (seen.has(key)) continue
     seen.add(key)
-    result.push(item)
+    result.push(message)
   }
-  return normalizeLoadedMessages(result)
+  return result
 }
 
 // ── Full load from transcript ──
@@ -322,14 +281,8 @@ export async function syncTask(taskID: string) {
     clearMessages()
     return
   }
-  const [transcript, timeline] = await Promise.all([
-    apiJson(`task/${encodeURIComponent(taskID)}/transcript`),
-    apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
-  ])
-  const messages = mergeLoadedConversationMessages(
-    Array.isArray(timeline) ? timeline : [],
-    Array.isArray(transcript) ? transcript : [],
-  )
+  const transcript = await apiJson(`task/${encodeURIComponent(taskID)}/transcript`)
+  const messages = mergeLoadedConversationMessages([], Array.isArray(transcript) ? transcript : [])
   setMessages(messages)
 }
 
@@ -378,12 +331,8 @@ export async function loadConversation(): Promise<void> {
         return
       }
       const transcript = await apiJson(`task/${encodeURIComponent(taskID)}/transcript`)
-      const timeline = await apiJson(`control/timeline?taskID=${encodeURIComponent(taskID)}`)
       if (taskID !== activeTaskID()) continue
-      const merged = mergeLoadedConversationMessages(
-        Array.isArray(timeline) ? timeline : [],
-        Array.isArray(transcript) ? transcript : [],
-      ).map((message: any) => ({
+      const merged = mergeLoadedConversationMessages([], Array.isArray(transcript) ? transcript : []).map((message: any) => ({
         ...message,
         parts: Array.isArray(message?.parts) ? message.parts.map((part: any) => touchReasoningPart(part)) : [],
       }))
