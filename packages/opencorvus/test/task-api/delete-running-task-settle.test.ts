@@ -9,6 +9,7 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionPromptState } from "../../src/session/prompt/state"
 import { SessionTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
 import { Database, eq } from "../../src/storage/db"
@@ -291,5 +292,46 @@ describe("deleteTask running task settlement", () => {
       type: "terminal",
       reason: "aborted",
     })
+  })
+
+  test("deleteTask survives prompt finish after instance context is gone", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { taskID, sessionID } = await createActiveTask(tmp.path, "delete after prompt owner context gone")
+    let childSessionID = ""
+    let childAbort: AbortSignal | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child = await Session.createNext({
+          kind: "frontend-research",
+          parentID: sessionID,
+          title: "child prompt cancelled by delete",
+          directory: tmp.path,
+        })
+        childSessionID = child.id
+        childAbort = SessionPromptState.start(child.id, tmp.path)
+        expect(childAbort).toBeDefined()
+        SessionStatus.set(child.id, { type: "streaming" }, { publish: false })
+      },
+    })
+
+    await Instance.disposeAll()
+
+    await expectNoProcessErrors(async () => {
+      const deletePromise = EngineService.deleteTask(taskID, {
+        cleanupTimeoutMs: 2_000,
+        taskLoopIdleTimeoutMs: 2_000,
+        promptSettleInactivityMs: 2_000,
+      })
+      await waitUntil(() => childAbort?.aborted === true, "child prompt abort")
+
+      SessionPromptState.finish(childSessionID, childAbort!)
+      await deletePromise
+    })
+
+    expect(taskRow(taskID)).toBeUndefined()
+    expect(sessionRow(sessionID)).toBeUndefined()
+    expect(SessionPromptState.isActive(childSessionID, tmp.path)).toBe(false)
   })
 })

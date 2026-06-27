@@ -1,4 +1,3 @@
-import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
@@ -210,34 +209,48 @@ function waitForPromptFinishAfterInactivity(input: {
 }): Promise<void> {
   if (!SessionPrompt.isActive(input.sessionID, input.directory)) return Promise.resolve()
 
+  const promptFinished = SessionPrompt.waitForFinish(input.sessionID, input.directory)
+  const pollMs = Math.min(250, Math.max(25, Math.floor(input.inactivityTimeoutMs / 10)))
+  let lastSignature = ""
+  let idleDeadline = Date.now() + input.inactivityTimeoutMs
+
+  const observeActivity = () => {
+    const status = SessionStatus.get(input.sessionID)
+    const activity = SessionStatus.getActivity(input.sessionID)
+    const signature = `${status.type}:${status.type === "terminal" ? status.reason : ""}:${
+      activity?.last_activity_at ?? 0
+    }`
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      idleDeadline = Date.now() + input.inactivityTimeoutMs
+    }
+  }
+
   return new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let settled = false
 
-    const cleanup = () => {
-      if (timer) clearTimeout(timer)
-      unsubscribe()
-    }
     const complete = (fn: () => void) => {
       if (settled) return
       settled = true
-      cleanup()
+      if (timer) clearTimeout(timer)
       fn()
     }
-    const schedule = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => {
+    const tick = () => {
+      if (settled) return
+      observeActivity()
+      if (Date.now() > idleDeadline) {
         complete(() =>
           reject(new AwaitTimeoutError(`${input.label} ${input.sessionID} inactive`, input.inactivityTimeoutMs)),
         )
-      }, input.inactivityTimeoutMs)
+        return
+      }
+      timer = setTimeout(tick, pollMs)
     }
-    const unsubscribe = Bus.subscribe(SessionStatus.Event.Status, (event) => {
-      if (event.properties.sessionID === input.sessionID) schedule()
-    })
 
-    schedule()
-    SessionPrompt.waitForFinish(input.sessionID, input.directory).then(
+    observeActivity()
+    timer = setTimeout(tick, pollMs)
+    promptFinished.then(
       () => complete(() => resolve()),
       (error) => complete(() => reject(error)),
     )

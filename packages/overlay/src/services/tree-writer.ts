@@ -40,6 +40,7 @@ import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message
 import { stageAccent } from "../utils/card-color"
 import { t } from "../utils/i18n"
 import { normalizeToolPartRecord } from "../utils/tool"
+import { compareTimelineOrderKeys, requireTimelineOrderKey } from "../utils/timeline-order"
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
  *  ("frontend_design", "frontend_design", "frontend-design") all resolve
@@ -109,18 +110,26 @@ function projectModelOntoCard(
 ): void {
   session.messageModels.set(messageID, model)
   const targetCardID = session.messageCardIDs.get(messageID) ?? fallbackCardID
+  refreshModelProjectionForCard(targetCardID)
+}
+
+function refreshModelProjectionForCard(targetCardID: string): void {
   if (!cardTreeStore.cards[targetCardID]) return
-  let latestModel: MessageModelProjection | undefined
-  let latestTime = Number.NEGATIVE_INFINITY
-  for (const [mid, projected] of session.messageModels) {
-    if (session.messageCardIDs.get(mid) !== targetCardID) continue
-    const time = messages.get(mid)?.time ?? 0
-    if (time >= latestTime) {
-      latestModel = projected
-      latestTime = time
+  let sharedModel: MessageModelProjection | undefined
+  let distinctModelCount = 0
+  const seenModels = new Set<string>()
+  for (const ownerSession of sessions.values()) {
+    for (const [mid, projected] of ownerSession.messageModels) {
+      if (ownerSession.messageCardIDs.get(mid) !== targetCardID) continue
+      if (!projected) continue
+      const key = `${projected.providerID}\u0000${projected.modelID}`
+      if (seenModels.has(key)) continue
+      seenModels.add(key)
+      distinctModelCount += 1
+      sharedModel = projected
     }
   }
-  setCardTreeStore("cards", targetCardID, "model", latestModel)
+  setCardTreeStore("cards", targetCardID, "model", distinctModelCount === 1 ? sharedModel : undefined)
 }
 
 function projectUsageOntoCard(
@@ -131,6 +140,10 @@ function projectUsageOntoCard(
 ): void {
   session.messageUsage.set(messageID, usage)
   const targetCardID = session.messageCardIDs.get(messageID) ?? fallbackCardID
+  refreshUsageProjectionForCard(targetCardID)
+}
+
+function refreshUsageProjectionForCard(targetCardID: string): void {
   if (!cardTreeStore.cards[targetCardID]) return
   let sumInput = 0
   let sumOutput = 0
@@ -138,29 +151,48 @@ function projectUsageOntoCard(
   let sumCost = 0
   let latestContext = 0
   let latestContextTime = Number.NEGATIVE_INFINITY
-  for (const [mid, u] of session.messageUsage) {
-    if (session.messageCardIDs.get(mid) !== targetCardID) continue
-    sumInput += u.inputTokens
-    sumOutput += u.outputTokens
-    sumTotal += u.totalTokens
-    sumCost += u.costUSD
-    const time = messages.get(mid)?.time ?? 0
-    if (u.contextTokens > 0 && time >= latestContextTime) {
-      latestContext = u.contextTokens
-      latestContextTime = time
+  let hasUsage = false
+  for (const ownerSession of sessions.values()) {
+    for (const [mid, u] of ownerSession.messageUsage) {
+      if (ownerSession.messageCardIDs.get(mid) !== targetCardID) continue
+      hasUsage = true
+      sumInput += u.inputTokens
+      sumOutput += u.outputTokens
+      sumTotal += u.totalTokens
+      sumCost += u.costUSD
+      const time = messages.get(mid)?.time ?? 0
+      if (u.contextTokens > 0 && time >= latestContextTime) {
+        latestContext = u.contextTokens
+        latestContextTime = time
+      }
     }
   }
-  setCardTreeStore("cards", targetCardID, "usage", {
-    inputTokens: sumInput,
-    outputTokens: sumOutput,
-    totalTokens: sumTotal,
-    costUSD: sumCost,
-  })
+  setCardTreeStore(
+    "cards",
+    targetCardID,
+    "usage",
+    hasUsage
+      ? {
+          inputTokens: sumInput,
+          outputTokens: sumOutput,
+          totalTokens: sumTotal,
+          costUSD: sumCost,
+        }
+      : undefined,
+  )
   if (latestContext > 0) {
     setCardTreeStore("cards", targetCardID, "contextTokens", latestContext)
     setCardTreeStore("cards", targetCardID, "contextTokensEstimated", false)
+  } else {
+    setCardTreeStore("cards", targetCardID, "contextTokens", undefined)
+    setCardTreeStore("cards", targetCardID, "contextTokensEstimated", undefined)
   }
   markCardStatsDirty(targetCardID)
+}
+
+function refreshMetadataProjectionForCard(cardID: string): void {
+  refreshUsageProjectionForCard(cardID)
+  refreshModelProjectionForCard(cardID)
 }
 
 /** A part's exact display target: which card owns it and at which index in
@@ -180,11 +212,10 @@ interface SessionInfo {
   goalID: string
   /** ids of messages that landed in this session's bucket, preserved to derive status. */
   messageIDs: Set<string>
-  /** messageID → the display card that owns that message turn. For
-   *  phase-absorbed sessions (build / planner under a goal) every entry
-   *  points at the single phase card; for integrity it points at the
-   *  dedicated integrity card; otherwise each entry is a distinct
-   *  message-turn card (`<stage>:session:<sid>:message:<mid>`). */
+  /** messageID → the display card that owns that message. Phase-absorbed
+   *  sessions point at the single phase card; non-phase messages point at
+   *  their adjacent segment card, whose id is based on the first message in
+   *  that segment. */
   messageCardIDs: Map<string, string>
   /** The message turn currently receiving session-level events
    *  (session.status / session.error). The newest `message.updated` for
@@ -194,13 +225,13 @@ interface SessionInfo {
    *  mutate THIS card only — older turn cards are frozen history. */
   activeCardID?: string
   /** Per-message cumulative usage observed for assistant messages in
-   *  this session. Phase cards can still own multiple messages, so the
+   *  this session. Segment and phase cards can own multiple messages, so the
    *  projection records per-message totals and writes the sum onto the
-   *  resolved owner card. Top-level non-phase cards are one message each. */
+   *  resolved owner card. */
   messageUsage: Map<string, MessageUsageProjection>
   /** Per-message actual model observed from assistant Message info. A
-   *  phase card displays the latest owned message's model; top-level
-   *  non-phase cards display their own message model. */
+   *  multi-message owner displays a card-level model only when all
+   *  model-bearing messages agree. */
   messageModels: Map<string, MessageModelProjection | undefined>
   /** part id → its exact {cardID,index} target — O(1) lookup for updates. */
   partIndex: Map<string, PartTarget>
@@ -218,6 +249,7 @@ interface MessageInfo {
   agent: string
   parentSessionID: string
   goalID: string
+  orderKey: string
   time: number
   completed: boolean
 }
@@ -238,6 +270,7 @@ interface MessageModelProjection {
 
 const sessions = new Map<string, SessionInfo>()
 const messages = new Map<string, MessageInfo>()
+let latestTimelineMessage: MessageInfo | undefined
 /** goalID → known. Goal cards themselves are driven by board.goalWorkflows,
  *  not by `goal.created` events — we just remember existence here so session
  *  bucket claiming is deterministic. */
@@ -333,6 +366,7 @@ export function resetWriter(
   }
   sessions.clear()
   messages.clear()
+  latestTimelineMessage = undefined
   knownGoalIDs.clear()
   integrityCardOwners.clear()
   pendingIntegrity.clear()
@@ -584,10 +618,7 @@ export function ingestPersistedConversationMessage(input: { info: any; parts: an
     })
     for (const part of input.parts) {
       if (!part) continue
-      applyEvent({
-        type: "message.part.updated",
-        properties: { part },
-      })
+      projectPersistedConversationPart(input.info, part)
     }
   })
 }
@@ -611,10 +642,10 @@ function sessionCardID(stage: string, sid: string): string {
   return `${stage}:session:${sid}`
 }
 
-/** Stable top-level message-turn card id. A runtime session can produce many
- *  real `message.updated` rows; each displayable non-phase row keeps its own
- *  card identity so chronological ordering cannot fold later turns into the
- *  first card. Sorting is still by `CardNode.time`, never by id. */
+/** Stable top-level message segment card id. A runtime session can produce
+ *  many real `message.updated` rows; adjacent compatible rows share the
+ *  first message's card identity, while non-adjacent rows get their own
+ *  segment card. Sorting is by backend `CardNode.orderKey`, never by id. */
 function messageTurnCardID(stage: string, sid: string, messageID: string): string {
   return `${stage}:session:${sid}:message:${messageID}`
 }
@@ -647,6 +678,7 @@ function createSessionCardNode(
   cardID: string,
   stage: string,
   goalID: string,
+  orderKey: string,
   time: number,
   sessionID: string,
   messageID: string,
@@ -668,6 +700,7 @@ function createSessionCardNode(
     goalID: goalID || undefined,
     parts,
     childIDs,
+    orderKey,
     time,
   }
 }
@@ -760,6 +793,7 @@ function handleMessageUpdated(event: any): void {
       `message.updated info.time.created must be positive (got ${info?.time?.created}); server emitter is the single source of truth`,
     )
   }
+  const orderKey = requireTimelineOrderKey(info.orderKey, `message.updated ${id}`)
   const existingMessage = messages.get(id)
   const timeCreated = existingMessage?.time && existingMessage.time > 0 ? existingMessage.time : incomingTimeCreated
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0
@@ -769,9 +803,7 @@ function handleMessageUpdated(event: any): void {
   const stage = deriveSessionStage(info)
   if (stage === "filtered") return
   const displayRole = displayRoleForResolvedRole(rawResolvedRole)
-
-  // Index the message.
-  messages.set(id, {
+  const nextMessageInfo: MessageInfo = {
     id,
     sessionID,
     stage,
@@ -780,9 +812,18 @@ function handleMessageUpdated(event: any): void {
     agent,
     parentSessionID,
     goalID,
+    orderKey,
     time: timeCreated,
     completed,
-  })
+  }
+  const insertsBeforeKnownTail =
+    !existingMessage && latestTimelineMessage ? messageTimeOrder(nextMessageInfo, latestTimelineMessage) < 0 : false
+
+  // Index the message.
+  messages.set(id, nextMessageInfo)
+  if (!latestTimelineMessage || messageTimeOrder(latestTimelineMessage, nextMessageInfo) <= 0) {
+    latestTimelineMessage = nextMessageInfo
+  }
 
   const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID })
   const priorMessageCount = session.messageIDs.size
@@ -792,19 +833,29 @@ function handleMessageUpdated(event: any): void {
     stage,
     goalID,
     role: displayRole,
+    orderKey,
     time: timeCreated,
     stampServerTime: true,
     deferHierarchy: !isPhaseAbsorbedSession(stage, goalID),
   })
+  const needsIntegrityHierarchyRebuild =
+    !isPhase && stage === "integrity" && Boolean(parentSessionID || session.parentSessionID)
 
   // Phase cards always need in-card message boundaries. Non-phase cards are
   // regrouped by the authoritative message timeline below; doing that from
   // live arrival order is the regression this path avoids.
+  const needsTimelineRegroup = priorMessageCount > 0 || insertsBeforeKnownTail
   if (isPhase && projectedMessageHasDisplayPart(id)) {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated)
     reorderPhaseCardParts(cardID)
-  } else if (priorMessageCount > 0) {
+    if (insertsBeforeKnownTail) regroupTimelineSegments()
+  } else if (!isPhase && needsTimelineRegroup) {
     regroupTimelineSegments()
+  } else if (isPhase && insertsBeforeKnownTail) {
+    regroupTimelineSegments()
+  } else if (needsIntegrityHierarchyRebuild) {
+    rebuildCardHierarchy()
+    rebuildTopLevelOrder()
   } else if (
     (Array.isArray(boardStore.board?.interactions) && boardStore.board.interactions.length > 0) ||
     standaloneQuestionInteractions.size > 0
@@ -843,6 +894,7 @@ interface EnsuredPartProjection {
   messageID: string
   sessionID: string
   displayRole: string
+  observationTime?: number
 }
 
 type PartEventRouteMeta = {
@@ -850,6 +902,7 @@ type PartEventRouteMeta = {
   resolvedRole?: unknown
   parentSessionID?: unknown
   goalID?: unknown
+  orderKey?: unknown
 }
 
 function requirePartEventRouteMeta(
@@ -860,6 +913,7 @@ function requirePartEventRouteMeta(
   resolvedRole: string
   parentSessionID: string
   goalID: string
+  orderKey: string
 } {
   const channel = String(meta?.channel || "").trim()
   const resolvedRole = String(meta?.resolvedRole || "").trim()
@@ -873,7 +927,22 @@ function requirePartEventRouteMeta(
     resolvedRole,
     parentSessionID: String(meta?.parentSessionID || ""),
     goalID: String(meta?.goalID || ""),
+    orderKey: requireTimelineOrderKey(meta?.orderKey, `message.part.updated ${messageID}`),
   }
+}
+
+function eventObservationTime(event: any): number | undefined {
+  const emittedAt = Number(event?.timestamp || event?.emittedAt || event?.emitted_at || 0)
+  return Number.isFinite(emittedAt) && emittedAt > 0 ? emittedAt : undefined
+}
+
+function requireDisplayPartObservationTime(
+  eventType: string,
+  messageID: string,
+  observationTime: number | undefined,
+): number {
+  if (Number.isFinite(observationTime) && Number(observationTime) > 0) return Number(observationTime)
+  throw new Error(`${eventType} for ${messageID} missing emittedAt/timestamp for display message ordering`)
 }
 
 function ensurePartProjection(
@@ -886,6 +955,16 @@ function ensurePartProjection(
   const sessionID = String(part.sessionID || "")
   if (!partID || !messageID || !sessionID) {
     throw new Error("message.part.updated part missing id/messageID/sessionID")
+  }
+  const partHasDisplay = conversationPartHasDisplay(part)
+  const routeOrderKey = partHasDisplay
+    ? requireTimelineOrderKey(opts.routeMeta?.orderKey, `message.part.updated ${messageID}`)
+    : undefined
+  const partOrderKey = partHasDisplay
+    ? requireTimelineOrderKey(part.orderKey, `message.part.updated part ${partID}`)
+    : undefined
+  if (partHasDisplay && routeOrderKey !== partOrderKey) {
+    throw new Error(`message.part.updated part ${partID} orderKey does not match event orderKey for ${messageID}`)
   }
 
   const existingSession = sessions.get(sessionID)
@@ -918,16 +997,17 @@ function ensurePartProjection(
     throw new Error(`message.part.updated could not ensure session ${sessionID}`)
   }
   if (!cardID) {
-    if (!conversationPartHasDisplay(part)) return null
+    if (!partHasDisplay) return null
     if (!displayRole) {
       throw new Error(`message.part.updated for ${messageID} missing resolved display role`)
     }
-    const observationTime = opts.observationTime ?? Date.now()
+    const observationTime = requireDisplayPartObservationTime("message.part.updated", messageID, opts.observationTime)
     const message = messages.get(messageID)
     const ensured = ensureMessageTurnProjection(session, messageID, {
       stage: session.stage,
       goalID: session.goalID,
       role: displayRole,
+      orderKey: partOrderKey!,
       time: message?.time || observationTime,
       stampServerTime: Boolean(message?.time),
     })
@@ -939,7 +1019,7 @@ function ensurePartProjection(
     drainPendingIntegrity(sessionID)
   }
 
-  upsertPart(session, messageID, cardID, partID, { ...part })
+  upsertPart(session, messageID, cardID, partID, { ...part, ...(partOrderKey ? { orderKey: partOrderKey } : {}) })
   if (!displayRole) {
     throw new Error(
       `message.part.updated for ${messageID} could not resolve display role from message or event metadata`,
@@ -951,17 +1031,52 @@ function ensurePartProjection(
 function handlePartUpdated(event: any): void {
   const props = propsOf(event)
   const part = props.part
-  const projection = ensurePartProjection(part, { routeMeta: props })
+  const observationTime = eventObservationTime(event)
+  const projection = ensurePartProjection(part, { observationTime, routeMeta: props })
   if (!projection) return
   const { session, cardID, messageID, displayRole } = projection
   if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
     const message = messages.get(messageID)
-    ensureBoundaryPart(session, cardID, messageID, displayRole, message?.time || Date.now())
+    const boundaryTime =
+      message?.time || requireDisplayPartObservationTime("message.part.updated", messageID, observationTime)
+    ensureBoundaryPart(session, cardID, messageID, displayRole, boundaryTime)
     reorderPhaseCardParts(cardID)
   }
   if (conversationPartHasDisplay(part)) {
     rebuildTopLevelOrder()
   }
+  syncSessionTopLevelVisibility(session)
+}
+
+function projectPersistedConversationPart(info: any, part: any): void {
+  if (!part || typeof part !== "object") throw new Error("persisted message part missing part")
+  const messageID = String(part.messageID || "")
+  const sessionID = String(part.sessionID || "")
+  const partID = String(part.id || "")
+  const infoID = String(info?.id || "")
+  const infoSessionID = String(info?.sessionID || "")
+  if (!partID || !messageID || !sessionID) {
+    throw new Error("persisted message part missing id/messageID/sessionID")
+  }
+  if (messageID !== infoID || sessionID !== infoSessionID) {
+    throw new Error(`persisted message part ${partID} does not belong to message ${infoID}`)
+  }
+  const session = sessions.get(sessionID)
+  const cardID = session?.messageCardIDs.get(messageID)
+  const message = messages.get(messageID)
+  if (!session || !cardID || !message) {
+    throw new Error(`persisted message ${messageID} was not projected before part ${partID}`)
+  }
+  const partOrderKey = conversationPartHasDisplay(part)
+    ? requireTimelineOrderKey(part.orderKey, `persisted message part ${partID}`)
+    : undefined
+
+  upsertPart(session, messageID, cardID, partID, { ...part, ...(partOrderKey ? { orderKey: partOrderKey } : {}) })
+  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
+    ensureBoundaryPart(session, cardID, messageID, message.resolvedRole, message.time)
+    reorderPhaseCardParts(cardID)
+  }
+  if (conversationPartHasDisplay(part)) rebuildTopLevelOrder()
   syncSessionTopLevelVisibility(session)
 }
 
@@ -1157,7 +1272,7 @@ function projectSessionStatus(event: any): ProjectedSessionStatus {
       throw new Error(`session.status unknown terminal reason: ${JSON.stringify(status)}`)
     }
     projected.terminalReason = reason
-    projected.timeCompleted = Number(event?.emittedAt || event?.emitted_at || Date.now())
+    projected.timeCompleted = eventEmittedAt(event, "session.status terminal")
     if (cardStatus === "error") {
       projected.errorReason =
         (typeof status.message === "string" && status.message) ||
@@ -1213,7 +1328,7 @@ function projectSessionError(event: any): ProjectedSessionStatus {
     cardStatus: "error",
     terminalReason: "error",
     errorReason: streamErrorMessage(event),
-    timeCompleted: Number(event?.emittedAt || event?.emitted_at || Date.now()),
+    timeCompleted: eventEmittedAt(event, "session.error"),
   }
 }
 
@@ -1341,6 +1456,7 @@ function handleStandaloneQuestion(event: any): void {
     const created = eventEmittedAt(event)
     standaloneQuestionInteractions.set(requestID, {
       id: requestID,
+      orderKey: requireTimelineOrderKey(event?.orderKey, `question.asked ${requestID}`),
       sessionID,
       type: "question",
       status: "pending",
@@ -1386,6 +1502,7 @@ interface RunningReviewPayload {
   reviewID: string
   phase: ReviewStreamPhase
   sessionID?: string
+  orderKey: string
   startedAt: number
   attempt: number
   elapsedMs: number
@@ -1421,9 +1538,11 @@ function reviewCardID(p: Pick<RunningReviewPayload, "phase" | "reviewID" | "sess
   return integrityCardID(p.sessionID)
 }
 
-function eventEmittedAt(event: any): number {
+function eventEmittedAt(event: any, context?: string): number {
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || event?.timestamp || 0)
-  return Number.isFinite(emittedAt) && emittedAt > 0 ? emittedAt : Date.now()
+  if (Number.isFinite(emittedAt) && emittedAt > 0) return emittedAt
+  const eventType = context || String(event?.type || "event")
+  throw new Error(`${eventType} missing emittedAt/timestamp; server emitter is the single source of truth`)
 }
 
 function integritySessionIDFromReviewID(reviewID: string): string | undefined {
@@ -1455,7 +1574,8 @@ function reconstructRunningIntegrityReview(input: {
     reviewID: input.reviewID,
     phase: input.phase,
     sessionID,
-    startedAt: Math.max(1, eventEmittedAt(input.event) - elapsedMs),
+    orderKey: requireTimelineOrderKey(input.event?.orderKey, `review.stream.${input.phase} ${input.reviewID}`),
+    startedAt: Math.max(1, eventEmittedAt(input.event, `review.stream.${input.phase} ${input.reviewID}`) - elapsedMs),
     attempt: input.attempt,
     elapsedMs,
   }
@@ -1485,13 +1605,13 @@ function handleReviewStreamStarted(event: any): void {
   if (!reviewID) throw new Error(`review.stream.started missing reviewID (taskID=${taskID})`)
   if (phase === "integrity" && !sessionID)
     throw new Error(`review.stream.started integrity missing sessionID (taskID=${taskID})`)
-  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0)
   const payload: RunningReviewPayload = {
     taskID,
     reviewID,
     phase,
     sessionID,
-    startedAt: emittedAt > 0 ? emittedAt : Date.now(),
+    orderKey: requireTimelineOrderKey(event?.orderKey, `review.stream.started ${reviewID}`),
+    startedAt: eventEmittedAt(event, `review.stream.started ${reviewID}`),
     attempt: 0,
     elapsedMs: 0,
   }
@@ -1525,7 +1645,7 @@ function handleReviewStreamProgress(event: any): void {
     taskID,
     reviewID,
     phase,
-    startedAt: existing?.startedAt ?? Date.now() - elapsedMs,
+    startedAt: existing.startedAt,
     attempt,
     elapsedMs,
     currentStep: normalizeReviewStep(String(props.currentStep || props.current_step || "")),
@@ -1589,6 +1709,7 @@ function handleReviewStreamChunk(event: any): void {
     }),
   )
   markCardStatsDirty(cardID)
+  rebuildTopLevelOrder()
 }
 
 /** Integrity is a real session, but its reasoning/verdict reach the overlay
@@ -1597,12 +1718,16 @@ function handleReviewStreamChunk(event: any): void {
  *  a single dedicated card id (`integrity:session:<sid>`). We still register
  *  a SessionInfo so session.status / usage routing (active turn card) works
  *  uniformly — `activeCardID` is pinned to the dedicated card. */
-function ensureIntegritySession(sessionID: string, time: number): { session: SessionInfo; cardID: string } {
+function ensureIntegritySession(
+  sessionID: string,
+  orderKey: string,
+  time: number,
+): { session: SessionInfo; cardID: string } {
   const session = ensureSessionProjection(sessionID, { stage: "integrity", parentSessionID: "", goalID: "" })
   const cardID = sessionCardID("integrity", sessionID)
   const created = !cardTreeStore.cards[cardID]
   if (created) {
-    setCardTreeStore("cards", cardID, createSessionCardNode(cardID, "integrity", "", time, sessionID, ""))
+    setCardTreeStore("cards", cardID, createSessionCardNode(cardID, "integrity", "", orderKey, time, sessionID, ""))
   }
   session.activeCardID = cardID
   if (created) {
@@ -1621,6 +1746,7 @@ function materializeRunningReview(p: RunningReviewPayload): void {
     taskID: p.taskID,
     reviewID: p.reviewID,
     sessionID: p.sessionID,
+    orderKey: p.orderKey,
     startedAt: p.startedAt,
     attempt: p.attempt,
     elapsedMs: p.elapsedMs,
@@ -1634,7 +1760,7 @@ function materializeRunningReview(p: RunningReviewPayload): void {
 }
 
 function materializeRunningIntegrity(p: RunningReviewPayload & { sessionID: string }): void {
-  const { cardID } = ensureIntegritySession(p.sessionID, p.startedAt)
+  const { cardID } = ensureIntegritySession(p.sessionID, p.orderKey, p.startedAt)
   const existing = cardTreeStore.cards[cardID]
   // If the completed event has already landed, don't downgrade the verdict
   // card back to "running". `attempts` on a completed card is > 0 and the
@@ -1840,7 +1966,11 @@ function handleIntegrityCompleted(event: any): void {
     attempts,
   }
 
-  const { session } = ensureIntegritySession(sessionID, emittedAt)
+  const { session } = ensureIntegritySession(
+    sessionID,
+    requireTimelineOrderKey(event?.orderKey, `integrity.review.completed ${sessionID}`),
+    emittedAt,
+  )
 
   materializeIntegrity(session, payload)
   // Running-card lifecycle: the completed upsert now owns this cardID; drop
@@ -1987,6 +2117,7 @@ function resolveTurnCardID(
   stage: string,
   goalID: string,
   messageID: string,
+  orderKey: string,
   time: number,
 ): {
   cardID: string
@@ -1995,7 +2126,7 @@ function resolveTurnCardID(
   if (stage === "integrity" && !goalID) {
     const cardID = integrityCardID(sessionID)
     if (!cardTreeStore.cards[cardID]) {
-      setCardTreeStore("cards", cardID, createSessionCardNode(cardID, "integrity", "", time, sessionID, ""))
+      setCardTreeStore("cards", cardID, createSessionCardNode(cardID, "integrity", "", orderKey, time, sessionID, ""))
     }
     return { cardID, isPhase: false }
   }
@@ -2017,6 +2148,7 @@ function resolveTurnCardID(
         phaseID: phase.phaseID,
         phaseSessionKind: stage,
         phaseSessionID: sessionID,
+        orderKey,
         time,
       })
     } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
@@ -2035,6 +2167,7 @@ interface EnsureTurnCardOpts {
   stage: string
   goalID: string
   role: string
+  orderKey: string
   time: number
   /** message.updated carries the authoritative server time; a
    *  part-before-message stamp is observation time only and must not
@@ -2083,6 +2216,7 @@ function migrateLifecycleCardToTurnCard(
   fromCardID: string,
   toCardID: string,
   messageID: string,
+  orderKey: string,
   time: number,
 ): void {
   if (fromCardID === toCardID || !cardTreeStore.cards[fromCardID] || cardTreeStore.cards[toCardID]) return
@@ -2095,6 +2229,7 @@ function migrateLifecycleCardToTurnCard(
         ...from,
         id: toCardID,
         messageID,
+        orderKey,
         time,
       }
       markCardStatsRemoved(fromCardID)
@@ -2115,7 +2250,7 @@ function ensureMessageTurnProjection(
 ): { cardID: string; isPhase: boolean } {
   const stage = opts.stage || session.stage || ""
   const goalID = opts.goalID || session.goalID || ""
-  const resolved = resolveTurnCardID(session.sessionID, stage, goalID, messageID, opts.time)
+  const resolved = resolveTurnCardID(session.sessionID, stage, goalID, messageID, opts.orderKey, opts.time)
   let cardID = resolved.cardID
   const isPhase = resolved.isPhase
 
@@ -2130,12 +2265,13 @@ function ensureMessageTurnProjection(
   if (!isPhase) {
     const lifecycleCardID = sessionCardID(stage, session.sessionID)
     if (!prior && lifecycleCardID !== cardID && cardTreeStore.cards[lifecycleCardID]) {
-      migrateLifecycleCardToTurnCard(session, lifecycleCardID, cardID, messageID, opts.time)
+      migrateLifecycleCardToTurnCard(session, lifecycleCardID, cardID, messageID, opts.orderKey, opts.time)
     }
     const existing = cardTreeStore.cards[cardID]
     if (existing) {
       setCardTreeStore("cards", cardID, "sessionID", session.sessionID)
       if (!existing.messageID) setCardTreeStore("cards", cardID, "messageID", messageID)
+      if (existing.orderKey !== opts.orderKey) setCardTreeStore("cards", cardID, "orderKey", opts.orderKey)
       if (opts.stampServerTime && prior && existing.messageID === messageID && existing.time !== opts.time) {
         setCardTreeStore("cards", cardID, "time", opts.time)
         markCardStatsDirty(cardID)
@@ -2151,7 +2287,7 @@ function ensureMessageTurnProjection(
       setCardTreeStore(
         "cards",
         cardID,
-        createSessionCardNode(cardID, stage, goalID, opts.time, session.sessionID, messageID),
+        createSessionCardNode(cardID, stage, goalID, opts.orderKey, opts.time, session.sessionID, messageID),
       )
     }
     // Freeze the previous still-running turn: a newer real message in the
@@ -2173,6 +2309,7 @@ function ensureMessageTurnProjection(
 }
 
 interface TimelineSegment {
+  key: string
   cardID: string
   session: SessionInfo
   stage: string
@@ -2181,9 +2318,7 @@ interface TimelineSegment {
 }
 
 function messageTimeOrder(left: MessageInfo, right: MessageInfo): number {
-  const byTime = left.time - right.time
-  if (byTime !== 0) return byTime
-  return left.id.localeCompare(right.id)
+  return compareTimelineOrderKeys(left.orderKey, right.orderKey, "message timeline")
 }
 
 function nonPhaseMessageTurnCardID(cardID: string): boolean {
@@ -2192,6 +2327,46 @@ function nonPhaseMessageTurnCardID(cardID: string): boolean {
 
 function timelineCardID(stage: string, sessionID: string, messageID: string): string {
   return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID)
+}
+
+function timelineSegmentKey(message: MessageInfo, session: SessionInfo, stage: string, goalID: string): string {
+  return JSON.stringify({
+    placement: "top_level",
+    sessionID: message.sessionID,
+    stage,
+    goalID,
+    parentSessionID: message.parentSessionID || session.parentSessionID || "",
+  })
+}
+
+export interface RenderedConversationCardTarget {
+  cardID?: string
+  renderedCardID: string
+}
+
+function renderedCardTargetFromProjectedCardID(cardID: string): RenderedConversationCardTarget {
+  const phaseIndex = cardID.indexOf(":phase:")
+  if (cardID.startsWith("step:") && phaseIndex > 0) {
+    return {
+      cardID,
+      renderedCardID: cardID.slice(0, phaseIndex),
+    }
+  }
+  return { renderedCardID: cardID }
+}
+
+export function renderedConversationCardTargetForMessage(
+  messageIDInput: string,
+): RenderedConversationCardTarget | null {
+  const messageID = String(messageIDInput || "")
+  if (!messageID) return null
+  for (const session of sessions.values()) {
+    const cardID = session.messageCardIDs.get(messageID)
+    if (!cardID) continue
+    if (!cardTreeStore.cards[cardID]) return null
+    return renderedCardTargetFromProjectedCardID(cardID)
+  }
+  return null
 }
 
 function isReviewStreamPart(part: any): boolean {
@@ -2309,8 +2484,8 @@ function reorderPhaseCardParts(cardID: string): void {
       else partsByMessage.set(messageID, [part])
     } else {
       // A display part may arrive before its message row. There is no
-      // authoritative timestamp yet, so keep it after timestamped groups
-      // until message.updated lets this function place it precisely.
+      // authoritative message order yet, so keep it after known message-order
+      // groups until message.updated lets this function place it precisely.
       pendingPartFirst.push(part)
     }
   }
@@ -2347,11 +2522,10 @@ function reorderPhaseCardParts(cardID: string): void {
   markCardStatsDirty(cardID)
 }
 
-/** Rebuild non-phase message-turn card ownership from the authoritative
+/** Rebuild non-phase message segment card ownership from the authoritative
  *  message timeline. Live `message.*` events are ephemeral and can arrive
- *  out of chronological order, but visible top-level identity is the real
- *  message id. A later message never folds back into an earlier non-phase
- *  card just because it shares session/stage/goal. */
+ *  out of chronological order. Only an immediately adjacent message with
+ *  the same segment key is absorbed into the previous segment card. */
 function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void {
   const ordered = [...messages.values()].filter((message) => sessions.has(message.sessionID)).sort(messageTimeOrder)
   if (ordered.length === 0) return
@@ -2360,6 +2534,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
   const integritySegmentBySession = new Map<string, TimelineSegment>()
+  let previousAdjacentSegment: TimelineSegment | undefined
 
   for (const message of ordered) {
     const session = sessions.get(message.sessionID)
@@ -2367,16 +2542,27 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     const stage = message.stage || session.stage
     const goalID = message.goalID || session.goalID
     if (isPhaseAbsorbedSession(stage, goalID)) {
+      previousAdjacentSegment = undefined
       continue
     }
 
-    let segment = stage === "integrity" && !goalID ? integritySegmentBySession.get(message.sessionID) : undefined
+    const key =
+      stage === "integrity" && !goalID
+        ? `integrity:${message.sessionID}`
+        : timelineSegmentKey(message, session, stage, goalID)
+    let segment =
+      stage === "integrity" && !goalID
+        ? integritySegmentBySession.get(message.sessionID)
+        : previousAdjacentSegment?.key === key
+          ? previousAdjacentSegment
+          : undefined
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id)
-      segment = { cardID, session, stage, goalID, messages: [] }
+      segment = { key, cardID, session, stage, goalID, messages: [] }
       segments.push(segment)
       if (stage === "integrity" && !goalID) integritySegmentBySession.set(message.sessionID, segment)
     }
+    previousAdjacentSegment = segment
     segment.messages.push(message)
     desiredCardByMessage.set(message.id, segment.cardID)
     targetMessageIDs.add(message.id)
@@ -2397,13 +2583,13 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   const partsByMessage = collectTimelineParts(targetMessageIDs)
   clearTimelinePartIndexes(targetMessageIDs)
 
-  const activeBySession = new Map<string, { messageID: string; cardID: string; time: number }>()
+  const activeBySession = new Map<string, { messageID: string; cardID: string; orderKey: string }>()
   for (const message of ordered) {
     const cardID = desiredCardByMessage.get(message.id)
     if (!cardID) continue
     const current = activeBySession.get(message.sessionID)
-    if (!current || message.time >= current.time) {
-      activeBySession.set(message.sessionID, { messageID: message.id, cardID, time: message.time })
+    if (!current || compareTimelineOrderKeys(message.orderKey, current.orderKey, "active session message") >= 0) {
+      activeBySession.set(message.sessionID, { messageID: message.id, cardID, orderKey: message.orderKey })
     }
   }
 
@@ -2428,7 +2614,15 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
     })()
     const base =
       existing ??
-      createSessionCardNode(segment.cardID, segment.stage, segment.goalID, first.time, first.sessionID, first.id)
+      createSessionCardNode(
+        segment.cardID,
+        segment.stage,
+        segment.goalID,
+        first.orderKey,
+        first.time,
+        first.sessionID,
+        first.id,
+      )
     setCardTreeStore("cards", segment.cardID, {
       ...base,
       sessionID: first.sessionID,
@@ -2436,6 +2630,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       stage: segment.stage,
       accent: !isUserStage(segment.stage) && segment.stage ? stageAccent(segment.stage) : undefined,
       title: roleTitleKey(segment.stage),
+      orderKey: first.orderKey,
       time: first.time,
       status,
       parts: [],
@@ -2443,7 +2638,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 
     const rebuiltParts: any[] = existing?.parts?.filter(isReviewStreamPart) ?? []
     for (const [index, message] of segment.messages.entries()) {
-      if (index > 0 && segment.stage === "integrity") {
+      if (index > 0) {
         const boundaryKey = `__boundary__:${segment.session.sessionID}:${message.id}`
         const boundary = {
           type: "boundary",
@@ -2470,6 +2665,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       }
     }
     setCardTreeStore("cards", segment.cardID, "parts", rebuiltParts)
+    refreshMetadataProjectionForCard(segment.cardID)
     markCardStatsDirty(segment.cardID)
   }
 
@@ -2490,28 +2686,80 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (!opts.deferHierarchy) rebuildCardHierarchy()
 }
 
+interface HydrateMessageMeta {
+  messageID: string
+  sessionID: string
+  stage: string
+  parentSessionID: string
+  goalID: string
+  orderKey: string
+  time: number
+}
+
+function hydrateMessageMetaOrder(left: HydrateMessageMeta, right: HydrateMessageMeta): number {
+  return compareTimelineOrderKeys(left.orderKey, right.orderKey, "hydrate message")
+}
+
+function parseHydrateMessageMeta(raw: any): HydrateMessageMeta {
+  const messageID = String(raw?.messageID || "")
+  const sessionID = String(raw?.sessionID || "")
+  const stage = String(raw?.stage || "")
+  const time = Number(raw?.time || 0)
+  if (!messageID || !sessionID) {
+    throw new Error("hydrateConversationView: view.messages entry missing messageID/sessionID")
+  }
+  if (!stage) throw new Error(`hydrateConversationView: view message ${messageID} missing stage`)
+  if (!(time > 0)) throw new Error(`hydrateConversationView: view message ${messageID} missing positive time`)
+  return {
+    messageID,
+    sessionID,
+    stage,
+    parentSessionID: String(raw?.parentSessionID || ""),
+    goalID: String(raw?.goalID || ""),
+    orderKey: requireTimelineOrderKey(raw?.orderKey, `hydrateConversationView message ${messageID}`),
+    time,
+  }
+}
+
 /** Replay a persisted task into the exact same visible card identity the
- *  live SSE stream would have built. Non-phase render identity is the
- *  durable message turn id; phase-absorbed sessions keep their phase card.
- *  `view.sessions` is metadata only (parentSessionID / goalID
- *  fallback) and MUST NOT regroup multiple messages into one session card
- *  (spec §6 — the highest replay-collapse risk). */
+ *  live SSE stream would have built. Display message metadata comes from
+ *  `view.messages[]`; transcript rows only provide payload and per-message
+ *  role/model/usage fields. */
 export function hydrateConversationView(view: any, transcript: any[]): void {
   const all = Array.isArray(transcript) ? transcript : []
   if (all.length === 0) return
   // Hydration runs immediately after setBoardData(); do not rely on the
   // detached boardStore effect having re-projected phase cards yet.
   rebuildBoardDerivedCards()
-  const sessionMeta = new Map<string, any>()
-  for (const s of Array.isArray(view?.sessions) ? view.sessions : []) {
-    const sid = String(s?.sessionID || "")
-    if (sid) sessionMeta.set(sid, s)
+  const transcriptByMessageID = new Map<string, any>()
+  const displayTranscriptMessageIDs = new Set<string>()
+  for (const message of all) {
+    const info = message?.info
+    if (!info || typeof info !== "object") {
+      throw new Error("hydrateConversationView: transcript message missing info")
+    }
+    const messageID = String(info.id || "")
+    if (!messageID) throw new Error("hydrateConversationView: transcript message missing id")
+    transcriptByMessageID.set(messageID, message)
+    if (transcriptMessageHasDisplay(message)) displayTranscriptMessageIDs.add(messageID)
   }
-  const ordered = all
-    .slice()
-    .sort((left, right) => Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0))
+  const viewMessages = Array.isArray(view?.messages) ? view.messages : []
+  if (displayTranscriptMessageIDs.size > 0 && viewMessages.length === 0) {
+    throw new Error("hydrateConversationView: view.messages metadata required for display transcript messages")
+  }
+  const ordered = viewMessages.map(parseHydrateMessageMeta).sort(hydrateMessageMetaOrder)
+  const viewDisplayMessageIDs = new Set(ordered.map((message) => message.messageID))
+  for (const messageID of displayTranscriptMessageIDs) {
+    if (!viewDisplayMessageIDs.has(messageID)) {
+      throw new Error(`hydrateConversationView: display transcript message ${messageID} missing from view.messages`)
+    }
+  }
   const touched = new Set<string>()
-  for (const message of ordered) {
+  for (const meta of ordered) {
+    const message = transcriptByMessageID.get(meta.messageID)
+    if (!message) {
+      throw new Error(`hydrateConversationView: view message ${meta.messageID} missing transcript payload`)
+    }
     const info = message?.info
     if (!info || typeof info !== "object") {
       throw new Error("hydrateConversationView: transcript message missing info")
@@ -2520,6 +2768,9 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     const sessionID = String(info.sessionID || "")
     if (!messageID || !sessionID) {
       throw new Error("hydrateConversationView: transcript message missing id/sessionID")
+    }
+    if (messageID !== meta.messageID || sessionID !== meta.sessionID) {
+      throw new Error(`hydrateConversationView: view metadata drift for message ${meta.messageID}`)
     }
     // No assistant-fallback (一个萝卜一个坑) — replay must reflect the same
     // role attribution the live event stream carries.
@@ -2532,17 +2783,20 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
       throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`)
     }
-    const meta = sessionMeta.get(sessionID)
-    const parentSessionID = String(info.parentSessionID || meta?.parentSessionID || "")
-    const goalID = String(info.goalID || meta?.goalID || "")
-    const timeCreated = Number(info?.time?.created || 0)
-    if (!(timeCreated > 0)) {
-      throw new Error(`hydrateConversationView: message ${messageID} missing info.time.created`)
+    const parentSessionID = meta.parentSessionID
+    const goalID = meta.goalID
+    const timeCreated = meta.time
+    const transcriptTimeCreated = Number(info?.time?.created || 0)
+    if (transcriptTimeCreated > 0 && transcriptTimeCreated !== timeCreated) {
+      throw new Error(`hydrateConversationView: message ${messageID} time drift between transcript and view`)
+    }
+    const transcriptOrderKey = requireTimelineOrderKey(info.orderKey, `transcript message ${messageID}`)
+    if (transcriptOrderKey && transcriptOrderKey !== meta.orderKey) {
+      throw new Error(`hydrateConversationView: message ${messageID} orderKey drift between transcript and view`)
     }
     const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0
-    const stage = deriveSessionStage(info)
+    const stage = meta.stage
     if (stage === "filtered") continue
-    if (!transcriptMessageHasDisplay(message)) continue
     const displayRole = displayRoleForResolvedRole(rawResolvedRole)
     messages.set(messageID, {
       id: messageID,
@@ -2553,6 +2807,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       agent: String(info.agent || ""),
       parentSessionID,
       goalID,
+      orderKey: meta.orderKey,
       time: timeCreated,
       completed,
     })
@@ -2562,6 +2817,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       stage,
       goalID,
       role: displayRole,
+      orderKey: meta.orderKey,
       time: timeCreated,
       stampServerTime: true,
       deferHierarchy: true,
@@ -2585,10 +2841,11 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     touched.add(sessionID)
   }
   regroupTimelineSegments({ deferHierarchy: true })
-  for (const message of ordered) {
+  for (const meta of ordered) {
+    const message = transcriptByMessageID.get(meta.messageID)
     const info = message?.info
-    const messageID = String(info?.id || "")
-    const sessionID = String(info?.sessionID || "")
+    const messageID = meta.messageID
+    const sessionID = meta.sessionID
     const session = sessions.get(sessionID)
     const cardID = session?.messageCardIDs.get(messageID)
     const usageProjection = usageProjectionFromInfo(info)
@@ -2698,6 +2955,7 @@ function rebuildTaskContextCard(board: any): void {
       `task.time.created must be positive (got ${task?.time?.created}); server emitter is the single source of truth`,
     )
   }
+  const orderKey = requireTimelineOrderKey(task?.orderKey, `task ${task?.id || "<unknown>"}`)
   const parts: any[] = [{ id: "ctx:user-request:text", type: "text", text: String(task.request) }]
   const attachments = Array.isArray(task.attachments) ? task.attachments : []
   for (let i = 0; i < attachments.length; i++) {
@@ -2718,7 +2976,8 @@ function rebuildTaskContextCard(board: any): void {
     title: t("chat.role.user"),
     parts,
     childIDs: [],
-    time: taskCreated - 2,
+    orderKey,
+    time: taskCreated,
   })
   markCardStatsDirty("ctx:user-request")
 }
@@ -2810,8 +3069,12 @@ function rebuildGoalStepCards(board: any): void {
       const stepStatus = normalizeStepStatus(step.status)
       const phaseEntries =
         step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
-          ? (step.phases as Record<string, { status?: string; startedAt?: number; completedAt?: number }>)
+          ? (step.phases as Record<
+              string,
+              { orderKey?: string; status?: string; startedAt?: number; completedAt?: number }
+            >)
           : null
+      const stepOrderKey = requireTimelineOrderKey(step?.orderKey, `goal step ${gid}/${stepID}`)
 
       // Create phase subcards. Phase cards ABSORB their claimed session's
       // parts: once `ensureSessionCard` routes a goal-scope phase-mapped
@@ -2826,6 +3089,7 @@ function rebuildGoalStepCards(board: any): void {
         label: string,
         sessionKind: string,
         status: CardStatus,
+        orderKey: string,
         startedAt: number,
         phaseSessionID?: string,
       ) => {
@@ -2841,6 +3105,7 @@ function rebuildGoalStepCards(board: any): void {
               prev.phaseID = pid
               prev.phaseSessionKind = sessionKind
               if (phaseSessionID) prev.phaseSessionID = phaseSessionID
+              prev.orderKey = orderKey
               // startedAt > 0 is invariant (caller filters pending phases).
               prev.time = startedAt
               // parts / childIDs intentionally preserved.
@@ -2857,6 +3122,7 @@ function rebuildGoalStepCards(board: any): void {
                 phaseID: pid,
                 phaseSessionKind: sessionKind,
                 ...(phaseSessionID ? { phaseSessionID } : {}),
+                orderKey,
                 time: startedAt,
               }
             }
@@ -2880,12 +3146,14 @@ function rebuildGoalStepCards(board: any): void {
           if (!(phaseStartedAt > 0)) continue
           const phaseCardID = goalPhaseCardID(gid, gRunID, stepID, pid)
           const phaseStatus = normalizeStepStatus(entry?.status)
+          const phaseOrderKey = requireTimelineOrderKey(entry?.orderKey, `goal phase ${gid}/${stepID}/${pid}`)
           writePhaseCard(
             phaseCardID,
             pid,
             String(pdef.label || pid),
             String(pdef.sessionKind || ""),
             phaseStatus,
+            phaseOrderKey,
             phaseStartedAt,
             pid === "build" ? String(step?.payload?.buildSessionID || "") || undefined : undefined,
           )
@@ -2911,6 +3179,7 @@ function rebuildGoalStepCards(board: any): void {
         attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
         parts: [],
         childIDs: phaseChildIDs,
+        orderKey: stepOrderKey,
         stepPayload: step.payload && typeof step.payload === "object" ? step.payload : undefined,
         stepID,
         goalID: gid,
@@ -2921,12 +3190,12 @@ function rebuildGoalStepCards(board: any): void {
   }
 }
 
-function interactionCardTime(cardID: string): number {
-  return Number(cardTreeStore.cards[cardID]?.time || 0)
+function interactionCardOrderKey(cardID: string): string {
+  return requireTimelineOrderKey(cardTreeStore.cards[cardID]?.orderKey, `interaction card ${cardID}`)
 }
 
 function upsertInteractionCard(seed: {
-  info: { id: string; role: string; time: { created: number } }
+  info: { id: string; orderKey: string; role: string; time: { created: number } }
   parts: any[]
 }): string {
   const seedID = String(seed?.info?.id || "")
@@ -2939,6 +3208,7 @@ function upsertInteractionCard(seed: {
       `interaction card seed ${seedID} missing info.time.created; server emitter is the single source of truth`,
     )
   }
+  const orderKey = requireTimelineOrderKey(seed?.info?.orderKey, `interaction card seed ${seedID}`)
   const parts = Array.isArray(seed?.parts) ? seed.parts.slice() : []
   setCardTreeStore("cards", cardID, {
     id: cardID,
@@ -2947,23 +3217,26 @@ function upsertInteractionCard(seed: {
     title: roleTitleKey(role),
     parts,
     childIDs: [],
+    orderKey,
     time,
   })
   markCardStatsDirty(cardID)
   return cardID
 }
 
-function sessionTurnCardAtOrBefore(session: SessionInfo | undefined, time: number): string | undefined {
+function sessionTurnCardAtOrBefore(session: SessionInfo | undefined, orderKey: string): string | undefined {
   if (!session) return undefined
   let selectedCardID = ""
-  let selectedTime = 0
+  let selectedOrderKey = ""
   for (const cardID of new Set(session.messageCardIDs.values())) {
     const card = cardTreeStore.cards[cardID]
-    const cardTime = Number(card?.time || 0)
-    if (!(cardTime > 0) || cardTime > time) continue
-    if (!selectedCardID || cardTime >= selectedTime) {
+    if (!card?.orderKey || compareTimelineOrderKeys(card.orderKey, orderKey, "interaction owner") > 0) continue
+    if (
+      !selectedCardID ||
+      compareTimelineOrderKeys(card.orderKey, selectedOrderKey, "interaction owner selected") >= 0
+    ) {
       selectedCardID = cardID
-      selectedTime = cardTime
+      selectedOrderKey = card.orderKey
     }
   }
   return selectedCardID || undefined
@@ -2984,17 +3257,16 @@ function rebuildInteractionCards(board: any): {
   const addMessages = (items: any[], sessionID?: string) => {
     const ordered = (Array.isArray(items) ? items : [])
       .flatMap((interaction) => interactionToCardSeeds(interaction))
-      .sort((left, right) => Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0))
+      .sort((left, right) => compareTimelineOrderKeys(left?.info?.orderKey, right?.info?.orderKey, "interaction seed"))
     for (const seed of ordered) {
       const cardID = upsertInteractionCard(seed)
       aliveCardIDs.add(cardID)
       if (sessionID) {
         const session = sessions.get(sessionID)
-        const interactionTime = Number(seed?.info?.time?.created || 0)
         // Attach to the latest turn that existed at the interaction time.
         // Rebuilds can run after newer turns appear; using activeCardID here
         // would make old prompts drift onto the newest card.
-        const ownerCardID = sessionTurnCardAtOrBefore(session, interactionTime)
+        const ownerCardID = sessionTurnCardAtOrBefore(session, seed.info.orderKey)
         if (!ownerCardID) {
           topLevel.push(cardID)
           continue
@@ -3028,17 +3300,20 @@ function rebuildInteractionCards(board: any): {
     }),
   )
 
-  topLevel.sort((a, b) => interactionCardTime(a) - interactionCardTime(b))
+  topLevel.sort((a, b) =>
+    compareTimelineOrderKeys(interactionCardOrderKey(a), interactionCardOrderKey(b), "interaction top-level"),
+  )
   for (const ids of bySessionCardID.values()) {
-    ids.sort((a, b) => interactionCardTime(a) - interactionCardTime(b))
+    ids.sort((a, b) =>
+      compareTimelineOrderKeys(interactionCardOrderKey(a), interactionCardOrderKey(b), "interaction child"),
+    )
   }
   return { bySessionCardID, topLevel }
 }
 
-function sessionSortTime(cardID: string | undefined): number {
-  if (!cardID) return 0
-  const time = Number(cardTreeStore.cards[cardID]?.time || 0)
-  return Number.isFinite(time) ? time : 0
+function sessionSortOrderKey(cardID: string | undefined): string {
+  if (!cardID) return ""
+  return typeof cardTreeStore.cards[cardID]?.orderKey === "string" ? cardTreeStore.cards[cardID]!.orderKey : ""
 }
 
 /** Display cards this session owns for hierarchy / visibility. Phase-
@@ -3137,15 +3412,19 @@ function rebuildCardHierarchyImpl(): void {
     }
   }
 
-  // Non-phase message-turn cards are all top-level by design — they sort
-  // chronologically by `time` in rebuildTopLevelOrder, so an orchestrator
-  // turn that ran after a child agent naturally falls AFTER that child's
-  // card. No parent claim, no "move parent after child" logic (spec §4).
+  // Non-phase message-turn cards are all top-level by design. Their
+  // `orderKey` puts an orchestrator turn that ran after a child agent after
+  // that child's card. No parent claim, no "move parent after child" logic.
   // Phase-absorbed sessions own no separate cards (parts live on the phase
   // card, claimed as a step child above).
-  const orderedSessions = [...sessions.values()].sort(
-    (a, b) => sessionSortTime(a.activeCardID) - sessionSortTime(b.activeCardID),
-  )
+  const orderedSessions = [...sessions.values()].sort((a, b) => {
+    const left = sessionSortOrderKey(a.activeCardID)
+    const right = sessionSortOrderKey(b.activeCardID)
+    if (!left && !right) return 0
+    if (!left) return -1
+    if (!right) return 1
+    return compareTimelineOrderKeys(left, right, "session hierarchy")
+  })
   for (const info of orderedSessions) {
     for (const cid of sessionOwnedCardIDs(info)) {
       if (cardTreeStore.cards[cid]) nextChildIDs.set(cid, nextChildIDs.get(cid) || [])
@@ -3276,21 +3555,16 @@ function normalizeStepStatus(raw: any): CardStatus {
 
 // ── Top-level ordering ──
 //
-// One rule: every top-level card sorts by its birth `time`. No grouping,
+// One rule: every top-level card sorts by backend `orderKey`. No grouping,
 // no per-kind priority lanes. User-request, session cards (orchestrator,
 // requirements, architect, planner, build, ...), goal-step cards, orphan
 // interactions (question / permission), and optimistic bubbles
-// all interleave on a single chronological axis. Card identity rules
+// all interleave on a single durable timeline axis. Card identity rules
 // (see specs/new-arch/07-panel-reactivity.md §身份规则) still decide
 // *whether* a card surfaces at the top level — not where.
 //
 // Invariants this function relies on, enforced by the writer elsewhere:
-//   • Every surfacing card carries `time` — session cards from
-//     `message.info.time.created`, step/phase from goal_run.time_started,
-//     interactions from their message time, optimistic from the local
-//     message's time, user-request from `task.time.created - 2` (the -2ms
-//     is what pins it ahead of any message that shares the exact task
-//     timestamp; no special-case needed here).
+//   • Every surfacing card carries `orderKey` from the backend projection.
 //   • Phase and integrity cards are always claimed as childIDs of their
 //     parent (step / requirements session) before this runs, so they drop
 //     out via the `claimedChildIDs` filter instead of needing kind logic.
@@ -3336,14 +3610,7 @@ function rebuildTopLevelOrder(): void {
   order.sort((a, b) => {
     const ca = cardTreeStore.cards[a]
     const cb = cardTreeStore.cards[b]
-    // Contract: every top-level card carries a numeric `time` (see
-    // CardNode.time in store/card-tree.ts). An undefined here means a
-    // creation path leaked through without stamping a birth time — that
-    // is a bug in the writer, not a condition to paper over with an
-    // end-of-list fallback.
-    if (typeof ca?.time !== "number") throw new Error(`rebuildTopLevelOrder: card ${a} missing numeric time`)
-    if (typeof cb?.time !== "number") throw new Error(`rebuildTopLevelOrder: card ${b} missing numeric time`)
-    return ca.time - cb.time
+    return compareTimelineOrderKeys(ca?.orderKey, cb?.orderKey, "top-level card")
   })
 
   replaceCardTreeOrder(order)

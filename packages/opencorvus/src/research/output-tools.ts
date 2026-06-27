@@ -379,14 +379,63 @@ function knownFactIDs(collector: ResearchCollector): Set<string> {
   return new Set(collector.facts.map((fact) => fact.id))
 }
 
+function knownEvidenceIDs(collector: ResearchCollector): Set<string> {
+  return new Set(collector.evidence_index.map((item) => item.id))
+}
+
+function knownCollectorClaimIDs(collector: ResearchCollector): Set<string> {
+  const ids = new Set<string>()
+  for (const item of collector.facts) ids.add(item.id)
+  for (const item of collector.inferences) ids.add(item.id)
+  for (const item of collector.problem_statements) ids.add(item.id)
+  for (const item of collector.user_needs) ids.add(item.id)
+  for (const item of collector.constraints) ids.add(item.id)
+  for (const item of collector.document_outline) ids.add(item.id)
+  for (const item of collector.open_questions) ids.add(item.id)
+  for (const item of collector.webpage_functional_surfaces) ids.add(item.id)
+  for (const item of collector.webpage_visual_layout) ids.add(item.id)
+  for (const item of collector.webpage_style_requirements) ids.add(item.id)
+  for (const item of collector.webpage_interaction_states) ids.add(item.id)
+  for (const item of collector.webpage_data_content_inventory) ids.add(item.id)
+  for (const item of collector.webpage_fidelity_acceptance) ids.add(item.id)
+  for (const item of collector.webpage_fidelity_risks) ids.add(item.id)
+  for (const item of collector.subpage_research_tasks) ids.add(item.id)
+  return ids
+}
+
+function sortedKnownList(ids: Set<string>): string {
+  const known = [...ids].sort()
+  return known.length ? known.join(", ") : "(none)"
+}
+
 function unknownFactIDError(collector: ResearchCollector, label: string, ids: readonly string[]): string | undefined {
   const known = knownFactIDs(collector)
   const missing = [...new Set(ids.filter((id) => !known.has(id)))]
   if (missing.length === 0) return undefined
-  const knownList = [...known].sort()
   return (
     `Error: ${label} references unknown fact id(s): ${missing.join(", ")}. ` +
-    `Register or correct the fact ids first; known fact ids: ${knownList.length ? knownList.join(", ") : "(none)"}. ` +
+    `Register or correct the fact ids first; known fact ids: ${sortedKnownList(known)}. ` +
+    "Collector unchanged."
+  )
+}
+
+function unknownEvidenceIDError(collector: ResearchCollector, label: string, ids: readonly string[]): string | undefined {
+  const known = knownEvidenceIDs(collector)
+  const missing = [...new Set(ids.filter((id) => !known.has(id)))]
+  if (missing.length === 0) return undefined
+  return (
+    `Error: ${label} references unknown evidence id(s): ${missing.join(", ")}. ` +
+    `Register or correct the evidence ids first; known evidence ids: ${sortedKnownList(known)}. ` +
+    "Collector unchanged."
+  )
+}
+
+function unknownClaimIDError(collector: ResearchCollector, label: string, id: string): string | undefined {
+  const known = knownCollectorClaimIDs(collector)
+  if (known.has(id)) return undefined
+  return (
+    `Error: ${label} references unknown claim id: ${id}. ` +
+    `Register the claim with its matching update_* tool first, or use a known claim id: ${sortedKnownList(known)}. ` +
     "Collector unchanged."
   )
 }
@@ -491,6 +540,8 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchFactSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(collector, `fact ${parsed.id}.evidence_ids`, parsed.evidence_ids)
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.facts, parsed)
         return `OK: fact "${parsed.id}" ${mode} (${collector.facts.length} total)`
@@ -568,6 +619,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchDocumentSectionSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `document_outline ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.document_outline, parsed)
         return `OK: document section "${parsed.id}" ${mode} (${collector.document_outline.length} total)`
@@ -587,6 +644,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
             `${options.expectedWebpageSourceUrl}; received ${parsed.source_url}.`
           )
         }
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          "webpage_contract.reference_image_evidence_ids",
+          parsed.reference_image_evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         collector.webpage_contract_source = parsed
         return "OK: webpage contract source set"
@@ -600,6 +663,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageFunctionalSurfaceSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.functional_surface ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_functional_surfaces, parsed)
         return `OK: webpage functional surface "${parsed.id}" ${mode}`
@@ -613,6 +682,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageVisualLayoutSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.visual_layout ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_visual_layout, parsed)
         return `OK: webpage visual layout "${parsed.id}" ${mode}`
@@ -626,6 +701,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageStyleRequirementSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.style_requirement ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_style_requirements, parsed)
         return `OK: webpage style requirement "${parsed.id}" ${mode}`
@@ -639,6 +720,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageInteractionStateSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.interaction_state ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_interaction_states, parsed)
         return `OK: webpage interaction state "${parsed.id}" ${mode}`
@@ -652,6 +739,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageDataInventorySchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.data_content_inventory ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_data_content_inventory, parsed)
         return `OK: webpage data inventory "${parsed.id}" ${mode}`
@@ -665,6 +758,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageAcceptanceCriterionSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.fidelity_acceptance ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_fidelity_acceptance, parsed)
         return `OK: webpage fidelity acceptance "${parsed.id}" ${mode}`
@@ -678,6 +777,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageFidelityRiskSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `webpage_contract.fidelity_risk ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_fidelity_risks, parsed)
         return `OK: webpage fidelity risk "${parsed.id}" ${mode}`
@@ -691,6 +796,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchSubpageTaskSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `subpage_research_task ${parsed.id}.evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.subpage_research_tasks, parsed)
         return `OK: subpage research task "${parsed.id}" ${mode}`
@@ -723,6 +834,12 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleMarkdownSectionSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `bundle section "${parsed.title}".evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         return upsertBundleSection(collector, parsed)
       },
@@ -735,6 +852,8 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleEvidenceNoteSchema.parse(input)
+        const evidenceErr = unknownEvidenceIDError(collector, "evidence note.evidence_id", [parsed.evidence_id])
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const idx = collector.bundle.evidence_notes.findIndex((existing) => existing.evidence_id === parsed.evidence_id)
         if (idx >= 0) {
@@ -753,6 +872,14 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleCitationEntrySchema.parse(input)
+        const claimErr = unknownClaimIDError(collector, "citation.claim_id", parsed.claim_id)
+        if (claimErr) return claimErr
+        const evidenceErr = unknownEvidenceIDError(
+          collector,
+          `citation "${parsed.claim_id}".evidence_ids`,
+          parsed.evidence_ids,
+        )
+        if (evidenceErr) return evidenceErr
         markCollectorMutated(collector)
         const idx = collector.bundle.citation_map.findIndex((existing) => existing.claim_id === parsed.claim_id)
         if (idx >= 0) {

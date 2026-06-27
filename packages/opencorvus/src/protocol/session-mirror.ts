@@ -5,9 +5,10 @@ import { Question } from "@/question"
 import { Message, Session, SessionStatus } from "@/session"
 import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
-import { Database, eq } from "@/storage/db"
-import { MessageTable } from "@/session/session.sql"
+import { Database, and, eq } from "@/storage/db"
+import { MessageTable, PartTable } from "@/session/session.sql"
 import { Log } from "@/util/log"
+import { timelineMessageOrderKey, timelinePartOrderKey } from "@/timeline/order"
 
 const log = Log.create({ service: "session-mirror" })
 
@@ -38,21 +39,34 @@ export function sessionBusEventSessionID(event: SessionBusEvent): string | undef
 
 type MessageOverlayInfo = {
   role: string
+  orderKey: string
   extra?: Record<string, unknown>
 }
 
 function persistedMessageOverlayInfo(messageID: string): MessageOverlayInfo {
   const row = Database.use((db) =>
-    db.select({ data: MessageTable.data }).from(MessageTable).where(eq(MessageTable.id, messageID)).get(),
+    db
+      .select({ data: MessageTable.data, timeCreated: MessageTable.time_created })
+      .from(MessageTable)
+      .where(eq(MessageTable.id, messageID))
+      .get(),
   )
-  const data = row?.data as Record<string, unknown> | undefined
+  if (!row) throw new Error(`session-mirror: message ${messageID} missing persisted row for overlay enrichment`)
+  const data = row.data as Record<string, unknown> | undefined
   const role = data?.role
   if (!data || typeof role !== "string" || role.length === 0) {
     throw new Error(`session-mirror: message ${messageID} missing persisted role for overlay enrichment`)
   }
+  const orderKey = timelineMessageOrderKey({
+    info: {
+      id: messageID,
+      time: { created: row.timeCreated },
+    },
+  })
   const extra = data.extra
   return {
     role,
+    orderKey,
     ...(extra && typeof extra === "object" && !Array.isArray(extra) ? { extra: extra as Record<string, unknown> } : {}),
   }
 }
@@ -66,6 +80,33 @@ function messageIDFromPayload(props: Record<string, unknown>): string {
   return ""
 }
 
+function partOrderKeyForPayload(props: Record<string, unknown>): string {
+  const part = props.part
+  if (!part || typeof part !== "object" || Array.isArray(part)) {
+    throw new Error("session-mirror: part event missing part for overlay enrichment")
+  }
+  const record = part as Record<string, unknown>
+  const partID = typeof record.id === "string" ? record.id : ""
+  const messageID = typeof record.messageID === "string" ? record.messageID : ""
+  const sessionID = typeof record.sessionID === "string" ? record.sessionID : ""
+  if (!partID || !messageID || !sessionID) {
+    throw new Error("session-mirror: part event missing part id/messageID/sessionID for overlay enrichment")
+  }
+  const row = Database.use((db) =>
+    db
+      .select({ timeCreated: PartTable.time_created })
+      .from(PartTable)
+      .where(and(eq(PartTable.id, partID), eq(PartTable.message_id, messageID), eq(PartTable.session_id, sessionID)))
+      .get(),
+  )
+  if (!row) throw new Error(`session-mirror: part ${partID} missing persisted row for overlay enrichment`)
+  const orderKey = timelinePartOrderKey({ id: partID, timeCreated: row.timeCreated })
+  if (typeof record.orderKey === "string" && record.orderKey.length > 0 && record.orderKey !== orderKey) {
+    throw new Error(`session-mirror: part ${partID} orderKey drift between payload and persisted row`)
+  }
+  return orderKey
+}
+
 function overlayInfoForPayload(props: Record<string, unknown>): MessageOverlayInfo {
   const info = props.info
   if (info && typeof info === "object") {
@@ -74,6 +115,10 @@ function overlayInfoForPayload(props: Record<string, unknown>): MessageOverlayIn
       const extra = record.extra
       return {
         role: record.role,
+        orderKey:
+          typeof record.orderKey === "string" && record.orderKey
+            ? record.orderKey
+            : timelineMessageOrderKey({ info: record }),
         ...(extra && typeof extra === "object" && !Array.isArray(extra)
           ? { extra: extra as Record<string, unknown> }
           : {}),
@@ -94,16 +139,25 @@ function sessionEventMeta(sessionID: string): { channel: string; resolvedRole: s
 
 function stampPayloadWithMeta(
   props: Record<string, unknown>,
-  meta: { channel: string; resolvedRole: string },
+  meta: { channel: string; resolvedRole: string; orderKey?: string },
 ): Record<string, unknown> {
   const payload = { ...props }
   const info = payload.info
   if (info && typeof info === "object") {
-    payload.info = {
+    const stampedInfo: Record<string, unknown> = {
       ...(info as Record<string, unknown>),
       channel: meta.channel,
       resolvedRole: meta.resolvedRole,
     }
+    payload.info = {
+      ...stampedInfo,
+      orderKey:
+        typeof stampedInfo.orderKey === "string" && stampedInfo.orderKey
+          ? stampedInfo.orderKey
+          : timelineMessageOrderKey({ info: stampedInfo as { id?: unknown; time?: { created?: unknown } } }),
+    }
+  } else if ("orderKey" in meta) {
+    payload.orderKey = meta.orderKey
   }
   payload.channel = meta.channel
   payload.resolvedRole = meta.resolvedRole
@@ -112,6 +166,19 @@ function stampPayloadWithMeta(
 
 function stampSessionPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
   return stampPayloadWithMeta(props, overlayMeta(sessionID, "", overlayInfoForPayload(props)))
+}
+
+function stampSessionPartPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
+  const meta = overlayMeta(sessionID, "", overlayInfoForPayload(props))
+  const partOrderKey = partOrderKeyForPayload(props)
+  const payload = stampPayloadWithMeta(props, { ...meta, orderKey: partOrderKey })
+  const part = payload.part
+  if (!part || typeof part !== "object" || Array.isArray(part)) {
+    throw new Error("session-mirror: stamped part event missing part")
+  }
+  payload.part = { ...(part as Record<string, unknown>), orderKey: partOrderKey }
+  payload.orderKey = partOrderKey
+  return payload
 }
 
 function stampSessionEventPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
@@ -127,6 +194,7 @@ export function enrichStandaloneSessionTranscript(messages: Message.WithParts[])
         ...message.info,
         channel: meta.channel,
         resolvedRole: meta.resolvedRole,
+        orderKey: timelineMessageOrderKey(message),
       } as unknown as Message.Info,
       parts: message.parts,
     }
@@ -149,10 +217,20 @@ export function mapSessionBusEvent(
   }
 
   if (event.type === SessionStatus.Event.Status.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
+    const status = props.status
+    const statusType =
+      status && typeof status === "object" && typeof (status as Record<string, unknown>).type === "string"
+        ? String((status as Record<string, unknown>).type)
+        : "unknown"
+    const reason =
+      status && typeof status === "object" && typeof (status as Record<string, unknown>).reason === "string"
+        ? String((status as Record<string, unknown>).reason)
+        : ""
     return {
       type: "session.status",
-      summary: String(props.status ?? "session status"),
-      payload: props,
+      summary: reason ? `session status: ${statusType} (${reason})` : `session status: ${statusType}`,
+      payload,
     }
   }
   if (event.type === SessionStatus.Event.Idle.type) {
@@ -173,7 +251,7 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === Message.Event.PartUpdated.type) {
-    const payload = stampSessionPayload(sessionID, props)
+    const payload = stampSessionPartPayload(sessionID, props)
     const part = payload.part as Record<string, unknown>
     return {
       type: "message.part.updated",

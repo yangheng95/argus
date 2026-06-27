@@ -15,6 +15,10 @@ function callTool(tools: Record<string, any>, name: string, input: unknown): Pro
   return tools[name].execute!(input as any, {} as any)
 }
 
+function collectorSnapshot(collector: ResearchCollector): string {
+  return JSON.stringify(collector)
+}
+
 async function registerMinimalBrief(kit = createResearchOutputTools()) {
   const { tools } = kit
   await callTool(tools, "update_research_scope", {
@@ -242,23 +246,16 @@ describe("research output tools", () => {
     await registerWebpageContract(kit)
     expect(kit.isReadyToSubmit()).toBe(true)
 
-    await callTool(kit.tools, "update_research_bundle_section", {
+    const invalidSection = await callTool(kit.tools, "update_research_bundle_section", {
       title: "Evidence Index",
       evidence_ids: ["ev_missing"],
       points: ['Quoted label: "Economy overview".'],
     })
+    expect(invalidSection).toContain("references unknown evidence id")
+    expect(invalidSection).toContain("ev_missing")
+    expect(invalidSection).toContain("Collector unchanged")
     expect(kit.isReadyToSubmit()).toBe(true)
-
-    const invalidSubmit = await callTool(kit.tools, "submit_research_brief", { final: true })
-    expect(invalidSubmit).toContain("failed semantic validation")
-    expect(kit.isReadyToSubmit()).toBe(false)
-
-    await callTool(kit.tools, "update_research_bundle_section", {
-      title: "Evidence Index",
-      evidence_ids: ["ev_1"],
-      points: ['Quoted label: "Economy overview".'],
-    })
-    expect(kit.isReadyToSubmit()).toBe(true)
+    expect(kit.getCollector().bundle.full_markdown_sections[0]?.evidence_ids).toEqual(["ev_1"])
   })
 
   test("replayUpdateToolCalls hydrates a fresh continuation collector from completed update tool inputs", async () => {
@@ -320,6 +317,16 @@ describe("research output tools", () => {
 
     for (const item of cases) {
       const kit = createResearchOutputTools()
+      await callTool(kit.tools, "update_research_evidence", {
+        id: "ev_1",
+        kind: "web",
+        pointer: "https://example.com",
+        title: "Example",
+        retrieved_at: "2026-05-31T00:00:00.000Z",
+        reliability: "primary",
+        excerpt: "A compact excerpt.",
+        volatile: false,
+      })
       await callTool(kit.tools, "update_research_fact", {
         id: "fact_1",
         statement: "A registered fact.",
@@ -334,6 +341,163 @@ describe("research output tools", () => {
       expect(result).toContain("Collector unchanged")
       expect(kit.getCollector()[item.collectorKey]).toEqual([])
     }
+  })
+
+  test("evidence-reference update tools reject unknown evidence ids before final submit", async () => {
+    const cases = [
+      {
+        tool: "update_research_fact",
+        input: { id: "fact_bad", statement: "A fact with stale evidence.", evidence_ids: ["ev_missing"] },
+      },
+      {
+        tool: "update_research_document_section",
+        input: { id: "sec_bad", title: "Section", purpose: "Purpose", evidence_ids: ["ev_missing"] },
+      },
+      {
+        tool: "update_webpage_contract_source",
+        input: {
+          source_url: "https://example.com/markets/world-economy/",
+          reference_image_evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_functional_surface",
+        input: {
+          id: "surface_bad",
+          title: "Surface",
+          user_visible_behavior: "Broken evidence reference.",
+          component_kind_hypothesis: "table",
+          required_interactions: [],
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_visual_layout",
+        input: {
+          id: "layout_bad",
+          viewport: "desktop",
+          region: "Region",
+          layout_contract: "Broken evidence reference.",
+          spacing_and_alignment: "Broken evidence reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_style_requirement",
+        input: {
+          id: "style_bad",
+          token_or_selector: ".card",
+          requirement: "Broken evidence reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_interaction_state",
+        input: {
+          id: "state_bad",
+          component: "Tabs",
+          state: "selected",
+          behavior: "Broken evidence reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_data_inventory",
+        input: {
+          id: "data_bad",
+          surface: "Table",
+          content_contract: "Broken evidence reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_fidelity_acceptance",
+        input: {
+          id: "acceptance_bad",
+          target: "Layout",
+          criterion: "Broken evidence reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_webpage_fidelity_risk",
+        input: {
+          id: "risk_bad",
+          risk: "Broken evidence reference.",
+          impact: "Correctness depends on registered source evidence.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_subpage_research_task",
+        input: {
+          id: "subpage_bad",
+          parent_url: "https://example.com",
+          url: "https://example.com/docs/api",
+          title: "API reference",
+          reason: "Needs independent evidence.",
+          suggested_focus: "Study the API reference.",
+          evidence_ids: ["ev_missing"],
+        },
+      },
+      {
+        tool: "update_research_bundle_section",
+        input: {
+          title: "Evidence Index",
+          evidence_ids: ["ev_missing"],
+          points: ['Quoted label: "Economy overview".'],
+        },
+      },
+      {
+        tool: "update_research_evidence_note",
+        input: {
+          evidence_id: "ev_missing",
+          observations: ['The source says "GDP growth".'],
+          artifact_refs: ["source-ir/content-model.json"],
+        },
+      },
+      {
+        tool: "update_research_citation",
+        input: {
+          claim_id: "fact_1",
+          evidence_ids: ["ev_missing"],
+          pointer: "research-bundle.md#bad",
+          usage: "Bad evidence reference.",
+        },
+      },
+    ] as const
+
+    for (const item of cases) {
+      const kit = await registerMinimalBrief()
+      const before = collectorSnapshot(kit.getCollector())
+
+      const result = await callTool(kit.tools, item.tool, item.input)
+
+      expect(result).toContain("references unknown evidence id")
+      expect(result).toContain("ev_missing")
+      expect(result).toContain("known evidence ids: ev_1")
+      expect(result).toContain("Collector unchanged")
+      expect(collectorSnapshot(kit.getCollector())).toBe(before)
+    }
+  })
+
+  test("citation update rejects unknown claim ids before mutating collector", async () => {
+    const kit = await registerMinimalBrief()
+    const before = collectorSnapshot(kit.getCollector())
+
+    const result = await callTool(kit.tools, "update_research_citation", {
+      claim_id: "claim_nine_major_regions",
+      evidence_ids: ["ev_1"],
+      pointer: "research-bundle.md#bad-claim",
+      usage: "Bad claim reference.",
+    })
+
+    expect(result).toContain("references unknown claim id")
+    expect(result).toContain("claim_nine_major_regions")
+    expect(result).toContain("known claim id")
+    expect(result).toContain("fact_1")
+    expect(result).toContain("Collector unchanged")
+    expect(collectorSnapshot(kit.getCollector())).toBe(before)
   })
 
   test("researchBundleFromDraft materializes registered structured notes with quotes", async () => {
@@ -416,10 +580,12 @@ describe("research output tools", () => {
     expect(kit.getCollector().webpage_contract_source).toBeUndefined()
   })
 
-  test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
+  test("webpage contract updates reject unknown evidence before final submit", async () => {
     const kit = await registerMinimalBrief()
     await registerWebpageContract(kit)
-    await callTool(kit.tools, "update_webpage_visual_layout", {
+    const before = collectorSnapshot(kit.getCollector())
+
+    const result = await callTool(kit.tools, "update_webpage_visual_layout", {
       id: "layout_desktop_economic_trends",
       viewport: "desktop",
       region: "Economic trends",
@@ -428,16 +594,18 @@ describe("research output tools", () => {
       evidence_ids: ["ev_missing"],
     })
 
-    const result = await callTool(kit.tools, "submit_research_brief", { final: true })
-
-    expect(result).toContain("failed semantic validation")
+    expect(result).toContain("references unknown evidence id")
     expect(result).toContain("webpage_contract.visual_layout layout_desktop_economic_trends.evidence_ids")
+    expect(result).toContain("Collector unchanged")
+    expect(collectorSnapshot(kit.getCollector())).toBe(before)
     expect(kit.getCollector().finalized).toBe(false)
   })
 
-  test("submit_research_brief rejects cited subpage tasks with unknown evidence", async () => {
+  test("subpage task update rejects unknown evidence before final submit", async () => {
     const kit = await registerMinimalBrief()
-    await callTool(kit.tools, "update_subpage_research_task", {
+    const before = collectorSnapshot(kit.getCollector())
+
+    const result = await callTool(kit.tools, "update_subpage_research_task", {
       id: "subpage_1",
       parent_url: "https://example.com",
       url: "https://example.com/docs/api",
@@ -447,15 +615,17 @@ describe("research output tools", () => {
       evidence_ids: ["ev_missing"],
     })
 
-    const result = await callTool(kit.tools, "submit_research_brief", { final: true })
-
-    expect(result).toContain("failed semantic validation")
+    expect(result).toContain("references unknown evidence id")
     expect(result).toContain("subpage_research_task subpage_1.evidence_ids")
+    expect(result).toContain("Collector unchanged")
+    expect(collectorSnapshot(kit.getCollector())).toBe(before)
   })
 
-  test("submit_research_brief reports every invalid subpage evidence reference in one result", async () => {
+  test("subpage task update errors preserve the collector across repeated bad writes", async () => {
     const kit = await registerMinimalBrief()
-    await callTool(kit.tools, "update_subpage_research_task", {
+    const before = collectorSnapshot(kit.getCollector())
+
+    const mobile = await callTool(kit.tools, "update_subpage_research_task", {
       id: "sub_mobile_viewport",
       parent_url: "https://example.com",
       url: "https://example.com/mobile",
@@ -464,7 +634,7 @@ describe("research output tools", () => {
       suggested_focus: "Capture mobile layout.",
       evidence_ids: ["fr_mobile_evidence"],
     })
-    await callTool(kit.tools, "update_subpage_research_task", {
+    const header = await callTool(kit.tools, "update_subpage_research_task", {
       id: "sub_header_detail",
       parent_url: "https://example.com",
       url: "https://example.com/header",
@@ -474,13 +644,11 @@ describe("research output tools", () => {
       evidence_ids: ["fr_header_surface"],
     })
 
-    const result = await callTool(kit.tools, "submit_research_brief", { final: true })
-
-    expect(result).toContain("failed semantic validation")
-    expect(result).toContain("subpage_research_task sub_mobile_viewport.evidence_ids")
-    expect(result).toContain("fr_mobile_evidence")
-    expect(result).toContain("subpage_research_task sub_header_detail.evidence_ids")
-    expect(result).toContain("fr_header_surface")
+    expect(mobile).toContain("subpage_research_task sub_mobile_viewport.evidence_ids")
+    expect(mobile).toContain("fr_mobile_evidence")
+    expect(header).toContain("subpage_research_task sub_header_detail.evidence_ids")
+    expect(header).toContain("fr_header_surface")
+    expect(collectorSnapshot(kit.getCollector())).toBe(before)
     expect(kit.getCollector().finalized).toBe(false)
   })
 

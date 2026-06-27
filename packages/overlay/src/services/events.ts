@@ -15,6 +15,7 @@ import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-wri
 import { routeNotification } from "./notify"
 import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./event-policy"
 import { markSelectedLiveEventConsumed } from "./selected-stream-cursor"
+import { requireTimelineOrderKey } from "../utils/timeline-order"
 
 // Forward SSE events to the tree-writer. The conversation view reads
 // `cardTreeStore`; message events stay out of the transcript mirror on the
@@ -217,7 +218,11 @@ function executorSessionID(properties: any): string {
 
 function convertExecutorEventToMessages(event: any, properties: any): any[] {
   const kind = executorEventKind(properties.type)
-  const timestamp = Number(event.timestamp || Date.now())
+  const timestamp = Number(event.timestamp || event.emittedAt || event.emitted_at || 0)
+  if (!(timestamp > 0)) {
+    throw new Error(`executor event ${kind || "<unknown>"} missing timestamp for display message ordering`)
+  }
+  const orderKey = requireTimelineOrderKey(event.orderKey, `executor event ${kind || "<unknown>"}`)
   const msgID = executorMessageID(properties)
   const sessionID = executorSessionID(properties)
   // Propagate the backend-stamped goalID so tree-writer can nest these
@@ -243,6 +248,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
         resolvedRole: "executor",
         channel: "executor",
         agent: "executor",
+        orderKey,
         time: { created: timestamp },
         ...(goalID ? { goalID } : {}),
       },
@@ -250,6 +256,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   }
   const ensureEvents = (partID: string, partEvent: any): any[] =>
     hasProjectedPart(sessionID, partID) ? [] : [messageEvent, partEvent]
+  const syntheticPart = (part: Record<string, unknown>): Record<string, unknown> => ({ ...part, orderKey })
 
   if (kind === "tool_call") {
     const name = properties.name || properties.payload?.name || properties.tool || "tool"
@@ -260,7 +267,8 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const partEvent = {
       type: "message.part.updated",
       properties: {
-        part: {
+        orderKey,
+        part: syntheticPart({
           id: partID,
           messageID: msgID,
           sessionID,
@@ -276,7 +284,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
             metadata: {},
             time: { start: timestamp },
           },
-        },
+        }),
       },
     }
     return [messageEvent, partEvent]
@@ -295,7 +303,8 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const partEvent = {
       type: "message.part.updated",
       properties: {
-        part: {
+        orderKey,
+        part: syntheticPart({
           id: partID,
           messageID: msgID,
           sessionID,
@@ -311,7 +320,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
             metadata: {},
             time: { start: timestamp },
           },
-        },
+        }),
       },
     }
     return [
@@ -344,7 +353,8 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
       {
         type: "message.part.updated",
         properties: {
-          part: {
+          orderKey,
+          part: syntheticPart({
             id: partID,
             messageID: msgID,
             sessionID,
@@ -361,7 +371,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
               metadata: {},
               time: { start: timestamp, end: timestamp },
             },
-          },
+          }),
         },
       },
     ]
@@ -374,7 +384,8 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const partEvent = {
       type: "message.part.updated",
       properties: {
-        part: {
+        orderKey,
+        part: syntheticPart({
           id: partID,
           messageID: msgID,
           sessionID,
@@ -382,7 +393,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           resolvedRole: "executor",
           channel: "executor",
           text: "",
-        },
+        }),
       },
     }
     return [
@@ -407,7 +418,8 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
     const partEvent = {
       type: "message.part.updated",
       properties: {
-        part: {
+        orderKey,
+        part: syntheticPart({
           id: partID,
           messageID: msgID,
           sessionID,
@@ -415,7 +427,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           resolvedRole: "executor",
           channel: "executor",
           text: "",
-        },
+        }),
       },
     }
     // First event creates the part as "reasoning" type (not "text"), then delta appends.
@@ -443,13 +455,14 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
       {
         type: "message.part.updated",
         properties: {
-          part: {
+          orderKey,
+          part: syntheticPart({
             id: partID,
             messageID: msgID,
             sessionID,
             type: "text",
             text: `Error: ${text}`,
-          },
+          }),
         },
       },
     ]
@@ -463,13 +476,14 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
       {
         type: "message.part.updated",
         properties: {
-          part: {
+          orderKey,
+          part: syntheticPart({
             id: partID,
             messageID: msgID,
             sessionID,
             type: "text",
             text: event.summary,
-          },
+          }),
         },
       },
     ]

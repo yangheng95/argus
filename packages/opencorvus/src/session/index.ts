@@ -9,7 +9,7 @@ import { Flag } from "../flag/flag"
 import { Identifier } from "../id/id"
 import { Installation } from "../installation"
 
-import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt } from "../storage/db"
+import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, or, sql } from "../storage/db"
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable, SESSION_KINDS, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
@@ -28,6 +28,7 @@ import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
 import { iife } from "@/util/iife"
 import { NamedError } from "@opencorvus-ai/util/error"
+import { timelinePartOrderKey } from "@/timeline/order"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -710,7 +711,8 @@ export namespace Session {
     directory?: string
     roots?: boolean
     start?: number
-    cursor?: number
+    cursorUpdated?: number
+    cursorSessionID?: string
     search?: string
     limit?: number
     archived?: boolean
@@ -726,8 +728,18 @@ export namespace Session {
     if (input?.start) {
       conditions.push(gte(SessionTable.time_updated, input.start))
     }
-    if (input?.cursor) {
-      conditions.push(lt(SessionTable.time_updated, input.cursor))
+    if ((input?.cursorUpdated === undefined) !== (input?.cursorSessionID === undefined)) {
+      throw new Error("Session.listGlobal requires cursorUpdated and cursorSessionID together")
+    }
+    if (input?.cursorUpdated !== undefined && input.cursorSessionID) {
+      const cursorUpdated = input.cursorUpdated
+      const cursorSessionID = input.cursorSessionID
+      conditions.push(
+        or(
+          sql`${SessionTable.time_updated} < ${cursorUpdated}`,
+          sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`,
+        )!,
+      )
     }
     if (input?.search) {
       conditions.push(like(SessionTable.title, `%${input.search}%`))
@@ -1091,7 +1103,7 @@ export namespace Session {
   }
 
   export const updatePart = fn(UpdatePartInput, async (part) => {
-    const { id, messageID, sessionID, ...data } = part
+    const { id, messageID, sessionID, orderKey: _orderKey, ...data } = part
     // Cheap regex on the serialized string is O(N) over the part payload,
     // dominated by the JSON.stringify cost the insert below would pay
     // anyway. Triggers before the row touches SQLite — keeps the DB clean.
@@ -1103,9 +1115,10 @@ export namespace Session {
       throw new InlineBase64InPartError(id, snippet)
     }
     const time = Date.now()
+    let outputPart = part
     const publishPartUpdated = () =>
       Bus.publish(Message.Event.PartUpdated, {
-        part,
+        part: outputPart,
       })
     const publishAfterCommit = Database.hasActiveContext()
     let wrotePart = false
@@ -1121,6 +1134,7 @@ export namespace Session {
           data: PartTable.data,
           sessionID: PartTable.session_id,
           messageID: PartTable.message_id,
+          timeCreated: PartTable.time_created,
         })
         .from(PartTable)
         .where(eq(PartTable.id, id))
@@ -1133,10 +1147,23 @@ export namespace Session {
         if (existingPart?.data) {
           const prev = existingPart.data as any
           if (prev.type === "tool" && prev.state?.status) {
-            if (shouldSkipToolStatusUpdate(prev.state.status, part.state.status)) return
+            if (shouldSkipToolStatusUpdate(prev.state.status, part.state.status)) {
+              outputPart = {
+                ...prev,
+                id,
+                sessionID,
+                messageID,
+                orderKey: timelinePartOrderKey({ id, timeCreated: existingPart.timeCreated }),
+              } as Message.Part
+              return
+            }
           }
         }
       }
+      outputPart = {
+        ...part,
+        orderKey: timelinePartOrderKey({ id, timeCreated: existingPart?.timeCreated ?? time }),
+      } as Message.Part
       db.insert(PartTable)
         .values({
           id,
@@ -1156,7 +1183,7 @@ export namespace Session {
     // message.part.delta. Inside a transaction, keep the post-commit effect
     // boundary so observers never see uncommitted parts.
     if (wrotePart && !publishAfterCommit) await publishPartUpdated()
-    return part
+    return outputPart
   })
 
   // updatePartDelta is a pure Bus publish. Deltas are ephemeral by contract —
