@@ -24,8 +24,9 @@ export namespace ModelsDev {
     "glm-5.1",
     "openai/glm-5.1",
     "qwen3.7-max",
-    "claude-sonnet-4-6-v2",
+    "claude-sonnet-4-6",
     "cy-claude-sonnet-4-6",
+    "cy-claude-sonnet-4-6-v2",
   ] as const
 
   const OPENCORVUS_API_URL = "https://api.opencorvus.ai/v1"

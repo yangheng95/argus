@@ -51,6 +51,12 @@ test("snapshot generator injects local hexin provider into registry data", () =>
 
   expect(generated.hexin.models["gpt-5.5"].id).toBe("gpt-5.5")
   expect(generated.hexin.models["kimi-k2.7-code"].interleaved).toEqual({ field: "reasoning_content" })
+  expect(generated.hexin.models["claude-sonnet-4-6-v2"]).toBeUndefined()
+  expect(generated.hexin.models["cy-claude-sonnet-4-6-v2"].limit).toEqual({
+    context: 1_000_000,
+    input: 1_000_000,
+    output: 64_000,
+  })
 })
 
 test("build scripts can reuse the checked-in snapshot without registry fetch", async () => {

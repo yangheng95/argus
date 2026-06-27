@@ -7,12 +7,20 @@ import {
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 import { ProviderTransform } from "../../src/provider/transform"
 
-test("hexin gpt-5.4 profile uses the large GPT-5.4 context window", () => {
+test("hexin gpt-5.4 and gpt-5.5 profiles use Hexin model-info limits", () => {
   const profile = profileFor("gpt-5.4")
   expect(profile.context).toBe(1_050_000)
-  expect(profile.input).toBe(922_000)
+  expect(profile.input).toBe(1_050_000)
   expect(profile.output).toBe(128_000)
+  expect(profile.reasoning).toBe(true)
   expect(profile.image_in).toBe(true)
+
+  const latest = profileFor("gpt-5.5")
+  expect(latest.context).toBe(1_050_000)
+  expect(latest.input).toBe(1_050_000)
+  expect(latest.output).toBe(128_000)
+  expect(latest.reasoning).toBe(true)
+  expect(latest.image_in).toBe(true)
 })
 
 test("hexin gpt-5.4 mini and nano profiles keep GPT-5 generation limits", () => {
@@ -25,6 +33,21 @@ test("hexin gpt-5.4 mini and nano profiles keep GPT-5 generation limits", () => 
   expect(nano.context).toBe(400_000)
   expect(nano.input).toBe(272_000)
   expect(nano.output).toBe(128_000)
+})
+
+test("hexin kimi-k2.5 profile follows Hexin model-info limits", () => {
+  const profile = profileFor("kimi-k2.5")
+
+  expect(profile.family).toBe("kimi")
+  expect(profile.reasoning).toBe(true)
+  expect(profile.attachment).toBe(true)
+  expect(profile.image_in).toBe(true)
+  expect(profile.pdf_in).toBe(false)
+  expect(profile.toolcall).toBe(true)
+  expect(profile.interleaved).toEqual({ field: "reasoning_content" })
+  expect(profile.context).toBe(262_144)
+  expect(profile.input).toBe(262_144)
+  expect(profile.output).toBe(262_144)
 })
 
 test("hexin kimi-k2.6 profile follows Moonshot thinking-model contract", () => {
@@ -105,8 +128,32 @@ test("hexin qwen3.7-max profile marks Hexin thinking mode as reasoning", () => {
 
   expect(profile.family).toBe("qwen")
   expect(profile.reasoning).toBe(true)
+  expect(profile.attachment).toBe(true)
+  expect(profile.image_in).toBe(true)
   expect(profile.toolcall).toBe(true)
   expect(profile.interleaved).toEqual({ field: "reasoning_content" })
+  expect(profile.context).toBe(1_000_000)
+  expect(profile.input).toBe(1_000_000)
+  expect(profile.output).toBe(65_536)
+})
+
+test("hexin claude-sonnet-4-6 profiles use Hexin model-info limits", () => {
+  for (const id of [
+    "claude-sonnet-4-6",
+    "claude-sonnet-4-6-bak",
+    "cy-claude-sonnet-4-6",
+    "cy-claude-sonnet-4-6-v2",
+  ]) {
+    const profile = profileFor(id)
+    expect(profile.family).toBe("claude")
+    expect(profile.reasoning).toBe(true)
+    expect(profile.attachment).toBe(true)
+    expect(profile.image_in).toBe(true)
+    expect(profile.toolcall).toBe(true)
+    expect(profile.context).toBe(1_000_000)
+    expect(profile.input).toBe(1_000_000)
+    expect(profile.output).toBe(64_000)
+  }
 })
 
 test("hexin interleaved reasoning profiles have explicit transform contracts", () => {
@@ -114,6 +161,7 @@ test("hexin interleaved reasoning profiles have explicit transform contracts", (
   expect(interleavedReasoningProfileContractIDs().sort()).toEqual([
     "glm-5",
     "glm-5.1",
+    "kimi-k2.5",
     "kimi-k2.6",
     "kimi-k2.7-code",
     "qwen3.7-max",
@@ -134,7 +182,7 @@ test("hexin interleaved reasoning profiles have explicit transform contracts", (
       })
     }
 
-    if (profile.family === "kimi") {
+    if (profile.family === "kimi" && id !== "kimi-k2.5") {
       expect(profile.temperature).toBe(false)
       expect(
         ProviderTransform.requestBody("hexin", {

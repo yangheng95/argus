@@ -10,7 +10,7 @@ import { ModelsDev } from "../../src/provider/models"
 import { Provider } from "../../src/provider/provider"
 import { discoverHexinModels, refreshHexinCache } from "../../src/provider/hexin-discovery"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
-import { Server } from "../../src/server/server"
+import { ProviderRoutes } from "../../src/server/routes/provider"
 import { tmpdir } from "../fixture/fixture"
 
 const legacyHexinCacheFile = path.join(Global.Path.cache, "hexin-models.json")
@@ -203,17 +203,16 @@ describe("hexin model discovery", () => {
 
     await using tmp = await tmpdir({ git: true })
 
-    const response = await Server.App().request("/provider/refresh", {
-      method: "POST",
-      headers: { "x-opencorvus-directory": tmp.path },
-    })
-    const body = (await response.json()) as { ok: boolean; hexin?: { count: number; ids: string[] }; error?: string }
-
-    expect(response.status).toBe(200)
-    expect(body).toMatchObject({ ok: true, hexin: { count: 2 } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const response = await ProviderRoutes().request("/refresh", {
+          method: "POST",
+        })
+        const body = (await response.json()) as { ok: boolean; hexin?: { count: number; ids: string[] }; error?: string }
+
+        expect(response.status).toBe(200)
+        expect(body).toMatchObject({ ok: true, hexin: { count: 2 } })
         const providers = await Provider.list()
         expect(Object.keys(providers.hexin.models).sort()).toEqual(["deepseek-v4-pro", "ths-auto-v2"])
       },
@@ -256,7 +255,19 @@ describe("hexin model discovery", () => {
   test("target reasoning models are exposed with provider-safe capabilities", async () => {
     globalThis.fetch = (async () =>
       new Response(
-        JSON.stringify({ data: [{ id: "kimi-k2.6" }, { id: "kimi-k2.7-code" }, { id: "openai/glm-5.1" }] }),
+        JSON.stringify({
+          data: [
+            { id: "gpt-5.4" },
+            { id: "gpt-5.5" },
+            { id: "kimi-k2.5" },
+            { id: "kimi-k2.6" },
+            { id: "kimi-k2.7-code" },
+            { id: "openai/glm-5.1" },
+            { id: "qwen3.7-max" },
+            { id: "cy-claude-sonnet-4-6" },
+            { id: "cy-claude-sonnet-4-6-v2" },
+          ],
+        }),
         {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -265,6 +276,30 @@ describe("hexin model discovery", () => {
 
     const models = await refreshHexinCache("test-hexin-key")
 
+    expect(models["gpt-5.4"].limit).toMatchObject({
+      context: 1_050_000,
+      input: 1_050_000,
+      output: 128_000,
+    })
+    expect(models["gpt-5.5"].limit).toMatchObject({
+      context: 1_050_000,
+      input: 1_050_000,
+      output: 128_000,
+    })
+    expect(models["kimi-k2.5"].capabilities).toMatchObject({
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: {
+        image: true,
+      },
+      interleaved: { field: "reasoning_content" },
+    })
+    expect(models["kimi-k2.5"].limit).toMatchObject({
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
+    })
     expect(models["kimi-k2.6"].capabilities).toMatchObject({
       reasoning: true,
       temperature: false,
@@ -304,6 +339,30 @@ describe("hexin model discovery", () => {
     expect(models["openai/glm-5.1"].limit).toMatchObject({
       context: 200_000,
       output: 128_000,
+    })
+    expect(models["qwen3.7-max"].capabilities).toMatchObject({
+      reasoning: true,
+      attachment: true,
+      toolcall: true,
+      input: {
+        image: true,
+      },
+      interleaved: { field: "reasoning_content" },
+    })
+    expect(models["qwen3.7-max"].limit).toMatchObject({
+      context: 1_000_000,
+      input: 1_000_000,
+      output: 65_536,
+    })
+    expect(models["cy-claude-sonnet-4-6"].limit).toMatchObject({
+      context: 1_000_000,
+      input: 1_000_000,
+      output: 64_000,
+    })
+    expect(models["cy-claude-sonnet-4-6-v2"].limit).toMatchObject({
+      context: 1_000_000,
+      input: 1_000_000,
+      output: 64_000,
     })
     expect(models["openai/glm-5.1"].transform).toEqual({
       sampling: {
