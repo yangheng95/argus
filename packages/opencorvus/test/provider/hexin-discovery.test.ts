@@ -275,6 +275,11 @@ describe("hexin model discovery", () => {
       },
       interleaved: { field: "reasoning_content" },
     })
+    expect(models["kimi-k2.6"].limit).toMatchObject({
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
+    })
     expect(models["kimi-k2.7-code"].capabilities).toMatchObject({
       reasoning: true,
       temperature: false,
@@ -284,6 +289,11 @@ describe("hexin model discovery", () => {
         image: true,
       },
       interleaved: { field: "reasoning_content" },
+    })
+    expect(models["kimi-k2.7-code"].limit).toMatchObject({
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
     })
     expect(models["openai/glm-5.1"].capabilities).toMatchObject({
       reasoning: true,

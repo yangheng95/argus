@@ -11,8 +11,9 @@
  * operator sees the real error. Provider startup and Provider.getModel() never
  * call this module to repair or replace the catalog.
  *
- * Gateway only exposes {id, object, created, owned_by}. Capability shape
- * is assigned by hexin-profiles.ts during catalog normalization.
+ * The /models endpoint only exposes {id, object, created, owned_by}.
+ * Capability shape is assigned by hexin-profiles.ts during catalog
+ * normalization from exact probes and /model/info metadata.
  */
 import { Log } from "../util/log"
 import type { Provider as ProviderNS } from "./provider"
