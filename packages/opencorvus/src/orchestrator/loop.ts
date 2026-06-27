@@ -3,7 +3,7 @@
  *
  * One wake = one orchestrator decision pass. There is no internal loop and no
  * watermark. The orchestrator LLM owns every workflow decision through its own
- * tool calls (dispatch_goal / deliver / modify_goal / fail_task / question).
+ * tool calls (build / complete_task / modify_goal / fail_task / question).
  * When it stops after a valid decision, the loop exits. The next wake normally
  * comes from an external trigger (operator message, scheduler tick, ownership
  * recovery) — re-entering this function with a fresh event.

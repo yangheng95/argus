@@ -24,7 +24,7 @@ HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两
 | Workflow   | 形态                                                                                                                            | 适用场景                                          |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | `direct`   | 按需 `analyze_intent`，然后 `build`                                                                                             | 显式 `kind=build`、局部编辑、bugfix、短调试       |
-| `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → per-goal `build` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
+| `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → 按需 `workload_analysis` → per-goal `build` → 按需 `visual_qa` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
 
 workflow 定义是给 orchestrator 的 prompt 上下文。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review。
 
@@ -38,14 +38,14 @@ Channel / UI / API
 Engine task row
   ↓
 Orchestrator session
-  ├─ typed workflow tools: requirements / architect / build / integrity / ...
+  ├─ typed workflow tools: frontend_research / frontend_design / analyze_intent / requirements / architect / workload_analysis / build / visual_qa / integrity / fact_check / ...
   ├─ durable artifacts: runs / goal_run_attempts / verification evidence / integrity attempts / reports
   └─ explicit user interactions: questions and permissions
   ↓
 Worker sessions
-  ├─ requirements, architect, frontend-design, frontend-research
+  ├─ frontend-research, frontend-design, requirements, architect, workload-analysis
   ├─ 每个 goal 一个隔离 worktree 中的 build session
-  └─ integrity review session
+  └─ visual QA 与 integrity review sessions
 ```
 
 ## 职责边界
@@ -73,7 +73,7 @@ Worker sessions
 LLM 发出 tool call → tool 执行 → tool result 写回 → 下一轮模型调用
 ```
 
-requirements、architect、build、integrity 等 worker session 都由 orchestrator 的 typed tools 创建。
+frontend research/design、requirements、architect、workload analysis、build、visual QA、integrity、fact check 等 worker session 都由 orchestrator 的 typed tools 创建。
 
 ## Worktree 并行
 

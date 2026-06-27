@@ -1636,12 +1636,11 @@ function writeAcceptanceRow(
 // pipeline/executor.ts in commit 54c382858 and replaced by the inline write,
 // keeping a single source of truth for goal-run acceptance persistence.
 
-// Task-level acceptance: produced by orchestrator's `deliver` tool after all
-// goal_runs complete. Writes the aggregated acceptance row (goal_run_id=NULL) +
-// one pending scope='acceptance' evidence artifact. The acceptance-agent settles
-// it later by appending a new evidence artifact (append-only — queries take
-// the latest via time_created desc). Post-phase-6 evidence lives in
-// engine_artifact (kind="verification-evidence"); see verification/persist.ts.
+// Task-level acceptance compatibility writer. Current task completion is driven
+// by orchestrator `complete_task` from the latest post-build integrity_attempt;
+// verification evidence lives in engine_artifact
+// (kind="verification-evidence"). This function preserves the legacy row shape
+// for callers that still need the acceptance artifact projection.
 export function persistTaskAcceptance(input: {
   task: TaskRow
   run: RunRow

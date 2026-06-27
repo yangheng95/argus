@@ -1,55 +1,51 @@
 ---
-title: Integrity and Evaluation
-description: OpenCorvus 如何记录验证证据并执行最终完整性复核。
+title: Integrity Review
+description: OpenCorvus 如何记录验证证据，并从最终 integrity attempt 完成任务。
 ---
 
-per-goal build attempt 产出 verification evidence，pipeline 的最终复核是 `integrity` workflow tool。
+per-goal build attempt 会发布持久证据，任务最终复核面是 `integrity` workflow tool。当前 completion contract 是 artifact-backed：orchestrator 只能基于最新 post-build `integrity_attempt` 完成任务。
 
 ## 当前复核流程
 
-1. **Build evidence**：direct build 或 per-goal build 写入 run / goal-run artifacts、changed files、reports 和可选 verification evidence。
-2. **Acceptance / evaluation artifacts**：`engine_artifact.kind="acceptance"` 与 `engine_artifact.kind="verification-evidence"` 保存 acceptance 与 check evidence，供 replay 使用。
-3. **Integrity review**：integrity agent 读取用户请求、requirements、architect contract graph、goal outputs、diffs、runtime/visual evidence、历史 attempts 与 acceptance evidence。
-4. **Orchestrator decision**：integrity 返回 pass 或 non-pass 证据。orchestrator 决定完成、modify goals、重新 build、回到 architect、询问用户或 fail task。
+1. **Build evidence**：direct build 与 per-goal build 写入 `run`、`goal_run_attempt`、changed-file、report、diff 与可选 verification artifacts。
+2. **Verification evidence**：browser preview target、browser preview capture、runtime check、截图与视觉证据存为 `engine_artifact` 行，例如 `verification-evidence`、`browser_preview_target`、`browser_preview_evidence`。
+3. **Visual QA**：任务存在前端可见交付面时，`visual_qa` 复核可见产品证据；它不完成任务。
+4. **Integrity review**：`integrity` 读取用户请求、requirements、architect contract graph、goal outputs、diffs、runtime/visual evidence 与历史 attempts。
+5. **Completion decision**：`complete_task` 要求当前 post-build `integrity_attempt` id。non-pass 证据会路由回 build、`modify_goal`、`architect`、用户问题或 `fail_task`。
 
 ## 证据表面
 
-| 表面                            | 当前源码                                                             |
-| ------------------------------- | -------------------------------------------------------------------- |
-| Acceptance / project checks     | `packages/opencorvus/src/acceptance/checks/project-gate.ts`          |
-| Runtime readiness               | `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts`     |
-| Contract audit review           | `packages/opencorvus/src/acceptance/checks/contract-audit-review.ts` |
-| Specialist reviews              | `packages/opencorvus/src/acceptance/specialists/`                    |
-| Integrity team review           | `packages/opencorvus/src/integrity/team-agent.ts`                    |
-| Integrity schemas               | `packages/opencorvus/src/integrity/team-schema.ts`                   |
-| Artifact-backed evaluation rows | `packages/opencorvus/src/engine/store.ts`                            |
+| 表面 | 当前源码 |
+| --- | --- |
+| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts` |
+| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts` |
+| Visual QA semantics | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
+| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
+| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
+| Completion guard | `packages/opencorvus/src/orchestrator/tools.ts` |
 
-## Evaluation Row 形态
+## Artifact Records
 
-`EvaluationRow` 从 `engine_artifact.kind="verification-evidence"` 重建：
+复核路径从当前 `engine_artifact` kind 重建，重点包括：
 
 ```typescript
-type EvaluationRow = {
-  scope: "goal_run" | "acceptance"
-  status: "pending" | "passed" | "failed" | "inconclusive"
-  verdict: "accepted" | "rejected" | "inconclusive"
-  checks: EngineEvaluationCheck[] | null
-}
+"run"
+"goal_run_attempt"
+"verification-evidence"
+"browser_preview_target"
+"browser_preview_evidence"
+"integrity_attempt"
 ```
 
-checks 是给 operator 与后续 review 使用的审计证据。
+checks 是给 operator 和后续 review 使用的审计证据，不能替代最终 `integrity_attempt` completion contract。
 
 ## Integrity Verdict 语义
 
-| Integrity outcome               | Orchestrator 含义                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| pass                            | 集成系统满足本任务；orchestrator 可以完成任务。                                      |
+| Integrity outcome | Orchestrator 含义 |
+| --- | --- |
+| pass | 集成系统满足本任务；orchestrator 可以用最新 post-build `integrity_attempt` id 调用 `complete_task`。 |
 | non-pass 且有 blocking findings | orchestrator 必须基于证据把修复路由到 build、`modify_goal`、`architect` 或用户问题。 |
-| thrown / artifact missing       | orchestrator 会收到可见失败证据并决定恢复；UI 不应静默显示空卡片。                   |
-
-## 配置说明
-
-Agent 模型与 step 预算分别配置在 `agent.integrity.*` 与 `assistant.integrity.*`。视觉验收阈值位于 engine config 的 `assistant.acceptance_visual`。
+| thrown / artifact missing | orchestrator 会收到可见失败证据并决定恢复；UI 不应静默显示空卡片。 |
 
 ## 你接下来要看的
 

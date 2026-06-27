@@ -24,7 +24,7 @@ OpenCorvus has two built-in workflows in `packages/opencorvus/src/engine/workflo
 | Workflow   | Shape                                                                                                                      | Use case                                                                                   |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `direct`   | `analyze_intent` as needed, then `build`                                                                                   | Explicit `kind=build`, scoped edits, bug fixes, short debugging                            |
-| `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → per-goal build → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
+| `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → workload_analysis as needed → per-goal build → visual_qa as needed → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
 
 The workflow definition is prompt context for the orchestrator. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline.
 
@@ -38,14 +38,14 @@ Channel / UI / API
 Engine task row
   ↓
 Orchestrator session
-  ├─ typed workflow tools: requirements / architect / build / integrity / ...
+  ├─ typed workflow tools: frontend_research / frontend_design / analyze_intent / requirements / architect / workload_analysis / build / visual_qa / integrity / fact_check / ...
   ├─ durable artifacts: runs / goal_run_attempts / verification evidence / integrity attempts / reports
   └─ explicit user interactions: questions and permissions
   ↓
 Worker sessions
-  ├─ requirements, architect, frontend-design, frontend-research
+  ├─ frontend-research, frontend-design, requirements, architect, workload-analysis
   ├─ per-goal build sessions in isolated worktrees
-  └─ integrity review session
+  └─ visual QA and integrity review sessions
 ```
 
 ## Responsibilities
@@ -73,7 +73,7 @@ Worker sessions
 LLM emits tool call → tool executes → tool result is appended → next model turn
 ```
 
-Typed orchestrator tools create worker sessions for requirements, architect, build, integrity, and related stages.
+Typed orchestrator tools create worker sessions for frontend research/design, requirements, architect, workload analysis, build, visual QA, integrity, fact check, and related stages.
 
 ## Worktree Parallelism
 

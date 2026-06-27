@@ -128,6 +128,7 @@ export type EngineArtifactKind =
   | "stage_continuation_request"
   | "agent_coordination_request"
   | "agent_coordination_response"
+  | "agent_coordination_action"
 export type EngineAcceptanceStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
@@ -257,8 +258,10 @@ export const EngineTaskTable = sqliteTable(
      *  task.metadata.criteria_results. Written by state.ts::upsertTaskCriteria,
      *  read by workbench/board.ts::buildBoardFields. */
     criteria_results: text({ mode: "json" }).$type<Array<Record<string, unknown>>>().notNull().default([]),
-    /** "workflow" tasks go through requirements→design→architect→execute→deliver.
-     *  "build" tasks bypass the pipeline and run the build agent directly —
+    /** "workflow" tasks use the orchestrator's explicit tool path
+     *  (frontend evidence as needed → requirements → architect →
+     *  workload_analysis as needed → build → visual_qa as needed → integrity).
+     *  "build" tasks bypass the broader workflow and run the build agent directly —
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same
      *  task table and queue so cancel/list/audit are uniform. */
     kind: text().notNull().$type<"workflow" | "build">().default("workflow"),

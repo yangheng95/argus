@@ -1,55 +1,51 @@
 ---
-title: Integrity and Evaluation
-description: How OpenCorvus records verification evidence and performs final integrity review.
+title: Integrity Review
+description: How OpenCorvus records verification evidence and completes tasks from final integrity attempts.
 ---
 
-Per-goal build attempts produce verification evidence, and the pipeline's final review is the `integrity` workflow tool.
+Per-goal build attempts publish durable evidence, and the task's final review is the `integrity` workflow tool. The current completion contract is artifact-backed: the orchestrator may complete a task only from the latest post-build `integrity_attempt`.
 
 ## Current Review Flow
 
-1. **Build evidence** — every direct build or per-goal build writes run and goal-run artifacts, changed files, reports, and optional verification evidence.
-2. **Acceptance/evaluation artifacts** — `engine_artifact` rows with `kind="acceptance"` and `kind="verification-evidence"` preserve acceptance and check evidence for replay.
-3. **Integrity review** — the integrity agent reads the user request, requirements, architect contract graph, goal outputs, diffs, runtime/visual evidence, previous attempts, and acceptance evidence.
-4. **Orchestrator decision** — integrity returns pass or non-pass evidence. The orchestrator decides whether to complete, modify goals, re-run build, re-enter architect, ask the user, or fail the task.
+1. **Build evidence** — direct and per-goal build work writes `run`, `goal_run_attempt`, changed-file, report, diff, and optional verification artifacts.
+2. **Verification evidence** — browser preview targets, browser preview captures, runtime checks, screenshots, and visual evidence are stored as `engine_artifact` rows such as `verification-evidence`, `browser_preview_target`, and `browser_preview_evidence`.
+3. **Visual QA** — `visual_qa` reviews visible product evidence when the task has a frontend-visible surface; it does not complete the task.
+4. **Integrity review** — `integrity` reads the user request, requirements, architect contract graph, goal outputs, diffs, runtime/visual evidence, and previous attempts.
+5. **Completion decision** — `complete_task` requires the current post-build `integrity_attempt` id. Non-pass evidence routes back to build, `modify_goal`, `architect`, a user question, or `fail_task`.
 
 ## Evidence Surfaces
 
-| Surface                         | Current source                                                       |
-| ------------------------------- | -------------------------------------------------------------------- |
-| Acceptance/project checks       | `packages/opencorvus/src/acceptance/checks/project-gate.ts`          |
-| Runtime readiness               | `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts`     |
-| Contract audit review           | `packages/opencorvus/src/acceptance/checks/contract-audit-review.ts` |
-| Specialist reviews              | `packages/opencorvus/src/acceptance/specialists/`                    |
-| Integrity team review           | `packages/opencorvus/src/integrity/team-agent.ts`                    |
-| Integrity schemas               | `packages/opencorvus/src/integrity/team-schema.ts`                   |
-| Artifact-backed evaluation rows | `packages/opencorvus/src/engine/store.ts`                            |
+| Surface | Current source |
+| --- | --- |
+| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts` |
+| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts` |
+| Visual QA semantics | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
+| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
+| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
+| Completion guard | `packages/opencorvus/src/orchestrator/tools.ts` |
 
-## Evaluation Row Shape
+## Artifact Records
 
-`EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"`:
+The review path is reconstructed from current `engine_artifact` kinds, especially:
 
 ```typescript
-type EvaluationRow = {
-  scope: "goal_run" | "acceptance"
-  status: "pending" | "passed" | "failed" | "inconclusive"
-  verdict: "accepted" | "rejected" | "inconclusive"
-  checks: EngineEvaluationCheck[] | null
-}
+"run"
+"goal_run_attempt"
+"verification-evidence"
+"browser_preview_target"
+"browser_preview_evidence"
+"integrity_attempt"
 ```
 
-Checks are audit evidence for operators and downstream review.
+Checks are audit evidence for operators and downstream review. They are not a replacement for the final `integrity_attempt` completion contract.
 
 ## Integrity Verdict Semantics
 
-| Integrity outcome               | Orchestrator meaning                                                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| pass                            | The integrated system is acceptable for this task; the orchestrator may complete the task.                              |
-| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence.         |
-| thrown / artifact missing       | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
-
-## Configuration Notes
-
-Agent models and step budgets are configured under `agent.integrity.*` and `assistant.integrity.*`. Visual acceptance thresholds live under `assistant.acceptance_visual` in the engine config.
+| Integrity outcome | Orchestrator meaning |
+| --- | --- |
+| pass | The integrated system is acceptable for this task; the orchestrator may call `complete_task` with the latest post-build `integrity_attempt` id. |
+| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence. |
+| thrown / artifact missing | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
 
 ## What's Next
 
