@@ -38,10 +38,12 @@ test("hexin kimi-k2.6 profile follows Moonshot thinking-model contract", () => {
   expect(profile.pdf_in).toBe(false)
   expect(profile.toolcall).toBe(true)
   expect(profile.interleaved).toEqual({ field: "reasoning_content" })
-  expect(profile.context).toBe(256_000)
+  expect(profile.context).toBe(262_144)
+  expect(profile.input).toBe(262_144)
+  expect(profile.output).toBe(262_144)
 })
 
-test("hexin kimi-k2.7-code profile follows verified Moonshot vision contract", () => {
+test("hexin kimi-k2.7-code profile follows verified Moonshot vision and context contract", () => {
   const profile = profileFor("kimi-k2.7-code")
 
   expect(profile.family).toBe("kimi")
@@ -52,8 +54,9 @@ test("hexin kimi-k2.7-code profile follows verified Moonshot vision contract", (
   expect(profile.pdf_in).toBe(false)
   expect(profile.toolcall).toBe(true)
   expect(profile.interleaved).toEqual({ field: "reasoning_content" })
-  expect(profile.context).toBe(200_000)
-  expect(profile.output).toBe(16_384)
+  expect(profile.context).toBe(262_144)
+  expect(profile.input).toBe(262_144)
+  expect(profile.output).toBe(262_144)
   expect(
     ProviderTransform.requestBody("hexin", {
       model: "kimi-k2.7-code",

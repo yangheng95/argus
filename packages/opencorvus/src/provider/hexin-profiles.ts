@@ -1,9 +1,9 @@
 /**
  * Capability profiles for Hexin-gateway models.
  *
- * The gateway's /v1/models endpoint only returns {id, object, created, owned_by}
- * — it does not expose capabilities. We maintain a prefix/pattern match table
- * here to assign capabilities at discovery time.
+ * The gateway's /v1/models endpoint only returns {id, object, created,
+ * owned_by}. Verified exact profiles below use direct probes and /v1/model/info
+ * metadata; generic families stay conservative until their own evidence exists.
  *
  * Unknown model IDs fall through to a conservative default (toolcall-capable
  * text-only, no reasoning/image/pdf) and log a warning so the table can be
@@ -185,8 +185,10 @@ const MATCHERS: Matcher[] = [
   },
   // Kimi K2.6: thinking is enabled by default; fixed sampling and
   // reasoning_content round-tripping are required by Moonshot's API contract.
-  // The generated provider snapshot marks Kimi K2.6 image-capable; keep PDF
-  // disabled here until the exact Hexin route is verified for PDF input.
+  // Hexin /v1/model/info reported max_tokens, max_input_tokens, and
+  // max_output_tokens as 262144 on 2026-06-27. The generated provider
+  // snapshot marks Kimi K2.6 image-capable; keep PDF disabled here until
+  // the exact Hexin route is verified for PDF input.
   {
     test: (id) => /(^|\/)kimi-k2\.6$/i.test(id),
     contractIDs: ["kimi-k2.6"],
@@ -199,13 +201,16 @@ const MATCHERS: Matcher[] = [
       pdf_in: false,
       toolcall: true,
       interleaved: { field: "reasoning_content" },
-      context: 256_000,
-      output: 128_000,
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
     },
   },
   // Kimi K2.7 Code: direct Hexin probe accepted image input and returned
   // reasoning_content. The same route rejects arbitrary temperature values;
   // keep fixed Moonshot sampling and leave PDF disabled until verified.
+  // Hexin /v1/model/info reported max_tokens, max_input_tokens, and
+  // max_output_tokens as 262144 on 2026-06-27.
   {
     test: (id) => /(^|\/)kimi-k2\.7-code$/i.test(id),
     contractIDs: ["kimi-k2.7-code"],
@@ -218,8 +223,9 @@ const MATCHERS: Matcher[] = [
       pdf_in: false,
       toolcall: true,
       interleaved: { field: "reasoning_content" },
-      context: 200_000,
-      output: 16_384,
+      context: 262_144,
+      input: 262_144,
+      output: 262_144,
     },
   },
   // Kimi
