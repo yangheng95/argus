@@ -15,11 +15,18 @@ const log = Log.create({ service: "instruction" })
 
 const FILES = ["AGENTS.md", "AGENT.md", "CLAUDE.md"]
 
+function isEnoent(error: unknown) {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+}
+
 async function findNamedFiles(dir: string, filename: string): Promise<string[]> {
   const exact = path.join(dir, filename)
   if (await Filesystem.exists(exact)) return [Filesystem.normalizePath(exact)]
   const lower = filename.toLowerCase()
-  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  const entries = await readdir(dir, { withFileTypes: true }).catch((error) => {
+    if (isEnoent(error)) return []
+    throw error
+  })
   return entries
     .filter((entry) => entry.isFile() && entry.name.toLowerCase() === lower)
     .map((entry) => Filesystem.normalizePath(path.join(dir, entry.name)))

@@ -59,6 +59,37 @@ describe("InstructionPrompt.resolve", () => {
     })
   })
 
+  test("ignores npm scoped imports and missing optional include parents in instruction references", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "AGENTS.md"),
+          [
+            "# Root Instructions",
+            "@rules.md",
+            "@missing-parent/rules.md",
+            "",
+            "```ts",
+            "import { createBridge } from '@ainvest/vibe-bridge';",
+            "```",
+            "",
+            "Inline code like `/** @internal */` is not a file include.",
+          ].join("\n"),
+        )
+        await Bun.write(path.join(dir, "rules.md"), "# Included Rules\nFollow the included rule.")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const system = await InstructionPrompt.system()
+        const text = system.join("\n\n")
+        expect(text).toContain("Instructions from: " + path.join(tmp.path, "rules.md"))
+        expect(text).toContain("Follow the included rule.")
+      },
+    })
+  })
+
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

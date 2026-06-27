@@ -88,6 +88,21 @@ describe("ConfigMarkdown: normal template", () => {
     const emailMatches = ConfigMarkdown.files(emailTest)
     expect(emailMatches.length).toBe(0)
   })
+
+  test("should ignore at references inside markdown code", () => {
+    const codeTest = [
+      "Load @rules.md before editing.",
+      "",
+      "```ts",
+      "import { createBridge } from '@ainvest/vibe-bridge';",
+      "```",
+      "",
+      "Inline code like `/** @internal */` and `@quoted/path.md` is not a file include.",
+      "Load @after.md too.",
+    ].join("\n")
+    const codeMatches = ConfigMarkdown.files(codeTest)
+    expect(codeMatches.map((match) => match[1])).toEqual(["rules.md", "after.md"])
+  })
 })
 
 describe("ConfigMarkdown: frontmatter parsing w/ empty frontmatter", async () => {
