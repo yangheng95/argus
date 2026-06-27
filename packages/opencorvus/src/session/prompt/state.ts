@@ -95,6 +95,13 @@ export namespace SessionPromptState {
     return Boolean(existingStateEntry(directory).promptState?.[sessionID])
   }
 
+  export function isActiveInAnyDirectory(sessionID: string): boolean {
+    for (const promptState of statesByDirectory.values()) {
+      if (promptState[sessionID]) return true
+    }
+    return false
+  }
+
   export function waitForFinish(sessionID: string, directory?: string): Promise<void> {
     return existingStateEntry(directory).promptState?.[sessionID]?.finished ?? Promise.resolve()
   }

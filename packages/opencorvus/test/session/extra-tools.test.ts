@@ -108,22 +108,22 @@ describe("SessionLoop session runtime contract", () => {
 
   test("SessionPrompt.cancel preserves runtime contract until the owning loop settles", async () => {
     const sessionID = `ses_runtime_${Date.now()}_cancel`
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        SessionPrompt.setSessionRuntimeContract(
-          sessionID,
-          runtimeContract(sessionID, {
-            tools: { persistent: dummyTool() },
-          }),
-        )
-        expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
-        SessionPrompt.cancel(sessionID)
-        expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
-        SessionPrompt.clearSessionRuntimeContract(sessionID)
-      },
-    })
+    await using tmp = await tmpdir()
+    const abort = SessionPromptState.start(sessionID, tmp.path)
+    try {
+      SessionPrompt.setSessionRuntimeContract(
+        sessionID,
+        runtimeContract(sessionID, {
+          tools: { persistent: dummyTool() },
+        }),
+      )
+      expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
+      expect(SessionPrompt.cancel(sessionID, tmp.path)).toBe(true)
+      expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
+    } finally {
+      if (abort) SessionPromptState.finish(sessionID, abort, tmp.path)
+      SessionPrompt.clearSessionRuntimeContract(sessionID)
+    }
   })
 
   test("SessionPrompt.cancel aborts a registered activity gate", async () => {
@@ -147,12 +147,14 @@ describe("SessionLoop session runtime contract", () => {
     })
   })
 
-  test("cancellation scope reports live sessions with no directory-matched prompt state", async () => {
+  test("cancellation scope reports live sessions whose prompt state belongs to another directory", async () => {
     const sessionID = `ses_runtime_${Date.now()}_strict_cancel`
     await using tmp = await tmpdir({ git: true })
+    await using other = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const abort = SessionPromptState.start(sessionID, other.path)
         SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
         try {
           expect(() =>
@@ -165,8 +167,33 @@ describe("SessionLoop session runtime contract", () => {
           ).toThrow(TaskCancellationIncompleteError)
           expect(SessionStatus.get(sessionID)).toEqual({ type: "streaming" })
         } finally {
+          if (abort) SessionPromptState.finish(sessionID, abort, other.path)
           SessionStatus.set(sessionID, { type: "idle" }, { publish: false })
         }
+      },
+    })
+  })
+
+  test("cancellation scope seals stale active status when no prompt state exists", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_stale_cancel`
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
+        const result = cancelSessionPromptInScope({
+          session: {
+            id: sessionID,
+            directory: tmp.path,
+          },
+        })
+
+        expect(result).toBe(false)
+        expect(SessionStatus.get(sessionID)).toEqual({
+          type: "terminal",
+          reason: "aborted",
+          error: expect.stringContaining("Stale prompt status"),
+        })
       },
     })
   })
