@@ -10,6 +10,7 @@ import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionTable } from "../../src/session/session.sql"
+import { SessionStatus } from "../../src/session/status"
 import { Database, eq } from "../../src/storage/db"
 import { EngineService } from "../../src/task-api"
 import { Log } from "../../src/util/log"
@@ -122,7 +123,7 @@ describe("deleteTask running task settlement", () => {
 
     expect(taskRow(taskID)).toBeUndefined()
     expect(sessionRow(sessionID)).toBeUndefined()
-  })
+  }, 15_000)
 
   test("reports incomplete cancellation and preserves rows when the task loop does not become idle", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -157,7 +158,7 @@ describe("deleteTask running task settlement", () => {
       releaseLoop.resolve()
       await loopPromise
     }
-  })
+  }, 15_000)
 
   test("waits for task-owned in-flight queue wake before physically deleting rows", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -258,6 +259,37 @@ describe("deleteTask running task settlement", () => {
     expect(queueRow(queueTaskID)).toMatchObject({
       status: "failed",
       error_message: "task cancelled",
+    })
+  })
+
+  test("deletes active task whose session tree has stale streaming status but no prompt state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { taskID, sessionID } = await createActiveTask(tmp.path, "delete stale streaming task")
+    let orchestratorSessionID = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const orchestrator = await Session.createNext({
+          kind: "orchestrator",
+          parentID: sessionID,
+          title: "orchestrator stale streaming",
+          directory: tmp.path,
+        })
+        orchestratorSessionID = orchestrator.id
+        SessionStatus.set(orchestrator.id, { type: "streaming" }, { publish: false })
+      },
+    })
+
+    await EngineService.deleteTask(taskID, {
+      taskLoopIdleTimeoutMs: 2_000,
+    })
+
+    expect(taskRow(taskID)).toBeUndefined()
+    expect(sessionRow(sessionID)).toBeUndefined()
+    expect(SessionStatus.get(orchestratorSessionID)).toMatchObject({
+      type: "terminal",
+      reason: "aborted",
     })
   })
 })

@@ -2681,6 +2681,19 @@ export namespace SessionLoop {
           for (const q of s.callbacks) q.reject(e)
           s.callbacks = []
         }
+        if (!abort.aborted) {
+          SessionStatus.set(sessionID, {
+            type: "terminal",
+            reason: "error",
+            error: e instanceof Error ? e.message : String(e),
+          })
+        } else if (SessionStatus.get(sessionID).type !== "terminal") {
+          SessionStatus.set(sessionID, {
+            type: "terminal",
+            reason: "aborted",
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
       } finally {
         const s = state(directory)[sessionID]
         if (s?.abort.signal === abort) finish(sessionID, abort, directory)

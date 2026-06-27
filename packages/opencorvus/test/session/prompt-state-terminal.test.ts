@@ -1,6 +1,8 @@
 import { afterEach, test, expect } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { SessionStatus } from "../../src/session/status"
 import { tmpdir } from "../fixture/fixture"
@@ -87,4 +89,24 @@ test("prompt cancel remains the user cancellation terminal source", async () => 
 
   expect(events).toEqual([{ type: "streaming" }, { type: "terminal", reason: "aborted" }])
   expect(SessionStatus.get(sessionID)).toEqual({ type: "terminal", reason: "aborted" })
+})
+
+test("prompt loop exception marks the session terminal error", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "loop exception terminal" })
+
+      await expect(SessionPrompt.loop({ sessionID: session.id })).rejects.toThrow("No user message found")
+
+      expect(SessionPromptState.isActive(session.id, tmp.path)).toBe(false)
+      expect(SessionStatus.get(session.id)).toEqual({
+        type: "terminal",
+        reason: "error",
+        error: "No user message found in stream. This should never happen.",
+      })
+    },
+  })
 })
