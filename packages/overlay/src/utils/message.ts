@@ -2,6 +2,7 @@
 // Canonical agent role classification and message display helpers.
 
 import { t } from "./i18n"
+import { isCardBodyMessagePart } from "./message-part"
 
 // ── Agent Role ──
 
@@ -18,12 +19,14 @@ export type AgentRole =
   | "frontend-research"
   | "visual-qa"
   | "architect"
+  | "goal-workload-analyst"
   | "planner"
   | "goal"
   | "executor"
   | "evaluator"
   | "build"
   | "explore"
+  | "deep-research"
   | "integrity"
   | "fact-check"
   | "acceptance"
@@ -41,12 +44,14 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "frontend-research",
   "visual-qa",
   "architect",
+  "goal-workload-analyst",
   "planner",
   "goal",
   "executor",
   "evaluator",
   "build",
   "explore",
+  "deep-research",
   "integrity",
   "fact-check",
   "acceptance",
@@ -85,6 +90,13 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "frontend-research" || text === "frontend_research") return "frontend-research"
   if (text === "visual-qa" || text === "visual_qa" || text === "visualqa") return "visual-qa"
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect"
+  if (
+    text === "goal-workload-analyst" ||
+    text === "goal_workload_analyst" ||
+    text === "workload-analysis" ||
+    text === "workload_analysis"
+  )
+    return "goal-workload-analyst"
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner"
   if (text === "goal" || text === "goal_gate") return "goal"
   // "coding" is the post-rename name of the build worker (commit 2bda4d8a22
@@ -95,6 +107,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   // dispatches are split out of the executor bucket (matches SessionKind
   // "explore" on the backend).
   if (text === "explore" || text === "explorer") return "explore"
+  if (text === "deep-research" || text === "deep_research" || text === "deepresearch") return "deep-research"
   if (
     text === "executor" ||
     text === "general" ||
@@ -155,7 +168,7 @@ export function isPendingPlaceholderPart(part: any): boolean {
 // ── Part ordering ──
 
 export function orderedMessageParts(message: any): any[] {
-  const parts = Array.isArray(message?.parts) ? message.parts : []
+  const parts = Array.isArray(message?.parts) ? message.parts.filter(isCardBodyMessagePart) : []
   if (parts.length < 2) return parts
   const reasoning: any[] = []
   const rest: any[] = []
@@ -179,6 +192,8 @@ export function roleLabel(role: string): string {
   if (role === "frontend-research" || role === "frontend_research") return t("chat.role.frontend-research")
   if (role === "visual-qa" || role === "visual_qa") return t("chat.role.visual-qa")
   if (role === "architect") return t("chat.role.architect")
+  if (role === "goal-workload-analyst" || role === "goal_workload_analyst")
+    return t("chat.role.goal-workload-analyst")
   if (role === "planner") return t("chat.role.planner")
   if (role === "evaluator") return t("chat.role.evaluator")
   if (role === "spec") return t("chat.role.spec")
@@ -187,6 +202,7 @@ export function roleLabel(role: string): string {
   if (role === "executor") return t("chat.role.executor")
   if (role === "build") return t("chat.role.build")
   if (role === "explore") return t("chat.role.explore")
+  if (role === "deep-research" || role === "deep_research") return t("chat.role.deep-research")
   if (role === "acceptance") return t("chat.role.acceptance")
   if (role === "integrity") return t("chat.role.integrity")
   if (role === "fact-check") return t("chat.role.fact-check")
@@ -204,42 +220,18 @@ export function roleLabel(role: string): string {
  * - "main" → message belongs to the main conversation
  */
 export function classifyMessage(msg: any, rootSessionID: string): string {
-  // Prefer backend-resolved channel (set by task-message-protocol-bridge).
-  // This is authoritative — it knows the session tree and agent identity.
+  void rootSessionID
   const backendChannel = String(msg?.info?.channel || "")
     .trim()
     .toLowerCase()
-  if (backendChannel && backendChannel !== "main") {
-    // "filtered" means the backend intentionally hid this message
-    if (backendChannel === "filtered") return "filtered"
-    const normalizedChannel = normalizeAgentRole(backendChannel)
-    if (AGENT_CARD_STAGES.has(normalizedChannel)) return normalizedChannel
+  if (!backendChannel) {
+    throw new Error(`classifyMessage: message ${msg?.info?.id ?? "<unknown>"} missing channel`)
   }
-
-  // User-role messages without a backend channel go to main conversation
-  if (
-    String(msg?.info?.role || "")
-      .trim()
-      .toLowerCase() === "user"
-  )
-    return "main"
-
-  // Use resolvedRole directly — backend is authoritative
-  const resolved = String(msg?.info?.resolvedRole || "")
-    .trim()
-    .toLowerCase()
-  if (AGENT_CARD_STAGES.has(resolved as AgentRole)) return resolved
-
-  // The store may receive direct message objects before overlay stamping
-  // (tests or partial reloads). The agent field is still
-  // first-party message metadata, so classify it canonically here.
-  const agent = String(msg?.info?.agent || "")
-    .trim()
-    .toLowerCase()
-  const normalized = normalizeAgentRole(agent)
-  if (AGENT_CARD_STAGES.has(normalized)) return normalized
-
-  return "main"
+  if (backendChannel === "main") return "main"
+  if (backendChannel === "filtered") return "filtered"
+  const normalizedChannel = normalizeAgentRole(backendChannel)
+  if (AGENT_CARD_STAGES.has(normalizedChannel)) return normalizedChannel
+  throw new Error(`classifyMessage: message ${msg?.info?.id ?? "<unknown>"} has unknown channel ${backendChannel}`)
 }
 
 // ── Agent stage label ──
@@ -248,6 +240,7 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
 export function agentStageLabel(stage: string): string {
   const role = normalizeAgentRole(stage)
   if (role === "spec") return t("chat.role.spec")
+  if (role === "orchestrator") return t("chat.role.orchestrator")
   if (role === "mission") return t("chat.role.mission")
   if (role === "intent-analysis") return t("chat.role.intent-analysis")
   if (role === "requirements") return t("chat.role.requirements")
@@ -255,15 +248,18 @@ export function agentStageLabel(stage: string): string {
   if (role === "frontend-research") return t("chat.role.frontend-research")
   if (role === "visual-qa") return t("chat.role.visual-qa")
   if (role === "architect") return t("chat.role.architect")
+  if (role === "goal-workload-analyst") return t("chat.role.goal-workload-analyst")
   if (role === "planner") return t("chat.role.planner")
   if (role === "goal") return t("chat.role.goal")
   if (role === "evaluator") return t("chat.role.evaluator")
   if (role === "executor") return t("chat.role.executor")
   if (role === "build") return t("chat.role.build")
   if (role === "explore") return t("chat.role.explore")
+  if (role === "deep-research") return t("chat.role.deep-research")
   if (role === "acceptance") return t("chat.role.acceptance")
   if (role === "integrity") return t("chat.role.integrity")
   if (role === "fact-check") return t("chat.role.fact-check")
+  if (role === "system") return t("chat.role.system")
   return t("chat.role.assistant")
 }
 
@@ -271,28 +267,11 @@ export function agentStageLabel(stage: string): string {
 
 /**
  * Determine the display role for a message.
- * Priority: resolvedRole > agent (normalized) > role > "assistant".
- * This ensures executor messages always display as "executor" even if
- * the backend only stamped agent="executor" without resolvedRole.
+ * Use backend-stamped resolvedRole. Missing resolvedRole is a bridge bug.
  */
 export function effectiveRole(msg: any, _rootSessionID?: string): string {
-  const resolved = msg.info?.resolvedRole
-  if (resolved) return resolved
-  const agent = String(msg.info?.agent || "")
-    .trim()
-    .toLowerCase()
-  if (agent) {
-    const normalized = normalizeAgentRole(agent)
-    if (AGENT_CARD_STAGES.has(normalized)) return normalized
-  }
-  // No assistant-fallback (一个萝卜一个坑). If we got here, the message has
-  // no resolvedRole AND no recognised agent AND no role — that's a server
-  // bridge bug; throw so it surfaces immediately.
-  const fallback = msg.info?.role
-  if (typeof fallback !== "string" || fallback.length === 0) {
-    throw new Error(
-      `effectiveRole: message ${msg.info?.id ?? "<unknown>"} has no resolvedRole/agent/role; bridge must enrich`,
-    )
-  }
-  return fallback
+  void _rootSessionID
+  const resolved = typeof msg?.info?.resolvedRole === "string" ? msg.info.resolvedRole.trim() : ""
+  if (!resolved) throw new Error(`effectiveRole: message ${msg?.info?.id ?? "<unknown>"} missing resolvedRole`)
+  return resolved
 }

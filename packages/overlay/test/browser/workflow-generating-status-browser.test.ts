@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -39,6 +40,66 @@ function eventStream() {
       "cache-control": "no-cache",
     },
   })
+}
+
+function streamingMessage(input: {
+  id: string
+  sessionID: string
+  channel: string
+  resolvedRole: string
+  agent: string
+  created: number
+  reasoning: string
+  text: string
+}) {
+  const reasoningPartID = `prt_${input.id}_reasoning`
+  const textPartID = `prt_${input.id}_text`
+  return {
+    info: {
+      id: input.id,
+      sessionID: input.sessionID,
+      channel: input.channel,
+      role: "assistant",
+      resolvedRole: input.resolvedRole,
+      agent: input.agent,
+      orderKey: testMessageOrderKey(input.id, input.created),
+      time: { created: input.created },
+      providerID: "openai",
+      modelID: "gpt-5-mini",
+    },
+    parts: [
+      {
+        id: `prt_${input.id}_step_start`,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: testPartOrderKey(`prt_${input.id}_step_start`, input.created - 2),
+        type: "step-start",
+      },
+      {
+        id: reasoningPartID,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: testPartOrderKey(reasoningPartID, input.created - 1),
+        type: "reasoning",
+        text: input.reasoning,
+      },
+      {
+        id: textPartID,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: testPartOrderKey(textPartID, input.created),
+        type: "text",
+        text: input.text,
+      },
+      {
+        id: `prt_${input.id}_step_finish`,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: testPartOrderKey(`prt_${input.id}_step_finish`, input.created + 1),
+        type: "step-finish",
+      },
+    ],
+  }
 }
 
 async function saveElementScreenshot(page: any, selector: string, filename: string) {
@@ -89,6 +150,77 @@ test("workflow generating panels expose live busy status regions", async () => {
     goalWorkflows: [],
     interactions: [],
   }
+  const transcript = [
+    streamingMessage({
+      id: "msg_frontend_research_stream",
+      sessionID: "ses_frontend_research_stream",
+      channel: "frontend-research",
+      resolvedRole: "frontend-research",
+      agent: "frontend-research",
+      created: now - 21_000,
+      reasoning: "Checking frontend evidence before requirements.",
+      text: "Frontend research streaming content is visible.",
+    }),
+    streamingMessage({
+      id: "msg_requirements_stream",
+      sessionID: "ses_requirements_stream",
+      channel: "requirements",
+      resolvedRole: "requirements",
+      agent: "requirements",
+      created: now - 20_000,
+      reasoning: "Separating explicit and inferred requirements.",
+      text: "Requirements streaming content is visible.",
+    }),
+  ]
+  const sessions = [
+    {
+      sessionID: "ses_frontend_research_stream",
+      stage: "frontend-research",
+      messageIDs: ["msg_frontend_research_stream"],
+      lastDisplayMessageID: "msg_frontend_research_stream",
+      firstMessageTime: now - 21_000,
+      lastMessageTime: now - 21_000,
+      placement: "top_level",
+      orderKey: testSessionOrderKey("ses_frontend_research_stream", now - 21_000),
+    },
+    {
+      sessionID: "ses_requirements_stream",
+      stage: "requirements",
+      messageIDs: ["msg_requirements_stream"],
+      lastDisplayMessageID: "msg_requirements_stream",
+      firstMessageTime: now - 20_000,
+      lastMessageTime: now - 20_000,
+      placement: "top_level",
+      orderKey: testSessionOrderKey("ses_requirements_stream", now - 20_000),
+    },
+  ]
+  const messages = transcript.map((item) => ({
+    messageID: item.info.id,
+    sessionID: item.info.sessionID,
+    stage: item.info.channel,
+    orderKey: item.info.orderKey,
+    time: item.info.time.created,
+    placement: "top_level",
+  }))
+  const conversation = {
+    board,
+    transcript,
+    timeline: [],
+    events: [],
+    view: {
+      sessions,
+      messages,
+      topLevelSessionIDs: sessions.map((session) => session.sessionID),
+    },
+    agentView: {
+      sessions,
+      messages,
+      topLevelSessionIDs: sessions.map((session) => session.sessionID),
+    },
+    eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+    history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
+    lastSequence: 0,
+  }
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -100,7 +232,7 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === "/global/health") return send({ version: "workflow-generating-status" })
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
@@ -136,6 +268,15 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts")
+      return send({
+        scope: "project",
+        skills: [],
+        agents: [],
+        matrix: [],
+        project_mounts: { agents: {} },
+        unmounted_count: 0,
+      })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/skills/config",
@@ -146,22 +287,13 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === "/session") return send([])
     if (path === "/control/timeline") return send([])
     if (path === `/task/${taskID}/board`) return send(board, { headers: { etag: `"board-${now}"` } })
-    if (path === `/task/${taskID}/conversation`)
-      return send({
-        board,
-        transcript: [],
-        timeline: [],
-        events: [],
-        view: { sessions: [] },
-        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-        lastSequence: 0,
-      })
+    if (path === `/task/${taskID}/conversation`) return send(conversation)
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-workflow-generating-status", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
     if (path === `/task/${taskID}/conversation/events`)
       return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
-    if (path === `/task/${taskID}/transcript`) return send([])
+    if (path === `/task/${taskID}/transcript`) return send(transcript)
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
@@ -201,9 +333,45 @@ test("workflow generating panels expose live busy status regions", async () => {
       timeout: 15_000,
     })
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    await page.waitForSelector('[data-ui="workflow-section-stack"]', { visible: true, timeout: 15_000 })
-    await page.waitForSelector("#frontendResearchSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
-    await page.waitForSelector("#requirementsSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
+    const waitVisible = async (selector: string) => {
+      try {
+        await page.waitForSelector(selector, { visible: true, timeout: 15_000 })
+      } catch (error) {
+        const diagnostics = await page.evaluate(() => ({
+          bodyDataset: { ...document.body.dataset },
+          selectedSource: (window as any).boardStore?.selectedSource,
+          activeTaskID: (window as any).boardStore?.board?.task?.id || "",
+          workflowText: document.querySelector('[data-ui="workflow-section-stack"]')?.textContent?.slice(0, 1200) || "",
+          sectionIDs: Array.from(document.querySelectorAll<HTMLElement>(".oc-section")).map((section) => ({
+            id: section.id,
+            text: section.textContent?.slice(0, 240) || "",
+            display: getComputedStyle(section).display,
+            visibility: getComputedStyle(section).visibility,
+          })),
+          pageText: document.body.innerText.slice(0, 1600),
+        }))
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+            { errors, diagnostics },
+            null,
+            2,
+          )}`,
+        )
+      }
+    }
+    await waitVisible('[data-ui="workflow-section-stack"]')
+    await waitVisible("#frontendResearchSection .req-streaming-indicator")
+    await waitVisible("#requirementsSection .req-streaming-indicator")
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("#frontendResearchSection .req-streaming-messages")
+          ?.textContent?.includes("Frontend research streaming content is visible.") &&
+        document
+          .querySelector("#requirementsSection .req-streaming-messages")
+          ?.textContent?.includes("Requirements streaming content is visible."),
+      { timeout: 15_000 },
+    )
     await page.waitForSelector("#architectSection .arch-generating", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#frontendResearchBadge", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#statusLabel", { visible: true, timeout: 15_000 })
@@ -240,6 +408,12 @@ test("workflow generating panels expose live busy status regions", async () => {
             title: badge?.getAttribute("title") ?? "",
           }
         })(),
+        streamingText: {
+          frontendResearch:
+            document.querySelector<HTMLElement>("#frontendResearchSection .req-streaming-messages")?.textContent || "",
+          requirements:
+            document.querySelector<HTMLElement>("#requirementsSection .req-streaming-messages")?.textContent || "",
+        },
       }
     })
 
@@ -276,6 +450,10 @@ test("workflow generating panels expose live busy status regions", async () => {
     assert.notEqual(statuses.frontendResearchBadge.text, "workflow.status.running")
     assert.notEqual(statuses.taskHeader, "active")
     assert.notEqual(statuses.taskRowBadge.text, "active")
+    assert.equal(statuses.streamingText.frontendResearch.includes("Frontend research streaming content is visible."), true)
+    assert.equal(statuses.streamingText.requirements.includes("Requirements streaming content is visible."), true)
+    assert.equal(statuses.streamingText.frontendResearch.includes("step-finish"), false)
+    assert.equal(statuses.streamingText.requirements.includes("step-finish"), false)
     assert.deepEqual(errors, [])
 
     const screenshot = await saveElementScreenshot(

@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
-import { stampTestEvent } from "./fixtures/timeline-order"
+import { stampTestEvent, testEventOrderKey, testMessageOrderKey, testPartOrderKey } from "./fixtures/timeline-order"
 
 installRealOverlayI18n()
 const {
@@ -13,7 +13,7 @@ const {
 const { cardTreeStore } = await import("../src/store/card-tree")
 
 function applyEvent(event: any): void {
-  applyEventRaw(stampTestEvent(event))
+  applyEventRaw(stampProjectionEventForTest(event))
 }
 
 function applyRawEvent(event: any): void {
@@ -45,18 +45,30 @@ function stampedPartEvent(channel: string, part: Record<string, any>) {
   }
 }
 
+function stampProjectionEventForTest(event: any): any {
+  const props = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  if (props?.info || props?.part) {
+    return stampTestEvent(event)
+  }
+  return stampTestEvent(event)
+}
+
 test("part projection materializes the deterministic turn when the part arrives before message metadata", () => {
   resetWriter()
 
   applyEvent({
     type: "message.part.updated",
     emittedAt: 1_780_000_000_010,
+    orderKey: testMessageOrderKey("msg_before_message", 1_780_000_000_000),
     properties: {
       taskID: "tsk_projection",
+      orderKey: testMessageOrderKey("msg_before_message", 1_780_000_000_000),
       ...stampedPartEvent("build", {
         id: "prt_before_message",
+        orderKey: testPartOrderKey("prt_before_message", 1_780_000_000_010),
         messageID: "msg_before_message",
         sessionID: "ses_before_message",
+        time: { created: 1_780_000_000_010 },
         type: "text",
         text: "part first",
       }),
@@ -78,10 +90,12 @@ test("part projection materializes the deterministic turn when the part arrives 
   applyEvent({
     type: "message.updated",
     emittedAt: 1_780_000_000_020,
+    orderKey: testMessageOrderKey("msg_before_message", 1_780_000_000_000),
     properties: {
       taskID: "tsk_projection",
       info: stampedInfo("build", {
         id: "msg_before_message",
+        orderKey: testMessageOrderKey("msg_before_message", 1_780_000_000_000),
         sessionID: "ses_before_message",
         role: "assistant",
         time: { created: 1_780_000_000_000 },
@@ -100,12 +114,16 @@ test("part-first card survives regroup until its message metadata arrives", () =
   applyEvent({
     type: "message.part.updated",
     emittedAt: 1_780_000_000_010,
+    orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
     properties: {
       taskID: "tsk_projection",
+      orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
       ...stampedPartEvent("orchestrator", {
         id: "prt_part_first_text",
+        orderKey: testPartOrderKey("prt_part_first_text", 1_780_000_000_010),
         messageID: "msg_part_first",
         sessionID: "ses_part_first_regroup",
+        time: { created: 1_780_000_000_010 },
         type: "text",
         text: "visible before metadata",
       }),
@@ -127,10 +145,12 @@ test("part-first card survives regroup until its message metadata arrives", () =
     applyEvent({
       type: "message.updated",
       emittedAt: created,
+      orderKey: testMessageOrderKey(id, created),
       properties: {
         taskID: "tsk_projection",
         info: stampedInfo("orchestrator", {
           id,
+          orderKey: testMessageOrderKey(id, created),
           sessionID: "ses_part_first_regroup",
           role: "assistant",
           time: { created },
@@ -150,12 +170,16 @@ test("part-first card survives regroup until its message metadata arrives", () =
     applyEvent({
       type: "message.part.updated",
       emittedAt: 1_780_000_000_250,
+      orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
       properties: {
         taskID: "tsk_projection",
+        orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
         ...stampedPartEvent("orchestrator", {
           id: "prt_part_first_finish",
+          orderKey: testPartOrderKey("prt_part_first_finish", 1_780_000_000_250),
           messageID: "msg_part_first",
           sessionID: "ses_part_first_regroup",
+          time: { created: 1_780_000_000_250 },
           type: "step-finish",
           reason: "tool-calls",
         }),
@@ -166,10 +190,12 @@ test("part-first card survives regroup until its message metadata arrives", () =
   applyEvent({
     type: "message.updated",
     emittedAt: 1_780_000_000_300,
+    orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
     properties: {
       taskID: "tsk_projection",
       info: stampedInfo("orchestrator", {
         id: "msg_part_first",
+        orderKey: testMessageOrderKey("msg_part_first", 1_780_000_000_050),
         sessionID: "ses_part_first_regroup",
         role: "assistant",
         time: { created: 1_780_000_000_050 },
@@ -183,12 +209,10 @@ test("part-first card survives regroup until its message metadata arrives", () =
         id: "prt_part_first_text",
         text: "visible before metadata",
       }),
-      expect.objectContaining({
-        id: "prt_part_first_finish",
-        type: "step-finish",
-        reason: "tool-calls",
-      }),
     ]),
+  )
+  expect((cardTreeStore.cards[partFirstCardID]?.parts || []).map((part: any) => part.id)).not.toContain(
+    "prt_part_first_finish",
   )
   expect(Object.keys(cardTreeStore.cards).filter((id) => id.includes("ses_part_first_regroup"))).toEqual([
     partFirstCardID,
@@ -201,6 +225,7 @@ test("non-reconstructable message stream events stay loud for selected-task reco
   expect(() =>
     applyEvent({
       type: "message.part.delta",
+      orderKey: testEventOrderKey("message.part.delta", 1_780_000_000_000),
       properties: {
         taskID: "tsk_projection",
         partID: "prt_missing",
@@ -213,10 +238,12 @@ test("non-reconstructable message stream events stay loud for selected-task reco
 
   applyEvent({
     type: "message.updated",
+    orderKey: testMessageOrderKey("msg_known", 1_780_000_000_100),
     properties: {
       taskID: "tsk_projection",
       info: stampedInfo("assistant", {
         id: "msg_known",
+        orderKey: testMessageOrderKey("msg_known", 1_780_000_000_100),
         sessionID: "ses_known",
         role: "assistant",
         time: { created: 1_780_000_000_100 },
@@ -227,6 +254,7 @@ test("non-reconstructable message stream events stay loud for selected-task reco
   expect(() =>
     applyEvent({
       type: "message.part.removed",
+      orderKey: testEventOrderKey("message.part.removed", 1_780_000_000_000),
       properties: {
         taskID: "tsk_projection",
         sessionID: "ses_known",
@@ -250,15 +278,16 @@ test("non-reconstructable message stream events stay loud for selected-task reco
         }),
       },
     }),
-  ).toThrow(/message\.part\.updated msg_known missing orderKey/)
+  ).toThrow(/message\.part\.updated msg_known envelope missing orderKey/)
 
   expect(() =>
     applyRawEvent({
       type: "message.part.updated",
       emittedAt: 1_780_000_000_210,
+      orderKey: "v1:0001780000000210:0000000000000030:0000000000000000:message:msg_known",
       properties: {
         taskID: "tsk_projection",
-        orderKey: "v1:0001780000000210:0000000000000031:0000000000000000:part:prt_route_only",
+        orderKey: "v1:0001780000000210:0000000000000030:0000000000000000:message:msg_known",
         ...stampedPartEvent("assistant", {
           id: "prt_route_only",
           messageID: "msg_known",
@@ -273,7 +302,29 @@ test("non-reconstructable message stream events stay loud for selected-task reco
   expect(() =>
     applyRawEvent({
       type: "message.part.updated",
+      emittedAt: 1_780_000_000_215,
+      orderKey: "v1:0001780000000100:0000000000000030:0000000000000000:message:msg_known",
+      properties: {
+        taskID: "tsk_projection",
+        orderKey: "v1:0001780000000100:0000000000000030:0000000000000000:message:msg_known",
+        ...stampedPartEvent("assistant", {
+          id: "prt_distinct_part_key",
+          orderKey: "v1:0001780000000215:0000000000000031:0000000000000000:part:prt_distinct_part_key",
+          messageID: "msg_known",
+          sessionID: "ses_known",
+          type: "text",
+          text: "message route key and part key are distinct domains",
+        }),
+      },
+    }),
+  ).not.toThrow()
+  expect(hasProjectedPart("ses_known", "prt_distinct_part_key")).toBe(true)
+
+  expect(() =>
+    applyRawEvent({
+      type: "message.part.updated",
       emittedAt: 1_780_000_000_220,
+      orderKey: "v1:0001780000000220:0000000000000031:0000000000000000:part:prt_mismatch_route",
       properties: {
         taskID: "tsk_projection",
         orderKey: "v1:0001780000000220:0000000000000031:0000000000000000:part:prt_mismatch_route",
@@ -283,15 +334,16 @@ test("non-reconstructable message stream events stay loud for selected-task reco
           messageID: "msg_known",
           sessionID: "ses_known",
           type: "text",
-          text: "route and part orderKey must agree",
+          text: "route orderKey must be a message-domain key",
         }),
       },
     }),
-  ).toThrow(/message\.part\.updated part prt_mismatch orderKey does not match event orderKey/)
+  ).toThrow(/message\.part\.updated msg_known envelope expected message orderKey/)
 
   expect(() =>
     applyEvent({
       type: "message.removed",
+      orderKey: testEventOrderKey("message.removed", 1_780_000_000_000),
       properties: {
         taskID: "tsk_projection",
         sessionID: "ses_known",
@@ -307,6 +359,7 @@ test("completed integrity verdict is not downgraded by late running review event
   applyEvent({
     type: "integrity.review.completed",
     emittedAt: 1_780_000_000_000,
+    orderKey: testEventOrderKey("integrity.review.completed", 1_780_000_000_000),
     properties: {
       taskID: "tsk_projection",
       sessionID: "ses_integrity_done",
@@ -332,6 +385,7 @@ test("completed integrity verdict is not downgraded by late running review event
   applyEvent({
     type: "review.stream.progress",
     emittedAt: 1_780_000_000_500,
+    orderKey: testEventOrderKey("review.stream.progress", 1_780_000_000_500),
     properties: {
       taskID: "tsk_projection",
       reviewID: "integrity:ses_integrity_done",
@@ -345,6 +399,7 @@ test("completed integrity verdict is not downgraded by late running review event
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1_780_000_000_600,
+    orderKey: testEventOrderKey("review.stream.chunk", 1_780_000_000_600),
     properties: {
       taskID: "tsk_projection",
       reviewID: "integrity:ses_integrity_done",

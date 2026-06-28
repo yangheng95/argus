@@ -5,11 +5,15 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey, testTaskOrderKey } from "../fixtures/timeline-order.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
 const TASK_ID = "tsk_message_card_chronological_turns"
+const USER_SESSION_ID = "ses_user"
+const CODING_SESSION_ID = "ses_coding"
 const PROJECT_ROOT = "D:/overlay/workspace/message-card-chronological-turns"
 const T0 = 1_776_000_000_000
 const SCREENSHOT_TOP_PATH = resolve(".scratch", "message-card-chronological-turns-browser", "timeline-top.png")
@@ -66,7 +70,9 @@ function message(input: {
   parentSessionID?: string
   tokens?: { input: number; output: number; total: number }
   cost?: number
+  includeStepStart?: boolean
 }) {
+  const textPartID = `part_${input.id}`
   return {
     info: {
       id: input.id,
@@ -75,6 +81,7 @@ function message(input: {
       role: input.role,
       resolvedRole: input.resolvedRole,
       agent: input.agent,
+      orderKey: testMessageOrderKey(input.id, input.created),
       time: { created: input.created },
       ...(input.parentSessionID ? { parentSessionID: input.parentSessionID } : {}),
       ...(input.role === "assistant" ? { providerID: "openai", modelID: "gpt-5-mini" } : {}),
@@ -84,10 +91,22 @@ function message(input: {
       ...(input.role === "assistant" && typeof input.cost === "number" ? { cost: input.cost } : {}),
     },
     parts: [
+      ...(input.includeStepStart
+        ? [
+            {
+              id: `step_start_${input.id}`,
+              messageID: input.id,
+              sessionID: input.sessionID,
+              orderKey: testPartOrderKey(`step_start_${input.id}`, input.created - 1),
+              type: "step-start",
+            },
+          ]
+        : []),
       {
-        id: `part_${input.id}`,
+        id: textPartID,
         messageID: input.id,
         sessionID: input.sessionID,
+        orderKey: testPartOrderKey(textPartID, input.created),
         type: "text",
         text: input.text,
       },
@@ -95,13 +114,14 @@ function message(input: {
   }
 }
 
-test("message cards render as chronological message turns without same-session merging", async () => {
+test("message cards render as chronological adjacent segment aggregation", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const task = {
     id: TASK_ID,
-    title: "Message card chronological turns",
+    orderKey: testTaskOrderKey(TASK_ID, T0 - 2_000),
+    title: "Message card adjacent segment chronology",
     directory: PROJECT_ROOT,
     status: "active",
     sessionID: "ses_orch",
@@ -113,8 +133,8 @@ test("message cards render as chronological message turns without same-session m
     task,
     run: { executor: "opencorvus", phase: "assistant", status: "active" },
     overview: {
-      headline: "Message card chronological turns",
-      summary: "Verify cards keep per-message identity.",
+      headline: "Message card adjacent segment chronology",
+      summary: "Verify cards keep timeline order while adjacent compatible messages share a segment card.",
       controls: {},
     },
     requirements: [],
@@ -125,7 +145,7 @@ test("message cards render as chronological message turns without same-session m
   const transcript = [
     message({
       id: "msg_user_1",
-      sessionID: "ses_coding",
+      sessionID: USER_SESSION_ID,
       channel: "main",
       role: "user",
       resolvedRole: "user",
@@ -135,7 +155,7 @@ test("message cards render as chronological message turns without same-session m
     }),
     message({
       id: "msg_assistant_1",
-      sessionID: "ses_coding",
+      sessionID: CODING_SESSION_ID,
       channel: "assistant",
       role: "assistant",
       resolvedRole: "assistant",
@@ -144,6 +164,17 @@ test("message cards render as chronological message turns without same-session m
       text: "Coding assistant reply one",
       tokens: { input: 500, output: 100, total: 600 },
       cost: 0.01,
+      includeStepStart: true,
+    }),
+    message({
+      id: "msg_assistant_1b",
+      sessionID: CODING_SESSION_ID,
+      channel: "assistant",
+      role: "assistant",
+      resolvedRole: "assistant",
+      agent: "coding-assistant",
+      created: T0 + 250,
+      text: "Coding assistant continuation",
     }),
     message({
       id: "msg_o1",
@@ -180,7 +211,7 @@ test("message cards render as chronological message turns without same-session m
     }),
     message({
       id: "msg_user_2",
-      sessionID: "ses_coding",
+      sessionID: USER_SESSION_ID,
       channel: "main",
       role: "user",
       resolvedRole: "user",
@@ -190,7 +221,7 @@ test("message cards render as chronological message turns without same-session m
     }),
     message({
       id: "msg_assistant_2",
-      sessionID: "ses_coding",
+      sessionID: CODING_SESSION_ID,
       channel: "assistant",
       role: "assistant",
       resolvedRole: "assistant",
@@ -203,13 +234,24 @@ test("message cards render as chronological message turns without same-session m
   ]
   const sessions = [
     {
-      sessionID: "ses_coding",
+      sessionID: USER_SESSION_ID,
       stage: "user",
-      messageIDs: ["msg_user_1", "msg_assistant_1", "msg_user_2", "msg_assistant_2"],
-      lastDisplayMessageID: "msg_assistant_2",
+      messageIDs: ["msg_user_1", "msg_user_2"],
+      lastDisplayMessageID: "msg_user_2",
       firstMessageTime: T0 + 100,
+      lastMessageTime: T0 + 600,
+      placement: "top_level",
+      orderKey: testSessionOrderKey(USER_SESSION_ID, T0 + 100),
+    },
+    {
+      sessionID: CODING_SESSION_ID,
+      stage: "assistant",
+      messageIDs: ["msg_assistant_1", "msg_assistant_1b", "msg_assistant_2"],
+      lastDisplayMessageID: "msg_assistant_2",
+      firstMessageTime: T0 + 200,
       lastMessageTime: T0 + 700,
       placement: "top_level",
+      orderKey: testSessionOrderKey(CODING_SESSION_ID, T0 + 200),
     },
     {
       sessionID: "ses_orch",
@@ -219,6 +261,7 @@ test("message cards render as chronological message turns without same-session m
       firstMessageTime: T0 + 300,
       lastMessageTime: T0 + 500,
       placement: "top_level",
+      orderKey: testSessionOrderKey("ses_orch", T0 + 300),
     },
     {
       sessionID: "ses_child",
@@ -229,6 +272,7 @@ test("message cards render as chronological message turns without same-session m
       firstMessageTime: T0 + 400,
       lastMessageTime: T0 + 400,
       placement: "top_level",
+      orderKey: testSessionOrderKey("ses_child", T0 + 400),
     },
   ]
   const messages = transcript.map((item) => ({
@@ -236,6 +280,7 @@ test("message cards render as chronological message turns without same-session m
     sessionID: item.info.sessionID,
     stage: item.info.channel === "main" ? "user" : item.info.channel,
     parentSessionID: item.info.parentSessionID,
+    orderKey: item.info.orderKey,
     time: item.info.time.created,
     placement: "top_level",
   }))
@@ -247,12 +292,11 @@ test("message cards render as chronological message turns without same-session m
     timeline: [],
     events: [],
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { sessions, messages, topLevelSessionIDs: ["ses_coding", "ses_orch", "ses_child"] },
-    agentView: { sessions, messages, topLevelSessionIDs: ["ses_coding", "ses_orch", "ses_child"] },
+    history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
+    view: { sessions, messages, topLevelSessionIDs: [USER_SESSION_ID, CODING_SESSION_ID, "ses_orch", "ses_child"] },
+    agentView: { sessions, messages, topLevelSessionIDs: [USER_SESSION_ID, CODING_SESSION_ID, "ses_orch", "ses_child"] },
   }
 
-  const errors: string[] = []
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -266,7 +310,7 @@ test("message cards render as chronological message turns without same-session m
       return json({ root: "D:/overlay", defaultDirectory: PROJECT_ROOT, projects: [] })
     if (path === "/project/current/worktrees") return json([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json([])
-    if (path === "/global/tasks" || path === "/tasks") return json({ tasks: [{ task, updated_at: T0 + 700 }] })
+    if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: T0 + 700 }] })
     if (path === "/path") return json({ directory: PROJECT_ROOT })
     if (path === "/vcs")
       return json({
@@ -298,6 +342,15 @@ test("message cards render as chronological message turns without same-session m
     if (path === "/executor") return json([])
     if (path === "/agent") return json([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return json([])
+    if (path === "/skill/mounts")
+      return json({
+        scope: "project",
+        skills: [],
+        agents: [],
+        matrix: [],
+        project_mounts: { agents: {} },
+        unmounted_count: 0,
+      })
     if (path === "/skill/directories")
       return json({
         global_config: "D:/skills/config",
@@ -335,13 +388,7 @@ test("message cards render as chronological message turns without same-session m
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    page.on("pageerror", (error: any) => errors.push(`pageerror: ${error.message || String(error)}`))
-    page.on("console", (message: any) => {
-      if (message.type() === "error") errors.push(`console: ${message.text()}`)
-    })
-    page.on("response", (response: any) => {
-      if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
-    })
+    const errors = installBrowserErrorCollector(page)
     await page.setViewport({ width: 1360, height: 1600 })
     await page.evaluateOnNewDocument(
       (seed: { serverUrl: string; taskID: string }) => {
@@ -356,18 +403,52 @@ test("message cards render as chronological message turns without same-session m
       { serverUrl: server.origin, taskID: TASK_ID },
     )
 
-    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector(`.task-row-main[data-task-id="${TASK_ID}"]`, { visible: true, timeout: 15_000 })
-    await page.click(`.task-row-main[data-task-id="${TASK_ID}"]`)
+    await page.goto(`${server.origin}/ui/index.html?taskID=${encodeURIComponent(TASK_ID)}`, { waitUntil: "load" })
+    try {
+      await page.waitForFunction(
+        (taskID: string) =>
+          (window as any).boardStore?.selectedSource?.kind === "task" &&
+          (window as any).boardStore.selectedSource.id === taskID,
+        { timeout: 15_000 },
+        TASK_ID,
+      )
+    } catch (error) {
+      const diagnostics = await page.evaluate(() => ({
+        localStorageWorkspaceTask: localStorage.getItem("oc_workspace_task") || "",
+        localStorageDirectory: localStorage.getItem("oc_directory") || "",
+        bodyDataset: { ...document.body.dataset },
+        selectedSource: (window as any).boardStore?.selectedSource,
+        activeTaskID: (window as any).boardStore?.board?.task?.id || "",
+        tasksLoaded: (window as any).boardStore?.tasksLoaded,
+        tasksError: (window as any).boardStore?.tasksError,
+        taskCount: (window as any).boardStore?.tasks?.length ?? -1,
+        taskRows: Array.from(document.querySelectorAll<HTMLElement>(".task-row-mini")).map((row) => ({
+          id: row.dataset.taskRowId || "",
+          active: row.dataset.active || "",
+          display: getComputedStyle(row).display,
+          visibility: getComputedStyle(row).visibility,
+        })),
+        cardCount: document.querySelectorAll("[data-card-id]").length,
+        pageText: document.body.innerText.slice(0, 1200),
+      }))
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+          { errors: errors.unexpectedErrors, diagnostics },
+          null,
+          2,
+        )}`,
+      )
+    }
+    await page.waitForSelector("#conversationWorkspace", { visible: true, timeout: 15_000 })
 
     const expectedCardIDs = [
-      "user:session:ses_coding:message:msg_user_1",
-      "assistant:session:ses_coding:message:msg_assistant_1",
+      `user:session:${USER_SESSION_ID}:message:msg_user_1`,
+      `assistant:session:${CODING_SESSION_ID}:message:msg_assistant_1`,
       "assistant:session:ses_orch:message:msg_o1",
       "architect:session:ses_child:message:msg_child",
       "assistant:session:ses_orch:message:msg_o2",
-      "user:session:ses_coding:message:msg_user_2",
-      "assistant:session:ses_coding:message:msg_assistant_2",
+      `user:session:${USER_SESSION_ID}:message:msg_user_2`,
+      `assistant:session:${CODING_SESSION_ID}:message:msg_assistant_2`,
     ]
     await page.waitForSelector(`[data-card-id="${expectedCardIDs.at(-1)}"]`, { visible: true, timeout: 15_000 })
     await page.waitForFunction(
@@ -398,21 +479,44 @@ test("message cards render as chronological message turns without same-session m
     assert.ok(header, "chat header should exist")
     mkdirSync(dirname(SCREENSHOT_USAGE_HEADER_PATH), { recursive: true })
     writeFileSync(SCREENSHOT_USAGE_HEADER_PATH, await header.screenshot({}))
-    assert.deepEqual(errors, [])
+    errors.assertNoUnexpectedErrors()
 
     const readVisibleExpectedIDs = async () =>
       page.evaluate((ids: string[]) => {
+        const scroll = document.getElementById("chatScroll")?.getBoundingClientRect()
         const cards = Array.from(document.querySelectorAll<HTMLElement>("[data-card-id]"))
-        return cards.map((card) => card.dataset.cardId || "").filter((id) => ids.includes(id))
+        return cards
+          .map((card) => {
+            const rect = card.getBoundingClientRect()
+            return {
+              id: card.dataset.cardId || "",
+              visible: scroll ? rect.bottom > scroll.top && rect.top < scroll.bottom : false,
+            }
+          })
+          .filter((item) => item.visible && ids.includes(item.id))
+          .map((item) => item.id)
       }, expectedCardIDs)
 
-    const workspace = await page.$("#conversationWorkspace")
-    assert.ok(workspace, "conversation workspace should exist")
+    const scrollHost = await page.$("#chatScroll")
+    assert.ok(scrollHost, "chat scroll host should exist")
 
-    await page.$eval("#conversationWorkspace", (el: HTMLElement) => {
+    await page.$eval("#chatScroll", (el: HTMLElement) => {
       el.scrollTop = 0
     })
     await page.waitForSelector(`[data-card-id="${expectedCardIDs[0]}"]`, { visible: true, timeout: 15_000 })
+    await page.waitForSelector(`[data-card-id="assistant:session:${CODING_SESSION_ID}:message:msg_assistant_1"]`, {
+      visible: true,
+      timeout: 15_000,
+    })
+    const absorbedAssistantCardID = `assistant:session:${CODING_SESSION_ID}:message:msg_assistant_1b`
+    assert.equal(await page.$(`[data-card-id="${absorbedAssistantCardID}"]`), null)
+    const firstAssistantText = await page.$eval(
+      `[data-card-id="assistant:session:${CODING_SESSION_ID}:message:msg_assistant_1"]`,
+      (el: HTMLElement) => el.textContent || "",
+    )
+    assert.ok(firstAssistantText.includes("Coding assistant reply one"))
+    assert.ok(firstAssistantText.includes("Coding assistant continuation"))
+    assert.equal(firstAssistantText.includes("step_start_msg_assistant_1"), false)
     const topIDs = await readVisibleExpectedIDs()
     assert.ok(topIDs.length >= 2, "top viewport should show the first chronological message cards")
     assert.deepEqual(topIDs, expectedCardIDs.slice(0, topIDs.length))
@@ -420,9 +524,9 @@ test("message cards render as chronological message turns without same-session m
     const firstUserCard = await page.$(`[data-card-id="${expectedCardIDs[0]}"]`)
     assert.ok(firstUserCard, "first user card should exist for element screenshot")
     writeFileSync(SCREENSHOT_FIRST_USER_PATH, await firstUserCard.screenshot({}))
-    writeFileSync(SCREENSHOT_TOP_PATH, await workspace.screenshot({}))
+    writeFileSync(SCREENSHOT_TOP_PATH, await scrollHost.screenshot({}))
 
-    await page.$eval("#conversationWorkspace", (el: HTMLElement) => {
+    await page.$eval("#chatScroll", (el: HTMLElement) => {
       el.scrollTop = el.scrollHeight
     })
     await page.waitForSelector(`[data-card-id="${expectedCardIDs.at(-1)}"]`, { visible: true, timeout: 15_000 })
@@ -458,9 +562,9 @@ test("message cards render as chronological message turns without same-session m
         ?.text.includes("Orchestrator turn two"),
     )
     assert.ok(
-      visible.find((item) => item.id === "user:session:ses_coding:message:msg_user_2")?.text.includes("User turn two"),
+      visible.find((item) => item.id === `user:session:${USER_SESSION_ID}:message:msg_user_2`)?.text.includes("User turn two"),
     )
-    writeFileSync(SCREENSHOT_BOTTOM_PATH, await workspace.screenshot({}))
+    writeFileSync(SCREENSHOT_BOTTOM_PATH, await scrollHost.screenshot({}))
   } finally {
     await browser.close()
     await server.close()

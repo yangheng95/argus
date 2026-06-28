@@ -1,11 +1,17 @@
 import { createStore } from "solid-js/store"
 import type { AgentWorkflowRecord, AgentWorkflowStatus } from "../utils/agent-workflow"
 import { normalizeAgentRole } from "../utils/message"
-import { goalStagePhaseID } from "../utils/workflow-step"
 import type { BoardSource } from "./board"
+import {
+  renderedConversationCardTargetForGoalPhase,
+  renderedConversationCardTargetForMessage,
+} from "../services/tree-writer"
+import { compareTimelineOrderKeys, requireTimelineOrderKey, requireTimelineOrderKeyDomain } from "../utils/timeline-order"
+import { messagePartHasDisplayContent } from "../utils/message-part"
 
 export interface ConversationAgentSessionView {
   sessionID: string
+  orderKey: string
   stage: string
   parentSessionID?: string
   goalID?: string
@@ -25,6 +31,7 @@ export interface ConversationAgentSessionView {
 
 export interface ConversationAgentMessageView {
   messageID: string
+  orderKey: string
   sessionID: string
   stage: string
   parentSessionID?: string
@@ -58,10 +65,10 @@ type ConversationAgentTargetRecord = Pick<
   | "parentSessionID"
   | "agentName"
   | "stage"
+  | "orderKey"
   | "startedAt"
   | "lastObservedAt"
   | "targetMessageID"
-  | "targetObservedAt"
   | "goalID"
   | "stepID"
   | "phaseID"
@@ -70,6 +77,8 @@ type ConversationAgentTargetRecord = Pick<
 >
 
 const pendingTargetsBySource = new Map<string, Map<string, ConversationAgentTargetRecord>>()
+
+type AgentRenderedTarget = Pick<AgentWorkflowRecord, "cardID" | "renderedCardID" | "stepID" | "phaseID">
 
 export function conversationAgentSourceKey(source: BoardSource | null): string {
   return source ? `${source.kind}:${source.id}` : ""
@@ -80,50 +89,49 @@ export function conversationAgentRecordsForSource(source: BoardSource | null): A
   return key && conversationAgentStore.taskID === key ? conversationAgentStore.records : []
 }
 
-function renderedTargetForMessage(
-  message: ConversationAgentMessageView,
-  stage: string,
-): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> | null {
-  const goalID = String(message?.goalID || "")
-  const stepID = String(message?.phase?.stepID || "")
-  const phaseID = String(message?.phase?.phaseID || "")
-  if (goalID && stepID && phaseID) {
-    const renderedCardID = `step:${goalID}:${stepID}`
-    return {
-      cardID: `${renderedCardID}:phase:${phaseID}`,
-      renderedCardID,
-    }
+function agentRenderedTargetFromProjection(target: {
+  cardID?: string
+  renderedCardID: string
+  stepID?: string
+  phaseID?: string
+}): AgentRenderedTarget {
+  return {
+    ...(target.cardID ? { cardID: target.cardID } : {}),
+    renderedCardID: target.renderedCardID,
+    ...(target.stepID ? { stepID: target.stepID } : {}),
+    ...(target.phaseID ? { phaseID: target.phaseID } : {}),
   }
-  const messageID = String(message?.messageID || "")
-  if (stage === "integrity" && messageID) return { renderedCardID: `${stage}:session:${message.sessionID}` }
-  if (messageID) return { renderedCardID: `${stage}:session:${message.sessionID}:message:${messageID}` }
-  return null
 }
 
-function renderedTargetForPhaseSession(
-  session: ConversationAgentSessionView,
-): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> | null {
+function renderedTargetForMessage(message: ConversationAgentMessageView): AgentRenderedTarget | null {
+  const messageID = String(message?.messageID || "")
+  if (!messageID) return null
+  const orderKey = requireTimelineOrderKeyDomain(message?.orderKey, `conversation agent message ${messageID}`, "message")
+  const target = renderedConversationCardTargetForMessage(messageID)
+  if (!target) return null
+  if (target.orderKey !== orderKey) {
+    throw new Error(`conversation agent message ${messageID} orderKey drift between rail view and tree-writer target`)
+  }
+  return agentRenderedTargetFromProjection(target)
+}
+
+function renderedTargetForPhaseSession(session: ConversationAgentSessionView): AgentRenderedTarget | null {
   const goalID = String(session?.goalID || "")
   const stepID = String(session?.phase?.stepID || "")
   const phaseID = String(session?.phase?.phaseID || "")
   if (!goalID || !stepID || !phaseID) return null
-  const renderedCardID = `step:${goalID}:${stepID}`
-  return {
-    cardID: `${renderedCardID}:phase:${phaseID}`,
-    renderedCardID,
-  }
+  const target = renderedConversationCardTargetForGoalPhase({ goalID, stepID, phaseID })
+  return target ? agentRenderedTargetFromProjection(target) : null
 }
 
-function renderedTargetForSession(
-  session: ConversationAgentSessionView,
-  stage: string,
-): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> | null {
+function renderedTargetForSession(session: ConversationAgentSessionView, stage: string): AgentRenderedTarget | null {
   const phaseTarget = renderedTargetForPhaseSession(session)
   if (phaseTarget) return phaseTarget
   const messageID = String(session?.lastDisplayMessageID || "")
   if (!messageID) return null
-  if (stage === "integrity") return { renderedCardID: `${stage}:session:${session.sessionID}` }
-  return { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
+  if (!stage) return null
+  const target = renderedConversationCardTargetForMessage(messageID)
+  return target ? agentRenderedTargetFromProjection(target) : null
 }
 
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
@@ -131,6 +139,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
   const rawStage = String(session?.stage || "")
   const stage = normalizeAgentRole(rawStage)
   const startedAt = Number(session?.firstObservedAt ?? session?.firstMessageTime ?? 0)
+  const orderKey = requireTimelineOrderKey(session?.orderKey, `conversation agent session ${sessionID}`)
   if (
     !sessionID ||
     !stage ||
@@ -152,6 +161,7 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     agentName: stage,
     stage,
     status,
+    orderKey,
     startedAt,
     lastObservedAt,
     ...(terminal ? { completedAt: lastObservedAt } : {}),
@@ -161,30 +171,66 @@ function agentRecordFromSession(session: ConversationAgentSessionView): AgentWor
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
-    ...(target ? { ...target, targetObservedAt: Number(session?.lastMessageTime || lastObservedAt) } : {}),
+    ...(target ? { ...target } : {}),
   }
 }
 
-function targetHasCard(target: ConversationAgentTargetRecord): boolean {
-  return !!target.renderedCardID || !!target.cardID
-}
-
-function targetShouldReplace(
-  existing: AgentWorkflowRecord,
-  target: ConversationAgentTargetRecord,
-): boolean {
-  if (!targetHasCard(target)) return false
-  if (!existing.renderedCardID && !existing.cardID) return true
-  return target.lastObservedAt >= Number(existing.targetObservedAt || 0)
+function projectedTargetForRecord(record: {
+  sessionID: string
+  stage?: string
+  targetMessageID?: string
+  goalID?: string
+  stepID?: string
+  phaseID?: string
+}): { orderKey: string; target: AgentRenderedTarget } | null {
+  const targetMessageID = String(record.targetMessageID || "")
+  if (targetMessageID) {
+    const target = renderedConversationCardTargetForMessage(targetMessageID)
+    if (!target) {
+      throw new Error(`conversation agent record ${record.sessionID} target message ${targetMessageID} is not projected`)
+    }
+    return { orderKey: target.orderKey, target: agentRenderedTargetFromProjection(target) }
+  }
+  const phaseTarget = renderedConversationCardTargetForGoalPhase({
+    goalID: record.goalID,
+    stepID: record.stepID,
+    phaseID: record.phaseID,
+    stage: record.stage,
+  })
+  return phaseTarget ? { orderKey: phaseTarget.orderKey, target: agentRenderedTargetFromProjection(phaseTarget) } : null
 }
 
 function mergeTargetIntoRecord(
   existing: AgentWorkflowRecord,
   target: ConversationAgentTargetRecord,
 ): AgentWorkflowRecord {
-  const replaceTarget = targetShouldReplace(existing, target)
+  const incomingProjection = projectedTargetForRecord(target)
+  if (!incomingProjection) {
+    throw new Error(`conversation agent target ${target.sessionID} has no projected orderKey`)
+  }
+  const existingProjection =
+    existing.renderedCardID || existing.cardID ? projectedTargetForRecord(existing) : null
+  if ((existing.renderedCardID || existing.cardID) && !existingProjection) {
+    throw new Error(`conversation agent record ${existing.sessionID} has a card target without projected orderKey`)
+  }
+  const replaceTarget =
+    !existingProjection ||
+    compareTimelineOrderKeys(
+      incomingProjection.orderKey,
+      existingProjection.orderKey,
+      `conversation agent target ${existing.sessionID}`,
+    ) >= 0
+  const existingOrderKey = requireTimelineOrderKey(existing.orderKey, `conversation agent record ${existing.sessionID}`)
+  const incomingOrderKey = requireTimelineOrderKey(
+    incomingProjection.orderKey,
+    `conversation agent target ${target.sessionID} projection`,
+  )
   return {
     ...existing,
+    orderKey:
+      compareTimelineOrderKeys(incomingOrderKey, existingOrderKey, "conversation agent merge") < 0
+        ? incomingOrderKey
+        : existingOrderKey,
     startedAt: Math.min(existing.startedAt, target.startedAt),
     lastObservedAt: Math.max(existing.lastObservedAt, target.lastObservedAt),
     parentSessionID: target.parentSessionID || existing.parentSessionID,
@@ -196,11 +242,15 @@ function mergeTargetIntoRecord(
     ...(replaceTarget
       ? {
           targetMessageID: target.targetMessageID,
-          targetObservedAt: target.lastObservedAt,
-          cardID: target.cardID,
-          renderedCardID: target.renderedCardID,
+          cardID: incomingProjection.target.cardID,
+          renderedCardID: incomingProjection.target.renderedCardID,
         }
-      : {}),
+      : existingProjection
+        ? {
+            cardID: existingProjection.target.cardID,
+            renderedCardID: existingProjection.target.renderedCardID,
+          }
+        : {}),
   }
 }
 
@@ -216,8 +266,14 @@ function mergeTargetRecords(
     nextRecords[index] = mergeTargetIntoRecord(nextRecords[index]!, target)
     attachedSessionIDs.add(target.sessionID)
   }
-  nextRecords = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
+  nextRecords = sortAgentRecords(nextRecords)
   return { records: applyDepth(nextRecords), attachedSessionIDs }
+}
+
+function sortAgentRecords(records: AgentWorkflowRecord[]): AgentWorkflowRecord[] {
+  return records.sort((left, right) =>
+    compareTimelineOrderKeys(left.orderKey, right.orderKey, "conversation agent record"),
+  )
 }
 
 function pendingTargetsForSource(sourceKey: string): Map<string, ConversationAgentTargetRecord> {
@@ -231,7 +287,13 @@ function pendingTargetsForSource(sourceKey: string): Map<string, ConversationAge
 function rememberPendingTarget(sourceKey: string, target: ConversationAgentTargetRecord): void {
   const pending = pendingTargetsForSource(sourceKey)
   const existing = pending.get(target.sessionID)
-  if (!existing || target.lastObservedAt >= existing.lastObservedAt) pending.set(target.sessionID, target)
+  if (
+    !existing ||
+    compareTimelineOrderKeys(target.orderKey, existing.orderKey, `conversation agent pending target ${target.sessionID}`) >=
+      0
+  ) {
+    pending.set(target.sessionID, target)
+  }
 }
 
 function forgetPendingTargets(sourceKey: string, sessionIDs: Set<string>): void {
@@ -241,7 +303,10 @@ function forgetPendingTargets(sourceKey: string, sessionIDs: Set<string>): void 
   if (pending.size === 0) pendingTargetsBySource.delete(sourceKey)
 }
 
-function pendingTargetsForCurrentRecords(sourceKey: string, records: AgentWorkflowRecord[]): ConversationAgentTargetRecord[] {
+function pendingTargetsForCurrentRecords(
+  sourceKey: string,
+  records: AgentWorkflowRecord[],
+): ConversationAgentTargetRecord[] {
   const pending = pendingTargetsBySource.get(sourceKey)
   if (!pending) return []
   const sessionIDs = new Set(records.map((record) => record.sessionID))
@@ -271,6 +336,11 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
     const rawStage = String(message?.stage || "")
     const stage = normalizeAgentRole(rawStage)
     const observedAt = Number(message?.time || 0)
+    const orderKey = requireTimelineOrderKeyDomain(
+      message?.orderKey,
+      `conversation agent message ${message?.messageID || ""}`,
+      "message",
+    )
     if (
       !sessionID ||
       !stage ||
@@ -282,7 +352,7 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
     ) {
       continue
     }
-    const target = renderedTargetForMessage(message, stage)
+    const target = renderedTargetForMessage(message)
     if (!target) continue
     const existing = bySession.get(sessionID)
     if (!existing) {
@@ -291,6 +361,7 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
         parentSessionID: String(message?.parentSessionID || ""),
         agentName: stage,
         stage,
+        orderKey,
         startedAt: observedAt,
         lastObservedAt: observedAt,
         targetMessageID: String(message.messageID || ""),
@@ -301,9 +372,11 @@ function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]
       })
       continue
     }
+    const isLatestTarget = compareTimelineOrderKeys(orderKey, existing.orderKey, "conversation agent message target") >= 0
     existing.startedAt = Math.min(existing.startedAt, observedAt)
     existing.lastObservedAt = Math.max(existing.lastObservedAt, observedAt)
-    if (observedAt >= existing.lastObservedAt) {
+    if (isLatestTarget) {
+      existing.orderKey = orderKey
       existing.agentName = stage
       existing.stage = stage
       existing.parentSessionID = String(message?.parentSessionID || existing.parentSessionID || "")
@@ -358,7 +431,7 @@ export function hydrateConversationAgentView(taskID: string, view: ConversationA
     recordsBySession.set(target.sessionID, mergeTargetIntoRecord(existing, target))
   }
   forgetPendingTargets(taskID, new Set(sourcePendingTargets.map((target) => target.sessionID)))
-  const records = [...recordsBySession.values()].sort((left, right) => left.startedAt - right.startedAt)
+  const records = sortAgentRecords([...recordsBySession.values()])
   setConversationAgentStore({
     taskID,
     records: applyDepth(records),
@@ -375,9 +448,7 @@ export function attachConversationAgentViewTargets(sourceKeyInput: string, view:
 function liveStageFromMessageInfo(info: any): string | null {
   const channel = String(info?.channel || "").trim()
   if (!channel) {
-    throw new Error(
-      `conversation agent live view: message info is missing channel. info=${JSON.stringify(info)}`,
-    )
+    throw new Error(`conversation agent live view: message info is missing channel. info=${JSON.stringify(info)}`)
   }
   if (channel === "main" || channel === "filtered") return null
   const stage = normalizeAgentRole(channel)
@@ -394,30 +465,20 @@ function liveEventObservedAt(event: any): number {
 }
 
 function livePartHasDisplay(part: any): boolean {
-  const type = String(part?.type || "")
-  if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
-  if (type === "text" || type === "reasoning") return Boolean(String(part?.text || "").trim())
-  return true
+  return messagePartHasDisplayContent(part)
 }
 
 function liveMessageRecordTarget(
   sessionID: string,
   messageID: string,
-  stage: string,
-  goalID: string,
 ): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID" | "stepID" | "phaseID"> {
-  const phase = goalID ? goalStagePhaseID(stage) : null
-  if (phase) {
-    const renderedCardID = `step:${goalID}:${phase.stepID}`
-    return {
-      cardID: `${renderedCardID}:phase:${phase.phaseID}`,
-      renderedCardID,
-      stepID: phase.stepID,
-      phaseID: phase.phaseID,
-    }
+  const target = renderedConversationCardTargetForMessage(messageID)
+  if (!target) {
+    throw new Error(
+      `conversation agent live view missing rendered message target for message ${messageID} in session ${sessionID}`,
+    )
   }
-  if (stage === "integrity") return { renderedCardID: `${stage}:session:${sessionID}` }
-  return { renderedCardID: `${stage}:session:${sessionID}:message:${messageID}` }
+  return agentRenderedTargetFromProjection(target)
 }
 
 export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string, event: any): void {
@@ -434,16 +495,18 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
   const stage = liveStageFromMessageInfo(info)
   if (!stage) return
   const observedAt = Number(info?.time?.created || 0)
+  const orderKey = requireTimelineOrderKey(event?.orderKey, `conversation agent live message ${messageID}`)
+  if (typeof info?.orderKey === "string" && info.orderKey.length > 0 && info.orderKey !== orderKey) {
+    throw new Error(`conversation agent live message ${messageID} orderKey drift between envelope and info`)
+  }
   if (!(observedAt > 0)) {
-    throw new Error(
-      `conversation agent live view info.time.created must be positive (got ${info?.time?.created})`,
-    )
+    throw new Error(`conversation agent live view info.time.created must be positive (got ${info?.time?.created})`)
   }
   const parentSessionID = String(info.parentSessionID || "")
   const goalID = String(info.goalID || "")
   const completedAt = Number(info?.time?.completed || 0)
   const completed = Number.isFinite(completedAt) && completedAt > 0
-  const target = liveMessageRecordTarget(sessionID, messageID, stage, goalID)
+  const target = liveMessageRecordTarget(sessionID, messageID)
   const nextObservedAt = completed ? Math.max(observedAt, completedAt) : observedAt
   applyTargetRecordsToStore(sourceKey, [
     {
@@ -451,6 +514,7 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
       parentSessionID,
       agentName: stage,
       stage,
+      orderKey,
       startedAt: observedAt,
       lastObservedAt: nextObservedAt,
       targetMessageID: messageID,
@@ -467,27 +531,36 @@ export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, ev
   const part = properties?.part
   if (!part || typeof part !== "object" || Array.isArray(part)) return
   if (!livePartHasDisplay(part)) return
-  const channel = String(properties?.channel || "").trim()
-  const resolvedRole = String(properties?.resolvedRole || "").trim()
-  if (!channel || !resolvedRole) return
   const messageID = String(part.messageID || "")
   const sessionID = String(part.sessionID || "")
   if (!messageID || !sessionID) throw new Error("conversation agent live view part missing messageID/sessionID")
+  const channel = typeof properties?.channel === "string" ? properties.channel.trim() : ""
+  const resolvedRole = typeof properties?.resolvedRole === "string" ? properties.resolvedRole.trim() : ""
+  if (!channel || !resolvedRole) {
+    throw new Error(
+      `conversation agent live view message.part.updated for ${messageID} missing top-level channel/resolvedRole`,
+    )
+  }
   const stage = liveStageFromMessageInfo({ channel })
   if (!stage) return
   const observedAt = liveEventObservedAt(event)
+  const orderKey = requireTimelineOrderKey(event?.orderKey, `conversation agent live part ${messageID}`)
+  if (typeof properties?.orderKey === "string" && properties.orderKey.length > 0 && properties.orderKey !== orderKey) {
+    throw new Error(`conversation agent live part ${messageID} orderKey drift between envelope and payload`)
+  }
   if (!(observedAt > 0)) {
     throw new Error("conversation agent live view message.part.updated missing emitted time")
   }
   const parentSessionID = String(properties.parentSessionID || "")
   const goalID = String(properties.goalID || "")
-  const target = liveMessageRecordTarget(sessionID, messageID, stage, goalID)
+  const target = liveMessageRecordTarget(sessionID, messageID)
   applyTargetRecordsToStore(sourceKey, [
     {
       sessionID,
       parentSessionID,
       agentName: stage,
       stage,
+      orderKey,
       startedAt: observedAt,
       lastObservedAt: observedAt,
       targetMessageID: messageID,
@@ -511,19 +584,11 @@ function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
 }
 
 function liveSessionRecordTarget(
-  sessionID: string,
   stage: string,
   goalID: string,
 ): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID" | "stepID" | "phaseID"> | null {
-  const phase = goalID ? goalStagePhaseID(stage) : null
-  if (!phase) return null
-  const renderedCardID = `step:${goalID}:${phase.stepID}`
-  return {
-    cardID: `${renderedCardID}:phase:${phase.phaseID}`,
-    renderedCardID,
-    stepID: phase.stepID,
-    phaseID: phase.phaseID,
-  }
+  const target = renderedConversationCardTargetForGoalPhase({ goalID, stage })
+  return target ? agentRenderedTargetFromProjection(target) : null
 }
 
 export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, event: any): void {
@@ -536,6 +601,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
   if (!stage) return
   const status = liveAgentStatusFromSessionStatus(properties?.status)
   const observedAt = liveEventObservedAt(event)
+  const orderKey = requireTimelineOrderKeyDomain(event?.orderKey, `conversation agent live session ${sessionID}`, "session")
   if (!(observedAt > 0)) {
     throw new Error("conversation agent live view session.status missing emitted time")
   }
@@ -545,7 +611,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
   const terminal = status === "completed" || status === "error" || status === "skipped"
   if (index === -1) {
     const goalID = String(properties.goalID || "")
-    const target = liveSessionRecordTarget(sessionID, stage, goalID)
+    const target = liveSessionRecordTarget(stage, goalID)
     const created: AgentWorkflowRecord = {
       id: sessionID,
       sessionID,
@@ -553,6 +619,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       agentName: stage,
       stage,
       status,
+      orderKey,
       startedAt: observedAt,
       lastObservedAt: observedAt,
       ...(terminal ? { completedAt: observedAt } : {}),
@@ -560,20 +627,25 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
       depth: 0,
       targetMessageID: "",
       goalID: goalID || undefined,
-      ...(target ? { ...target, targetObservedAt: observedAt } : {}),
+      ...(target ? { ...target } : {}),
     }
     const pendingTarget = pendingTargetsForSource(sourceKey).get(sessionID)
     nextRecords.push(pendingTarget ? mergeTargetIntoRecord(created, pendingTarget) : created)
   } else {
     const existing = nextRecords[index]!
     const goalID = String(properties.goalID || existing.goalID || "")
-    const target = liveSessionRecordTarget(sessionID, stage, goalID)
+    const target = liveSessionRecordTarget(stage, goalID)
     const updated: AgentWorkflowRecord = {
       ...existing,
       parentSessionID: String(properties.parentSessionID || existing.parentSessionID || ""),
       agentName: stage,
       stage,
       status,
+      orderKey:
+        existing.orderKey &&
+        compareTimelineOrderKeys(existing.orderKey, orderKey, "conversation agent live session") <= 0
+          ? existing.orderKey
+          : orderKey,
       startedAt: Math.min(existing.startedAt, observedAt),
       lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
       ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
@@ -585,6 +657,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
           parentSessionID: updated.parentSessionID,
           agentName: stage,
           stage,
+          orderKey,
           startedAt: observedAt,
           lastObservedAt: observedAt,
           targetMessageID: updated.targetMessageID || "",
@@ -593,7 +666,7 @@ export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, 
         })
       : updated
   }
-  const records = applyDepth(nextRecords.sort((left, right) => left.startedAt - right.startedAt))
+  const records = applyDepth(sortAgentRecords(nextRecords))
   forgetPendingTargets(sourceKey, new Set(records.map((record) => record.sessionID)))
   setConversationAgentStore({
     taskID: sourceKey,

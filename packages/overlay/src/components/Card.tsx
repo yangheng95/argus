@@ -9,12 +9,12 @@ import {
   visibleChildIDsForCard,
 } from "../utils/card-tree"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
-import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
-import { loadConversationSessionHistory } from "../services/conversation"
+import { rootTaskSessionID, activeTaskID } from "../store/board"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
 import { currentTraceDirectory } from "../services/trace-directory"
 import { normalizeAgentRole } from "../utils/message"
+import { isBoundaryMessagePart } from "../utils/message-part"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { CardHeader } from "./CardHeader"
 import { CardParts } from "./CardParts"
@@ -27,8 +27,6 @@ import { TracePanel } from "./TracePanel"
 import { t } from "../utils/i18n"
 import { StoreCardNode } from "./StoreCardNode"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
-
-const inFlightBuildHistorySessions = new Set<string>()
 
 /**
  * Recursive structured-card primitive for non-bubble conversation items.
@@ -53,14 +51,6 @@ export function Card(props: { node: CardNode; depth: number }) {
   const promotedBuildPhase = createMemo(() => buildPhaseChildForStep(props.node))
   const headerNode = createMemo(() => stepHeaderNodeWithBuildPhase(props.node))
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node))
-  const buildHistorySessionID = createMemo(() => {
-    if (props.node.kind === "phase" && props.node.phaseID === "build") {
-      return props.node.phaseSessionID
-    }
-    if (props.node.kind !== "step") return undefined
-    return promotedBuildPhase()?.phaseSessionID || props.node.stepPayload?.buildSessionID
-  })
-
   // Foot stats are collapsed-only. Expanded stage cards render their actual
   // body and children, so a recursive descendant scan here would only add
   // per-delta work on the streaming hot path.
@@ -218,7 +208,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (node.kind !== "phase" || parts.length === 0) return parts
     const phaseRole = node.phaseSessionKind || node.stage || ""
     const first = parts[0]
-    if (!phaseRole || first?.type !== "boundary") return parts
+    if (!phaseRole || !isBoundaryMessagePart(first)) return parts
     return normalizeAgentRole(String(first.role || "")) === normalizeAgentRole(phaseRole) ? parts.slice(1) : parts
   }
 
@@ -252,26 +242,6 @@ export function Card(props: { node: CardNode; depth: number }) {
       observer.disconnect()
       updateStickyInlineSizeOnFrame.cancel()
     })
-  })
-
-  createEffect(() => {
-    if (!expanded()) return
-    const sessionID = String(buildHistorySessionID() || "")
-    const taskID = activeTaskID()
-    const directory = String(boardStore.board?.task?.directory || "").trim()
-    if (!sessionID || !taskID || !directory) return
-    const phase = props.node.kind === "phase" ? props.node : promotedBuildPhase()
-    if ((phase?.parts?.length || 0) > 0) return
-    const key = `${taskID}:${sessionID}`
-    if (inFlightBuildHistorySessions.has(key)) return
-    inFlightBuildHistorySessions.add(key)
-    void loadConversationSessionHistory(sessionID, taskID, { directory })
-      .catch((error) => {
-        console.warn("[conversation] build session history hydrate failed", error)
-      })
-      .finally(() => {
-        inFlightBuildHistorySessions.delete(key)
-      })
   })
 
   return (
@@ -349,22 +319,8 @@ export function Card(props: { node: CardNode; depth: number }) {
             <CardParts parts={bodyParts()} depth={props.depth} streaming={props.node.status === "running"} />
           </Show>
 
-          {/* Recursive children.
-              Store-backed cards use `childIDs` — the renderer dereferences
-              each id through the `cardTreeStore.cards` proxy so targeted
-              writes to a single descendant don't re-run any intermediate
-              memo. Transient cards (tool promotion in CardParts) still
-              carry inline `children`; when both are set `childIDs` wins. */}
-          <Show
-            when={visibleChildIDs().length > 0}
-            fallback={
-              <Show when={(props.node.children?.length ?? 0) > 0}>
-                <div class="card__children">
-                  <For each={props.node.children}>{(child) => <Card node={child} depth={props.depth + 1} />}</For>
-                </div>
-              </Show>
-            }
-          >
+          {/* Recursive children are store-backed only. */}
+          <Show when={visibleChildIDs().length > 0}>
             <div class="card__children">
               <For each={visibleChildIDs()}>
                 {(id) => (

@@ -37,10 +37,15 @@ import {
 } from "../store/card-tree-stats"
 import { boardStore, setBoardProjectionHandler } from "../store/board"
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message"
+import { isBoundaryMessagePart, isCardBodyMessagePart, messagePartHasDisplayContent } from "../utils/message-part"
 import { stageAccent } from "../utils/card-color"
 import { t } from "../utils/i18n"
 import { normalizeToolPartRecord } from "../utils/tool"
-import { compareTimelineOrderKeys, requireTimelineOrderKey } from "../utils/timeline-order"
+import {
+  compareTimelineOrderKeys,
+  requireTimelineOrderKey,
+  requireTimelineOrderKeyDomain,
+} from "../utils/timeline-order"
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
  *  ("frontend_design", "frontend_design", "frontend-design") all resolve
@@ -105,11 +110,13 @@ function modelProjectionFromInfo(info: any): MessageModelProjection | undefined 
 function projectModelOntoCard(
   session: SessionInfo,
   messageID: string,
-  fallbackCardID: string,
   model: MessageModelProjection | undefined,
 ): void {
   session.messageModels.set(messageID, model)
-  const targetCardID = session.messageCardIDs.get(messageID) ?? fallbackCardID
+  const targetCardID = session.messageCardIDs.get(messageID)
+  if (!targetCardID) {
+    throw new Error(`message ${messageID} missing rendered card projection for model metadata`)
+  }
   refreshModelProjectionForCard(targetCardID)
 }
 
@@ -135,11 +142,13 @@ function refreshModelProjectionForCard(targetCardID: string): void {
 function projectUsageOntoCard(
   session: SessionInfo,
   messageID: string,
-  fallbackCardID: string,
   usage: MessageUsageProjection,
 ): void {
   session.messageUsage.set(messageID, usage)
-  const targetCardID = session.messageCardIDs.get(messageID) ?? fallbackCardID
+  const targetCardID = session.messageCardIDs.get(messageID)
+  if (!targetCardID) {
+    throw new Error(`message ${messageID} missing rendered card projection for usage metadata`)
+  }
   refreshUsageProjectionForCard(targetCardID)
 }
 
@@ -251,7 +260,12 @@ interface MessageInfo {
   goalID: string
   orderKey: string
   time: number
+  serverTimeConfirmed: boolean
   completed: boolean
+}
+
+interface PendingPartFirstMessageInfo extends MessageInfo {
+  pendingPartFirst: true
 }
 
 interface MessageUsageProjection {
@@ -270,6 +284,7 @@ interface MessageModelProjection {
 
 const sessions = new Map<string, SessionInfo>()
 const messages = new Map<string, MessageInfo>()
+const pendingPartFirstMessages = new Map<string, PendingPartFirstMessageInfo>()
 let latestTimelineMessage: MessageInfo | undefined
 /** goalID → known. Goal cards themselves are driven by board.goalWorkflows,
  *  not by `goal.created` events — we just remember existence here so session
@@ -366,6 +381,7 @@ export function resetWriter(
   }
   sessions.clear()
   messages.clear()
+  pendingPartFirstMessages.clear()
   latestTimelineMessage = undefined
   knownGoalIDs.clear()
   integrityCardOwners.clear()
@@ -614,6 +630,7 @@ export function ingestPersistedConversationMessage(input: { info: any; parts: an
   batch(() => {
     applyEvent({
       type: "message.updated",
+      orderKey: input.info.orderKey,
       properties: { info: input.info },
     })
     for (const part of input.parts) {
@@ -655,10 +672,11 @@ function isUserStage(stage: string): boolean {
 }
 
 function conversationPartHasDisplay(part: any): boolean {
-  const type = String(part?.type || "")
-  if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
-  if (type === "text" || type === "reasoning") return Boolean(String(part?.text || "").trim())
-  return true
+  return messagePartHasDisplayContent(part)
+}
+
+function conversationPartIsProjectable(part: any): boolean {
+  return isCardBodyMessagePart(part)
 }
 
 function transcriptMessageHasDisplay(message: any): boolean {
@@ -780,11 +798,11 @@ function handleMessageUpdated(event: any): void {
     throw new Error(`message.updated info missing role for message ${info.id}; bridge must enrich it`)
   }
   const role = rawRole
-  const rawResolvedRole = info.resolvedRole || info.agent || role
+  const rawResolvedRole = info.resolvedRole
   if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
-    throw new Error(`message.updated info missing resolvedRole/agent for message ${info.id}`)
+    throw new Error(`message.updated info missing resolvedRole for message ${info.id}`)
   }
-  const agent = String(info.agent || "")
+  const agent = typeof info.agent === "string" ? info.agent : ""
   const parentSessionID = String(info.parentSessionID || "")
   const goalID = String(info.goalID || "")
   const incomingTimeCreated = Number(info?.time?.created || 0)
@@ -793,9 +811,15 @@ function handleMessageUpdated(event: any): void {
       `message.updated info.time.created must be positive (got ${info?.time?.created}); server emitter is the single source of truth`,
     )
   }
-  const orderKey = requireTimelineOrderKey(info.orderKey, `message.updated ${id}`)
+  const envelopeOrderKey = requireTimelineOrderKeyDomain(event?.orderKey, `message.updated ${id} envelope`, "message")
+  const infoOrderKey = requireTimelineOrderKeyDomain(info.orderKey, `message.updated ${id}`, "message")
+  if (envelopeOrderKey !== infoOrderKey) {
+    throw new Error(`message.updated ${id} orderKey drift between envelope and info`)
+  }
+  const orderKey = envelopeOrderKey
   const existingMessage = messages.get(id)
-  const timeCreated = existingMessage?.time && existingMessage.time > 0 ? existingMessage.time : incomingTimeCreated
+  pendingPartFirstMessages.delete(id)
+  const timeCreated = existingMessage?.serverTimeConfirmed ? existingMessage.time : incomingTimeCreated
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0
 
   // Channel-driven stage. Bridge stamps it on every event; an absent
@@ -814,6 +838,7 @@ function handleMessageUpdated(event: any): void {
     goalID,
     orderKey,
     time: timeCreated,
+    serverTimeConfirmed: true,
     completed,
   }
   const insertsBeforeKnownTail =
@@ -823,6 +848,8 @@ function handleMessageUpdated(event: any): void {
   messages.set(id, nextMessageInfo)
   if (!latestTimelineMessage || messageTimeOrder(latestTimelineMessage, nextMessageInfo) <= 0) {
     latestTimelineMessage = nextMessageInfo
+  } else if (latestTimelineMessage.id === id) {
+    latestTimelineMessage = [...messages.values()].sort(messageTimeOrder).at(-1)
   }
 
   const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID })
@@ -878,9 +905,9 @@ function handleMessageUpdated(event: any): void {
   // messageID; a later message.updated for the same message overwrites that
   // message's slot rather than double-counting.
   const usageProjection = usageProjectionFromInfo(info)
-  if (usageProjection) projectUsageOntoCard(session, id, cardID, usageProjection)
+  if (usageProjection) projectUsageOntoCard(session, id, usageProjection)
   if (messageInfoIsAssistant(info)) {
-    projectModelOntoCard(session, id, cardID, modelProjectionFromInfo(info))
+    projectModelOntoCard(session, id, modelProjectionFromInfo(info))
   }
 
   drainPendingSessionStatus(sessionID)
@@ -915,8 +942,8 @@ function requirePartEventRouteMeta(
   goalID: string
   orderKey: string
 } {
-  const channel = String(meta?.channel || "").trim()
-  const resolvedRole = String(meta?.resolvedRole || "").trim()
+  const channel = typeof meta?.channel === "string" ? meta.channel.trim() : ""
+  const resolvedRole = typeof meta?.resolvedRole === "string" ? meta.resolvedRole.trim() : ""
   if (!channel || !resolvedRole) {
     throw new Error(
       `message.part.updated for ${messageID} missing top-level channel/resolvedRole; backend bridge must stamp routing metadata outside part`,
@@ -927,7 +954,7 @@ function requirePartEventRouteMeta(
     resolvedRole,
     parentSessionID: String(meta?.parentSessionID || ""),
     goalID: String(meta?.goalID || ""),
-    orderKey: requireTimelineOrderKey(meta?.orderKey, `message.part.updated ${messageID}`),
+    orderKey: requireTimelineOrderKeyDomain(meta?.orderKey, `message.part.updated ${messageID}`, "message"),
   }
 }
 
@@ -957,22 +984,27 @@ function ensurePartProjection(
     throw new Error("message.part.updated part missing id/messageID/sessionID")
   }
   const partHasDisplay = conversationPartHasDisplay(part)
-  const routeOrderKey = partHasDisplay
-    ? requireTimelineOrderKey(opts.routeMeta?.orderKey, `message.part.updated ${messageID}`)
-    : undefined
-  const partOrderKey = partHasDisplay
-    ? requireTimelineOrderKey(part.orderKey, `message.part.updated part ${partID}`)
-    : undefined
-  if (partHasDisplay && routeOrderKey !== partOrderKey) {
-    throw new Error(`message.part.updated part ${partID} orderKey does not match event orderKey for ${messageID}`)
-  }
+  const routeOrderKey = requireTimelineOrderKeyDomain(
+    opts.routeMeta?.orderKey,
+    `message.part.updated ${messageID}`,
+    "message",
+  )
+  const partOrderKey = requireTimelineOrderKeyDomain(part.orderKey, `message.part.updated part ${partID}`, "part")
 
   const existingSession = sessions.get(sessionID)
   let session = existingSession
   let cardID = session?.messageCardIDs.get(messageID)
-  let displayRole = messages.get(messageID)?.resolvedRole || ""
-  const eventResolvedRole = String(opts.routeMeta?.resolvedRole || "").trim()
+  let displayRole = ""
+  const existingMessage = messages.get(messageID)
+  if (existingMessage) {
+    displayRole = existingMessage.resolvedRole
+  } else {
+    const pendingMessage = pendingPartFirstMessages.get(messageID)
+    if (pendingMessage) displayRole = pendingMessage.resolvedRole
+  }
+  const eventResolvedRole = typeof opts.routeMeta?.resolvedRole === "string" ? opts.routeMeta.resolvedRole.trim() : ""
   if (!displayRole && eventResolvedRole) displayRole = displayRoleForResolvedRole(eventResolvedRole)
+  let route: ReturnType<typeof requirePartEventRouteMeta> | undefined
 
   if (!session || !cardID) {
     // Bridge stamps channel/goalID/parentSessionID onto the event payload.
@@ -981,7 +1013,7 @@ function ensurePartProjection(
     // known, the turn card's deterministic id is too — build it now at
     // observation time. The later message.updated overwrites `time` with the
     // authoritative server timestamp; no synthetic stub / rename.
-    const route = requirePartEventRouteMeta(opts.routeMeta, messageID)
+    route = requirePartEventRouteMeta(opts.routeMeta, messageID)
     const stage = deriveSessionStage(route)
     if (stage === "filtered") return null
     displayRole = displayRoleForResolvedRole(route.resolvedRole)
@@ -1002,24 +1034,41 @@ function ensurePartProjection(
       throw new Error(`message.part.updated for ${messageID} missing resolved display role`)
     }
     const observationTime = requireDisplayPartObservationTime("message.part.updated", messageID, opts.observationTime)
-    const message = messages.get(messageID)
+    if (!route) route = requirePartEventRouteMeta(opts.routeMeta, messageID)
+    pendingPartFirstMessages.set(messageID, {
+      id: messageID,
+      sessionID,
+      stage: session.stage,
+      role: displayRole,
+      resolvedRole: displayRole,
+      agent: displayRole,
+      parentSessionID: route.parentSessionID,
+      goalID: route.goalID,
+      orderKey: route.orderKey,
+      time: observationTime,
+      serverTimeConfirmed: false,
+      completed: false,
+      pendingPartFirst: true,
+    })
     const ensured = ensureMessageTurnProjection(session, messageID, {
       stage: session.stage,
       goalID: session.goalID,
       role: displayRole,
-      orderKey: partOrderKey!,
-      time: message?.time || observationTime,
-      stampServerTime: Boolean(message?.time),
+      orderKey: route.orderKey,
+      time: observationTime,
+      stampServerTime: false,
     })
     cardID = ensured.cardID
     if (ensured.isPhase) {
-      ensureBoundaryPart(session, cardID, messageID, displayRole, message?.time || observationTime)
+      ensureBoundaryPart(session, cardID, messageID, displayRole, observationTime)
     }
     drainPendingSessionStatus(sessionID)
     drainPendingIntegrity(sessionID)
   }
 
-  upsertPart(session, messageID, cardID, partID, { ...part, ...(partOrderKey ? { orderKey: partOrderKey } : {}) })
+  if (!conversationPartIsProjectable(part)) return null
+
+  upsertPart(session, messageID, cardID, partID, { ...part, orderKey: partOrderKey })
   if (!displayRole) {
     throw new Error(
       `message.part.updated for ${messageID} could not resolve display role from message or event metadata`,
@@ -1032,17 +1081,31 @@ function handlePartUpdated(event: any): void {
   const props = propsOf(event)
   const part = props.part
   const observationTime = eventObservationTime(event)
-  const projection = ensurePartProjection(part, { observationTime, routeMeta: props })
-  if (!projection) return
-  const { session, cardID, messageID, displayRole } = projection
-  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
-    const message = messages.get(messageID)
-    const boundaryTime =
-      message?.time || requireDisplayPartObservationTime("message.part.updated", messageID, observationTime)
-    ensureBoundaryPart(session, cardID, messageID, displayRole, boundaryTime)
-    reorderPhaseCardParts(cardID)
+  const envelopeMessageID = String(part?.messageID || "")
+  const envelopeOrderKey = requireTimelineOrderKeyDomain(
+    event?.orderKey,
+    `message.part.updated ${envelopeMessageID} envelope`,
+    "message",
+  )
+  if (typeof props?.orderKey === "string" && props.orderKey.length > 0 && props.orderKey !== envelopeOrderKey) {
+    throw new Error(`message.part.updated ${envelopeMessageID} orderKey drift between envelope and payload`)
   }
-  if (conversationPartHasDisplay(part)) {
+  const projection = ensurePartProjection(part, {
+    observationTime,
+    routeMeta: { ...props, orderKey: envelopeOrderKey },
+  })
+  if (!projection) return
+  const { session, cardID, messageID: projectedMessageID, displayRole } = projection
+  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
+    const message = messages.get(projectedMessageID)
+    const boundaryTime =
+      message?.time || requireDisplayPartObservationTime("message.part.updated", projectedMessageID, observationTime)
+    ensureBoundaryPart(session, cardID, projectedMessageID, displayRole, boundaryTime)
+    reorderPhaseCardParts(cardID)
+    rebuildTopLevelOrder()
+  } else if (conversationPartHasDisplay(part)) {
+    regroupTimelineSegments()
+  } else {
     rebuildTopLevelOrder()
   }
   syncSessionTopLevelVisibility(session)
@@ -1067,11 +1130,10 @@ function projectPersistedConversationPart(info: any, part: any): void {
   if (!session || !cardID || !message) {
     throw new Error(`persisted message ${messageID} was not projected before part ${partID}`)
   }
-  const partOrderKey = conversationPartHasDisplay(part)
-    ? requireTimelineOrderKey(part.orderKey, `persisted message part ${partID}`)
-    : undefined
+  const partOrderKey = requireTimelineOrderKeyDomain(part.orderKey, `persisted message part ${partID}`, "part")
+  if (!conversationPartIsProjectable(part)) return
 
-  upsertPart(session, messageID, cardID, partID, { ...part, ...(partOrderKey ? { orderKey: partOrderKey } : {}) })
+  upsertPart(session, messageID, cardID, partID, { ...part, orderKey: partOrderKey })
   if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
     ensureBoundaryPart(session, cardID, messageID, message.resolvedRole, message.time)
     reorderPhaseCardParts(cardID)
@@ -1201,6 +1263,7 @@ function handleMessageRemoved(event: any): void {
   session.messageIDs.delete(messageID)
   session.messageCardIDs.delete(messageID)
   messages.delete(messageID)
+  pendingPartFirstMessages.delete(messageID)
 
   removeIndexedParts(session, cardID, (part) => String(part?.messageID || "") === messageID)
 
@@ -1338,6 +1401,7 @@ function handleSessionStatus(event: any): void {
   if (!sessionID) {
     throw new Error("session.status missing sessionID")
   }
+  requireTimelineOrderKeyDomain(event?.orderKey, `session.status ${sessionID}`, "session")
   const projected = projectSessionStatus(event)
   const info = ensureLifecycleSessionProjection(event, sessionID)
   const activeCardID = info?.activeCardID
@@ -1359,6 +1423,7 @@ function handleSessionError(event: any): void {
   if (!sessionID) {
     throw new Error("session.error missing sessionID")
   }
+  requireTimelineOrderKeyDomain(event?.orderKey, `session.error ${sessionID}`, "session")
   const projected = projectSessionError(event)
   const info = ensureLifecycleSessionProjection(event, sessionID)
   const activeCardID = info?.activeCardID
@@ -2123,13 +2188,6 @@ function resolveTurnCardID(
   cardID: string
   isPhase: boolean
 } {
-  if (stage === "integrity" && !goalID) {
-    const cardID = integrityCardID(sessionID)
-    if (!cardTreeStore.cards[cardID]) {
-      setCardTreeStore("cards", cardID, createSessionCardNode(cardID, "integrity", "", orderKey, time, sessionID, ""))
-    }
-    return { cardID, isPhase: false }
-  }
   if (isPhaseAbsorbedSession(stage, goalID)) {
     const phase = goalStagePhaseID(stage)!
     // Read the live run id so the stub lands on the current attempt's card.
@@ -2253,6 +2311,8 @@ function ensureMessageTurnProjection(
   const resolved = resolveTurnCardID(session.sessionID, stage, goalID, messageID, opts.orderKey, opts.time)
   let cardID = resolved.cardID
   const isPhase = resolved.isPhase
+  const lifecycleCardID = sessionCardID(stage, session.sessionID)
+  const preserveDedicatedLifecycleCard = stage === "integrity" && Boolean(cardTreeStore.cards[lifecycleCardID])
 
   const prior = session.messageCardIDs.get(messageID)
   if (prior && prior !== resolved.cardID && isPhase) {
@@ -2262,9 +2322,16 @@ function ensureMessageTurnProjection(
     cardID = prior
   }
 
+  if (!isPhase && preserveDedicatedLifecycleCard) {
+    session.messageCardIDs.set(messageID, lifecycleCardID)
+    session.activeMessageID = messageID
+    session.activeCardID = lifecycleCardID
+    if (!opts.deferHierarchy) rebuildCardHierarchy()
+    return { cardID: lifecycleCardID, isPhase }
+  }
+
   if (!isPhase) {
-    const lifecycleCardID = sessionCardID(stage, session.sessionID)
-    if (!prior && lifecycleCardID !== cardID && cardTreeStore.cards[lifecycleCardID]) {
+    if (!prior && lifecycleCardID !== cardID && cardTreeStore.cards[lifecycleCardID] && !preserveDedicatedLifecycleCard) {
       migrateLifecycleCardToTurnCard(session, lifecycleCardID, cardID, messageID, opts.orderKey, opts.time)
     }
     const existing = cardTreeStore.cards[cardID]
@@ -2294,7 +2361,7 @@ function ensureMessageTurnProjection(
     // same session means the older turn is no longer the active stream.
     // Display projection invariant, not a synthetic lifecycle event
     // (spec §3.4).
-    const prevCardID = session.activeCardID
+    const prevCardID = preserveDedicatedLifecycleCard ? undefined : session.activeCardID
     if (prevCardID && prevCardID !== cardID && cardTreeStore.cards[prevCardID]?.status === "running") {
       setCardTreeStore("cards", prevCardID, "status", "completed")
     }
@@ -2302,7 +2369,7 @@ function ensureMessageTurnProjection(
 
   session.messageCardIDs.set(messageID, cardID)
   session.activeMessageID = messageID
-  session.activeCardID = cardID
+  if (!preserveDedicatedLifecycleCard) session.activeCardID = cardID
 
   if (!opts.deferHierarchy) rebuildCardHierarchy()
   return { cardID, isPhase }
@@ -2326,7 +2393,7 @@ function nonPhaseMessageTurnCardID(cardID: string): boolean {
 }
 
 function timelineCardID(stage: string, sessionID: string, messageID: string): string {
-  return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID)
+  return messageTurnCardID(stage, sessionID, messageID)
 }
 
 function timelineSegmentKey(message: MessageInfo, session: SessionInfo, stage: string, goalID: string): string {
@@ -2342,17 +2409,62 @@ function timelineSegmentKey(message: MessageInfo, session: SessionInfo, stage: s
 export interface RenderedConversationCardTarget {
   cardID?: string
   renderedCardID: string
+  orderKey: string
+  time?: number
+  sessionID?: string
+  messageID?: string
+  stepID?: string
+  phaseID?: string
 }
 
-function renderedCardTargetFromProjectedCardID(cardID: string): RenderedConversationCardTarget {
+function stepIDFromProjectedStepCardID(cardID: string): string {
+  const [head] = cardID.split(":phase:")
+  const parts = String(head || "").split(":")
+  return parts[0] === "step" && parts.length >= 3 ? String(parts[2] || "") : ""
+}
+
+function renderedCardTargetFromProjectedCardID(
+  cardID: string,
+  source: {
+    orderKey: string
+    time?: number
+    sessionID?: string
+    messageID?: string
+  },
+): RenderedConversationCardTarget | null {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return null
+  const orderKey = requireTimelineOrderKey(source.orderKey, `rendered conversation card ${cardID}`)
+  const time = Number(source?.time ?? card.time ?? 0)
   const phaseIndex = cardID.indexOf(":phase:")
   if (cardID.startsWith("step:") && phaseIndex > 0) {
     return {
       cardID,
       renderedCardID: cardID.slice(0, phaseIndex),
+      orderKey,
+      ...(time > 0 ? { time } : {}),
+      ...(source?.sessionID ? { sessionID: source.sessionID } : {}),
+      ...(source?.messageID ? { messageID: source.messageID } : {}),
+      stepID: card.stepID || stepIDFromProjectedStepCardID(cardID),
+      phaseID: card.phaseID || cardID.slice(phaseIndex + ":phase:".length),
     }
   }
-  return { renderedCardID: cardID }
+  return {
+    renderedCardID: cardID,
+    orderKey,
+    ...(time > 0 ? { time } : {}),
+    ...(source?.sessionID ? { sessionID: source.sessionID } : {}),
+    ...(source?.messageID ? { messageID: source.messageID } : {}),
+  }
+}
+
+function renderedProjectedCardTarget(cardID: string): RenderedConversationCardTarget | null {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return null
+  return renderedCardTargetFromProjectedCardID(cardID, {
+    orderKey: card.orderKey,
+    time: card.time,
+  })
 }
 
 export function renderedConversationCardTargetForMessage(
@@ -2360,13 +2472,35 @@ export function renderedConversationCardTargetForMessage(
 ): RenderedConversationCardTarget | null {
   const messageID = String(messageIDInput || "")
   if (!messageID) return null
-  for (const session of sessions.values()) {
-    const cardID = session.messageCardIDs.get(messageID)
-    if (!cardID) continue
-    if (!cardTreeStore.cards[cardID]) return null
-    return renderedCardTargetFromProjectedCardID(cardID)
-  }
-  return null
+  const message = messages.get(messageID) ?? pendingPartFirstMessages.get(messageID)
+  if (!message) return null
+  const session = sessions.get(message.sessionID)
+  const cardID = session?.messageCardIDs.get(messageID)
+  if (!cardID) return null
+  return renderedCardTargetFromProjectedCardID(cardID, {
+    orderKey: message.orderKey,
+    time: message.time,
+    sessionID: message.sessionID,
+    messageID,
+  })
+}
+
+export function renderedConversationCardTargetForGoalPhase(input: {
+  goalID?: unknown
+  stepID?: unknown
+  phaseID?: unknown
+  stage?: unknown
+}): RenderedConversationCardTarget | null {
+  const goalID = String(input?.goalID || "")
+  const explicitStepID = String(input?.stepID || "")
+  const explicitPhaseID = String(input?.phaseID || "")
+  const phase =
+    explicitStepID && explicitPhaseID
+      ? { stepID: explicitStepID, phaseID: explicitPhaseID }
+      : goalStagePhaseID(String(input?.stage || ""))
+  if (!goalID || !phase?.stepID || !phase?.phaseID) return null
+  const runID = goalCurrentRunID.get(goalID)
+  return renderedProjectedCardTarget(goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID))
 }
 
 function isReviewStreamPart(part: any): boolean {
@@ -2378,7 +2512,8 @@ function collectTimelineParts(messageIDs: Set<string>): Map<string, any[]> {
   const seenPartIDs = new Set<string>()
   for (const card of Object.values(cardTreeStore.cards)) {
     for (const part of card?.parts || []) {
-      if (!part || part.type === "boundary") continue
+      if (!part || isBoundaryMessagePart(part)) continue
+      if (!conversationPartIsProjectable(part)) continue
       const messageID = String(part.messageID || "")
       if (!messageIDs.has(messageID)) continue
       const partID = String(part.id || "")
@@ -2474,15 +2609,17 @@ function reorderPhaseCardParts(cardID: string): void {
   for (const part of current) {
     if (!part) continue
     const messageID = String(part.messageID || "")
-    if (part.type === "boundary") {
+    if (isBoundaryMessagePart(part)) {
       if (!messageID || !knownMessageIDs.has(messageID)) pendingPartFirst.push(part)
       continue
     }
     if (messageID && knownMessageIDs.has(messageID)) {
+      if (!conversationPartIsProjectable(part)) continue
       const list = partsByMessage.get(messageID)
       if (list) list.push(part)
       else partsByMessage.set(messageID, [part])
     } else {
+      if (!conversationPartIsProjectable(part)) continue
       // A display part may arrive before its message row. There is no
       // authoritative message order yet, so keep it after known message-order
       // groups until message.updated lets this function place it precisely.
@@ -2513,7 +2650,7 @@ function reorderPhaseCardParts(cardID: string): void {
     }
   }
   for (const part of pendingPartFirst) {
-    if (part?.type === "boundary") indexPhaseBoundary(part, cardID, rebuilt.length)
+    if (isBoundaryMessagePart(part)) indexPhaseBoundary(part, cardID, rebuilt.length)
     else indexPhasePart(part, cardID, rebuilt.length)
     rebuilt.push(part)
   }
@@ -2527,13 +2664,15 @@ function reorderPhaseCardParts(cardID: string): void {
  *  out of chronological order. Only an immediately adjacent message with
  *  the same segment key is absorbed into the previous segment card. */
 function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void {
-  const ordered = [...messages.values()].filter((message) => sessions.has(message.sessionID)).sort(messageTimeOrder)
+  const timelineMessages = new Map<string, MessageInfo>()
+  for (const message of pendingPartFirstMessages.values()) timelineMessages.set(message.id, message)
+  for (const message of messages.values()) timelineMessages.set(message.id, message)
+  const ordered = [...timelineMessages.values()].filter((message) => sessions.has(message.sessionID)).sort(messageTimeOrder)
   if (ordered.length === 0) return
 
   const segments: TimelineSegment[] = []
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
-  const integritySegmentBySession = new Map<string, TimelineSegment>()
   let previousAdjacentSegment: TimelineSegment | undefined
 
   for (const message of ordered) {
@@ -2546,21 +2685,12 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       continue
     }
 
-    const key =
-      stage === "integrity" && !goalID
-        ? `integrity:${message.sessionID}`
-        : timelineSegmentKey(message, session, stage, goalID)
-    let segment =
-      stage === "integrity" && !goalID
-        ? integritySegmentBySession.get(message.sessionID)
-        : previousAdjacentSegment?.key === key
-          ? previousAdjacentSegment
-          : undefined
+    const key = timelineSegmentKey(message, session, stage, goalID)
+    let segment = previousAdjacentSegment?.key === key ? previousAdjacentSegment : undefined
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id)
       segment = { key, cardID, session, stage, goalID, messages: [] }
       segments.push(segment)
-      if (stage === "integrity" && !goalID) integritySegmentBySession.set(message.sessionID, segment)
     }
     previousAdjacentSegment = segment
     segment.messages.push(message)
@@ -2570,13 +2700,9 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (segments.length === 0) return
 
   const oldOwnedCardIDs = new Set<string>()
-  const pendingPartFirstCardIDs = new Set<string>()
   for (const session of sessions.values()) {
     for (const [messageID, cardID] of session.messageCardIDs) {
       if (nonPhaseMessageTurnCardID(cardID)) oldOwnedCardIDs.add(cardID)
-      if (!messages.has(messageID) && nonPhaseMessageTurnCardID(cardID) && cardTreeStore.cards[cardID]) {
-        pendingPartFirstCardIDs.add(cardID)
-      }
     }
   }
 
@@ -2594,7 +2720,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   }
 
   for (const [messageID, cardID] of desiredCardByMessage) {
-    const message = messages.get(messageID)
+    const message = timelineMessages.get(messageID)
     const session = message ? sessions.get(message.sessionID) : undefined
     if (session) session.messageCardIDs.set(messageID, cardID)
   }
@@ -2671,7 +2797,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 
   const targetCardIDs = new Set(segments.map((segment) => segment.cardID))
   for (const cardID of oldOwnedCardIDs) {
-    if (targetCardIDs.has(cardID) || pendingPartFirstCardIDs.has(cardID)) continue
+    if (targetCardIDs.has(cardID)) continue
     clearMessageCardOwnershipForCard(cardID)
     removeCardReferences(cardID)
   }
@@ -2716,7 +2842,7 @@ function parseHydrateMessageMeta(raw: any): HydrateMessageMeta {
     stage,
     parentSessionID: String(raw?.parentSessionID || ""),
     goalID: String(raw?.goalID || ""),
-    orderKey: requireTimelineOrderKey(raw?.orderKey, `hydrateConversationView message ${messageID}`),
+    orderKey: requireTimelineOrderKeyDomain(raw?.orderKey, `hydrateConversationView message ${messageID}`, "message"),
     time,
   }
 }
@@ -2779,9 +2905,9 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       throw new Error(`hydrateConversationView: message ${messageID} missing info.role`)
     }
     const role = rawRole
-    const rawResolvedRole = info.resolvedRole || info.agent || role
+    const rawResolvedRole = info.resolvedRole
     if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
-      throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`)
+      throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole`)
     }
     const parentSessionID = meta.parentSessionID
     const goalID = meta.goalID
@@ -2790,7 +2916,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     if (transcriptTimeCreated > 0 && transcriptTimeCreated !== timeCreated) {
       throw new Error(`hydrateConversationView: message ${messageID} time drift between transcript and view`)
     }
-    const transcriptOrderKey = requireTimelineOrderKey(info.orderKey, `transcript message ${messageID}`)
+    const transcriptOrderKey = requireTimelineOrderKeyDomain(info.orderKey, `transcript message ${messageID}`, "message")
     if (transcriptOrderKey && transcriptOrderKey !== meta.orderKey) {
       throw new Error(`hydrateConversationView: message ${messageID} orderKey drift between transcript and view`)
     }
@@ -2804,11 +2930,12 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       stage,
       role,
       resolvedRole: displayRole,
-      agent: String(info.agent || ""),
+      agent: typeof info.agent === "string" ? info.agent : "",
       parentSessionID,
       goalID,
       orderKey: meta.orderKey,
       time: timeCreated,
+      serverTimeConfirmed: true,
       completed,
     })
     const session = ensureSessionProjection(sessionID, { stage, parentSessionID, goalID })
@@ -2831,11 +2958,17 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       if (!partID) {
         throw new Error(`hydrateConversationView: message ${messageID} contains part without id`)
       }
-      upsertPart(session, messageID, cardID, partID, {
-        ...part,
-        messageID,
-        sessionID,
-      })
+      const partMessageID = String(part?.messageID || "")
+      const partSessionID = String(part?.sessionID || "")
+      if (!partMessageID || !partSessionID) {
+        throw new Error(`hydrateConversationView: part ${partID} missing messageID/sessionID`)
+      }
+      if (partMessageID !== messageID || partSessionID !== sessionID) {
+        throw new Error(`hydrateConversationView: part ${partID} metadata drift for message ${messageID}`)
+      }
+      requireTimelineOrderKeyDomain(part.orderKey, `persisted message part ${partID}`, "part")
+      if (!conversationPartIsProjectable(part)) continue
+      upsertPart(session, messageID, cardID, partID, part)
     }
     if (isPhase) reorderPhaseCardParts(cardID)
     touched.add(sessionID)
@@ -2847,13 +2980,14 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
     const messageID = meta.messageID
     const sessionID = meta.sessionID
     const session = sessions.get(sessionID)
-    const cardID = session?.messageCardIDs.get(messageID)
     const usageProjection = usageProjectionFromInfo(info)
-    if (session && cardID && usageProjection) {
-      projectUsageOntoCard(session, messageID, cardID, usageProjection)
+    if (usageProjection) {
+      if (!session) throw new Error(`message ${messageID} missing session projection for usage metadata`)
+      projectUsageOntoCard(session, messageID, usageProjection)
     }
-    if (session && cardID && messageInfoIsAssistant(info)) {
-      projectModelOntoCard(session, messageID, cardID, modelProjectionFromInfo(info))
+    if (messageInfoIsAssistant(info)) {
+      if (!session) throw new Error(`message ${messageID} missing session projection for model metadata`)
+      projectModelOntoCard(session, messageID, modelProjectionFromInfo(info))
     }
   }
   rebuildCardHierarchy()
@@ -3230,13 +3364,14 @@ function sessionTurnCardAtOrBefore(session: SessionInfo | undefined, orderKey: s
   let selectedOrderKey = ""
   for (const cardID of new Set(session.messageCardIDs.values())) {
     const card = cardTreeStore.cards[cardID]
-    if (!card?.orderKey || compareTimelineOrderKeys(card.orderKey, orderKey, "interaction owner") > 0) continue
+    const cardOrderKey = requireTimelineOrderKey(card?.orderKey, `interaction owner card ${cardID}`)
+    if (compareTimelineOrderKeys(cardOrderKey, orderKey, "interaction owner") > 0) continue
     if (
       !selectedCardID ||
-      compareTimelineOrderKeys(card.orderKey, selectedOrderKey, "interaction owner selected") >= 0
+      compareTimelineOrderKeys(cardOrderKey, selectedOrderKey, "interaction owner selected") >= 0
     ) {
       selectedCardID = cardID
-      selectedOrderKey = card.orderKey
+      selectedOrderKey = cardOrderKey
     }
   }
   return selectedCardID || undefined
@@ -3336,12 +3471,7 @@ function pushUniqueChild(target: string[], childID: string): void {
 function cardHasDisplayPart(card: CardNode | undefined): boolean {
   if (!card) return false
   for (const part of card.parts || []) {
-    if (!part || part.type === "boundary") continue
-    if (part.type === "text" || part.type === "reasoning") {
-      if (String(part.text || "").replace(/[\[\]\s]/g, "")) return true
-      continue
-    }
-    return true
+    if (messagePartHasDisplayContent(part)) return true
   }
   return false
 }
@@ -3628,7 +3758,7 @@ function rebuildTopLevelOrder(): void {
 setBoardProjectionHandler(() => {
   rebuildBoardDerivedCards()
 })
-rebuildBoardDerivedCards()
+if (boardStore.board) rebuildBoardDerivedCards()
 
 // Synthetic-message projection removed: chat.ts no longer writes
 // duplicate placeholders into messageStore.messages (the

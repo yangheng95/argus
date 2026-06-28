@@ -6,11 +6,15 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const { boardStore, setBoardStore } = await import("../src/store/board")
-const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import(
-  "../src/services/tree-writer"
-)
+const { boardStore, setBoardStore: setBoardStoreRaw } = await import("../src/store/board")
+const {
+  applyEvent: applyEventRaw,
+  flushBufferedPartDeltas,
+  resetWriter,
+  hydrateConversationView: hydrateConversationViewRaw,
+} = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
+const { isCardBodyMessagePart } = await import("../src/utils/message-part")
 const { collectDialogInteractions } = await import("../src/utils/interaction-dialog")
 const { installRealOverlayI18n } = await import("./fixtures/i18n")
 const { replay } = await import("./fixtures/replay")
@@ -33,9 +37,201 @@ installRealOverlayI18n()
 
 const INTEGRITY_SID = "ses_integrity"
 
+function testOrderKey(rank: number, time: number, id: string, sequence = 0, domain = "test"): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return testOrderKey(30, time, id, 0, "message")
+}
+
+function partOrderKey(id: string, time: number): string {
+  return testOrderKey(31, time, id, 0, "part")
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return testOrderKey(10, time, id, 0, "task")
+}
+
+function boardOrderKey(id: string, time: number, rank: number): string {
+  return testOrderKey(rank, time, id, 0, "board")
+}
+
+function interactionOrderKey(id: string, time: number): string {
+  return testOrderKey(70, time, id, 0, "interaction")
+}
+
+function eventOrderKey(type: string, time: number): string {
+  return testOrderKey(40, time, `evt_${type}_${time}`, 0, "event")
+}
+
+function sessionOrderKey(id: string, time: number): string {
+  return testOrderKey(50, time, id, 0, "session")
+}
+
+function stampBoard(board: any): any {
+  if (!board || typeof board !== "object" || Array.isArray(board)) return board
+  const task = board.task && typeof board.task === "object" ? board.task : undefined
+  const taskCreated = Number(task?.time?.created || 1)
+  return {
+    ...board,
+    ...(task
+      ? {
+          task: {
+            ...task,
+            orderKey: task.orderKey || taskOrderKey(String(task.id || TASK_ID), taskCreated),
+          },
+        }
+      : {}),
+    workflow:
+      board.workflow && typeof board.workflow === "object"
+        ? {
+            ...board.workflow,
+            steps: Array.isArray(board.workflow.steps)
+              ? board.workflow.steps.map((step: any) => ({
+                  ...step,
+                  orderKey:
+                    step.orderKey ||
+                    boardOrderKey(`${String(task?.id || TASK_ID)}-${String(step?.id || "step")}`, taskCreated, 61),
+                }))
+              : board.workflow.steps,
+          }
+        : board.workflow,
+    goalWorkflows: Array.isArray(board.goalWorkflows)
+      ? board.goalWorkflows.map((goal: any) => {
+          const goalCreated = Number(goal?.time?.created || taskCreated)
+          return {
+            ...goal,
+            orderKey: goal.orderKey || boardOrderKey(String(goal?.goalID || "goal"), goalCreated, 60),
+            steps: Array.isArray(goal?.steps)
+              ? goal.steps.map((step: any) => {
+                  const stepStarted = Number(step?.startedAt || goalCreated)
+                  return {
+                    ...step,
+                    orderKey:
+                      step.orderKey ||
+                      boardOrderKey(
+                        `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}`,
+                        stepStarted,
+                        61,
+                      ),
+                    phases:
+                      step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
+                        ? Object.fromEntries(
+                            Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => {
+                              const phaseStarted = Number(phase?.startedAt || stepStarted)
+                              return [
+                                phaseID,
+                                {
+                                  ...phase,
+                                  orderKey:
+                                    phase?.orderKey ||
+                                    boardOrderKey(
+                                      `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}-${phaseID}`,
+                                      phaseStarted,
+                                      62,
+                                    ),
+                                },
+                              ]
+                            }),
+                          )
+                        : step.phases,
+                  }
+                })
+              : goal?.steps,
+          }
+        })
+      : board.goalWorkflows,
+    interactions: Array.isArray(board.interactions)
+      ? board.interactions.map((interaction: any) => {
+          const interactionCreated = Number(interaction?.time?.created || taskCreated)
+          return {
+            ...interaction,
+            orderKey:
+              interaction.orderKey || interactionOrderKey(String(interaction?.id || "interaction"), interactionCreated),
+          }
+        })
+      : board.interactions,
+  }
+}
+
+function setBoardStore(...args: any[]): any {
+  if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampBoard(args[1]))
+  return (setBoardStoreRaw as any)(...args)
+}
+
+function requireExplicitOrderKey(value: unknown, label: string, domain: "message" | "part" | "session"): string {
+  const key = typeof value === "string" ? value.trim() : ""
+  if (!key) throw new Error(`${label} missing explicit ${domain} orderKey`)
+  const actualDomain = key.split(":", 6)[4] || ""
+  if (actualDomain !== domain) throw new Error(`${label} expected ${domain} orderKey, got ${actualDomain}: ${key}`)
+  return key
+}
+
+function stampEvent(event: any): any {
+  const type = String(event?.type || "event")
+  const props = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  if (!props || typeof props !== "object") return event
+  if (type === "message.updated" && props.info && typeof props.info === "object") {
+    const infoOrderKey = requireExplicitOrderKey(
+      props.info.orderKey,
+      `message.updated info ${String(props.info.id || "")}`,
+      "message",
+    )
+    const eventOrderKey = requireExplicitOrderKey(event?.orderKey, "message.updated event", "message")
+    if (eventOrderKey !== infoOrderKey) throw new Error(`message.updated event orderKey drift: ${eventOrderKey}`)
+    return event
+  }
+  if (type === "message.part.updated" && props.part && typeof props.part === "object") {
+    const part = props.part as Record<string, any>
+    const propertiesOrderKey = requireExplicitOrderKey(
+      props.orderKey,
+      `message.part.updated properties ${String(part.messageID || "")}`,
+      "message",
+    )
+    const eventOrderKey = requireExplicitOrderKey(event?.orderKey, "message.part.updated event", "message")
+    if (eventOrderKey !== propertiesOrderKey) {
+      throw new Error(`message.part.updated event orderKey drift: ${eventOrderKey}`)
+    }
+    requireExplicitOrderKey(part.orderKey, `message.part.updated part ${String(part.id || "")}`, "part")
+    return event
+  }
+  if (type === "session.status" || type === "session.error" || type === "session.idle") {
+    requireExplicitOrderKey(event?.orderKey, `${type} event`, "session")
+  }
+  return event
+}
+
+function applyEvent(event: any): void {
+  applyEventRaw(stampEvent(event))
+}
+
+function stampTranscript(transcript: any[]): any[] {
+  return (Array.isArray(transcript) ? transcript : []).map((message) => {
+    const info = message?.info || {}
+    requireExplicitOrderKey(info.orderKey, `transcript message ${String(info.id || "")}`, "message")
+    return {
+      ...message,
+      parts: Array.isArray(message?.parts)
+        ? message.parts.map((part: any) => {
+            requireExplicitOrderKey(part?.orderKey, `transcript part ${String(part?.id || "")}`, "part")
+            return part
+          })
+        : message?.parts,
+    }
+  })
+}
+
+function hydrateConversationView(view: any, transcript: any[]): void {
+  const stampedTranscript = stampTranscript(transcript)
+  hydrateConversationViewRaw(requireHydrateView(view), stampedTranscript)
+}
+
 function stampedInfo(channel: string, info: Record<string, any>) {
+  const orderKey = requireExplicitOrderKey(info.orderKey, `message info ${String(info.id || "")}`, "message")
   return {
     ...info,
+    orderKey,
     resolvedRole: info.resolvedRole ?? channel,
     agent: info.agent ?? channel,
     channel,
@@ -44,18 +240,48 @@ function stampedInfo(channel: string, info: Record<string, any>) {
 
 function stampedPart(channel: string, part: Record<string, any>) {
   const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
-  return cleanPart
+  const orderKey = requireExplicitOrderKey(part.orderKey, `part ${String(part.id || "")}`, "part")
+  return {
+    ...cleanPart,
+    orderKey,
+  }
 }
 
 function stampedPartEvent(channel: string, part: Record<string, any>) {
-  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, owningMessageOrderKey, ...cleanPart } = part
+  const messageKey = requireExplicitOrderKey(
+    owningMessageOrderKey,
+    `part event owning message ${String(part.messageID || "")}`,
+    "message",
+  )
+  const partKey = requireExplicitOrderKey(cleanPart.orderKey, `part event part ${String(part.id || "")}`, "part")
   return {
-    part: cleanPart,
+    part: {
+      ...cleanPart,
+      orderKey: partKey,
+    },
+    orderKey: messageKey,
     resolvedRole: resolvedRole ?? channel,
     channel,
     ...(parentSessionID ? { parentSessionID } : {}),
     ...(goalID ? { goalID } : {}),
   }
+}
+
+function transcriptMessageHasDisplay(message: any): boolean {
+  return Array.isArray(message?.parts) && message.parts.some((part: any) => String(part?.text || "").trim())
+}
+
+function requireHydrateView(view: any): any {
+  const sessions = Array.isArray(view?.sessions) ? view.sessions : []
+  const messages = Array.isArray(view?.messages) ? view.messages : []
+  for (const session of sessions) {
+    requireExplicitOrderKey(session?.orderKey, `view session ${String(session?.sessionID || "")}`, "session")
+  }
+  for (const message of messages) {
+    requireExplicitOrderKey(message?.orderKey, `view message ${String(message?.messageID || "")}`, "message")
+  }
+  return view
 }
 
 test("phase cards absorb goal-scoped session parts — no nested session cards", async () => {
@@ -165,10 +391,12 @@ test("executor sessions surface when they contain visible reasoning", () => {
   const reasoningPartID = "part_executor_reasoning"
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_executor_reasoning", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("executor", {
         id: "msg_executor_reasoning",
+        orderKey: messageOrderKey("msg_executor_reasoning", 1_776_000_001_000),
         sessionID: EXECUTOR_SID,
         role: "assistant",
         resolvedRole: "executor",
@@ -182,10 +410,13 @@ test("executor sessions surface when they contain visible reasoning", () => {
 
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_executor_reasoning", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("executor", {
         id: reasoningPartID,
+        orderKey: partOrderKey(reasoningPartID, 1_776_000_001_000),
+        owningMessageOrderKey: messageOrderKey("msg_executor_reasoning", 1_776_000_001_000),
         messageID: "msg_executor_reasoning",
         sessionID: EXECUTOR_SID,
         type: "reasoning",
@@ -235,10 +466,12 @@ test("non-goal agent message shells stay hidden until display content arrives", 
   const architectCardID = "architect:session:ses_architect_blank:message:msg_architect_blank"
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_architect_blank", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("architect", {
         id: "msg_architect_blank",
+        orderKey: messageOrderKey("msg_architect_blank", 1_776_000_001_000),
         sessionID: "ses_architect_blank",
         role: "assistant",
         resolvedRole: "architect",
@@ -254,10 +487,13 @@ test("non-goal agent message shells stay hidden until display content arrives", 
 
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_architect_blank", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("architect", {
         id: "part_architect_visible",
+        orderKey: partOrderKey("part_architect_visible", 1_776_000_001_000),
+        owningMessageOrderKey: messageOrderKey("msg_architect_blank", 1_776_000_001_000),
         messageID: "msg_architect_blank",
         sessionID: "ses_architect_blank",
         type: "text",
@@ -288,10 +524,12 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_root",
+        orderKey: messageOrderKey("msg_root", 1_776_000_000_000),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -302,10 +540,12 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_architect", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("architect", {
         id: "msg_architect",
+        orderKey: messageOrderKey("msg_architect", 1_776_000_001_000),
         sessionID: "ses_architect",
         role: "assistant",
         resolvedRole: "architect",
@@ -317,10 +557,13 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "part_root",
+        orderKey: partOrderKey("part_root", 1_776_000_000_500),
+        owningMessageOrderKey: messageOrderKey("msg_root", 1_776_000_000_500),
         messageID: "msg_root",
         sessionID: ROOT_SID,
         type: "text",
@@ -330,10 +573,13 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_architect", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("architect", {
         id: "part_architect",
+        orderKey: partOrderKey("part_architect", 1_776_000_001_000),
+        owningMessageOrderKey: messageOrderKey("msg_architect", 1_776_000_001_000),
         messageID: "msg_architect",
         sessionID: "ses_architect",
         type: "text",
@@ -370,10 +616,12 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_user_followup", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("main", {
         id: "msg_user_followup",
+        orderKey: messageOrderKey("msg_user_followup", 1_776_000_001_000),
         sessionID: USER_SID,
         role: "user",
         resolvedRole: "user",
@@ -384,10 +632,13 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_user_followup", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("main", {
         id: "prt_user_followup",
+        orderKey: partOrderKey("prt_user_followup", 1_776_000_001_000),
+        owningMessageOrderKey: messageOrderKey("msg_user_followup", 1_776_000_001_000),
         messageID: "msg_user_followup",
         sessionID: USER_SID,
         type: "text",
@@ -509,10 +760,12 @@ test("tree-writer projects interactions into session children and top-level card
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_root_interaction", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_root_interaction",
+        orderKey: messageOrderKey("msg_root_interaction", 1_776_000_000_500),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -548,9 +801,11 @@ test("tree-writer projects raw Mission question events into the session card", (
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_mission_question", 1_780_500_000_000),
     properties: {
       info: stampedInfo("mission", {
         id: "msg_mission_question",
+        orderKey: messageOrderKey("msg_mission_question", 1_780_500_000_000),
         sessionID: MISSION_SID,
         role: "assistant",
         resolvedRole: "mission",
@@ -563,6 +818,7 @@ test("tree-writer projects raw Mission question events into the session card", (
 
   applyEvent({
     type: "question.asked",
+    orderKey: eventOrderKey("question.asked", 1_780_500_000_500),
     emittedAt: 1_780_500_000_500,
     properties: {
       id: QUESTION_ID,
@@ -609,9 +865,11 @@ test("tree-writer keeps background Mission questions available for the popup hos
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_background_mission_question", 1_780_600_000_100),
     properties: {
       info: stampedInfo("mission", {
         id: "msg_background_mission_question",
+        orderKey: messageOrderKey("msg_background_mission_question", 1_780_600_000_100),
         sessionID: MISSION_SID,
         role: "assistant",
         resolvedRole: "mission",
@@ -624,6 +882,7 @@ test("tree-writer keeps background Mission questions available for the popup hos
 
   applyEvent({
     type: "question.asked",
+    orderKey: eventOrderKey("question.asked", 1_780_600_000_500),
     emittedAt: 1_780_600_000_500,
     properties: {
       id: QUESTION_ID,
@@ -663,6 +922,7 @@ test("tree-writer does not duplicate task questions from raw question events", (
 
   applyEvent({
     type: "question.asked",
+    orderKey: eventOrderKey("question.asked", 1_776_000_000_500),
     emittedAt: 1_776_000_000_500,
     properties: {
       id: "que_task_normalized_elsewhere",
@@ -701,10 +961,12 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_root",
+        orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
         sessionID: ROOT_ASSISTANT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -716,10 +978,13 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_root",
+        orderKey: partOrderKey("prt_root", 1_776_000_000_500),
+        owningMessageOrderKey: messageOrderKey("msg_root", 1_776_000_000_500),
         messageID: "msg_root",
         sessionID: ROOT_ASSISTANT_SID,
         type: "text",
@@ -755,10 +1020,14 @@ test("channel-stamped part.updated materializes the correct session card immedia
   // staged session card immediately instead of creating a pending stub.
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_race", 1_776_000_001_000),
+    emittedAt: 1_776_000_000_750,
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("planner", {
         id: "prt_stream",
+        orderKey: partOrderKey("prt_stream", 1_776_000_001_000),
+        owningMessageOrderKey: messageOrderKey("msg_race", 1_776_000_001_000),
         messageID: "msg_race",
         sessionID: "ses_race",
         type: "text",
@@ -776,10 +1045,12 @@ test("channel-stamped part.updated materializes the correct session card immedia
   // Once message.updated arrives, the same planner turn card stays put.
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_race", 1_776_000_001_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("planner", {
         id: "msg_race",
+        orderKey: messageOrderKey("msg_race", 1_776_000_001_000),
         sessionID: "ses_race",
         role: "assistant",
         resolvedRole: "planner",
@@ -791,10 +1062,12 @@ test("channel-stamped part.updated materializes the correct session card immedia
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_root",
+        orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -810,10 +1083,13 @@ test("channel-stamped part.updated materializes the correct session card immedia
   expect(cardTreeStore.order).not.toContain(rootCardID)
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_root_race",
+        orderKey: partOrderKey("prt_root_race", 1_776_000_000_500),
+        owningMessageOrderKey: messageOrderKey("msg_root", 1_776_000_000_500),
         messageID: "msg_root",
         sessionID: ROOT_SID,
         type: "text",
@@ -825,6 +1101,97 @@ test("channel-stamped part.updated materializes the correct session card immedia
   // Planner is now a top-level sibling of the root assistant, not a child.
   expect(cardTreeStore.order).toContain(plannerRaceCardID)
   expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(plannerRaceCardID)
+})
+
+test("part-first display message requires event time for ordering", () => {
+  resetWriter()
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "part-first timestamp contract",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+
+  expect(() =>
+    applyEvent({
+      type: "message.part.updated",
+      orderKey: messageOrderKey("msg_no_time", 1),
+      properties: {
+        taskID: TASK_ID,
+        ...stampedPartEvent("planner", {
+          id: "prt_no_time",
+          orderKey: partOrderKey("prt_no_time", 1),
+          owningMessageOrderKey: messageOrderKey("msg_no_time", 1),
+          messageID: "msg_no_time",
+          sessionID: "ses_no_time",
+          type: "text",
+          text: "display part without event timestamp",
+          parentSessionID: ROOT_SID,
+        }),
+      },
+    }),
+  ).toThrow(/missing emittedAt\/timestamp for display message ordering/)
+})
+
+test("part-first consecutive build messages merge before message.updated arrives", () => {
+  seedTurnBoard("part-first build adjacent segment")
+
+  const sessionID = "ses_part_first_build"
+  const firstCardID = `build:session:${sessionID}:message:msg_build_part_first_1`
+  const secondCardID = `build:session:${sessionID}:message:msg_build_part_first_2`
+
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_build_part_first_1", 1_776_000_000_100),
+    emittedAt: 1_776_000_000_100,
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_build_part_first_1",
+        orderKey: partOrderKey("prt_build_part_first_1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_build_part_first_1", 1_776_000_000_100),
+        messageID: "msg_build_part_first_1",
+        sessionID,
+        type: "text",
+        text: "first build stream chunk",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_build_part_first_2", 1_776_000_000_200),
+    emittedAt: 1_776_000_000_200,
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_build_part_first_2",
+        orderKey: partOrderKey("prt_build_part_first_2", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_build_part_first_2", 1_776_000_000_200),
+        messageID: "msg_build_part_first_2",
+        sessionID,
+        type: "text",
+        text: "second build stream chunk",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[firstCardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+  expect(cardTreeStore.order.filter((id) => id === firstCardID || id === secondCardID)).toEqual([firstCardID])
+  expect(cardTreeStore.cards[firstCardID]?.parts.map((part: any) => [part.type, part.messageID, part.text])).toEqual([
+    ["text", "msg_build_part_first_1", "first build stream chunk"],
+    ["boundary", "msg_build_part_first_2", undefined],
+    ["text", "msg_build_part_first_2", "second build stream chunk"],
+  ])
 })
 
 // ── Integrity review (renamed from "fidelity" 2026-04+) ──
@@ -855,6 +1222,7 @@ test("integrity completed event materializes an integrity session card with stru
 
   applyEvent({
     type: "integrity.review.completed",
+    orderKey: eventOrderKey("integrity.review.completed", 1_776_000_002_000),
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
@@ -938,6 +1306,7 @@ test("integrity completed event can materialize before any message stream arrive
   // integrity session card even before any message/part stream arrives.
   applyEvent({
     type: "integrity.review.completed",
+    orderKey: eventOrderKey("integrity.review.completed", 1_776_000_002_000),
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
@@ -999,6 +1368,7 @@ test("integrity event missing sessionID throws (schema became required)", () => 
   expect(() =>
     applyEvent({
       type: "integrity.review.completed",
+      orderKey: eventOrderKey("integrity.review.completed", 1_776_000_002_000),
       emittedAt: 1_776_000_002_000,
       properties: {
         taskID: TASK_ID,
@@ -1039,6 +1409,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
 
   applyEvent({
     type: "review.stream.started",
+    orderKey: eventOrderKey("review.stream.started", 1_776_000_001_000),
     emittedAt: 1_776_000_001_000,
     properties: {
       taskID: TASK_ID,
@@ -1049,6 +1420,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   })
   applyEvent({
     type: "review.stream.progress",
+    orderKey: eventOrderKey("review.stream.progress", 1_776_000_021_000),
     emittedAt: 1_776_000_021_000,
     properties: {
       taskID: TASK_ID,
@@ -1069,6 +1441,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
 
   applyEvent({
     type: "review.stream.progress",
+    orderKey: eventOrderKey("review.stream.progress", 1_776_000_101_000),
     emittedAt: 1_776_000_101_000,
     properties: {
       taskID: TASK_ID,
@@ -1108,6 +1481,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
 
   applyEvent({
     type: "review.stream.started",
+    orderKey: eventOrderKey("review.stream.started", 1_776_000_001_000),
     emittedAt: 1_776_000_001_000,
     properties: {
       taskID: TASK_ID,
@@ -1120,6 +1494,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
   for (const delta of ["plan ", "then ", "verify"]) {
     applyEvent({
       type: "review.stream.chunk",
+      orderKey: eventOrderKey("review.stream.chunk", 1_776_000_001_100),
       emittedAt: 1_776_000_001_100,
       properties: {
         taskID: TASK_ID,
@@ -1162,6 +1537,7 @@ test("resetWriter clears integrity session cards materialized from protocol even
 
   applyEvent({
     type: "integrity.review.completed",
+    orderKey: eventOrderKey("integrity.review.completed", 1_776_000_002_000),
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
@@ -1250,6 +1626,7 @@ test("session.status preserves terminal reason when status arrives before the ca
 
   applyEvent({
     type: "session.status",
+    orderKey: sessionOrderKey("ses_pending_terminal", 1_776_000_010_000),
     emittedAt: 1_776_000_010_000,
     properties: {
       sessionID: "ses_pending_terminal",
@@ -1259,9 +1636,11 @@ test("session.status preserves terminal reason when status arrives before the ca
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_pending_terminal", 1_776_000_009_000),
     properties: {
       info: stampedInfo("requirements", {
         id: "msg_pending_terminal",
+        orderKey: messageOrderKey("msg_pending_terminal", 1_776_000_009_000),
         sessionID: "ses_pending_terminal",
         role: "assistant",
         time: { created: 1_776_000_009_000 },
@@ -1273,6 +1652,38 @@ test("session.status preserves terminal reason when status arrives before the ca
   expect(card.status).toBe("completed")
   expect(card.terminalReason).toBe("aborted")
   expect(card.timeCompleted).toBe(1_776_000_010_000)
+})
+
+test("session.status terminal without event time is rejected instead of using the local clock", () => {
+  resetWriter()
+
+  expect(() =>
+    applyEvent({
+      type: "session.status",
+      orderKey: sessionOrderKey("ses_missing_status_time", 1_776_000_010_000),
+      properties: {
+        sessionID: "ses_missing_status_time",
+        status: { type: "terminal", reason: "completed" },
+      },
+    }),
+  ).toThrow(/session\.status terminal missing emittedAt\/timestamp/)
+})
+
+test("session.status rejects non-session orderKey domains", () => {
+  resetWriter()
+
+  expect(() =>
+    applyEvent({
+      type: "session.status",
+      orderKey: "v1:0001776000010000:0000000000000030:0000000000000000:message:msg_wrong_status_key",
+      emittedAt: 1_776_000_010_000,
+      properties: {
+        sessionID: "ses_wrong_status_key",
+        channel: "assistant",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toThrow(/expected session orderKey/)
 })
 
 test("session.status without a message does not materialize a blank frontend research card", () => {
@@ -1295,6 +1706,7 @@ test("session.status without a message does not materialize a blank frontend res
   const cardID = `frontend-research:session:${sessionID}`
   applyEvent({
     type: "session.status",
+    orderKey: sessionOrderKey(sessionID, 1_776_000_010_000),
     emittedAt: 1_776_000_010_000,
     properties: {
       sessionID,
@@ -1335,6 +1747,7 @@ test("message arrival applies buffered lifecycle status without creating a dupli
 
   applyEvent({
     type: "session.status",
+    orderKey: sessionOrderKey(sessionID, 1_776_000_001_000),
     emittedAt: 1_776_000_001_000,
     properties: {
       sessionID,
@@ -1350,10 +1763,12 @@ test("message arrival applies buffered lifecycle status without creating a dupli
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_frontend_design_lifecycle", 1_776_000_002_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("frontend-design", {
         id: "msg_frontend_design_lifecycle",
+        orderKey: messageOrderKey("msg_frontend_design_lifecycle", 1_776_000_002_000),
         sessionID,
         role: "assistant",
         parentSessionID: ROOT_SID,
@@ -1370,10 +1785,13 @@ test("message arrival applies buffered lifecycle status without creating a dupli
   expect(cardTreeStore.order).not.toContain(messageCardID)
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_frontend_design_lifecycle", 1_776_000_002_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("frontend-design", {
         id: "prt_frontend_design_lifecycle",
+        orderKey: partOrderKey("prt_frontend_design_lifecycle", 1_776_000_002_000),
+        owningMessageOrderKey: messageOrderKey("msg_frontend_design_lifecycle", 1_776_000_002_000),
         messageID: "msg_frontend_design_lifecycle",
         sessionID,
         type: "text",
@@ -1402,10 +1820,12 @@ test("goal phase stub title is an i18n role key, not the raw phase id", () => {
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_planner_phase_stub", 1_776_000_003_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("planner", {
         id: "msg_planner_phase_stub",
+        orderKey: messageOrderKey("msg_planner_phase_stub", 1_776_000_003_000),
         sessionID: "ses_planner_phase_stub",
         role: "assistant",
         parentSessionID: ROOT_SID,
@@ -1425,9 +1845,11 @@ test("session.error marks the session card with the original stream error", () =
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_stream_error", 1_776_000_009_000),
     properties: {
       info: stampedInfo("frontend-design", {
         id: "msg_stream_error",
+        orderKey: messageOrderKey("msg_stream_error", 1_776_000_009_000),
         sessionID: "ses_stream_error",
         role: "assistant",
         time: { created: 1_776_000_009_000 },
@@ -1437,6 +1859,7 @@ test("session.error marks the session card with the original stream error", () =
 
   applyEvent({
     type: "session.error",
+    orderKey: sessionOrderKey("ses_stream_error", 1_776_000_010_000),
     emittedAt: 1_776_000_010_000,
     properties: {
       sessionID: "ses_stream_error",
@@ -1449,6 +1872,7 @@ test("session.error marks the session card with the original stream error", () =
 
   applyEvent({
     type: "session.status",
+    orderKey: sessionOrderKey("ses_stream_error", 1_776_000_011_000),
     emittedAt: 1_776_000_011_000,
     properties: {
       sessionID: "ses_stream_error",
@@ -1463,6 +1887,24 @@ test("session.error marks the session card with the original stream error", () =
   expect(card.timeCompleted).toBe(1_776_000_010_000)
 })
 
+test("session.error without event time is rejected instead of using the local clock", () => {
+  resetWriter()
+
+  expect(() =>
+    applyEvent({
+      type: "session.error",
+      orderKey: sessionOrderKey("ses_missing_error_time", 1_776_000_010_000),
+      properties: {
+        sessionID: "ses_missing_error_time",
+        error: {
+          name: "MessageAPIError",
+          data: { message: "provider stream failed" },
+        },
+      },
+    }),
+  ).toThrow(/session\.error missing emittedAt\/timestamp/)
+})
+
 test("session.error with channel buffers until a real assistant message card exists", () => {
   resetWriter()
 
@@ -1472,6 +1914,7 @@ test("session.error with channel buffers until a real assistant message card exi
 
   applyEvent({
     type: "session.error",
+    orderKey: sessionOrderKey(sessionID, 1_776_000_012_000),
     emittedAt: 1_776_000_012_000,
     properties: {
       sessionID,
@@ -1489,9 +1932,11 @@ test("session.error with channel buffers until a real assistant message card exi
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_queue_error", 1_776_000_012_500),
     properties: {
       info: stampedInfo("assistant", {
         id: "msg_queue_error",
+        orderKey: messageOrderKey("msg_queue_error", 1_776_000_012_500),
         sessionID,
         role: "assistant",
         time: { created: 1_776_000_012_500 },
@@ -1509,9 +1954,12 @@ test("session.error with channel buffers until a real assistant message card exi
 
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_queue_error", 1_776_000_012_500),
     properties: {
       ...stampedPartEvent("assistant", {
         id: "part_queue_error",
+        orderKey: partOrderKey("part_queue_error", 1_776_000_012_500),
+        owningMessageOrderKey: messageOrderKey("msg_queue_error", 1_776_000_012_500),
         messageID: "msg_queue_error",
         sessionID,
         type: "text",
@@ -1547,6 +1995,99 @@ function seedTurnBoard(request: string): void {
   resetWriter()
 }
 
+test("hydrate rejects non-message orderKey domains in view message metadata", () => {
+  seedTurnBoard("hydrate wrong message domain")
+
+  const messageID = "msg_hydrate_wrong_message_domain"
+  const messageTime = 1_776_000_000_100
+  expect(() =>
+    hydrateConversationViewRaw(
+      {
+        sessions: [],
+        messages: [
+          {
+            messageID,
+            sessionID: ROOT_SID,
+            stage: "assistant",
+            time: messageTime,
+            orderKey: partOrderKey("prt_not_a_message_key", messageTime),
+          },
+        ],
+      },
+      [
+        {
+          info: {
+            id: messageID,
+            sessionID: ROOT_SID,
+            role: "assistant",
+            resolvedRole: "assistant",
+            agent: "assistant",
+            channel: "assistant",
+            time: { created: messageTime },
+            orderKey: messageOrderKey(messageID, messageTime),
+          },
+          parts: [
+            {
+              id: "prt_hydrate_wrong_message_domain",
+              messageID,
+              sessionID: ROOT_SID,
+              orderKey: partOrderKey("prt_hydrate_wrong_message_domain", messageTime),
+              type: "text",
+              text: "visible",
+            },
+          ],
+        },
+      ],
+    ),
+  ).toThrow(/expected message orderKey/)
+})
+
+test("hydrate rejects persisted parts without part orderKey even before display text", () => {
+  seedTurnBoard("hydrate empty part missing key")
+
+  const messageID = "msg_hydrate_empty_part_missing_key"
+  const messageTime = 1_776_000_000_200
+  expect(() =>
+    hydrateConversationViewRaw(
+      {
+        sessions: [],
+        messages: [
+          {
+            messageID,
+            sessionID: ROOT_SID,
+            stage: "assistant",
+            time: messageTime,
+            orderKey: messageOrderKey(messageID, messageTime),
+          },
+        ],
+      },
+      [
+        {
+          info: {
+            id: messageID,
+            sessionID: ROOT_SID,
+            role: "assistant",
+            resolvedRole: "assistant",
+            agent: "assistant",
+            channel: "assistant",
+            time: { created: messageTime },
+            orderKey: messageOrderKey(messageID, messageTime),
+          },
+          parts: [
+            {
+              id: "prt_hydrate_empty_part_missing_key",
+              messageID,
+              sessionID: ROOT_SID,
+              type: "reasoning",
+              text: "",
+            },
+          ],
+        },
+      ],
+    ),
+  ).toThrow(/persisted message part prt_hydrate_empty_part_missing_key missing orderKey/)
+})
+
 test("orchestrator turns stay chronological around child agents", () => {
   seedTurnBoard("interleave turns")
 
@@ -1556,10 +2097,12 @@ test("orchestrator turns stay chronological around child agents", () => {
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_o1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_o1",
+        orderKey: messageOrderKey("msg_o1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1570,10 +2113,13 @@ test("orchestrator turns stay chronological around child agents", () => {
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_o1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_o1",
+        orderKey: partOrderKey("prt_o1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_o1", 1_776_000_000_100),
         messageID: "msg_o1",
         sessionID: ROOT_SID,
         type: "text",
@@ -1584,10 +2130,12 @@ test("orchestrator turns stay chronological around child agents", () => {
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_child", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("architect", {
         id: "msg_child",
+        orderKey: messageOrderKey("msg_child", 1_776_000_000_200),
         sessionID: "ses_child",
         role: "assistant",
         resolvedRole: "architect",
@@ -1599,10 +2147,13 @@ test("orchestrator turns stay chronological around child agents", () => {
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_child", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("architect", {
         id: "prt_child",
+        orderKey: partOrderKey("prt_child", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_child", 1_776_000_000_200),
         messageID: "msg_child",
         sessionID: "ses_child",
         type: "text",
@@ -1613,10 +2164,12 @@ test("orchestrator turns stay chronological around child agents", () => {
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_o2", 1_776_000_000_300),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_o2",
+        orderKey: messageOrderKey("msg_o2", 1_776_000_000_300),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1627,10 +2180,13 @@ test("orchestrator turns stay chronological around child agents", () => {
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_o2", 1_776_000_000_300),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_o2",
+        orderKey: partOrderKey("prt_o2", 1_776_000_000_300),
+        owningMessageOrderKey: messageOrderKey("msg_o2", 1_776_000_000_300),
         messageID: "msg_o2",
         sessionID: ROOT_SID,
         type: "text",
@@ -1664,10 +2220,12 @@ test("late child agent event restores chronological orchestrator card order", ()
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_late_o1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_late_o1",
+        orderKey: messageOrderKey("msg_late_o1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1678,10 +2236,13 @@ test("late child agent event restores chronological orchestrator card order", ()
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_late_o1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_late_o1",
+        orderKey: partOrderKey("prt_late_o1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_late_o1", 1_776_000_000_100),
         messageID: "msg_late_o1",
         sessionID: ROOT_SID,
         type: "text",
@@ -1695,10 +2256,12 @@ test("late child agent event restores chronological orchestrator card order", ()
   // O1/O2 in the persisted message timeline.
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_late_o2", 1_776_000_000_300),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_late_o2",
+        orderKey: messageOrderKey("msg_late_o2", 1_776_000_000_300),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1709,10 +2272,13 @@ test("late child agent event restores chronological orchestrator card order", ()
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_late_o2", 1_776_000_000_300),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_late_o2",
+        orderKey: partOrderKey("prt_late_o2", 1_776_000_000_300),
+        owningMessageOrderKey: messageOrderKey("msg_late_o2", 1_776_000_000_300),
         messageID: "msg_late_o2",
         sessionID: ROOT_SID,
         type: "text",
@@ -1723,10 +2289,12 @@ test("late child agent event restores chronological orchestrator card order", ()
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_late_child", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("architect", {
         id: "msg_late_child",
+        orderKey: messageOrderKey("msg_late_child", 1_776_000_000_200),
         sessionID: "ses_late_child",
         role: "assistant",
         resolvedRole: "architect",
@@ -1738,10 +2306,13 @@ test("late child agent event restores chronological orchestrator card order", ()
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_late_child", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("architect", {
         id: "prt_late_child",
+        orderKey: partOrderKey("prt_late_child", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_late_child", 1_776_000_000_200),
         messageID: "msg_late_child",
         sessionID: "ses_late_child",
         type: "text",
@@ -1756,7 +2327,7 @@ test("late child agent event restores chronological orchestrator card order", ()
   expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child")
 })
 
-test("consecutive messages from the same agent stay in separate message cards", () => {
+test("consecutive messages from the same agent merge into one adjacent segment card", () => {
   seedTurnBoard("consecutive turns")
 
   const cardID = `assistant:session:${ROOT_SID}:message:msg_c1`
@@ -1764,10 +2335,12 @@ test("consecutive messages from the same agent stay in separate message cards", 
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_c1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_c1",
+        orderKey: messageOrderKey("msg_c1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1778,10 +2351,13 @@ test("consecutive messages from the same agent stay in separate message cards", 
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_c1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_c1",
+        orderKey: partOrderKey("prt_c1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_c1", 1_776_000_000_100),
         messageID: "msg_c1",
         sessionID: ROOT_SID,
         type: "text",
@@ -1792,10 +2368,12 @@ test("consecutive messages from the same agent stay in separate message cards", 
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_c2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_c2",
+        orderKey: messageOrderKey("msg_c2", 1_776_000_000_200),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -1806,10 +2384,13 @@ test("consecutive messages from the same agent stay in separate message cards", 
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_c2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_c2",
+        orderKey: partOrderKey("prt_c2", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_c2", 1_776_000_000_200),
         messageID: "msg_c2",
         sessionID: ROOT_SID,
         type: "text",
@@ -1819,12 +2400,136 @@ test("consecutive messages from the same agent stay in separate message cards", 
   })
 
   expect(cardTreeStore.cards[cardID]).toBeDefined()
-  expect(cardTreeStore.cards[secondCardID]).toBeDefined()
-  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID, secondCardID])
-  expect((cardTreeStore.cards[cardID]?.parts || []).map((p: any) => p.text)).toEqual(["first consecutive turn"])
-  expect((cardTreeStore.cards[secondCardID]?.parts || []).map((p: any) => p.text)).toEqual(["second consecutive turn"])
-  expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
-  expect(cardTreeStore.cards[secondCardID]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID])
+  expect((cardTreeStore.cards[cardID]?.parts || []).map((p: any) => [p.type, p.messageID, p.text])).toEqual([
+    ["text", "msg_c1", "first consecutive turn"],
+    ["boundary", "msg_c2", undefined],
+    ["text", "msg_c2", "second consecutive turn"],
+  ])
+})
+
+test("integrity messages separated by a user turn do not merge across the timeline", () => {
+  seedTurnBoard("integrity non-adjacent turns")
+
+  const firstIntegrityCardID = `integrity:session:${INTEGRITY_SID}:message:msg_integrity_first`
+  const userCardID = `user:session:${ROOT_SID}:message:msg_integrity_user_between`
+  const secondIntegrityCardID = `integrity:session:${INTEGRITY_SID}:message:msg_integrity_second`
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_integrity_first", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("integrity", {
+        id: "msg_integrity_first",
+        orderKey: messageOrderKey("msg_integrity_first", 1_776_000_000_100),
+        sessionID: INTEGRITY_SID,
+        role: "assistant",
+        resolvedRole: "integrity",
+        agent: "integrity",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_integrity_first", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("integrity", {
+        id: "prt_integrity_first",
+        orderKey: partOrderKey("prt_integrity_first", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_integrity_first", 1_776_000_000_100),
+        messageID: "msg_integrity_first",
+        sessionID: INTEGRITY_SID,
+        type: "text",
+        text: "first integrity turn",
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_integrity_user_between", 1_776_000_000_150),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("main", {
+        id: "msg_integrity_user_between",
+        orderKey: messageOrderKey("msg_integrity_user_between", 1_776_000_000_150),
+        sessionID: ROOT_SID,
+        role: "user",
+        resolvedRole: "user",
+        agent: "user",
+        time: { created: 1_776_000_000_150 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_integrity_user_between", 1_776_000_000_150),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("main", {
+        id: "prt_integrity_user_between",
+        orderKey: partOrderKey("prt_integrity_user_between", 1_776_000_000_150),
+        owningMessageOrderKey: messageOrderKey("msg_integrity_user_between", 1_776_000_000_150),
+        messageID: "msg_integrity_user_between",
+        sessionID: ROOT_SID,
+        resolvedRole: "user",
+        type: "text",
+        text: "user turn between integrity messages",
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_integrity_second", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("integrity", {
+        id: "msg_integrity_second",
+        orderKey: messageOrderKey("msg_integrity_second", 1_776_000_000_200),
+        sessionID: INTEGRITY_SID,
+        role: "assistant",
+        resolvedRole: "integrity",
+        agent: "integrity",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_integrity_second", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("integrity", {
+        id: "prt_integrity_second",
+        orderKey: partOrderKey("prt_integrity_second", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_integrity_second", 1_776_000_000_200),
+        messageID: "msg_integrity_second",
+        sessionID: INTEGRITY_SID,
+        type: "text",
+        text: "second integrity turn",
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[`integrity:session:${INTEGRITY_SID}`]).toBeUndefined()
+  expect(cardTreeStore.cards[firstIntegrityCardID]).toBeDefined()
+  expect(cardTreeStore.cards[userCardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondIntegrityCardID]).toBeDefined()
+  expect(cardTreeStore.order.filter((id) => [firstIntegrityCardID, userCardID, secondIntegrityCardID].includes(id))).toEqual([
+    firstIntegrityCardID,
+    userCardID,
+    secondIntegrityCardID,
+  ])
+  expect((cardTreeStore.cards[firstIntegrityCardID]?.parts || []).map((part: any) => part.text)).not.toContain(
+    "second integrity turn",
+  )
 })
 
 test("repeated message.updated for the same agent message does not reset card start time", () => {
@@ -1834,10 +2539,12 @@ test("repeated message.updated for the same agent message does not reset card st
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("frontend-research", {
         id: "msg_timer_stable",
+        orderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
         sessionID: "ses_timer_stable",
         role: "assistant",
         resolvedRole: "frontend-research",
@@ -1849,10 +2556,13 @@ test("repeated message.updated for the same agent message does not reset card st
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("frontend-research", {
         id: "prt_timer_stable",
+        orderKey: partOrderKey("prt_timer_stable", 1_776_000_012_000),
+        owningMessageOrderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
         messageID: "msg_timer_stable",
         sessionID: "ses_timer_stable",
         type: "text",
@@ -1865,10 +2575,12 @@ test("repeated message.updated for the same agent message does not reset card st
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("frontend-research", {
         id: "msg_timer_stable",
+        orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
         sessionID: "ses_timer_stable",
         role: "assistant",
         resolvedRole: "frontend-research",
@@ -1891,10 +2603,12 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_explore_1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("explore", {
         id: "msg_explore_1",
+        orderKey: messageOrderKey("msg_explore_1", 1_776_000_000_100),
         sessionID: "ses_explore_mixed",
         role: "user",
         resolvedRole: "orchestrator",
@@ -1906,10 +2620,13 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_explore_1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("explore", {
         id: "prt_explore_1",
+        orderKey: partOrderKey("prt_explore_1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_explore_1", 1_776_000_000_100),
         messageID: "msg_explore_1",
         sessionID: "ses_explore_mixed",
         type: "text",
@@ -1920,10 +2637,12 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_explore_2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("explore", {
         id: "msg_explore_2",
+        orderKey: messageOrderKey("msg_explore_2", 1_776_000_000_200),
         sessionID: "ses_explore_mixed",
         role: "assistant",
         resolvedRole: "orchestrator",
@@ -1935,10 +2654,13 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_explore_2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("explore", {
         id: "prt_explore_2",
+        orderKey: partOrderKey("prt_explore_2", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_explore_2", 1_776_000_000_200),
         messageID: "msg_explore_2",
         sessionID: "ses_explore_mixed",
         type: "text",
@@ -1949,13 +2671,14 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
 
   const card = cardTreeStore.cards[cardID]
   expect(card).toBeDefined()
-  expect(cardTreeStore.cards[secondCardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
   expect(card?.stage).toBe("explore")
   expect(card?.title).toBe("chat.role.explore")
-  expect(card?.parts.map((part: any) => part.text)).toEqual(["inspect repo"])
-  expect(card?.parts.some((part: any) => part.type === "boundary")).toBe(false)
-  expect(cardTreeStore.cards[secondCardID]?.parts.map((part: any) => part.text)).toEqual(["repo inspected"])
-  expect(cardTreeStore.cards[secondCardID]?.parts.some((part: any) => part.type === "boundary")).toBe(false)
+  expect(card?.parts.map((part: any) => [part.type, part.messageID, part.text])).toEqual([
+    ["text", "msg_explore_1", "inspect repo"],
+    ["boundary", "msg_explore_2", undefined],
+    ["text", "msg_explore_2", "repo inspected"],
+  ])
 })
 
 test("mission session splits user turns from mission agent turns", () => {
@@ -1971,14 +2694,34 @@ test("mission session splits user turns from mission agent turns", () => {
       sessions: [
         {
           sessionID: "ses_mission_split",
+          orderKey: sessionOrderKey("ses_mission_split", 1_776_000_000_100),
           stage: "user",
           messageIDs: ["msg_mission_user"],
           placement: "top_level",
         },
         {
           sessionID: "ses_mission_split",
+          orderKey: sessionOrderKey("ses_mission_split", 1_776_000_000_100),
           stage: "mission",
           messageIDs: ["msg_mission_agent"],
+          placement: "top_level",
+        },
+      ],
+      messages: [
+        {
+          messageID: "msg_mission_user",
+          orderKey: messageOrderKey("msg_mission_user", 1_776_000_000_100),
+          sessionID: "ses_mission_split",
+          stage: "user",
+          time: 1_776_000_000_100,
+          placement: "top_level",
+        },
+        {
+          messageID: "msg_mission_agent",
+          orderKey: messageOrderKey("msg_mission_agent", 1_776_000_000_200),
+          sessionID: "ses_mission_split",
+          stage: "mission",
+          time: 1_776_000_000_200,
           placement: "top_level",
         },
       ],
@@ -1987,6 +2730,7 @@ test("mission session splits user turns from mission agent turns", () => {
       {
         info: stampedInfo("main", {
           id: "msg_mission_user",
+          orderKey: messageOrderKey("msg_mission_user", 1_776_000_000_100),
           sessionID: "ses_mission_split",
           role: "user",
           resolvedRole: "user",
@@ -1995,6 +2739,7 @@ test("mission session splits user turns from mission agent turns", () => {
         parts: [
           stampedPart("main", {
             id: "prt_mission_user",
+            orderKey: partOrderKey("prt_mission_user", 1_776_000_000_100),
             messageID: "msg_mission_user",
             sessionID: "ses_mission_split",
             type: "text",
@@ -2005,6 +2750,7 @@ test("mission session splits user turns from mission agent turns", () => {
       {
         info: stampedInfo("mission", {
           id: "msg_mission_agent",
+          orderKey: messageOrderKey("msg_mission_agent", 1_776_000_000_200),
           sessionID: "ses_mission_split",
           role: "assistant",
           resolvedRole: "mission",
@@ -2014,6 +2760,7 @@ test("mission session splits user turns from mission agent turns", () => {
         parts: [
           stampedPart("mission", {
             id: "prt_mission_agent",
+            orderKey: partOrderKey("prt_mission_agent", 1_776_000_000_200),
             messageID: "msg_mission_agent",
             sessionID: "ses_mission_split",
             type: "text",
@@ -2046,10 +2793,12 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_i1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_phase_i1",
+        orderKey: messageOrderKey("msg_phase_i1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2060,10 +2809,13 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_phase_i1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_phase_i1",
+        orderKey: partOrderKey("prt_phase_i1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_phase_i1", 1_776_000_000_100),
         messageID: "msg_phase_i1",
         sessionID: ROOT_SID,
         type: "text",
@@ -2073,10 +2825,12 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_build", 1_776_000_000_150),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("build", {
         id: "msg_phase_build",
+        orderKey: messageOrderKey("msg_phase_build", 1_776_000_000_150),
         sessionID: "ses_phase_build_interrupt",
         role: "assistant",
         resolvedRole: "build",
@@ -2089,10 +2843,12 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_i2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_phase_i2",
+        orderKey: messageOrderKey("msg_phase_i2", 1_776_000_000_200),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2103,10 +2859,13 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_phase_i2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_phase_i2",
+        orderKey: partOrderKey("prt_phase_i2", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_phase_i2", 1_776_000_000_200),
         messageID: "msg_phase_i2",
         sessionID: ROOT_SID,
         type: "text",
@@ -2135,20 +2894,22 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
   const hasVisibleMessagePart = () =>
     Object.values(cardTreeStore.cards).some((card: any) =>
       (card?.parts || []).some(
-        (part: any) =>
-          part.messageID === messageID &&
-          part.type !== "step-start" &&
-          part.type !== "step-finish" &&
-          part.type !== "boundary",
+        (part: any) => part.messageID === messageID && isCardBodyMessagePart(part),
       ),
+    )
+  const hasPartID = (partID: string) =>
+    Object.values(cardTreeStore.cards).some((card: any) =>
+      (card?.parts || []).some((part: any) => part.id === partID),
     )
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey(messageID, 1_776_000_000_150),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("build", {
         id: messageID,
+        orderKey: messageOrderKey(messageID, 1_776_000_000_150),
         sessionID,
         role: "assistant",
         resolvedRole: "build",
@@ -2162,13 +2923,17 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
 
   expect(hasEmptyBoundary()).toBe(false)
   expect(hasVisibleMessagePart()).toBe(false)
+  expect(hasPartID("prt_empty_step")).toBe(false)
 
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey(messageID, 1_776_000_000_150),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("build", {
         id: "prt_empty_step",
+        orderKey: partOrderKey("prt_empty_step", 1_776_000_000_150),
+        owningMessageOrderKey: messageOrderKey(messageID, 1_776_000_000_150),
         messageID,
         sessionID,
         type: "step-start",
@@ -2183,10 +2948,13 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
 
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey(messageID, 1_776_000_000_150),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("build", {
         id: "prt_visible_text",
+        orderKey: partOrderKey("prt_visible_text", 1_776_000_000_150),
+        owningMessageOrderKey: messageOrderKey(messageID, 1_776_000_000_150),
         messageID,
         sessionID,
         type: "text",
@@ -2213,10 +2981,12 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey(assistantMessageID, 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("build", {
         id: assistantMessageID,
+        orderKey: messageOrderKey(assistantMessageID, 1_776_000_000_200),
         sessionID,
         role: "assistant",
         resolvedRole: "build",
@@ -2229,10 +2999,13 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey(assistantMessageID, 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("build", {
         id: "prt_phase_prompt_order_assistant",
+        orderKey: partOrderKey("prt_phase_prompt_order_assistant", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey(assistantMessageID, 1_776_000_000_200),
         messageID: assistantMessageID,
         sessionID,
         type: "text",
@@ -2245,10 +3018,12 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey(promptMessageID, 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("build", {
         id: promptMessageID,
+        orderKey: messageOrderKey(promptMessageID, 1_776_000_000_100),
         sessionID,
         role: "user",
         resolvedRole: "user",
@@ -2261,10 +3036,13 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey(promptMessageID, 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("build", {
         id: "prt_phase_prompt_order_user",
+        orderKey: partOrderKey("prt_phase_prompt_order_user", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey(promptMessageID, 1_776_000_000_100),
         messageID: promptMessageID,
         sessionID,
         type: "text",
@@ -2299,6 +3077,7 @@ test("hydrate skips empty build transcript messages before boundary projection",
       sessions: [
         {
           sessionID: emptySessionID,
+          orderKey: sessionOrderKey(emptySessionID, 1_776_000_000_150),
           stage: "build",
           parentSessionID: ROOT_SID,
           goalID,
@@ -2310,6 +3089,7 @@ test("hydrate skips empty build transcript messages before boundary projection",
         },
         {
           sessionID: visibleSessionID,
+          orderKey: sessionOrderKey(visibleSessionID, 1_776_000_000_200),
           stage: "build",
           parentSessionID: ROOT_SID,
           goalID,
@@ -2322,11 +3102,25 @@ test("hydrate skips empty build transcript messages before boundary projection",
         },
       ],
       topLevelSessionIDs: [],
+      messages: [
+        {
+          messageID: "msg_hydrate_visible",
+          orderKey: messageOrderKey("msg_hydrate_visible", 1_776_000_000_200),
+          sessionID: visibleSessionID,
+          stage: "build",
+          parentSessionID: ROOT_SID,
+          goalID,
+          time: 1_776_000_000_200,
+          placement: "goal_phase",
+          phase: { stepID: "build", phaseID: "build" },
+        },
+      ],
     },
     [
       {
         info: stampedInfo("build", {
           id: "msg_hydrate_empty",
+          orderKey: messageOrderKey("msg_hydrate_empty", 1_776_000_000_150),
           sessionID: emptySessionID,
           role: "assistant",
           parentSessionID: ROOT_SID,
@@ -2338,13 +3132,37 @@ test("hydrate skips empty build transcript messages before boundary projection",
       {
         info: stampedInfo("build", {
           id: "msg_hydrate_visible",
+          orderKey: messageOrderKey("msg_hydrate_visible", 1_776_000_000_200),
           sessionID: visibleSessionID,
           role: "assistant",
           parentSessionID: ROOT_SID,
           goalID,
           time: { created: 1_776_000_000_200 },
         }),
-        parts: [{ id: "prt_hydrate_visible", type: "text", text: "hydrated build output" }],
+        parts: [
+          {
+            id: "prt_hydrate_step_start",
+            orderKey: partOrderKey("prt_hydrate_step_start", 1_776_000_000_199),
+            messageID: "msg_hydrate_visible",
+            sessionID: visibleSessionID,
+            type: "step-start",
+          },
+          {
+            id: "prt_hydrate_visible",
+            orderKey: partOrderKey("prt_hydrate_visible", 1_776_000_000_200),
+            messageID: "msg_hydrate_visible",
+            sessionID: visibleSessionID,
+            type: "text",
+            text: "hydrated build output",
+          },
+          {
+            id: "prt_hydrate_step_finish",
+            orderKey: partOrderKey("prt_hydrate_step_finish", 1_776_000_000_201),
+            messageID: "msg_hydrate_visible",
+            sessionID: visibleSessionID,
+            type: "step-finish",
+          },
+        ],
       },
     ],
   )
@@ -2355,6 +3173,8 @@ test("hydrate skips empty build transcript messages before boundary projection",
   ) as any
   expect(phaseCard).toBeDefined()
   expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "hydrated build output")).toBe(true)
+  expect(phaseCard.parts.some((part: any) => part.id === "prt_hydrate_step_start")).toBe(false)
+  expect(phaseCard.parts.some((part: any) => part.id === "prt_hydrate_step_finish")).toBe(false)
 })
 
 test("interaction remains attached to the turn active at interaction time", () => {
@@ -2389,10 +3209,12 @@ test("interaction remains attached to the turn active at interaction time", () =
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_i1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_i1",
+        orderKey: messageOrderKey("msg_i1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2403,10 +3225,12 @@ test("interaction remains attached to the turn active at interaction time", () =
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_i2", 1_776_000_000_300),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_i2",
+        orderKey: messageOrderKey("msg_i2", 1_776_000_000_300),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2428,10 +3252,12 @@ test("late part.delta lands on the original turn card after a newer message star
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_d1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_d1",
+        orderKey: messageOrderKey("msg_d1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2442,10 +3268,13 @@ test("late part.delta lands on the original turn card after a newer message star
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_d1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_d1",
+        orderKey: partOrderKey("prt_d1", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_d1", 1_776_000_000_100),
         messageID: "msg_d1",
         sessionID: ROOT_SID,
         type: "text",
@@ -2456,10 +3285,12 @@ test("late part.delta lands on the original turn card after a newer message star
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_d2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_d2",
+        orderKey: messageOrderKey("msg_d2", 1_776_000_000_200),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2470,10 +3301,13 @@ test("late part.delta lands on the original turn card after a newer message star
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: messageOrderKey("msg_d2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "prt_d2",
+        orderKey: partOrderKey("prt_d2", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_d2", 1_776_000_000_200),
         messageID: "msg_d2",
         sessionID: ROOT_SID,
         type: "text",
@@ -2507,10 +3341,12 @@ test("session.status terminal updates the active message card", () => {
 
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_s1", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_s1",
+        orderKey: messageOrderKey("msg_s1", 1_776_000_000_100),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2521,10 +3357,12 @@ test("session.status terminal updates the active message card", () => {
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_s_child", 1_776_000_000_150),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("architect", {
         id: "msg_s_child",
+        orderKey: messageOrderKey("msg_s_child", 1_776_000_000_150),
         sessionID: "ses_status_child",
         role: "assistant",
         resolvedRole: "architect",
@@ -2536,10 +3374,12 @@ test("session.status terminal updates the active message card", () => {
   })
   applyEvent({
     type: "message.updated",
+    orderKey: messageOrderKey("msg_s2", 1_776_000_000_200),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("assistant", {
         id: "msg_s2",
+        orderKey: messageOrderKey("msg_s2", 1_776_000_000_200),
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
@@ -2551,6 +3391,7 @@ test("session.status terminal updates the active message card", () => {
 
   applyEvent({
     type: "session.status",
+    orderKey: sessionOrderKey(ROOT_SID, 1_776_000_000_300),
     emittedAt: 1_776_000_000_300,
     properties: {
       sessionID: ROOT_SID,
@@ -2564,7 +3405,7 @@ test("session.status terminal updates the active message card", () => {
   expect(cardTreeStore.cards[o2]?.terminalReason).toBe("completed")
 })
 
-test("hydrate keeps consecutive same-agent messages in separate message cards", () => {
+test("hydrate merges consecutive same-agent messages into one adjacent segment card", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -2583,6 +3424,7 @@ test("hydrate keeps consecutive same-agent messages in separate message cards", 
   const mk = (id: string, created: number, text: string) => ({
     info: {
       id,
+      orderKey: messageOrderKey(id, created),
       sessionID: ROOT_SID,
       role: "assistant",
       resolvedRole: "assistant",
@@ -2590,20 +3432,53 @@ test("hydrate keeps consecutive same-agent messages in separate message cards", 
       channel: "assistant",
       time: { created },
     },
-    parts: [{ id: `prt_${id}`, messageID: id, sessionID: ROOT_SID, type: "text", text }],
+    parts: [{ id: `prt_${id}`, orderKey: partOrderKey(`prt_${id}`, created), messageID: id, sessionID: ROOT_SID, type: "text", text }],
   })
   const transcript = [mk("msg_h1", 1_776_000_000_100, "first turn"), mk("msg_h2", 1_776_000_000_200, "second turn")]
 
-  hydrateConversationView({ sessions: [{ sessionID: ROOT_SID, stage: "assistant" }] }, transcript)
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID: ROOT_SID,
+          orderKey: sessionOrderKey(ROOT_SID, 1_776_000_000_100),
+          stage: "assistant",
+          messageIDs: ["msg_h1", "msg_h2"],
+          placement: "top_level",
+        },
+      ],
+      messages: [
+        {
+          messageID: "msg_h1",
+          orderKey: messageOrderKey("msg_h1", 1_776_000_000_100),
+          sessionID: ROOT_SID,
+          stage: "assistant",
+          time: 1_776_000_000_100,
+          placement: "top_level",
+        },
+        {
+          messageID: "msg_h2",
+          orderKey: messageOrderKey("msg_h2", 1_776_000_000_200),
+          sessionID: ROOT_SID,
+          stage: "assistant",
+          time: 1_776_000_000_200,
+          placement: "top_level",
+        },
+      ],
+    },
+    transcript,
+  )
 
   const h1 = `assistant:session:${ROOT_SID}:message:msg_h1`
   const h2 = `assistant:session:${ROOT_SID}:message:msg_h2`
   expect(cardTreeStore.order).toContain(h1)
-  expect(cardTreeStore.order).toContain(h2)
+  expect(cardTreeStore.order).not.toContain(h2)
   expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "first turn")).toBe(true)
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "second turn")).toBe(false)
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
-  expect(cardTreeStore.cards[h2]?.parts.some((p: any) => p.text === "second turn")).toBe(true)
-  expect(cardTreeStore.cards[h2]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
+  expect(cardTreeStore.cards[h1]?.parts.map((p: any) => [p.type, p.messageID, p.text])).toEqual([
+    ["text", "msg_h1", "first turn"],
+    ["boundary", "msg_h2", undefined],
+    ["text", "msg_h2", "second turn"],
+  ])
+  expect(cardTreeStore.cards[h2]).toBeUndefined()
   expect(cardTreeStore.cards[`assistant:session:${ROOT_SID}`]).toBeUndefined()
 })
