@@ -5,6 +5,7 @@
 import { appStore } from "../store/app"
 import { apiJson } from "./api"
 import { updateConfig } from "./config"
+import type { ConfigRequestOptions } from "./config"
 
 export interface AddMcpInput {
   name: string
@@ -17,6 +18,13 @@ export interface AddMcpInput {
 type McpAddRequest =
   | { name: string; config: { type: "remote"; url: string } }
   | { name: string; config: { type: "local"; command: string[] } }
+
+type McpRequestOptions = ConfigRequestOptions
+
+function mcpPath(path: string, options: McpRequestOptions = {}): string {
+  const directory = options.directory?.trim()
+  return directory ? `${path}?directory=${encodeURIComponent(directory)}` : path
+}
 
 export function parseMcpArguments(input: string): string[] {
   const args: string[] = []
@@ -72,7 +80,7 @@ export function buildMcpAddRequest(input: AddMcpInput): McpAddRequest {
   }
 }
 
-export async function addMcpServer(input: AddMcpInput): Promise<void> {
+export async function addMcpServer(input: AddMcpInput, options: McpRequestOptions = {}): Promise<void> {
   const request = buildMcpAddRequest(input)
   await updateConfig((current: any) => {
     const existing = current.mcp && typeof current.mcp === "object" && !Array.isArray(current.mcp) ? current.mcp : {}
@@ -80,27 +88,27 @@ export async function addMcpServer(input: AddMcpInput): Promise<void> {
       ...existing,
       [request.name]: request.config,
     }
-  })
-  await connectMcp(request.name)
+  }, options)
+  await connectMcp(request.name, options)
 }
 
 /** Connects a configured MCP server by name. */
-export async function connectMcp(name: string): Promise<void> {
-  await apiJson(`mcp/${encodeURIComponent(name)}/connect`, {
+export async function connectMcp(name: string, options: McpRequestOptions = {}): Promise<void> {
+  await apiJson(mcpPath(`mcp/${encodeURIComponent(name)}/connect`, options), {
     method: "POST",
   })
 }
 
 /** Disconnects an active MCP connection by name. */
-export async function disconnectMcp(name: string): Promise<void> {
-  await apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, {
+export async function disconnectMcp(name: string, options: McpRequestOptions = {}): Promise<void> {
+  await apiJson(mcpPath(`mcp/${encodeURIComponent(name)}/disconnect`, options), {
     method: "POST",
   })
 }
 
 /** Removes stored OAuth/auth credentials for an MCP server by name. */
-export async function removeMcpAuth(name: string): Promise<void> {
-  await apiJson(`mcp/${encodeURIComponent(name)}/auth`, {
+export async function removeMcpAuth(name: string, options: McpRequestOptions = {}): Promise<void> {
+  await apiJson(mcpPath(`mcp/${encodeURIComponent(name)}/auth`, options), {
     method: "DELETE",
   })
 }
@@ -109,13 +117,13 @@ export async function removeMcpAuth(name: string): Promise<void> {
  * Disconnects all MCP servers and removes their auth credentials.
  * Callers are responsible for confirming and persisting config changes.
  */
-export async function deleteAllMcp(): Promise<void> {
-  const names = Object.keys(appStore.mcp ?? {})
+export async function deleteAllMcp(options: McpRequestOptions & { names?: readonly string[] } = {}): Promise<void> {
+  const names = options.names ? [...options.names] : Object.keys(appStore.mcp ?? {})
   if (names.length === 0) return
   for (const name of names) {
-    await disconnectMcp(name)
+    await disconnectMcp(name, options)
   }
   for (const name of names) {
-    await removeMcpAuth(name)
+    await removeMcpAuth(name, options)
   }
 }

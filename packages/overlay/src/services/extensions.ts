@@ -46,6 +46,18 @@ export interface AgentSkillMountMatrix {
   project_mounts?: unknown
 }
 
+interface SkillMountRequestOptions {
+  sessionID?: string
+  refresh?: boolean
+  directory?: string
+  isCurrentDirectory?: (directory: string) => boolean
+}
+
+export interface DirectoryOwnedRequestOptions {
+  directory?: string
+  isCurrentDirectory?: (directory: string) => boolean
+}
+
 // ── Helpers ──
 
 function stabilizeSkillOrder(matrix: AgentSkillMountMatrix): AgentSkillMountMatrix {
@@ -75,6 +87,43 @@ function commitSkillMountMatrix(matrix: AgentSkillMountMatrix): AgentSkillMountM
   setSkillMounts(stable)
   if (Array.isArray(stable.skills)) setSkills(stable.skills)
   return stable
+}
+
+function skillMountPath(base: string, options: Pick<SkillMountRequestOptions, "directory" | "refresh" | "sessionID">): string {
+  const query = new URLSearchParams()
+  if (options.sessionID) query.set("sessionID", options.sessionID)
+  if (options.refresh) query.set("refresh", "true")
+  if (options.directory) query.set("directory", options.directory)
+  const suffix = query.toString()
+  return suffix ? `${base}?${suffix}` : base
+}
+
+function directoryOwnedPath(base: string, options: Pick<DirectoryOwnedRequestOptions, "directory">): string {
+  const directory = String(options.directory || "").trim()
+  if (!directory) return base
+  const query = new URLSearchParams({ directory })
+  return `${base}?${query.toString()}`
+}
+
+function ownsDirectoryRequest(options: DirectoryOwnedRequestOptions): boolean {
+  const directory = String(options.directory || "").trim()
+  return !directory || !options.isCurrentDirectory || options.isCurrentDirectory(directory)
+}
+
+function commitOwnedSkillMountMatrix(
+  matrix: AgentSkillMountMatrix,
+  options: Pick<SkillMountRequestOptions, "directory" | "isCurrentDirectory">,
+): AgentSkillMountMatrix {
+  const directory = String(options.directory || "").trim()
+  if (directory && options.isCurrentDirectory && !options.isCurrentDirectory(directory)) return matrix
+  return commitSkillMountMatrix(matrix)
+}
+
+function skillMountOptions(
+  sessionIDOrOptions?: string | SkillMountRequestOptions,
+): SkillMountRequestOptions {
+  if (typeof sessionIDOrOptions === "string") return { sessionID: sessionIDOrOptions }
+  return sessionIDOrOptions ?? {}
 }
 
 /**
@@ -109,71 +158,80 @@ function errorMessage(error: unknown): string {
  * NOTE: renderExtensions() DOM call is omitted — callers should
  * react to store updates via Solid reactivity.
  */
-export async function loadExtensions(): Promise<{ skills: SkillDescriptor[]; mcp: Record<string, any> }> {
-  const [matrix, mcp] = await Promise.all([loadSkillMountMatrix(), loadMcpStatus()])
+export async function loadExtensions(
+  options: DirectoryOwnedRequestOptions = {},
+): Promise<{ skills: SkillDescriptor[]; mcp: Record<string, any> }> {
+  const [matrix, mcp] = await Promise.all([loadSkillMountMatrix(options), loadMcpStatus(options)])
   return { skills: matrix.skills, mcp }
 }
 
-export async function loadInstalledSkills(): Promise<SkillDescriptor[]> {
-  const skills = await apiJson("skill/installed")
+export async function loadInstalledSkills(options: DirectoryOwnedRequestOptions = {}): Promise<SkillDescriptor[]> {
+  const skills = await apiJson(directoryOwnedPath("skill/installed", options))
   if (!Array.isArray(skills)) {
     throw new Error("skill/installed returned a non-array payload")
   }
-  setSkills(skills)
+  if (ownsDirectoryRequest(options)) setSkills(skills)
   return skills
 }
 
 export async function loadSkillMountMatrix(
-  options: { sessionID?: string; refresh?: boolean } = {},
+  options: SkillMountRequestOptions = {},
 ): Promise<AgentSkillMountMatrix> {
-  const query = new URLSearchParams()
-  if (options.sessionID) query.set("sessionID", options.sessionID)
-  if (options.refresh) query.set("refresh", "true")
-  const suffix = query.toString()
-  const matrix = await apiJson(suffix ? `skill/mounts?${suffix}` : "skill/mounts")
+  const matrix = await apiJson(skillMountPath("skill/mounts", options))
   if (!matrix || typeof matrix !== "object" || Array.isArray(matrix)) {
     throw new Error("skill/mounts returned a non-object payload")
   }
-  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
+  return commitOwnedSkillMountMatrix(matrix as AgentSkillMountMatrix, options)
 }
 
-export async function mountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
-  const matrix = await apiJson("skill/mount", {
+export async function mountSkill(
+  agent: string,
+  skill: string,
+  sessionIDOrOptions?: string | SkillMountRequestOptions,
+): Promise<AgentSkillMountMatrix> {
+  const options = skillMountOptions(sessionIDOrOptions)
+  const matrix = await apiJson(skillMountPath("skill/mount", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
+    body: JSON.stringify({ agent, skill, sessionID: options.sessionID || undefined }),
   })
-  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
+  return commitOwnedSkillMountMatrix(matrix as AgentSkillMountMatrix, options)
 }
 
-export async function unmountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
-  const matrix = await apiJson("skill/unmount", {
+export async function unmountSkill(
+  agent: string,
+  skill: string,
+  sessionIDOrOptions?: string | SkillMountRequestOptions,
+): Promise<AgentSkillMountMatrix> {
+  const options = skillMountOptions(sessionIDOrOptions)
+  const matrix = await apiJson(skillMountPath("skill/unmount", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
+    body: JSON.stringify({ agent, skill, sessionID: options.sessionID || undefined }),
   })
-  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
+  return commitOwnedSkillMountMatrix(matrix as AgentSkillMountMatrix, options)
 }
 
 export async function importAndMountSkill(
   agent: string,
   payload: Record<string, unknown>,
-  sessionID?: string,
+  sessionIDOrOptions?: string | SkillMountRequestOptions,
 ): Promise<AgentSkillMountMatrix> {
-  const matrix = await apiJson("skill/import-and-mount", {
+  const options = skillMountOptions(sessionIDOrOptions)
+  const matrix = await apiJson(skillMountPath("skill/import-and-mount", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agent, sessionID: sessionID || undefined, import: payload }),
+    body: JSON.stringify({ agent, sessionID: options.sessionID || undefined, import: payload }),
   })
-  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
+  return commitOwnedSkillMountMatrix(matrix as AgentSkillMountMatrix, options)
 }
 
-export async function loadMcpStatus(): Promise<Record<string, any>> {
-  const mcp = await apiJson("mcp")
+export async function loadMcpStatus(options: DirectoryOwnedRequestOptions = {}): Promise<Record<string, any>> {
+  const mcp = await apiJson(directoryOwnedPath("mcp", options))
   if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
     throw new Error("mcp returned a non-object payload")
   }
-  setMcp(mcp)
+  if (ownsDirectoryRequest(options)) setMcp(mcp)
   return mcp
 }
 
@@ -182,12 +240,12 @@ export async function loadMcpStatus(): Promise<Record<string, any>> {
  * store.
  * NOTE: This only refreshes store data; callers own dialog visibility.
  */
-export async function loadSkillMarket(): Promise<any[]> {
-  const items = await apiJson("skill/market")
+export async function loadSkillMarket(options: DirectoryOwnedRequestOptions = {}): Promise<any[]> {
+  const items = await apiJson(directoryOwnedPath("skill/market", options))
   if (!Array.isArray(items)) {
     throw new Error("skill/market returned a non-array payload")
   }
-  setSkillMarket(items)
+  if (ownsDirectoryRequest(options)) setSkillMarket(items)
   return items
 }
 
@@ -197,8 +255,12 @@ export async function loadSkillMarket(): Promise<any[]> {
  * Removes a skill source via the API.
  * Mirrors removeSkillSource.
  */
-export async function removeSkillSource(source: string, kind: string): Promise<void> {
-  await apiJson("skill/remove", {
+export async function removeSkillSource(
+  source: string,
+  kind: string,
+  options: DirectoryOwnedRequestOptions = {},
+): Promise<void> {
+  await apiJson(directoryOwnedPath("skill/remove", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source, kind }),
@@ -209,8 +271,13 @@ export async function removeSkillSource(source: string, kind: string): Promise<v
  * Installs a skill via the API.
  * Mirrors installSkill.
  */
-export async function installSkill(kind: string, value: string, policy?: string): Promise<void> {
-  await apiJson("skill/install", {
+export async function installSkill(
+  kind: string,
+  value: string,
+  policy?: string,
+  options: DirectoryOwnedRequestOptions = {},
+): Promise<void> {
+  await apiJson(directoryOwnedPath("skill/install", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, value, policy: policy || undefined }),
@@ -221,8 +288,9 @@ export async function importSkillFile(
   filename: string,
   content: string,
   policy?: string,
+  options: DirectoryOwnedRequestOptions = {},
 ): Promise<{ name: string; source: string; kind: "path"; names?: string[]; sources?: string[] }> {
-  return await apiJson("skill/import-file", {
+  return await apiJson(directoryOwnedPath("skill/import-file", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, content, policy: policy || undefined }),
@@ -238,8 +306,9 @@ export async function importSkillPackage(
   sourceName: string,
   files: SkillImportPackageFile[],
   policy?: string,
+  options: DirectoryOwnedRequestOptions = {},
 ): Promise<{ name: string; source: string; kind: "path"; names?: string[]; sources?: string[] }> {
-  return await apiJson("skill/import-file", {
+  return await apiJson(directoryOwnedPath("skill/import-file", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sourceName, files, policy: policy || undefined }),
@@ -250,8 +319,9 @@ export async function importSkillArchive(
   filename: string,
   archiveBase64: string,
   policy?: string,
+  options: DirectoryOwnedRequestOptions = {},
 ): Promise<{ name: string; source: string; kind: "path"; names?: string[]; sources?: string[] }> {
-  return await apiJson("skill/import-file", {
+  return await apiJson(directoryOwnedPath("skill/import-file", options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, archiveBase64, policy: policy || undefined }),
@@ -264,9 +334,13 @@ export async function importSkillArchive(
  * responsible for confirming before calling this function.
  * Mirrors the API call portion of deleteSkill.
  */
-export async function deleteSkill(source: string, kind: string): Promise<void> {
+export async function deleteSkill(
+  source: string,
+  kind: string,
+  options: DirectoryOwnedRequestOptions = {},
+): Promise<void> {
   if (!source || !kind) return
-  await removeSkillSource(source, kind)
+  await removeSkillSource(source, kind, options)
 }
 
 /**
@@ -275,15 +349,17 @@ export async function deleteSkill(source: string, kind: string): Promise<void> {
  * responsible for confirming before calling this function.
  * Mirrors the API call portion of deleteAllSkills.
  */
-export async function deleteAllSkills(): Promise<void> {
-  const skills: SkillDescriptor[] = appStore.skills
+export async function deleteAllSkills(
+  options: DirectoryOwnedRequestOptions & { skills?: readonly SkillDescriptor[] } = {},
+): Promise<void> {
+  const skills: readonly SkillDescriptor[] = options.skills ?? appStore.skills
   const custom = skills.filter((item) => !item.builtin)
   const list = custom.filter(skillRemovable)
   if (list.length === 0) return
   let removalError: unknown
   for (const item of list) {
     try {
-      await removeSkillSource(item.source!, skillRemoveKind(item))
+      await removeSkillSource(item.source!, skillRemoveKind(item), options)
     } catch (error) {
       removalError = error
       break
@@ -291,7 +367,7 @@ export async function deleteAllSkills(): Promise<void> {
   }
 
   try {
-    await loadInstalledSkills()
+    await loadInstalledSkills(options)
   } catch (refreshError) {
     if (removalError) {
       throw new Error(

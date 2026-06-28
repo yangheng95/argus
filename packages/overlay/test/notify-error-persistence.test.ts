@@ -77,6 +77,22 @@ describe("notify: details payload round-trips", () => {
   })
 })
 
+describe("notify: task ownership is stored on the notification item", () => {
+  test("showNotification preserves explicit task directory and title", () => {
+    showNotification({
+      tone: "error",
+      title: "failed",
+      taskID: "tsk_owned",
+      taskDirectory: "D:/project-a",
+      taskTitle: "Owned task",
+    })
+
+    expect(notificationStore.items[0]?.taskID).toBe("tsk_owned")
+    expect(notificationStore.items[0]?.taskDirectory).toBe("D:/project-a")
+    expect(notificationStore.items[0]?.taskTitle).toBe("Owned task")
+  })
+})
+
 describe("notify: center history survives toast dismissal", () => {
   test("dismissNotification hides history notifications without deleting center history", () => {
     const id = notifyError({ title: "failed", message: "needs attention" })

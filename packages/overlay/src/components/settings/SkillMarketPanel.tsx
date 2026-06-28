@@ -22,7 +22,9 @@ import {
   loadSkillMountMatrix,
   loadMcpStatus,
   loadSkillMarket,
+  deleteSkill,
   deleteAllSkills,
+  installSkill,
   importSkillArchive,
   importAndMountSkill,
   importSkillFile,
@@ -125,6 +127,11 @@ interface SkillDropPayload {
   file?: File
   archive?: File
   files?: SkillImportPackageFile[]
+}
+
+interface ActiveMatrixPair {
+  skill: string
+  agent: string
 }
 
 // ── Helpers ──
@@ -335,10 +342,8 @@ function sourceDirectoryTone(directory: string): string {
 }
 
 function matrixAgentTrack(agent: Pick<AgentSkillRow, "name">, compact: boolean): string {
-  const minPx = compact ? 104 : 132
-  const minCh = Math.max(compact ? 14 : 16, agent.name.length + (compact ? 4 : 6))
-  const max = compact ? "max-content" : "1fr"
-  return `minmax(max(calc(${minPx}px * var(--ui-scale)), ${minCh}ch), ${max})`
+  if (compact) return "minmax(calc(76px * var(--ui-scale)), calc(92px * var(--ui-scale)))"
+  return "minmax(calc(92px * var(--ui-scale)), calc(112px * var(--ui-scale)))"
 }
 
 // ── Extension Settings Panels ──
@@ -465,10 +470,8 @@ function ExtensionSettingsPanel(props: {
     return syncActiveDirectoryApiContext().trim()
   }
 
-  function requireActiveDirectory(): boolean {
-    if (currentDirectory()) return true
-    setPanelNotice(t("workspace.no_directory"), "warn")
-    return false
+  function sourceMatchesDirectory(directory: string): boolean {
+    return currentDirectory() === directory
   }
 
   const skills = createMemo((): SkillItem[] => [...(appStore.skills as SkillItem[])])
@@ -488,13 +491,14 @@ function ExtensionSettingsPanel(props: {
   const matrixGridTemplate = createMemo(() => {
     const compact = props.compact === true
     const skillColumn = compact
-      ? "minmax(calc(180px * var(--ui-scale)), calc(260px * var(--ui-scale)))"
-      : "minmax(calc(240px * var(--ui-scale)), calc(360px * var(--ui-scale)))"
+      ? "minmax(calc(150px * var(--ui-scale)), calc(188px * var(--ui-scale)))"
+      : "minmax(calc(208px * var(--ui-scale)), calc(248px * var(--ui-scale)))"
     const agentColumns = agentRows()
       .map((agent) => matrixAgentTrack(agent, compact))
       .join(" ")
     return `${skillColumn} ${agentColumns}`.trim()
   })
+  const [activeMatrixPair, setActiveMatrixPair] = createSignal<ActiveMatrixPair | null>(null)
   const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
   const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
 
@@ -503,45 +507,83 @@ function ExtensionSettingsPanel(props: {
   const builtinCount = createMemo(() => poolSkills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
-  async function refreshSkillMounts(options: { refresh?: boolean } = {}) {
-    if (!currentDirectory()) return undefined
-    return await loadSkillMountMatrix({ refresh: options.refresh })
+  function activateMatrixPair(skill: string, agent: string) {
+    setActiveMatrixPair({ skill, agent })
   }
 
-  async function refreshMcpStatus() {
-    return (await loadMcpStatus()) as Record<string, McpItem>
+  function clearMatrixPair(skill: string, agent: string) {
+    const active = activeMatrixPair()
+    if (active?.skill === skill && active.agent === agent) setActiveMatrixPair(null)
   }
 
-  async function reloadCurrentPanel(options: { refreshSkills?: boolean } = {}) {
-    if (!requireActiveDirectory()) return
+  function matrixSkillActive(skill: string): boolean {
+    return activeMatrixPair()?.skill === skill
+  }
+
+  function matrixAgentActive(agent: string): boolean {
+    return activeMatrixPair()?.agent === agent
+  }
+
+  function matrixPairActive(skill: string, agent: string): boolean {
+    const active = activeMatrixPair()
+    return active?.skill === skill && active.agent === agent
+  }
+
+  async function refreshSkillMounts(options: { refresh?: boolean; directory?: string } = {}) {
+    const directory = options.directory ?? currentDirectory()
+    if (!directory) return undefined
+    return await loadSkillMountMatrix({
+      refresh: options.refresh,
+      directory,
+      isCurrentDirectory: sourceMatchesDirectory,
+    })
+  }
+
+  async function refreshMcpStatus(options: { directory?: string } = {}) {
+    const directory = options.directory ?? currentDirectory()
+    if (!directory) return undefined
+    return (await loadMcpStatus({ directory, isCurrentDirectory: sourceMatchesDirectory })) as Record<string, McpItem>
+  }
+
+  async function reloadCurrentPanel(options: { refreshSkills?: boolean; directory?: string } = {}) {
+    const directory = options.directory ?? currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     setLoading(true)
     setNotice("")
     try {
       if (props.mode === "mcp") {
-        await refreshMcpStatus()
+        await refreshMcpStatus({ directory })
       } else if (props.mode === "skill-market") {
-        await Promise.all([refreshSkillMounts({ refresh: options.refreshSkills }), loadSkillMarket()])
+        await Promise.all([
+          refreshSkillMounts({ refresh: options.refreshSkills, directory }),
+          loadSkillMarket({ directory, isCurrentDirectory: sourceMatchesDirectory }),
+        ])
       } else {
-        await refreshSkillMounts({ refresh: options.refreshSkills })
+        await refreshSkillMounts({ refresh: options.refreshSkills, directory })
       }
+      if (!sourceMatchesDirectory(directory)) return
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleRemoveSkill(source: string, kind: string, name: string) {
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     if (!(await nativeConfirm(t("skill.delete_confirm", { name })))) return
     try {
-      await apiJson("skill/remove", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, kind }),
-      })
-      await reloadCurrentPanel()
+      await deleteSkill(source, kind, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -556,54 +598,62 @@ function ExtensionSettingsPanel(props: {
   }
 
   async function handleDeleteAllSkills() {
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     const list = removableSkills()
+    const customCount = customSkills().length
     if (list.length === 0) return
     const message =
-      list.length === customSkills().length
+      list.length === customCount
         ? t("skill.delete_all_confirm_all", { count: list.length })
         : t("skill.delete_all_confirm_partial", {
             removable: list.length,
-            blocked: customSkills().length - list.length,
+            blocked: customCount - list.length,
           })
     if (!(await nativeConfirm(message))) return
     try {
-      await deleteAllSkills()
-      await reloadCurrentPanel()
+      await deleteAllSkills({ directory, isCurrentDirectory: sourceMatchesDirectory, skills: list })
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
   async function handleDeleteAllMcp() {
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     const names = mcpEntries().map(([name]) => name)
     if (names.length === 0) return
     if (!(await nativeConfirm(t("mcp.delete_all_confirm", { count: names.length })))) return
     try {
-      await deleteAllMcp()
+      await deleteAllMcp({ directory, isCurrentDirectory: sourceMatchesDirectory, names })
       await updateConfig((current: any) => {
         delete current.mcp
-      })
-      await reloadCurrentPanel()
+      }, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
   async function handleInstall(item: MarketItem) {
     if (!item.source || item.install_kind === "manual") return
+    const directory = currentDirectory()
+    if (!directory || loadedMarketDirectory() !== directory) return
     try {
-      await apiJson("skill/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: item.install_kind,
-          value: item.source,
-          policy: item.recommended_policy || undefined,
-        }),
+      await installSkill(item.install_kind, item.source, item.recommended_policy, {
+        directory,
+        isCurrentDirectory: sourceMatchesDirectory,
       })
-      await reloadCurrentPanel()
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -655,27 +705,28 @@ function ExtensionSettingsPanel(props: {
   async function handleAddSkill() {
     const value = skillForm.value.trim()
     if (!value) return
-    if (!requireActiveDirectory()) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     try {
-      await apiJson("skill/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: skillForm.type,
-          value,
-          policy: skillForm.policy,
-        }),
+      await installSkill(skillForm.type, value, skillForm.policy, {
+        directory,
+        isCurrentDirectory: sourceMatchesDirectory,
       })
+      if (!sourceMatchesDirectory(directory)) return
       setSkillForm({ type: "path", value: "", policy: "ask" })
       setShowAddSkill(false)
-      await reloadCurrentPanel()
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
   async function handleDroppedSkillDrop(event: DragEvent) {
-    if (!currentDirectory()) {
+    const directory = currentDirectory()
+    if (!directory) {
       setPanelNotice(t("workspace.no_directory"), "warn")
       return
     }
@@ -686,49 +737,69 @@ function ExtensionSettingsPanel(props: {
       setLoading(true)
       setNotice("")
       const imported = payload.archive
-        ? await importSkillArchive(payload.archive.name, await fileToBase64(payload.archive), skillForm.policy)
+        ? await importSkillArchive(payload.archive.name, await fileToBase64(payload.archive), skillForm.policy, {
+            directory,
+            isCurrentDirectory: sourceMatchesDirectory,
+          })
         : payload.files
-          ? await importSkillPackage(payload.sourceName, payload.files, skillForm.policy)
+          ? await importSkillPackage(payload.sourceName, payload.files, skillForm.policy, {
+              directory,
+              isCurrentDirectory: sourceMatchesDirectory,
+            })
           : payload.file
-            ? await importSkillFile(payload.file.name, await payload.file.text(), skillForm.policy)
+            ? await importSkillFile(payload.file.name, await payload.file.text(), skillForm.policy, {
+                directory,
+                isCurrentDirectory: sourceMatchesDirectory,
+              })
             : undefined
       if (!imported) return
       const installedNames = imported.names?.length ? imported.names.join(", ") : imported.name
+      if (!sourceMatchesDirectory(directory)) return
       setPanelNotice(t("skill.drop_success", { name: installedNames }), "active")
-      await reloadCurrentPanel()
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
       setSkillDragActive(false)
-      setLoading(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleMount(agent: string, skill: string) {
-    if (!requireActiveDirectory()) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     try {
       setLoading(true)
       setNotice("")
-      await mountSkill(agent, skill)
+      await mountSkill(agent, skill, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      if (!sourceMatchesDirectory(directory)) return
       setPanelNotice(t("skill.mount.success", { skill, agent }), "active")
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
   async function handleUnmount(agent: string, skill: string) {
-    if (!requireActiveDirectory()) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     try {
       setLoading(true)
       setNotice("")
-      await unmountSkill(agent, skill)
+      await unmountSkill(agent, skill, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      if (!sourceMatchesDirectory(directory)) return
       setPanelNotice(t("skill.mount.removed", { skill, agent }), "active")
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
@@ -736,7 +807,11 @@ function ExtensionSettingsPanel(props: {
     event.preventDefault()
     event.stopPropagation()
     setSkillDragActive(false)
-    if (!requireActiveDirectory()) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     const skillName = event.dataTransfer?.getData("application/x-opencorvus-skill")
     if (skillName) {
       await handleMount(agent, skillName)
@@ -750,12 +825,13 @@ function ExtensionSettingsPanel(props: {
       if (!body) return
       setLoading(true)
       setNotice("")
-      await importAndMountSkill(agent, body)
+      await importAndMountSkill(agent, body, { directory, isCurrentDirectory: sourceMatchesDirectory })
+      if (!sourceMatchesDirectory(directory)) return
       setPanelNotice(t("skill.drop_mount_success", { name: payload.sourceName, agent }), "active")
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (sourceMatchesDirectory(directory)) setLoading(false)
     }
   }
 
@@ -786,10 +862,12 @@ function ExtensionSettingsPanel(props: {
     }
     if (loadedMarketDirectory() === directory) return
     setNotice("")
-    loadSkillMarket()
-      .then(() => setLoadedMarketDirectory(directory))
+    loadSkillMarket({ directory, isCurrentDirectory: sourceMatchesDirectory })
+      .then(() => {
+        if (sourceMatchesDirectory(directory)) setLoadedMarketDirectory(directory)
+      })
       .catch((e) => {
-        setPanelNotice(e instanceof Error ? e.message : String(e))
+        if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
       })
   })
 
@@ -800,14 +878,14 @@ function ExtensionSettingsPanel(props: {
     if (!directory) return
 
     if (props.mode === "skill") {
-      refreshSkillMounts().catch((e) => {
-        setPanelNotice(e instanceof Error ? e.message : String(e))
+      refreshSkillMounts({ directory }).catch((e) => {
+        if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
       })
       return
     }
     if (props.mode === "mcp") {
-      refreshMcpStatus().catch((e) => {
-        setPanelNotice(e instanceof Error ? e.message : String(e))
+      refreshMcpStatus({ directory }).catch((e) => {
+        if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
       })
     }
   })
@@ -821,8 +899,8 @@ function ExtensionSettingsPanel(props: {
     }
 
     setNotice("")
-    refreshSkillMounts().catch((e) => {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+    refreshSkillMounts({ directory }).catch((e) => {
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     })
   })
 
@@ -835,8 +913,8 @@ function ExtensionSettingsPanel(props: {
     }
 
     const refresh = () => {
-      refreshMcpStatus().catch((e) => {
-        setPanelNotice(e instanceof Error ? e.message : String(e))
+      refreshMcpStatus({ directory }).catch((e) => {
+        if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
       })
     }
     setNotice("")
@@ -875,20 +953,28 @@ function ExtensionSettingsPanel(props: {
   })
 
   async function handleAddMcp() {
-    if (!requireActiveDirectory()) return
+    const directory = currentDirectory()
+    if (!directory) {
+      setPanelNotice(t("workspace.no_directory"), "warn")
+      return
+    }
     try {
-      await addMcpServer({
-        name: mcpForm.name,
-        type: mcpForm.type,
-        url: mcpForm.url,
-        command: mcpForm.command,
-        args: mcpForm.args,
-      })
+      await addMcpServer(
+        {
+          name: mcpForm.name,
+          type: mcpForm.type,
+          url: mcpForm.url,
+          command: mcpForm.command,
+          args: mcpForm.args,
+        },
+        { directory, isCurrentDirectory: sourceMatchesDirectory },
+      )
+      if (!sourceMatchesDirectory(directory)) return
       setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" })
       setShowAddMcp(false)
-      await reloadCurrentPanel()
+      await reloadCurrentPanel({ directory })
     } catch (e) {
-      setPanelNotice(e instanceof Error ? e.message : String(e))
+      if (sourceMatchesDirectory(directory)) setPanelNotice(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -1014,6 +1100,7 @@ function ExtensionSettingsPanel(props: {
                     {(agent) => (
                       <div
                         class="agent-skill-grid-agent"
+                        data-active-combo={matrixAgentActive(agent.name) ? "true" : "false"}
                         data-skill-tool={agent.skill_tool_available ? "true" : "false"}
                         role="columnheader"
                         title={agent.name}
@@ -1050,6 +1137,7 @@ function ExtensionSettingsPanel(props: {
                           <button
                             type="button"
                             class="agent-skill-grid-skill"
+                            data-active-combo={matrixSkillActive(item.name) ? "true" : "false"}
                             data-unmounted={item.unmounted ? "true" : "false"}
                             title={skillTitle()}
                             draggable
@@ -1097,10 +1185,17 @@ function ExtensionSettingsPanel(props: {
                                 <button
                                   type="button"
                                   class="agent-skill-grid-cell"
+                                  data-active-combo={matrixPairActive(item.name, agent.name) ? "true" : "false"}
                                   data-state={cellState()}
                                   disabled={!agent.skill_tool_available || loading()}
                                   title={cellLabel()}
                                   aria-label={cellLabel()}
+                                  onPointerEnter={() => activateMatrixPair(item.name, agent.name)}
+                                  onPointerLeave={(event) => {
+                                    if (!event.currentTarget.matches(":focus")) clearMatrixPair(item.name, agent.name)
+                                  }}
+                                  onFocus={() => activateMatrixPair(item.name, agent.name)}
+                                  onBlur={() => clearMatrixPair(item.name, agent.name)}
                                   onClick={() => {
                                     if (!agent.skill_tool_available) return
                                     const current = mounted()

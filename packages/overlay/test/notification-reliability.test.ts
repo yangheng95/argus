@@ -146,6 +146,8 @@ async function waitForUploadedLogs(calls: { logs: Array<Record<string, unknown>>
 
 function taskItem(input: {
   id: string
+  title?: string
+  directory?: string
   status?: string
   pending?: number
   completed?: number
@@ -155,7 +157,8 @@ function taskItem(input: {
   return {
     task: {
       id: input.id,
-      title: input.id,
+      title: input.title ?? input.id,
+      directory: input.directory,
       status: input.status ?? "active",
       time: {
         updated: input.updated ?? 10,
@@ -258,6 +261,18 @@ describe("routeNotification tier matrix", () => {
     await flushNotifications()
     expect(notificationStore.items).toHaveLength(1)
     expect(notificationStore.items[0]?.details).toBe('{"error":"provider quota exceeded"}')
+  })
+
+  test("routeNotification freezes the task title and directory on the notification item", async () => {
+    setBoardStore("tasks", [taskItem({ id: "tsk_notify", title: "Original title", directory: "D:/project-a" })])
+
+    routeNotification({ type: "task.failed", taskID: "tsk_notify", notify: { tier: 1 } })
+    await flushNotifications()
+    setBoardStore("tasks", [taskItem({ id: "tsk_notify", title: "Changed title", directory: "D:/project-b" })])
+
+    expect(notificationStore.items).toHaveLength(1)
+    expect(notificationStore.items[0]?.taskTitle).toBe("Original title")
+    expect(notificationStore.items[0]?.taskDirectory).toBe("D:/project-a")
   })
 
   test("native notification send failures surface as semantic in-app diagnostics", async () => {
