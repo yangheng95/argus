@@ -1448,6 +1448,19 @@ export function listProjectTasks(projectID: string, limit = 50) {
   )
 }
 
+export function listStartedIncompleteTaskIDs(input?: { projectID?: string }): string[] {
+  const conditions: SQL[] = [isNotNull(EngineTaskTable.time_started), isNull(EngineTaskTable.time_completed)]
+  if (input?.projectID) conditions.unshift(eq(EngineTaskTable.project_id, input.projectID))
+  return Database.use((db) =>
+    db
+      .select({ id: EngineTaskTable.id })
+      .from(EngineTaskTable)
+      .where(and(...conditions))
+      .all()
+      .map((row) => row.id),
+  )
+}
+
 /** 按关键词和/或状态搜索 project 内的 task */
 export function searchProjectTasks(projectID: string, opts: { query?: string; status?: string; limit?: number }) {
   const conditions = [eq(EngineTaskTable.project_id, projectID)]

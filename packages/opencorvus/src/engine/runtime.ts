@@ -19,6 +19,8 @@ import {
   findRun,
   findActiveRunForTask,
   findTask,
+  listActiveSessionsForTask,
+  listStartedIncompleteTaskIDs,
   listLiveRuns,
   listGoalRunsForRun,
   listLiveRunsForProject,
@@ -39,6 +41,10 @@ function hasExecutorActiveRuns(runs: RunRow[]): boolean {
   return runs.some((r) => (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
+function hasActiveTaskSessions(taskIDs: string[]): boolean {
+  return taskIDs.some((taskID) => listActiveSessionsForTask(taskID).length > 0)
+}
+
 export function activeExecutorSessionsError(operation: string) {
   return new ActiveExecutorSessionsError({
     operation,
@@ -48,12 +54,15 @@ export function activeExecutorSessionsError(operation: string) {
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
-  return hasExecutorActiveRuns(listLiveRunsForProject(Instance.project.id))
+  return (
+    hasExecutorActiveRuns(listLiveRunsForProject(Instance.project.id)) ||
+    hasActiveTaskSessions(listStartedIncompleteTaskIDs({ projectID: Instance.project.id }))
+  )
 }
 
 /** Check if any executor session is active across all registered project tasks. */
 export function hasAnyActiveSessions(): boolean {
-  return hasExecutorActiveRuns(listLiveRuns())
+  return hasExecutorActiveRuns(listLiveRuns()) || hasActiveTaskSessions(listStartedIncompleteTaskIDs())
 }
 
 export namespace EngineRuntime {
