@@ -2213,6 +2213,7 @@ function resolveTurnCardID(
         title: roleTitleKey(stage),
         parts: [],
         childIDs: [],
+        goalID,
         phaseID: phase.phaseID,
         phaseSessionKind: stage,
         phaseSessionID: sessionID,
@@ -3272,6 +3273,10 @@ function rebuildGoalStepCards(board: any): void {
               prev.title = label
               prev.phaseID = pid
               prev.phaseSessionKind = sessionKind
+              prev.goalID = gid
+              prev.goalDescription = gw.goalObjective || undefined
+              prev.round = orderIndex + 1
+              prev.attempt = typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1
               if (phaseSessionID) prev.phaseSessionID = phaseSessionID
               prev.orderKey = orderKey
               // startedAt > 0 is invariant (caller filters pending phases).
@@ -3289,6 +3294,10 @@ function rebuildGoalStepCards(board: any): void {
                 childIDs: [],
                 phaseID: pid,
                 phaseSessionKind: sessionKind,
+                goalID: gid,
+                goalDescription: gw.goalObjective || undefined,
+                round: orderIndex + 1,
+                attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
                 ...(phaseSessionID ? { phaseSessionID } : {}),
                 orderKey,
                 time: startedAt,
@@ -3325,6 +3334,7 @@ function rebuildGoalStepCards(board: any): void {
             phaseStartedAt,
             pid === "build" ? String(step?.payload?.buildSessionID || "") || undefined : undefined,
           )
+          markCardStatsDirty(phaseCardID)
           phaseChildIDs.push(phaseCardID)
         }
       }
@@ -3354,6 +3364,7 @@ function rebuildGoalStepCards(board: any): void {
         goalDescription: gw.goalObjective || undefined,
         time: stepStartedAt,
       })
+      markCardStatsDirty(stepCardID)
     }
   }
 }

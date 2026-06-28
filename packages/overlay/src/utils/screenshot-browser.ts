@@ -1,4 +1,5 @@
 import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
+import { goalRevisionLabel } from "./goal-label"
 import { normalizeAgentRole, type AgentRole } from "./message"
 import { isBoundaryMessagePart } from "./message-part"
 import type { CardNode } from "../store/card-tree"
@@ -13,6 +14,7 @@ export interface ScreenshotBrowserItem {
   ownerSessionID: string
   ownerMessageID: string
   ownerTime: number
+  ownerLabel: string
   src: string
   thumbnailSrc: string
   alt: string
@@ -32,6 +34,7 @@ export interface ScreenshotBrowserGroup {
   sessionID: string
   messageID: string
   time: number
+  label: string
   items: ScreenshotBrowserItem[]
 }
 
@@ -40,6 +43,8 @@ interface ScreenshotBrowserOwnerSeed {
   sessionID: string
   messageID: string
   time: number
+  goalID: string
+  ownerLabel: string
 }
 
 interface ScreenshotBrowserOwner extends ScreenshotBrowserOwnerSeed {
@@ -60,6 +65,7 @@ export type ScreenshotBrowserRow =
       sessionID: string
       messageID: string
       time: number
+      label: string
       count: number
     }
   | {
@@ -92,6 +98,12 @@ function firstPositiveNumber(...values: unknown[]): number {
   return 0
 }
 
+function positiveInteger(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.trunc(n)
+}
+
 function messageTime(message: any): number {
   const time = message?.info?.time
   return firstPositiveNumber(time?.completed, time?.updated, time?.created)
@@ -103,15 +115,40 @@ function messageRole(message: any): AgentRole {
   )
 }
 
-function ownerKey(input: { role: AgentRole; sessionID: string; messageID: string; time: number }): string {
-  if (!input.messageID && input.time <= 0) {
-    throw new Error("Screenshot browser owner requires a message id or timestamp")
-  }
+function goalOwnerLabel(info: any): string {
+  const explicit = firstString(info?.goalLabel)
+  if (explicit) return explicit
+  const round = positiveInteger(info?.round)
+  const attempt = positiveInteger(info?.attempt)
+  return round > 0 && attempt > 0 ? goalRevisionLabel(round, attempt) : ""
+}
+
+function ownerKey(input: {
+  role: AgentRole
+  sessionID: string
+  messageID: string
+  time: number
+  goalID: string
+  ownerLabel: string
+}): string {
   const segments: string[] = [input.role]
-  if (input.sessionID) segments.push(`session:${input.sessionID}`)
-  if (input.messageID) segments.push(`message:${input.messageID}`)
-  if (input.time > 0) segments.push(`time:${input.time}`)
-  return segments.join(":")
+  if (input.goalID && input.ownerLabel) {
+    segments.push(`goal:${input.goalID}`, `revision:${input.ownerLabel}`)
+    return segments.join(":")
+  }
+  if (input.sessionID) {
+    segments.push(`session:${input.sessionID}`)
+    return segments.join(":")
+  }
+  if (input.messageID) {
+    segments.push(`message:${input.messageID}`)
+    return segments.join(":")
+  }
+  if (input.time > 0) {
+    segments.push(`time:${input.time}`)
+    return segments.join(":")
+  }
+  throw new Error("Screenshot browser owner requires goal revision, session id, message id, or timestamp")
 }
 
 function createOwner(input: {
@@ -119,26 +156,35 @@ function createOwner(input: {
   sessionID?: string
   messageID?: string
   time?: number
+  goalID?: string
+  ownerLabel?: string
 }): ScreenshotBrowserOwner {
   const role = input.role
   const sessionID = firstString(input.sessionID)
   const messageID = firstString(input.messageID)
   const time = firstPositiveNumber(input.time)
+  const goalID = firstString(input.goalID)
+  const ownerLabel = firstString(input.ownerLabel)
   return {
-    key: ownerKey({ role, sessionID, messageID, time }),
+    key: ownerKey({ role, sessionID, messageID, time, goalID, ownerLabel }),
     role,
     sessionID,
     messageID,
     time,
+    goalID,
+    ownerLabel,
   }
 }
 
 function messageOwnerSeed(message: any): ScreenshotBrowserOwnerSeed {
+  const goalID = firstString(message?.info?.goalID)
   return {
     role: messageRole(message),
     sessionID: firstString(message?.info?.sessionID),
     messageID: firstString(message?.info?.id),
     time: messageTime(message),
+    goalID,
+    ownerLabel: goalID ? goalOwnerLabel(message?.info) : "",
   }
 }
 
@@ -156,6 +202,7 @@ function ownerFields(owner: ScreenshotBrowserOwner) {
     ownerSessionID: owner.sessionID,
     ownerMessageID: owner.messageID,
     ownerTime: owner.time,
+    ownerLabel: owner.ownerLabel,
   }
 }
 
@@ -230,6 +277,8 @@ function boundaryOwnersByMessage(
         sessionID: firstString(part.sessionID, baseOwner.sessionID),
         messageID,
         time: firstPositiveNumber(part.time, baseOwner.time),
+        goalID: firstString(part.goalID, baseOwner.goalID),
+        ownerLabel: firstString(part.goalLabel, part.ownerLabel, baseOwner.ownerLabel),
       }),
     )
   }
@@ -249,6 +298,8 @@ function ownerForPart(input: {
     sessionID: firstString(input.part?.sessionID, boundary?.sessionID, input.baseOwner.sessionID),
     messageID: firstString(messageID, boundary?.messageID, input.baseOwner.messageID),
     time: firstPositiveNumber(boundary?.time, input.baseOwner.time),
+    goalID: firstString(input.part?.goalID, boundary?.goalID, input.baseOwner.goalID),
+    ownerLabel: firstString(input.part?.goalLabel, input.part?.ownerLabel, boundary?.ownerLabel, input.baseOwner.ownerLabel),
   })
 }
 
@@ -418,6 +469,9 @@ function cardMessage(card: CardNode): any {
   const role = firstString(card.role, card.stage)
   const time = Number(card.time)
   const completed = Number(card.timeCompleted)
+  const goalID = firstString(card.goalID)
+  const round = positiveInteger(card.round)
+  const attempt = positiveInteger(card.attempt)
   return {
     info: {
       id: firstString(card.messageID, card.id),
@@ -425,6 +479,9 @@ function cardMessage(card: CardNode): any {
       role,
       resolvedRole: role,
       agent: firstString(card.stage, role),
+      ...(goalID ? { goalID } : {}),
+      ...(round > 0 ? { round } : {}),
+      ...(attempt > 0 ? { attempt } : {}),
       time: {
         created: Number.isFinite(time) && time > 0 ? time : 0,
         completed: Number.isFinite(completed) && completed > 0 ? completed : undefined,
@@ -469,11 +526,15 @@ export function groupScreenshotBrowserItems(items: readonly ScreenshotBrowserIte
         sessionID: item.ownerSessionID,
         messageID: item.ownerMessageID,
         time: item.ownerTime,
+        label: item.ownerLabel,
         items: [],
       }
       groups.set(item.ownerKey, group)
     }
     group.items.push(item)
+    const itemTime = firstPositiveNumber(item.time, item.ownerTime)
+    if (itemTime > group.time) group.time = itemTime
+    if (!group.label && item.ownerLabel) group.label = item.ownerLabel
   }
   return [...groups.values()]
 }
@@ -493,6 +554,7 @@ export function buildScreenshotBrowserRows(
       sessionID: group.sessionID,
       messageID: group.messageID,
       time: group.time,
+      label: group.label,
       count: group.items.length,
     })
     for (let index = 0; index < group.items.length; index += columns) {

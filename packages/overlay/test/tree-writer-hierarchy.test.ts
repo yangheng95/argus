@@ -329,6 +329,9 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
     expect(node).toBeDefined()
     expect(node!.kind).toBe("phase")
     expect(node!.phaseID).toBe(phaseID)
+    expect(node!.goalID).toBe(GOAL_ID)
+    expect(node!.round).toBe(1)
+    expect(node!.attempt).toBe(1)
     // Phase cards never nest session cards as children (the session's
     // parts live directly on the phase card). Interaction cards are a
     // separate concern — they can appear as phase children when their
@@ -1838,6 +1841,7 @@ test("goal phase stub title is an i18n role key, not the raw phase id", () => {
   const phaseCardID = "step:goal_phase_stub:build:phase:plan"
   expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
   expect(cardTreeStore.cards[phaseCardID]?.title).toBe("chat.role.planner")
+  expect(cardTreeStore.cards[phaseCardID]?.goalID).toBe("goal_phase_stub")
 })
 
 test("session.error marks the session card with the original stream error", () => {

@@ -199,11 +199,12 @@ function screenshotCacheItem(input: {
   return {
     id: input.id ?? `file:${messageID}:${partID}`,
     role,
-    ownerKey: `${role}:session:${ownerSessionID}:message:${ownerMessageID}:time:${ownerTime}`,
+    ownerKey: `${role}:session:${ownerSessionID}`,
     ownerRole: role,
     ownerSessionID,
     ownerMessageID,
     ownerTime,
+    ownerLabel: "",
     src: input.src,
     thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(input.src),
     alt: input.title ?? input.src,
