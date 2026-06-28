@@ -115,6 +115,28 @@ Runtime or structural issues repaired in this goal:
     checks also live in `packages/overlay/src/utils/message-part.ts` via
     `isBoundaryMessagePart()` so separator handling does not duplicate the
     string literal across production code.
+17. Conversation agent rail targets are derived from the current
+    tree-writer projection, not from cached `renderedCardID` /
+    `targetMessageID` fields. Existing record targets may become stale after
+    adjacent segment regroup, `message.removed`, hydrate reset, rewind prune,
+    or session switch. Incoming targets must still be proven by tree-writer,
+    but a stale existing target must not block replacement by a current
+    projection.
+18. A `message.updated` row without rendered body content is not a rendered
+    rail target. It may update the session ledger through `session.status`,
+    but rail location fields are attached only once the message has a
+    currently rendered target, normally after a display part arrives.
+19. Conversation projection reset is a lifecycle boundary. Once hydrate enters
+    the `resetWriter()` commit phase, derived rail target fields are cleared
+    before the replacement view is projected; mission session switch/close
+    resets the rail view together with the card tree.
+20. SSE dispatch diagnostics are bounded structured records. They include
+    event/message/session identifiers and a bounded sample, not the full event
+    payload. Overlay log-upload failure diagnostics stay local and never
+    recurse into the same `/log` upload queue.
+21. Backend `conversationMessageHasDisplay()` and overlay
+    `messagePartHasDisplayContent()` agree that control parts and empty
+    reasoning shells such as `[]` are non-display content.
 
 Adversarial review resolution:
 

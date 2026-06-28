@@ -2467,6 +2467,27 @@ function renderedProjectedCardTarget(cardID: string): RenderedConversationCardTa
   })
 }
 
+function cardIsRenderedReachable(cardID: string): boolean {
+  const targetCardID = String(cardID || "")
+  if (!targetCardID) return false
+  const seen = new Set<string>()
+  const visit = (id: string): boolean => {
+    if (!id || seen.has(id)) return false
+    seen.add(id)
+    if (id === targetCardID) return true
+    const card = cardTreeStore.cards[id]
+    if (!card) return false
+    for (const childID of card.childIDs || []) {
+      if (visit(childID)) return true
+    }
+    return false
+  }
+  for (const id of cardTreeStore.order) {
+    if (visit(id)) return true
+  }
+  return false
+}
+
 export function renderedConversationCardTargetForMessage(
   messageIDInput: string,
 ): RenderedConversationCardTarget | null {
@@ -2477,6 +2498,9 @@ export function renderedConversationCardTargetForMessage(
   const session = sessions.get(message.sessionID)
   const cardID = session?.messageCardIDs.get(messageID)
   if (!cardID) return null
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return null
+  if (card.kind !== "phase" && !cardIsRenderedReachable(cardID)) return null
   return renderedCardTargetFromProjectedCardID(cardID, {
     orderKey: message.orderKey,
     time: message.time,

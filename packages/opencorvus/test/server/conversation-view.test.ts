@@ -382,6 +382,7 @@ test("conversationMessageHasDisplay rejects envelope-only and control-only messa
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "boundary" }] })).toBe(false)
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "text", text: "   " }] })).toBe(false)
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "reasoning", text: "" }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "reasoning", text: "[]" }] })).toBe(false)
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "text", text: "visible" }] })).toBe(true)
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "reasoning", text: "visible" }] })).toBe(true)
   expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "tool", tool: "read" }] })).toBe(true)

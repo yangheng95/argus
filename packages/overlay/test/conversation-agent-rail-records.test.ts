@@ -14,16 +14,17 @@ import {
   resetConversationAgentView,
   attachConversationAgentViewTargets as attachConversationAgentViewTargetsRaw,
 } from "../src/store/conversation-agents"
-import { applyEvent, resetWriter } from "../src/services/tree-writer"
+import { applyEvent, renderedConversationCardTargetForMessage, resetWriter } from "../src/services/tree-writer"
+import { setBoardStore } from "../src/store/board"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 installRealOverlayI18n()
 
-function testOrderKey(rank: number, time: number, id: string): string {
-  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:test:${id}`
+function testOrderKey(rank: number, time: number, id: string, domain = "test"): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
 }
 
 function messageOrderKey(id: string, time: number): string {
-  return testOrderKey(30, time, id)
+  return testOrderKey(30, time, id, "message")
 }
 
 function partOrderKey(id: string, time: number): string {
@@ -31,11 +32,64 @@ function partOrderKey(id: string, time: number): string {
 }
 
 function sessionOrderKey(id: string, time: number): string {
-  return testOrderKey(50, time, id)
+  return testOrderKey(50, time, id, "session")
 }
 
 function eventOrderKey(id: string, time: number): string {
-  return testOrderKey(40, time, id)
+  return testOrderKey(40, time, id, "event")
+}
+
+function boardOrderKey(id: string, time: number, rank: number): string {
+  return testOrderKey(rank, time, id, "board")
+}
+
+function projectGoalPhaseCard(input: {
+  goalID: string
+  phaseID: "plan" | "build"
+  sessionKind: "planner" | "build"
+  startedAt: number
+}): void {
+  setBoardStore("board", {
+    task: { id: "tsk_goal_phase_projection", status: "active" },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          label: "Executor",
+          phases: [
+            { id: "plan", label: "Plan", sessionKind: "planner" },
+            { id: "build", label: "Build", sessionKind: "build" },
+          ],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: input.goalID,
+        goalTitle: "Goal phase projection",
+        goalStatus: "running",
+        orderIndex: 0,
+        steps: [
+          {
+            stepID: "build",
+            orderKey: boardOrderKey(`${input.goalID}-build`, input.startedAt, 61),
+            label: "Executor",
+            status: "running",
+            startedAt: input.startedAt,
+            phases: {
+              [input.phaseID]: {
+                orderKey: boardOrderKey(`${input.goalID}-build-${input.phaseID}`, input.startedAt, 62),
+                status: "running",
+                startedAt: input.startedAt,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  applyEvent({ type: "task.updated" })
 }
 
 function record(sessionID: string, startedAt: number, renderedCardID?: string): AgentWorkflowRecord {
@@ -59,12 +113,14 @@ function record(sessionID: string, startedAt: number, renderedCardID?: string): 
 function liveMessageUpdated(info: Record<string, any>) {
   const created = Number(info?.time?.created || 1_779_100_000_000)
   const id = String(info?.id || "msg_live")
+  const orderKey = info.orderKey || messageOrderKey(id, created)
   return {
     type: "message.updated",
+    orderKey,
     properties: {
       info: {
         id,
-        orderKey: info.orderKey || messageOrderKey(id, created),
+        orderKey,
         role: "assistant",
         resolvedRole: info.channel,
         agent: info.channel,
@@ -113,11 +169,50 @@ function attachConversationAgentViewTargets(sourceKey: string, view: any): void 
 function resetRailAndProjection(): void {
   resetConversationAgentView()
   resetWriter()
+  setBoardStore("board", null)
 }
 
 function projectAndApplyLiveMessageUpdated(sourceKey: string, event: any): void {
   applyEvent(event)
   applyLiveConversationAgentMessageUpdated(sourceKey, event)
+}
+
+function visiblePartForMessageUpdated(event: any): any {
+  const info = event?.properties?.info
+  const messageID = String(info?.id || "")
+  const sessionID = String(info?.sessionID || "")
+  const created = Number(info?.time?.created || 0)
+  const partID = `part_${messageID}`
+  return {
+    type: "message.part.updated",
+    emittedAt: created + 1,
+    orderKey: event.orderKey,
+    properties: {
+      orderKey: event.orderKey,
+      channel: info?.channel,
+      resolvedRole: info?.resolvedRole,
+      parentSessionID: info?.parentSessionID,
+      goalID: info?.goalID,
+      part: {
+        id: partID,
+        orderKey: partOrderKey(partID, created + 1),
+        sessionID,
+        messageID,
+        type: "text",
+        text: `visible text for ${messageID}`,
+      },
+    },
+  }
+}
+
+function projectAndApplyVisibleLiveMessageUpdated(sourceKey: string, event: any): void {
+  projectAndApplyLiveMessageUpdated(sourceKey, event)
+  projectAndApplyLivePartUpdated(sourceKey, visiblePartForMessageUpdated(event))
+}
+
+function projectVisibleMessage(event: any): void {
+  applyEvent(event)
+  applyEvent(visiblePartForMessageUpdated(event))
 }
 
 function projectAndApplyLivePartUpdated(sourceKey: string, event: any): void {
@@ -191,9 +286,18 @@ test("ConversationAgentRail locate failures surface through AppLog and notificat
   expect(source).not.toContain('console.error("[agent-rail] card scroll request failed"')
 })
 
+test("conversation agent target merge uses projection orderKey as the only merge key", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/store/conversation-agents.ts"), "utf8")
+  expect(source).toContain("const incomingProjection = requireProjectedTargetForRecord(")
+  expect(source).toContain("const existingProjection = projectedTargetForRecord(existing)")
+  expect(source).toContain("const incomingOrderKey = requireTimelineOrderKey(")
+  expect(source).not.toContain("incomingProjection?.orderKey || target.orderKey")
+  expect(source).not.toContain("incomingProjection?.orderKey")
+})
+
 test("hydrated agent records target the latest canonical display message", () => {
   resetRailAndProjection()
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_old",
       sessionID: "ses_build",
@@ -201,7 +305,7 @@ test("hydrated agent records target the latest canonical display message", () =>
       time: { created: 100 },
     }),
   )
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_latest",
       sessionID: "ses_build",
@@ -209,7 +313,7 @@ test("hydrated agent records target the latest canonical display message", () =>
       time: { created: 200 },
     }),
   )
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_goal_old",
       sessionID: "ses_goal_build",
@@ -219,7 +323,7 @@ test("hydrated agent records target the latest canonical display message", () =>
       time: { created: 300 },
     }),
   )
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_goal_latest",
       sessionID: "ses_goal_build",
@@ -348,7 +452,8 @@ test("hydrated lifecycle-only agent records create rail entries without blank ca
 })
 
 test("hydrated goal-phase agent records may target the phase card without a display message", () => {
-  resetConversationAgentView()
+  resetRailAndProjection()
+  projectGoalPhaseCard({ goalID: "goal_a", phaseID: "build", sessionKind: "build", startedAt: 100 })
   hydrateConversationAgentView("task:tsk", {
     sessions: [
       {
@@ -367,6 +472,36 @@ test("hydrated goal-phase agent records may target the phase card without a disp
 
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe("step:goal_a:build")
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
+})
+
+test("live goal-phase lifecycle-only status targets only a projected phase card", () => {
+  resetRailAndProjection()
+  projectGoalPhaseCard({
+    goalID: "goal_live_lifecycle",
+    phaseID: "plan",
+    sessionKind: "planner",
+    startedAt: 1_779_100_000_000,
+  })
+  applyLiveConversationAgentSessionStatus("task:tsk_live_lifecycle_phase", {
+    type: "session.status",
+    orderKey: sessionOrderKey("ses_live_lifecycle_phase", 1_779_100_000_100),
+    emittedAt: 1_779_100_000_100,
+    properties: {
+      sessionID: "ses_live_lifecycle_phase",
+      channel: "planner",
+      resolvedRole: "planner",
+      parentSessionID: "ses_goal_root",
+      goalID: "goal_live_lifecycle",
+      status: { type: "streaming" },
+    },
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_lifecycle_phase" })
+  expect(records[0]?.targetMessageID).toBe("")
+  expect(records[0]?.cardID).toBe("step:goal_live_lifecycle:build:phase:plan")
+  expect(records[0]?.renderedCardID).toBe("step:goal_live_lifecycle:build")
+  expect(records[0]?.stepID).toBe("build")
+  expect(records[0]?.phaseID).toBe("plan")
 })
 
 test("hydrated agent records are scoped to the selected task or session source", () => {
@@ -431,15 +566,16 @@ function liveSessionStatus(
   sessionID: string,
   status: Record<string, any> = { type: "streaming" },
   emittedAt = 1_779_099_999_000,
+  channel = "build",
 ) {
   return {
     type: "session.status",
-    orderKey: eventOrderKey(`evt_${sessionID}_${emittedAt}`, emittedAt),
+    orderKey: sessionOrderKey(sessionID, emittedAt),
     emittedAt,
     properties: {
       sessionID,
-      channel: "build",
-      resolvedRole: "build",
+      channel,
+      resolvedRole: channel,
       parentSessionID: "ses_root",
       status,
     },
@@ -459,7 +595,7 @@ test("live session.status creates a rail record without waiting for hydrate", ()
 
 test("live message target is retained until session.status creates rail existence", () => {
   resetRailAndProjection()
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_live_first",
@@ -479,13 +615,81 @@ test("live message target is retained until session.status creates rail existenc
   expect(records[0]?.lastObservedAt).toBe(1_779_099_999_000)
 })
 
+test("live same-millisecond out-of-order messages keep target by orderKey and refresh rendered segment target", () => {
+  resetRailAndProjection()
+  applyLiveConversationAgentSessionStatus("task:tsk_same_ms", liveSessionStatus("ses_same_ms"))
+  const created = 1_779_100_000_000
+  const targetMessageOrderKey = messageOrderKey("msg_same_b", created)
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_same_ms",
+    liveMessageUpdated({
+      id: "msg_same_b",
+      sessionID: "ses_same_ms",
+      channel: "build",
+      orderKey: targetMessageOrderKey,
+      time: { created },
+    }),
+  )
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_same_ms",
+    liveMessageUpdated({
+      id: "msg_same_a",
+      sessionID: "ses_same_ms",
+      channel: "build",
+      orderKey: messageOrderKey("msg_same_a", created),
+      time: { created },
+    }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_same_ms" })
+  expect(records[0]?.targetMessageID).toBe("msg_same_b")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_same_ms:message:msg_same_a")
+  expect(renderedConversationCardTargetForMessage("msg_same_b")).toMatchObject({
+    renderedCardID: "build:session:ses_same_ms:message:msg_same_a",
+    orderKey: targetMessageOrderKey,
+  })
+})
+
+test("pending same-millisecond live targets use orderKey when session.status arrives later", () => {
+  resetRailAndProjection()
+  const created = 1_779_100_000_000
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_pending_same_ms",
+    liveMessageUpdated({
+      id: "msg_pending_b",
+      sessionID: "ses_pending_same_ms",
+      channel: "build",
+      orderKey: messageOrderKey("msg_pending_b", created),
+      time: { created },
+    }),
+  )
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_pending_same_ms",
+    liveMessageUpdated({
+      id: "msg_pending_a",
+      sessionID: "ses_pending_same_ms",
+      channel: "build",
+      orderKey: messageOrderKey("msg_pending_a", created),
+      time: { created },
+    }),
+  )
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_pending_same_ms" })).toEqual([])
+
+  applyLiveConversationAgentSessionStatus("task:tsk_pending_same_ms", liveSessionStatus("ses_pending_same_ms"))
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_pending_same_ms" })
+  expect(records[0]?.targetMessageID).toBe("msg_pending_b")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_pending_same_ms:message:msg_pending_a")
+})
+
 test("live part target is retained until session.status creates rail existence", () => {
   resetRailAndProjection()
   projectAndApplyLivePartUpdated("task:tsk_live", {
     type: "message.part.updated",
     emittedAt: 1_779_099_998_000,
+    orderKey: messageOrderKey("msg_part_first", 1_779_099_998_000),
     properties: {
-      orderKey: partOrderKey("part_live_first", 1_779_099_998_000),
+      orderKey: messageOrderKey("msg_part_first", 1_779_099_998_000),
       channel: "build",
       resolvedRole: "build",
       parentSessionID: "ses_root",
@@ -515,8 +719,9 @@ test("live part target rejects missing top-level route metadata", () => {
     applyLiveConversationAgentPartUpdated("task:tsk_live", {
       type: "message.part.updated",
       emittedAt: 1_779_099_998_000,
+      orderKey: messageOrderKey("msg_part_missing_route", 1_779_099_998_000),
       properties: {
-        orderKey: partOrderKey("part_missing_route", 1_779_099_998_000),
+        orderKey: messageOrderKey("msg_part_missing_route", 1_779_099_998_000),
         parentSessionID: "ses_root",
         part: {
           id: "part_missing_route",
@@ -539,7 +744,7 @@ test("older live message fills an empty target after newer session.status", () =
     "task:tsk_live",
     liveSessionStatus("ses_live_build", { type: "streaming" }, 1_779_100_001_000),
   )
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_older",
@@ -583,7 +788,7 @@ test("history target attachment updates existing rail records without creating e
     ],
   })
 
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_history",
       sessionID: "ses_history_build",
@@ -591,7 +796,7 @@ test("history target attachment updates existing rail records without creating e
       time: { created: 80 },
     }),
   )
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_missing",
       sessionID: "ses_missing",
@@ -625,9 +830,122 @@ test("history target attachment updates existing rail records without creating e
   expect(records[0]?.renderedCardID).toBe("build:session:ses_history_build:message:msg_history")
 })
 
+test("history target attachment replaces stale existing targets with the current projection", () => {
+  resetRailAndProjection()
+  projectVisibleMessage(
+    liveMessageUpdated({
+      id: "msg_stale_projection",
+      sessionID: "ses_stale_projection",
+      channel: "build",
+      time: { created: 100 },
+    }),
+  )
+  hydrateConversationAgentView("task:tsk_stale_projection", {
+    sessions: [
+      {
+        sessionID: "ses_stale_projection",
+        stage: "build",
+        messageIDs: ["msg_stale_projection"],
+        lastDisplayMessageID: "msg_stale_projection",
+        firstMessageTime: 100,
+        lastMessageTime: 100,
+        placement: "top_level",
+      },
+    ],
+  })
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_stale_projection" })[0]?.targetMessageID).toBe(
+    "msg_stale_projection",
+  )
+
+  resetWriter()
+  projectVisibleMessage(
+    liveMessageUpdated({
+      id: "msg_replacement_projection",
+      sessionID: "ses_stale_projection",
+      channel: "build",
+      time: { created: 200 },
+    }),
+  )
+
+  attachConversationAgentViewTargets("task:tsk_stale_projection", {
+    messages: [
+      {
+        sessionID: "ses_stale_projection",
+        stage: "build",
+        messageID: "msg_replacement_projection",
+        time: 200,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_stale_projection" })
+  expect(records[0]?.targetMessageID).toBe("msg_replacement_projection")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_stale_projection:message:msg_replacement_projection")
+})
+
+test("history target attachment sorts by incoming projection while retaining a newer existing target", () => {
+  resetRailAndProjection()
+  projectVisibleMessage(
+    liveMessageUpdated({
+      id: "msg_projection_new",
+      sessionID: "ses_projection_sort",
+      channel: "build",
+      time: { created: 300 },
+    }),
+  )
+  hydrateConversationAgentView("task:tsk_projection_sort", {
+    sessions: [
+      {
+        sessionID: "ses_projection_other",
+        stage: "build",
+        messageIDs: [],
+        firstMessageTime: 150,
+        lastMessageTime: 150,
+        placement: "top_level",
+      },
+      {
+        sessionID: "ses_projection_sort",
+        stage: "build",
+        messageIDs: ["msg_projection_new"],
+        lastDisplayMessageID: "msg_projection_new",
+        firstMessageTime: 250,
+        lastMessageTime: 300,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  projectVisibleMessage(
+    liveMessageUpdated({
+      id: "msg_projection_old",
+      sessionID: "ses_projection_sort",
+      channel: "build",
+      time: { created: 100 },
+    }),
+  )
+  attachConversationAgentViewTargets("task:tsk_projection_sort", {
+    messages: [
+      {
+        sessionID: "ses_projection_sort",
+        stage: "build",
+        messageID: "msg_projection_old",
+        time: 100,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_projection_sort" })
+  expect(records.map((record) => record.sessionID)).toEqual(["ses_projection_sort", "ses_projection_other"])
+  expect(records[0]?.orderKey).toBe(messageOrderKey("msg_projection_old", 100))
+  expect(records[0]?.targetMessageID).toBe("msg_projection_new")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_projection_sort:message:msg_projection_old")
+})
+
 test("history target attachment does not overwrite a newer target", () => {
   resetRailAndProjection()
-  applyEvent(
+  projectVisibleMessage(
     liveMessageUpdated({
       id: "msg_new",
       sessionID: "ses_history_build",
@@ -668,7 +986,7 @@ test("history target attachment does not overwrite a newer target", () => {
 test("live message.updated attaches target to an existing rail execution record", () => {
   resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
       id: "msg_live",
@@ -685,9 +1003,66 @@ test("live message.updated attaches target to an existing rail execution record"
   expect(records[0]?.targetMessageID).toBe("msg_live")
 })
 
+test("live message.updated without rendered body does not attach a rail target", () => {
+  resetRailAndProjection()
+  applyLiveConversationAgentSessionStatus(
+    "task:tsk_error_only",
+    liveSessionStatus("ses_error_only", { type: "streaming" }, 1_779_100_000_000, "visual-qa"),
+  )
+  projectAndApplyLiveMessageUpdated(
+    "task:tsk_error_only",
+    liveMessageUpdated({
+      id: "msg_error_only",
+      sessionID: "ses_error_only",
+      channel: "visual-qa",
+      time: { created: 1_779_100_000_100, completed: 1_779_100_000_200 },
+      finish: "error",
+      error: {
+        name: "PromptBudgetOverflowError",
+        data: { message: "context overflow" },
+      },
+    }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_error_only" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_error_only"])
+  expect(records[0]?.targetMessageID).toBe("")
+  expect(records[0]?.renderedCardID).toBeUndefined()
+})
+
+test("message removal clears stale rail target projection on read", () => {
+  resetRailAndProjection()
+  applyLiveConversationAgentSessionStatus("task:tsk_remove", liveSessionStatus("ses_remove"))
+  projectAndApplyVisibleLiveMessageUpdated(
+    "task:tsk_remove",
+    liveMessageUpdated({
+      id: "msg_removed_target",
+      sessionID: "ses_remove",
+      channel: "build",
+      time: { created: 1_779_100_000_100 },
+    }),
+  )
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_remove" })[0]?.targetMessageID).toBe(
+    "msg_removed_target",
+  )
+
+  applyEvent({
+    type: "message.removed",
+    orderKey: eventOrderKey("message.removed", 1_779_100_000_300),
+    properties: {
+      sessionID: "ses_remove",
+      messageID: "msg_removed_target",
+    },
+  })
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_remove" })
+  expect(records[0]?.targetMessageID).toBe("")
+  expect(records[0]?.renderedCardID).toBeUndefined()
+})
+
 test("live message.updated does not create rail existence without a session ledger record", () => {
   resetRailAndProjection()
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "task:tsk_live_no_status",
     liveMessageUpdated({
       id: "msg_live",
@@ -704,7 +1079,7 @@ test("live message.updated retargets goal-phase records to the rendered step car
   resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("task:tsk_live_phase", {
     type: "session.status",
-    orderKey: eventOrderKey("evt_ses_live_plan", 1_779_100_000_100),
+    orderKey: sessionOrderKey("ses_live_plan", 1_779_100_000_100),
     emittedAt: 1_779_100_000_100,
     properties: {
       sessionID: "ses_live_plan",
@@ -715,7 +1090,7 @@ test("live message.updated retargets goal-phase records to the rendered step car
       status: { type: "streaming" },
     },
   })
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "task:tsk_live_phase",
     liveMessageUpdated({
       id: "msg_plan",
@@ -767,7 +1142,7 @@ test("live message.updated records are scoped by task and session source keys", 
   resetRailAndProjection()
   applyLiveConversationAgentSessionStatus("session:ses_coding_live", {
     type: "session.status",
-    orderKey: eventOrderKey("evt_ses_child_live", 1_779_099_999_000),
+    orderKey: sessionOrderKey("ses_child_live", 1_779_099_999_000),
     emittedAt: 1_779_099_999_000,
     properties: {
       sessionID: "ses_child_live",
@@ -776,7 +1151,7 @@ test("live message.updated records are scoped by task and session source keys", 
       status: { type: "streaming" },
     },
   })
-  projectAndApplyLiveMessageUpdated(
+  projectAndApplyVisibleLiveMessageUpdated(
     "session:ses_coding_live",
     liveMessageUpdated({
       id: "msg_coding_live",

@@ -15,6 +15,7 @@ import { cardTreeStore, setHydratedRewindCursor } from "../store/card-tree"
 import { mergeLoadedConversationMessages } from "../store/messages"
 import {
   attachConversationAgentViewTargets,
+  clearConversationAgentRenderedTargets,
   hydrateConversationAgentView,
   resetConversationAgentView,
 } from "../store/conversation-agents"
@@ -384,6 +385,7 @@ export async function hydrateConversation(
     const mergedMessages = mergeLoadedConversationMessages(timeline, transcript)
     const lastSequence = source.kind === "task" ? requireNonnegativeInteger(data?.lastSequence, "lastSequence") : 0
 
+    clearConversationAgentRenderedTargets(sourceKey(source))
     resetWriter({
       scrollIntent: options.scrollIntent ?? "preserve",
       cause: options.resetCause ?? "conversation-hydrate",

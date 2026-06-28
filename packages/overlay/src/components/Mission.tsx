@@ -15,6 +15,7 @@ import {
 } from "../services/mission"
 import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
+import { resetConversationAgentView } from "../store/conversation-agents"
 import { ApiError } from "../services/api"
 import { t } from "../utils/i18n"
 import { humanizeApiError } from "../utils/mission-helpers"
@@ -118,6 +119,7 @@ function MissionContent(props: MissionProps) {
     stopSSE()
     clearMessages()
     setChatAttachments([])
+    resetConversationAgentView()
     resetWriter({ scrollIntent: "bottom", cause: "mission-session-switch" })
     setBoardStore("selectedSource", source)
     setBoardStore("board", null)
@@ -216,6 +218,7 @@ function MissionContent(props: MissionProps) {
     stopSSE()
     clearMessages()
     setChatAttachments([])
+    resetConversationAgentView()
     resetWriter({ scrollIntent: "bottom", cause: "mission-session-close" })
     setBoardStore("selectedSource", null)
     setBoardStore("board", null)
