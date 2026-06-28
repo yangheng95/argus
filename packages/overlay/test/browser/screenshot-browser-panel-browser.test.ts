@@ -7,6 +7,7 @@ import { deflateSync } from "node:zlib"
 import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -85,6 +86,18 @@ function screenshotIndex(path: string): number | null {
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
+}
+
+function orderKey(domain: "message" | "part" | "session", rank: number, time: number, id: string, sequence = 0): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return orderKey("message", 30, time, id)
+}
+
+function sessionOrderKey(id: string, time: number): string {
+  return orderKey("session", 50, time, id)
 }
 
 function json(value: unknown, init?: ResponseInit) {
@@ -182,6 +195,7 @@ function conversationPayload() {
       resolvedRole: "visual-qa",
       agent: "visual-qa",
       channel: "visual-qa",
+      orderKey: messageOrderKey(`msg_visual_${index}`, 1_780_000_010_000 + index * 1_000),
       time: { created: 1_780_000_010_000 + index * 1_000, completed: 1_780_000_011_000 + index * 1_000 },
     },
     parts: [
@@ -189,10 +203,15 @@ function conversationPayload() {
         id: `part_screenshot_${index}`,
         messageID: `msg_visual_${index}`,
         sessionID: "ses_visual",
+        orderKey: orderKey("part", 31, 1_780_000_010_000 + index * 1_000, `part_screenshot_${index}`),
         type: "tool",
         tool: "browser_observe",
         state: {
           status: "pending",
+          time: {
+            start: 1_780_000_010_000 + index * 1_000,
+            end: 1_780_000_010_500 + index * 1_000,
+          },
           metadata: {
             browser: {
               url: `https://example.test/visual-${index}`,
@@ -205,6 +224,16 @@ function conversationPayload() {
       },
     ],
   }))
+  const viewMessages = transcript.map((message) => ({
+    messageID: message.info.id,
+    sessionID: message.info.sessionID,
+    stage: "visual-qa",
+    orderKey: message.info.orderKey,
+    time: message.info.time.created,
+    placement: "top_level",
+  }))
+  const firstMessage = transcript[0]!
+  const lastMessage = transcript.at(-1)!
   return {
     lastSequence: 1,
     board: {
@@ -223,8 +252,26 @@ function conversationPayload() {
       order: [],
       cards: {},
       sessions: [],
+      messages: viewMessages,
     },
-    agentView: { rootID: "root", cards: {}, order: [] },
+    agentView: {
+      sessions: [
+        {
+          sessionID: "ses_visual",
+          orderKey: sessionOrderKey("ses_visual", firstMessage.info.time.created),
+          stage: "visual-qa",
+          messageIDs: transcript.map((message) => message.info.id),
+          lastDisplayMessageID: lastMessage.info.id,
+          firstMessageTime: firstMessage.info.time.created,
+          lastMessageTime: lastMessage.info.time.created,
+          firstObservedAt: firstMessage.info.time.created,
+          lastObservedAt: lastMessage.info.time.created,
+          status: "completed",
+          placement: "top_level",
+        },
+      ],
+      messages: viewMessages,
+    },
     messageWatermark: 0,
   }
 }
@@ -255,7 +302,6 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
-    const unexpectedRequests: string[] = []
     const attachmentRequests: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -287,7 +333,7 @@ test(
       if (path === "/global/health") return json({ version: "1.2.3" })
       if (path === "/global/projects/discover") return json([])
       if (path === "/project/current/worktrees") return json([])
-      if (path === "/tasks" || path === "/global/tasks") return json({ tasks: [{ task: TASK }] })
+      if (path === "/global/tasks") return json({ tasks: [{ task: TASK }] })
       if (path === "/task/tsk_screenshot_browser/board") {
         return json(conversationPayload().board, { headers: { etag: '"board-screenshot-browser"' } })
       }
@@ -360,13 +406,23 @@ test(
       if (path === "/file") return json({ entries: [] })
       if (path === "/find/file") return json({ entries: [] })
       if (path === "/log" && req.method === "POST") return json({ ok: true })
-      unexpectedRequests.push(`${req.method} ${path}`)
       return json({ error: "unexpected screenshot browser fixture request", path }, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const expectedThumbnailAborts: string[] = []
+      const errors = installBrowserErrorCollector(page, {
+        allowRequestFailure: (failure) => {
+          if (failure.errorText !== "net::ERR_ABORTED") return false
+          if (!/^\/attachment\/project\/screenshot-\d+\.png\?variant=screenshot-browser-thumbnail$/.test(failure.pathWithSearch)) {
+            return false
+          }
+          expectedThumbnailAborts.push(failure.pathWithSearch)
+          return true
+        },
+      })
       await page.setViewport({ width: 1440, height: 900 })
       await page.evaluateOnNewDocument((serverUrl) => {
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
@@ -378,7 +434,6 @@ test(
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
-      await page.waitForSelector(`[data-task-id="${TASK.id}"]`, { visible: true })
       await page.waitForFunction(() =>
         performance
           .getEntriesByType("resource")
@@ -583,7 +638,32 @@ test(
         [],
         `screenshot open should use ResizeObserver entries: ${JSON.stringify(layoutEvents)}`,
       )
-      await page.waitForSelector(".screenshot-browser-card")
+      try {
+        await page.waitForSelector(".screenshot-browser-card")
+      } catch (error) {
+        const timeoutState = await page.evaluate(() => {
+          const panel = document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")
+          const screenshotPanel = document.querySelector<HTMLElement>(".screenshot-browser-panel")
+          const groups = document.querySelector<HTMLElement>(".screenshot-browser-groups")
+          const empty = document.querySelector<HTMLElement>(".screenshot-browser-empty")
+          return {
+            activeElement: document.activeElement?.tagName ?? "",
+            bodyText: document.body.innerText.slice(0, 1000),
+            cardCount: document.querySelectorAll(".screenshot-browser-card").length,
+            emptyText: empty?.textContent?.trim() ?? "",
+            groupCount: document.querySelectorAll(".screenshot-browser-group").length,
+            groupsVirtualized: groups?.dataset.virtualized ?? "",
+            panelActive: panel?.dataset.active ?? "",
+            panelOpen: panel?.dataset.open ?? "",
+            screenshotPanelActive: screenshotPanel?.dataset.active ?? "",
+            title: screenshotPanel?.querySelector<HTMLElement>(".oc-surface-header__title")?.textContent ?? "",
+          }
+        })
+        const timeoutScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-card-timeout.png")
+        writeFileSync(timeoutScreenshotPath, await page.screenshot({ fullPage: false }))
+        const message = error instanceof Error ? error.message : String(error)
+        assert.fail(`screenshot browser card did not render: ${message}; state=${JSON.stringify(timeoutState)}`)
+      }
       const firstCardVisibleElapsed = Date.now() - openStart
       assert.ok(firstCardVisibleElapsed < 1_500, `screenshot browser first card took ${firstCardVisibleElapsed}ms`)
       await waitForVisibleScreenshotThumbnails(page, "initial open", attachmentRequests)
@@ -665,11 +745,17 @@ test(
       )
 
       const thumbLayout = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")
+        const card = document.querySelector<HTMLElement>(".screenshot-browser-card")
         const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
         const image = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+        const panelRect = panel?.getBoundingClientRect()
+        const cardRect = card?.getBoundingClientRect()
         const triggerRect = trigger?.getBoundingClientRect()
         const imageRect = image?.getBoundingClientRect()
         return {
+          panelWidth: panelRect?.width ?? 0,
+          cardWidth: cardRect?.width ?? 0,
           triggerWidth: triggerRect?.width ?? 0,
           triggerHeight: triggerRect?.height ?? 0,
           imageWidth: imageRect?.width ?? 0,
@@ -716,6 +802,7 @@ test(
 
       await page.setViewport({ width: 960, height: 760 })
       await new Promise((resolve) => setTimeout(resolve, 100))
+      await waitForVisibleScreenshotThumbnails(page, "post-resize screenshot", attachmentRequests)
       assert.ok(
         attachmentRequests.length - requestsBeforeOpen < 32,
         `viewport resize materialized too many screenshots: ${attachmentRequests.length - requestsBeforeOpen}`,
@@ -984,6 +1071,18 @@ test(
       assert.equal(narrowLayout.cardEscaped, false, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.thumbEscaped, false, JSON.stringify(narrowLayout))
       assert.ok(narrowLayout.bodyOverflowX <= narrowLayout.allowedBodyOverflowX + 1, JSON.stringify(narrowLayout))
+      assert.ok(
+        Math.abs((narrowLayout.panel?.width ?? 0) - thumbLayout.panelWidth) > 16,
+        `screenshot panel width did not change during resize: initial=${JSON.stringify(thumbLayout)} narrow=${JSON.stringify(narrowLayout)}`,
+      )
+      assert.ok(
+        Math.abs((narrowLayout.card?.width ?? 0) - thumbLayout.cardWidth) <= 1,
+        `screenshot card width changed with panel resize: initial=${JSON.stringify(thumbLayout)} narrow=${JSON.stringify(narrowLayout)}`,
+      )
+      assert.ok(
+        Math.abs((narrowLayout.thumb?.width ?? 0) - thumbLayout.triggerWidth) <= 1,
+        `screenshot thumbnail width changed with panel resize: initial=${JSON.stringify(thumbLayout)} narrow=${JSON.stringify(narrowLayout)}`,
+      )
 
       const narrowScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-narrow.png")
       const narrowScreenshot = await page.screenshot({ fullPage: false })
@@ -1057,7 +1156,11 @@ test(
       })
       assert.ok(narrowPanelScreenshot.length > 0)
       writeFileSync(narrowPanelScreenshotPath, narrowPanelScreenshot)
-      assert.deepEqual(unexpectedRequests, [])
+      assert.ok(
+        expectedThumbnailAborts.length < 8,
+        `screenshot browser cancelled too many thumbnail requests: ${JSON.stringify(expectedThumbnailAborts)}`,
+      )
+      errors.assertNoUnexpectedErrors()
     } finally {
       await browser.close()
       await server.close()

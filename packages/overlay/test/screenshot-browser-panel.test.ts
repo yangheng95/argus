@@ -256,7 +256,9 @@ describe("screenshot browser panel", () => {
               type: "tool",
               tool: "bash",
               state: {
-                attachments: [{ url: "/attachment/project/data.json", mime: "application/json", filename: "data.json" }],
+                attachments: [
+                  { url: "/attachment/project/data.json", mime: "application/json", filename: "data.json" },
+                ],
               },
             },
           ],
@@ -688,6 +690,9 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("<Virtualizer")
     expect(component).not.toContain("ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT")
     expect(component).not.toContain("itemSize={")
+    expect(component).toContain("SCREENSHOT_BROWSER_CARD_WIDTH = 132")
+    expect(component).not.toContain("SCREENSHOT_BROWSER_CARD_MIN_WIDTH")
+    expect(component).toContain("const cardWidth = createMemo(() => SCREENSHOT_BROWSER_CARD_WIDTH * currentUIScale())")
     expect(component).toContain("buildScreenshotBrowserRows(groups(), columnCount())")
     expect(component).toContain("IntersectionObserver")
     expect(component).toContain("SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME")
@@ -703,6 +708,7 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("new ResizeObserver((entries) =>")
     expect(component).toContain("pendingWidth = entry.contentRect.width")
     expect(component).not.toContain("element.clientWidth")
+    expect(component).toContain('style={`--screenshot-browser-card-width: ${cardWidth()}px`}')
     expect(component).toContain("groupScreenshotBrowserItems")
     expect(component).toContain("isStoredAttachmentUrl")
     expect(component).toContain("isScreenshotBrowserThumbnailUrl")
@@ -755,7 +761,10 @@ describe("screenshot browser panel", () => {
     )
     expect(css).toContain(".screenshot-browser-virtual-item")
     expect(css).toContain(".screenshot-browser-row-grid")
-    expect(css).toContain("grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, 1fr))")
+    expect(css).toContain(
+      "grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, var(--screenshot-browser-card-width)))",
+    )
+    expect(css).not.toContain("grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, 1fr))")
     expect(css).not.toContain(".screenshot-browser-grid")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
     expect(css).toContain(".screenshot-browser__thumb-trigger .screenshot-browser__thumb-image")
