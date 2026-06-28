@@ -1605,3 +1605,61 @@ Reviewed visual evidence:
 Still open after this repair:
 
 - No remaining item from the Thirty-Third Overlay/GUI ownership cluster is known after the focused repair. A new independent-agent iteration is required before declaring convergence.
+
+## Thirty-Sixth Confirmed Residuals
+
+Independent backend/API contract audit found three new non-duplicate issue clusters:
+
+- Config PATCH routes document named `BadRequestError` 400 responses, but project config update and session config update still return plain `{ error }` bodies for semantic validation failures such as invalid provider or unknown prompt profile.
+- Global DB reset/import routes document shared named 409 errors, but active-session destructive-operation conflicts return plain `{ error }` bodies.
+- `GET /experimental/task-plan` and `GET /experimental/scratchpad` call `Session.getInProject()` and can throw `NotFoundError` for missing or wrong-project sessions, while OpenAPI/SDK currently declare only 200 responses for these operations.
+
+Independent Overlay/GUI audit found three new non-duplicate issue clusters:
+
+- Provider panel Test / Save / Delete operations capture a request directory but do not consistently guard response commits and test-result state by the initiating directory.
+- Prompt Profile save/delete/activate/import operations pass a directory to config helpers, but do not pass an ownership predicate, and component reload/notice paths re-read the current scope after mutation.
+- Browser visual tests still have broad error-collector opt-outs for screenshot-producing suites such as provider, prompt-profile, left-tool, and skill/MCP panels. Hidden 404/pageerror/console errors can still pass visual screenshots outside the suites repaired in the Thirty-First round.
+
+Independent scheduler/tooling audit found one new non-duplicate issue cluster:
+
+- `tool.truncation.cleanup` is registered as a global scheduler task, but its cleanup logic reads ambient `Instance.directory` from the first bootstrapped project. Later projects can generate stale `tool-output/tool_*` files that the global timer never scans.
+
+Call point recall for the next repair:
+
+- Experimental task-plan/scratchpad contracts: `packages/opencorvus/src/server/routes/experimental.ts`, `packages/opencorvus/test/server/session-artifact-routes.test.ts`, `packages/opencorvus/test/server/app-routes.test.ts`, OpenAPI generation, and JS SDK generated response/error types.
+- Config 400 contracts: `packages/opencorvus/src/server/routes/config.ts`, `packages/opencorvus/src/server/routes/session.ts`, `packages/opencorvus/test/server/config-routes.test.ts`, `packages/opencorvus/test/server/config-patch-provider.test.ts`, `packages/opencorvus/test/server/session-routes.test.ts`, OpenAPI generation, and JS SDK generated error types.
+- Global DB destructive conflict contracts: `packages/opencorvus/src/server/routes/global.ts`, `packages/opencorvus/test/server/global-db-destructive.test.ts`, OpenAPI generation, and JS SDK generated error types.
+- Provider and Prompt Profile directory ownership: `packages/overlay/src/components/settings/ProvidersPanel.tsx`, `packages/overlay/src/components/settings/PromptCatalog.tsx`, `packages/overlay/src/services/config.ts`, related provider/prompt browser tests, and project-directory stale-response tests.
+- Browser error collector opt-outs: `packages/overlay/test/browser-error-collector.test.ts`, `packages/overlay/test/browser/error-collector.ts`, and the screenshot-producing browser suites still allowlisted there.
+- Tool truncation cleanup ownership: `packages/opencorvus/src/tool/truncation.ts`, `packages/opencorvus/src/scheduler/index.ts`, `packages/opencorvus/src/project/bootstrap.ts`, `packages/opencorvus/src/tool/tool.ts`, `packages/opencorvus/src/tool/registry.ts`, `packages/opencorvus/src/session/loop.ts`, and tool truncation scheduler tests.
+
+## Thirty-Sixth Round Repair And Verification
+
+Repaired in this round:
+
+- `GET /experimental/task-plan` now documents the named 404 response that `Session.getInProject()` already throws for missing or wrong-project sessions.
+- `GET /experimental/scratchpad` now documents the same named 404 response for missing or wrong-project sessions.
+- OpenAPI runtime coverage now includes both experimental memory routes in a focused not-found response assertion.
+- Static `packages/sdk/openapi.json` and generated JS SDK types were regenerated through `packages/sdk/js/script/build.ts`, adding `ExperimentalTaskplanListErrors` and `ExperimentalScratchpadGetErrors`.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/app-routes.test.ts -t "browser-preview and panel memory not-found responses" --timeout 60000` failed before the route contract fix at the missing experimental 404 response.
+- `bun test packages/opencorvus/test/server/app-routes.test.ts -t "experimental task memory not-found responses" --timeout 60000` passed after the route contract fix and is the focused regression for this repair.
+- `bun test packages/opencorvus/test/server/session-artifact-routes.test.ts -t "todo, task-plan, and scratchpad reads reject sessions outside the active project" --timeout 60000`
+- `bun ./packages/sdk/js/script/build.ts`
+- `bun test packages/opencorvus/test/server/app-routes.test.ts packages/opencorvus/test/server/session-artifact-routes.test.ts --timeout 120000`
+- `bun run api:routes-check`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run ./packages/opencorvus/script/docs/render-api-md.ts --check`
+- `git diff --check -- packages/opencorvus/src/server/routes/experimental.ts packages/opencorvus/test/server/app-routes.test.ts packages/sdk/openapi.json packages/sdk/js/src/gen/types.gen.ts packages/sdk/js/src/gen/sdk.gen.ts specs/new-arch/2026-06-27-bug-hunt-residual-convergence.md`
+
+Still open after this repair:
+
+- Config PATCH named 400 response/body drift.
+- Global DB destructive active-session 409 response/body drift.
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- `tool.truncation.cleanup` global scheduler vs project runtime-root ownership mismatch.

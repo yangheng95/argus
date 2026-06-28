@@ -59,6 +59,17 @@ describe("app routes", () => {
     expect(names).not.toContain("TaskCancelledMessageError")
   })
 
+  test("Server.openapi documents experimental task memory not-found responses", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+    const operations = [paths["/experimental/task-plan"]?.get, paths["/experimental/scratchpad"]?.get]
+
+    for (const operation of operations) {
+      const schema = operation?.responses?.[404]?.content?.["application/json"]?.schema
+      expect(JSON.stringify(schema)).toContain("NotFoundError")
+    }
+  })
+
   test("Server.openapi documents directory query for project-scoped routes only once", async () => {
     const spec = await Server.openapi()
     const paths = spec.paths ?? {}

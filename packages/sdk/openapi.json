@@ -3690,6 +3690,57 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "NotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "LogFileNotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -3737,6 +3788,57 @@
                   },
                   "required": [
                     "content"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "NotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "LogFileNotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
                   ]
                 }
               }

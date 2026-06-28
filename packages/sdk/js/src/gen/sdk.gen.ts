@@ -66,7 +66,9 @@ import type {
   ExperimentalScheduleCreateResponses,
   ExperimentalScheduleDeleteResponses,
   ExperimentalScheduleListResponses,
+  ExperimentalScratchpadGetErrors,
   ExperimentalScratchpadGetResponses,
+  ExperimentalTaskplanListErrors,
   ExperimentalTaskplanListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
@@ -1721,7 +1723,11 @@ export class Taskplan extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<ExperimentalTaskplanListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      ExperimentalTaskplanListResponses,
+      ExperimentalTaskplanListErrors,
+      ThrowOnError
+    >({
       url: "/experimental/task-plan",
       ...options,
       ...params,
@@ -1751,7 +1757,11 @@ export class Scratchpad extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<ExperimentalScratchpadGetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      ExperimentalScratchpadGetResponses,
+      ExperimentalScratchpadGetErrors,
+      ThrowOnError
+    >({
       url: "/experimental/scratchpad",
       ...options,
       ...params,
