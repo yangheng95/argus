@@ -5168,6 +5168,27 @@ export type ExperimentalTaskplanListData = {
   url: "/experimental/task-plan"
 }
 
+export type ExperimentalTaskplanListErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalTaskplanListError = ExperimentalTaskplanListErrors[keyof ExperimentalTaskplanListErrors]
+
 export type ExperimentalTaskplanListResponses = {
   /**
    * Tasks
@@ -5196,6 +5217,27 @@ export type ExperimentalScratchpadGetData = {
   }
   url: "/experimental/scratchpad"
 }
+
+export type ExperimentalScratchpadGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalScratchpadGetError = ExperimentalScratchpadGetErrors[keyof ExperimentalScratchpadGetErrors]
 
 export type ExperimentalScratchpadGetResponses = {
   /**
