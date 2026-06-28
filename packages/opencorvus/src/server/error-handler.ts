@@ -3,6 +3,8 @@ import { HTTPException } from "hono/http-exception"
 import type { Context } from "hono"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { Log } from "../util/log"
+import { NotFoundError } from "../storage/db"
+import { badRequestBody } from "./error"
 
 const log = Log.create({ service: "server" })
 
@@ -72,7 +74,16 @@ export function serverErrorResponse(err: Error | unknown, c: Context): Response 
   if (namedError) {
     return c.json(err.toObject(), { status })
   }
-  if (err instanceof HTTPException) return err.getResponse()
+  if (err instanceof HTTPException) {
+    const message = err.message
+    if (err.status === 400) {
+      return c.json(badRequestBody(message), { status: 400 })
+    }
+    if (err.status === 404) {
+      return c.json(new NotFoundError({ message }).toObject(), { status: 404 })
+    }
+    return c.json(new NamedError.Unknown({ message }).toObject(), { status })
+  }
   const message = err instanceof Error ? err.message : String(err)
   return c.json(new NamedError.Unknown({ message }).toObject(), {
     status: 500,
