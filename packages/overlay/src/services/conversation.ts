@@ -1,6 +1,7 @@
 import { apiJson } from "./api"
 import { replayTaskEventToTree } from "./events"
 import { hydrateConversationView, resetWriter } from "./tree-writer"
+import { prewarmMarkdownRenderCache } from "../utils/markdown"
 import {
   boardStore,
   setBoardStore,
@@ -169,6 +170,19 @@ function parseRewindCursor(raw: any): number | null {
   return value
 }
 
+function prewarmTranscriptMarkdown(transcript: readonly unknown[]): void {
+  const sources: string[] = []
+  for (const message of transcript) {
+    const parts = Array.isArray((message as any)?.parts) ? (message as any).parts : []
+    for (const part of parts) {
+      const type = String(part?.type || "")
+      if (type !== "text" && type !== "reasoning") continue
+      const text = String(part?.text || "")
+      if (text.trim()) sources.push(text)
+    }
+  }
+  prewarmMarkdownRenderCache(sources)
+}
 function sourceKey(source: BoardSource): string {
   return `${source.kind}:${source.id}`
 }
@@ -399,6 +413,7 @@ export async function hydrateConversation(
     }
     setBoardUpdatedAt(Date.now())
     hydrateConversationView(view, mergedMessages)
+    prewarmTranscriptMarkdown(transcript)
     setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey(source), agentView)
     markSelectedMessageWatermark(messageWatermark)
@@ -469,6 +484,7 @@ export async function mergeLatestConversationTail(
     setBoardData(board)
     setBoardUpdatedAt(Date.now())
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    prewarmTranscriptMarkdown(transcript)
     setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey({ kind: "task", id: selectedTaskID }), agentView)
     markSelectedMessageWatermark(messageWatermark)
@@ -578,6 +594,7 @@ export async function loadOlderConversationHistory(
       return false
     }
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    prewarmTranscriptMarkdown(transcript)
     attachConversationAgentViewTargets(sourceKey(source), view)
     for (const event of events) {
       replayTaskEventToTree(event)
@@ -621,6 +638,7 @@ export async function loadConversationSessionHistory(
     const view = requireObject(page?.view, "view")
     if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    prewarmTranscriptMarkdown(transcript)
     attachConversationAgentViewTargets(sourceKey({ kind: "task", id: selectedTaskID }), view)
     for (const event of events) {
       assertActiveSessionHistory(selectedTaskID, epoch, signal)

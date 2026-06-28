@@ -26,9 +26,13 @@ export const MARKDOWN_RENDER_CHAR_LIMIT = 120_000
 export const CODE_BLOCK_RENDER_CHAR_LIMIT = 120_000
 export const CODE_BLOCK_RENDER_LINE_LIMIT = 2_000
 export const MARKDOWN_DATA_IMAGE_CHAR_LIMIT = 120_000
+const MARKDOWN_RENDER_CACHE_LIMIT = 512
+const MARKDOWN_PREWARM_FRAME_BUDGET_MS = 24
 const RENDER_CLIP_NOTICE = "\n\n[Overlay display clipped; full content remains available in the task trace.]"
 const DATA_IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((data:image\/(?:png|jpe?g|gif|webp|avif);base64,[^)]+)\)/gi
 const plainUrlLinkifier = new LinkifyIt({ fuzzyEmail: false, fuzzyIP: false })
+const markdownRenderCache = new Map<string, string>()
+let markdownPrewarmEpoch = 0
 
 // Register languages (selective import keeps bundle small)
 const LANGUAGES: [string, any][] = [
@@ -325,7 +329,50 @@ export function renderMarkdown(text: string): string {
     withoutOversizedImages.length > MARKDOWN_RENDER_CHAR_LIMIT
       ? `${withoutOversizedImages.slice(0, MARKDOWN_RENDER_CHAR_LIMIT)}${RENDER_CLIP_NOTICE}`
       : withoutOversizedImages
-  return marked.parse(source) as string
+  const cached = markdownRenderCache.get(source)
+  if (cached !== undefined) {
+    markdownRenderCache.delete(source)
+    markdownRenderCache.set(source, cached)
+    return cached
+  }
+  const rendered = marked.parse(source) as string
+  markdownRenderCache.set(source, rendered)
+  if (markdownRenderCache.size > MARKDOWN_RENDER_CACHE_LIMIT) {
+    const oldest = markdownRenderCache.keys().next().value
+    if (typeof oldest === "string") markdownRenderCache.delete(oldest)
+  }
+  return rendered
+}
+
+function setMarkdownPrewarmPending(count: number): void {
+  if (typeof window === "undefined") return
+  ;(window as any).__ocMarkdownRenderPrewarmPending = count
+}
+
+export function prewarmMarkdownRenderCache(sources: readonly string[]): void {
+  if (typeof window === "undefined") return
+  const unique: string[] = []
+  const seen = new Set<string>()
+  for (const item of sources) {
+    const source = String(item || "")
+    if (!source.trim() || seen.has(source)) continue
+    seen.add(source)
+    unique.push(source)
+  }
+  const epoch = ++markdownPrewarmEpoch
+  let index = 0
+  setMarkdownPrewarmPending(unique.length)
+  const runFrame = () => {
+    if (epoch !== markdownPrewarmEpoch) return
+    const deadline = performance.now() + MARKDOWN_PREWARM_FRAME_BUDGET_MS
+    while (index < unique.length && performance.now() < deadline) {
+      renderMarkdown(unique[index]!)
+      index += 1
+    }
+    setMarkdownPrewarmPending(unique.length - index)
+    if (index < unique.length) window.requestAnimationFrame(runFrame)
+  }
+  window.requestAnimationFrame(runFrame)
 }
 
 /** Alias for renderMarkdown — used by some callers. */

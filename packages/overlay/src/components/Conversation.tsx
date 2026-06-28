@@ -17,8 +17,8 @@ import { listenConversationCardScroll, type ConversationCardScrollRequest } from
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Icon } from "./Icon"
 
-const VIRTUAL_OVERSCAN_ITEMS = 16
-const ESTIMATED_CARD_HEIGHT = 132
+const VIRTUAL_OVERSCAN_ITEMS = 4
+const ESTIMATED_CARD_HEIGHT = 320
 const CARD_SCROLL_TARGET_MAX_FRAMES = 12
 
 function clipText(value: string, limit = 96): string {
