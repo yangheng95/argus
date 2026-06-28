@@ -139,7 +139,7 @@ type NodeRenderResult =
     }
 
 async function renderFilesViaNode(input: NodeRenderInput): Promise<NodeRenderResult> {
-  const hardTimeoutMs = input.launchTimeoutMs + input.timeout + 20_000
+  const inactivityTimeoutMs = input.launchTimeoutMs + input.timeout + 20_000
   try {
     const run = await runBrowserNodeSidecar<NodeRenderResult>({
       runtime: {
@@ -150,7 +150,7 @@ async function renderFilesViaNode(input: NodeRenderInput): Promise<NodeRenderRes
       script: NODE_RENDER_SCRIPT,
       payload: input,
       payloadEnvName: "OPENCORVUS_RENDER_INPUT",
-      hardTimeoutMs,
+      inactivityTimeoutMs,
       label: "Node webpage render",
     })
     if (run.exitCode !== 0 && run.result.ok) {
@@ -187,6 +187,159 @@ export async function resolveNodeRenderSidecarRuntime(
 const NODE_RENDER_SCRIPT = String.raw`
 const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
 
+function opencorvusActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+function opencorvusIsBrowserImplicitAssetRequest(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico";
+  } catch {
+    return false;
+  }
+}
+
+function opencorvusRequestUrl(payload) {
+  const request = payload && typeof payload.request === "function" ? payload.request() : payload;
+  if (request && typeof request.url === "function") return request.url();
+  if (payload && typeof payload.url === "function") return payload.url();
+  return "";
+}
+
+function opencorvusResourceType(payload) {
+  const request = payload && typeof payload.request === "function" ? payload.request() : payload;
+  return request && typeof request.resourceType === "function" ? request.resourceType() : "";
+}
+
+function opencorvusUrlScope(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === "file:") return "file:";
+    if (parsed.origin && parsed.origin !== "null") return parsed.origin;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function opencorvusIsSameOrigin(pageUrl, rawUrl) {
+  const pageScope = opencorvusUrlScope(pageUrl);
+  const requestScope = opencorvusUrlScope(rawUrl);
+  return Boolean(pageScope && requestScope && pageScope === requestScope);
+}
+
+function opencorvusIsPrimaryNavigationRequest(payload) {
+  const request = payload && typeof payload.request === "function" ? payload.request() : payload;
+  return Boolean(request && typeof request.isNavigationRequest === "function" && request.isNavigationRequest());
+}
+
+function opencorvusIsCriticalPageRequestFailure(pageUrl, payload) {
+  const url = opencorvusRequestUrl(payload);
+  if (opencorvusIsBrowserImplicitAssetRequest(url)) return false;
+  if (opencorvusIsPrimaryNavigationRequest(payload)) return true;
+  if (!opencorvusIsSameOrigin(pageUrl, url)) return false;
+  const type = opencorvusResourceType(payload);
+  return (
+    type === "document" ||
+    type === "script" ||
+    type === "stylesheet" ||
+    type === "xhr" ||
+    type === "fetch" ||
+    type === "image" ||
+    type === "media" ||
+    type === "font"
+  );
+}
+
+function opencorvusErrorStack(error) {
+  if (error && typeof error.stack === "string") return error.stack;
+  if (error && typeof error.message === "string") return error.message;
+  return String(error || "");
+}
+
+function opencorvusIsSameOriginPageError(pageUrl, error) {
+  const stack = opencorvusErrorStack(error);
+  const scope = opencorvusUrlScope(pageUrl);
+  return Boolean(scope && stack.includes(scope));
+}
+
+async function opencorvusWithBrowserInactivity(page, pageUrl, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  let rejectFailure;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const browserFailure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(new Error(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    rejectFailure(new Error(label + " Browser failures before render capture: " + source));
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => {
+    reset(opencorvusActivityLabel("console", payload));
+  });
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    if (
+      status >= 400 &&
+      status < 600 &&
+      !opencorvusIsPrimaryNavigationRequest(payload) &&
+      opencorvusIsCriticalPageRequestFailure(pageUrl, payload)
+    ) {
+      fail(opencorvusActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(opencorvusActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => {
+    if (opencorvusIsCriticalPageRequestFailure(pageUrl, payload)) {
+      fail(opencorvusActivityLabel("requestfailed", payload));
+      return;
+    }
+    reset(opencorvusActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => {
+    if (opencorvusIsSameOriginPageError(pageUrl, payload)) {
+      fail(opencorvusActivityLabel("pageerror", payload));
+      return;
+    }
+    reset(opencorvusActivityLabel("pageerror", payload));
+  });
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive, browserFailure]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 async function main() {
   const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_RENDER_INPUT || "", "base64").toString("utf8"));
   let browser;
@@ -201,16 +354,55 @@ async function main() {
     const context = await browser.newContext({ viewport: input.viewport });
     const page = await context.newPage();
     const consoleErrors = [];
+    const browserFailures = [];
+    const assertNoBrowserFailures = (stage) => {
+      if (browserFailures.length > 0) {
+        throw new Error("Browser failures before render " + stage + ": " + browserFailures.join("; "));
+      }
+    };
+    page.on("response", (res) => {
+      const status = res.status();
+      if (
+        status >= 400 &&
+        status < 600 &&
+        !opencorvusIsPrimaryNavigationRequest(res) &&
+        opencorvusIsCriticalPageRequestFailure(input.url, res)
+      ) {
+        browserFailures.push("response " + res.url() + " HTTP " + status);
+      }
+    });
+    page.on("requestfailed", (req) => {
+      if (opencorvusIsCriticalPageRequestFailure(input.url, req)) {
+        browserFailures.push("requestfailed " + req.url() + " " + (req.failure()?.errorText || "request failed"));
+      }
+    });
     page.on("console", (msg) => {
-      if (msg.type() === "error") consoleErrors.push(msg.text());
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
     });
     page.on("pageerror", (err) => {
-      consoleErrors.push(err && err.message ? err.message : String(err));
+      const message = err && err.message ? err.message : String(err);
+      if (opencorvusIsSameOriginPageError(input.url, err)) {
+        browserFailures.push("pageerror " + message);
+      }
     });
 
     phase = "navigate";
-    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeout });
-    await page.waitForLoadState("networkidle", { timeout: Math.min(5000, input.timeout) }).catch(() => undefined);
+    await opencorvusWithBrowserInactivity(
+      page,
+      input.url,
+      "navigate " + input.url,
+      input.timeout,
+      () => page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 0 }),
+    );
+    await opencorvusWithBrowserInactivity(
+      page,
+      input.url,
+      "networkidle " + input.url,
+      Math.min(5000, input.timeout),
+      () => page.waitForLoadState("networkidle", { timeout: 0 }),
+    ).catch(() => undefined);
 
     phase = "evaluate";
     await Promise.race([
@@ -227,8 +419,10 @@ async function main() {
       }),
       new Promise((resolve) => setTimeout(resolve, 5000)),
     ]).catch(() => undefined);
+    assertNoBrowserFailures("capture");
     await page.addStyleTag({ content: input.stabilizationCss });
     await new Promise((resolve) => setTimeout(resolve, 3000));
+    assertNoBrowserFailures("stabilization");
     const textSignals = await page.evaluate(() => {
       function isElementVisible(element) {
         const style = window.getComputedStyle(element);
@@ -275,7 +469,9 @@ async function main() {
     }).catch(() => ({ bodyText: "", visibleText: "" }));
 
     phase = "screenshot";
+    assertNoBrowserFailures("screenshot");
     const screenshot = Buffer.from(await page.screenshot({ type: "png", fullPage: input.fullPage }));
+    assertNoBrowserFailures("artifact");
     process.stdout.write(JSON.stringify({
       ok: true,
       screenshotBase64: screenshot.toString("base64"),

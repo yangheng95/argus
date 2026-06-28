@@ -83,6 +83,23 @@ describe("capture reference diagnostics", () => {
     expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
   })
 
+  test("node capture script owns navigation by browser inactivity and classifies failed subresources", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+
+    expect(source).toContain("opencorvusWithBrowserInactivity")
+    expect(source).toContain('() => page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 0 })')
+    expect(source).not.toContain('page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs })')
+    expect(source).toContain("failedSubresources")
+    expect(source).toContain("opencorvusIsCriticalPageRequestFailure")
+    expect(source).toContain("opencorvusIsSameOriginPageError")
+    expect(source).toContain("URL screenshot capture \" + stage + \" browser failures")
+    expect(source).toContain("assertNoBrowserFailures(\"content_paint\")")
+    expect(source).toContain("assertNoBrowserFailures(\"screenshot\")")
+    expect(source).toContain("assertNoBrowserFailures(\"artifact\")")
+    expect(source).not.toContain("opencorvusIsSameOriginConsoleError")
+    expect(source).not.toContain("console error")
+  })
+
   test("node capture script passes browser proxy credentials to the Playwright context", () => {
     const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
 
@@ -156,6 +173,193 @@ describe("capture reference diagnostics", () => {
       ).rejects.toBeInstanceOf(CaptureReferenceError)
       expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false)
       expect(existsSync(path.join(outDir, "screenshot.png"))).toBe(false)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("rejects HTTP error pages before materializing reference artifacts", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-http-error-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Server error reference page</h1>
+              <p>This page has enough visible content to pass visual thresholds.</p>
+            </main>
+          </body></html>`,
+          { status: 500, headers: { "content-type": "text/html" } },
+        )
+      },
+    })
+
+    try {
+      await expect(
+        captureReferenceManifest({
+          url: `http://127.0.0.1:${server.port}/`,
+          outDir,
+          viewport: { width: 640, height: 360 },
+          timeoutMs: 20_000,
+        }),
+      ).rejects.toBeInstanceOf(CaptureReferenceError)
+      expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false)
+      expect(existsSync(path.join(outDir, "screenshot.png"))).toBe(false)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("rejects 200 reference pages with failed subresources before materializing artifacts", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-subresource-error-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url)
+        if (url.pathname === "/missing.png") {
+          return new Response("missing", { status: 404, headers: { "content-type": "text/plain" } })
+        }
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Reference page with a missing asset</h1>
+              <img src="/missing.png" alt="missing asset">
+            </main>
+          </body></html>`,
+          { headers: { "content-type": "text/html" } },
+        )
+      },
+    })
+
+    try {
+      await expect(
+        captureReferenceManifest({
+          url: `http://127.0.0.1:${server.port}/`,
+          outDir,
+          viewport: { width: 640, height: 360 },
+          timeoutMs: 20_000,
+        }),
+      ).rejects.toBeInstanceOf(CaptureReferenceError)
+      expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false)
+      expect(existsSync(path.join(outDir, "screenshot.png"))).toBe(false)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("captures 200 reference pages with third-party failed script diagnostics", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-third-party-diagnostics-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const thirdPartyServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("missing", { status: 404, headers: { "content-type": "application/javascript" } })
+      },
+    })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Reference page with third-party diagnostics</h1>
+              <script src="http://127.0.0.1:${thirdPartyServer.port}/missing.js"></script>
+            </main>
+          </body></html>`,
+          { headers: { "content-type": "text/html" } },
+        )
+      },
+    })
+
+    try {
+      const result = await captureReferenceManifest({
+        url: `http://127.0.0.1:${server.port}/`,
+        outDir,
+        viewport: { width: 640, height: 360 },
+        timeoutMs: 20_000,
+      })
+
+      expect(result.manifest.reference_strings).toContain("Reference page with third-party diagnostics")
+      expect(statSync(result.artifactPaths.screenshotPng).size).toBeGreaterThan(0)
+      expect(statSync(result.artifactPaths.domHtml).size).toBeGreaterThan(0)
+    } finally {
+      server.stop(true)
+      thirdPartyServer.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("rejects late page errors before materializing reference artifacts", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-late-pageerror-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Reference page with late error</h1>
+              <p>This page has enough visible content to pass visual thresholds.</p>
+            </main>
+            <script>setTimeout(() => { throw new Error("late capture pageerror") }, 1000)</script>
+          </body></html>`,
+          { headers: { "content-type": "text/html" } },
+        )
+      },
+    })
+
+    try {
+      await expect(
+        captureReferenceManifest({
+          url: `http://127.0.0.1:${server.port}/`,
+          outDir,
+          viewport: { width: 640, height: 360 },
+          timeoutMs: 20_000,
+        }),
+      ).rejects.toBeInstanceOf(CaptureReferenceError)
+      expect(existsSync(path.join(outDir, "manifest.json"))).toBe(false)
+      expect(existsSync(path.join(outDir, "screenshot.png"))).toBe(false)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  test("captures reference artifacts when console diagnostics fire", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-late-console-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Reference page with console diagnostics</h1>
+              <p>This page has enough visible content to pass visual thresholds.</p>
+            </main>
+            <script>setTimeout(() => console.error("late capture console"), 1000)</script>
+          </body></html>`,
+          { headers: { "content-type": "text/html" } },
+        )
+      },
+    })
+
+    try {
+      const result = await captureReferenceManifest({
+        url: `http://127.0.0.1:${server.port}/`,
+        outDir,
+        viewport: { width: 640, height: 360 },
+        timeoutMs: 20_000,
+      })
+
+      expect(result.manifest.reference_strings).toContain("Reference page with console diagnostics")
+      expect(statSync(result.artifactPaths.screenshotPng).size).toBeGreaterThan(0)
     } finally {
       server.stop(true)
       rmSync(outDir, { recursive: true, force: true })
