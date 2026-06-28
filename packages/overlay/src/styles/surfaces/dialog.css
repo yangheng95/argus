@@ -2,7 +2,7 @@
   position: fixed;
   top: 0;
   left: 0;
-  z-index: var(--ui-z-overlay);
+  z-index: var(--ui-z-dialog);
   border: none;
   background: transparent;
   padding: 0;
@@ -90,6 +90,31 @@
      scroll inside `.config-content`, so the cap is consistent across
      wide / wider modes. */
   max-height: min(calc(var(--ui-overlay-shell-height) - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale)));
+}
+
+.dialog-fullscreen .dialog-form {
+  top: 0;
+  left: 0;
+  transform: none;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
+  background: var(--dialog-bg);
+  border: 0;
+  border-radius: 0;
+}
+
+.dialog-fullscreen .dialog-form > .dialog-header {
+  margin: 0;
+}
+
+.dialog-fullscreen .dialog-form > .dialog-actions:not(.compact) {
+  margin: 0;
 }
 
 .dialog-title {

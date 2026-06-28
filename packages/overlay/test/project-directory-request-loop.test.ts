@@ -67,7 +67,9 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("const directory = currentDirectory()")
     expect(source).toContain('setPanelNotice(t("workspace.no_directory"), "warn")')
     expect(source).toContain("refreshSkillMounts({ directory }).catch")
-    expect(source).toContain(
+    expect(source).toContain("const poolSkills = createMemo(() => mounts()?.skills ?? [])")
+    expect(source).not.toContain("mounts()?.skills ?? skills()")
+    expect(source).not.toContain(
       "const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills",
     )
     expect(source).not.toContain("panelSkills")
@@ -152,7 +154,9 @@ describe("overlay project directory request loop", () => {
 
   test("Skill and MCP panel has one store source and does not swallow destructive MCP failures", () => {
     const source = read("src/components/settings/SkillMarketPanel.tsx")
-    expect(source).toContain(
+    expect(source).toContain("const poolSkills = createMemo(() => mounts()?.skills ?? [])")
+    expect(source).not.toContain("mounts()?.skills ?? skills()")
+    expect(source).not.toContain(
       "const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills",
     )
     expect(source).toContain(

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js"
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { currentUIScale } from "../utils/layout-tokens"
 import { cardTreeStore } from "../store/card-tree"
@@ -25,6 +25,7 @@ const SCREENSHOT_BROWSER_MAX_COLUMNS = 3
 const SCREENSHOT_BROWSER_GRID_GAP = 8
 const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
 const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1
+const SCREENSHOT_BROWSER_ITEM_RENDER_CHUNK_SIZE = 12
 
 interface ScreenshotThumbnailLoadJob {
   readonly load: () => void
@@ -224,12 +225,14 @@ function ScreenshotBrowserVirtualRow(props: { row: ScreenshotBrowserRow; columns
 export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   const [listEl, setListEl] = createSignal<HTMLDivElement>()
   const [listWidth, setListWidth] = createSignal(0)
+  const [renderedItemCount, setRenderedItemCount] = createSignal(0)
   const active = createMemo(() => props.active())
   const cardWidth = createMemo(() => SCREENSHOT_BROWSER_CARD_WIDTH * currentUIScale())
-  const items = createMemo(() => {
+  const sourceItems = createMemo(() => {
     if (!active()) return []
     return cardTreeStore.screenshotItems
   })
+  const items = createMemo(() => sourceItems().slice(0, renderedItemCount()))
   const groups = createMemo(() => groupScreenshotBrowserItems(items()))
   const columnCount = createMemo(() => {
     const scale = currentUIScale()
@@ -240,6 +243,37 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
     return Math.min(SCREENSHOT_BROWSER_MAX_COLUMNS, Math.max(1, Math.floor((width + gap) / (fixedCardWidth + gap))))
   })
   const rows = createMemo(() => buildScreenshotBrowserRows(groups(), columnCount()))
+
+  createEffect(() => {
+    const total = sourceItems().length
+    if (!active() || total <= 0) {
+      setRenderedItemCount(0)
+      return
+    }
+
+    let rendered = Math.min(untrack(renderedItemCount), total)
+    if (untrack(renderedItemCount) !== rendered) setRenderedItemCount(rendered)
+    if (rendered >= total) return
+
+    let frameID = 0
+    const renderNextChunk = () => {
+      rendered = Math.min(total, rendered + SCREENSHOT_BROWSER_ITEM_RENDER_CHUNK_SIZE)
+      setRenderedItemCount(rendered)
+      if (rendered < total) frameID = window.requestAnimationFrame(renderNextChunk)
+    }
+    if (rendered > 0) {
+      frameID = window.requestAnimationFrame(renderNextChunk)
+    } else {
+      frameID = window.requestAnimationFrame(() => {
+        frameID = window.requestAnimationFrame(() => {
+          frameID = window.requestAnimationFrame(renderNextChunk)
+        })
+      })
+    }
+    onCleanup(() => {
+      if (frameID) window.cancelAnimationFrame(frameID)
+    })
+  })
 
   createEffect(() => {
     const element = listEl()
@@ -266,13 +300,16 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
         variant="panel"
         title={t("screenshots.title")}
         actions={
-          <span class="screenshot-browser-panel__count" aria-label={t("screenshots.count", { count: items().length })}>
-            {items().length}
+          <span
+            class="screenshot-browser-panel__count"
+            aria-label={t("screenshots.count", { count: sourceItems().length })}
+          >
+            {sourceItems().length}
           </span>
         }
       />
       <Show
-        when={groups().length > 0}
+        when={sourceItems().length > 0}
         fallback={
           <div class="screenshot-browser-empty">
             <Icon name="screenshots" size={18} />
@@ -284,21 +321,25 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
           ref={setListEl}
           class="screenshot-browser-groups"
           data-virtualized="true"
+          data-item-count={sourceItems().length}
+          data-rendered-count={renderedItemCount()}
           style={`--screenshot-browser-card-width: ${cardWidth()}px`}
         >
-          <Virtualizer
-            data={rows()}
-            overscan={SCREENSHOT_BROWSER_ROW_OVERSCAN}
-            as={ScreenshotVirtualWindow}
-            item={ScreenshotVirtualItem}
-          >
-            {(row) => (
-              <ScreenshotBrowserVirtualRow
-                row={row}
-                columns={row.kind === "items" ? Math.max(columnCount(), row.items.length) : columnCount()}
-              />
-            )}
-          </Virtualizer>
+          <Show when={renderedItemCount() > 0 && groups().length > 0}>
+            <Virtualizer
+              data={rows()}
+              overscan={SCREENSHOT_BROWSER_ROW_OVERSCAN}
+              as={ScreenshotVirtualWindow}
+              item={ScreenshotVirtualItem}
+            >
+              {(row) => (
+                <ScreenshotBrowserVirtualRow
+                  row={row}
+                  columns={row.kind === "items" ? Math.max(columnCount(), row.items.length) : columnCount()}
+                />
+              )}
+            </Virtualizer>
+          </Show>
         </div>
       </Show>
     </section>

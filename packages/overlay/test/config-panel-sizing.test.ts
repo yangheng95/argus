@@ -9,6 +9,7 @@ import {
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
+const DIALOG_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "dialog.css"), "utf8")
 const FIELD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "field.css"), "utf8")
 const SETTINGS_COMPONENTS_DIR = join(OVERLAY_ROOT, "src", "components", "settings")
 const CONFIG_DIALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
@@ -62,8 +63,28 @@ function bodyOf(selector: string): string {
 }
 
 describe("config panel sizing", () => {
-  test("config dialog keeps a stable minimum height", () => {
-    expect(bodyOf("#configDialog .dialog-form")).toMatch(/min-height\s*:/)
+  test("config dialog fills the shell in fullscreen mode", () => {
+    expect(CONFIG_DIALOG_TSX).toContain("fullscreen={true}")
+    expect(CONFIG_DIALOG_TSX).toContain("modal={false}")
+    expect(CONFIG_DIALOG_TSX).toContain("backdropClose={false}")
+    expect(CONFIG_DIALOG_TSX).toContain("draggable={false}")
+    const fullscreenDialog = bodyOfSource(DIALOG_CSS, ".dialog-fullscreen .dialog-form")
+    expect(fullscreenDialog).toMatch(/top:\s*0/)
+    expect(fullscreenDialog).toMatch(/left:\s*0/)
+    expect(fullscreenDialog).toMatch(/transform:\s*none/)
+    expect(fullscreenDialog).toMatch(/width:\s*100%/)
+    expect(fullscreenDialog).toMatch(/height:\s*100%/)
+    expect(fullscreenDialog).toMatch(/max-width:\s*none/)
+    expect(fullscreenDialog).toMatch(/max-height:\s*none/)
+    expect(fullscreenDialog).toMatch(/min-height:\s*0/)
+    expect(fullscreenDialog).toMatch(/overflow:\s*hidden/)
+    expect(fullscreenDialog).toMatch(/padding:\s*0/)
+    expect(fullscreenDialog).toMatch(/gap:\s*0/)
+    expect(fullscreenDialog).toMatch(/background:\s*var\(--dialog-bg\)/)
+    expect(fullscreenDialog).toMatch(/border:\s*0/)
+    expect(fullscreenDialog).toMatch(/border-radius:\s*0/)
+    expect(bodyOf("#configDialog.dialog-fullscreen .dialog-form")).toMatch(/min-height\s*:\s*0/)
+    expect(bodyOf("#configDialog.dialog-fullscreen .config-dialog-layout")).toMatch(/max-height\s*:\s*none/)
     expect(bodyOf(".config-dialog-layout")).toMatch(/flex\s*:\s*1 1 auto/)
     expect(bodyOf(".config-content")).toMatch(/min-height\s*:\s*0/)
   })
