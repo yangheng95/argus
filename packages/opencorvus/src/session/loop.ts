@@ -1834,6 +1834,9 @@ export namespace SessionLoop {
     ) {
       system.push(terminalToolSystemPrompt(terminalToolContract.toolName))
     }
+    if (isLastStep) {
+      system.push(MAX_STEPS)
+    }
 
     const memoryQuery = (lastUserMsg?.parts ?? [])
       .filter((part): part is Message.TextPart => part.type === "text")
@@ -1900,17 +1903,7 @@ export namespace SessionLoop {
       }
     }
 
-    const modelMessages = [
-      ...baseModelMessages,
-      ...(isLastStep
-        ? [
-            {
-              role: "assistant" as const,
-              content: MAX_STEPS,
-            },
-          ]
-        : []),
-    ]
+    const modelMessages = baseModelMessages
 
     const systemChars = system.reduce((sum, s) => sum + s.length, 0)
     const systemTokensEst = Math.round(systemChars / 4)

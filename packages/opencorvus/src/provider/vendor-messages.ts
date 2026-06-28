@@ -184,17 +184,17 @@ function stableBase36(value: string): string {
   return hash.toString(36)
 }
 
-const claudeDropToolResultAssistantTail: NormalizeMessages = (msgs) => {
+const claudeDropAssistantPrefillTail: NormalizeMessages = (msgs) => {
+  // Claude-like providers reject assistant prefill: the request must end in a
+  // user/tool turn, not a text-only assistant narration tail.
   const last = msgs[msgs.length - 1]
-  const previous = msgs[msgs.length - 2]
-  if (!last || !previous) return msgs
-  if (previous.role !== "tool" || last.role !== "assistant") return msgs
+  if (!last) return msgs
   if (!isTextOnlyAssistant(last)) return msgs
   return msgs.slice(0, -1)
 }
 
 const claudeNormalize: NormalizeMessages = (msgs, model) => {
-  return claudeDropToolResultAssistantTail(claudeSanitizeToolCallIds(msgs, model), model)
+  return claudeDropAssistantPrefillTail(claudeSanitizeToolCallIds(msgs, model), model)
 }
 
 function extractInlineThink(text: string) {
