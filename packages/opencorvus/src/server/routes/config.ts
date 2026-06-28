@@ -11,7 +11,7 @@ import { Agent } from "../../agent/agent"
 import { PromptProfile, PromptProfileCatalogSchema } from "@/agent/prompt-profile"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
-import { errors } from "../error"
+import { badRequestBody, errors } from "../error"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { testNetworkProxy } from "../../util/network-proxy-test"
@@ -102,14 +102,14 @@ export const ConfigRoutes = lazy(() =>
         // schema. RFC 7396 still allows `null` to signal deletion.
         if (partial.provider != null) {
           if (typeof partial.provider !== "object" || Array.isArray(partial.provider)) {
-            return c.json({ error: "config.provider must be a record of providerID -> ProviderConfig" }, 400)
+            return c.json(badRequestBody("config.provider must be a record of providerID -> ProviderConfig"), 400)
           }
           for (const [pid, value] of Object.entries(partial.provider as Record<string, unknown>)) {
             if (value === null) continue
             const parsed = Config.Provider.safeParse(value)
             if (!parsed.success) {
               const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ")
-              return c.json({ error: `config.provider.${pid}: ${issues}` }, 400)
+              return c.json(badRequestBody(`config.provider.${pid}: ${issues}`), 400)
             }
           }
         }
@@ -120,7 +120,7 @@ export const ConfigRoutes = lazy(() =>
           const issues = parsedPreview.error.issues
             .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
             .join("; ")
-          return c.json({ error: `config: ${issues}` }, 400)
+          return c.json(badRequestBody(`config: ${issues}`), 400)
         }
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)

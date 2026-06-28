@@ -108,9 +108,9 @@ describe("config prompt routes", () => {
         expect(architect?.prompt).toBe(architect?.editable_prompt)
         expect(requirements?.prompt).toBe(requirements?.editable_prompt)
         expect(frontendDesign?.prompt).toBe(frontendDesign?.editable_prompt)
-        expect(architect?.effective_prompt).toContain("verification tied to reference evidence")
-        expect(requirements?.effective_prompt).toContain("visual acceptance conditions")
-        expect(frontendDesign?.effective_prompt).toContain("source-backed replica contract")
+        expect(architect?.effective_prompt).toContain("Register at least two goals")
+        expect(requirements?.effective_prompt).toContain("You do NOT produce goals, acceptance_specs")
+        expect(frontendDesign?.effective_prompt).toContain("source-derived visual HTML skeleton")
         // Distinct defaults — the pre-fix bug made several agents collapse to
         // the same empty/inherits_core placeholder.
         expect(architect!.default_prompt).not.toBe(requirements!.default_prompt)
@@ -357,8 +357,14 @@ describe("config prompt routes", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = (await response.json()) as { error?: string }
-        expect(body.error).toContain("Unknown prompt profile")
+        const body = (await response.json()) as {
+          success: false
+          data: { message: string }
+          errors: Array<{ message: string }>
+        }
+        expect(body.success).toBe(false)
+        expect(body.data.message).toContain("Unknown prompt profile")
+        expect(body.errors[0]?.message).toBe(body.data.message)
         expect((await Config.get()).prompt_profile.active).toBe("frontend-replica")
       },
     })
