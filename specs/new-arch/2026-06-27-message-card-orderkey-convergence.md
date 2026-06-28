@@ -137,6 +137,12 @@ Runtime or structural issues repaired in this goal:
 21. Backend `conversationMessageHasDisplay()` and overlay
     `messagePartHasDisplayContent()` agree that control parts and empty
     reasoning shells such as `[]` are non-display content.
+22. Goal-phase messages are not repeated top-level timeline boundaries. The
+    visible top-level boundary is the owning goal step card, ordered by the
+    backend board `orderKey`. Internal build/planner phase messages update
+    that card in place and must not repeatedly split adjacent top-level agent
+    segments that visually remain adjacent after the step card has already
+    appeared.
 
 Adversarial review resolution:
 
@@ -171,6 +177,27 @@ Adversarial review resolution:
 
 Workers must not edit outside their assigned domains unless they first prove
 the extra file is a direct dependency of their issue.
+
+## 2026-06-29 Residual Build Split
+
+Runtime task `tsk_f0e5c0272001djBGw2eLvbkgkH` exposed a remaining split-card
+case after the rail/root repairs. The affected visible Build cards were not
+ordinary adjacent messages from one top-level Build session interrupted by a
+new top-level card. They were split because `regroupTimelineSegments()` scanned
+every persisted message, and each goal-phase Build message cleared the current
+adjacent segment even though those messages were absorbed inside an already
+rendered goal step card.
+
+The repair target is the projection layer:
+
+- Top-level ordinary messages still merge only when their segment key is
+  identical and no visible top-level boundary appears between them.
+- Goal phase internals no longer act as repeated boundaries.
+- The owning goal step card remains a real boundary at its backend board
+  `orderKey`, so a step that truly appears between two top-level messages still
+  prevents cross-boundary merging.
+- Renderer components, rail lookup, and card IDs remain downstream consumers;
+  they must not add a second aggregation policy.
 
 ## Acceptance
 
