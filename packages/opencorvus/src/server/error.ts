@@ -89,6 +89,14 @@ export function errors(...codes: number[]) {
   return Object.fromEntries(codes.map((code) => [code, ERRORS[code as keyof typeof ERRORS]]))
 }
 
+export function badRequestBody(message: string) {
+  return {
+    data: { message },
+    errors: [{ message }],
+    success: false as const,
+  }
+}
+
 /** Reply route's response set — same shape as `errors(...)` but
  *  substitutes REPLY_400_RESPONSE for the generic 400 entry so OpenAPI
  *  documents the actual NamedError union the route returns. */

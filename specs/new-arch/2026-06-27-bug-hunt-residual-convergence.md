@@ -1663,3 +1663,46 @@ Still open after this repair:
 - Prompt Profile directory-owned mutation reload/notice state.
 - Browser error collector opt-outs for screenshot-producing browser suites.
 - `tool.truncation.cleanup` global scheduler vs project runtime-root ownership mismatch.
+
+## Thirty-Seventh Round Repair And Verification
+
+Repaired in this round:
+
+- Project `PATCH /config` semantic 400 branches now return the documented shared `BadRequestError` body (`success: false`, `data.message`, and `errors[].message`) instead of a parallel plain `{ error }` shape.
+- `PATCH /session/:sessionID/config` now uses the same `BadRequestError` body for unknown prompt-profile rejection, matching its existing OpenAPI/SDK 400 declaration.
+- The shared server error module now exposes `badRequestBody()` as the single reusable constructor for runtime branches that intentionally return the generic `BadRequestError` schema.
+- Config route tests now assert the runtime 400 body shape for malformed provider records, malformed provider entries, deprecated provider model status, and unknown prompt profiles.
+- Session route coverage now asserts the unknown prompt-profile rejection body, not only the 400 status and no-write behavior.
+- While re-running `config-routes`, an existing prompt/test phrase drift was exposed. The config prompt test now pins stable native-agent prompt semantics that are present in both the current prompt text and the clean HEAD prompt text instead of an obsolete exact phrase.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/config-patch-provider.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts --timeout 120000`
+- `bun test packages/opencorvus/test/server/config-routes.test.ts --timeout 120000`
+- `bun test packages/opencorvus/test/server/mcp-routes.test.ts packages/opencorvus/test/server/mission-routes.test.ts --timeout 120000`
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "DB reset rejects projectDir input|DB reset rejects a mismatched database target" --timeout 60000`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run api:routes-check`
+- `bun run ./packages/opencorvus/script/docs/render-api-md.ts --check`
+- `git diff --check -- packages/opencorvus/src/server/error.ts packages/opencorvus/src/server/routes/config.ts packages/opencorvus/src/server/routes/session.ts packages/opencorvus/src/server/routes/mcp.ts packages/opencorvus/src/server/routes/global.ts packages/opencorvus/src/server/routes/mission.ts packages/opencorvus/test/server/config-patch-provider.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/session-routes.test.ts`
+
+Independent-agent findings received during this round:
+
+- Backend/API: request-origin rejection currently maps to 500 instead of 403; `HTTPException` branches in task/orchestrator routes can emit plain-text bodies while route contracts declare JSON errors; the session-config PATCH drift is covered by this round.
+- Overlay/GUI: overlay browser sidecar RPC timeout is fixed-duration instead of inactivity-based; route callback exceptions in the browser launch wrapper are swallowed by `route.continue()`; workspace command launchers can commit stale error/loading state after directory switch.
+- Scheduler/tooling: tool-output cleanup can delete fresh files around identifier timestamp wrap; wait-cron early activity and event scheduler subscriptions are instance-scoped and can miss worktree/session activity.
+
+Still open after this repair:
+
+- Global DB destructive active-session 409 response/body drift.
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- `tool.truncation.cleanup` global scheduler vs project runtime-root ownership mismatch.
+- Request-origin forbidden status mapping to 403.
+- Task/orchestrator `HTTPException` plain-text response contract drift.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Tool-output cleanup identifier timestamp wrap data-loss risk.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.

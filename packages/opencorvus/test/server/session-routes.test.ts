@@ -165,6 +165,11 @@ describe("session routes", () => {
           body: JSON.stringify({ prompt_profile: { active: "missing-profile" } }),
         })
         expect(rejected.status).toBe(400)
+        await expect(rejected.json()).resolves.toMatchObject({
+          success: false,
+          data: { message: expect.stringContaining("Unknown prompt profile") },
+          errors: [{ message: expect.stringContaining("Unknown prompt profile") }],
+        })
         expect((await Session.get(session.id)).metadata?.configOverlay).toMatchObject({
           prompt_profile: { active: "frontend-automation-debug" },
         })

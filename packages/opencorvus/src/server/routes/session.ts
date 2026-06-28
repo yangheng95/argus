@@ -22,7 +22,7 @@ import { EngineService } from "@/task-api"
 import { Snapshot } from "@/snapshot"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Log } from "../../util/log"
-import { errors } from "../error"
+import { badRequestBody, errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
 import { enrichStandaloneSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
@@ -330,7 +330,7 @@ export const SessionRoutes = lazy(() =>
           try {
             PromptProfile.assertKnownProfileID(patch.prompt_profile.active, await EffectiveConfig.base({ sessionID }))
           } catch (error) {
-            return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+            return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
           }
         }
         await Session.mergeConfigOverlayInProject({ sessionID, projectID, patch })

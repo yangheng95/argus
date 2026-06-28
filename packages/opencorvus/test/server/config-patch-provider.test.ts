@@ -5,6 +5,12 @@ import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+type BadRequestBody = {
+  success: false
+  data: { message: string }
+  errors: Array<{ message: string }>
+}
+
 // What this pins
 // ----------------
 // PATCH /config used to validate only the top-level shape (record of
@@ -67,8 +73,10 @@ describe("config PATCH provider sub-shape validation", () => {
       fn: async () => {
         const res = await patch(tmp.path, { provider: "this-is-not-an-object" })
         expect(res.status).toBe(400)
-        const body = (await res.json()) as { error: string }
-        expect(body.error).toMatch(/must be a record/i)
+        const body = (await res.json()) as BadRequestBody
+        expect(body.success).toBe(false)
+        expect(body.data.message).toMatch(/must be a record/i)
+        expect(body.errors[0]?.message).toBe(body.data.message)
       },
     })
   })
@@ -86,9 +94,11 @@ describe("config PATCH provider sub-shape validation", () => {
           },
         })
         expect(res.status).toBe(400)
-        const body = (await res.json()) as { error: string }
-        expect(body.error).toContain("config.provider.broken")
-        expect(body.error).toContain("name")
+        const body = (await res.json()) as BadRequestBody
+        expect(body.success).toBe(false)
+        expect(body.data.message).toContain("config.provider.broken")
+        expect(body.data.message).toContain("name")
+        expect(body.errors[0]?.message).toBe(body.data.message)
       },
     })
   })
@@ -113,9 +123,11 @@ describe("config PATCH provider sub-shape validation", () => {
           },
         })
         expect(res.status).toBe(400)
-        const body = (await res.json()) as { error: string }
-        expect(body.error).toContain("config.provider.broken")
-        expect(body.error).toContain("models.retired.status")
+        const body = (await res.json()) as BadRequestBody
+        expect(body.success).toBe(false)
+        expect(body.data.message).toContain("config.provider.broken")
+        expect(body.data.message).toContain("models.retired.status")
+        expect(body.errors[0]?.message).toBe(body.data.message)
       },
     })
   })
