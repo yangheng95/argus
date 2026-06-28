@@ -23,7 +23,7 @@ function namedErrorUnionSchema(first: string, ...rest: string[]) {
   return resolver(z.union([branch(first), ...rest.map(branch)]))
 }
 
-/** Reply route 400 — three NamedError subclasses can land here. The
+/** Reply route 400 — direct-reply NamedError subclasses can land here. The
  *  generic ERRORS[400] (BadRequestError) only describes the hono
  *  validator shape, which never reaches the reply route's 400s; using
  *  it would be a lie in OpenAPI. codex review 2026-05-26 — minor. */
@@ -35,6 +35,7 @@ const REPLY_400_RESPONSE = {
         "InvalidReplyTargetKindError",
         "BuildSessionDirectReplyError",
         "MissingModelConfigError",
+        "AgentSessionAttachmentReferenceError",
       ),
     },
   },
@@ -71,7 +72,11 @@ export const ERRORS = {
     description: "Conflict",
     content: {
       "application/json": {
-        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError", "TaskCancellationIncompleteError"),
+        schema: namedErrorUnionSchema(
+          "ReplyTargetEnvelopeMissingError",
+          "AgentSessionPendingCoordinationError",
+          "TaskCancellationIncompleteError",
+        ),
       },
     },
   },
@@ -80,6 +85,14 @@ export const ERRORS = {
     content: {
       "application/json": {
         schema: namedErrorSchema("SessionRuntimeContractMissingError"),
+      },
+    },
+  },
+  500: {
+    description: "Internal server error",
+    content: {
+      "application/json": {
+        schema: namedErrorSchema("UnknownError"),
       },
     },
   },
@@ -96,6 +109,22 @@ export function badRequestBody(message: string) {
     success: false as const,
   }
 }
+
+export function namedErrorResponse(description: string, first: string, ...rest: string[]) {
+  return {
+    description,
+    content: {
+      "application/json": {
+        schema: namedErrorUnionSchema(first, ...rest),
+      },
+    },
+  }
+}
+
+export const ActiveExecutorSessionsResponse = namedErrorResponse(
+  "Active executor sessions prevent this operation",
+  "ActiveExecutorSessionsError",
+)
 
 /** Reply route's response set — same shape as `errors(...)` but
  *  substitutes REPLY_400_RESPONSE for the generic 400 entry so OpenAPI

@@ -13,9 +13,9 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
-import { errors } from "../error"
+import { ActiveExecutorSessionsResponse, errors } from "../error"
+import { canRestartServer, startServerRestart } from "../restart"
 import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
-import path from "node:path"
 import {
   MysqlTransferFullExport,
   MysqlTransferImportResult,
@@ -27,6 +27,12 @@ import {
 } from "@/storage/mysql-transfer"
 
 const log = Log.create({ service: "server" })
+
+const DatabaseResetRequest = z
+  .object({
+    database: z.string().trim().min(1),
+  })
+  .strict()
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -48,7 +54,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Get health",
         description:
-          "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.",
+          "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is the current SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.",
         operationId: "global.health",
         responses: {
           200: {
@@ -241,12 +247,13 @@ export const GlobalRoutes = lazy(() =>
               },
             },
           },
+          409: ActiveExecutorSessionsResponse,
         },
       }),
       async (c) => {
-        const { hasActiveSessions } = await import("@/engine/runtime")
-        if (hasActiveSessions()) {
-          return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
+        const { activeExecutorSessionsError, hasAnyActiveSessions } = await import("@/engine/runtime")
+        if (hasAnyActiveSessions()) {
+          throw activeExecutorSessionsError("global.dispose")
         }
         await closeBrowserPreviewLiveSessions()
         await Instance.disposeAll()
@@ -265,7 +272,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Reset database",
         description:
-          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify a registered absolute projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+          "DESTRUCTIVE. The caller must send the current DB path reported by /global/health. The server verifies that it exactly matches Database.Path(), refuses active executor sessions, disposes all in-memory Instance handles, closes SQLite, deletes the current DB file with WAL/SHM, then spawns a replacement server process so schema is rebuilt from DDL on startup. The route does not read SQLite state before deletion, so it remains usable when schema drift or DB corruption requires an explicit file reset.",
         operationId: "global.db.reset",
         responses: {
           200: {
@@ -275,6 +282,7 @@ export const GlobalRoutes = lazy(() =>
                 schema: resolver(
                   z.object({
                     ok: z.boolean(),
+                    restarting: z.boolean(),
                     targets: z.array(
                       z.object({
                         label: z.string(),
@@ -288,36 +296,69 @@ export const GlobalRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 409),
+          500: {
+            description: "Database file deletion failed",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.literal(false),
+                    restarting: z.literal(false),
+                    targets: z.array(
+                      z.object({
+                        label: z.string(),
+                        path: z.string(),
+                        ok: z.boolean(),
+                        error: z.string().optional(),
+                      }),
+                    ),
+                  }),
+                ),
+              },
+            },
+          },
+          503: {
+            description: "Server restart handler is not registered",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.literal(false),
+                    error: z.string(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+          409: ActiveExecutorSessionsResponse,
         },
       }),
-      validator(
-        "json",
-        z.object({
-          projectDir: z
-            .string()
-            .trim()
-            .min(1)
-            .refine((value) => path.isAbsolute(value), "projectDir must be an absolute filesystem path")
-            .describe(
-              "Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.",
-            ),
-        }),
-      ),
+      validator("json", DatabaseResetRequest),
       async (c) => {
-        const { projectDir } = c.req.valid("json")
-        const registered = Project.findByRegisteredDirectory(projectDir)
-        if (!registered) {
-          return c.json(badRequest(`projectDir must reference a registered project directory: ${projectDir}`), 400)
+        const { database } = c.req.valid("json")
+        const currentDatabase = Database.Path()
+        if (database !== currentDatabase) {
+          return c.json(
+            badRequest(`DB reset target must match current Database.Path(): expected ${currentDatabase}`),
+            400,
+          )
         }
-        const { hasActiveSessions } = await import("@/engine/runtime")
-        if (hasActiveSessions()) {
-          return c.json({ error: "Active executor sessions exist, refusing DB reset" }, 409)
+        if (!canRestartServer()) {
+          log.warn("db reset requested without registered restart handler")
+          return c.json({ ok: false, error: "Server restart handler is not registered; refusing DB reset" }, 503)
+        }
+        const { activeExecutorSessionsError, hasAnyActiveSessions } = await import("@/engine/runtime")
+        if (Database.hasOpenConnection() && hasAnyActiveSessions()) {
+          throw activeExecutorSessionsError("global.db.reset")
         }
         await Instance.disposeAll()
-        const targets = await Database.reset(registered.directory)
-        log.warn("db reset via /global/db/reset", { projectDir: registered.directory, targets })
-        return c.json({ ok: targets.every((t) => t.ok), targets })
+        const targets = await Database.resetFiles(database)
+        const ok = targets.every((t) => t.ok)
+        log.warn("db reset via /global/db/reset", { database, targets, restarting: ok })
+        if (!ok) return c.json({ ok: false, restarting: false, targets }, 500)
+        startServerRestart("server.restart")
+        return c.json({ ok: true, restarting: true, targets })
       },
     )
     .get(
@@ -376,14 +417,15 @@ export const GlobalRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 409),
+          ...errors(400),
+          409: ActiveExecutorSessionsResponse,
         },
       }),
       validator("json", z.object({ snapshot: MysqlTransferSnapshot })),
       async (c) => {
-        const { hasActiveSessions } = await import("@/engine/runtime")
-        if (hasActiveSessions()) {
-          return c.json({ error: "Active executor sessions exist, refusing DB import" }, 409)
+        const { activeExecutorSessionsError, hasAnyActiveSessions } = await import("@/engine/runtime")
+        if (hasAnyActiveSessions()) {
+          throw activeExecutorSessionsError("global.db.mysql.import")
         }
         await Instance.disposeAll()
         const { snapshot } = c.req.valid("json")

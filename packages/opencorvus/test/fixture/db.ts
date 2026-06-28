@@ -17,12 +17,34 @@ function assertTestDatabasePath(dbPath: string) {
   )
 }
 
+function isBusyRemovalError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "EBUSY" || error.code === "EPERM")
+  )
+}
+
+async function removeDatabaseFile(file: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rm(file, { force: true })
+      return
+    } catch (error) {
+      if (!isBusyRemovalError(error) || attempt >= 99) throw error
+      Bun.gc(true)
+      await Bun.sleep(100)
+    }
+  }
+}
+
 export async function resetDatabase() {
   await Instance.disposeAll().catch(() => undefined)
   Database.close()
   const dbPath = Database.Path()
   assertTestDatabasePath(dbPath)
-  await rm(dbPath, { force: true }).catch(() => undefined)
-  await rm(`${dbPath}-wal`, { force: true }).catch(() => undefined)
-  await rm(`${dbPath}-shm`, { force: true }).catch(() => undefined)
+  await removeDatabaseFile(dbPath)
+  await removeDatabaseFile(`${dbPath}-wal`)
+  await removeDatabaseFile(`${dbPath}-shm`)
 }

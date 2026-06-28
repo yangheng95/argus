@@ -171,7 +171,7 @@ function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
 }
 
 export namespace Database {
-  // SQLite state is global and single-source: `<Global.Path.data>/opencorvus.db`.
+  // SQLite state is process-wide and single-source: `<Global.Path.data>/opencorvus.db`.
   // Project-scoped routing (`Instance.directory`) selects which project rows
   // a request operates on; it does NOT select a different SQLite file.
   //
@@ -215,31 +215,24 @@ export namespace Database {
     Client.reset()
   }
 
-  // Atomic on-disk wipe shared by `opencorvus db reset` CLI and the
-  // /global/db/reset HTTP backdoor. The SQLite file itself is global
-  // (`Database.Path()`); caller still MUST pass the project directory
-  // explicitly so project-scoped scratch under `<projectDir>/.opencorvus/`
-  // can be removed alongside the shared DB.
-  export async function reset(
-    projectDir: string,
-  ): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
-    const normalizedProjectDir = projectDir.trim()
-    if (!path.isAbsolute(normalizedProjectDir)) {
-      throw new Error(`Database.reset projectDir must be an absolute path: ${projectDir}`)
-    }
-    close()
-    const dbPath = Path()
-    const targets: Array<{ label: string; path: string }> = [
+  export function hasOpenConnection() {
+    return !!state.sqlite
+  }
+
+  export type ResetTarget = { label: string; path: string; ok: boolean; error?: string }
+  type ResetTargetInput = { label: string; path: string }
+
+  function databaseFileTargets(databasePath = Path()): ResetTargetInput[] {
+    const dbPath = databasePath
+    return [
       { label: "db", path: dbPath },
       { label: "db-wal", path: `${dbPath}-wal` },
       { label: "db-shm", path: `${dbPath}-shm` },
-      { label: "runtime", path: ProjectRuntimePaths.projectRuntimeRoot(normalizedProjectDir) },
-      ...ProjectRuntimePaths.legacyRuntimeRelativePaths.map((relative) => ({
-        label: `legacy:${relative}`,
-        path: path.join(normalizedProjectDir, ...relative.split("/")),
-      })),
     ]
-    const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []
+  }
+
+  async function removeTargets(targets: ResetTargetInput[]): Promise<ResetTarget[]> {
+    const results: ResetTarget[] = []
     for (const target of targets) {
       try {
         await rm(target.path, { recursive: true, force: true })
@@ -249,6 +242,44 @@ export namespace Database {
       }
     }
     return results
+  }
+
+  // Overlay DB reset is a file deletion operation for the current runtime
+  // SQLite path reported by /global/health. It must not read SQLite state
+  // first, because schema drift or a corrupt DB file is the primary reason the
+  // user needs this action.
+  export async function resetFiles(databasePath: string): Promise<ResetTarget[]> {
+    const normalizedDatabasePath = databasePath.trim()
+    if (!path.isAbsolute(normalizedDatabasePath)) {
+      throw new Error(`Database.resetFiles databasePath must be an absolute path: ${databasePath}`)
+    }
+    const currentDatabasePath = Path()
+    if (normalizedDatabasePath !== currentDatabasePath) {
+      throw new Error(`Database.resetFiles databasePath must match Database.Path(): expected ${currentDatabasePath}`)
+    }
+    close()
+    return removeTargets(databaseFileTargets(normalizedDatabasePath))
+  }
+
+  // Atomic on-disk wipe used by `opencorvus db reset` CLI. The SQLite file
+  // itself is global (`Database.Path()`); caller still MUST pass the project
+  // directory explicitly so project-scoped scratch under
+  // `<projectDir>/.opencorvus/` can be removed alongside the shared DB.
+  export async function reset(projectDir: string): Promise<ResetTarget[]> {
+    const normalizedProjectDir = projectDir.trim()
+    if (!path.isAbsolute(normalizedProjectDir)) {
+      throw new Error(`Database.reset projectDir must be an absolute path: ${projectDir}`)
+    }
+    close()
+    const targets: ResetTargetInput[] = [
+      ...databaseFileTargets(),
+      { label: "runtime", path: ProjectRuntimePaths.projectRuntimeRoot(normalizedProjectDir) },
+      ...ProjectRuntimePaths.legacyRuntimeRelativePaths.map((relative) => ({
+        label: `legacy:${relative}`,
+        path: path.join(normalizedProjectDir, ...relative.split("/")),
+      })),
+    ]
+    return removeTargets(targets)
   }
 
   export function rebuildSqlite(callback: (sqlite: BunDatabase) => void) {

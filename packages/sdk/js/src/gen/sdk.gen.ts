@@ -15,14 +15,23 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  BrowserPreviewCaptureTaskTargetErrors,
   BrowserPreviewCaptureTaskTargetResponses,
+  BrowserPreviewCompareTaskTargetRegionsErrors,
   BrowserPreviewCompareTaskTargetRegionsResponses,
+  BrowserPreviewLiveInputErrors,
   BrowserPreviewLiveInputResponses,
+  BrowserPreviewLiveSnapshotErrors,
   BrowserPreviewLiveSnapshotResponses,
+  BrowserPreviewReadTaskEvidenceArtifactErrors,
   BrowserPreviewReadTaskEvidenceArtifactResponses,
+  BrowserPreviewReadTaskEvidenceCaptureErrors,
   BrowserPreviewReadTaskEvidenceCaptureResponses,
+  BrowserPreviewReadTaskEvidenceErrors,
   BrowserPreviewReadTaskEvidenceResponses,
+  BrowserPreviewSelectTaskTargetErrors,
   BrowserPreviewSelectTaskTargetResponses,
+  BrowserPreviewTaskTargetErrors,
   BrowserPreviewTaskTargetResponses,
   ChannelAttachmentCreateErrors,
   ChannelAttachmentCreateResponses,
@@ -32,16 +41,24 @@ import type {
   ChannelMessageResponses,
   ChannelRuntimeResponses,
   ChannelRuntimeRestartResponses,
+  CodingCliOpenErrors,
   CodingCliOpenResponses,
+  CodingCliProfilesErrors,
   CodingCliProfilesResponses,
   CodingSessionAbortErrors,
   CodingSessionAbortResponses,
   CodingSessionCreateResponses,
+  CodingSessionDeleteErrors,
   CodingSessionDeleteResponses,
+  CodingSessionGetErrors,
   CodingSessionGetResponses,
+  CodingSessionSelectionUpdateErrors,
   CodingSessionSelectionUpdateResponses,
+  CodingSessionsListErrors,
   CodingSessionsListResponses,
+  CodingSessionUpdateErrors,
   CodingSessionUpdateResponses,
+  CommandListErrors,
   CommandListResponses,
   Config as Config4,
   ConfigGetResponses,
@@ -59,12 +76,19 @@ import type {
   ExecutorListResponses,
   ExecutorSetModelErrors,
   ExecutorSetModelResponses,
+  ExperimentalEventscheduleCreateErrors,
   ExperimentalEventscheduleCreateResponses,
+  ExperimentalEventscheduleDeleteErrors,
   ExperimentalEventscheduleDeleteResponses,
+  ExperimentalEventscheduleListErrors,
   ExperimentalEventscheduleListResponses,
+  ExperimentalResourceListErrors,
   ExperimentalResourceListResponses,
+  ExperimentalScheduleCreateErrors,
   ExperimentalScheduleCreateResponses,
+  ExperimentalScheduleDeleteErrors,
   ExperimentalScheduleDeleteResponses,
+  ExperimentalScheduleListErrors,
   ExperimentalScheduleListResponses,
   ExperimentalScratchpadGetErrors,
   ExperimentalScratchpadGetResponses,
@@ -77,15 +101,26 @@ import type {
   ExperimentalWorkspaceRemoveResponses,
   ExportSessionErrors,
   ExportSessionResponses,
+  FileCreateErrors,
+  FileCreateResponses,
+  FileDeleteErrors,
+  FileDeleteResponses,
   FileListResponses,
+  FileMoveErrors,
+  FileMoveResponses,
   FilePartInput,
   FilePartSource,
+  FileReadErrors,
   FileReadResponses,
   FileStatusResponses,
+  FileUploadErrors,
   FileUploadResponses,
+  FileWriteErrors,
   FileWriteResponses,
+  FindFilesErrors,
   FindFilesResponses,
   FindSymbolsResponses,
+  FindTextErrors,
   FindTextResponses,
   FormatterStatusResponses,
   GatewayCapabilitiesResponses,
@@ -102,6 +137,7 @@ import type {
   GlobalDbMysqlSchemaResponses,
   GlobalDbResetErrors,
   GlobalDbResetResponses,
+  GlobalDisposeErrors,
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
@@ -113,6 +149,7 @@ import type {
   GoalRunAcceptanceResponses,
   GoalUpdateErrors,
   GoalUpdateResponses,
+  InstanceDisposeErrors,
   InstanceDisposeResponses,
   InteractionRejectErrors,
   InteractionRejectResponses,
@@ -134,24 +171,32 @@ import type {
   McpAuthRemoveResponses,
   McpAuthStartErrors,
   McpAuthStartResponses,
+  McpConnectErrors,
   McpConnectResponses,
+  McpDisconnectErrors,
   McpDisconnectResponses,
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
   MissionAbortErrors,
   MissionAbortResponses,
+  MissionDeleteErrors,
   MissionDeleteResponses,
   MissionListResponses,
   MissionProjectArchiveErrors,
   MissionProjectArchiveResponses,
+  MissionRenameErrors,
   MissionRenameResponses,
+  MissionStatusErrors,
   MissionStatusResponses,
+  MissionWakeErrors,
   MissionWakeResponses,
   NetworkProxyTestRequest,
   OutputFormat,
   PanelCapabilitiesResponses,
+  PanelKnowledgeMemoryDeleteErrors,
   PanelKnowledgeMemoryDeleteResponses,
+  PanelKnowledgeMemoryGetErrors,
   PanelKnowledgeMemoryGetResponses,
   PanelKnowledgeMemoryListResponses,
   PanelKnowledgeMemorySearchResponses,
@@ -232,7 +277,9 @@ import type {
   RunEvaluationsResponses,
   RunGetErrors,
   RunGetResponses,
+  ServerRestartErrors,
   ServerRestartResponses,
+  ServerShutdownErrors,
   ServerShutdownResponses,
   SessionAbortErrors,
   SessionAbortResponses,
@@ -259,6 +306,7 @@ import type {
   SessionGetResponses,
   SessionInitErrors,
   SessionInitResponses,
+  SessionListGlobalErrors,
   SessionListGlobalResponses,
   SessionListResponses,
   SessionMessageErrors,
@@ -499,7 +547,7 @@ export class Current extends HeyApiClient {
    * Rename the currently active project record. The source directory on disk is not renamed.
    */
   public update<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       name: string
     },
@@ -728,7 +776,7 @@ export class Terminal extends HeyApiClient {
    * Open the active project directory in the operating system terminal application.
    */
   public open<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       cwd: string
       profileID?: string
@@ -935,7 +983,7 @@ export class Attachment extends HeyApiClient {
    * Store a temporary attachment and return a signed public URL for channels that require remote image URLs.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       filename: string
       mime: string
@@ -1043,7 +1091,7 @@ export class Channel extends HeyApiClient {
    * Bridge an external channel message into the task board and panel control workflow.
    */
   public message<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       platform:
         | "slack"
@@ -1530,7 +1578,11 @@ export class Schedule extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalScheduleListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      ExperimentalScheduleListResponses,
+      ExperimentalScheduleListErrors,
+      ThrowOnError
+    >({
       url: "/experimental/schedule",
       ...options,
       ...params,
@@ -1541,7 +1593,7 @@ export class Schedule extends HeyApiClient {
    * Create scheduled task
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       name: string
       expression: string
@@ -1566,7 +1618,11 @@ export class Schedule extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<ExperimentalScheduleCreateResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<
+      ExperimentalScheduleCreateResponses,
+      ExperimentalScheduleCreateErrors,
+      ThrowOnError
+    >({
       url: "/experimental/schedule",
       ...options,
       ...params,
@@ -1599,7 +1655,11 @@ export class Schedule extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).delete<ExperimentalScheduleDeleteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).delete<
+      ExperimentalScheduleDeleteResponses,
+      ExperimentalScheduleDeleteErrors,
+      ThrowOnError
+    >({
       url: "/experimental/schedule/{id}",
       ...options,
       ...params,
@@ -1618,7 +1678,11 @@ export class Eventschedule extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalEventscheduleListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      ExperimentalEventscheduleListResponses,
+      ExperimentalEventscheduleListErrors,
+      ThrowOnError
+    >({
       url: "/experimental/event-schedule",
       ...options,
       ...params,
@@ -1629,7 +1693,7 @@ export class Eventschedule extends HeyApiClient {
    * Create event-triggered task
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       name: string
       eventType: string
@@ -1660,7 +1724,11 @@ export class Eventschedule extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<ExperimentalEventscheduleCreateResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<
+      ExperimentalEventscheduleCreateResponses,
+      ExperimentalEventscheduleCreateErrors,
+      ThrowOnError
+    >({
       url: "/experimental/event-schedule",
       ...options,
       ...params,
@@ -1693,7 +1761,11 @@ export class Eventschedule extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).delete<ExperimentalEventscheduleDeleteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).delete<
+      ExperimentalEventscheduleDeleteResponses,
+      ExperimentalEventscheduleDeleteErrors,
+      ThrowOnError
+    >({
       url: "/experimental/event-schedule/{id}",
       ...options,
       ...params,
@@ -1782,7 +1854,11 @@ export class Resource extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalResourceListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      ExperimentalResourceListResponses,
+      ExperimentalResourceListErrors,
+      ThrowOnError
+    >({
       url: "/experimental/resource",
       ...options,
       ...params,
@@ -1957,7 +2033,7 @@ export class Session extends HeyApiClient {
    * Create a new OpenCorvus session for interacting with AI assistants and managing conversations.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       kind:
         | "root"
@@ -2022,14 +2098,15 @@ export class Session extends HeyApiClient {
   /**
    * List sessions across projects
    *
-   * List sessions across all projects with cursor-based pagination and optional archived inclusion. Sets x-next-cursor response header when more results are available.
+   * List sessions across all projects with compound cursor-based pagination and optional archived inclusion. Sets x-next-cursor-updated and x-next-cursor-session-id response headers when more results are available.
    */
   public listGlobal<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       roots?: boolean
       start?: number
-      cursor?: number
+      cursorUpdated?: number
+      cursorSessionID?: string
       search?: string
       limit?: number
       archived?: boolean
@@ -2044,7 +2121,8 @@ export class Session extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "query", key: "roots" },
             { in: "query", key: "start" },
-            { in: "query", key: "cursor" },
+            { in: "query", key: "cursorUpdated" },
+            { in: "query", key: "cursorSessionID" },
             { in: "query", key: "search" },
             { in: "query", key: "limit" },
             { in: "query", key: "archived" },
@@ -2052,7 +2130,7 @@ export class Session extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<SessionListGlobalResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<SessionListGlobalResponses, SessionListGlobalErrors, ThrowOnError>({
       url: "/session/global",
       ...options,
       ...params,
@@ -2672,7 +2750,7 @@ export class Session extends HeyApiClient {
       extra?: {
         [key: string]: unknown
       }
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2763,6 +2841,7 @@ export class Session extends HeyApiClient {
       variant?: string
       parts?: Array<{
         id?: string
+        orderKey?: string
         type: "file"
         mime: string
         filename?: string
@@ -3150,7 +3229,7 @@ export class Discover extends HeyApiClient {
    * Fetches the explicit OpenAI-compatible /models endpoint for a user-supplied base URL. This route only runs when requested by the operator; provider startup remains offline-first.
    */
   public models<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       api: string
       apiKey?: string
@@ -3508,7 +3587,7 @@ export class App extends HeyApiClient {
    * Write a log entry to the server logs with specified level and metadata.
    */
   public log<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       service: string
       level: "debug" | "info" | "error" | "warn"
       message: string
@@ -3602,7 +3681,7 @@ export class Skill extends HeyApiClient {
    * Persist an explicit agent-skill mount in project or session scope.
    */
   public mount<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       agent: string
       skill: string
@@ -3641,7 +3720,7 @@ export class Skill extends HeyApiClient {
    * Remove an explicit agent-skill mount in project or session scope.
    */
   public unmount<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       agent: string
       skill: string
@@ -3680,7 +3759,7 @@ export class Skill extends HeyApiClient {
    * Write a dropped skill source into the project skill pool and mount the resolved skill name.
    */
   public importAndMount<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       agent: string
       sessionID?: string
@@ -3787,7 +3866,7 @@ export class Skill extends HeyApiClient {
    * Install a skill source from a local path, remote URL, or git repository into the global skill config.
    */
   public install<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       kind: "path" | "url" | "git"
       value: string
@@ -3875,7 +3954,7 @@ export class Skill extends HeyApiClient {
    * Remove a configured skill source from global config and delete managed installs when applicable.
    */
   public remove<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       source: string
       kind?: "path" | "url" | "git"
@@ -3912,7 +3991,7 @@ export class Skill extends HeyApiClient {
    * Set the global allow, ask, or deny policy for a named skill.
    */
   public policy<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       name: string
       action: PermissionAction
@@ -3951,7 +4030,7 @@ export class Message extends HeyApiClient {
    * Route a desktop panel message through the control message service, streaming deltas via SSE.
    */
   public stream<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       surface:
         | "panel"
@@ -4081,7 +4160,11 @@ export class Memory extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).delete<PanelKnowledgeMemoryDeleteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).delete<
+      PanelKnowledgeMemoryDeleteResponses,
+      PanelKnowledgeMemoryDeleteErrors,
+      ThrowOnError
+    >({
       url: "/panel/knowledge/memory/{id}",
       ...options,
       ...params,
@@ -4109,7 +4192,11 @@ export class Memory extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<PanelKnowledgeMemoryGetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      PanelKnowledgeMemoryGetResponses,
+      PanelKnowledgeMemoryGetErrors,
+      ThrowOnError
+    >({
       url: "/panel/knowledge/memory/{id}",
       ...options,
       ...params,
@@ -4120,7 +4207,7 @@ export class Memory extends HeyApiClient {
    * Search memories
    */
   public search<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       query: string
       sessionID?: string
@@ -4217,7 +4304,7 @@ export class Panel extends HeyApiClient {
    * Route a desktop panel chat or button intent through the control message service.
    */
   public message<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       surface:
         | "panel"
@@ -4370,7 +4457,7 @@ export class Cli extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<CodingCliProfilesResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<CodingCliProfilesResponses, CodingCliProfilesErrors, ThrowOnError>({
       url: "/coding/cli/profiles",
       ...options,
       ...params,
@@ -4383,7 +4470,7 @@ export class Cli extends HeyApiClient {
    * Open an installed coding CLI in the operating system terminal application.
    */
   public open<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       cliID: string
       terminalProfileID: string
@@ -4404,7 +4491,7 @@ export class Cli extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<CodingCliOpenResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<CodingCliOpenResponses, CodingCliOpenErrors, ThrowOnError>({
       url: "/coding/cli/open",
       ...options,
       ...params,
@@ -4443,7 +4530,11 @@ export class Selection extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).patch<CodingSessionSelectionUpdateResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).patch<
+      CodingSessionSelectionUpdateResponses,
+      CodingSessionSelectionUpdateErrors,
+      ThrowOnError
+    >({
       url: "/coding/session/{sessionID}/selection",
       ...options,
       ...params,
@@ -4499,7 +4590,11 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).delete<CodingSessionDeleteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).delete<
+      CodingSessionDeleteResponses,
+      CodingSessionDeleteErrors,
+      ThrowOnError
+    >({
       url: "/coding/session/{sessionID}",
       ...options,
       ...params,
@@ -4529,7 +4624,7 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<CodingSessionGetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<CodingSessionGetResponses, CodingSessionGetErrors, ThrowOnError>({
       url: "/coding/session/{sessionID}",
       ...options,
       ...params,
@@ -4561,7 +4656,11 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).patch<CodingSessionUpdateResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).patch<
+      CodingSessionUpdateResponses,
+      CodingSessionUpdateErrors,
+      ThrowOnError
+    >({
       url: "/coding/session/{sessionID}",
       ...options,
       ...params,
@@ -4639,7 +4738,7 @@ export class Sessions extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<CodingSessionsListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<CodingSessionsListResponses, CodingSessionsListErrors, ThrowOnError>({
       url: "/coding/sessions",
       ...options,
       ...params,
@@ -4671,7 +4770,7 @@ export class Control2 extends HeyApiClient {
    * Route a remote/mobile natural-language control message through the shared control plane.
    */
   public message<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       text: string
       taskID?: string
@@ -5587,7 +5686,7 @@ export class Mission extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<MissionStatusResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<MissionStatusResponses, MissionStatusErrors, ThrowOnError>({
       url: "/mission/{missionID}/status",
       ...options,
       ...params,
@@ -5653,7 +5752,7 @@ export class Mission extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).patch<MissionRenameResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).patch<MissionRenameResponses, MissionRenameErrors, ThrowOnError>({
       url: "/mission/{missionID}/title",
       ...options,
       ...params,
@@ -5718,7 +5817,7 @@ export class Mission extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).delete<MissionDeleteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).delete<MissionDeleteResponses, MissionDeleteErrors, ThrowOnError>({
       url: "/mission/{missionID}",
       ...options,
       ...params,
@@ -5731,7 +5830,7 @@ export class Mission extends HeyApiClient {
    * Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, directory, missionID) — exactly one mission session is keyed per mission.
    */
   public wake<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       missionID?: string
       text: string
@@ -5756,7 +5855,7 @@ export class Mission extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<MissionWakeResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<MissionWakeResponses, MissionWakeErrors, ThrowOnError>({
       url: "/mission/wake",
       ...options,
       ...params,
@@ -5830,7 +5929,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<BrowserPreviewTaskTargetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      BrowserPreviewTaskTargetResponses,
+      BrowserPreviewTaskTargetErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview",
       ...options,
       ...params,
@@ -5862,7 +5965,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<BrowserPreviewReadTaskEvidenceResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      BrowserPreviewReadTaskEvidenceResponses,
+      BrowserPreviewReadTaskEvidenceErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/evidence/{evidenceID}",
       ...options,
       ...params,
@@ -5894,7 +6001,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<BrowserPreviewReadTaskEvidenceCaptureResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<
+      BrowserPreviewReadTaskEvidenceCaptureResponses,
+      BrowserPreviewReadTaskEvidenceCaptureErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png",
       ...options,
       ...params,
@@ -5928,13 +6039,15 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<BrowserPreviewReadTaskEvidenceArtifactResponses, unknown, ThrowOnError>(
-      {
-        url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}",
-        ...options,
-        ...params,
-      },
-    )
+    return (options?.client ?? this.client).get<
+      BrowserPreviewReadTaskEvidenceArtifactResponses,
+      BrowserPreviewReadTaskEvidenceArtifactErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}",
+      ...options,
+      ...params,
+    })
   }
 
   /**
@@ -5962,7 +6075,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).put<BrowserPreviewSelectTaskTargetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<
+      BrowserPreviewSelectTaskTargetResponses,
+      BrowserPreviewSelectTaskTargetErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/target",
       ...options,
       ...params,
@@ -6001,7 +6118,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<BrowserPreviewCaptureTaskTargetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<
+      BrowserPreviewCaptureTaskTargetResponses,
+      BrowserPreviewCaptureTaskTargetErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/capture",
       ...options,
       ...params,
@@ -6091,7 +6212,7 @@ export class BrowserPreview extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<
       BrowserPreviewCompareTaskTargetRegionsResponses,
-      unknown,
+      BrowserPreviewCompareTaskTargetRegionsErrors,
       ThrowOnError
     >({
       url: "/task/{taskID}/browser-preview/compare",
@@ -6132,7 +6253,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<BrowserPreviewLiveSnapshotResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<
+      BrowserPreviewLiveSnapshotResponses,
+      BrowserPreviewLiveSnapshotErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/live/snapshot",
       ...options,
       ...params,
@@ -6191,7 +6316,11 @@ export class BrowserPreview extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<BrowserPreviewLiveInputResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<
+      BrowserPreviewLiveInputResponses,
+      BrowserPreviewLiveInputErrors,
+      ThrowOnError
+    >({
       url: "/task/{taskID}/browser-preview/live/input",
       ...options,
       ...params,
@@ -6211,7 +6340,7 @@ export class Server extends HeyApiClient {
    * Gracefully abort live execution state and stop the current process.
    */
   public shutdown<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).post<ServerShutdownResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<ServerShutdownResponses, ServerShutdownErrors, ThrowOnError>({
       url: "/shutdown",
       ...options,
     })
@@ -6223,7 +6352,7 @@ export class Server extends HeyApiClient {
    * Spawn a new server process with the same arguments, then exit.
    */
   public restart<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).post<ServerRestartResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<ServerRestartResponses, ServerRestartErrors, ThrowOnError>({
       url: "/restart",
       ...options,
     })
@@ -6273,9 +6402,9 @@ export class Queue extends HeyApiClient {
    * Reorder queued tasks in a directory
    */
   public reorder<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       query_directory?: string
-      body_directory?: string
+      body_directory: string
       orderedTaskIDs?: Array<string>
       revision?: string
     },
@@ -6401,6 +6530,7 @@ export class Conversation extends HeyApiClient {
     parameters: {
       taskID: string
       before: number
+      before_order_key: string
       before_id?: string
       limit?: number
     },
@@ -6413,6 +6543,7 @@ export class Conversation extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "query", key: "before" },
+            { in: "query", key: "before_order_key" },
             { in: "query", key: "before_id" },
             { in: "query", key: "limit" },
           ],
@@ -6475,7 +6606,7 @@ export class Session3 extends HeyApiClient {
   /**
    * Reply directly to a task agent session
    *
-   * Accept a human-authored message aimed at a task agent session. When the target session can be continued in-process, the message is appended there. When the target session cannot be continued directly, the same request is recorded as a task-root operator message with target session facts so the orchestrator can decide the next action.
+   * Accept a human-authored message aimed at a task agent session. When the target session can be continued in-process, the message is appended there. Structural direct-reply failures are returned as precise NamedError responses; this route never rewrites the message into task-root operator input.
    */
   public reply<ThrowOnError extends boolean = false>(
     parameters: {
@@ -6555,7 +6686,7 @@ export class Task extends HeyApiClient {
    * Create task
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       "init-git"?: boolean
       project?: string
@@ -8324,7 +8455,7 @@ export class Find extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<FindTextResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<FindTextResponses, FindTextErrors, ThrowOnError>({
       url: "/find",
       ...options,
       ...params,
@@ -8360,7 +8491,7 @@ export class Find extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<FindFilesResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<FindFilesResponses, FindFilesErrors, ThrowOnError>({
       url: "/find/file",
       ...options,
       ...params,
@@ -8452,7 +8583,7 @@ export class File extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<FileReadResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<FileReadResponses, FileReadErrors, ThrowOnError>({
       url: "/file/content",
       ...options,
       ...params,
@@ -8465,7 +8596,7 @@ export class File extends HeyApiClient {
    * Write text content to an existing editable file in the project directory.
    */
   public write<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       path: string
       content: string
@@ -8484,8 +8615,114 @@ export class File extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).patch<FileWriteResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).patch<FileWriteResponses, FileWriteErrors, ThrowOnError>({
       url: "/file/content",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete file item
+   *
+   * Delete one project file or directory recursively. The project root cannot be deleted.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      path: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<FileDeleteResponses, FileDeleteErrors, ThrowOnError>({
+      url: "/file/item",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Move file item
+   *
+   * Move or rename one file or directory within the project directory without overwriting.
+   */
+  public move<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      path: string
+      newPath: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "newPath" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<FileMoveResponses, FileMoveErrors, ThrowOnError>({
+      url: "/file/item",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Create file item
+   *
+   * Create one file or directory under an existing project directory without overwriting.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      path: string
+      type: "file" | "directory"
+      content?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "type" },
+            { in: "body", key: "content" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<FileCreateResponses, FileCreateErrors, ThrowOnError>({
+      url: "/file/item",
       ...options,
       ...params,
       headers: {
@@ -8502,7 +8739,7 @@ export class File extends HeyApiClient {
    * Write dropped files into an existing project directory without overwriting existing files.
    */
   public upload<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       targetDir: string
       files: Array<{
@@ -8525,7 +8762,7 @@ export class File extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<FileUploadResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<FileUploadResponses, FileUploadErrors, ThrowOnError>({
       url: "/file/upload",
       ...options,
       ...params,
@@ -8744,7 +8981,7 @@ export class Mcp extends HeyApiClient {
    * Dynamically add a new Model Context Protocol (MCP) server to the system.
    */
   public add<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       name: string
       config: McpLocalConfig | McpRemoteConfig
@@ -8796,7 +9033,7 @@ export class Mcp extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<McpConnectResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<McpConnectResponses, McpConnectErrors, ThrowOnError>({
       url: "/mcp/{name}/connect",
       ...options,
       ...params,
@@ -8824,7 +9061,7 @@ export class Mcp extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<McpDisconnectResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<McpDisconnectResponses, McpDisconnectErrors, ThrowOnError>({
       url: "/mcp/{name}/disconnect",
       ...options,
       ...params,
@@ -8863,7 +9100,7 @@ export class Pty extends HeyApiClient {
    * Create a project-bound Pseudo Terminal (PTY) session for an explicit command.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       command: string
       args?: Array<string>
@@ -9048,7 +9285,7 @@ export class Instance extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<InstanceDisposeResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<InstanceDisposeResponses, InstanceDisposeErrors, ThrowOnError>({
       url: "/instance/dispose",
       ...options,
       ...params,
@@ -9143,7 +9380,7 @@ export class Command extends HeyApiClient {
     options?: Options<never, ThrowOnError>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<CommandListResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).get<CommandListResponses, CommandListErrors, ThrowOnError>({
       url: "/command",
       ...options,
       ...params,
@@ -9361,7 +9598,7 @@ export class Mysql extends HeyApiClient {
    * DESTRUCTIVE. Rebuild the local SQLite DB from a strict MySQL transfer snapshot. This does not make MySQL a runtime DB; it is a one-shot transfer/import surface.
    */
   public import<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       snapshot: {
         format: "opencorvus.mysql-transfer.v1"
         schemaFingerprint: string
@@ -9396,15 +9633,15 @@ export class Db extends HeyApiClient {
   /**
    * Reset database
    *
-   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify a registered absolute projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   * DESTRUCTIVE. The caller must send the current DB path reported by /global/health. The server verifies that it exactly matches Database.Path(), refuses active executor sessions, disposes all in-memory Instance handles, closes SQLite, deletes the current DB file with WAL/SHM, then spawns a replacement server process so schema is rebuilt from DDL on startup. The route does not read SQLite state before deletion, so it remains usable when schema drift or DB corruption requires an explicit file reset.
    */
   public reset<ThrowOnError extends boolean = false>(
-    parameters?: {
-      projectDir: string
+    parameters: {
+      database: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "projectDir" }] }])
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "database" }] }])
     return (options?.client ?? this.client).post<GlobalDbResetResponses, GlobalDbResetErrors, ThrowOnError>({
       url: "/global/db/reset",
       ...options,
@@ -9427,7 +9664,7 @@ export class Global2 extends HeyApiClient {
   /**
    * Get health
    *
-   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.
+   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is the current SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.
    */
   public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
@@ -9454,7 +9691,7 @@ export class Global2 extends HeyApiClient {
    * Clean up and dispose all OpenCorvus instances, releasing all resources.
    */
   public dispose<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).post<GlobalDisposeResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<GlobalDisposeResponses, GlobalDisposeErrors, ThrowOnError>({
       url: "/global/dispose",
       ...options,
     })

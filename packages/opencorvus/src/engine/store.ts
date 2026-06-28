@@ -4,6 +4,7 @@ import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { SessionStatus } from "@/session/status"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
+import { timelineOrderKey } from "@/timeline/order"
 import {
   Database,
   NotFoundError,
@@ -398,12 +399,18 @@ export function findActivePlanForTask(taskID: string): PlanRow | undefined {
   )
 }
 
-/** Phase-6-f-3: return the newest run for a task (by logical run_id
- *  time_created desc), derived from `engine_artifact` kind="run" stream.
- *  Replaces the `task.active_run_id` cache column. Returns undefined when
- *  the task has no runs yet. */
-export function findActiveRunForTask(taskID: string): RunRow | undefined {
+/** Return the newest run tip for a task, including terminal tips. Use this for
+ * history/result context, not for active execution ownership. */
+export function findLatestRunForTask(taskID: string): RunRow | undefined {
   return findRuns(taskID)[0]
+}
+
+/** Phase-6-f-3: `task.active_run_id` cache column was removed. The active run
+ * projection is the latest run tip only while that tip is live; terminal
+ * completed/failed/aborted tips stay in history but are not active. */
+export function findActiveRunForTask(taskID: string): RunRow | undefined {
+  const latest = findLatestRunForTask(taskID)
+  return latest && (LIVE_RUN_STATUSES as readonly string[]).includes(latest.status) ? latest : undefined
 }
 
 /** Phase-6-f-5: return the single non-superseded spec snapshot for a task,
@@ -1225,6 +1232,20 @@ export function findRuns(taskID: string): RunRow[] {
   return latestPerRun(rows).map(artifactRowToRunRow)
 }
 
+export function listLiveRuns(): RunRow[] {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(eq(EngineArtifactTable.kind, "run"))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+  return latestPerRun(rows)
+    .map(artifactRowToRunRow)
+    .filter((r) => (LIVE_RUN_STATUSES as readonly string[]).includes(r.status))
+}
+
 export function listLiveRunsForProject(projectID: string): RunRow[] {
   const rows = Database.use((db) =>
     db
@@ -1629,6 +1650,11 @@ export function activeRunBySession(sessionID: string): RunRow | undefined {
 export function viewTask(row: TaskRow, input?: { directory?: string }) {
   return {
     id: row.id,
+    orderKey: timelineOrderKey({
+      domain: "task",
+      time: row.time_created,
+      id: row.id,
+    }),
     projectID: row.project_id,
     directory: input?.directory,
     sessionID: row.session_id ?? undefined,
@@ -1674,6 +1700,11 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
 export function viewTaskListTask(row: TaskRow, input?: { directory?: string; queueRevision?: string }) {
   return {
     id: row.id,
+    orderKey: timelineOrderKey({
+      domain: "task",
+      time: row.time_created,
+      id: row.id,
+    }),
     projectID: row.project_id,
     directory: input?.directory,
     sessionID: row.session_id ?? undefined,
@@ -1791,6 +1822,11 @@ export function viewInteraction(row: InteractionRow) {
   return {
     id: row.id,
     taskID: row.task_id,
+    orderKey: timelineOrderKey({
+      domain: "interaction",
+      time: row.time_created,
+      id: row.id,
+    }),
     runID: row.run_id,
     sessionID: row.session_id ?? undefined,
     externalID: row.external_id,

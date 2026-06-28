@@ -1560,30 +1560,6 @@ export type SessionConfig = {
   }
 }
 
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
-}
-
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
 export type OutputFormatText = {
   type: "text"
 }
@@ -1599,34 +1575,6 @@ export type OutputFormatJsonSchema = {
 }
 
 export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
-
-export type UserMessage = {
-  id: string
-  sessionID: string
-  role: "user"
-  time: {
-    created: number
-  }
-  format?: OutputFormat
-  summary?: {
-    title?: string
-    body?: string
-  }
-  agent: string
-  model: {
-    providerID: string
-    modelID: string
-  }
-  system?: string
-  systemMode?: "append_to_agent" | "complete"
-  tools?: {
-    [key: string]: boolean
-  }
-  variant?: string
-  extra?: {
-    [key: string]: unknown
-  }
-}
 
 export type ProviderAuthError = {
   name: "ProviderAuthError"
@@ -1751,6 +1699,16 @@ export type ModelImageInputTooLargeError = {
     width: number
     height: number
     maxDimension: number
+    originalWidth?: number
+    originalHeight?: number
+    blankMarginCrop?: {
+      originalWidth: number
+      originalHeight: number
+      width: number
+      height: number
+      trimOffsetLeft?: number
+      trimOffsetTop?: number
+    }
   }
 }
 
@@ -1781,93 +1739,74 @@ export type TokenUsage = {
   }
 }
 
-export type AssistantMessage = {
-  id: string
-  sessionID: string
-  role: "assistant"
-  time: {
-    created: number
-    completed?: number
-  }
-  error?:
-    | ProviderAuthError
-    | UnknownError
-    | MessageOutputLengthError
-    | MessageAbortedError
-    | StructuredOutputError
-    | StructuredOutputPayloadError
-    | TerminalToolMissingError
-    | SnapshotIntegrityError
-    | SnapshotEmptyTreeError
-    | ContextOverflowError
-    | PromptBudgetOverflowError
-    | ToolSchemaBudgetError
-    | ModelImageInputTooLargeError
-    | ApiError
-  parentID: string
-  modelID: string
-  providerID: string
-  agent: string
-  path: {
-    cwd: string
-    root: string
-  }
-  summary?: boolean
-  cost: number
-  tokens: TokenUsage
-  structured?: unknown
-  variant?: string
-  finish?: string
-}
-
-export type Message = UserMessage | AssistantMessage
-
-export type TextPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "text"
-  text: string
-  kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type SubtaskPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  command?: string
-}
-
-export type ReasoningPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "reasoning"
-  text: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end?: number
-  }
-}
+export type VisibleMessage =
+  | {
+      id: string
+      sessionID: string
+      orderKey: string
+      role: "user"
+      time: {
+        created: number
+      }
+      format?: OutputFormat
+      summary?: {
+        title?: string
+        body?: string
+      }
+      agent: string
+      model: {
+        providerID: string
+        modelID: string
+      }
+      system?: string
+      systemMode?: "append_to_agent" | "complete"
+      tools?: {
+        [key: string]: boolean
+      }
+      variant?: string
+      extra?: {
+        [key: string]: unknown
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      orderKey: string
+      role: "assistant"
+      time: {
+        created: number
+        completed?: number
+      }
+      error?:
+        | ProviderAuthError
+        | UnknownError
+        | MessageOutputLengthError
+        | MessageAbortedError
+        | StructuredOutputError
+        | StructuredOutputPayloadError
+        | TerminalToolMissingError
+        | SnapshotIntegrityError
+        | SnapshotEmptyTreeError
+        | ContextOverflowError
+        | PromptBudgetOverflowError
+        | ToolSchemaBudgetError
+        | ModelImageInputTooLargeError
+        | ApiError
+      parentID: string
+      modelID: string
+      providerID: string
+      agent: string
+      path: {
+        cwd: string
+        root: string
+      }
+      summary?: boolean
+      cost: number
+      tokens: TokenUsage
+      structured?: unknown
+      variant?: string
+      finish?: string
+    }
 
 export type FilePartSourceText = {
   value: string
@@ -1910,21 +1849,13 @@ export type ResourceSource = {
 
 export type FilePartSource = FileSource | SymbolSource | ResourceSource
 
-export type FilePart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
-}
-
 export type ToolStatePending = {
   status: "pending"
   input: unknown
   raw: string
+  time: {
+    start: number
+  }
 }
 
 export type ToolStateRunning = {
@@ -1937,6 +1868,18 @@ export type ToolStateRunning = {
   time: {
     start: number
   }
+}
+
+export type FilePart = {
+  id: string
+  sessionID: string
+  messageID: string
+  orderKey?: string
+  type: "file"
+  mime: string
+  filename?: string
+  url: string
+  source?: FilePartSource
 }
 
 export type ToolStateCompleted = {
@@ -1981,10 +1924,236 @@ export type ToolStateError = {
 
 export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
 
+export type VisibleMessagePart =
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "text"
+      text: string
+      kind?: "user_content" | "control" | "context"
+      source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+      time?: {
+        start: number
+        end?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "subtask"
+      prompt: string
+      description: string
+      agent: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      command?: string
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "reasoning"
+      text: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        start: number
+        end?: number
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "file"
+      mime: string
+      filename?: string
+      url: string
+      source?: FilePartSource
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "tool"
+      callID: string
+      tool: string
+      state: ToolState
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "step-start"
+      snapshot?: string
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "step-finish"
+      reason: string
+      snapshot?: string
+      cost: number
+      tokens: TokenUsage
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "snapshot"
+      snapshot: string
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "patch"
+      hash: string
+      files: Array<string>
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "agent"
+      name: string
+      source?: {
+        value: string
+        start: number
+        end: number
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "retry"
+      attempt: number
+      error: ApiError
+      time: {
+        created: number
+      }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "compaction"
+      auto: boolean
+      overflow?: boolean
+      tail_start_id?: string
+      anchor_id?: string
+      focus?: string
+    }
+
+export type VisibleMessageWithParts = {
+  info: VisibleMessage
+  parts: Array<VisibleMessagePart>
+}
+
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+  /**
+   * Priority level of the task: high, medium, low
+   */
+  priority: string
+}
+
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type TextPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  orderKey?: string
+  type: "text"
+  text: string
+  kind?: "user_content" | "control" | "context"
+  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+  time?: {
+    start: number
+    end?: number
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  orderKey?: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+}
+
+export type ReasoningPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  orderKey?: string
+  type: "reasoning"
+  text: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end?: number
+  }
+}
+
 export type ToolPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "tool"
   callID: string
   tool: string
@@ -1998,6 +2167,7 @@ export type StepStartPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "step-start"
   snapshot?: string
 }
@@ -2006,6 +2176,7 @@ export type StepFinishPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "step-finish"
   reason: string
   snapshot?: string
@@ -2017,6 +2188,7 @@ export type SnapshotPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "snapshot"
   snapshot: string
 }
@@ -2025,6 +2197,7 @@ export type PatchPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "patch"
   hash: string
   files: Array<string>
@@ -2034,6 +2207,7 @@ export type AgentPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "agent"
   name: string
   source?: {
@@ -2047,6 +2221,7 @@ export type RetryPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "retry"
   attempt: number
   error: ApiError
@@ -2059,6 +2234,7 @@ export type CompactionPart = {
   id: string
   sessionID: string
   messageID: string
+  orderKey?: string
   type: "compaction"
   auto: boolean
   overflow?: boolean
@@ -2083,6 +2259,7 @@ export type Part =
 
 export type TextPartInput = {
   id?: string
+  orderKey?: string
   type: "text"
   text: string
   kind?: "user_content" | "control" | "context"
@@ -2098,6 +2275,7 @@ export type TextPartInput = {
 
 export type FilePartInput = {
   id?: string
+  orderKey?: string
   type: "file"
   mime: string
   filename?: string
@@ -2107,6 +2285,7 @@ export type FilePartInput = {
 
 export type AgentPartInput = {
   id?: string
+  orderKey?: string
   type: "agent"
   name: string
   source?: {
@@ -2118,6 +2297,7 @@ export type AgentPartInput = {
 
 export type SubtaskPartInput = {
   id?: string
+  orderKey?: string
   type: "subtask"
   prompt: string
   description: string
@@ -2272,6 +2452,39 @@ export type AcceptanceDiffSummary = {
   additions?: number
   deletions?: number
   status?: "added" | "deleted" | "modified"
+}
+
+export type TaskMessageUserInfo = {
+  id: string
+  sessionID: string
+  orderKey: string
+  role: "user"
+  time: {
+    created: number
+  }
+  format?: OutputFormat
+  summary?: {
+    title?: string
+    body?: string
+  }
+  agent: string
+  model: {
+    providerID: string
+    modelID: string
+  }
+  system?: string
+  systemMode?: "append_to_agent" | "complete"
+  tools?: {
+    [key: string]: boolean
+  }
+  variant?: string
+  extra?: {
+    [key: string]: unknown
+  }
+}
+
+export type TaskMessageUserPart = Part & {
+  orderKey: string
 }
 
 export type TaskMessageTarget = {
@@ -2484,13 +2697,6 @@ export type EventProjectUpdated = {
   properties: Project
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -2509,6 +2715,30 @@ export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
     [key: string]: unknown
+  }
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    orderKey: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+    orderKey: string
   }
 }
 
@@ -2538,7 +2768,7 @@ export type EventTodoUpdated = {
 export type EventMessageUpdated = {
   type: "message.updated"
   properties: {
-    info: Message
+    info: VisibleMessage
   }
 }
 
@@ -2553,7 +2783,8 @@ export type EventMessageRemoved = {
 export type EventMessagePartUpdated = {
   type: "message.part.updated"
   properties: {
-    part: Part
+    orderKey: string
+    part: VisibleMessagePart
   }
 }
 
@@ -2574,106 +2805,6 @@ export type EventMessagePartRemoved = {
     sessionID: string
     messageID: string
     partID: string
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ModelImageInputTooLargeError
-      | ApiError
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventMcpAuthRequired = {
-  type: "mcp.auth.required"
-  properties: {
-    name: string
-    message: string
-    reason: "needs_auth" | "needs_client_registration"
-  }
-}
-
-export type EventMcpPromptsChanged = {
-  type: "mcp.prompts.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventMcpResourcesChanged = {
-  type: "mcp.resources.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
   }
 }
 
@@ -2925,6 +3056,17 @@ export type EventTaskMessage = {
   }
 }
 
+export type EventTaskLifecycle = {
+  type: "task.lifecycle"
+  properties: {
+    taskID: string
+    fact: "server_restart_active_task_recovered"
+    status?: "queued" | "active" | "completed" | "failed" | "cancelled"
+    orphaned?: boolean
+    summary: string
+  }
+}
+
 export type EventRunProgress = {
   type: "run.progress"
   properties: {
@@ -2958,6 +3100,20 @@ export type EventMessageInjected = {
   }
 }
 
+export type EventTaskReport = {
+  type: "task.report"
+  properties: {
+    taskID?: string
+    sessionID: string
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    question?: string
+    next_plan?: string
+    artifacts?: Array<string>
+    error?: string
+  }
+}
+
 export type EventAgentCoordinationRequested = {
   type: "agent.coordination.requested"
   properties: {
@@ -2977,8 +3133,23 @@ export type EventAgentCoordinationResponded = {
     taskID: string
     requestID: string
     responseID: string
+    actionID: string
     sessionID: string
     decision: "continue" | "cancel_worker" | "redispatch" | "fail_task" | "ask_user"
+    summary: string
+  }
+}
+
+export type EventAgentCoordinationAction = {
+  type: "agent.coordination.action"
+  properties: {
+    taskID: string
+    requestID: string
+    responseID: string
+    actionID: string
+    sessionID: string
+    action: "continue_worker" | "cancel_worker" | "redispatch_worker" | "fail_task" | "ask_user"
+    status: "pending" | "completed" | "failed"
     summary: string
   }
 }
@@ -3265,6 +3436,134 @@ export type EventIntegrityReviewCompleted = {
   }
 }
 
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type EventMcpAuthRequired = {
+  type: "mcp.auth.required"
+  properties: {
+    name: string
+    message: string
+    reason: "needs_auth" | "needs_client_registration"
+  }
+}
+
+export type EventMcpPromptsChanged = {
+  type: "mcp.prompts.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventMcpResourcesChanged = {
+  type: "mcp.resources.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID: string
+    orderKey: string
+    channel?: string
+    resolvedRole?: string
+    goalID?: string
+    parentSessionID?: string
+    error:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ModelImageInputTooLargeError
+      | ApiError
+    summary?: string
+  }
+}
+
 export type EventTaskQueueCompleted = {
   type: "task-queue.completed"
   properties: {
@@ -3292,49 +3591,6 @@ export type EventQuestionRejected = {
   properties: {
     sessionID: string
     requestID: string
-  }
-}
-
-export type EventTaskReport = {
-  type: "task.report"
-  properties: {
-    sessionID: string
-    status: "progress" | "need_input" | "done" | "failed"
-    summary: string
-    question?: string
-    next_plan?: string
-    artifacts?: Array<string>
-    error?: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
   }
 }
 
@@ -3390,13 +3646,6 @@ export type EventConfigChanged = {
   type: "config.changed"
   properties: {
     sessionID: string
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
   }
 }
 
@@ -3507,10 +3756,12 @@ export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventProjectUpdated
-  | EventServerInstanceDisposed
   | EventServerConnected
   | EventServerHeartbeat
   | EventGlobalDisposed
+  | EventServerInstanceDisposed
+  | EventSessionStatus
+  | EventSessionIdle
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventTodoUpdated
@@ -3519,17 +3770,6 @@ export type Event =
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
-  | EventSessionError
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpAuthRequired
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskCompleted
@@ -3555,11 +3795,14 @@ export type Event =
   | EventAcceptanceReady
   | EventEvaluationCompleted
   | EventTaskMessage
+  | EventTaskLifecycle
   | EventRunProgress
   | EventRunOutput
   | EventMessageInjected
+  | EventTaskReport
   | EventAgentCoordinationRequested
   | EventAgentCoordinationResponded
+  | EventAgentCoordinationAction
   | EventAgentCoordinationCancelled
   | EventWorkflowSelected
   | EventWorkflowStepUpdated
@@ -3569,15 +3812,24 @@ export type Event =
   | EventReviewStreamChunk
   | EventAcceptanceEvidenceUpdated
   | EventIntegrityReviewCompleted
+  | EventFileEdited
+  | EventFileWatcherUpdated
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpAuthRequired
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventVcsBranchUpdated
+  | EventWorktreeReady
+  | EventWorktreeFailed
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventSessionError
   | EventTaskQueueCompleted
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
-  | EventTaskReport
-  | EventFileWatcherUpdated
-  | EventVcsBranchUpdated
-  | EventWorktreeReady
-  | EventWorktreeFailed
   | EventTaskPlanUpdated
   | EventSessionCompacted
   | EventSessionCreated
@@ -3585,7 +3837,6 @@ export type Event =
   | EventSessionDeleted
   | EventSessionDiff
   | EventConfigChanged
-  | EventFileEdited
   | EventGoalReport
   | EventWorkspaceReady
   | EventWorkspaceFailed
@@ -3692,6 +3943,12 @@ export type ProjectCurrentDeleteErrors = {
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -4660,9 +4917,21 @@ export type ExecutorSetModelErrors = {
    */
   400: BadRequestError
   /**
-   * Executor not found or does not support model switching
+   * Not found
    */
-  404: unknown
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type ExecutorSetModelError = ExecutorSetModelErrors[keyof ExecutorSetModelErrors]
@@ -4966,6 +5235,22 @@ export type WorktreeResetErrors = {
    * Bad request
    */
   400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type WorktreeResetError = WorktreeResetErrors[keyof WorktreeResetErrors]
@@ -4987,6 +5272,15 @@ export type ExperimentalScheduleListData = {
   }
   url: "/experimental/schedule"
 }
+
+export type ExperimentalScheduleListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalScheduleListError = ExperimentalScheduleListErrors[keyof ExperimentalScheduleListErrors]
 
 export type ExperimentalScheduleListResponses = {
   /**
@@ -5027,6 +5321,31 @@ export type ExperimentalScheduleCreateData = {
   url: "/experimental/schedule"
 }
 
+export type ExperimentalScheduleCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalScheduleCreateError = ExperimentalScheduleCreateErrors[keyof ExperimentalScheduleCreateErrors]
+
 export type ExperimentalScheduleCreateResponses = {
   /**
    * Created task
@@ -5052,6 +5371,31 @@ export type ExperimentalScheduleDeleteData = {
   url: "/experimental/schedule/{id}"
 }
 
+export type ExperimentalScheduleDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalScheduleDeleteError = ExperimentalScheduleDeleteErrors[keyof ExperimentalScheduleDeleteErrors]
+
 export type ExperimentalScheduleDeleteResponses = {
   /**
    * Cancelled
@@ -5072,6 +5416,16 @@ export type ExperimentalEventscheduleListData = {
   }
   url: "/experimental/event-schedule"
 }
+
+export type ExperimentalEventscheduleListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalEventscheduleListError =
+  ExperimentalEventscheduleListErrors[keyof ExperimentalEventscheduleListErrors]
 
 export type ExperimentalEventscheduleListResponses = {
   /**
@@ -5118,6 +5472,32 @@ export type ExperimentalEventscheduleCreateData = {
   url: "/experimental/event-schedule"
 }
 
+export type ExperimentalEventscheduleCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalEventscheduleCreateError =
+  ExperimentalEventscheduleCreateErrors[keyof ExperimentalEventscheduleCreateErrors]
+
 export type ExperimentalEventscheduleCreateResponses = {
   /**
    * Created event task
@@ -5142,6 +5522,32 @@ export type ExperimentalEventscheduleDeleteData = {
   }
   url: "/experimental/event-schedule/{id}"
 }
+
+export type ExperimentalEventscheduleDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ExperimentalEventscheduleDeleteError =
+  ExperimentalEventscheduleDeleteErrors[keyof ExperimentalEventscheduleDeleteErrors]
 
 export type ExperimentalEventscheduleDeleteResponses = {
   /**
@@ -5262,6 +5668,20 @@ export type ExperimentalResourceListData = {
   }
   url: "/experimental/resource"
 }
+
+export type ExperimentalResourceListErrors = {
+  /**
+   * MCP resources failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type ExperimentalResourceListError = ExperimentalResourceListErrors[keyof ExperimentalResourceListErrors]
 
 export type ExperimentalResourceListResponses = {
   /**
@@ -5389,9 +5809,13 @@ export type SessionListGlobalData = {
      */
     start?: number
     /**
-     * Return sessions updated before this timestamp (milliseconds since epoch)
+     * Compound cursor updated timestamp (milliseconds since epoch)
      */
-    cursor?: number
+    cursorUpdated?: number
+    /**
+     * Compound cursor session ID
+     */
+    cursorSessionID?: string
     /**
      * Filter sessions by title (case-insensitive)
      */
@@ -5407,6 +5831,15 @@ export type SessionListGlobalData = {
   }
   url: "/session/global"
 }
+
+export type SessionListGlobalErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SessionListGlobalError = SessionListGlobalErrors[keyof SessionListGlobalErrors]
 
 export type SessionListGlobalResponses = {
   /**
@@ -5619,11 +6052,40 @@ export type SessionConversationResponses = {
       title?: string | null
       directory?: string | null
     }
-    transcript: Array<unknown>
-    timeline: Array<unknown>
+    transcript: Array<VisibleMessageWithParts>
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        source?: string
+        surface: string
+        taskID?: string
+        sessionID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            type: "text"
+            text: string
+          }
+        | {
+            id: string
+            type: "file"
+            mime: string
+            url: string
+            filename?: string
+          }
+      >
+    }>
     events: Array<{
       event_id: string
       session_id: string
+      orderKey: string
       type: string
       emittedAt: number
       timestamp: number
@@ -5637,16 +6099,18 @@ export type SessionConversationResponses = {
         badge?: boolean
       }
     }>
-    history?: {
+    history: {
       oldestTimestamp: number | null
+      oldestOrderKey: string | null
       oldestMessageID?: string | null
       hasMore: boolean
       limit: number
     }
-    agentView?: {
+    agentView: {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -5665,6 +6129,7 @@ export type SessionConversationResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -5681,6 +6146,7 @@ export type SessionConversationResponses = {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -5699,6 +6165,7 @@ export type SessionConversationResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -5740,6 +6207,7 @@ export type SessionEventsResponses = {
   200: {
     event_id: string
     session_id: string
+    orderKey: string
     type: string
     emittedAt: number
     timestamp: number
@@ -6132,6 +6600,12 @@ export type SessionAbortErrors = {
         }
       }
     | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
         name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
@@ -6277,10 +6751,7 @@ export type SessionMessagesResponses = {
   /**
    * List of messages
    */
-  200: Array<{
-    info: Message
-    parts: Array<Part>
-  }>
+  200: Array<VisibleMessageWithParts>
 }
 
 export type SessionMessagesResponse = SessionMessagesResponses[keyof SessionMessagesResponses]
@@ -6351,8 +6822,46 @@ export type SessionPromptResponses = {
    * Created message
    */
   200: {
-    info: AssistantMessage
-    parts: Array<Part>
+    info: {
+      id: string
+      sessionID: string
+      orderKey: string
+      role: "assistant"
+      time: {
+        created: number
+        completed?: number
+      }
+      error?:
+        | ProviderAuthError
+        | UnknownError
+        | MessageOutputLengthError
+        | MessageAbortedError
+        | StructuredOutputError
+        | StructuredOutputPayloadError
+        | TerminalToolMissingError
+        | SnapshotIntegrityError
+        | SnapshotEmptyTreeError
+        | ContextOverflowError
+        | PromptBudgetOverflowError
+        | ToolSchemaBudgetError
+        | ModelImageInputTooLargeError
+        | ApiError
+      parentID: string
+      modelID: string
+      providerID: string
+      agent: string
+      path: {
+        cwd: string
+        root: string
+      }
+      summary?: boolean
+      cost: number
+      tokens: TokenUsage
+      structured?: unknown
+      variant?: string
+      finish?: string
+    }
+    parts: Array<VisibleMessagePart>
   }
 }
 
@@ -6463,10 +6972,7 @@ export type SessionMessageResponses = {
   /**
    * Message
    */
-  200: {
-    info: Message
-    parts: Array<Part>
-  }
+  200: VisibleMessageWithParts
 }
 
 export type SessionMessageResponse = SessionMessageResponses[keyof SessionMessageResponses]
@@ -6584,7 +7090,7 @@ export type PartUpdateResponses = {
   /**
    * Successfully updated part
    */
-  200: Part
+  200: VisibleMessagePart
 }
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
@@ -6656,10 +7162,7 @@ export type SessionPromptAsyncResponses = {
    */
   202: {
     taskID: string
-    user_message: {
-      info: Message
-      parts: Array<Part>
-    }
+    user_message: VisibleMessageWithParts
   }
 }
 
@@ -6741,6 +7244,7 @@ export type SessionCommandData = {
     variant?: string
     parts?: Array<{
       id?: string
+      orderKey?: string
       type: "file"
       mime: string
       filename?: string
@@ -6793,8 +7297,46 @@ export type SessionCommandResponses = {
    * Created message
    */
   200: {
-    info: AssistantMessage
-    parts: Array<Part>
+    info: {
+      id: string
+      sessionID: string
+      orderKey: string
+      role: "assistant"
+      time: {
+        created: number
+        completed?: number
+      }
+      error?:
+        | ProviderAuthError
+        | UnknownError
+        | MessageOutputLengthError
+        | MessageAbortedError
+        | StructuredOutputError
+        | StructuredOutputPayloadError
+        | TerminalToolMissingError
+        | SnapshotIntegrityError
+        | SnapshotEmptyTreeError
+        | ContextOverflowError
+        | PromptBudgetOverflowError
+        | ToolSchemaBudgetError
+        | ModelImageInputTooLargeError
+        | ApiError
+      parentID: string
+      modelID: string
+      providerID: string
+      agent: string
+      path: {
+        cwd: string
+        root: string
+      }
+      summary?: boolean
+      cost: number
+      tokens: TokenUsage
+      structured?: unknown
+      variant?: string
+      finish?: string
+    }
+    parts: Array<VisibleMessagePart>
   }
 }
 
@@ -6853,7 +7395,45 @@ export type SessionShellResponses = {
   /**
    * Created message
    */
-  200: AssistantMessage
+  200: {
+    id: string
+    sessionID: string
+    orderKey: string
+    role: "assistant"
+    time: {
+      created: number
+      completed?: number
+    }
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ModelImageInputTooLargeError
+      | ApiError
+    parentID: string
+    modelID: string
+    providerID: string
+    agent: string
+    path: {
+      cwd: string
+      root: string
+    }
+    summary?: boolean
+    cost: number
+    tokens: TokenUsage
+    structured?: unknown
+    variant?: string
+    finish?: string
+  }
 }
 
 export type SessionShellResponse = SessionShellResponses[keyof SessionShellResponses]
@@ -8476,6 +9056,27 @@ export type PanelKnowledgeMemoryDeleteData = {
   url: "/panel/knowledge/memory/{id}"
 }
 
+export type PanelKnowledgeMemoryDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type PanelKnowledgeMemoryDeleteError = PanelKnowledgeMemoryDeleteErrors[keyof PanelKnowledgeMemoryDeleteErrors]
+
 export type PanelKnowledgeMemoryDeleteResponses = {
   /**
    * Deleted
@@ -8501,6 +9102,27 @@ export type PanelKnowledgeMemoryGetData = {
   }
   url: "/panel/knowledge/memory/{id}"
 }
+
+export type PanelKnowledgeMemoryGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type PanelKnowledgeMemoryGetError = PanelKnowledgeMemoryGetErrors[keyof PanelKnowledgeMemoryGetErrors]
 
 export type PanelKnowledgeMemoryGetResponses = {
   /**
@@ -8602,6 +9224,7 @@ export type ControlTimelineResponses = {
   200: Array<{
     info: {
       id: string
+      orderKey: string
       role: "user" | "assistant" | "system"
       source?: string
       surface: string
@@ -8643,6 +9266,15 @@ export type CodingCliProfilesData = {
   url: "/coding/cli/profiles"
 }
 
+export type CodingCliProfilesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingCliProfilesError = CodingCliProfilesErrors[keyof CodingCliProfilesErrors]
+
 export type CodingCliProfilesResponses = {
   /**
    * Coding CLI profile list
@@ -8667,6 +9299,15 @@ export type CodingCliOpenData = {
   }
   url: "/coding/cli/open"
 }
+
+export type CodingCliOpenErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingCliOpenError = CodingCliOpenErrors[keyof CodingCliOpenErrors]
 
 export type CodingCliOpenResponses = {
   /**
@@ -8704,6 +9345,9 @@ export type CodingSessionsListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     limit?: number
     cursorUpdated?: number
@@ -8712,6 +9356,15 @@ export type CodingSessionsListData = {
   }
   url: "/coding/sessions"
 }
+
+export type CodingSessionsListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CodingSessionsListError = CodingSessionsListErrors[keyof CodingSessionsListErrors]
 
 export type CodingSessionsListResponses = {
   /**
@@ -8742,6 +9395,27 @@ export type CodingSessionDeleteData = {
   url: "/coding/session/{sessionID}"
 }
 
+export type CodingSessionDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type CodingSessionDeleteError = CodingSessionDeleteErrors[keyof CodingSessionDeleteErrors]
+
 export type CodingSessionDeleteResponses = {
   /**
    * Deleted coding assistant session
@@ -8764,6 +9438,27 @@ export type CodingSessionGetData = {
   }
   url: "/coding/session/{sessionID}"
 }
+
+export type CodingSessionGetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type CodingSessionGetError = CodingSessionGetErrors[keyof CodingSessionGetErrors]
 
 export type CodingSessionGetResponses = {
   /**
@@ -8791,6 +9486,27 @@ export type CodingSessionUpdateData = {
   }
   url: "/coding/session/{sessionID}"
 }
+
+export type CodingSessionUpdateErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type CodingSessionUpdateError = CodingSessionUpdateErrors[keyof CodingSessionUpdateErrors]
 
 export type CodingSessionUpdateResponses = {
   /**
@@ -8845,6 +9561,12 @@ export type CodingSessionAbortErrors = {
         }
       }
     | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
         name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
@@ -8878,6 +9600,28 @@ export type CodingSessionSelectionUpdateData = {
   }
   url: "/coding/session/{sessionID}/selection"
 }
+
+export type CodingSessionSelectionUpdateErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type CodingSessionSelectionUpdateError =
+  CodingSessionSelectionUpdateErrors[keyof CodingSessionSelectionUpdateErrors]
 
 export type CodingSessionSelectionUpdateResponses = {
   /**
@@ -9021,7 +9765,7 @@ export type GatewayStatsResponses = {
       queries: number
       mutations: number
     }
-    channelRuntime?: {
+    channelRuntime: {
       running: boolean
       status: string
       channels: Array<string>
@@ -9884,6 +10628,27 @@ export type MissionStatusData = {
   url: "/mission/{missionID}/status"
 }
 
+export type MissionStatusErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type MissionStatusError = MissionStatusErrors[keyof MissionStatusErrors]
+
 export type MissionStatusResponses = {
   /**
    * Mission status snapshot
@@ -9999,6 +10764,22 @@ export type MissionProjectArchiveData = {
 
 export type MissionProjectArchiveErrors = {
   /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
    * Mission project is not a Git worktree
    */
   422: {
@@ -10032,6 +10813,27 @@ export type MissionRenameData = {
   }
   url: "/mission/{missionID}/title"
 }
+
+export type MissionRenameErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type MissionRenameError = MissionRenameErrors[keyof MissionRenameErrors]
 
 export type MissionRenameResponses = {
   /**
@@ -10088,11 +10890,33 @@ export type MissionAbortData = {
 
 export type MissionAbortErrors = {
   /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
    * Conflict
    */
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -10130,6 +10954,27 @@ export type MissionDeleteData = {
   url: "/mission/{missionID}"
 }
 
+export type MissionDeleteErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type MissionDeleteError = MissionDeleteErrors[keyof MissionDeleteErrors]
+
 export type MissionDeleteResponses = {
   /**
    * Mission deleted
@@ -10156,6 +11001,15 @@ export type MissionWakeData = {
   }
   url: "/mission/wake"
 }
+
+export type MissionWakeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MissionWakeError = MissionWakeErrors[keyof MissionWakeErrors]
 
 export type MissionWakeResponses = {
   /**
@@ -10214,6 +11068,36 @@ export type BrowserPreviewTaskTargetData = {
   url: "/task/{taskID}/browser-preview"
 }
 
+export type BrowserPreviewTaskTargetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Browser preview evidence is corrupt
+   */
+  500: {
+    name: "BrowserPreviewEvidenceCorruptionError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type BrowserPreviewTaskTargetError = BrowserPreviewTaskTargetErrors[keyof BrowserPreviewTaskTargetErrors]
+
 export type BrowserPreviewTaskTargetResponses = {
   /**
    * Browser preview target
@@ -10266,6 +11150,37 @@ export type BrowserPreviewReadTaskEvidenceData = {
   url: "/task/{taskID}/browser-preview/evidence/{evidenceID}"
 }
 
+export type BrowserPreviewReadTaskEvidenceErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Browser preview evidence capture is corrupt
+   */
+  500: {
+    name: "BrowserPreviewEvidenceCorruptionError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceError =
+  BrowserPreviewReadTaskEvidenceErrors[keyof BrowserPreviewReadTaskEvidenceErrors]
+
 export type BrowserPreviewReadTaskEvidenceResponses = {
   /**
    * Persisted browser preview evidence
@@ -10309,6 +11224,37 @@ export type BrowserPreviewReadTaskEvidenceCaptureData = {
   url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"
 }
 
+export type BrowserPreviewReadTaskEvidenceCaptureErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Browser preview evidence artifact is corrupt
+   */
+  500: {
+    name: "BrowserPreviewEvidenceCorruptionError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceCaptureError =
+  BrowserPreviewReadTaskEvidenceCaptureErrors[keyof BrowserPreviewReadTaskEvidenceCaptureErrors]
+
 export type BrowserPreviewReadTaskEvidenceCaptureResponses = {
   /**
    * Persisted browser preview PNG screenshot
@@ -10335,6 +11281,37 @@ export type BrowserPreviewReadTaskEvidenceArtifactData = {
   url: "/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"
 }
 
+export type BrowserPreviewReadTaskEvidenceArtifactErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Browser preview evidence is corrupt
+   */
+  500: {
+    name: "BrowserPreviewEvidenceCorruptionError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type BrowserPreviewReadTaskEvidenceArtifactError =
+  BrowserPreviewReadTaskEvidenceArtifactErrors[keyof BrowserPreviewReadTaskEvidenceArtifactErrors]
+
 export type BrowserPreviewReadTaskEvidenceArtifactResponses = {
   /**
    * Persisted browser preview region comparison PNG artifact
@@ -10360,6 +11337,28 @@ export type BrowserPreviewSelectTaskTargetData = {
   }
   url: "/task/{taskID}/browser-preview/target"
 }
+
+export type BrowserPreviewSelectTaskTargetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type BrowserPreviewSelectTaskTargetError =
+  BrowserPreviewSelectTaskTargetErrors[keyof BrowserPreviewSelectTaskTargetErrors]
 
 export type BrowserPreviewSelectTaskTargetResponses = {
   /**
@@ -10414,6 +11413,28 @@ export type BrowserPreviewCaptureTaskTargetData = {
   }
   url: "/task/{taskID}/browser-preview/capture"
 }
+
+export type BrowserPreviewCaptureTaskTargetErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type BrowserPreviewCaptureTaskTargetError =
+  BrowserPreviewCaptureTaskTargetErrors[keyof BrowserPreviewCaptureTaskTargetErrors]
 
 export type BrowserPreviewCaptureTaskTargetResponses = {
   /**
@@ -10554,6 +11575,28 @@ export type BrowserPreviewCompareTaskTargetRegionsData = {
   url: "/task/{taskID}/browser-preview/compare"
 }
 
+export type BrowserPreviewCompareTaskTargetRegionsErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type BrowserPreviewCompareTaskTargetRegionsError =
+  BrowserPreviewCompareTaskTargetRegionsErrors[keyof BrowserPreviewCompareTaskTargetRegionsErrors]
+
 export type BrowserPreviewCompareTaskTargetRegionsResponses = {
   /**
    * Browser preview region comparison result
@@ -10677,6 +11720,27 @@ export type BrowserPreviewLiveSnapshotData = {
   url: "/task/{taskID}/browser-preview/live/snapshot"
 }
 
+export type BrowserPreviewLiveSnapshotErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type BrowserPreviewLiveSnapshotError = BrowserPreviewLiveSnapshotErrors[keyof BrowserPreviewLiveSnapshotErrors]
+
 export type BrowserPreviewLiveSnapshotResponses = {
   /**
    * Interactive browser preview PNG frame
@@ -10723,6 +11787,27 @@ export type BrowserPreviewLiveInputData = {
   url: "/task/{taskID}/browser-preview/live/input"
 }
 
+export type BrowserPreviewLiveInputErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type BrowserPreviewLiveInputError = BrowserPreviewLiveInputErrors[keyof BrowserPreviewLiveInputErrors]
+
 export type BrowserPreviewLiveInputResponses = {
   /**
    * Interactive browser preview PNG frame after input
@@ -10738,6 +11823,17 @@ export type ServerShutdownData = {
   query?: never
   url: "/shutdown"
 }
+
+export type ServerShutdownErrors = {
+  /**
+   * Shutdown handler unavailable
+   */
+  503: {
+    ok: boolean
+  }
+}
+
+export type ServerShutdownError = ServerShutdownErrors[keyof ServerShutdownErrors]
 
 export type ServerShutdownResponses = {
   /**
@@ -10756,6 +11852,17 @@ export type ServerRestartData = {
   query?: never
   url: "/restart"
 }
+
+export type ServerRestartErrors = {
+  /**
+   * Shutdown handler unavailable
+   */
+  503: {
+    ok: boolean
+  }
+}
+
+export type ServerRestartError = ServerRestartErrors[keyof ServerRestartErrors]
 
 export type ServerRestartResponses = {
   /**
@@ -11320,6 +12427,7 @@ export type TaskListResponses = {
     tasks: Array<{
       task: {
         id: string
+        orderKey: string
         projectID: string
         directory?: string
         sessionID?: string | null
@@ -11438,6 +12546,7 @@ export type TaskListResponses = {
       pending_interaction_items: Array<{
         id: string
         taskID: string
+        orderKey: string
         runID: string | null
         sessionID?: string | null
         externalID: string
@@ -11496,6 +12605,7 @@ export type TaskGlobalListResponses = {
     tasks: Array<{
       task: {
         id: string
+        orderKey: string
         projectID: string
         directory?: string
         sessionID?: string | null
@@ -11614,6 +12724,7 @@ export type TaskGlobalListResponses = {
       pending_interaction_items: Array<{
         id: string
         taskID: string
+        orderKey: string
         runID: string | null
         sessionID?: string | null
         externalID: string
@@ -11730,6 +12841,7 @@ export type TaskQueueStartNowResponses = {
   200: {
     task: {
       id: string
+      orderKey: string
       projectID: string
       directory?: string
       sessionID?: string | null
@@ -11879,6 +12991,7 @@ export type TaskGetResponses = {
    */
   200: {
     id: string
+    orderKey: string
     projectID: string
     directory?: string
     sessionID?: string | null
@@ -12148,6 +13261,7 @@ export type TaskProgressResponses = {
   200: {
     task: {
       id: string
+      orderKey: string
       projectID: string
       directory?: string
       sessionID?: string | null
@@ -12267,6 +13381,7 @@ export type TaskProgressResponses = {
     pendingInteractions: Array<{
       id: string
       taskID: string
+      orderKey: string
       runID: string | null
       sessionID?: string | null
       externalID: string
@@ -12373,6 +13488,7 @@ export type TaskEventsResponses = {
   200: {
     event_id: string
     task_id: string
+    orderKey: string
     run_id?: string
     type: string
     emittedAt: number
@@ -12437,6 +13553,7 @@ export type TaskConversationResponses = {
       snapshotVersion: string
       task: {
         id: string
+        orderKey: string
         projectID: string
         directory?: string
         sessionID?: string | null
@@ -12631,6 +13748,7 @@ export type TaskConversationResponses = {
       interactions: Array<{
         id: string
         taskID: string
+        orderKey: string
         runID: string | null
         sessionID?: string | null
         externalID: string
@@ -12713,6 +13831,7 @@ export type TaskConversationResponses = {
         name: string
         steps: Array<{
           id: string
+          orderKey: string
           label: string
           tool: string
           scope: "task" | "goal"
@@ -12746,6 +13865,7 @@ export type TaskConversationResponses = {
       }
       goalWorkflows?: Array<{
         goalID: string
+        orderKey: string
         goalTitle: string
         goalObjective?: string
         goalStatus: string
@@ -12756,6 +13876,7 @@ export type TaskConversationResponses = {
         priority: "blocking" | "advisory"
         steps: Array<{
           stepID: string
+          orderKey: string
           label: string
           status: "pending" | "running" | "completed" | "skipped" | "failed"
           startedAt?: number
@@ -12804,6 +13925,7 @@ export type TaskConversationResponses = {
           }
           phases?: {
             [key: string]: {
+              orderKey: string
               status: "pending" | "running" | "completed" | "skipped" | "failed"
               startedAt?: number
               completedAt?: number
@@ -12824,11 +13946,40 @@ export type TaskConversationResponses = {
         evidence?: string
       }>
     }
-    transcript: Array<unknown>
-    timeline: Array<unknown>
+    transcript: Array<VisibleMessageWithParts>
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        source?: string
+        surface: string
+        taskID?: string
+        sessionID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            type: "text"
+            text: string
+          }
+        | {
+            id: string
+            type: "file"
+            mime: string
+            url: string
+            filename?: string
+          }
+      >
+    }>
     events: Array<{
       event_id: string
       task_id: string
+      orderKey: string
       run_id?: string
       type: string
       emittedAt: number
@@ -12852,16 +14003,18 @@ export type TaskConversationResponses = {
       limit: number
       sinceTimestamp?: number | null
     }
-    history?: {
+    history: {
       oldestTimestamp: number | null
+      oldestOrderKey: string | null
       oldestMessageID?: string | null
       hasMore: boolean
       limit: number
     }
-    agentView?: {
+    agentView: {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -12880,6 +14033,7 @@ export type TaskConversationResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -12896,6 +14050,7 @@ export type TaskConversationResponses = {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -12914,6 +14069,7 @@ export type TaskConversationResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -12967,11 +14123,40 @@ export type TaskConversationSessionResponses = {
    * Task conversation session transcript
    */
   200: {
-    transcript: Array<unknown>
-    timeline: Array<unknown>
+    transcript: Array<VisibleMessageWithParts>
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        source?: string
+        surface: string
+        taskID?: string
+        sessionID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            type: "text"
+            text: string
+          }
+        | {
+            id: string
+            type: "file"
+            mime: string
+            url: string
+            filename?: string
+          }
+      >
+    }>
     events: Array<{
       event_id: string
       task_id: string
+      orderKey: string
       run_id?: string
       type: string
       emittedAt: number
@@ -12992,6 +14177,7 @@ export type TaskConversationSessionResponses = {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -13010,6 +14196,7 @@ export type TaskConversationSessionResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -13024,6 +14211,7 @@ export type TaskConversationSessionResponses = {
     }
     history: {
       oldestTimestamp: number | null
+      oldestOrderKey: string | null
       oldestMessageID?: string | null
       hasMore: boolean
       limit: number
@@ -13040,6 +14228,7 @@ export type TaskConversationHistoryData = {
   }
   query: {
     before: number
+    before_order_key: string
     before_id?: string
     limit?: number
   }
@@ -13072,11 +14261,40 @@ export type TaskConversationHistoryResponses = {
    * Task conversation history page
    */
   200: {
-    transcript: Array<unknown>
-    timeline: Array<unknown>
+    transcript: Array<VisibleMessageWithParts>
+    timeline: Array<{
+      info: {
+        id: string
+        orderKey: string
+        role: "user" | "assistant" | "system"
+        source?: string
+        surface: string
+        taskID?: string
+        sessionID?: string
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      parts: Array<
+        | {
+            id: string
+            type: "text"
+            text: string
+          }
+        | {
+            id: string
+            type: "file"
+            mime: string
+            url: string
+            filename?: string
+          }
+      >
+    }>
     events: Array<{
       event_id: string
       task_id: string
+      orderKey: string
       run_id?: string
       type: string
       emittedAt: number
@@ -13097,6 +14315,7 @@ export type TaskConversationHistoryResponses = {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
         sessionID: string
+        orderKey: string
         stage: string
         parentSessionID?: string
         goalID?: string
@@ -13115,6 +14334,7 @@ export type TaskConversationHistoryResponses = {
       }>
       messages: Array<{
         messageID: string
+        orderKey: string
         sessionID: string
         stage: string
         parentSessionID?: string
@@ -13129,6 +14349,7 @@ export type TaskConversationHistoryResponses = {
     }
     history: {
       oldestTimestamp: number | null
+      oldestOrderKey: string | null
       oldestMessageID?: string | null
       hasMore: boolean
       limit: number
@@ -13181,6 +14402,7 @@ export type TaskConversationEventsResponses = {
     events: Array<{
       event_id: string
       task_id: string
+      orderKey: string
       run_id?: string
       type: string
       emittedAt: number
@@ -13297,6 +14519,7 @@ export type TaskBoardResponses = {
     snapshotVersion: string
     task: {
       id: string
+      orderKey: string
       projectID: string
       directory?: string
       sessionID?: string | null
@@ -13491,6 +14714,7 @@ export type TaskBoardResponses = {
     interactions: Array<{
       id: string
       taskID: string
+      orderKey: string
       runID: string | null
       sessionID?: string | null
       externalID: string
@@ -13573,6 +14797,7 @@ export type TaskBoardResponses = {
       name: string
       steps: Array<{
         id: string
+        orderKey: string
         label: string
         tool: string
         scope: "task" | "goal"
@@ -13606,6 +14831,7 @@ export type TaskBoardResponses = {
     }
     goalWorkflows?: Array<{
       goalID: string
+      orderKey: string
       goalTitle: string
       goalObjective?: string
       goalStatus: string
@@ -13616,6 +14842,7 @@ export type TaskBoardResponses = {
       priority: "blocking" | "advisory"
       steps: Array<{
         stepID: string
+        orderKey: string
         label: string
         status: "pending" | "running" | "completed" | "skipped" | "failed"
         startedAt?: number
@@ -13664,6 +14891,7 @@ export type TaskBoardResponses = {
         }
         phases?: {
           [key: string]: {
+            orderKey: string
             status: "pending" | "running" | "completed" | "skipped" | "failed"
             startedAt?: number
             completedAt?: number
@@ -13722,10 +14950,7 @@ export type TaskTranscriptResponses = {
   /**
    * Task session messages including tool calls
    */
-  200: Array<{
-    info: Message
-    parts: Array<Part>
-  }>
+  200: Array<VisibleMessageWithParts>
 }
 
 export type TaskTranscriptResponse = TaskTranscriptResponses[keyof TaskTranscriptResponses]
@@ -13766,6 +14991,12 @@ export type TaskOperatorModelContextErrors = {
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -13898,6 +15129,7 @@ export type TaskInteractionsResponses = {
   200: Array<{
     id: string
     taskID: string
+    orderKey: string
     runID: string | null
     sessionID?: string | null
     externalID: string
@@ -13980,6 +15212,12 @@ export type TaskMessageErrors = {
         }
       }
     | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
         name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
@@ -13999,8 +15237,8 @@ export type TaskMessageResponses = {
     wake_status: "started" | "queued" | "not_woken"
     should_resume: boolean
     user_message?: {
-      info: unknown
-      parts: Array<unknown>
+      info: TaskMessageUserInfo
+      parts: Array<TaskMessageUserPart>
     }
   }
 }
@@ -14050,6 +15288,12 @@ export type TaskInjectErrors = {
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -14123,6 +15367,12 @@ export type TaskSessionReplyErrors = {
           [key: string]: unknown
         }
       }
+    | {
+        name: "AgentSessionAttachmentReferenceError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Not found
    */
@@ -14145,6 +15395,12 @@ export type TaskSessionReplyErrors = {
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -14223,6 +15479,12 @@ export type TaskSessionCancelErrors = {
         }
       }
     | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
         name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
@@ -14282,6 +15544,12 @@ export type TaskCancelErrors = {
   409:
     | {
         name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
         data: {
           [key: string]: unknown
         }
@@ -14760,6 +16028,12 @@ export type RunAbortErrors = {
         }
       }
     | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
         name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
@@ -15188,6 +16462,7 @@ export type InteractionReplyResponses = {
   200: {
     id: string
     taskID: string
+    orderKey: string
     runID: string | null
     sessionID?: string | null
     externalID: string
@@ -15260,6 +16535,7 @@ export type InteractionRejectResponses = {
   200: {
     id: string
     taskID: string
+    orderKey: string
     runID: string | null
     sessionID?: string | null
     externalID: string
@@ -15673,6 +16949,15 @@ export type FindTextData = {
   url: "/find"
 }
 
+export type FindTextErrors = {
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FindTextError = FindTextErrors[keyof FindTextErrors]
+
 export type FindTextResponses = {
   /**
    * Matches
@@ -15713,6 +16998,15 @@ export type FindFilesData = {
   }
   url: "/find/file"
 }
+
+export type FindFilesErrors = {
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FindFilesError = FindFilesErrors[keyof FindFilesErrors]
 
 export type FindFilesResponses = {
   /**
@@ -15780,6 +17074,29 @@ export type FileReadData = {
   url: "/file/content"
 }
 
+export type FileReadErrors = {
+  /**
+   * File not found
+   */
+  404: {
+    name: "FileNotFoundError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+  /**
+   * File read failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type FileReadError = FileReadErrors[keyof FileReadErrors]
+
 export type FileReadResponses = {
   /**
    * File content
@@ -15804,6 +17121,35 @@ export type FileWriteData = {
   url: "/file/content"
 }
 
+export type FileWriteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
+}
+
+export type FileWriteError = FileWriteErrors[keyof FileWriteErrors]
+
 export type FileWriteResponses = {
   /**
    * Updated file content
@@ -15812,6 +17158,202 @@ export type FileWriteResponses = {
 }
 
 export type FileWriteResponse = FileWriteResponses[keyof FileWriteResponses]
+
+export type FileDeleteData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    path: string
+  }
+  url: "/file/item"
+}
+
+export type FileDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type FileDeleteError = FileDeleteErrors[keyof FileDeleteErrors]
+
+export type FileDeleteResponses = {
+  /**
+   * Deleted file path
+   */
+  200: {
+    path: string
+  }
+}
+
+export type FileDeleteResponse = FileDeleteResponses[keyof FileDeleteResponses]
+
+export type FileMoveData = {
+  body: {
+    path: string
+    newPath: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item"
+}
+
+export type FileMoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type FileMoveError = FileMoveErrors[keyof FileMoveErrors]
+
+export type FileMoveResponses = {
+  /**
+   * Moved file node
+   */
+  200: {
+    previousPath: string
+    path: string
+    node: FileNode
+  }
+}
+
+export type FileMoveResponse = FileMoveResponses[keyof FileMoveResponses]
+
+export type FileCreateData = {
+  body: {
+    path: string
+    type: "file" | "directory"
+    content?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item"
+}
+
+export type FileCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type FileCreateError = FileCreateErrors[keyof FileCreateErrors]
+
+export type FileCreateResponses = {
+  /**
+   * Created file node
+   */
+  200: FileNode
+}
+
+export type FileCreateResponse = FileCreateResponses[keyof FileCreateResponses]
 
 export type FileUploadData = {
   body: {
@@ -15831,6 +17373,37 @@ export type FileUploadData = {
   }
   url: "/file/upload"
 }
+
+export type FileUploadErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type FileUploadError = FileUploadErrors[keyof FileUploadErrors]
 
 export type FileUploadResponses = {
   /**
@@ -15979,6 +17552,10 @@ export type McpAuthRemoveErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * Internal server error
+   */
+  500: UnknownError
 }
 
 export type McpAuthRemoveError = McpAuthRemoveErrors[keyof McpAuthRemoveErrors]
@@ -16029,6 +17606,15 @@ export type McpAuthStartErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * MCP OAuth start failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type McpAuthStartError = McpAuthStartErrors[keyof McpAuthStartErrors]
@@ -16087,6 +17673,15 @@ export type McpAuthCallbackErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * MCP OAuth completion failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors]
@@ -16135,6 +17730,15 @@ export type McpAuthAuthenticateErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * MCP OAuth completion failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAuthenticateErrors]
@@ -16162,6 +17766,36 @@ export type McpConnectData = {
   url: "/mcp/{name}/connect"
 }
 
+export type McpConnectErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * MCP connection failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type McpConnectError = McpConnectErrors[keyof McpConnectErrors]
+
 export type McpConnectResponses = {
   /**
    * MCP server connected successfully
@@ -16184,6 +17818,27 @@ export type McpDisconnectData = {
   }
   url: "/mcp/{name}/disconnect"
 }
+
+export type McpDisconnectErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type McpDisconnectError = McpDisconnectErrors[keyof McpDisconnectErrors]
 
 export type McpDisconnectResponses = {
   /**
@@ -16451,6 +18106,20 @@ export type InstanceDisposeData = {
   url: "/instance/dispose"
 }
 
+export type InstanceDisposeErrors = {
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    name: "ActiveExecutorSessionsError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type InstanceDisposeError = InstanceDisposeErrors[keyof InstanceDisposeErrors]
+
 export type InstanceDisposeResponses = {
   /**
    * Instance disposed
@@ -16533,6 +18202,20 @@ export type CommandListData = {
   }
   url: "/command"
 }
+
+export type CommandListErrors = {
+  /**
+   * Command list failed
+   */
+  500: {
+    name: "UnknownError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type CommandListError = CommandListErrors[keyof CommandListErrors]
 
 export type CommandListResponses = {
   /**
@@ -16919,6 +18602,20 @@ export type GlobalDisposeData = {
   url: "/global/dispose"
 }
 
+export type GlobalDisposeErrors = {
+  /**
+   * Active executor sessions prevent this operation
+   */
+  409: {
+    name: "ActiveExecutorSessionsError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type GlobalDisposeError = GlobalDisposeErrors[keyof GlobalDisposeErrors]
+
 export type GlobalDisposeResponses = {
   /**
    * Global disposed
@@ -16930,10 +18627,7 @@ export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeRe
 
 export type GlobalDbResetData = {
   body: {
-    /**
-     * Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.
-     */
-    projectDir: string
+    database: string
   }
   path?: never
   query?: never
@@ -16946,21 +18640,34 @@ export type GlobalDbResetErrors = {
    */
   400: BadRequestError
   /**
-   * Conflict
+   * Active executor sessions prevent this operation
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ActiveExecutorSessionsError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+  /**
+   * Database file deletion failed
+   */
+  500: {
+    ok: false
+    restarting: false
+    targets: Array<{
+      label: string
+      path: string
+      ok: boolean
+      error?: string
+    }>
+  }
+  /**
+   * Server restart handler is not registered
+   */
+  503: {
+    ok: false
+    error: string
+  }
 }
 
 export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
@@ -16971,6 +18678,7 @@ export type GlobalDbResetResponses = {
    */
   200: {
     ok: boolean
+    restarting: boolean
     targets: Array<{
       label: string
       path: string
@@ -17080,21 +18788,14 @@ export type GlobalDbMysqlImportErrors = {
    */
   400: BadRequestError
   /**
-   * Conflict
+   * Active executor sessions prevent this operation
    */
-  409:
-    | {
-        name: "ReplyTargetEnvelopeMissingError"
-        data: {
-          [key: string]: unknown
-        }
-      }
-    | {
-        name: "TaskCancellationIncompleteError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+  409: {
+    name: "ActiveExecutorSessionsError"
+    data: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]

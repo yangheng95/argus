@@ -13,7 +13,7 @@ import { Session } from "../../src/session"
 import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 import { serverErrorResponse } from "../../src/server/error-handler"
 
-Log.init({ print: false })
+await Log.init({ print: false })
 
 /**
  * 2026-04-30 darwin cascade audit (W2-V31). The server.ts onError
@@ -80,6 +80,23 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       403,
       "RequestOriginForbiddenError",
+    )
+  })
+
+  test("ActiveExecutorSessionsError maps to 409", async () => {
+    const ActiveExecutorSessionsError = NamedError.create(
+      "ActiveExecutorSessionsError",
+      z.object({ operation: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new ActiveExecutorSessionsError({
+          operation: "global.db.reset",
+          message: "Active executor sessions exist; refusing global.db.reset.",
+        })
+      },
+      409,
+      "ActiveExecutorSessionsError",
     )
   })
 
@@ -290,6 +307,57 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       409,
       "FileUploadConflictError",
+    )
+  })
+
+  test("FileInvalidPathError maps to 400", async () => {
+    const FileInvalidPathError = NamedError.create(
+      "FileInvalidPathError",
+      z.object({ path: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new FileInvalidPathError({
+          path: "../escape.txt",
+          message: "File path must stay inside the project",
+        })
+      },
+      400,
+      "FileInvalidPathError",
+    )
+  })
+
+  test("FileNotFoundError maps to 404", async () => {
+    const FileNotFoundError = NamedError.create(
+      "FileNotFoundError",
+      z.object({ path: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new FileNotFoundError({
+          path: "missing.txt",
+          message: "File entry not found",
+        })
+      },
+      404,
+      "FileNotFoundError",
+    )
+  })
+
+  test("FileConflictError maps to 409", async () => {
+    const FileConflictError = NamedError.create(
+      "FileConflictError",
+      z.object({ path: z.string(), message: z.string() }),
+    )
+    await expectMapping(
+      () => {
+        throw new FileConflictError({
+          path: "README.md",
+          message: "File destination already exists",
+        })
+      },
+      409,
+      "FileConflictError",
     )
   })
 
