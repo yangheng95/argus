@@ -2791,6 +2791,47 @@ test("mission session splits user turns from mission agent turns", () => {
 
 test("phase-absorbed agent does not merge surrounding orchestrator turns", () => {
   seedTurnBoard("phase interruption")
+  const phaseGoalID = "goal_phase_interrupt"
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "phase interruption",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          label: "Executor",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: phaseGoalID,
+        goalTitle: "Phase interruption",
+        goalStatus: "running",
+        orderIndex: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "running",
+            startedAt: 1_776_000_000_150,
+            phases: {
+              build: { status: "running", startedAt: 1_776_000_000_150 },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_phase_i1`
   const o2 = `assistant:session:${ROOT_SID}:message:msg_phase_i2`
@@ -2840,7 +2881,7 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
         resolvedRole: "build",
         agent: "build",
         parentSessionID: ROOT_SID,
-        goalID: "goal_phase_interrupt",
+        goalID: phaseGoalID,
         time: { created: 1_776_000_000_150 },
       }),
     },
@@ -2883,6 +2924,341 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1, o2])
   expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toEqual(["orchestrator before phase"])
   expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toEqual(["orchestrator after phase"])
+})
+
+test("late goal step materialization splits an already merged top-level segment", () => {
+  seedTurnBoard("late step boundary")
+  const phaseGoalID = "goal_late_step_boundary"
+  const firstCardID = `assistant:session:${ROOT_SID}:message:msg_late_step_before`
+  const secondCardID = `assistant:session:${ROOT_SID}:message:msg_late_step_after`
+  const stepCardID = `step:${phaseGoalID}:build`
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_late_step_before", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_late_step_before",
+        orderKey: messageOrderKey("msg_late_step_before", 1_776_000_000_100),
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_late_step_before", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("assistant", {
+        id: "prt_late_step_before",
+        orderKey: partOrderKey("prt_late_step_before", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_late_step_before", 1_776_000_000_100),
+        messageID: "msg_late_step_before",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "before late step",
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_late_step_after", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: "msg_late_step_after",
+        orderKey: messageOrderKey("msg_late_step_after", 1_776_000_000_200),
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_late_step_after", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("assistant", {
+        id: "prt_late_step_after",
+        orderKey: partOrderKey("prt_late_step_after", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_late_step_after", 1_776_000_000_200),
+        messageID: "msg_late_step_after",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "after late step",
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[firstCardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "late step boundary",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          label: "Executor",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: phaseGoalID,
+        goalTitle: "Late step boundary",
+        goalStatus: "running",
+        orderIndex: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "running",
+            startedAt: 1_776_000_000_150,
+            phases: {
+              build: { status: "running", startedAt: 1_776_000_000_150 },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
+
+  expect(cardTreeStore.cards[stepCardID]).toBeDefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeDefined()
+  expect(cardTreeStore.order.filter((id) => [firstCardID, stepCardID, secondCardID].includes(id))).toEqual([
+    firstCardID,
+    stepCardID,
+    secondCardID,
+  ])
+  expect((cardTreeStore.cards[firstCardID]?.parts || []).map((part: any) => part.text)).toEqual(["before late step"])
+  expect((cardTreeStore.cards[secondCardID]?.parts || []).map((part: any) => part.text)).toEqual(["after late step"])
+})
+
+test("goal phase internals do not repeatedly split adjacent top-level build segments", () => {
+  seedTurnBoard("phase internals are not repeated top-level boundaries")
+  const phaseGoalID = "goal_phase_internal_boundary"
+  const topSessionID = "ses_top_build_diagnostics"
+  const phaseSessionID = "ses_goal_phase_internal_build"
+  const firstCardID = `build:session:${topSessionID}:message:msg_top_build_before_step`
+  const afterStepCardID = `build:session:${topSessionID}:message:msg_top_build_after_step_a`
+  const splitCardID = `build:session:${topSessionID}:message:msg_top_build_after_step_b`
+  const phaseStepCardID = `step:${phaseGoalID}:build`
+  const phaseCardID = `${phaseStepCardID}:phase:build`
+
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "phase internals are not repeated top-level boundaries",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          label: "Executor",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: phaseGoalID,
+        goalTitle: "Visible goal step boundary",
+        goalStatus: "running",
+        orderIndex: 0,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "running",
+            startedAt: 1_776_000_000_150,
+            phases: {
+              build: { status: "running", startedAt: 1_776_000_000_150 },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_top_build_before_step", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_top_build_before_step",
+        orderKey: messageOrderKey("msg_top_build_before_step", 1_776_000_000_100),
+        sessionID: topSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_top_build_before_step", 1_776_000_000_100),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_top_build_before_step",
+        orderKey: partOrderKey("prt_top_build_before_step", 1_776_000_000_100),
+        owningMessageOrderKey: messageOrderKey("msg_top_build_before_step", 1_776_000_000_100),
+        messageID: "msg_top_build_before_step",
+        sessionID: topSessionID,
+        type: "text",
+        text: "top build before visible step",
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_top_build_after_step_a", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_top_build_after_step_a",
+        orderKey: messageOrderKey("msg_top_build_after_step_a", 1_776_000_000_200),
+        sessionID: topSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_top_build_after_step_a", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_top_build_after_step_a",
+        orderKey: partOrderKey("prt_top_build_after_step_a", 1_776_000_000_200),
+        owningMessageOrderKey: messageOrderKey("msg_top_build_after_step_a", 1_776_000_000_200),
+        messageID: "msg_top_build_after_step_a",
+        sessionID: topSessionID,
+        type: "text",
+        text: "top build after visible step",
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_goal_phase_internal", 1_776_000_000_250),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_goal_phase_internal",
+        orderKey: messageOrderKey("msg_goal_phase_internal", 1_776_000_000_250),
+        sessionID: phaseSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID: phaseGoalID,
+        time: { created: 1_776_000_000_250 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_goal_phase_internal", 1_776_000_000_250),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_goal_phase_internal",
+        orderKey: partOrderKey("prt_goal_phase_internal", 1_776_000_000_250),
+        owningMessageOrderKey: messageOrderKey("msg_goal_phase_internal", 1_776_000_000_250),
+        messageID: "msg_goal_phase_internal",
+        sessionID: phaseSessionID,
+        type: "text",
+        text: "internal goal phase build output",
+        parentSessionID: ROOT_SID,
+        goalID: phaseGoalID,
+      }),
+    },
+  })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_top_build_after_step_b", 1_776_000_000_300),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_top_build_after_step_b",
+        orderKey: messageOrderKey("msg_top_build_after_step_b", 1_776_000_000_300),
+        sessionID: topSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_000_300 },
+      }),
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_top_build_after_step_b", 1_776_000_000_300),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("build", {
+        id: "prt_top_build_after_step_b",
+        orderKey: partOrderKey("prt_top_build_after_step_b", 1_776_000_000_300),
+        owningMessageOrderKey: messageOrderKey("msg_top_build_after_step_b", 1_776_000_000_300),
+        messageID: "msg_top_build_after_step_b",
+        sessionID: topSessionID,
+        type: "text",
+        text: "top build still visually adjacent",
+      }),
+    },
+  })
+
+  expect(cardTreeStore.cards[phaseStepCardID]).toBeDefined()
+  expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
+  expect(cardTreeStore.cards[firstCardID]).toBeDefined()
+  expect(cardTreeStore.cards[afterStepCardID]).toBeDefined()
+  expect(cardTreeStore.cards[splitCardID]).toBeUndefined()
+  expect(
+    cardTreeStore.order.filter((id) => [firstCardID, phaseStepCardID, afterStepCardID, splitCardID].includes(id)),
+  ).toEqual([firstCardID, phaseStepCardID, afterStepCardID])
+  expect(
+    (cardTreeStore.cards[afterStepCardID]?.parts || []).map((part: any) => [part.type, part.messageID, part.text]),
+  ).toEqual([
+    ["text", "msg_top_build_after_step_a", "top build after visible step"],
+    ["boundary", "msg_top_build_after_step_b", undefined],
+    ["text", "msg_top_build_after_step_b", "top build still visually adjacent"],
+  ])
 })
 
 test("phase-absorbed empty build messages do not create timestamp-only boundaries", () => {

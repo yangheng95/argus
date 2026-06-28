@@ -2395,6 +2395,10 @@ interface TimelineSegment {
   messages: MessageInfo[]
 }
 
+type TimelineProjectionItem =
+  | { kind: "message"; orderKey: string; message: MessageInfo }
+  | { kind: "boundary"; orderKey: string; cardID: string }
+
 function messageTimeOrder(left: MessageInfo, right: MessageInfo): number {
   return compareTimelineOrderKeys(left.orderKey, right.orderKey, "message timeline")
 }
@@ -2415,6 +2419,31 @@ function timelineSegmentKey(message: MessageInfo, session: SessionInfo, stage: s
     goalID,
     parentSessionID: message.parentSessionID || session.parentSessionID || "",
   })
+}
+
+function visibleTimelineBoundaryCards(): TimelineProjectionItem[] {
+  const boundaries: TimelineProjectionItem[] = []
+  const seen = new Set<string>()
+  for (const card of Object.values(cardTreeStore.cards)) {
+    if (!card || card.kind !== "step") continue
+    const cardID = String(card.id || "")
+    if (!cardID || seen.has(cardID)) continue
+    seen.add(cardID)
+    boundaries.push({
+      kind: "boundary",
+      cardID,
+      orderKey: requireTimelineOrderKey(card.orderKey, `visible timeline boundary ${cardID}`),
+    })
+  }
+  return boundaries
+}
+
+function timelineProjectionItemOrder(left: TimelineProjectionItem, right: TimelineProjectionItem): number {
+  const byOrderKey = compareTimelineOrderKeys(left.orderKey, right.orderKey, "visible message segment")
+  if (byOrderKey !== 0) return byOrderKey
+  const leftID = left.kind === "message" ? `message:${left.message.id}` : `boundary:${left.cardID}`
+  const rightID = right.kind === "message" ? `message:${right.message.id}` : `boundary:${right.cardID}`
+  return leftID < rightID ? -1 : leftID > rightID ? 1 : 0
 }
 
 export interface RenderedConversationCardTarget {
@@ -2704,21 +2733,33 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   for (const message of messages.values()) timelineMessages.set(message.id, message)
   const ordered = [...timelineMessages.values()].filter((message) => sessions.has(message.sessionID)).sort(messageTimeOrder)
   if (ordered.length === 0) return
+  const projectionItems: TimelineProjectionItem[] = []
+  for (const message of ordered) {
+    const session = sessions.get(message.sessionID)
+    if (!session) continue
+    const stage = message.stage || session.stage
+    const goalID = message.goalID || session.goalID
+    if (isPhaseAbsorbedSession(stage, goalID)) continue
+    projectionItems.push({ kind: "message", orderKey: message.orderKey, message })
+  }
+  projectionItems.push(...visibleTimelineBoundaryCards())
+  projectionItems.sort(timelineProjectionItemOrder)
 
   const segments: TimelineSegment[] = []
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
   let previousAdjacentSegment: TimelineSegment | undefined
 
-  for (const message of ordered) {
+  for (const item of projectionItems) {
+    if (item.kind === "boundary") {
+      previousAdjacentSegment = undefined
+      continue
+    }
+    const message = item.message
     const session = sessions.get(message.sessionID)
     if (!session) continue
     const stage = message.stage || session.stage
     const goalID = message.goalID || session.goalID
-    if (isPhaseAbsorbedSession(stage, goalID)) {
-      previousAdjacentSegment = undefined
-      continue
-    }
 
     const key = timelineSegmentKey(message, session, stage, goalID)
     let segment = previousAdjacentSegment?.key === key ? previousAdjacentSegment : undefined
@@ -3093,6 +3134,12 @@ function rebuildBoardDerivedCards(): void {
     rebuildTaskContextCard(board)
     // Per-goal executor step cards (top-level) + their phase children.
     rebuildGoalStepCards(board)
+    // Goal phase internals are absorbed into phase cards, but the owning
+    // top-level step card is still a real visible timeline boundary.
+    // Re-run ordinary segment projection after board step materialization so
+    // adjacent message cards split only on rendered step boundaries, not on
+    // every internal phase message.
+    regroupTimelineSegments({ deferHierarchy: true })
     // Session-to-goal claiming.
     rebuildCardHierarchy()
     // Drain the stats dirty queue inside the same batch as the structural
