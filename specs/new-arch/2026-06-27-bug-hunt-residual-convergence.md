@@ -1769,3 +1769,30 @@ Still open after this repair:
 - Overlay browser sidecar inactivity timeout and route callback failure propagation.
 - Workspace command launcher stale directory-owned GUI state.
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
+
+## Fortieth Round Repair And Verification
+
+Repaired in this round:
+
+- `tool.truncation.cleanup` no longer scans only the runtime root derived from the ambient `Instance.directory` captured by the first global scheduler registration.
+- Cleanup now derives scan roots from the durable project registry with `Project.list()`, then scans each registered project worktree runtime root.
+- The scan intentionally follows the current `Truncate.output()` single write source: task tool output is written under `taskPrimaryProjectRoot()`, which resolves to the owning project worktree, not transient sandbox paths.
+- Regression coverage now registers two projects, creates expired tool-output files under both runtime roots, invokes cleanup from the first project context, and proves both roots are cleaned.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/tool/truncation.test.ts -t "global cleanup scans every registered project runtime root" --timeout 60000` failed before the fix because the second project file remained.
+- `bun test packages/opencorvus/test/tool/truncation.test.ts -t "global cleanup scans every registered project runtime root" --timeout 60000`
+- `bun test packages/opencorvus/test/tool/truncation.test.ts --timeout 120000`
+- `bun run --cwd packages/opencorvus typecheck`
+
+Still open after this repair:
+
+- Global DB destructive active-session 409 protection/body drift.
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- Task/orchestrator `HTTPException` plain-text response contract drift.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.
