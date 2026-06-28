@@ -474,8 +474,12 @@ function ExtensionSettingsPanel(props: {
     return currentDirectory() === directory
   }
 
-  const skills = createMemo((): SkillItem[] => [...(appStore.skills as SkillItem[])])
-  const mounts = createMemo(() => skillMountMatrix(appStore.skillMounts))
+  const panelActive = createMemo(() => props.active === true)
+  const skillPanelActive = createMemo(() => props.mode === "skill" && panelActive())
+  const mcpPanelActive = createMemo(() => props.mode === "mcp" && panelActive())
+  const marketPanelActive = createMemo(() => props.mode === "skill-market" && panelActive())
+  const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills as SkillItem[])] : []))
+  const mounts = createMemo(() => (skillPanelActive() ? skillMountMatrix(appStore.skillMounts) : undefined))
   const poolSkills = createMemo(() => mounts()?.skills ?? skills())
   const agentRows = createMemo(() => {
     const matrix = mounts()
@@ -499,8 +503,10 @@ function ExtensionSettingsPanel(props: {
     return `${skillColumn} ${agentColumns}`.trim()
   })
   const [activeMatrixPair, setActiveMatrixPair] = createSignal<ActiveMatrixPair | null>(null)
-  const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
-  const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
+  const mcp = createMemo((): Record<string, McpItem> => (mcpPanelActive() ? { ...(appStore.mcp as Record<string, McpItem>) } : {}))
+  const market = createMemo((): MarketItem[] =>
+    marketPanelActive() ? [...(appStore.skillMarket as MarketItem[])] : [],
+  )
 
   const customSkills = createMemo(() => poolSkills().filter((item) => !item.builtin))
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable))
@@ -1004,7 +1010,7 @@ function ExtensionSettingsPanel(props: {
       </Show>
 
       {/* ── Installed Skills ── */}
-      <Show when={props.mode === "skill"}>
+      <Show when={skillPanelActive()}>
         <SettingsGroup
           class="extension-settings-group"
           data-compact={props.compact ? "true" : "false"}
@@ -1404,7 +1410,7 @@ function ExtensionSettingsPanel(props: {
       </Show>
 
       {/* ── MCP Servers ── */}
-      <Show when={props.mode === "mcp"}>
+      <Show when={mcpPanelActive()}>
         <SettingsGroup
           class="extension-settings-group"
           data-compact={props.compact ? "true" : "false"}
@@ -1552,7 +1558,7 @@ function ExtensionSettingsPanel(props: {
       </Show>
 
       {/* ── Skill Market ── */}
-      <Show when={props.mode === "skill-market"}>
+      <Show when={marketPanelActive()}>
         <SettingsGroup class="extension-settings-group" title={t("skill.market.title")}>
           <div class="extension-settings-body">
             <div class="extension-list" id="skillMarketList">

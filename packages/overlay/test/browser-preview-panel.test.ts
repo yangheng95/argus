@@ -88,8 +88,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain('"data-evidence-id": image().evidenceID')
   expect(component).not.toContain("captureImageUrl")
   expect(component).toContain("type BrowserPreviewLiveImage")
+  expect(component).toContain("type PendingBrowserPreviewLiveInput")
   expect(component).toContain("liveImageUrl")
-  expect(component).toContain("pendingLiveInputs: BrowserPreviewLiveInput[]")
+  expect(component).toContain("pendingLiveInputs: PendingBrowserPreviewLiveInput[]")
   expect(component).toContain("const flushLiveInputOnFrame = createAnimationFrameScheduler")
   expect(component).toContain("let liveImageRect: BrowserPreviewLiveImageRect | undefined")
   expect(component).toContain("let liveImageScrollElement: HTMLElement | null = null")
@@ -107,6 +108,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("onLoad={scheduleLiveImageRectMeasure}")
   expect(component).toContain("function flushLiveInputBatch()")
   expect(component).toContain("queueLiveInput(input)")
+  expect(component).toContain("pendingLiveInputsForScope(scope, key)")
+  expect(component).toContain("browserPreviewLivePoint(input, rect, scope.viewport)")
+  expect(component).toContain("if (!inputs) return")
   expect(component).toContain("sendTaskBrowserPreviewLiveInputsObjectUrl({ ...scope, inputs })")
   expect(component).toContain("browserPreviewLiveImageMatchesScope")
   expect(component).toContain('if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""')
@@ -208,17 +212,22 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).not.toContain("browser_preview.viewport.toggle")
   expect(component).toContain('data-ui="browser-preview-evidence"')
   expect(component).toContain('data-ui="browser-preview-evidence-missing"')
-  const livePointSource = component.slice(
-    component.indexOf("const livePoint ="),
-    component.indexOf("const sendLiveInput =", component.indexOf("const livePoint =")),
+  const liveInputReadySource = component.slice(
+    component.indexOf("const liveInputReadyScopeKey ="),
+    component.indexOf("const sendLiveInput =", component.indexOf("const liveInputReadyScopeKey =")),
+  )
+  const pendingLiveInputsSource = component.slice(
+    component.indexOf("const pendingLiveInputsForScope ="),
+    component.indexOf("async function flushLiveInputBatch", component.indexOf("const pendingLiveInputsForScope =")),
   )
   const clearLiveImageUrlSource = component.slice(
     component.indexOf("const clearLiveImageUrl ="),
     component.indexOf("const taskScopeKey =", component.indexOf("const clearLiveImageUrl =")),
   )
-  expect(livePointSource).toContain("browserPreviewLivePoint(event, liveImageRect, viewport)")
-  expect(livePointSource).not.toContain("querySelector")
-  expect(livePointSource).not.toContain("getBoundingClientRect")
+  expect(liveInputReadySource).not.toContain("querySelector")
+  expect(liveInputReadySource).not.toContain("getBoundingClientRect")
+  expect(pendingLiveInputsSource).not.toContain("querySelector")
+  expect(pendingLiveInputsSource).not.toContain("getBoundingClientRect")
   expect(clearLiveImageUrlSource).toContain("untrack(liveImage)")
   expect(clearLiveImageUrlSource).not.toContain("liveImage()")
   const targetStatusSourceStart = component.indexOf('class="browser-preview-status"')

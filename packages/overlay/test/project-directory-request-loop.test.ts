@@ -42,7 +42,9 @@ describe("overlay project directory request loop", () => {
     expect(mcpPanelBlock).toContain('mode="mcp"')
     expect(mcpPanelBlock).toContain("active={props.active ?? true}")
     expect(source).toContain("refreshMcpStatus({ directory }).catch")
-    expect(source).toContain("const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp")
+    expect(source).toContain(
+      "const mcp = createMemo((): Record<string, McpItem> => (mcpPanelActive() ? { ...(appStore.mcp",
+    )
     expect(source).not.toContain("panelMcp")
     expect(source).not.toContain("setPanelMcp")
     expect(source).toContain("if (!props.compact) return")
@@ -65,7 +67,9 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("const directory = currentDirectory()")
     expect(source).toContain('setPanelNotice(t("workspace.no_directory"), "warn")')
     expect(source).toContain("refreshSkillMounts({ directory }).catch")
-    expect(source).toContain("const skills = createMemo((): SkillItem[] => [...(appStore.skills")
+    expect(source).toContain(
+      "const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills",
+    )
     expect(source).not.toContain("panelSkills")
     expect(source).not.toContain("setPanelSkills")
     expect(source).toContain('if (props.mode === "skill")')
@@ -92,6 +96,20 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("<McpPanel directory={activeProjectDirectory} />")
     expect(source).not.toContain("return <SkillsPanel />")
     expect(source).not.toContain("return <McpPanel />")
+  })
+
+  test("compact skill and MCP panels do not materialize hidden matrix/list projections", () => {
+    const source = read("src/components/settings/SkillMarketPanel.tsx")
+    expect(source).toContain("const panelActive = createMemo(() => props.active === true)")
+    expect(source).toContain('const skillPanelActive = createMemo(() => props.mode === "skill" && panelActive())')
+    expect(source).toContain('const mcpPanelActive = createMemo(() => props.mode === "mcp" && panelActive())')
+    expect(source).toContain(
+      'const marketPanelActive = createMemo(() => props.mode === "skill-market" && panelActive())',
+    )
+    expect(source).toContain("const mounts = createMemo(() => (skillPanelActive() ? skillMountMatrix(appStore.skillMounts) : undefined))")
+    expect(source).toContain("<Show when={skillPanelActive()}>")
+    expect(source).toContain("<Show when={mcpPanelActive()}>")
+    expect(source).toContain("<Show when={marketPanelActive()}>")
   })
 
   test("memory panel sends the active directory on every memory request", () => {
@@ -134,8 +152,12 @@ describe("overlay project directory request loop", () => {
 
   test("Skill and MCP panel has one store source and does not swallow destructive MCP failures", () => {
     const source = read("src/components/settings/SkillMarketPanel.tsx")
-    expect(source).toContain("const skills = createMemo((): SkillItem[] => [...(appStore.skills")
-    expect(source).toContain("const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp")
+    expect(source).toContain(
+      "const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills",
+    )
+    expect(source).toContain(
+      "const mcp = createMemo((): Record<string, McpItem> => (mcpPanelActive() ? { ...(appStore.mcp",
+    )
     expect(source).toContain("function sourceMatchesDirectory(directory: string): boolean")
     expect(source).toContain("return await loadSkillMountMatrix({")
     expect(source).toContain("directory,")
