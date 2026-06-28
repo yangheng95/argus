@@ -1869,3 +1869,42 @@ Still open after this repair:
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
 - Full `task-conversation-routes` suite can leak or retain SQLite resources long enough for Windows `EBUSY` during `resetDatabase()`.
 - Global destructive active-session guards may need explicit blocked-run coverage.
+
+## Forty-Third Round Repair And Verification
+
+Repaired in this round:
+
+- Global destructive active-session guards now treat every live executor run as active: `queued`, `accepted`, `running`, and `blocked`.
+- `EXECUTOR_ACTIVE_RUN_STATUSES` now reuses the run catalog's `LIVE_RUN_STATUSES` single source instead of maintaining a narrower hand-written list that omitted queued and blocked live runs.
+- `hasActiveSessions()` and `hasAnyActiveSessions()` also inspect task-owned active sessions for started-but-incomplete tasks through `listActiveSessionsForTask()`, so run-less streaming/retry task sessions still block destructive disposal/reset/import routes.
+- Regression coverage seeds blocked and queued executor runs plus run-less streaming task sessions, then asserts `/global/dispose`, `/global/db/reset`, `/global/db/mysql/import`, and `/instance/dispose` all return the structured `ActiveExecutorSessionsError` 409 before disposal or file deletion.
+- The destructive-route fixture now disposes cached instances in cleanup, and the instance-dispose route regression invokes the exported app route under an explicit instance context so the test covers the route guard without unrelated full-bootstrap directory locks.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "blocked live executor sessions" --timeout 60000` failed before the fix because `/global/dispose` returned 200 and entered disposal despite a blocked live run.
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "blocked live executor sessions" --timeout 60000`
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "queued live executor" --timeout 60000`
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "run-less streaming" --timeout 90000`
+- `bun test packages/opencorvus/test/engine/catalog.test.ts --timeout 60000`
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts --timeout 120000`
+- `bun test packages/opencorvus/test/engine/catalog.test.ts packages/opencorvus/test/engine/active-sessions.test.ts --timeout 120000`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run api:routes-check`
+- `bun run ./packages/opencorvus/script/docs/render-api-md.ts --check`
+
+Independent-agent findings received during this round:
+
+- Backend/runtime: queued live runs are not dispatchable but are still active, so destructive guards must use live-run semantics. The same audit found run-less streaming/retry sessions were invisible to run-only guards and needed task-session coverage.
+- Overlay/GUI: provider/prompt/skill screenshot-producing browser suites still bypass the shared browser error collector through opt-outs, and the guard currently keys on a literal `installBrowserErrorCollector(page` call that blocks correct collector installs on differently named page variables.
+- Tooling: the long `task-conversation-routes` suite still has a test-helper SSE cleanup gap; aborting the signal without cancelling/releasing the stream reader can retain SQLite resources long enough to trigger Windows `EBUSY` during fixture reset.
+
+Still open after this repair:
+
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.
+- Full `task-conversation-routes` suite can leak or retain SQLite resources long enough for Windows `EBUSY` during `resetDatabase()`.

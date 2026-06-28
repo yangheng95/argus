@@ -1,17 +1,24 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database as BunDatabase } from "bun:sqlite"
+import { Hono } from "hono"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
+import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Server } from "../../src/server/server"
+import { AppRoutes } from "../../src/server/routes/app"
 import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../src/server/shutdown"
+import { SessionTable } from "../../src/session/session.sql"
+import { SessionStatus } from "../../src/session/status"
 import { Database, eq } from "../../src/storage/db"
 import { exportMysqlTransferSnapshot } from "../../src/storage/mysql-transfer"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 
@@ -45,10 +52,11 @@ function projectIDs() {
   return Database.use((db) => db.select({ id: ProjectTable.id }).from(ProjectTable).all()).map((row) => row.id)
 }
 
-function insertActiveRun(input: { projectID: string; projectName: string; worktree: string }) {
+function insertActiveRun(input: { projectID: string; projectName: string; worktree: string; status?: EngineRunStatus }) {
   const taskID = Identifier.ascending("task")
   const runID = Identifier.ascending("run")
   const now = Date.now()
+  const status = input.status ?? "running"
   insertProject(input.projectID, input.projectName, input.worktree)
   Database.use((db) => {
     db.insert(EngineTaskTable)
@@ -69,10 +77,10 @@ function insertActiveRun(input: { projectID: string; projectName: string; worktr
         task_id: taskID,
         run_id: runID,
         kind: "run",
-        label: "active-run",
+        label: `${status}-run`,
         payload: {
           executor: "opencorvus",
-          status: "running",
+          status,
           phase: "execute",
           time_started: now,
           time_completed: null,
@@ -82,6 +90,92 @@ function insertActiveRun(input: { projectID: string; projectName: string; worktr
       })
       .run()
   })
+}
+
+function insertRunlessStreamingTaskSession(input: { projectID: string; projectName: string; worktree: string }) {
+  const taskID = Identifier.ascending("task")
+  const rootID = Identifier.ascending("session")
+  const buildID = Identifier.ascending("session")
+  const now = Date.now()
+  insertProject(input.projectID, input.projectName, input.worktree)
+  Database.use((db) => {
+    db.insert(SessionTable)
+      .values([
+        {
+          id: rootID,
+          project_id: input.projectID,
+          parent_id: null,
+          slug: "runless-root",
+          directory: input.worktree,
+          title: "Runless root",
+          version: "1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        },
+        {
+          id: buildID,
+          project_id: input.projectID,
+          parent_id: rootID,
+          slug: "runless-build",
+          directory: input.worktree,
+          title: "Runless build",
+          version: "1",
+          kind: "build",
+          time_created: now + 1,
+          time_updated: now + 1,
+        },
+      ])
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: input.projectID,
+        session_id: rootID,
+        source: "test",
+        title: "Runless streaming destructive-route guard task",
+        request: "keep destructive database routes blocked while this task-owned session is streaming",
+        priority: "normal",
+        time_started: now + 2,
+        time_created: now,
+        time_updated: now + 2,
+      })
+      .run()
+    const orderKey = timelineOrderKey({ domain: "session", time: now + 1, id: buildID })
+    db.insert(ProtocolEventTable)
+      .values({
+        id: Identifier.ascending("event"),
+        kind: "event",
+        type: "session.status",
+        aggregate_type: "task",
+        aggregate_id: taskID,
+        task_id: taskID,
+        run_id: null,
+        goal_run_id: null,
+        session_id: buildID,
+        interaction_id: null,
+        stream_id: null,
+        source: "test",
+        target: null,
+        causation_id: null,
+        correlation_id: null,
+        reply_to: null,
+        seq: 1,
+        order_key: orderKey,
+        deadline_ms: null,
+        emitted_at: now + 3,
+        payload: {
+          orderKey,
+          sessionID: buildID,
+          status: { type: "streaming" },
+        },
+        time_created: now + 3,
+        time_updated: now + 3,
+      })
+      .run()
+  })
+  SessionStatus.set(buildID, { type: "streaming" }, { publish: false })
+  return { taskID, rootID, buildID }
 }
 
 async function expectActiveSessionConflict(response: Response, operation: string) {
@@ -113,6 +207,7 @@ describe("global destructive database routes", () => {
     mock.restore()
     clearServerShutdownHandler()
     Server.resetProjectRoutesAppForTest()
+    await Instance.disposeAll()
     await resetDatabase()
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true })
@@ -296,11 +391,77 @@ describe("global destructive database routes", () => {
     expect(disposeAll).not.toHaveBeenCalled()
   })
 
+  test.serial("global dispose rejects blocked live executor sessions across any project", async () => {
+    insertActiveRun({
+      projectID: "project-blocked-global-dispose",
+      projectName: "Blocked global dispose",
+      worktree: mktemp("opencorvus-blocked-global-dispose-"),
+      status: "blocked",
+    })
+    const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+
+    const response = await Server.App().request("/global/dispose", { method: "POST" })
+
+    await expectActiveSessionConflict(response, "global.dispose")
+    expect(disposeAll).not.toHaveBeenCalled()
+  })
+
+  test.serial("global dispose rejects queued live executor runs across any project", async () => {
+    insertActiveRun({
+      projectID: "project-queued-global-dispose",
+      projectName: "Queued global dispose",
+      worktree: mktemp("opencorvus-queued-global-dispose-"),
+      status: "queued",
+    })
+    const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+
+    const response = await Server.App().request("/global/dispose", { method: "POST" })
+
+    await expectActiveSessionConflict(response, "global.dispose")
+    expect(disposeAll).not.toHaveBeenCalled()
+  })
+
+  test.serial("global dispose rejects run-less streaming task sessions across any project", async () => {
+    insertRunlessStreamingTaskSession({
+      projectID: "project-runless-global-dispose",
+      projectName: "Runless global dispose",
+      worktree: mktemp("opencorvus-runless-global-dispose-"),
+    })
+    const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+
+    const response = await Server.App().request("/global/dispose", { method: "POST" })
+
+    await expectActiveSessionConflict(response, "global.dispose")
+    expect(disposeAll).not.toHaveBeenCalled()
+  })
+
   test.serial("DB reset rejects active executor sessions across any project before disposal or file deletion", async () => {
     insertActiveRun({
       projectID: "project-active-db-reset",
       projectName: "Active DB reset",
       worktree: mktemp("opencorvus-active-db-reset-"),
+    })
+    const dbPath = Database.Path()
+    const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+    const resetFiles = spyOn(Database, "resetFiles").mockResolvedValue([{ label: "database", path: dbPath, ok: true }])
+    installRestartHarness()
+
+    const response = await Server.App().request("/global/db/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ database: dbPath }),
+    })
+
+    await expectActiveSessionConflict(response, "global.db.reset")
+    expect(disposeAll).not.toHaveBeenCalled()
+    expect(resetFiles).not.toHaveBeenCalled()
+  })
+
+  test.serial("DB reset rejects run-less streaming task sessions before disposal or file deletion", async () => {
+    insertRunlessStreamingTaskSession({
+      projectID: "project-runless-db-reset",
+      projectName: "Runless DB reset",
+      worktree: mktemp("opencorvus-runless-db-reset-"),
     })
     const dbPath = Database.Path()
     const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
@@ -338,6 +499,48 @@ describe("global destructive database routes", () => {
     expect(disposeAll).not.toHaveBeenCalled()
     expect(projectIDs()).toContain("project-active-mysql-import")
     Database.close()
+  })
+
+  test.serial("MySQL import rejects run-less streaming task sessions before rebuilding SQLite", async () => {
+    insertProject("project-runless-import-source", "Runless import source", "C:/opencorvus/runless-import-source")
+    const snapshot = exportMysqlTransferSnapshot()
+    insertRunlessStreamingTaskSession({
+      projectID: "project-runless-mysql-import",
+      projectName: "Runless MySQL import",
+      worktree: mktemp("opencorvus-runless-mysql-import-"),
+    })
+    const disposeAll = spyOn(Instance, "disposeAll").mockResolvedValue(undefined)
+
+    const response = await Server.App().request("/global/db/mysql/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ snapshot }),
+    })
+
+    await expectActiveSessionConflict(response, "global.db.mysql.import")
+    expect(disposeAll).not.toHaveBeenCalled()
+    expect(projectIDs()).toContain("project-runless-mysql-import")
+    Database.close()
+  })
+
+  test.serial("instance dispose rejects run-less streaming task sessions in the current project", async () => {
+    const worktree = mktemp("opencorvus-runless-instance-dispose-")
+    insertRunlessStreamingTaskSession({
+      projectID: Project.directoryProjectID(worktree),
+      projectName: "Runless instance dispose",
+      worktree,
+    })
+    const dispose = spyOn(Instance, "dispose").mockResolvedValue(undefined)
+
+    const response = await Instance.provide({
+      directory: worktree,
+      async fn() {
+        return AppRoutes(new Hono()).request("/instance/dispose", { method: "POST" })
+      },
+    })
+
+    await expectActiveSessionConflict(response, "instance.dispose")
+    expect(dispose).not.toHaveBeenCalled()
   })
 
   test.serial("MySQL import aborts before rebuilding SQLite when disposeAll rejects", async () => {

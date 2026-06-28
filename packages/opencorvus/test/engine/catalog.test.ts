@@ -33,7 +33,7 @@ describe("engine status catalog", () => {
   test("run status catalog separates live from dispatchable", () => {
     expect(LIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
     expect(DISPATCHABLE_RUN_STATUSES).toEqual(["accepted", "running", "blocked"])
-    expect(EXECUTOR_ACTIVE_RUN_STATUSES).toEqual(["accepted", "running"])
+    expect(EXECUTOR_ACTIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
 
     expect(isLiveRunStatus("queued")).toBe(true)
     expect(isDispatchableRunStatus("queued")).toBe(false)
