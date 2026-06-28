@@ -55,10 +55,10 @@ paths, or hiding broken functionality behind throttles.
 | --- | --- | --- |
 | Conversation streaming | `conversation-stream-jank.test.ts` runs 120 history messages and 900 deltas with interval drift, long tasks, mounted card count, and screenshot. Latest observed after stream fix: drift 46.9 ms, 1 long task at 56.0 ms, 17 mounted cards. | Covered for the reproduced stream path. |
 | Workflow / inspector | `workflow-generating-status-browser.test.ts` proves live workflow status without streamed body text. Stream benchmark asserts `workflowMessages=0`. | Functional coverage only; still needs a closed/open workflow RAF/long-task pressure case. |
-| Task list | `task-list-perf.test.ts` covers 300 task rows and mission search timing. Latest observed: panel rows 263.5 ms, select last 18.4 ms, mission rows 161.9 ms, mission search 19.7 ms. | Timing coverage, not RAF/long-task coverage. |
-| Long transcript | `long-transcript-scroll.test.ts` checks scroll anchoring in a synthetic page. | Not enough for real overlay render pressure. Needs long completed markdown hydration/scroll benchmark. |
+| Task list | `task-list-perf.test.ts` covers 300 task rows and mission search timing with per-action RAF and long-task probes. Latest observed in the high-signal group: panel workflow 783.6 ms / 44.2 ms RAF, select last 13.0 ms / 6.8 ms RAF, mission rows 84.0 ms / 21.0 ms RAF, mission search 19.9 ms / 7.0 ms RAF. | Covered for task and mission list pressure. |
+| Long transcript | `conversation-long-transcript-markdown-browser.test.ts` loads the real overlay with 240 completed markdown messages, waits for transcript markdown prewarm, scrolls the chat surface, records RAF gaps, long tasks, mounted card count, markdown block count, and screenshot evidence. Latest observed in the high-signal group: RAF gap 48.5 ms, 1 long task, max long task 50.0 ms, 6 mounted cards. | Covered for completed markdown transcript scrolling. |
 | Agent rail | `conversation-agent-rail-scroll-browser.test.ts` covers drag/visibility. Source tests cover parent ID helpers and server-hydrated record source. | Functional/visual coverage; no dedicated RAF/long-task pressure case. |
-| Browser Preview | `browser-preview-live-input-batch.test.ts` covers live input batching, layout-read avoidance, nonblank screenshot, and no hidden capture. A 2026-06-28 run exposed dropped click/wheel inputs; fixed by queuing pending point inputs until live image geometry is available. | Functional responsiveness path repaired; still lacks global RAF/long-task benchmark. |
+| Browser Preview | `browser-preview-live-input-batch.test.ts` covers live input batching, layout-read avoidance, nonblank screenshot, no hidden capture, and RAF/long-task probes for mixed input, wheel burst, and resized click. Latest observed in the high-signal group: mixed 7.1 ms RAF / 0 long task, wheel 7.0 ms RAF / 0 long task, resized click 7.1 ms RAF / 0 long task. | Covered for live input responsiveness. |
 | Screenshot browser | `screenshot-browser-panel-browser.test.ts` covers open RAF gaps, long tasks, thumbnail request bounds, virtualization, resize screenshots, and cancellation. | Strong covered surface. |
 | File explorer | Existing browser tests cover accessibility, search errors, and focus visuals. Source audit found hidden search could still run when panel was inactive and large expanded trees are fully flattened before virtualization. Hidden search was repaired in this pass. | Hidden search repaired; large expanded-tree row materialization remains an open risk. |
 | Settings / Skills / MCP | Visual and matrix-density tests exist. Source audit found permanently mounted hidden panels could still derive and render large matrix/list data while CSS-hidden. Compact Skills/MCP projections were active-scoped in this pass and browser tests now assert hidden panels do not materialize matrix/list DOM. | Hidden compact panel materialization repaired; settings dialog density/left-edge compact matrix visual polish remains a separate open risk. |
@@ -100,6 +100,12 @@ Verification:
 - `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-service.test.ts --timeout 30000`
 - `bun run --cwd packages/overlay typecheck`
 - `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/browser-preview-live-input-batch.test.ts`
+
+2026-06-28 normalized metrics:
+
+- Mixed click/wheel/key: RAF gap 7.1 ms, max long task 0.0 ms.
+- Wheel burst: RAF gap 7.0 ms, max long task 0.0 ms.
+- Resized visual-center click: RAF gap 7.1 ms, max long task 0.0 ms.
 
 ## 2026-06-28 File Explorer Hidden Search Result
 
@@ -160,16 +166,60 @@ Verification:
   `.scratch/skill-mcp-delete-confirm.png`,
   `.scratch/skill-mcp-delete-failure.png`
 
+## 2026-06-28 Long Completed Markdown Transcript Result
+
+Root cause:
+
+- Conversation virtualization bounded DOM size, but completed markdown cards
+  still parsed markdown synchronously the first time a virtual item mounted.
+- The fixed `itemSize` estimate was tuned for short stream cards, so large
+  completed markdown messages caused extra virtualizer correction work during
+  scrollbar jumps.
+- A long transcript could therefore stall a scroll frame even though only a
+  small number of cards were mounted.
+
+Repair:
+
+- The central `renderMarkdown()` now owns a deterministic HTML cache, so
+  repeated virtual remounts do not re-run `marked` and syntax highlighting.
+- Conversation hydrate, tail merge, older-history load, and session-history
+  load prewarm completed text/reasoning markdown through that same renderer
+  before scroll interaction. Components still use the same `renderMarkdown`
+  entry point; no alternate text renderer or fallback route was added.
+- The conversation virtualizer estimate now matches completed markdown cards
+  better, while overscan is kept narrow enough to avoid batch-mounting many
+  heavy markdown cards in one frame.
+
+Verification:
+
+- `bun test packages/overlay/test/streaming-text-render.test.ts packages/overlay/test/markdown-safety.test.ts packages/overlay/test/message-url-preview.test.ts --timeout 30000`
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/conversation-long-transcript-markdown-browser.test.ts packages/overlay/test/browser/conversation-stream-jank.test.ts packages/overlay/test/browser/conversation-agent-rail-scroll-browser.test.ts`
+- Visual evidence:
+  `.scratch/overlay-long-markdown-transcript-scroll.png`
+
+## 2026-06-28 Task List RAF/Long-Task Normalization Result
+
+Result:
+
+- `task-list-perf.test.ts` now records RAF gaps and long tasks for task row
+  expansion/pagination/search, task selection, Mission row pagination, and
+  Mission search.
+- The benchmark tool was corrected to ignore the probe startup frame so it
+  measures the interaction, not prior page-settle time.
+
+Verification:
+
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/task-list-perf.test.ts`
+- Latest high-signal metrics: panel workflow 783.6 ms / 44.2 ms RAF, select
+  last 13.0 ms / 6.8 ms RAF, Mission rows 84.0 ms / 21.0 ms RAF, Mission
+  search 19.9 ms / 7.0 ms RAF.
+
 ## Remaining Work
 
 1. Add or extend a global live-pressure browser benchmark that opens a large
    selected task with conversation, workflow, agent rail, task list, browser
    preview, screenshot panel, and file/settings surfaces, then records RAF gaps,
    long tasks, mounted DOM counts, and route pressure.
-2. Add a real overlay long completed markdown transcript benchmark before
-   claiming long transcripts cannot jank during scroll/hydration.
-3. Normalize task-list and browser-preview timing tests to include RAF/long-task
-   probes rather than elapsed DOM-settle timing alone.
-4. Revisit compact Skills matrix visual density/left-edge clipping separately;
+2. Revisit compact Skills matrix visual density/left-edge clipping separately;
    the active-unmount repair keeps the opened panel functional but did not
    redesign that matrix.

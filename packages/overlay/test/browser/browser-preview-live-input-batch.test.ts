@@ -7,6 +7,7 @@ import sharp from "sharp"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 const SCREENSHOT_PATH = fileURLToPath(new URL("../../.scratch/browser-preview-live-input-batch.png", import.meta.url))
@@ -23,6 +24,17 @@ interface LiveInputLayoutProbeSummary {
     inInputEvent: boolean
     inRaf: boolean
   }>
+}
+
+interface InteractionPerf {
+  longTaskCount: number
+  maxLongTaskMs: number
+  maxRafGapMs: number
+}
+
+const PERF_LIMITS = {
+  maxRafGapMs: 120,
+  maxLongTaskMs: 160,
 }
 
 function route(url: URL) {
@@ -193,29 +205,6 @@ async function clickBrowserPreviewViewport(page: OverlayPage, viewportID: "deskt
   }, selector)
 }
 
-const rightActivityOpenPredicates: Record<"browser" | "explorer" | "inspector" | "screenshots", () => boolean> = {
-  browser: () => document.querySelector<HTMLElement>('[data-workbench-view="browser"]')?.dataset.open === "true",
-  explorer: () => document.querySelector<HTMLElement>('[data-workbench-view="explorer"]')?.dataset.open === "true",
-  inspector: () => document.querySelector<HTMLElement>('[data-workbench-view="inspector"]')?.dataset.open === "true",
-  screenshots: () =>
-    document.querySelector<HTMLElement>('[data-workbench-view="screenshots"]')?.dataset.open === "true",
-}
-
-async function openRightActivity(
-  page: OverlayPage,
-  activity: "browser" | "explorer" | "inspector" | "screenshots",
-  diagnostics: () => unknown,
-) {
-  const selector = `[data-ui="side-activity-button"][data-side="right"][data-activity="${activity}"]`
-  await page.waitForSelector(selector, { visible: true })
-  const isOpen = await page.evaluate(
-    (value) => document.querySelector<HTMLElement>(`[data-workbench-view="${value}"]`)?.dataset.open === "true",
-    activity,
-  )
-  if (!isOpen) await page.click(selector)
-  await waitForPageState(page, rightActivityOpenPredicates[activity], `${activity} right activity open`, diagnostics)
-}
-
 async function installLiveInputLayoutProbe(page: OverlayPage) {
   await page.evaluate(() => {
     const win = window as any
@@ -281,33 +270,111 @@ function assertNoLiveInputEventLayoutReads(summary: LiveInputLayoutProbeSummary,
   )
 }
 
-async function forceBrowserPreviewHorizontalScroll(page: OverlayPage, diagnostics: () => unknown) {
-  await page.setViewport({ width: 1280, height: 900 })
-  await openRightActivity(page, "screenshots", diagnostics)
-  await openRightActivity(page, "inspector", diagnostics)
-  await openRightActivity(page, "explorer", diagnostics)
-  await openRightActivity(page, "browser", diagnostics)
+async function startInteractionPerfProbe(page: OverlayPage) {
+  await page.evaluate(() => {
+    const state = {
+      longTasks: [] as number[],
+      observer: undefined as PerformanceObserver | undefined,
+      rafGaps: [] as number[],
+      rafID: 0,
+      sampling: true,
+    }
+    let previousFrame = performance.now()
+    const tick = (time: number) => {
+      if (!state.sampling) return
+      state.rafGaps.push(time - previousFrame)
+      previousFrame = time
+      state.rafID = requestAnimationFrame(tick)
+    }
+    if ("PerformanceObserver" in window && PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+      state.observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) state.longTasks.push(entry.duration)
+      })
+      state.observer.observe({ entryTypes: ["longtask"] })
+    }
+    state.rafID = requestAnimationFrame(tick)
+    ;(window as any).__browserPreviewInteractionPerf = state
+  })
+}
+
+async function stopInteractionPerfProbe(page: OverlayPage): Promise<InteractionPerf> {
   return await page.evaluate(async () => {
-    const body = document.querySelector<HTMLElement>(".center-workbench-body")
-    const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-    if (!body || !image) throw new Error("Browser preview scroll fixture is missing")
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-    const before = image.getBoundingClientRect()
-    const maxScroll = body.scrollWidth - body.clientWidth
-    if (maxScroll < 120) throw new Error(`Browser preview scroll fixture needs overflow, maxScroll=${maxScroll}`)
-    body.scrollLeft = Math.min(maxScroll, body.scrollLeft + 120)
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-    const after = image.getBoundingClientRect()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const state = (window as any).__browserPreviewInteractionPerf
+    if (!state) throw new Error("missing Browser Preview interaction perf probe")
+    state.sampling = false
+    cancelAnimationFrame(state.rafID)
+    state.observer?.disconnect()
     return {
-      afterLeft: after.left,
-      beforeLeft: before.left,
-      deltaLeft: after.left - before.left,
-      imageWidth: after.width,
-      maxScroll,
-      scrollLeft: body.scrollLeft,
-      visible: after.right > 0 && after.left < window.innerWidth,
+      longTaskCount: state.longTasks.length,
+      maxLongTaskMs: state.longTasks.length > 0 ? Math.max(...state.longTasks) : 0,
+      maxRafGapMs: Math.max(0, ...state.rafGaps),
     }
   })
+}
+
+function assertInteractionPerf(metric: InteractionPerf, label: string) {
+  assert.ok(metric.maxRafGapMs <= PERF_LIMITS.maxRafGapMs, `${label} maxRafGapMs=${metric.maxRafGapMs}`)
+  assert.ok(metric.maxLongTaskMs <= PERF_LIMITS.maxLongTaskMs, `${label} maxLongTaskMs=${metric.maxLongTaskMs}`)
+}
+
+async function livePreviewPaneLayout(page: OverlayPage) {
+  return await page.evaluate(async () => {
+    const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+    const live = document.querySelector<HTMLElement>('[data-ui="browser-preview-live"]')
+    const frame = document.querySelector<HTMLElement>(".browser-preview-live-frame")
+    const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+    if (!stage || !live || !frame || !image) throw new Error("Browser preview live pane layout fixture is missing")
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    const liveStyle = getComputedStyle(live)
+    const frameStyle = getComputedStyle(frame)
+    const imageStyle = getComputedStyle(image)
+    const liveContentWidth =
+      live.clientWidth - parseFloat(liveStyle.paddingLeft || "0") - parseFloat(liveStyle.paddingRight || "0")
+    const stageRect = stage.getBoundingClientRect()
+    const liveRect = live.getBoundingClientRect()
+    const frameRect = frame.getBoundingClientRect()
+    const imageRect = image.getBoundingClientRect()
+    return {
+      aspectRatio: frameStyle.aspectRatio,
+      frameTransform: frameStyle.transform,
+      frameWidth: frameRect.width,
+      imageHeight: imageRect.height,
+      imageTransform: imageStyle.transform,
+      imageWidth: imageRect.width,
+      liveContentWidth,
+      liveFlex: liveStyle.flex,
+      liveWidth: liveRect.width,
+      stageClientWidth: stage.clientWidth,
+      stageScrollWidth: stage.scrollWidth,
+      stageWidth: stageRect.width,
+    }
+  })
+}
+
+function assertLivePreviewFitsPane(
+  layout: Awaited<ReturnType<typeof livePreviewPaneLayout>>,
+  label: string,
+) {
+  assert.ok(
+    layout.stageScrollWidth - layout.stageClientWidth <= 1,
+    `${label}: live preview stage must not create horizontal overflow\n${JSON.stringify(layout, null, 2)}`,
+  )
+  assert.ok(
+    Math.abs(layout.frameWidth - layout.liveContentWidth) <= 2,
+    `${label}: live frame should fill the pane content width\n${JSON.stringify(layout, null, 2)}`,
+  )
+  assert.ok(
+    Math.abs(layout.imageWidth - layout.frameWidth) <= 2,
+    `${label}: live screenshot should render at the frame width\n${JSON.stringify(layout, null, 2)}`,
+  )
+  assert.ok(
+    layout.imageHeight > 0,
+    `${label}: live screenshot should remain visible after width-fit scaling\n${JSON.stringify(layout, null, 2)}`,
+  )
+  assert.notEqual(layout.aspectRatio, "auto", `${label}: live frame must carry backend viewport aspect ratio`)
+  assert.equal(layout.frameTransform, "none", `${label}: live frame must not use CSS transform scaling`)
+  assert.equal(layout.imageTransform, "none", `${label}: live image must not use CSS transform scaling`)
 }
 
 async function dispatchLiveClickAtVisualCenter(page: OverlayPage) {
@@ -477,6 +544,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
   const task = {
     id: taskID,
     directory: projectRoot,
+    orderKey: testTaskOrderKey(taskID, now - 10_000),
     status: "active",
     sessionID: "ses_live_input_batch",
     request: "Verify live input batching",
@@ -514,7 +582,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     if (path === "/project/current/worktrees") return json([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
     if (path === `/task/${taskID}/operator-model-context`) return json({ selected: null, candidates: [] })
-    if (path === "/global/tasks" || path === "/tasks") return json({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/path") return json({ directory: projectRoot })
     if (path === "/vcs")
       return json({
@@ -695,6 +763,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     assert.deepEqual(liveSnapshotBodies[0], { targetID, viewportID: "desktop" })
 
     await installLiveInputLayoutProbe(page)
+    await startInteractionPerfProbe(page)
     await dispatchMixedInput(page)
     assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "mixed click wheel key live input")
     await waitForFixtureActivity(
@@ -702,6 +771,8 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       "mixed click wheel key live input batch",
       () => ({ requestLog, liveInputBodies }),
     )
+    const mixedInputPerf = await stopInteractionPerfProbe(page)
+    assertInteractionPerf(mixedInputPerf, "mixed click wheel key live input")
     const firstBody = liveInputBodies[0] as { input?: unknown; inputs?: Array<{ kind?: string; deltaY?: number }> }
     assert.equal(firstBody.input, undefined)
     assert.deepEqual(
@@ -711,6 +782,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
 
     const beforeBurstCount = liveInputBodies.length
     const wheelEventCount = 20
+    await startInteractionPerfProbe(page)
     await dispatchWheelBurst(page, wheelEventCount)
     assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "wheel burst live input")
     await waitForFixtureActivity(
@@ -718,6 +790,8 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       "wheel burst live input batch",
       () => ({ requestLog, liveInputBodies }),
     )
+    const wheelBurstPerf = await stopInteractionPerfProbe(page)
+    assertInteractionPerf(wheelBurstPerf, "wheel burst live input")
     const burstBodies = liveInputBodies.slice(beforeBurstCount) as Array<{
       inputs?: Array<{ kind?: string; deltaY?: number }>
     }>
@@ -731,28 +805,35 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       .reduce((total, input) => total + Number(input.deltaY || 0), 0)
     assert.equal(burstWheelDelta, wheelEventCount * 10)
 
-    const scrollMetrics = await forceBrowserPreviewHorizontalScroll(page, () => ({
-      liveInputBodies,
-      liveSnapshotBodies,
-      requestLog,
-    }))
-    assert.ok(
-      scrollMetrics.visible,
-      `browser preview live image should remain visible after scroll: ${JSON.stringify(scrollMetrics)}`,
+    assertLivePreviewFitsPane(await livePreviewPaneLayout(page), "initial live preview pane fit")
+    await page.setViewport({ width: 1120, height: 760 })
+    await waitForPageState(
+      page,
+      () => {
+        const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+        return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+      },
+      "live screenshot after pane resize",
+      () => ({ errors, requestLog, liveInputBodies }),
     )
-    assert.ok(
-      Math.abs(scrollMetrics.deltaLeft) > 40,
-      `browser preview scroll should move the live image viewport rect: ${JSON.stringify(scrollMetrics)}`,
-    )
-    const beforeScrolledClickCount = liveInputBodies.length
+    assertLivePreviewFitsPane(await livePreviewPaneLayout(page), "resized live preview pane fit")
+    const beforeResizedClickCount = liveInputBodies.length
+    await startInteractionPerfProbe(page)
     await dispatchLiveClickAtVisualCenter(page)
-    assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "scrolled visual-center live click")
+    assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "resized visual-center live click")
     await waitForFixtureActivity(
-      () => liveInputBodies.length > beforeScrolledClickCount,
-      "scrolled visual-center live click",
-      () => ({ requestLog, liveInputBodies, scrollMetrics }),
+      () => liveInputBodies.length > beforeResizedClickCount,
+      "resized visual-center live click",
+      () => ({ requestLog, liveInputBodies }),
     )
-    assertCenteredLiveClickInput(liveInputBodies.at(-1), viewports[0], "scrolled visual-center live click")
+    const resizedClickPerf = await stopInteractionPerfProbe(page)
+    assertInteractionPerf(resizedClickPerf, "resized visual-center live click")
+    assertCenteredLiveClickInput(liveInputBodies.at(-1), viewports[0], "resized visual-center live click")
+    console.log(
+      `[perf] browser-preview-live-input mixed=${mixedInputPerf.maxRafGapMs.toFixed(1)}raf/${mixedInputPerf.maxLongTaskMs.toFixed(1)}lt ` +
+        `wheel=${wheelBurstPerf.maxRafGapMs.toFixed(1)}raf/${wheelBurstPerf.maxLongTaskMs.toFixed(1)}lt ` +
+        `resizedClick=${resizedClickPerf.maxRafGapMs.toFixed(1)}raf/${resizedClickPerf.maxLongTaskMs.toFixed(1)}lt`,
+    )
 
     await waitForPageState(
       page,
