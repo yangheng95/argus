@@ -1,15 +1,8 @@
-import { Index, Show } from "solid-js"
-import { CardParts } from "./CardParts"
-import { orderedMessageParts } from "../utils/message"
+import { Show } from "solid-js"
 import { t } from "../utils/i18n"
 
 interface FrontendResearchPanelProps {
   status?: string
-  streamingMessages?: any[]
-}
-
-function hasStream(messages: any[] | undefined): boolean {
-  return Array.isArray(messages) && messages.length > 0
 }
 
 export function FrontendResearchPanel(props: FrontendResearchPanelProps) {
@@ -28,19 +21,11 @@ export function FrontendResearchPanel(props: FrontendResearchPanelProps) {
         </div>
       </Show>
 
-      <Show when={hasStream(props.streamingMessages)}>
-        <div class="req-streaming-messages">
-          <Index each={props.streamingMessages}>
-            {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} streaming={isGenerating()} />}
-          </Index>
-        </div>
-      </Show>
-
       <Show when={isFailed()}>
         <p class="empty-hint empty-hint--card">{t("workflow.frontend_research_failed")}</p>
       </Show>
 
-      <Show when={!isGenerating() && !isFailed() && !hasStream(props.streamingMessages)}>
+      <Show when={!isGenerating() && !isFailed()}>
         <p class="empty-hint empty-hint--card">{t("workflow.frontend_research_pending")}</p>
       </Show>
     </div>

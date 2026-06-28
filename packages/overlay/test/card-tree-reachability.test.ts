@@ -71,9 +71,10 @@ test("parentID helpers resolve ancestors without scanning child arrays", () => {
   expect(topLevelCardIDForCard("root", ["root"], cards)).toBe("root")
 })
 
-test("Board stage-message discovery does not enumerate cardTreeStore.cards keys", async () => {
+test("Board does not derive workflow streamed text from the card tree", async () => {
   const source = await Bun.file(`${OVERLAY_ROOT}/src/components/Board.tsx`).text()
-  expect(source).toContain("orderedReachableCardIDs()")
+  expect(source).not.toContain("orderedReachableCardIDs()")
+  expect(source).not.toContain("cardMessageSegments")
   expect(source).not.toContain("Object.keys(cardTreeStore.cards)")
 })
 

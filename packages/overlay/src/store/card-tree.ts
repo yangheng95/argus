@@ -487,10 +487,11 @@ export function replaceCardTreeOrder(
   let previousSnapshot: string[] = []
   let nextSnapshot: string[] = []
   setCardTreeStore("order", (current) => {
-    previousSnapshot = Array.from(current)
     const next = typeof nextOrder === "function" ? Array.from(nextOrder(current)) : Array.from(nextOrder)
+    if (equalCardTreeOrder(current, next)) return current
+    previousSnapshot = Array.from(current)
     nextSnapshot = next
-    changed = !equalCardTreeOrder(current, next)
+    changed = true
     return next
   })
   if (changed) notifyCardTreeOrderStats(previousSnapshot, nextSnapshot)

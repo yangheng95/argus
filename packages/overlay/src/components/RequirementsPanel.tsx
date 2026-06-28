@@ -6,9 +6,7 @@
  * 2. Complete — shows structured requirements list with type/priority badges
  * 3. Pending — shows "pending" hint when no data and not generating
  */
-import { For, Index, Show } from "solid-js"
-import { CardParts } from "./CardParts"
-import { orderedMessageParts } from "../utils/message"
+import { For, Show } from "solid-js"
 import { t } from "../utils/i18n"
 
 interface Requirement {
@@ -25,8 +23,6 @@ interface RequirementsPanelProps {
   specContent?: string
   /** Whether the requirements step is currently running */
   isGenerating?: boolean
-  /** Streaming agent messages from the requirements stage */
-  streamingMessages?: any[]
 }
 
 function typeBadgeClass(type: string): string {
@@ -44,7 +40,6 @@ function typeBadgeClass(type: string): string {
 
 export function RequirementsPanel(props: RequirementsPanelProps) {
   const hasData = () => props.requirements && props.requirements.length > 0
-  const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0
 
   return (
     <div class="req-panel">
@@ -55,16 +50,6 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
             <span class="card__spinner" />
             <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>
-          <Show when={hasStream()}>
-            <div class="req-streaming-messages">
-              {/* Index over For: SSE stream is append-only, never reorders. */}
-              <Index each={props.streamingMessages}>
-                {(msg) => (
-                  <CardParts parts={orderedMessageParts(msg())} depth={1} streaming={props.isGenerating === true} />
-                )}
-              </Index>
-            </div>
-          </Show>
         </div>
       </Show>
 
