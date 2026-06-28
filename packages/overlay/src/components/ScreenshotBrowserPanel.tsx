@@ -20,7 +20,7 @@ import { PreviewableImage } from "./ImagePreview"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 
 const SCREENSHOT_BROWSER_ROW_OVERSCAN = 1
-const SCREENSHOT_BROWSER_CARD_MIN_WIDTH = 132
+const SCREENSHOT_BROWSER_CARD_WIDTH = 132
 const SCREENSHOT_BROWSER_MAX_COLUMNS = 3
 const SCREENSHOT_BROWSER_GRID_GAP = 8
 const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
@@ -225,6 +225,7 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   const [listEl, setListEl] = createSignal<HTMLDivElement>()
   const [listWidth, setListWidth] = createSignal(0)
   const active = createMemo(() => props.active())
+  const cardWidth = createMemo(() => SCREENSHOT_BROWSER_CARD_WIDTH * currentUIScale())
   const items = createMemo(() => {
     if (!active()) return []
     return cardTreeStore.screenshotItems
@@ -232,11 +233,11 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   const groups = createMemo(() => groupScreenshotBrowserItems(items()))
   const columnCount = createMemo(() => {
     const scale = currentUIScale()
-    const minWidth = SCREENSHOT_BROWSER_CARD_MIN_WIDTH * scale
+    const fixedCardWidth = cardWidth()
     const gap = SCREENSHOT_BROWSER_GRID_GAP * scale
     const width = listWidth()
     if (width <= 0) return 1
-    return Math.min(SCREENSHOT_BROWSER_MAX_COLUMNS, Math.max(1, Math.floor((width + gap) / (minWidth + gap))))
+    return Math.min(SCREENSHOT_BROWSER_MAX_COLUMNS, Math.max(1, Math.floor((width + gap) / (fixedCardWidth + gap))))
   })
   const rows = createMemo(() => buildScreenshotBrowserRows(groups(), columnCount()))
 
@@ -279,7 +280,12 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
           </div>
         }
       >
-        <div ref={setListEl} class="screenshot-browser-groups" data-virtualized="true">
+        <div
+          ref={setListEl}
+          class="screenshot-browser-groups"
+          data-virtualized="true"
+          style={`--screenshot-browser-card-width: ${cardWidth()}px`}
+        >
           <Virtualizer
             data={rows()}
             overscan={SCREENSHOT_BROWSER_ROW_OVERSCAN}

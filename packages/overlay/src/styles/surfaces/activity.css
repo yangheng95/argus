@@ -566,7 +566,7 @@
 
 .screenshot-browser-row-grid {
   display: grid;
-  grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, var(--screenshot-browser-card-width)));
   gap: calc(8px * var(--ui-scale));
   min-width: 0;
 }
