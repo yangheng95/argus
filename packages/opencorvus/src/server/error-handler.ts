@@ -27,6 +27,7 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "LogFileNotFoundError") return 404
   if (err.name === "ProviderModelNotFoundError") return 400
   if (err.name === "DirectoryRequiredError") return 400
+  if (err.name === "RequestOriginForbiddenError") return 403
   if (err.name === "InvalidInitGitParameterError") return 400
   if (err.name === "InvalidDirectoryError") return 400
   if (err.name === "ChildSessionConfigError") return 400
