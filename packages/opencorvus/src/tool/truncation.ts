@@ -36,15 +36,37 @@ export namespace Truncate {
     })
   }
 
+  function isMissingFile(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+  }
+
+  async function statExistingFile(filepath: string) {
+    try {
+      return await fs.stat(filepath)
+    } catch (error) {
+      if (isMissingFile(error)) return undefined
+      throw error
+    }
+  }
+
+  async function unlinkExistingFile(filepath: string) {
+    try {
+      await fs.unlink(filepath)
+    } catch (error) {
+      if (isMissingFile(error)) return
+      throw error
+    }
+  }
+
   export async function cleanup() {
-    const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
+    const cutoff = Date.now() - RETENTION_MS
     const root = ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
-    const entries = await Glob.scan("s/*/*/tool-output/tool_*", { cwd: root, include: "file" }).catch(
-      () => [] as string[],
-    )
+    const entries = await Glob.scan("s/*/*/tool-output/tool_*", { cwd: root, include: "file" })
     for (const entry of entries) {
-      if (Identifier.timestamp(path.basename(entry)) >= cutoff) continue
-      await fs.unlink(path.join(root, entry)).catch(() => {})
+      const filepath = path.join(root, entry)
+      const stat = await statExistingFile(filepath)
+      if (!stat || stat.mtimeMs >= cutoff) continue
+      await unlinkExistingFile(filepath)
     }
   }
 

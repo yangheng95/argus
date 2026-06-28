@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, afterEach, beforeEach } from "bun:test"
+import { describe, test, expect, afterAll, afterEach, beforeEach, mock, spyOn } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Truncate } from "../../src/tool/truncation"
 import { Identifier } from "../../src/id/id"
@@ -285,8 +285,13 @@ describe("Truncate", () => {
 
   describe("cleanup", () => {
     const DAY_MS = 24 * 60 * 60 * 1000
+    const IDENTIFIER_TIMESTAMP_WRAP_MS = 0x1000000000
     let oldFile = ""
     let recentFile = ""
+
+    afterEach(() => {
+      mock.restore()
+    })
 
     afterAll(async () => {
       if (oldFile) await fs.unlink(oldFile).catch(() => {})
@@ -308,12 +313,14 @@ describe("Truncate", () => {
           const oldId = Identifier.create("tool", false, oldTimestamp)
           oldFile = path.join(outputDir, oldId)
           await Filesystem.write(oldFile, "old content")
+          await fs.utimes(oldFile, new Date(oldTimestamp), new Date(oldTimestamp))
 
           // Create a recent file (3 days ago)
           const recentTimestamp = Date.now() - 3 * DAY_MS
           const recentId = Identifier.create("tool", false, recentTimestamp)
           recentFile = path.join(outputDir, recentId)
           await Filesystem.write(recentFile, "recent content")
+          await fs.utimes(recentFile, new Date(recentTimestamp), new Date(recentTimestamp))
 
           await Truncate.cleanup()
 
@@ -321,6 +328,36 @@ describe("Truncate", () => {
           expect(await Filesystem.exists(oldFile)).toBe(false)
 
           // Recent file should still exist
+          expect(await Filesystem.exists(recentFile)).toBe(true)
+        },
+      })
+    })
+
+    test("preserves recent files when identifier timestamps wrap", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const cleanupNow = IDENTIFIER_TIMESTAMP_WRAP_MS + 2 * DAY_MS
+          const taskID = Identifier.create("task")
+          const sessionID = Identifier.create("session")
+          const outputDir = ProjectRuntimePaths.toolOutputDir(tmp.path, taskID, sessionID)
+          await fs.mkdir(outputDir, { recursive: true })
+
+          const oldId = Identifier.create("tool", false, cleanupNow - 10 * DAY_MS)
+          oldFile = path.join(outputDir, oldId)
+          await Filesystem.write(oldFile, "old content")
+          await fs.utimes(oldFile, new Date(cleanupNow - 10 * DAY_MS), new Date(cleanupNow - 10 * DAY_MS))
+
+          const recentId = Identifier.create("tool", false, cleanupNow - DAY_MS)
+          recentFile = path.join(outputDir, recentId)
+          await Filesystem.write(recentFile, "recent content")
+          await fs.utimes(recentFile, new Date(cleanupNow - DAY_MS), new Date(cleanupNow - DAY_MS))
+
+          spyOn(Date, "now").mockReturnValue(cleanupNow)
+          await Truncate.cleanup()
+
+          expect(await Filesystem.exists(oldFile)).toBe(false)
           expect(await Filesystem.exists(recentFile)).toBe(true)
         },
       })
