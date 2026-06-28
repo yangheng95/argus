@@ -1735,3 +1735,37 @@ Still open after this repair:
 - Workspace command launcher stale directory-owned GUI state.
 - Tool-output cleanup identifier timestamp wrap data-loss risk.
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
+
+## Thirty-Ninth Round Repair And Verification
+
+Repaired in this round:
+
+- `tool.truncation.cleanup` no longer derives file age from `Identifier.timestamp()` embedded in `tool_*` filenames. The identifier timestamp stores only the low 36 bits of milliseconds, so cleanup could misclassify fresh files after timestamp wrap.
+- Cleanup now uses the filesystem `mtimeMs` as the single age source and compares it against `Date.now() - RETENTION_MS`.
+- Missing files during `stat` or `unlink` are treated as an idempotent concurrent cleanup race; other filesystem failures propagate instead of being hidden behind a broad catch.
+- Truncation cleanup tests now set file mtimes explicitly and include a wrap-boundary regression proving a recent post-wrap file is preserved while an old file is deleted.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/tool/truncation.test.ts -t "preserves recent files when identifier timestamps wrap" --timeout 60000` failed before the fix because cleanup deleted the recent file.
+- `bun test packages/opencorvus/test/tool/truncation.test.ts -t "preserves recent files when identifier timestamps wrap" --timeout 60000`
+- `bun test packages/opencorvus/test/tool/truncation.test.ts --timeout 120000`
+- `bun run --cwd packages/opencorvus typecheck`
+
+Independent-agent findings received during this round:
+
+- Backend/API: global destructive DB routes can miss active-session protection outside project `Instance` context and still return plain `{ error }` for active-session 409 conflicts; task/orchestrator `HTTPException` branches remain a second error-response source.
+- Overlay/GUI: browser sidecar RPC timeout and route callback handling remain defective; workspace command launchers can still commit stale directory-owned GUI state; browser error collector opt-outs still cover many screenshot suites.
+- Scheduler/tooling: `tool.truncation.cleanup` still scans only the ambient first project runtime root; wait-cron and event scheduler still use instance-local bus visibility for cross-worktree activity.
+
+Still open after this repair:
+
+- Global DB destructive active-session 409 protection/body drift.
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- `tool.truncation.cleanup` global scheduler vs project runtime-root ownership mismatch.
+- Task/orchestrator `HTTPException` plain-text response contract drift.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.
