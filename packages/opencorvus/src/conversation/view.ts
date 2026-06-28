@@ -215,7 +215,8 @@ function applyLedgerLatestStatus(session: ConversationSessionView, ledger: Conve
 export function conversationPartHasDisplay(part: any): boolean {
   const type = String(part?.type || "")
   if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
-  if (type === "text" || type === "reasoning") {
+  if (type === "reasoning") return !!String(part?.text || "").replace(/[\[\]\s]/g, "")
+  if (type === "text") {
     return !!String(part?.text || "").trim()
   }
   return true

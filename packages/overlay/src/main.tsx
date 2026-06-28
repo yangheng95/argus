@@ -95,6 +95,7 @@ import {
 import { wakeMission, type MissionWakeResult } from "./services/mission"
 import { startSSE, stopSSE } from "./services/sse"
 import { resetWriter } from "./services/tree-writer"
+import { resetConversationAgentView } from "./store/conversation-agents"
 import { openImagePreview } from "./services/image-preview"
 import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./utils/debug-info"
 import { taskOwningDirectory } from "./services/task-directory"
@@ -600,6 +601,7 @@ async function openMissionSession(result: MissionWakeResult): Promise<void> {
   stopSSE()
   clearMessages()
   setChatAttachments([])
+  resetConversationAgentView()
   resetWriter({ scrollIntent: "bottom", cause: "mission-session-switch" })
   setBoardStore("selectedSource", source)
   setBoardStore("board", null)

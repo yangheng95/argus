@@ -115,7 +115,6 @@ function reportFlushFailure(entry: AppLogEntry, error: unknown): void {
   })
   appendStoreEntry(diagnostic)
   notifyLoggedError(diagnostic)
-  persist(diagnostic)
 }
 
 function flush(): void {

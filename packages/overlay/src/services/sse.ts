@@ -61,6 +61,101 @@ export interface SseStartOptions {
   directory?: string
 }
 
+function ssePayloadSample(data: string): string {
+  return String(data || "").slice(0, 500)
+}
+
+const SSE_DISPATCH_EVENT_SAMPLE_LIMIT = 12_000
+const SSE_DISPATCH_ERROR_DETAIL_LIMIT = 4_000
+const SSE_DISPATCH_PAYLOAD_KEY_LIMIT = 80
+
+function boundedString(value: string, limit: number): string {
+  if (value.length <= limit) return value
+  return `${value.slice(0, limit)}\n...[truncated ${value.length - limit} chars]`
+}
+
+function jsonSample(value: unknown, limit: number): string {
+  try {
+    return boundedString(JSON.stringify(value, null, 2), limit)
+  } catch {
+    return boundedString(String(value), limit)
+  }
+}
+
+function boundedErrorDetails(error: unknown): string {
+  return boundedString(formatErrorDetails(error), SSE_DISPATCH_ERROR_DETAIL_LIMIT)
+}
+
+function payloadKeyDiagnostic(properties: Record<string, any>): Record<string, unknown> {
+  const keys = Object.keys(properties).sort()
+  return {
+    keys: keys.slice(0, SSE_DISPATCH_PAYLOAD_KEY_LIMIT),
+    total: keys.length,
+    truncated: Math.max(0, keys.length - SSE_DISPATCH_PAYLOAD_KEY_LIMIT),
+  }
+}
+
+function eventProperties(event: any): Record<string, any> {
+  const properties = event?.properties
+  if (properties && typeof properties === "object" && !Array.isArray(properties)) return properties
+  const payload = event?.payload
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload
+  return {}
+}
+
+function dispatchEventDiagnostic(event: any): Record<string, unknown> {
+  const properties = eventProperties(event)
+  const info = properties.info && typeof properties.info === "object" ? properties.info : undefined
+  const part = properties.part && typeof properties.part === "object" ? properties.part : undefined
+  return {
+    eventID: event?.event_id || event?.eventID || "",
+    taskID: event?.task_id || event?.taskID || properties.taskID || properties.task_id || "",
+    type: event?.type || "",
+    orderKey: event?.orderKey || properties.orderKey || "",
+    messageID: info?.id || part?.messageID || properties.messageID || "",
+    sessionID: info?.sessionID || part?.sessionID || properties.sessionID || "",
+    partID: part?.id || properties.partID || "",
+    sequence: event?.sequence ?? "",
+    liveSequence: event?.live_sequence ?? "",
+    liveEpoch: event?.live_epoch ?? "",
+    emittedAt: event?.emittedAt || event?.emitted_at || "",
+    timestamp: event?.timestamp || "",
+    payloadKeys: payloadKeyDiagnostic(properties),
+    eventSample: jsonSample(event, SSE_DISPATCH_EVENT_SAMPLE_LIMIT),
+  }
+}
+
+function dispatchNotificationDetails(errorDetails: string, event: any): string {
+  return boundedString(
+    `${errorDetails}\n\nevent diagnostic:\n${jsonSample(dispatchEventDiagnostic(event), SSE_DISPATCH_EVENT_SAMPLE_LIMIT)}`,
+    SSE_DISPATCH_EVENT_SAMPLE_LIMIT + SSE_DISPATCH_ERROR_DETAIL_LIMIT,
+  )
+}
+
+function logMalformedSsePayload(input: {
+  stream: "selected-task" | "task-list"
+  data: string
+  error: unknown
+  taskID?: string
+  directory?: string
+}): void {
+  const where = input.stream === "selected-task" ? `task ${input.taskID || "<unknown>"}` : "task list"
+  AppLog.error("sse", `malformed ${input.stream} SSE payload`, {
+    stream: input.stream,
+    taskID: input.taskID,
+    directory: input.directory,
+    error: boundedErrorDetails(input.error),
+    payloadSample: ssePayloadSample(input.data),
+    notificationID: `sse:parse-error:${input.stream}:${input.taskID || input.directory || "global"}`,
+    notificationTitle: "Malformed live event",
+    notificationMessage: `OpenCorvus received a malformed SSE payload for ${where}.`,
+    notificationDetails: boundedString(
+      `${boundedErrorDetails(input.error)}\n\npayload sample:\n${ssePayloadSample(input.data)}`,
+      SSE_DISPATCH_ERROR_DETAIL_LIMIT + 600,
+    ),
+  })
+}
+
 export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
   if (deps.currentTaskID() !== deps.taskID) return
   const startedAt = Date.now()
@@ -247,13 +342,13 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
         armWatchdog(handle)
         // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
         // tree-writer's `let it crash` is meaningless if onEvent silently
-        // swallows the throw. Split: JSON.parse error → benign skip;
-        // dispatch error → console.error so the operator can find why
-        // the conversation panel is empty.
+        // swallows malformed input or dispatch failures. Both paths surface
+        // through AppLog so the operator can diagnose an empty panel.
         let event: any
         try {
           event = JSON.parse(data)
-        } catch {
+        } catch (error) {
+          logMalformedSsePayload({ stream: "selected-task", taskID, directory, data, error })
           return
         }
         if (event.type === "task.heartbeat" || event.type === "task.connected") return
@@ -268,22 +363,17 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
             handleEventStreamEvent(event)
           }
         } catch (err) {
-          const eventPayload = (() => {
-            try {
-              return JSON.stringify(event, null, 2)
-            } catch {
-              return String(event)
-            }
-          })()
+          const diagnostic = dispatchEventDiagnostic(event)
+          const errorDetails = boundedErrorDetails(err)
           AppLog.error("sse", `dispatch error for event ${event?.type || "<unknown>"}`, {
             taskID,
             eventType: event?.type || "<unknown>",
-            error: formatErrorDetails(err),
-            event,
+            error: errorDetails,
+            event: diagnostic,
             notificationID: `sse:dispatch-error:${taskID}`,
             notificationTitle: "Conversation event failed to render",
             notificationMessage: `Event type ${event?.type || "<unknown>"} threw while updating the conversation panel.`,
-            notificationDetails: `${formatErrorDetails(err)}\n\nevent payload:\n${eventPayload}`,
+            notificationDetails: dispatchNotificationDetails(errorDetails, event),
           })
         }
       },
@@ -368,12 +458,13 @@ export function startTaskListSSE() {
         recomputeBadgeFromTasks()
       },
       onEvent: (data) => {
-        // Same split as startSSE above: parse errors silent, dispatch
-        // errors surfaced.
+        // Same split as startSSE above: parse errors and dispatch errors
+        // are both surfaced.
         let event: any
         try {
           event = JSON.parse(data)
-        } catch {
+        } catch (error) {
+          logMalformedSsePayload({ stream: "task-list", directory, data, error })
           return
         }
         if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return
@@ -384,21 +475,16 @@ export function startTaskListSSE() {
           // and would throw on every missing payload).
           handleTaskListNotification(event)
         } catch (err) {
-          const eventPayload = (() => {
-            try {
-              return JSON.stringify(event, null, 2)
-            } catch {
-              return String(event)
-            }
-          })()
+          const diagnostic = dispatchEventDiagnostic(event)
+          const errorDetails = boundedErrorDetails(err)
           AppLog.error("sse", `task-list dispatch error for event ${event?.type || "<unknown>"}`, {
             eventType: event?.type || "<unknown>",
-            error: formatErrorDetails(err),
-            event,
+            error: errorDetails,
+            event: diagnostic,
             notificationID: "task-list-sse:dispatch-error",
             notificationTitle: "Task list event failed to render",
             notificationMessage: `Event type ${event?.type || "<unknown>"} threw while updating the task list.`,
-            notificationDetails: `${formatErrorDetails(err)}\n\nevent payload:\n${eventPayload}`,
+            notificationDetails: dispatchNotificationDetails(errorDetails, event),
           })
         }
       },

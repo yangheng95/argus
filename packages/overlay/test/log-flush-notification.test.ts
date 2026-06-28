@@ -76,7 +76,7 @@ test("overlay error logs create notification-center diagnostics through AppLog",
   expect(item?.timeoutMs).toBe(0)
 })
 
-test("overlay log upload failure creates a semantic notification and retries the queued entry", async () => {
+test("overlay log upload failure creates a semantic notification and retries without recursive upload", async () => {
   let requests = 0
   const bodies: Array<Record<string, unknown>> = []
   __setHostTransportForTest(
@@ -105,8 +105,8 @@ test("overlay log upload failure creates a semantic notification and retries the
 
   await waitForLogDrain(2_500)
 
-  expect(requests).toBeGreaterThanOrEqual(3)
-  expect(bodies).toContainEqual(
+  expect(requests).toBe(2)
+  expect(bodies).not.toContainEqual(
     expect.objectContaining({
       service: "overlay:system",
       level: "error",
@@ -117,11 +117,11 @@ test("overlay log upload failure creates a semantic notification and retries the
     bodies.some((body) => {
       const extra = body.extra as Record<string, unknown> | undefined
       return (
-        extra?.notificationID === "system:overlay-log-upload-failed" &&
-        String(extra.notificationDetails || "").includes("LOG_WRITE_FAILED")
+        extra?.notificationID === "system:overlay-log-upload-failed" ||
+        String(extra?.notificationDetails || "").includes("LOG_WRITE_FAILED")
       )
     }),
-  ).toBe(true)
+  ).toBe(false)
   const loggedError = notificationStore.items.find(
     (entry) => entry.id === "log:error:unit:cannot persist overlay diagnostics",
   )
