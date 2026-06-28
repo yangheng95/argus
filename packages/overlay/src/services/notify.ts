@@ -30,6 +30,9 @@ import { createStore } from "solid-js/store"
 import { getHostTransport } from "./host-transport"
 import { setDockBadge, setTrayAttention } from "./window"
 import { loadBadgeAckKeys, saveBadgeAckKeys } from "./overlay-settings-storage"
+import { formatErrorDetails } from "../utils/error-details"
+
+export { formatErrorDetails } from "../utils/error-details"
 
 type HostPermission = "granted" | "denied" | "default" | "unsupported"
 
@@ -43,6 +46,7 @@ export interface NotifyDescriptor {
 export interface RoutedNotificationEvent {
   type: string
   taskID?: string | null
+  directory?: string | null
   notify?: NotifyDescriptor
   notificationDetails?: string
   details?: string
@@ -60,6 +64,8 @@ export interface AppNotificationInput {
   // while the operator can still copy the underlying failure verbatim.
   details?: string
   taskID?: string
+  taskDirectory?: string
+  taskTitle?: string
   timeoutMs?: number
   centerHistory?: boolean
 }
@@ -71,6 +77,8 @@ export interface AppNotificationItem {
   message: string
   details: string
   taskID: string
+  taskDirectory: string
+  taskTitle: string
   time: number
   timeoutMs: number
   dismissedAt: number
@@ -184,39 +192,6 @@ function defaultCenterHistory(tone: AppNotificationTone): boolean {
   return tone === "error" || tone === "warning"
 }
 
-/**
- * Render a thrown value into a multi-line detail string suitable for the
- * notification's collapsible details block. Pulls stack, and — when the
- * error is an ApiError — the HTTP status / path / response body.
- */
-export function formatErrorDetails(err: unknown): string {
-  if (err == null) return ""
-  if (err instanceof Error) {
-    const parts: string[] = []
-    const meta = err as Error & { status?: unknown; path?: unknown; body?: unknown }
-    if (typeof meta.status === "number" && typeof meta.path === "string") {
-      parts.push(`HTTP ${meta.status} ${meta.path}`)
-    }
-    parts.push(err.stack || `${err.name}: ${err.message}`)
-    if (meta.body !== undefined) {
-      let rendered: string
-      try {
-        rendered = typeof meta.body === "string" ? meta.body : JSON.stringify(meta.body, null, 2)
-      } catch {
-        rendered = String(meta.body)
-      }
-      if (rendered) parts.push(`response body:\n${rendered}`)
-    }
-    return parts.join("\n\n")
-  }
-  if (typeof err === "string") return err
-  try {
-    return JSON.stringify(err, null, 2)
-  } catch {
-    return String(err)
-  }
-}
-
 function armDismissTimer(id: string, timeoutMs: number): void {
   const existing = notificationTimers.get(id)
   if (existing) clearTimeout(existing)
@@ -228,13 +203,18 @@ function armDismissTimer(id: string, timeoutMs: number): void {
 
 export function showNotification(input: AppNotificationInput): string {
   const id = input.id || nextNotificationID()
+  const taskID = input.taskID || ""
+  const explicitTaskTitle = input.taskTitle?.trim()
+  const taskTitle = taskID ? (explicitTaskTitle ? explicitTaskTitle : notificationTaskTitle(taskID)) : ""
   const item: AppNotificationItem = {
     id,
     tone: input.tone,
     title: input.title,
     message: input.message || "",
     details: input.details || "",
-    taskID: input.taskID || "",
+    taskID,
+    taskDirectory: notificationTaskDirectory(taskID, input.taskDirectory || ""),
+    taskTitle,
     timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
     time: Date.now(),
     dismissedAt: 0,
@@ -370,6 +350,25 @@ export function notificationTaskTitle(taskID: string): string {
   return taskID
 }
 
+export function notificationTaskDirectory(taskID: string, explicitDirectory = ""): string {
+  if (!taskID) return ""
+  const explicit = explicitDirectory.trim()
+  if (explicit) return explicit
+  const directories: string[] = []
+  for (const item of boardStore.tasks as any[]) {
+    if (item?.task?.id !== taskID) continue
+    const directory = typeof item.task.directory === "string" ? item.task.directory.trim() : ""
+    if (directory) directories.push(directory)
+  }
+  if (activeTaskID() === taskID) {
+    const directory = typeof boardStore.board?.task?.directory === "string" ? boardStore.board.task.directory.trim() : ""
+    if (directory) directories.push(directory)
+  }
+  const unique = [...new Set(directories)]
+  if (unique.length > 1) throw new Error(`notification task ${taskID} has inconsistent project directories`)
+  return unique[0] ?? ""
+}
+
 function windowFocused(): boolean {
   return typeof document !== "undefined" && typeof document.hasFocus === "function" && document.hasFocus()
 }
@@ -449,7 +448,8 @@ export function routeNotification(event: RoutedNotificationEvent): void {
   const taskID = taskIDForEvent(event)
   const copyKey = eventCopyKey(event.type, notify)
   const title = t(`notify.event.${copyKey}.title`)
-  const body = t(`notify.event.${copyKey}.body`, { title: notificationTaskTitle(taskID) })
+  const taskTitle = notificationTaskTitle(taskID)
+  const body = t(`notify.event.${copyKey}.body`, { title: taskTitle })
   showNotification({
     id: `event:${taskID || "global"}:${event.type}:${notify.tier}`,
     tone: toneForTier(notify),
@@ -457,6 +457,8 @@ export function routeNotification(event: RoutedNotificationEvent): void {
     message: body,
     details: notificationDetails(event),
     taskID,
+    taskDirectory: typeof event.directory === "string" ? event.directory : "",
+    taskTitle,
     centerHistory: true,
   })
   observeNotifyBackground("desktop notification dispatch", sendDesktopIfAllowed(event, taskID, title, body))

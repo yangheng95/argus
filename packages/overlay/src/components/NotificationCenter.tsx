@@ -5,7 +5,6 @@ import {
   centerHistoryNotificationItems,
   dismissNotification,
   formatErrorDetails,
-  notificationTaskTitle,
   notifyError,
   visibleNotificationItems,
   type AppNotificationItem,
@@ -37,7 +36,8 @@ function toneLabel(tone: string): string {
 
 export async function activateTaskNotification(item: AppNotificationItem): Promise<void> {
   if (!item.taskID) return
-  await selectTask(item.taskID)
+  if (!item.taskDirectory) throw new Error(`Notification ${item.id} has no project directory for task ${item.taskID}`)
+  await selectTask(item.taskID, { directory: item.taskDirectory })
   await loadTasks()
   dismissNotification(item.id)
 }
@@ -54,6 +54,8 @@ function runTaskNotificationAction(item: AppNotificationItem): void {
       message: activateTaskNotificationErrorMessage(error),
       details: formatErrorDetails(error),
       taskID: item.taskID,
+      taskDirectory: item.taskDirectory,
+      taskTitle: item.taskTitle,
     })
   })
 }
@@ -113,7 +115,7 @@ function groupByTask(items: AppNotificationItem[]): NotificationGroup[] {
       indexByKey.set(key, index)
       groups.push({
         key,
-        title: item.taskID ? notificationTaskTitle(item.taskID) : t("notify.system_group"),
+        title: item.taskID ? item.taskTitle : t("notify.system_group"),
         items: [],
       })
     }
@@ -123,7 +125,7 @@ function groupByTask(items: AppNotificationItem[]): NotificationGroup[] {
 }
 
 function NotificationItem(props: { item: AppNotificationItem; surface: NotificationSurface }) {
-  const taskTitle = () => (props.item.taskID ? notificationTaskTitle(props.item.taskID) : "")
+  const taskTitle = () => (props.item.taskID ? props.item.taskTitle : "")
 
   return (
     <section
@@ -145,7 +147,7 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
         <Show when={props.item.message}>
           <div class="app-notification__message">{props.item.message}</div>
         </Show>
-        <Show when={props.item.taskID}>
+        <Show when={props.item.taskID && props.item.taskDirectory}>
           <div class="app-notification__actions">
             <Button
               type="button"

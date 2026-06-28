@@ -11,7 +11,7 @@ import {
   parseMcpArguments,
   removeMcpAuth,
 } from "../src/services/mcp"
-import { setMcp } from "../src/store/app"
+import { appStore, setAppStore, setMcp } from "../src/store/app"
 
 const PROJECT_DIR = "C:/Users/example/project"
 
@@ -61,6 +61,7 @@ describe("MCP overlay service", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
     configure({ directory: "" })
+    setAppStore("config", null)
     setMcp({})
   })
 
@@ -106,6 +107,47 @@ describe("MCP overlay service", () => {
       directory: PROJECT_DIR,
     })
     expect(requests[2].body).toBeUndefined()
+  })
+
+  test("persists and connects MCP servers using the explicit action directory", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
+    configure({ directory: "D:/other/project" })
+
+    await addMcpServer(
+      {
+        name: "docs",
+        type: "remote",
+        url: "https://mcp.example.com/api",
+      },
+      { directory: PROJECT_DIR },
+    )
+
+    expect(requests.map((req) => req.query?.directory)).toEqual([PROJECT_DIR, PROJECT_DIR, PROJECT_DIR])
+  })
+
+  test("stale explicit MCP config writes do not replace the active project config mirror", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
+    configure({ directory: "D:/current/project" })
+    setAppStore("config", { mcp: { current: { type: "remote", url: "https://current.example.com/mcp" } } })
+
+    await addMcpServer(
+      {
+        name: "docs",
+        type: "remote",
+        url: "https://mcp.example.com/api",
+      },
+      {
+        directory: PROJECT_DIR,
+        isCurrentDirectory: (directory) => directory === "D:/current/project",
+      },
+    )
+
+    expect(requests.map((req) => req.query?.directory)).toEqual([PROJECT_DIR, PROJECT_DIR, PROJECT_DIR])
+    expect(appStore.config).toEqual({
+      mcp: { current: { type: "remote", url: "https://current.example.com/mcp" } },
+    })
   })
 
   test("builds local MCP config using the server-side command array contract", () => {
@@ -192,6 +234,22 @@ describe("MCP overlay service", () => {
       ["POST", "mcp/browser/disconnect"],
       ["POST", "mcp/filesystem/disconnect"],
       ["DELETE", "mcp/browser/auth"],
+    ])
+  })
+
+  test("delete-all uses captured MCP names and explicit directory", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
+    configure({ directory: "D:/other/project" })
+    setMcp({ stale: { status: "connected" } })
+
+    await deleteAllMcp({ directory: PROJECT_DIR, names: ["browser", "filesystem"] })
+
+    expect(requests.map((req) => [req.method, req.path, req.query?.directory])).toEqual([
+      ["POST", "mcp/browser/disconnect", PROJECT_DIR],
+      ["POST", "mcp/filesystem/disconnect", PROJECT_DIR],
+      ["DELETE", "mcp/browser/auth", PROJECT_DIR],
+      ["DELETE", "mcp/filesystem/auth", PROJECT_DIR],
     ])
   })
 })
