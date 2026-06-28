@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
+import type { Provider } from "../../src/provider/provider"
+import { ProviderTransform } from "../../src/provider/transform"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
@@ -15,6 +17,36 @@ function streamOf(events: Array<Record<string, unknown>>): AsyncIterable<any> {
       for (const event of events) yield event
     },
   }
+}
+
+function hexinClaudeModel(): Provider.Model {
+  return {
+    id: "hexin/cy-claude-sonnet-4-6",
+    providerID: "hexin",
+    name: "Hexin Claude",
+    api: {
+      id: "cy-claude-sonnet-4-6",
+      url: "https://aimemodeldev.myhexin.com/litellm/v1",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, image: false, audio: false, video: false, pdf: false },
+      output: { text: true, image: false, audio: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    limit: { context: 128_000, input: 128_000, output: 32_000 },
+    options: {},
+    headers: {},
+  } as Provider.Model
+}
+
+async function normalizedClaudeMessages(input: LLM.StreamInput) {
+  return await ProviderTransform.message(input.messages, hexinClaudeModel(), {})
 }
 
 describe("session runtime contract wakes", () => {
@@ -85,7 +117,7 @@ describe("session runtime contract wakes", () => {
             messageID: user.id,
             text: "original visible request",
           })
-          await Session.updateMessage({
+          const priorAssistant = await Session.updateMessage({
             id: Identifier.ascending("message"),
             role: "assistant",
             sessionID: session.id,
@@ -104,6 +136,13 @@ describe("session runtime contract wakes", () => {
               reasoning: 0,
               cache: { read: 0, write: 0 },
             },
+          })
+          await Session.updatePart({
+            id: Identifier.ascending("part"),
+            type: "text",
+            sessionID: session.id,
+            messageID: priorAssistant.id,
+            text: "prior local narration",
           })
 
           SessionPrompt.setSessionRuntimeContract(session.id, {
@@ -128,6 +167,8 @@ describe("session runtime contract wakes", () => {
           expect(streamInputs).toHaveLength(1)
           expect(streamInputs[0]!.runtimeSystemMode).toBe("complete")
           expect(streamInputs[0]!.system.join("\n")).toContain("FRESH_RUNTIME_SYSTEM")
+          const providerMessages = await normalizedClaudeMessages(streamInputs[0]!)
+          expect(providerMessages.at(-1)?.role).toBe("user")
           const composedSystem = await LLM.composeSystem(streamInputs[0]!)
           expect(composedSystem.join("\n")).toContain("FRESH_RUNTIME_SYSTEM")
           expect(composedSystem.join("\n")).not.toContain("STALE_USER_SYSTEM")
@@ -217,6 +258,13 @@ describe("session runtime contract wakes", () => {
               cache: { read: 0, write: 0 },
             },
           })
+          await Session.updatePart({
+            id: Identifier.ascending("part"),
+            type: "text",
+            sessionID: session.id,
+            messageID: priorAssistant.id,
+            text: "prior standby narration",
+          })
 
           const standbyResult = await Promise.race([
             SessionPrompt.loop({ sessionID: session.id }),
@@ -247,6 +295,8 @@ describe("session runtime contract wakes", () => {
           expect(wakeResult).toBeDefined()
           expect(streamInputs).toHaveLength(1)
           expect(streamInputs[0]!.runtimeSystemMode).toBe("complete")
+          const providerMessages = await normalizedClaudeMessages(streamInputs[0]!)
+          expect(providerMessages.at(-1)?.role).toBe("user")
           const composedSystem = await LLM.composeSystem(streamInputs[0]!)
           expect(composedSystem.join("\n")).toContain("FRESH_RUNTIME_SYSTEM")
           expect(composedSystem.join("\n")).not.toContain("STALE_USER_SYSTEM")
@@ -261,5 +311,94 @@ describe("session runtime contract wakes", () => {
       })
     },
     { timeout: 25_000 },
+  )
+
+  test(
+    "max-step instruction is sent as system context instead of assistant prefill",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({
+        git: true,
+        config: {
+          model: "mock-control/control",
+          agent: { orchestrator: { steps: 1 } },
+        },
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(Snapshot, "track").mockResolvedValue("snap_max_step_prefill")
+          spyOn(Snapshot, "patch").mockResolvedValue({ files: [], hash: "hash_max_step_prefill" } as never)
+
+          const streamInputs: LLM.StreamInput[] = []
+          spyOn(LLM, "stream").mockImplementation((async (input: LLM.StreamInput) => {
+            streamInputs.push(input)
+            return {
+              fullStream: streamOf([
+                {
+                  type: "finish-step",
+                  finishReason: "stop",
+                  usage: {
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    reasoningTokens: 0,
+                    cachedInputTokens: 0,
+                    totalTokens: 0,
+                  },
+                },
+                { type: "finish", finishReason: "stop" },
+              ]),
+            } as Awaited<ReturnType<typeof LLM.stream>>
+          }) as typeof LLM.stream)
+
+          const now = Date.now()
+          const session = await Session.create({ kind: "orchestrator", title: "Max step prefill test" })
+          await Session.mergeConfigOverlay({
+            sessionID: session.id,
+            patch: { model: "mock-control/control" },
+          })
+          const user = await Session.updateMessage({
+            id: Identifier.ascending("message"),
+            role: "user",
+            sessionID: session.id,
+            time: { created: now },
+            agent: "orchestrator",
+            model: { providerID: "mock-control", modelID: "control" },
+          })
+          await Session.updatePart({
+            id: Identifier.ascending("part"),
+            type: "text",
+            sessionID: session.id,
+            messageID: user.id,
+            text: "trigger one bounded turn",
+          })
+          SessionPrompt.setSessionRuntimeContract(session.id, {
+            identity: {
+              sessionID: session.id,
+              agentKind: "orchestrator",
+              contractKind: "orchestrator-wake",
+              installedAt: now,
+            },
+            system: [],
+            systemMode: "complete",
+            runOnce: true,
+            tools: {},
+          })
+
+          const result = await Promise.race([
+            SessionPrompt.loop({ sessionID: session.id }),
+            Bun.sleep(10_000).then(() => undefined),
+          ])
+
+          expect(result).toBeDefined()
+          expect(streamInputs).toHaveLength(1)
+          expect(streamInputs[0]!.messages.at(-1)?.role).toBe("user")
+          expect(streamInputs[0]!.system.join("\n")).toContain("CRITICAL - MAXIMUM STEPS REACHED")
+          SessionPrompt.clearSessionRuntimeContract(session.id)
+        },
+      })
+    },
+    { timeout: 20_000 },
   )
 })

@@ -209,6 +209,33 @@ describe("provider request-body contract", () => {
     expect(messages[2].content[0].toolCallId).toBe("toolu_bdrk_invalid")
   })
 
+  test("Hexin Claude drops final text-only assistant tail without requiring a tool result", async () => {
+    const hexinClaude = model({
+      id: "hexin/cy-claude-sonnet-4-6",
+      providerID: "hexin",
+      api: {
+        id: "cy-claude-sonnet-4-6",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+
+    const messages = (await ProviderTransform.message(
+      [
+        { role: "user", content: "original visible request" },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "prior local narration" }],
+        },
+      ] as any[],
+      hexinClaude,
+      {},
+    )) as any[]
+
+    expect(messages.map((message) => message.role)).toEqual(["user"])
+    expect(messages[0].content).toBe("original visible request")
+  })
+
   test("Claude keeps non-tail assistant history before a later user turn", async () => {
     const claude = model({
       id: "anthropic/claude-sonnet-4",
