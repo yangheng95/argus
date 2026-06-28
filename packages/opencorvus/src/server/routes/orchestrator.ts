@@ -38,6 +38,7 @@ import {
 } from "@/engine/model"
 import { TaskStatusDetail, taskStatusDetailFromBoard } from "@/status/task-status-snapshot"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
+import { listPendingAgentCoordinationRequests } from "@/engine/agent-coordination"
 import { requireTask } from "@/engine/store"
 import { abortChildExecutionForSession } from "@/engine/execution-abort"
 import { TaskQueueReorderError } from "@/engine/queue"
@@ -61,7 +62,7 @@ import {
   taskSession,
 } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
-import { DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
+import { AgentSessionPendingCoordinationError, DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
@@ -1320,6 +1321,21 @@ export const EngineRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         await assertDirectAgentSession(params.taskID, params.sessionID)
+        const pendingCoordination = listPendingAgentCoordinationRequests(params.taskID).filter(
+          (request) => request.payload.session_id === params.sessionID,
+        )
+        if (pendingCoordination.length > 0) {
+          const requestIDs = pendingCoordination.map((request) => request.payload.request_id)
+          throw new AgentSessionPendingCoordinationError({
+            taskID: params.taskID,
+            sessionID: params.sessionID,
+            requestIDs,
+            message:
+              `Session ${params.sessionID} has pending A2A (Agent-to-Agent) coordination request(s) ` +
+              `${requestIDs.join(", ")}. ` +
+              `Answer through respond_agent_coordination so cancellation is bound to visible response/action artifacts.`,
+          })
+        }
         await abortChildExecutionForSession({
           taskID: params.taskID,
           sessionID: params.sessionID,

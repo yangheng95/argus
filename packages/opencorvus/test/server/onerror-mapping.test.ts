@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Worktree } from "../../src/worktree/index"
@@ -359,6 +360,20 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       409,
       "FileConflictError",
     )
+  })
+
+  test("HTTPException 400 maps to documented BadRequestError JSON", async () => {
+    const probe = buildOnErrorProbe(() => {
+      throw new HTTPException(400, { message: "invalid task create body" })
+    })
+    const response = await probe.request("/__throw__", { method: "GET" })
+    expect(response.status).toBe(400)
+    expect(response.headers.get("content-type") ?? "").toContain("application/json")
+    const body = (await response.json()) as { success: boolean; errors: Array<{ message: string }> }
+    expect(body).toMatchObject({
+      success: false,
+      errors: [{ message: "invalid task create body" }],
+    })
   })
 
   test("an unrecognized NamedError falls through to 500", async () => {

@@ -64,6 +64,16 @@ export const ReplyTargetEnvelopeMissingError = NamedError.create(
   }),
 )
 
+export const AgentSessionPendingCoordinationError = NamedError.create(
+  "AgentSessionPendingCoordinationError",
+  z.object({
+    message: z.string(),
+    taskID: z.string(),
+    sessionID: z.string(),
+    requestIDs: z.array(z.string()),
+  }),
+)
+
 export const BuildSessionDirectReplyError = NamedError.create(
   "BuildSessionDirectReplyError",
   z.object({

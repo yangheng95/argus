@@ -1826,7 +1826,46 @@ Still open after this repair:
 - Provider panel directory-owned response/test-result state.
 - Prompt Profile directory-owned mutation reload/notice state.
 - Browser error collector opt-outs for screenshot-producing browser suites.
-- Task/orchestrator `HTTPException` plain-text response contract drift.
 - Overlay browser sidecar inactivity timeout and route callback failure propagation.
 - Workspace command launcher stale directory-owned GUI state.
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
+
+## Forty-Second Round Repair And Verification
+
+Repaired in this round:
+
+- The pending A2A (Agent-to-Agent) direct session cancel branch no longer throws `HTTPException(409)` and no longer returns a plain-text response body while the route advertises the shared JSON 409 contract.
+- `POST /task/:taskID/session/:sessionID/cancel` now throws the existing `AgentSessionPendingCoordinationError` with `taskID`, `sessionID`, and `requestIDs`, matching the same semantic error source already used by the direct-reply path.
+- `serverErrorResponse()` no longer returns `HTTPException.getResponse()` directly. Hono 400 exceptions are normalized through the existing `badRequestBody()` schema and Hono 404 exceptions are normalized through the existing `NotFoundError` JSON schema, so task-create pre-validation and task-not-found branches do not leak empty-content-type plain text.
+- Independent backend audit confirmed this was not the global DB fix from `d89978a698`; the bug was a separate task-session cancellation contract split between runtime plain text and OpenAPI/SDK JSON.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/task-conversation-routes.test.ts -t "refuses to bypass a pending A2A request" --timeout 60000` failed before the fix because the 409 response had no `application/json` content type and could only be asserted with `response.text()`.
+- `bun test packages/opencorvus/test/server/onerror-mapping.test.ts -t "HTTPException 400 maps to documented BadRequestError JSON" --timeout 60000` failed before the fix because `HTTPException.getResponse()` returned plain text with no `application/json` content type.
+- `bun test packages/opencorvus/test/server/onerror-mapping.test.ts packages/opencorvus/test/server/task-session-cancel-error-contract.test.ts --timeout 60000`
+- `bun test packages/opencorvus/test/server/task-create-route.test.ts -t "invalid init-git" --timeout 60000`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run api:routes-check`
+- `bun run ./packages/opencorvus/script/docs/render-api-md.ts --check`
+
+Verification caveat found during broader testing:
+
+- `bun test packages/opencorvus/test/server/onerror-mapping.test.ts packages/opencorvus/test/server/task-conversation-routes.test.ts --timeout 180000` ran all `onerror-mapping` tests and most of the long conversation-route suite, but then hit Windows `EBUSY` while `resetDatabase()` removed the temp SQLite file after unrelated SSE/DB tests. This is a resource-cleanup/tooling risk, not a failing assertion in the A2A error-contract test; it remains open for a dedicated test-fixture/resource-lifetime iteration.
+
+Independent-agent findings received during this round:
+
+- Backend/API: pending A2A cancel was still plain-text 409 despite `AgentSessionPendingCoordinationError` being the documented and existing semantic error source.
+- Overlay/GUI: screenshot-producing provider/prompt/skill browser suites still bypass the shared browser error collector through a fixed opt-out allowlist.
+- Scheduler/runtime: wait-cron and event scheduler subscriptions remain instance-local and can miss cross-instance activity; blocked runs may also need review in global destructive active-session guards.
+
+Still open after this repair:
+
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.
+- Full `task-conversation-routes` suite can leak or retain SQLite resources long enough for Windows `EBUSY` during `resetDatabase()`.
+- Global destructive active-session guards may need explicit blocked-run coverage.
