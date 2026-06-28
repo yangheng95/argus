@@ -36,7 +36,9 @@ export interface NormalizedNode {
   status?: string
   title: string
   subtitle?: string
+  goalID?: string
   round?: number
+  attempt?: number
   phaseID?: string
   phaseSessionKind?: string
   // audit-2026-04-29 W2-V26 — `phaseSessionID` is set by tree-writer
@@ -84,7 +86,9 @@ function normalizeNode(id: string, acc: Record<string, NormalizedNode>): string 
   if (node.stage) out.stage = node.stage
   if (node.status) out.status = node.status
   if (node.subtitle) out.subtitle = node.subtitle
+  if (node.goalID) out.goalID = node.goalID
   if (typeof node.round === "number") out.round = node.round
+  if (typeof node.attempt === "number") out.attempt = node.attempt
   if (node.phaseID) out.phaseID = node.phaseID
   if (node.phaseSessionKind) out.phaseSessionKind = node.phaseSessionKind
   if ((node as any).phaseSessionID) out.phaseSessionID = (node as any).phaseSessionID

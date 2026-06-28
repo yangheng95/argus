@@ -178,14 +178,15 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
 
 function ScreenshotBrowserVirtualRow(props: { row: ScreenshotBrowserRow; columns: number }) {
   if (props.row.kind === "group") {
-    const label = () =>
-      props.row.time > 0 ? `${roleLabel(props.row.role)} · ${stamp(props.row.time)}` : roleLabel(props.row.role)
+    const row = props.row
+    const ownerLabel = () => row.label || roleLabel(row.role)
+    const ownerTitle = () =>
+      row.label && row.label !== roleLabel(row.role) ? `${row.label} · ${roleLabel(row.role)}` : roleLabel(row.role)
+    const label = () => (row.time > 0 ? `${ownerLabel()} · ${stamp(row.time)}` : ownerLabel())
     const labelTitle = () =>
-      props.row.time > 0
-        ? `${roleLabel(props.row.role)} · ${fullStampWithRelative(props.row.time)}`
-        : roleLabel(props.row.role)
+      row.time > 0 ? `${ownerTitle()} · ${fullStampWithRelative(row.time)}` : ownerTitle()
     return (
-      <section class="screenshot-browser-group" data-agent-role={props.row.role} data-owner-key={props.row.groupKey}>
+      <section class="screenshot-browser-group" data-agent-role={row.role} data-owner-key={row.groupKey}>
         <header class="screenshot-browser-group__header">
           <span title={labelTitle()}>{label()}</span>
           <small>{t("screenshots.group_count", { count: props.row.count })}</small>

@@ -22,6 +22,9 @@ const TASK = {
 }
 
 const SCREENSHOT_COUNT = 120
+const SCREENSHOT_GOAL_ID = "goal_screenshot_browser"
+const SCREENSHOT_GOAL_RUN_ID = "run_screenshot_browser"
+const SCREENSHOT_BUILD_SESSION_ID = "ses_build_screenshot_browser"
 
 const SCREENSHOT_IMAGE_WIDTH = 1440
 const SCREENSHOT_IMAGE_HEIGHT = 900
@@ -88,8 +91,18 @@ function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
 
-function orderKey(domain: "message" | "part" | "session", rank: number, time: number, id: string, sequence = 0): string {
+function orderKey(
+  domain: "board" | "message" | "part" | "session",
+  rank: number,
+  time: number,
+  id: string,
+  sequence = 0,
+): string {
   return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function boardOrderKey(id: string, time: number, rank: number): string {
+  return orderKey("board", rank, time, id)
 }
 
 function messageOrderKey(id: string, time: number): string {
@@ -187,30 +200,35 @@ async function waitForVisibleScreenshotThumbnails(
 }
 
 function conversationPayload() {
+  const firstScreenshotTime = 1_780_000_010_000
+  const lastScreenshotTime = firstScreenshotTime + (SCREENSHOT_COUNT - 1) * 1_000
   const transcript = Array.from({ length: SCREENSHOT_COUNT }, (_item, index) => ({
     info: {
-      id: `msg_visual_${index}`,
-      sessionID: "ses_visual",
+      id: `msg_build_${index}`,
+      sessionID: SCREENSHOT_BUILD_SESSION_ID,
+      parentSessionID: TASK.sessionID,
+      goalID: SCREENSHOT_GOAL_ID,
       role: "assistant",
-      resolvedRole: "visual-qa",
-      agent: "visual-qa",
-      channel: "visual-qa",
-      orderKey: messageOrderKey(`msg_visual_${index}`, 1_780_000_010_000 + index * 1_000),
-      time: { created: 1_780_000_010_000 + index * 1_000, completed: 1_780_000_011_000 + index * 1_000 },
+      resolvedRole: "build",
+      agent: "build",
+      channel: "build",
+      orderKey: messageOrderKey(`msg_build_${index}`, firstScreenshotTime + index * 1_000),
+      time: { created: firstScreenshotTime + index * 1_000, completed: firstScreenshotTime + 1_000 + index * 1_000 },
     },
     parts: [
       {
         id: `part_screenshot_${index}`,
-        messageID: `msg_visual_${index}`,
-        sessionID: "ses_visual",
-        orderKey: orderKey("part", 31, 1_780_000_010_000 + index * 1_000, `part_screenshot_${index}`),
+        messageID: `msg_build_${index}`,
+        sessionID: SCREENSHOT_BUILD_SESSION_ID,
+        goalID: SCREENSHOT_GOAL_ID,
+        orderKey: orderKey("part", 31, firstScreenshotTime + index * 1_000, `part_screenshot_${index}`),
         type: "tool",
         tool: "browser_observe",
         state: {
           status: "pending",
           time: {
-            start: 1_780_000_010_000 + index * 1_000,
-            end: 1_780_000_010_500 + index * 1_000,
+            start: firstScreenshotTime + index * 1_000,
+            end: firstScreenshotTime + 500 + index * 1_000,
           },
           metadata: {
             browser: {
@@ -227,10 +245,13 @@ function conversationPayload() {
   const viewMessages = transcript.map((message) => ({
     messageID: message.info.id,
     sessionID: message.info.sessionID,
-    stage: "visual-qa",
+    parentSessionID: TASK.sessionID,
+    goalID: SCREENSHOT_GOAL_ID,
+    stage: "build",
     orderKey: message.info.orderKey,
     time: message.info.time.created,
-    placement: "top_level",
+    placement: "goal_phase",
+    phase: { stepID: "build", phaseID: "build" },
   }))
   const firstMessage = transcript[0]!
   const lastMessage = transcript.at(-1)!
@@ -239,7 +260,39 @@ function conversationPayload() {
     board: {
       snapshotVersion: "board:tsk_screenshot_browser",
       task: TASK,
-      goalWorkflows: [],
+      workflow: {
+        steps: [{ id: "build", phases: [{ id: "build", label: "Build", sessionKind: "build" }] }],
+      },
+      goalWorkflows: [
+        {
+          goalID: SCREENSHOT_GOAL_ID,
+          goalRunID: SCREENSHOT_GOAL_RUN_ID,
+          goalTitle: "Screenshot grouping",
+          goalObjective: "Group build screenshots under the goal revision label.",
+          goalStatus: "completed",
+          orderIndex: 0,
+          retryCount: 0,
+          orderKey: boardOrderKey(SCREENSHOT_GOAL_ID, firstScreenshotTime, 60),
+          steps: [
+            {
+              stepID: "build",
+              label: "Executor",
+              status: "completed",
+              startedAt: firstScreenshotTime,
+              orderKey: boardOrderKey(`${SCREENSHOT_GOAL_ID}-build`, firstScreenshotTime, 61),
+              phases: {
+                build: {
+                  status: "completed",
+                  startedAt: firstScreenshotTime,
+                  completedAt: lastScreenshotTime,
+                  orderKey: boardOrderKey(`${SCREENSHOT_GOAL_ID}-build-build`, firstScreenshotTime, 62),
+                },
+              },
+              payload: { buildSessionID: SCREENSHOT_BUILD_SESSION_ID },
+            },
+          ],
+        },
+      ],
       interactions: [],
     },
     transcript,
@@ -257,9 +310,11 @@ function conversationPayload() {
     agentView: {
       sessions: [
         {
-          sessionID: "ses_visual",
-          orderKey: sessionOrderKey("ses_visual", firstMessage.info.time.created),
-          stage: "visual-qa",
+          sessionID: SCREENSHOT_BUILD_SESSION_ID,
+          orderKey: sessionOrderKey(SCREENSHOT_BUILD_SESSION_ID, firstMessage.info.time.created),
+          stage: "build",
+          parentSessionID: TASK.sessionID,
+          goalID: SCREENSHOT_GOAL_ID,
           messageIDs: transcript.map((message) => message.info.id),
           lastDisplayMessageID: lastMessage.info.id,
           firstMessageTime: firstMessage.info.time.created,
@@ -267,7 +322,8 @@ function conversationPayload() {
           firstObservedAt: firstMessage.info.time.created,
           lastObservedAt: lastMessage.info.time.created,
           status: "completed",
-          placement: "top_level",
+          placement: "goal_phase",
+          phase: { stepID: "build", phaseID: "build" },
         },
       ],
       messages: viewMessages,
@@ -692,6 +748,7 @@ test(
         groupRole: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.agentRole,
         groupOwnerKey: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.ownerKey,
         groupTitle: document.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
+        groupCount: document.querySelector<HTMLElement>(".screenshot-browser-group__header small")?.textContent,
         visibleGroups: Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-group"))
           .slice(0, 3)
           .map((group) => ({
@@ -711,21 +768,17 @@ test(
       assert.equal(state.screenshotsOpen, "true")
       assert.equal(state.buttonActive, "true")
       assert.equal(state.title, "Screenshots")
-      assert.equal(state.groupRole, "visual-qa")
-      assert.equal(state.groupOwnerKey, "visual-qa:session:ses_visual:message:msg_visual_119:time:1780000129000")
-      assert.ok(state.groupTitle?.startsWith("Visual QA · "), JSON.stringify(state))
-      assert.deepEqual(
-        state.visibleGroups.slice(0, 2).map((group) => group.ownerKey),
-        [
-          "visual-qa:session:ses_visual:message:msg_visual_119:time:1780000129000",
-          "visual-qa:session:ses_visual:message:msg_visual_118:time:1780000128000",
-        ],
-      )
+      assert.equal(state.groupRole, "build")
+      assert.equal(state.groupOwnerKey, "build:goal:goal_screenshot_browser:revision:#G1V1")
+      assert.ok(state.groupTitle?.startsWith("#G1V1 · "), JSON.stringify(state))
+      assert.equal(state.groupCount, "120", JSON.stringify(state))
+      assert.deepEqual(state.visibleGroups.map((group) => group.ownerKey), [
+        "build:goal:goal_screenshot_browser:revision:#G1V1",
+      ])
       assert.ok(
-        state.visibleGroups.every((group) => group.title?.startsWith("Visual QA · ")),
+        state.visibleGroups.every((group) => group.title?.startsWith("#G1V1 · ")),
         JSON.stringify(state.visibleGroups),
       )
-      assert.notEqual(state.visibleGroups[0]?.title, state.visibleGroups[1]?.title, JSON.stringify(state.visibleGroups))
       assert.equal(state.cardTitle, "visual-check-119.png")
       assert.equal(state.virtualized, "true")
       assert.equal(state.itemCount, "120")

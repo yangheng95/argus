@@ -52,11 +52,12 @@ function screenshotItem(
   return {
     id: input.id ?? `file:${src}`,
     role,
-    ownerKey: input.ownerKey ?? `${ownerRole}:session:${ownerSessionID}:message:${ownerMessageID}:time:${ownerTime}`,
+    ownerKey: input.ownerKey ?? `${ownerRole}:session:${ownerSessionID}`,
     ownerRole,
     ownerSessionID,
     ownerMessageID,
     ownerTime,
+    ownerLabel: input.ownerLabel ?? "",
     src,
     thumbnailSrc: input.thumbnailSrc ?? screenshotBrowserThumbnailUrl(src),
     alt: input.alt ?? src,
@@ -202,8 +203,8 @@ describe("screenshot browser panel", () => {
     ])
     expect(groups.map((group) => group.role)).toEqual(["visual-qa", "build"])
     expect(groups.map((group) => group.key)).toEqual([
-      "visual-qa:session:ses_visual:message:m2:time:200",
-      "build:session:ses_build:message:m1:time:100",
+      "visual-qa:session:ses_visual",
+      "build:session:ses_build",
     ])
     expect(groups.map((group) => group.time)).toEqual([200, 100])
     expect(groups[0].items.map((item) => item.source)).toEqual(["tool-browser-evidence", "tool-attachment"])
@@ -267,7 +268,7 @@ describe("screenshot browser panel", () => {
     ).toEqual([])
   })
 
-  test("groups screenshots by concrete agent turn instead of collapsing one build role", () => {
+  test("groups screenshots by the same agent owner across message turns", () => {
     const messages = [
       {
         info: {
@@ -326,19 +327,46 @@ describe("screenshot browser panel", () => {
 
     const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItems(messages))
 
-    expect(groups.map((group) => group.key)).toEqual([
-      "build:session:ses_build:message:msg_build_second:time:1780000020000",
-      "build:session:ses_build:message:msg_build_first:time:1780000010000",
-    ])
-    expect(groups.map((group) => group.role)).toEqual(["build", "build"])
-    expect(groups.map((group) => group.time)).toEqual([1_780_000_020_000, 1_780_000_010_000])
+    expect(groups.map((group) => group.key)).toEqual(["build:session:ses_build"])
+    expect(groups.map((group) => group.role)).toEqual(["build"])
+    expect(groups.map((group) => group.time)).toEqual([1_780_000_020_000])
     expect(groups.map((group) => group.items.map((item) => item.src))).toEqual([
-      ["/attachment/project/build-second.png"],
-      ["/attachment/project/build-first.png"],
+      ["/attachment/project/build-second.png", "/attachment/project/build-first.png"],
     ])
   })
 
-  test("phase card screenshots inherit the boundary agent turn and time", () => {
+  test("keeps same-role screenshots separate when they come from different sessions", () => {
+    const messages = ["a", "b"].map((suffix, index) => ({
+      info: {
+        id: `msg_build_${suffix}`,
+        sessionID: `ses_build_${suffix}`,
+        channel: "build",
+        resolvedRole: "build",
+        time: { created: 1_780_000_010_000 + index },
+      },
+      parts: [
+        {
+          id: `part_build_${suffix}`,
+          type: "file",
+          messageID: `msg_build_${suffix}`,
+          sessionID: `ses_build_${suffix}`,
+          url: `/attachment/project/build-${suffix}.png`,
+          mime: "image/png",
+          filename: `build-${suffix}.png`,
+        },
+      ],
+    }))
+
+    const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItems(messages))
+
+    expect(groups.map((group) => group.key)).toEqual(["build:session:ses_build_b", "build:session:ses_build_a"])
+    expect(groups.map((group) => group.items.map((item) => item.src))).toEqual([
+      ["/attachment/project/build-b.png"],
+      ["/attachment/project/build-a.png"],
+    ])
+  })
+
+  test("phase card screenshots inherit boundary item time while sharing the agent owner", () => {
     const items = collectScreenshotBrowserItems([
       {
         info: {
@@ -391,13 +419,75 @@ describe("screenshot browser panel", () => {
     const groups = groupScreenshotBrowserItems(items)
 
     expect(items.map((item) => item.ownerKey)).toEqual([
-      "build:session:ses_build:message:msg_build_second:time:1780000020000",
-      "build:session:ses_build:message:msg_build_first:time:1780000010000",
+      "build:session:ses_build",
+      "build:session:ses_build",
     ])
-    expect(groups.map((group) => group.key)).toEqual([
-      "build:session:ses_build:message:msg_build_second:time:1780000020000",
-      "build:session:ses_build:message:msg_build_first:time:1780000010000",
+    expect(items.map((item) => item.time)).toEqual([1_780_000_020_000, 1_780_000_010_000])
+    expect(groups.map((group) => group.key)).toEqual(["build:session:ses_build"])
+    expect(groups[0]?.time).toBe(1_780_000_020_000)
+  })
+
+  test("goal-scoped build screenshots use the goal revision owner label", () => {
+    const card: CardNode = {
+      id: "step:goal-a:build:phase:build",
+      kind: "phase",
+      phaseID: "build",
+      phaseSessionKind: "build",
+      phaseSessionID: "ses_goal_build",
+      goalID: "goal-a",
+      round: 2,
+      attempt: 3,
+      role: "build",
+      stage: "build",
+      title: "Build",
+      time: 1_780_000_000_000,
+      parts: [
+        {
+          type: "boundary",
+          messageID: "msg_goal_build_first",
+          role: "build",
+          sessionID: "ses_goal_build",
+          time: 1_780_000_010_000,
+        },
+        {
+          id: "part_goal_build_first",
+          type: "file",
+          messageID: "msg_goal_build_first",
+          sessionID: "ses_goal_build",
+          url: "/attachment/project/goal-build-first.png",
+          mime: "image/png",
+          filename: "goal-build-first.png",
+        },
+        {
+          type: "boundary",
+          messageID: "msg_goal_build_second",
+          role: "build",
+          sessionID: "ses_goal_build",
+          time: 1_780_000_020_000,
+        },
+        {
+          id: "part_goal_build_second",
+          type: "file",
+          messageID: "msg_goal_build_second",
+          sessionID: "ses_goal_build",
+          url: "/attachment/project/goal-build-second.png",
+          mime: "image/png",
+          filename: "goal-build-second.png",
+        },
+      ],
+      childIDs: [],
+    }
+
+    const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItemsFromCard(card))
+    const rows = buildScreenshotBrowserRows(groups, 2)
+
+    expect(groups.map((group) => group.key)).toEqual(["build:goal:goal-a:revision:#G2V3"])
+    expect(groups[0]?.label).toBe("#G2V3")
+    expect(groups[0]?.items.map((item) => item.src)).toEqual([
+      "/attachment/project/goal-build-second.png",
+      "/attachment/project/goal-build-first.png",
     ])
+    expect(rows[0]).toMatchObject({ kind: "group", role: "build", label: "#G2V3", count: 2 })
   })
 
   test("collects screenshots from hydrated card tree as the panel source", () => {
@@ -488,9 +578,8 @@ describe("screenshot browser panel", () => {
       `/attachment/project/build.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
     ])
     expect(groupScreenshotBrowserItems(items).map((group) => group.key)).toEqual([
-      "visual-qa:session:ses_visual:message:msg_tool:time:250",
-      "visual-qa:session:ses_visual:message:msg_visual:time:200",
-      "build:session:ses_build:message:msg_build:time:100",
+      "visual-qa:session:ses_visual",
+      "build:session:ses_build",
     ])
   })
 
