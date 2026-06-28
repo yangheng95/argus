@@ -88,6 +88,27 @@ describe("extractPage", () => {
     expect(source).toContain("...(input.browserProxy ? { proxy: input.browserProxy } : {})")
   })
 
+  test("owns navigation by browser inactivity instead of Playwright elapsed timeout", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../../src/browser/webpage/extract.ts"), "utf8")
+
+    expect(source).toContain("opencorvusWithBrowserInactivity")
+    expect(source).toContain('() => page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 0 })')
+    expect(source).toContain('() => page.waitForLoadState("networkidle", { timeout: 0 })')
+    expect(source).toContain("opencorvusIsCriticalPageRequestFailure")
+    expect(source).toContain("opencorvusIsSameOriginPageError")
+    expect(source).toContain('assertNoBrowserFailures("scroll")')
+    expect(source).toContain('assertNoBrowserFailures("screenshot")')
+    expect(source).toContain('assertNoBrowserFailures("artifact")')
+    expect(source).not.toContain("opencorvusIsSameOriginConsoleError")
+    expect(source).not.toContain("console error")
+    expect(source).not.toContain(
+      'page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.navigationTimeoutMs })',
+    )
+    expect(source).not.toContain(
+      'page.waitForLoadState("networkidle", { timeout: Math.min(5000, input.navigationTimeoutMs) })',
+    )
+  })
+
   test("extracts DOM, tokens, assets, and validates schema", async () => {
     const { url, server } = await serveFixture()
     try {
@@ -123,18 +144,24 @@ describe("extractPage", () => {
 })
 
 describe("extractPage error paths", () => {
-  test("keeps DOM evidence when one external image socket closes during asset mirroring", async () => {
+  test("keeps DOM evidence when one third-party image socket closes during asset mirroring", async () => {
     const outputDir = path.join(os.tmpdir(), `extract-image-skip-${process.pid}-${Date.now()}`)
     mkdirSync(outputDir, { recursive: true })
     const progress: string[] = []
-    const server = createServer((req, res) => {
+    const imageServer = createServer((req, res) => {
       if (req.url === "/broken.jpg") {
         res.destroy(new Error("simulated image socket close"))
         return
       }
+      res.writeHead(404)
+      res.end("missing")
+    })
+    await new Promise<void>((ok) => imageServer.listen(0, "127.0.0.1", ok))
+    const imagePort = (imageServer.address() as AddressInfo).port
+    const server = createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "text/html", Connection: "close" })
       res.end(
-        `<!doctype html><html><head><title>Image Skip</title></head><body><main><h1>Evidence survives</h1><img src="/broken.jpg" alt="broken asset"></main></body></html>`,
+        `<!doctype html><html><head><title>Image Skip</title></head><body><main><h1>Evidence survives</h1><img src="http://127.0.0.1:${imagePort}/broken.jpg" alt="broken asset"></main></body></html>`,
       )
     })
     await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
@@ -156,6 +183,7 @@ describe("extractPage error paths", () => {
       expect(progress.some((message) => message.includes("skipped 1 unavailable images"))).toBe(true)
     } finally {
       server.close()
+      imageServer.close()
       rmSync(outputDir, { recursive: true, force: true })
     }
   }, 90_000)
@@ -198,6 +226,117 @@ describe("extractPage error paths", () => {
       }
     } finally {
       server.close()
+    }
+  }, 60_000)
+
+  test("throws UrlExtractError on HTTP 500", async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(500, { "Content-Type": "text/html" })
+      res.end("<!doctype html><html><body><main><h1>Server error page</h1></main></body></html>")
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 0,
+      })
+      throw new Error("should have thrown")
+    } catch (error) {
+      expect(UrlExtractError.isInstance(error)).toBe(true)
+      if (UrlExtractError.isInstance(error)) {
+        // @ts-expect-error status is attached by the runtime error payload.
+        expect(error.data.status).toBe(500)
+      }
+    } finally {
+      server.close()
+    }
+  }, 60_000)
+
+  test("keeps evidence on pages with console diagnostics", async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(
+        `<!doctype html><html><head><title>Late console extraction page</title></head><body><main><h1>Late console extraction page</h1></main>
+        <script>setTimeout(() => console.error("late extract console"), 1000)</script></body></html>`,
+      )
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const result = await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 1500,
+      })
+
+      expect(result.title).toBe("Late console extraction page")
+      expect(JSON.stringify(result.tree)).toContain("Late console extraction page")
+    } finally {
+      server.close()
+    }
+  }, 60_000)
+
+  test("throws UrlExtractError on a successful page with failed script subresources", async () => {
+    const server = createServer((req, res) => {
+      if (req.url === "/missing.js") {
+        res.writeHead(404, { "Content-Type": "application/javascript" })
+        res.end("missing")
+        return
+      }
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(
+        '<!doctype html><html><head><title>Broken asset</title></head><body><main><h1>Broken asset page</h1><script src="/missing.js"></script></main></body></html>',
+      )
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 0,
+      })
+      throw new Error("should have thrown")
+    } catch (error) {
+      expect(UrlExtractError.isInstance(error)).toBe(true)
+      if (UrlExtractError.isInstance(error)) {
+        expect(error.data.reason).toContain("Browser failures")
+        expect(error.data.reason).toContain("missing.js")
+      }
+    } finally {
+      server.close()
+    }
+  }, 60_000)
+
+  test("keeps evidence on a successful page with failed third-party script diagnostics", async () => {
+    const thirdPartyServer = createServer((_req, res) => {
+      res.writeHead(404, { "Content-Type": "application/javascript" })
+      res.end("missing third-party script")
+    })
+    await new Promise<void>((ok) => thirdPartyServer.listen(0, "127.0.0.1", ok))
+    const thirdPartyPort = (thirdPartyServer.address() as AddressInfo).port
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(
+        `<!doctype html><html><head><title>Third-party diagnostics</title></head><body><main><h1>Evidence survives diagnostics</h1><script src="http://127.0.0.1:${thirdPartyPort}/missing.js"></script></main></body></html>`,
+      )
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const result = await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 0,
+      })
+
+      expect(result.title).toBe("Third-party diagnostics")
+      expect(result.stats.extractedElements).toBeGreaterThan(0)
+    } finally {
+      server.close()
+      thirdPartyServer.close()
     }
   }, 60_000)
 })
