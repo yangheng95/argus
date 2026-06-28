@@ -7,6 +7,7 @@ import { Scheduler } from "../scheduler"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { taskIDForSession } from "@/orchestrator/task-event"
@@ -58,15 +59,24 @@ export namespace Truncate {
     }
   }
 
-  export async function cleanup() {
-    const cutoff = Date.now() - RETENTION_MS
-    const root = ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
+  function registeredRuntimeRoots() {
+    return [...new Set(Project.list().map((project) => ProjectRuntimePaths.projectRuntimeRoot(project.worktree)))]
+  }
+
+  async function cleanupRoot(root: string, cutoff: number) {
     const entries = await Glob.scan("s/*/*/tool-output/tool_*", { cwd: root, include: "file" })
     for (const entry of entries) {
       const filepath = path.join(root, entry)
       const stat = await statExistingFile(filepath)
       if (!stat || stat.mtimeMs >= cutoff) continue
       await unlinkExistingFile(filepath)
+    }
+  }
+
+  export async function cleanup() {
+    const cutoff = Date.now() - RETENTION_MS
+    for (const root of registeredRuntimeRoots()) {
+      await cleanupRoot(root, cutoff)
     }
   }
 

@@ -362,5 +362,35 @@ describe("Truncate", () => {
         },
       })
     })
+
+    test("global cleanup scans every registered project runtime root", async () => {
+      await using first = await tmpdir()
+      await using second = await tmpdir()
+      await Instance.provide({ directory: first.path, fn: async () => {} })
+      await Instance.provide({ directory: second.path, fn: async () => {} })
+
+      async function writeOldOutput(projectDir: string) {
+        const taskID = Identifier.create("task")
+        const sessionID = Identifier.create("session")
+        const outputDir = ProjectRuntimePaths.toolOutputDir(projectDir, taskID, sessionID)
+        await fs.mkdir(outputDir, { recursive: true })
+        const timestamp = Date.now() - 10 * DAY_MS
+        const file = path.join(outputDir, Identifier.create("tool", false, timestamp))
+        await Filesystem.write(file, "old content")
+        await fs.utimes(file, new Date(timestamp), new Date(timestamp))
+        return file
+      }
+
+      const firstOld = await writeOldOutput(first.path)
+      const secondOld = await writeOldOutput(second.path)
+
+      await Instance.provide({
+        directory: first.path,
+        fn: () => Truncate.cleanup(),
+      })
+
+      expect(await Filesystem.exists(firstOld)).toBe(false)
+      expect(await Filesystem.exists(secondOld)).toBe(false)
+    })
   })
 })
