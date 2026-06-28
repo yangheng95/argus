@@ -7,10 +7,8 @@
 import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
 import { useDisclosure } from "../solid/disclosure"
 import { boardStore } from "../store/board"
-import { cardTreeStore, type CardNode } from "../store/card-tree"
 import { t, tc } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
-import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree"
 import { statusIconName } from "../utils/status-mapping"
 import { taskLifecycleStatusOrIdleLabel, workflowStepStatusLabelFromString } from "../utils/status-labels"
 import { activeTone, verdictTone } from "../utils/verdict-tone"
@@ -517,74 +515,6 @@ export function Board(props: BoardProps) {
     return ""
   }
 
-  // Messages feeding the RequirementsPanel / GoalWorkflowList live-stream
-  // surfaces. Single source of truth: `cardTreeStore.cards` — the same
-  // store that powers the left conversation panel. Each agent session card
-  // already carries a stage (spec / goal / requirements / planner / build
-  // / executor / evaluator / ...), a goalID, and a flat `parts` array with
-  // boundary markers between the messages it aggregated.
-  //
-  // We re-split the card's parts at boundary markers so each message segment
-  // preserves per-turn reasoning ordering when `CardParts` re-renders
-  // them in the panel. One card -> N message segments (N = boundary count + 1,
-  // minus empty trailing groups).
-  function cardToMessageSegments(card: CardNode): any[] {
-    // Single source for the boundary split lives in utils/card-tree
-    // (cardMessageSegments) — shared with the ConversationAgentRail
-    // latest-message preview. Board additionally requires a role on every
-    // segment for attribution: no assistant-fallback (一个萝卜一个坑). A
-    // missing role means the emitter is wrong — surface it.
-    return cardMessageSegments(card).map((segment) => {
-      if (segment.role.length === 0) {
-        throw new Error(
-          `Board grouping: card ${card.id} parts have no role boundary; emitter must mark role transitions explicitly`,
-        )
-      }
-      return {
-        info: {
-          id: segment.id,
-          role: segment.role,
-          time: { created: segment.time },
-        },
-        parts: segment.parts,
-      }
-    })
-  }
-
-  /** Agent cards for a given stage, in chronological order. */
-  function agentCardsForStage(stage: string): CardNode[] {
-    const ids = orderedReachableCardIDs()
-    const matched: CardNode[] = []
-    for (const id of ids) {
-      const card = cardTreeStore.cards[id]
-      if (!card || card.kind !== "agent") continue
-      if (card.stage !== stage) continue
-      matched.push(card)
-    }
-    return matched.sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
-  }
-
-  // Requirements surface reads the actual requirements stage plus legacy
-  // spec/goal cards created by older task snapshots.
-  const requirementsMessages = createMemo(() => {
-    const out: any[] = []
-    for (const stage of ["requirements", "spec", "goal"]) {
-      for (const card of agentCardsForStage(stage)) {
-        out.push(...cardToMessageSegments(card))
-      }
-    }
-    return out
-  })
-  const frontendResearchMessages = createMemo(() => {
-    const out: any[] = []
-    for (const stage of ["frontend-research"]) {
-      for (const card of agentCardsForStage(stage)) {
-        out.push(...cardToMessageSegments(card))
-      }
-    }
-    return out
-  })
-
   return (
     <>
       <div id="taskActionsBar">
@@ -619,7 +549,7 @@ export function Board(props: BoardProps) {
             badgeText={frontendResearchStatus() ? workflowStepStatusLabelFromString(frontendResearchStatus()) : ""}
             badgeTone={workflowStatusTone(frontendResearchStatus())}
           >
-            <FrontendResearchPanel status={frontendResearchStatus()} streamingMessages={frontendResearchMessages()} />
+            <FrontendResearchPanel status={frontendResearchStatus()} />
           </SectionFrame>
         </Show>
 
@@ -652,7 +582,6 @@ export function Board(props: BoardProps) {
               requirements={requirements()}
               specContent={spec()?.content}
               isGenerating={isRequirementsGenerating()}
-              streamingMessages={requirementsMessages()}
             />
           </SectionFrame>
         </Show>

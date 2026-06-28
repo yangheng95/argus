@@ -362,16 +362,6 @@ test("workflow generating panels expose live busy status regions", async () => {
     await waitVisible('[data-ui="workflow-section-stack"]')
     await waitVisible("#frontendResearchSection .req-streaming-indicator")
     await waitVisible("#requirementsSection .req-streaming-indicator")
-    await page.waitForFunction(
-      () =>
-        document
-          .querySelector("#frontendResearchSection .req-streaming-messages")
-          ?.textContent?.includes("Frontend research streaming content is visible.") &&
-        document
-          .querySelector("#requirementsSection .req-streaming-messages")
-          ?.textContent?.includes("Requirements streaming content is visible."),
-      { timeout: 15_000 },
-    )
     await page.waitForSelector("#architectSection .arch-generating", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#frontendResearchBadge", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#statusLabel", { visible: true, timeout: 15_000 })
@@ -408,12 +398,10 @@ test("workflow generating panels expose live busy status regions", async () => {
             title: badge?.getAttribute("title") ?? "",
           }
         })(),
-        streamingText: {
-          frontendResearch:
-            document.querySelector<HTMLElement>("#frontendResearchSection .req-streaming-messages")?.textContent || "",
-          requirements:
-            document.querySelector<HTMLElement>("#requirementsSection .req-streaming-messages")?.textContent || "",
-        },
+        workflowText: document.querySelector<HTMLElement>('[data-ui="workflow-section-stack"]')?.textContent || "",
+        workflowStreamMessageCount: document.querySelectorAll(
+          "#frontendResearchSection .req-streaming-messages, #requirementsSection .req-streaming-messages",
+        ).length,
       }
     })
 
@@ -450,10 +438,10 @@ test("workflow generating panels expose live busy status regions", async () => {
     assert.notEqual(statuses.frontendResearchBadge.text, "workflow.status.running")
     assert.notEqual(statuses.taskHeader, "active")
     assert.notEqual(statuses.taskRowBadge.text, "active")
-    assert.equal(statuses.streamingText.frontendResearch.includes("Frontend research streaming content is visible."), true)
-    assert.equal(statuses.streamingText.requirements.includes("Requirements streaming content is visible."), true)
-    assert.equal(statuses.streamingText.frontendResearch.includes("step-finish"), false)
-    assert.equal(statuses.streamingText.requirements.includes("step-finish"), false)
+    assert.equal(statuses.workflowStreamMessageCount, 0)
+    assert.equal(statuses.workflowText.includes("Frontend research streaming content is visible."), false)
+    assert.equal(statuses.workflowText.includes("Requirements streaming content is visible."), false)
+    assert.equal(statuses.workflowText.includes("step-finish"), false)
     assert.deepEqual(errors, [])
 
     const screenshot = await saveElementScreenshot(

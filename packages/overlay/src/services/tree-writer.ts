@@ -1158,7 +1158,11 @@ function handlePartDelta(event: any): void {
   // Resolve the EXACT card that owns this part. A late delta for an older
   // message turn must land on that turn's card, never on whatever turn is
   // currently active for the session (spec §3.3 — primary failure mode).
-  const part = cardTreeStore.cards[target.cardID]?.parts?.[target.index]
+  const cardBefore = cardTreeStore.cards[target.cardID]
+  const part = cardBefore?.parts?.[target.index]
+  const hadDisplay = conversationPartHasDisplay(part)
+  const wasHiddenSessionCard = shouldHideSessionCard(cardBefore)
+  const sessionWasTopLevelVisible = session.topLevelVisible
   if (field === "raw" && part?.type === "tool") {
     setCardTreeStore(
       "cards",
@@ -1180,8 +1184,14 @@ function handlePartDelta(event: any): void {
     )
   }
   markCardStatsDirty(target.cardID)
-  if (conversationPartHasDisplay(cardTreeStore.cards[target.cardID]?.parts?.[target.index])) {
+  const cardAfter = cardTreeStore.cards[target.cardID]
+  const hasDisplay = conversationPartHasDisplay(cardAfter?.parts?.[target.index])
+  const isHiddenSessionCard = shouldHideSessionCard(cardAfter)
+  const displayBecameVisible = !hadDisplay && hasDisplay
+  if (displayBecameVisible && cardAfter?.kind === "phase") {
     reorderPhaseCardParts(target.cardID)
+  }
+  if (wasHiddenSessionCard && !isHiddenSessionCard && sessionWasTopLevelVisible) {
     rebuildTopLevelOrder()
   }
   syncSessionTopLevelVisibility(session)
