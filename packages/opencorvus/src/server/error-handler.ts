@@ -29,13 +29,16 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "DirectoryRequiredError") return 400
   if (err.name === "RequestOriginForbiddenError") return 403
   if (err.name === "InvalidInitGitParameterError") return 400
+  if (err.name === "ActiveExecutorSessionsError") return 409
   if (err.name === "InvalidDirectoryError") return 400
   if (err.name === "ChildSessionConfigError") return 400
   if (err.name === "WorktreeNotGitError") return 412
   if (err.name.startsWith("Worktree")) return 400
   if (err.name === "InvalidReplyTargetKindError") return 400
   if (err.name === "BuildSessionDirectReplyError") return 400
+  if (err.name === "AgentSessionAttachmentReferenceError") return 400
   if (err.name === "ReplyTargetEnvelopeMissingError") return 409
+  if (err.name === "AgentSessionPendingCoordinationError") return 409
   if (err.name === "SessionRuntimeContractMissingError") return 410
   if (err.name === "TaskEmptyMessageError") return 400
   if (err.name === "TaskGlobalProjectBindingError") return 409
@@ -45,6 +48,9 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "PtyCreateFailedError") return 400
   if (err.name === "FileUploadConflictError") return 409
   if (err.name.startsWith("FileUpload")) return 400
+  if (err.name === "FileNotFoundError") return 404
+  if (err.name === "FileConflictError") return 409
+  if (err.name === "FileInvalidPathError") return 400
   if (err.name === "PluginServiceNotFoundError") return 404
   if (err.name === "PluginServiceRegistrationError") return 500
   if (err.name === "PluginServiceDuplicateIDError") return 500

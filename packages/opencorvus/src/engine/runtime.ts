@@ -1,5 +1,7 @@
 import { Instance } from "@/project/instance"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Database, and, eq, sql } from "@/storage/db"
+import z from "zod"
 import {
   EngineArtifactTable,
   EngineInteractionRequestTable,
@@ -17,6 +19,7 @@ import {
   findRun,
   findActiveRunForTask,
   findTask,
+  listLiveRuns,
   listGoalRunsForRun,
   listLiveRunsForProject,
   type RunRow,
@@ -24,14 +27,33 @@ import {
 import { Identifier } from "@/id/id"
 import { EXECUTOR_ACTIVE_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
 
+export const ActiveExecutorSessionsError = NamedError.create(
+  "ActiveExecutorSessionsError",
+  z.object({
+    message: z.string(),
+    operation: z.string(),
+  }),
+)
+
+function hasExecutorActiveRuns(runs: RunRow[]): boolean {
+  return runs.some((r) => (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status))
+}
+
+export function activeExecutorSessionsError(operation: string) {
+  return new ActiveExecutorSessionsError({
+    operation,
+    message: `Active executor sessions exist; refusing ${operation}.`,
+  })
+}
+
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
-  try {
-    const runs = listLiveRunsForProject(Instance.project.id)
-    return runs.some((r) => (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status))
-  } catch {
-    return false
-  }
+  return hasExecutorActiveRuns(listLiveRunsForProject(Instance.project.id))
+}
+
+/** Check if any executor session is active across all registered project tasks. */
+export function hasAnyActiveSessions(): boolean {
+  return hasExecutorActiveRuns(listLiveRuns())
 }
 
 export namespace EngineRuntime {

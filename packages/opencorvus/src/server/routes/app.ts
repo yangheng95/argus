@@ -12,7 +12,7 @@ import { Hono } from "hono"
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi"
 import { streamSSE } from "../sse"
 import z from "zod"
-import { errors } from "../error"
+import { ActiveExecutorSessionsResponse, errors, namedErrorResponse } from "../error"
 import { ProjectRoutes } from "./project"
 import { ConfigRoutes } from "./config"
 import { ExperimentalRoutes, resetExperimentalRouteFactoriesForOpenApi } from "./experimental"
@@ -40,13 +40,21 @@ import { PluginRoutes } from "./plugin"
 import { QuickNoteRoutes } from "@/quicknote/routes"
 import "@/tool/goal-report-event"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
-import { Env } from "@/runtime/env"
+import { startServerRestart } from "../restart"
 import { AppDocumentation } from "./documentation"
 import { serverErrorResponse } from "../error-handler"
 import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import { Event as ServerEvent, payload as serverEventPayload } from "../event"
 
 const log = Log.create({ service: "server" })
+const ShutdownUnavailableResponse = {
+  description: "Shutdown handler unavailable",
+  content: {
+    "application/json": {
+      schema: resolver(z.object({ ok: z.boolean() })),
+    },
+  },
+} as const
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -138,6 +146,7 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
+          503: ShutdownUnavailableResponse,
         },
       }),
       async (c) => {
@@ -167,6 +176,7 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
+          503: ShutdownUnavailableResponse,
         },
       }),
       async (c) => {
@@ -175,16 +185,7 @@ export function AppRoutes(root: Hono) {
           return c.json({ ok: false }, 503)
         }
         log.info("restart requested, spawning new process")
-        const argv = process.argv
-        const child = Bun.spawn(argv, {
-          cwd: process.cwd(),
-          env: Env.snapshot(),
-          stdio: ["ignore", "ignore", "ignore"],
-        })
-        child.unref()
-        setTimeout(() => {
-          requestServerShutdown("server.restart")
-        }, 25)
+        startServerRestart("server.restart")
         return c.json({ ok: true })
       },
     )
@@ -210,12 +211,13 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
+          409: ActiveExecutorSessionsResponse,
         },
       }),
       async (c) => {
-        const { hasActiveSessions } = await import("@/engine/runtime")
+        const { activeExecutorSessionsError, hasActiveSessions } = await import("@/engine/runtime")
         if (hasActiveSessions()) {
-          return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
+          throw activeExecutorSessionsError("instance.dispose")
         }
         await closeBrowserPreviewLiveSessions()
         await Instance.dispose()
@@ -328,6 +330,7 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
+          500: namedErrorResponse("Command list failed", "UnknownError"),
         },
       }),
       async (c) => {

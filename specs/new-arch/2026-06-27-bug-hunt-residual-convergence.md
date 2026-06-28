@@ -1796,3 +1796,37 @@ Still open after this repair:
 - Overlay browser sidecar inactivity timeout and route callback failure propagation.
 - Workspace command launcher stale directory-owned GUI state.
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
+
+## Forty-First Round Repair And Verification
+
+Repaired in this round:
+
+- Global destructive routes now use a global active-run projection instead of the project-scoped `hasActiveSessions()` function that read `Instance.project.id` and returned false outside project context.
+- `hasActiveSessions()` no longer catches missing context or DB failures as false. The project-scoped guard now fails loudly if called without a project context, while global destructive routes call `hasAnyActiveSessions()`.
+- `/global/dispose`, `/global/db/reset`, and `/global/db/mysql/import` now reject active executor sessions with the structured `ActiveExecutorSessionsError` body and shared NamedError 409 mapping instead of a parallel plain `{ error }` shape.
+- `/global/db/reset` preserves the 2026-06-26 DB-file-delete contract: it only scans active runs when the current process already has an open SQLite connection, so corrupt/stale DB reset still does not open SQLite before deletion.
+- `/instance/dispose` now documents and returns the same structured active-session conflict body as the global dispose route.
+- Static OpenAPI and generated JS SDK types were regenerated after the 409 response schema changed.
+- Test tooling fixes exposed during verification were repaired instead of hidden: `global-db-destructive` now runs destructive DB cases serially, `resetDatabase()` no longer swallows arbitrary file-removal errors and retries only Windows `EBUSY` / `EPERM` locks with a finite deadline, and `onerror-mapping` now awaits async `Log.init()`.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts -t "active executor sessions across any project" --timeout 60000` failed before the fix because all three destructive routes returned 200 and entered disposal/reset paths.
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts --timeout 120000`
+- `bun test packages/opencorvus/test/server/onerror-mapping.test.ts -t "ActiveExecutorSessionsError maps to 409" --timeout 60000`
+- `bun test packages/opencorvus/test/server/global-db-destructive.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts packages/opencorvus/test/server/app-routes.test.ts --timeout 180000`
+- `bun ./packages/sdk/js/script/build.ts`
+- `bun run api:routes-check`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run ./packages/opencorvus/script/docs/render-api-md.ts --check`
+
+Still open after this repair:
+
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- Task/orchestrator `HTTPException` plain-text response contract drift.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.

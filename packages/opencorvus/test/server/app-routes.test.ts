@@ -70,6 +70,84 @@ describe("app routes", () => {
     }
   })
 
+  test("Server.openapi documents direct reply attachment reference errors", async () => {
+    const spec = await Server.openapi()
+    const response = spec.paths?.["/task/{taskID}/session/{sessionID}/reply"]?.post?.responses?.[400]
+    const schema = response?.content?.["application/json"]?.schema
+    const schemas = schema?.anyOf ?? (schema ? [schema] : [])
+    const names = schemas.map(
+      (schema: { properties?: { name?: { const?: string } } }) => schema.properties?.name?.const,
+    )
+
+    expect(response?.description).toBe("Reply rejected before persistence")
+    expect(names).toContain("AgentSessionAttachmentReferenceError")
+  })
+
+  test("Server.openapi documents shutdown restart and dispose failure responses", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+
+    expect(paths["/shutdown"]?.post?.responses?.[503]?.content?.["application/json"]?.schema?.properties).toHaveProperty(
+      "ok",
+    )
+    expect(paths["/restart"]?.post?.responses?.[503]?.content?.["application/json"]?.schema?.properties).toHaveProperty(
+      "ok",
+    )
+    expect(
+      paths["/instance/dispose"]?.post?.responses?.[409]?.content?.["application/json"]?.schema?.properties?.name
+        ?.const,
+    ).toBe("ActiveExecutorSessionsError")
+    expect(
+      paths["/global/dispose"]?.post?.responses?.[409]?.content?.["application/json"]?.schema?.properties?.name
+        ?.const,
+    ).toBe("ActiveExecutorSessionsError")
+  })
+
+  test("Server.openapi documents browser-preview and panel memory not-found responses", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+    const operations = [
+      paths["/task/{taskID}/browser-preview"]?.get,
+      paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get,
+      paths["/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png"]?.get,
+      paths["/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"]?.get,
+      paths["/task/{taskID}/browser-preview/target"]?.put,
+      paths["/task/{taskID}/browser-preview/capture"]?.post,
+      paths["/task/{taskID}/browser-preview/compare"]?.post,
+      paths["/task/{taskID}/browser-preview/live/snapshot"]?.post,
+      paths["/task/{taskID}/browser-preview/live/input"]?.post,
+      paths["/experimental/task-plan"]?.get,
+      paths["/experimental/scratchpad"]?.get,
+      paths["/panel/knowledge/memory/{id}"]?.get,
+      paths["/panel/knowledge/memory/{id}"]?.delete,
+    ]
+
+    for (const operation of operations) {
+      expect(operation?.responses?.[404]?.content?.["application/json"]?.schema).toBeDefined()
+    }
+    const artifact500 =
+      paths["/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}"]?.get?.responses?.[500]
+        ?.content?.["application/json"]?.schema
+    expect(JSON.stringify(artifact500)).toContain("BrowserPreviewEvidenceCorruptionError")
+  })
+
+  test("Server.openapi documents Mission detail not-found responses", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+    const operations = [
+      paths["/mission/{missionID}/status"]?.get,
+      paths["/mission/{missionID}/project-archive"]?.get,
+      paths["/mission/{missionID}/title"]?.patch,
+      paths["/mission/{missionID}/abort"]?.post,
+      paths["/mission/{missionID}"]?.delete,
+    ]
+
+    for (const operation of operations) {
+      const schema = operation?.responses?.[404]?.content?.["application/json"]?.schema
+      expect(JSON.stringify(schema)).toContain("NotFoundError")
+    }
+  })
+
   test("Server.openapi documents directory query for project-scoped routes only once", async () => {
     const spec = await Server.openapi()
     const paths = spec.paths ?? {}
