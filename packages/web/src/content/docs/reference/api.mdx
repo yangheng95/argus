@@ -85,6 +85,13 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | PATCH | `/goal/{goalID}` | Update goal | `goal.update` |
 | POST | `/interaction/{interactionID}/reject` | Reject interaction | `interaction.reject` |
 | POST | `/interaction/{interactionID}/reply` | Reply to interaction | `interaction.reply` |
+| GET | `/mission` | List Missions | `mission.list` |
+| POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
+| DELETE | `/mission/{missionID}` | Delete a Mission | `mission.delete` |
+| POST | `/mission/{missionID}/abort` | Abort a Mission | `mission.abort` |
+| GET | `/mission/{missionID}/project-archive` | Download Mission project archive | `mission.projectArchive` |
+| GET | `/mission/{missionID}/status` | Get Mission status | `mission.status` |
+| PATCH | `/mission/{missionID}/title` | Rename a Mission | `mission.rename` |
 | GET | `/run/{runID}` | Get run | `run.get` |
 | POST | `/run/{runID}/abort` | Abort run | `run.abort` |
 | GET | `/run/{runID}/acceptance` | Get run acceptance | `run.acceptance` |
@@ -261,6 +268,12 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 |---|---|---|---|
 | GET | `/export/session/{sessionID}` | Export session messages | `export.session` |
 
+### QuickNote
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| POST | `/api/v1/notes` | Create QuickNote | `quicknote.create` |
+
 ### MCP
 
 | Method | Path | Summary | operationId |
@@ -315,6 +328,8 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
 | PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |
 | GET | `/pty/{ptyID}/connect` | Connect to PTY session | `pty.connect` |
+| POST | `/terminal/open` | Open system terminal | `terminal.open` |
+| GET | `/terminal/profiles` | List system terminal profiles | `terminal.profiles` |
 
 ### File / Search
 
@@ -323,6 +338,9 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/file` | List files | `file.list` |
 | GET | `/file/content` | Read file | `file.read` |
 | PATCH | `/file/content` | Write file | `file.write` |
+| DELETE | `/file/item` | Delete file item | `file.delete` |
+| PATCH | `/file/item` | Move file item | `file.move` |
+| POST | `/file/item` | Create file item | `file.create` |
 | GET | `/file/status` | Get file status | `file.status` |
 | POST | `/file/upload` | Upload files | `file.upload` |
 | GET | `/find` | Find text | `find.text` |
@@ -352,28 +370,3 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
-
-### Api
-
-| Method | Path | Summary | operationId |
-|---|---|---|---|
-| POST | `/api/v1/notes` | Create QuickNote | `quicknote.create` |
-
-### Mission
-
-| Method | Path | Summary | operationId |
-|---|---|---|---|
-| GET | `/mission` | List Missions | `mission.list` |
-| POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
-| DELETE | `/mission/{missionID}` | Delete a Mission | `mission.delete` |
-| POST | `/mission/{missionID}/abort` | Abort a Mission | `mission.abort` |
-| GET | `/mission/{missionID}/project-archive` | Download Mission project archive | `mission.projectArchive` |
-| GET | `/mission/{missionID}/status` | Get Mission status | `mission.status` |
-| PATCH | `/mission/{missionID}/title` | Rename a Mission | `mission.rename` |
-
-### Terminal
-
-| Method | Path | Summary | operationId |
-|---|---|---|---|
-| POST | `/terminal/open` | Open system terminal | `terminal.open` |
-| GET | `/terminal/profiles` | List system terminal profiles | `terminal.profiles` |
