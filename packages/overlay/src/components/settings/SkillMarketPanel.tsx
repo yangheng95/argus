@@ -308,10 +308,6 @@ function mountedAgentsFor(item: SkillItem): string[] {
   return Array.isArray(item.mounted_agents) ? item.mounted_agents : []
 }
 
-function mountedSkillFor(agent: AgentSkillRow, skill: SkillItem): MountedSkillItem | undefined {
-  return agent.mounted.find((item) => item.name === skill.name)
-}
-
 function skillSourceRoot(item: SkillItem): string {
   if (item.builtin) return "builtin"
   const location = `${item.location || item.source || ""}`.replaceAll("\\", "/")
@@ -350,6 +346,7 @@ function matrixAgentTrack(agent: Pick<AgentSkillRow, "name">, compact: boolean):
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
 const MCP_STATUS_REFRESH_INTERVAL_MS = 1_000
+const SKILL_MATRIX_RENDER_CHUNK_SIZE = 8
 
 interface FormSelectOption extends SettingsSelectOption {}
 
@@ -478,9 +475,8 @@ function ExtensionSettingsPanel(props: {
   const skillPanelActive = createMemo(() => props.mode === "skill" && panelActive())
   const mcpPanelActive = createMemo(() => props.mode === "mcp" && panelActive())
   const marketPanelActive = createMemo(() => props.mode === "skill-market" && panelActive())
-  const skills = createMemo((): SkillItem[] => (skillPanelActive() ? [...(appStore.skills as SkillItem[])] : []))
   const mounts = createMemo(() => (skillPanelActive() ? skillMountMatrix(appStore.skillMounts) : undefined))
-  const poolSkills = createMemo(() => mounts()?.skills ?? skills())
+  const poolSkills = createMemo(() => mounts()?.skills ?? [])
   const agentRows = createMemo(() => {
     const matrix = mounts()
     if (!matrix) return []
@@ -491,6 +487,13 @@ function ExtensionSettingsPanel(props: {
         ...agent,
         mounted: rows.get(agent.name) ?? [],
       })) as AgentSkillRow[]
+  })
+  const mountedSkillLookupByAgent = createMemo(() => {
+    const lookup = new Map<string, Map<string, MountedSkillItem>>()
+    for (const agent of agentRows()) {
+      lookup.set(agent.name, new Map(agent.mounted.map((item) => [item.name, item])))
+    }
+    return lookup
   })
   const matrixGridTemplate = createMemo(() => {
     const compact = props.compact === true
@@ -512,6 +515,37 @@ function ExtensionSettingsPanel(props: {
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable))
   const builtinCount = createMemo(() => poolSkills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
+  const [visibleMatrixSkillCount, setVisibleMatrixSkillCount] = createSignal(0)
+  const matrixSkills = createMemo(() => {
+    if (props.compact) return poolSkills()
+    return poolSkills().slice(0, visibleMatrixSkillCount())
+  })
+
+  createEffect(() => {
+    const active = skillPanelActive()
+    const total = poolSkills().length
+    if (!active || props.compact || total === 0) {
+      setVisibleMatrixSkillCount(active ? total : 0)
+      return
+    }
+
+    let cancelled = false
+    let frameID = 0
+    setVisibleMatrixSkillCount(0)
+    const renderNextChunk = () => {
+      if (cancelled) return
+      setVisibleMatrixSkillCount((current) => {
+        const next = Math.min(current + SKILL_MATRIX_RENDER_CHUNK_SIZE, total)
+        if (next < total) frameID = window.requestAnimationFrame(renderNextChunk)
+        return next
+      })
+    }
+    frameID = window.requestAnimationFrame(renderNextChunk)
+    onCleanup(() => {
+      cancelled = true
+      if (frameID) window.cancelAnimationFrame(frameID)
+    })
+  })
 
   function activateMatrixPair(skill: string, agent: string) {
     setActiveMatrixPair({ skill, agent })
@@ -533,6 +567,53 @@ function ExtensionSettingsPanel(props: {
   function matrixPairActive(skill: string, agent: string): boolean {
     const active = activeMatrixPair()
     return active?.skill === skill && active.agent === agent
+  }
+
+  const matrixSkillNames = createMemo(() => matrixSkills().map((item) => item.name))
+  const matrixAgentNames = createMemo(() => agentRows().map((agent) => agent.name))
+  const firstMatrixPair = createMemo<ActiveMatrixPair | null>(() => {
+    const skill = matrixSkillNames()[0]
+    const agent = matrixAgentNames()[0]
+    return skill && agent ? { skill, agent } : null
+  })
+
+  function matrixCellTabIndex(skill: string, agent: string): number | undefined {
+    const active = activeMatrixPair() ?? firstMatrixPair()
+    return active?.skill === skill && active.agent === agent ? 0 : undefined
+  }
+
+  function focusMatrixCell(skill: string, agent: string): void {
+    setActiveMatrixPair({ skill, agent })
+    window.requestAnimationFrame(() => {
+      const selector = `.agent-skill-grid-cell[data-skill-name="${CSS.escape(skill)}"][data-agent-name="${CSS.escape(agent)}"]`
+      document.querySelector<HTMLButtonElement>(selector)?.focus()
+    })
+  }
+
+  function handleMatrixCellKeyDown(event: KeyboardEvent, skill: string, agent: string): void {
+    const skills = matrixSkillNames()
+    const agents = matrixAgentNames()
+    const skillIndex = skills.indexOf(skill)
+    const agentIndex = agents.indexOf(agent)
+    if (skillIndex < 0 || agentIndex < 0) return
+    let nextSkillIndex = skillIndex
+    let nextAgentIndex = agentIndex
+    if (event.key === "ArrowRight") nextAgentIndex = Math.min(agents.length - 1, agentIndex + 1)
+    else if (event.key === "ArrowLeft") nextAgentIndex = Math.max(0, agentIndex - 1)
+    else if (event.key === "ArrowDown") nextSkillIndex = Math.min(skills.length - 1, skillIndex + 1)
+    else if (event.key === "ArrowUp") nextSkillIndex = Math.max(0, skillIndex - 1)
+    else if (event.key === "Home") nextAgentIndex = 0
+    else if (event.key === "End") nextAgentIndex = Math.max(0, agents.length - 1)
+    else return
+    const nextSkill = skills[nextSkillIndex]
+    const nextAgent = agents[nextAgentIndex]
+    if (!nextSkill || !nextAgent || (nextSkill === skill && nextAgent === agent)) return
+    event.preventDefault()
+    focusMatrixCell(nextSkill, nextAgent)
+  }
+
+  function mountedSkillForAgent(agent: string, skill: string): MountedSkillItem | undefined {
+    return mountedSkillLookupByAgent().get(agent)?.get(skill)
   }
 
   async function refreshSkillMounts(options: { refresh?: boolean; directory?: string } = {}) {
@@ -1124,7 +1205,7 @@ function ExtensionSettingsPanel(props: {
                       </div>
                     )}
                   </For>
-                  <For each={poolSkills()}>
+                  <For each={matrixSkills()}>
                     {(item) => {
                       const mountedAgents = () => mountedAgentsFor(item)
                       const sourceDirectory = () => skillSourceDirectory(item)
@@ -1140,8 +1221,8 @@ function ExtensionSettingsPanel(props: {
                           .join("\n")
                       return (
                         <>
-                          <button
-                            type="button"
+                          <div
+                            role="rowheader"
                             class="agent-skill-grid-skill"
                             data-active-combo={matrixSkillActive(item.name) ? "true" : "false"}
                             data-unmounted={item.unmounted ? "true" : "false"}
@@ -1168,10 +1249,11 @@ function ExtensionSettingsPanel(props: {
                                 <span title={skillDuplicateTitle(item)}>{t("skill.duplicate")}</span>
                               </Show>
                             </span>
-                          </button>
+                          </div>
                           <For each={agentRows()}>
                             {(agent) => {
-                              const mounted = () => mountedSkillFor(agent, item)
+                              const mounted = () => mountedSkillForAgent(agent.name, item.name)
+                              const cellDisabled = () => !agent.skill_tool_available || loading()
                               const cellState = () => {
                                 if (!agent.skill_tool_available) return "unavailable"
                                 const current = mounted()
@@ -1187,54 +1269,59 @@ function ExtensionSettingsPanel(props: {
                                 if (current.enabled) return `${t("skill.mount.remove")}: ${item.name} -> ${agent.name}`
                                 return `${item.name} -> ${agent.name}: ${current.reason || ""}`
                               }
+                              const activateCell = () => {
+                                if (cellDisabled()) return
+                                const current = mounted()
+                                if (current) {
+                                  void handleUnmount(agent.name, item.name)
+                                  return
+                                }
+                                void handleMount(agent.name, item.name)
+                              }
+                              const handleCellKeyDown = (event: KeyboardEvent) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault()
+                                  activateCell()
+                                  return
+                                }
+                                handleMatrixCellKeyDown(event, item.name, agent.name)
+                              }
                               return (
-                                <button
-                                  type="button"
+                                <div
+                                  role="button"
                                   class="agent-skill-grid-cell"
                                   data-active-combo={matrixPairActive(item.name, agent.name) ? "true" : "false"}
+                                  data-agent-name={agent.name}
+                                  data-disabled={cellDisabled() ? "true" : "false"}
+                                  data-skill-name={item.name}
                                   data-state={cellState()}
-                                  disabled={!agent.skill_tool_available || loading()}
+                                  aria-disabled={cellDisabled() ? "true" : undefined}
                                   title={cellLabel()}
                                   aria-label={cellLabel()}
+                                  tabIndex={cellDisabled() ? undefined : matrixCellTabIndex(item.name, agent.name)}
                                   onPointerEnter={() => activateMatrixPair(item.name, agent.name)}
                                   onPointerLeave={(event) => {
                                     if (!event.currentTarget.matches(":focus")) clearMatrixPair(item.name, agent.name)
                                   }}
                                   onFocus={() => activateMatrixPair(item.name, agent.name)}
                                   onBlur={() => clearMatrixPair(item.name, agent.name)}
-                                  onClick={() => {
-                                    if (!agent.skill_tool_available) return
-                                    const current = mounted()
-                                    if (current) {
-                                      void handleUnmount(agent.name, item.name)
-                                      return
-                                    }
-                                    void handleMount(agent.name, item.name)
-                                  }}
+                                  onKeyDown={handleCellKeyDown}
+                                  onClick={activateCell}
                                   onDragOver={(event) => {
-                                    if (!agent.skill_tool_available) return
+                                    if (cellDisabled()) return
                                     event.preventDefault()
                                     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
                                   }}
                                   onDrop={(event) => {
-                                    if (!agent.skill_tool_available) return
+                                    if (cellDisabled()) return
                                     void handleAgentDrop(agent.name, event)
                                   }}
                                 >
-                                  <Show when={cellState() === "mounted"}>
-                                    <Icon name="check" />
-                                  </Show>
+                                  <span class="agent-skill-grid-cell__glyph" aria-hidden="true" />
                                   <Show when={cellState() === "conflict"}>
-                                    <Icon name="info-circle" />
                                     <span class="agent-skill-grid-cell__reason">{mounted()?.reason || ""}</span>
                                   </Show>
-                                  <Show when={cellState() === "available"}>
-                                    <Icon name="plus" />
-                                  </Show>
-                                  <Show when={cellState() === "unavailable"}>
-                                    <Icon name="cancel" />
-                                  </Show>
-                                </button>
+                                </div>
                               )
                             }}
                           </For>

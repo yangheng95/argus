@@ -1,4 +1,4 @@
-import { For, Show, createMemo, onCleanup } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "solid-js"
 import PromptCatalog from "./settings/PromptCatalog"
 import ChannelsPanel from "./settings/ChannelsPanel"
@@ -223,9 +223,22 @@ export function ConfigDialogHost() {
     rows.push([t("about.runtime_type"), runtimeTypeLabel()])
     return rows
   })
+  const activeConfigTab = createMemo(() => dialogStore.config.activeTab)
+  const [renderedConfigTab, setRenderedConfigTab] = createSignal<ConfigDialogTab | null>(null)
 
-  const renderActivePanel = () => {
-    switch (dialogStore.config.activeTab) {
+  createEffect(() => {
+    const tab = activeConfigTab()
+    if (!dialogStore.config.open) {
+      setRenderedConfigTab(null)
+      return
+    }
+    setRenderedConfigTab(null)
+    const frameID = window.requestAnimationFrame(() => setRenderedConfigTab(tab))
+    onCleanup(() => window.cancelAnimationFrame(frameID))
+  })
+
+  const renderActivePanel = (tab: ConfigDialogTab) => {
+    switch (tab) {
       case "general":
         return <GeneralPanel />
       case "permissions":
@@ -357,7 +370,10 @@ export function ConfigDialogHost() {
     <Dialog
       id="configDialog"
       open={dialogStore.config.open}
-      wider={true}
+      fullscreen={true}
+      modal={false}
+      backdropClose={false}
+      draggable={false}
       title={t("config.title")}
       onClose={closeConfigDialog}
       headerActions={
@@ -418,25 +434,23 @@ export function ConfigDialogHost() {
             onKeyDown={handleResizeKeyDown}
           />
           <div class="config-content" id="configContent">
-            <For each={CONFIG_TABS}>
-              {(tab) => (
-                <TabPanel
-                  value={tab.id}
-                  class="config-tab-panel"
-                  data-config-panel={tab.id}
-                  id={tab.id === "channel" ? "channelSection" : undefined}
-                >
-                  <Show when={dialogStore.config.activeTab === tab.id}>
-                    <div
-                      classList={{ "config-section-body": true, "about-body": tab.id === "about" }}
-                      id={activePanelBodyID(tab.id)}
-                    >
-                      {renderActivePanel()}
-                    </div>
-                  </Show>
-                </TabPanel>
-              )}
-            </For>
+            <TabPanel
+              value={activeConfigTab()}
+              class="config-tab-panel"
+              data-config-panel={activeConfigTab()}
+              id={activeConfigTab() === "channel" ? "channelSection" : undefined}
+            >
+              <Show when={renderedConfigTab()}>
+                {(tab) => (
+                  <div
+                    classList={{ "config-section-body": true, "about-body": tab() === "about" }}
+                    id={activePanelBodyID(tab())}
+                  >
+                    {renderActivePanel(tab())}
+                  </div>
+                )}
+              </Show>
+            </TabPanel>
           </div>
         </Tabs>
       </Show>

@@ -45,6 +45,8 @@ export interface DialogProps {
   wide?: boolean
   /** Widest width variant for dense multi-pane dialogs. */
   wider?: boolean
+  /** Full-screen variant for workspace settings surfaces that should fill the shell. */
+  fullscreen?: boolean
   /** Render title as `h2` by default, override only when semantics require it. */
   titleAs?: "div" | "h1" | "h2" | "span"
   /** Whether clicking outside the content closes the dialog. */
@@ -76,7 +78,15 @@ export interface DialogProps {
 
 export function Dialog(rawProps: DialogProps) {
   const merged = mergeProps(
-    { wide: false, wider: false, titleAs: "h2" as const, backdropClose: true, modal: true, draggable: true },
+    {
+      wide: false,
+      wider: false,
+      fullscreen: false,
+      titleAs: "h2" as const,
+      backdropClose: true,
+      modal: true,
+      draggable: true,
+    },
     rawProps,
   )
   const [local, rest] = splitProps(merged, [
@@ -87,6 +97,7 @@ export function Dialog(rawProps: DialogProps) {
     "headerClass",
     "wide",
     "wider",
+    "fullscreen",
     "titleAs",
     "backdropClose",
     "modal",
@@ -207,8 +218,10 @@ export function Dialog(rawProps: DialogProps) {
     if (local.backdropClose === false) event.preventDefault()
   }
 
+  const nonModalPointerPassthrough = () => !local.modal && !local.fullscreen
+
   const dialogContentStyle = (): JSX.CSSProperties | undefined =>
-    local.modal ? undefined : { "pointer-events": "none" }
+    nonModalPointerPassthrough() ? { "pointer-events": "none" } : undefined
 
   const dialogOverlayStyle = (): JSX.CSSProperties | undefined =>
     local.modal ? undefined : { "pointer-events": "none" }
@@ -233,7 +246,13 @@ export function Dialog(rawProps: DialogProps) {
         />
         <KobalteDialogContent
           {...rest}
-          class={["dialog", local.wide ? "dialog-wide" : "", local.wider ? "dialog-wider" : "", local.class]
+          class={[
+            "dialog",
+            local.wide ? "dialog-wide" : "",
+            local.wider ? "dialog-wider" : "",
+            local.fullscreen ? "dialog-fullscreen" : "",
+            local.class,
+          ]
             .filter(Boolean)
             .join(" ")}
           aria-modal={local.modal ? "true" : undefined}

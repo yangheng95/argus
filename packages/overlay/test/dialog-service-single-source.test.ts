@@ -154,7 +154,11 @@ describe("app/session dialog single source", () => {
   test("config dialog mounts only the active settings tab body", () => {
     expect(configHost).toContain("<Show when={dialogStore.config.open}>")
     expect(configHost).toContain("renderActivePanel")
-    expect(configHost).toContain("switch (dialogStore.config.activeTab)")
+    expect(configHost).toContain("switch (tab)")
+    expect(configHost).toContain("const activeConfigTab = createMemo(() => dialogStore.config.activeTab)")
+    expect(configHost).toContain("const [renderedConfigTab, setRenderedConfigTab]")
+    expect(configHost).toContain("window.requestAnimationFrame(() => setRenderedConfigTab(tab))")
+    expect(configHost).toContain("data-config-panel={activeConfigTab()}")
     expect(configHost).not.toContain(
       "<PromptCatalog />\n            </div>\n          </div>\n          <div classList",
     )
@@ -162,6 +166,28 @@ describe("app/session dialog single source", () => {
       "<ProvidersPanel />\n            </div>\n          </div>\n          <div classList",
     )
     expect(configHost).not.toContain("<AgentModelsPanel />\n            </div>\n          </div>")
+  })
+
+  test("config dialog switches requested tab before opening", () => {
+    const openConfigDialog = dialogService.slice(dialogService.indexOf("export function openConfigDialog("))
+    const focusIndex = openConfigDialog.indexOf("focusConfigSection(section)")
+    const openIndex = openConfigDialog.indexOf('setDialogStore("config", "open", true)')
+    const refreshIndex = openConfigDialog.indexOf("refreshSettingsInfoAfterDialogFrame()")
+    expect(focusIndex).toBeGreaterThan(-1)
+    expect(openIndex).toBeGreaterThan(-1)
+    expect(refreshIndex).toBeGreaterThan(-1)
+    expect(focusIndex).toBeLessThan(openIndex)
+    expect(openIndex).toBeLessThan(refreshIndex)
+    expect(dialogService).toContain("function refreshSettingsInfoAfterDialogFrame(): void")
+    expect(dialogService).toContain("window.requestAnimationFrame(() =>")
+    expect(dialogService).toContain("function focusConfigElementAfterDialogFrame(")
+    expect(dialogService).toContain("configSectionFocusFrame = window.requestAnimationFrame(() =>")
+    expect(dialogService).toContain("window.cancelAnimationFrame(configSectionFocusFrame)")
+    expect(dialogService).toContain('focusConfigElementAfterDialogFrame("channelList"')
+    expect(dialogService).toContain("focusConfigElementAfterDialogFrame(target.elementID")
+    expect(dialogService).toContain("cancelConfigSectionFocusFrame()")
+    expect(dialogService).not.toContain("queueMicrotask(() => {\n      const channelList")
+    expect(dialogService).not.toContain("queueMicrotask(() => {\n      const element = document.getElementById(target.elementID!)")
   })
 
   test("network settings tab is a first-class config section and writes only scoped network.proxy", () => {

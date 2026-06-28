@@ -677,9 +677,9 @@ test(
       const maxLongTask = Math.max(0, ...longTaskDurations)
       assert.equal(openPerf?.supportedLongTasks, true, `longtask observer unavailable: ${JSON.stringify(openPerf)}`)
       assert.ok(decodedElapsed < 5_000, `screenshot browser visible image decode took ${decodedElapsed}ms`)
-      assert.ok(maxRafGap < 180, `screenshot browser open RAF gap was ${maxRafGap}ms: ${JSON.stringify(openPerf)}`)
+      assert.ok(maxRafGap <= 120, `screenshot browser open RAF gap was ${maxRafGap}ms: ${JSON.stringify(openPerf)}`)
       assert.ok(
-        maxLongTask < 180,
+        maxLongTask <= 160,
         `screenshot browser open long task was ${maxLongTask}ms: ${JSON.stringify(openPerf)}`,
       )
 
@@ -702,6 +702,8 @@ test(
         cardTitle: document.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent,
         cardCount: document.querySelectorAll(".screenshot-browser-card").length,
         virtualized: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.virtualized,
+        itemCount: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.itemCount,
+        renderedCount: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.renderedCount,
         virtualWindow: !!document.querySelector(".screenshot-browser-virtual-window"),
         uiScale: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
       }))
@@ -726,6 +728,8 @@ test(
       assert.notEqual(state.visibleGroups[0]?.title, state.visibleGroups[1]?.title, JSON.stringify(state.visibleGroups))
       assert.equal(state.cardTitle, "visual-check-119.png")
       assert.equal(state.virtualized, "true")
+      assert.equal(state.itemCount, "120")
+      assert.equal(state.renderedCount, state.itemCount)
       assert.equal(state.virtualWindow, true)
       assert.ok(Number.parseFloat(state.uiScale) >= 1.55, JSON.stringify(state))
       assert.ok(state.cardCount > 0, JSON.stringify(state))

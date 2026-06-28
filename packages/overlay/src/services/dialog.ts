@@ -19,6 +19,7 @@ import { clampConfigSidebarWidth, configSidebarResizeBounds } from "../utils/con
 import { currentUIScale } from "../utils/layout-tokens"
 
 let sessionDialogSeq = 0
+let configSectionFocusFrame = 0
 const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id))
 
 const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
@@ -51,6 +52,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function refreshSettingsInfoAfterDialogFrame(): void {
+  window.requestAnimationFrame(() => {
+    void loadSettingsInfo()
+      .then(() => renderAboutVersion())
+      .catch((error) => {
+        notifyError({
+          id: "config:load-settings-info",
+          title: t("config.title"),
+          message: errorMessage(error),
+          details: formatErrorDetails(error),
+        })
+      })
+  })
+}
+
+function focusConfigElementAfterDialogFrame(elementID: string, focus: (element: HTMLElement) => void): void {
+  if (configSectionFocusFrame) window.cancelAnimationFrame(configSectionFocusFrame)
+  configSectionFocusFrame = window.requestAnimationFrame(() => {
+    configSectionFocusFrame = window.requestAnimationFrame(() => {
+      configSectionFocusFrame = 0
+      const element = document.getElementById(elementID)
+      if (element instanceof HTMLElement) focus(element)
+    })
+  })
+}
+
+function cancelConfigSectionFocusFrame(): void {
+  if (!configSectionFocusFrame) return
+  window.cancelAnimationFrame(configSectionFocusFrame)
+  configSectionFocusFrame = 0
+}
+
 // ── Public API ──
 
 /**
@@ -77,16 +110,10 @@ export function focusConfigSection(name: string): void {
   const target = CONFIG_SECTION_TARGETS[name]
   switchConfigTab(target?.tab ?? name)
   if (name === "channel") {
-    queueMicrotask(() => {
-      const channelList = document.getElementById("channelList") as HTMLElement | null
-      channelList?.scrollTo?.({ top: 0 })
-    })
+    focusConfigElementAfterDialogFrame("channelList", (element) => element.scrollTo({ top: 0 }))
   }
   if (target?.elementID) {
-    queueMicrotask(() => {
-      const element = document.getElementById(target.elementID!) as HTMLElement | null
-      element?.scrollIntoView?.({ block: "start" })
-    })
+    focusConfigElementAfterDialogFrame(target.elementID, (element) => element.scrollIntoView({ block: "start" }))
   }
 }
 
@@ -108,7 +135,7 @@ export function renderAboutVersion(): void {
 
 /**
  * Open the config dialog, optionally scrolling to a specific section.
- * Pre-loads config info and refreshes the about panel.
+ * Refreshes config info after the dialog shell has had a frame to appear.
  */
 export function openConfigDialog(
   section?: string,
@@ -118,21 +145,11 @@ export function openConfigDialog(
     agentModelsScope: options.agentModelsScope ?? "project",
     agentModelsSessionID: options.sessionID ?? null,
   })
-  setDialogStore("config", "open", true)
-  void loadSettingsInfo()
-    .then(() => renderAboutVersion())
-    .catch((error) => {
-      notifyError({
-        id: "config:load-settings-info",
-        title: t("config.title"),
-        message: errorMessage(error),
-        details: formatErrorDetails(error),
-      })
-    })
-
   if (section) {
     focusConfigSection(section)
   }
+  setDialogStore("config", "open", true)
+  refreshSettingsInfoAfterDialogFrame()
 }
 
 export function openSessionAgentModels(sessionID: string): void {
@@ -140,6 +157,7 @@ export function openSessionAgentModels(sessionID: string): void {
 }
 
 export function closeConfigDialog(): void {
+  cancelConfigSectionFocusFrame()
   setDialogStore("config", "open", false)
 }
 
