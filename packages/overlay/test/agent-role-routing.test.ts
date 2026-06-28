@@ -6,12 +6,23 @@ import {
   agentRoleToSectionPhase,
   agentStageLabel,
   classifyMessage,
+  effectiveRole,
   normalizeAgentRole,
+  orderedMessageParts,
   roleLabel,
 } from "../src/utils/message"
+import {
+  isBoundaryMessagePart,
+  isCardBodyMessagePart,
+  isProtocolControlMessagePart,
+  messagePartHasDisplayContent,
+} from "../src/utils/message-part"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 
 const EN_US = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")
 const ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
+
+installRealOverlayI18n()
 
 const SESSION_CARD_STAGES = [
   "assistant",
@@ -22,9 +33,12 @@ const SESSION_CARD_STAGES = [
   "frontend-design",
   "frontend-research",
   "visual-qa",
+  "goal-workload-analyst",
+  "deep-research",
   "goal",
   "architect",
   "integrity",
+  "fact-check",
   "acceptance",
   "executor",
   "build",
@@ -64,6 +78,76 @@ test("explore aliases and channel classification stay in the explore card", () =
       "root",
     ),
   ).toBe("explore")
+})
+
+test("message classification does not fall back from missing backend channel", () => {
+  expect(() =>
+    classifyMessage(
+      {
+        info: {
+          id: "msg_missing_channel",
+          resolvedRole: "build",
+          role: "assistant",
+          agent: "build",
+        },
+      },
+      "root",
+    ),
+  ).toThrow(/missing channel/)
+  expect(() =>
+    effectiveRole({
+      info: {
+        id: "msg_missing_resolved_role",
+        role: "assistant",
+        agent: "build",
+      },
+    }),
+  ).toThrow(/missing resolvedRole/)
+})
+
+test("ordered message parts exclude control-only step boundaries before CardParts", () => {
+  const parts = orderedMessageParts({
+    parts: [
+      { id: "prt_step_start", type: "step-start" },
+      { id: "prt_text_empty", type: "text", text: "" },
+      { id: "prt_text_visible", type: "text", text: "visible text" },
+      { id: "prt_step_finish", type: "step-finish" },
+      { id: "prt_reasoning_empty", type: "reasoning", text: "" },
+      { id: "prt_boundary", type: "boundary" },
+      { id: "prt_reasoning_visible", type: "reasoning", text: "visible reasoning" },
+    ],
+  })
+
+  expect(parts.map((part) => part.id)).toEqual([
+    "prt_reasoning_empty",
+    "prt_reasoning_visible",
+    "prt_text_empty",
+    "prt_text_visible",
+  ])
+})
+
+test("message part classification separates protocol controls from rendered separators", () => {
+  expect(isProtocolControlMessagePart({ type: "step-start" })).toBe(true)
+  expect(isProtocolControlMessagePart({ type: "step-finish" })).toBe(true)
+  expect(isCardBodyMessagePart({ type: "step-start" })).toBe(false)
+  expect(isCardBodyMessagePart({ type: "step-finish" })).toBe(false)
+
+  expect(isProtocolControlMessagePart({ type: "boundary" })).toBe(false)
+  expect(isBoundaryMessagePart({ type: "boundary" })).toBe(true)
+  expect(isCardBodyMessagePart({ type: "boundary" })).toBe(false)
+
+  expect(isCardBodyMessagePart({ type: "text", text: "" })).toBe(true)
+  expect(messagePartHasDisplayContent({ type: "text", text: "" })).toBe(false)
+  expect(isCardBodyMessagePart({ type: "reasoning", text: "[]" })).toBe(true)
+  expect(messagePartHasDisplayContent({ type: "reasoning", text: "[]" })).toBe(false)
+  expect(messagePartHasDisplayContent({ type: "reasoning", text: "[thinking]" })).toBe(true)
+})
+
+test("workload and deep-research session kinds do not collapse into assistant", () => {
+  expect(normalizeAgentRole("goal-workload-analyst")).toBe("goal-workload-analyst")
+  expect(normalizeAgentRole("workload_analysis")).toBe("goal-workload-analyst")
+  expect(normalizeAgentRole("deep-research")).toBe("deep-research")
+  expect(normalizeAgentRole("deep_research")).toBe("deep-research")
 })
 
 test("evaluation agents route to the live acceptance section phase", () => {

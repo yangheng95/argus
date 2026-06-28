@@ -1,5 +1,6 @@
 import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { normalizeAgentRole, type AgentRole } from "./message"
+import { isBoundaryMessagePart } from "./message-part"
 import type { CardNode } from "../store/card-tree"
 
 export const SCREENSHOT_BROWSER_ITEM_LIMIT = 120
@@ -219,7 +220,7 @@ function boundaryOwnersByMessage(
 ): Map<string, ScreenshotBrowserOwner> {
   const owners = new Map<string, ScreenshotBrowserOwner>()
   for (const part of parts) {
-    if (!isRecord(part) || part.type !== "boundary") continue
+    if (!isRecord(part) || !isBoundaryMessagePart(part)) continue
     const messageID = firstString(part.messageID)
     if (!messageID) continue
     owners.set(
@@ -386,7 +387,7 @@ function collectScreenshotBrowserMessage(collector: ScreenshotBrowserCollector, 
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index]
     if (!isRecord(part)) continue
-    if (part.type === "boundary") continue
+    if (isBoundaryMessagePart(part)) continue
     if (part.type === "file") {
       if (!isStoredImageReference(part)) continue
       const owner = ownerForPart({ message, part, baseOwner, boundaries })

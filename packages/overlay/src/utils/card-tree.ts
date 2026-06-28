@@ -17,18 +17,16 @@ import type {
 } from "../store/card-tree"
 import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool"
 import { extractTodos } from "./todos"
+import { isBoundaryMessagePart, isCardBodyMessagePart } from "./message-part"
 
 export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree"
 
-// Transient cards (built inline by the renderer with `children: CardNode[]`)
-// never flow through tree-writer's mutation pipeline, so their cached subtree
-// fields are never populated. Store-backed cards always carry the cache after
-// the first `flushCardStats` call. Detecting "transient" precisely is hard, so
-// we use a conservative rule: a node with inline children OR without cached
-// counts uses the recursive walk below.
+// Transient tool cards never flow through tree-writer's mutation pipeline, so
+// their cached subtree fields are never populated. Store-backed cards always
+// carry the cache after the first `flushCardStats` call; cards without cached
+// counts use the direct recursive walk below.
 function shouldUseCachedStats(node: CardNode): boolean {
   if (!node) return false
-  if (Array.isArray(node.children) && node.children.length > 0) return false
   return node.subtreeCounts !== undefined
 }
 
@@ -69,7 +67,7 @@ const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"]
 function cardHasDisplayPart(node: CardNode | undefined): boolean {
   if (!node) return false
   for (const part of node.parts || []) {
-    if (!part || part.type === "boundary") continue
+    if (!isCardBodyMessagePart(part)) continue
     if (part.type === "text" || part.type === "reasoning") {
       if (String(part.text || "").replace(/[\[\]\s]/g, "")) return true
       continue
@@ -169,11 +167,6 @@ export function collectCardText(node: CardNode): string {
   for (const cid of node.childIDs || []) {
     const child = cardTreeStore.cards[cid]
     if (!child) continue
-    const sub = collectCardText(child)
-    if (sub) chunks.push(sub)
-  }
-  // Transient cards (tool promotion in CardParts) carry inline children.
-  for (const child of node.children || []) {
     const sub = collectCardText(child)
     if (sub) chunks.push(sub)
   }
@@ -357,9 +350,6 @@ function gatherLatest(node: CardNode, hits: LatestHit[], suppressTools: boolean)
     const child = cardTreeStore.cards[cid]
     if (child) gatherLatest(child as unknown as CardNode, hits, suppressTools)
   }
-  for (const child of node.children || []) {
-    gatherLatest(child, hits, suppressTools)
-  }
 }
 
 export function collectLatestActivityText(node: CardNode): string {
@@ -432,7 +422,7 @@ export function cardMessageSegments(card: CardNode): CardMessageSegment[] {
     buffer = []
   }
   for (const part of parts) {
-    if ((part as { type?: string } | undefined)?.type === "boundary") {
+    if (isBoundaryMessagePart(part)) {
       flush()
       boundary = part as BoundaryPart
       continue
@@ -494,9 +484,6 @@ function gatherCounts(node: CardNode, counts: ActivityCounts): void {
   for (const cid of node.childIDs || []) {
     const child = cardTreeStore.cards[cid]
     if (child) gatherCounts(child as unknown as CardNode, counts)
-  }
-  for (const child of node.children || []) {
-    gatherCounts(child, counts)
   }
 }
 
@@ -569,9 +556,6 @@ function gatherTodos(node: CardNode, hits: TodoHit[]): void {
   for (const cid of node.childIDs || []) {
     const child = cardTreeStore.cards[cid]
     if (child) gatherTodos(child as unknown as CardNode, hits)
-  }
-  for (const child of node.children || []) {
-    gatherTodos(child, hits)
   }
 }
 

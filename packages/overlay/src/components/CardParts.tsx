@@ -9,6 +9,25 @@ import { shortRelativePath } from "../utils/tool"
 import { selectedTaskDirectory } from "../store/board"
 import { toolToCardNode } from "../utils/tool-card-node"
 import { t } from "../utils/i18n"
+import { isBoundaryMessagePart } from "../utils/message-part"
+
+const KNOWN_PART_TYPES = new Set([
+  "boundary",
+  "text",
+  "reasoning",
+  "tool",
+  "patch",
+  "file",
+  "interaction-question",
+  "interaction-permission",
+  "subtask",
+])
+
+function unsupportedPartFallback(part: any) {
+  const type = String(part?.type || "")
+  if (KNOWN_PART_TYPES.has(type)) return null
+  throw new Error(`CardParts unsupported part type: ${type || "<missing>"}`)
+}
 
 /** Render the parts list of a card body. Handles boundary separators,
  *  inline text / reasoning, and nested tool cards. Each part renders as its
@@ -17,8 +36,8 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
   return (
     <For each={props.parts}>
       {(part) => (
-        <Switch fallback={null}>
-          <Match when={part?.type === "boundary"}>
+        <Switch fallback={unsupportedPartFallback(part)}>
+          <Match when={isBoundaryMessagePart(part)}>
             <div class="card-boundary">
               <span class="card-boundary-role">{part.roleLabel}</span>
               <Show when={part.time}>
