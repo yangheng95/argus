@@ -11,7 +11,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
 import { Session } from "../../src/session"
 import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
-import type { ContentfulStatusCode } from "hono/utils/http-status"
+import { serverErrorResponse } from "../../src/server/error-handler"
 
 Log.init({ print: false })
 
@@ -43,34 +43,7 @@ Log.init({ print: false })
  */
 function buildOnErrorProbe(throwFn: () => never): Hono {
   const probe = new Hono()
-  probe.onError((err, c) => {
-    if (
-      err instanceof NamedError ||
-      (err &&
-        typeof err === "object" &&
-        typeof (err as any).name === "string" &&
-        typeof (err as any).toObject === "function")
-    ) {
-      let status: ContentfulStatusCode
-      if (err.name === "NotFoundError") status = 404
-      else if (err.name === "ProviderModelNotFoundError") status = 400
-      else if (err.name === "DirectoryRequiredError") status = 400
-      else if (err.name === "InvalidDirectoryError") status = 400
-      else if (err.name === "ChildSessionConfigError") status = 400
-      else if (err.name === "WorktreeNotGitError") status = 412
-      else if (err.name.startsWith("Worktree")) status = 400
-      else if (err.name === "TaskEmptyMessageError") status = 400
-      else if (err.name === "TaskGlobalProjectBindingError") status = 409
-      else if (err.name === "TaskChannelBindingProjectConflictError") status = 409
-      else if (err.name === "TaskCancellationIncompleteError") status = 409
-      else if (err.name === "PtyCreateFailedError") status = 400
-      else if (err.name === "FileUploadConflictError") status = 409
-      else if (err.name.startsWith("FileUpload")) status = 400
-      else status = 500
-      return c.json((err as NamedError & { toObject(): { name: string; data: unknown } }).toObject(), { status })
-    }
-    return c.json({ name: "UnknownError" }, 500)
-  })
+  probe.onError(serverErrorResponse)
   probe.get("/__throw__", () => {
     throwFn()
   })
@@ -93,6 +66,20 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "DirectoryRequiredError",
+    )
+  })
+
+  test("RequestOriginForbiddenError maps to 403", async () => {
+    await expectMapping(
+      () => {
+        throw new Server.RequestOriginForbiddenError({
+          message: "Request Origin is not allowed: https://evil.example",
+          origin: "https://evil.example",
+          host: "127.0.0.1:7878",
+        })
+      },
+      403,
+      "RequestOriginForbiddenError",
     )
   })
 

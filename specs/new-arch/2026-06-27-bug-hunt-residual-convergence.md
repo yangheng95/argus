@@ -1706,3 +1706,32 @@ Still open after this repair:
 - Workspace command launcher stale directory-owned GUI state.
 - Tool-output cleanup identifier timestamp wrap data-loss risk.
 - Wait-cron and event scheduler cross-instance activity visibility gaps.
+
+## Thirty-Eighth Round Repair And Verification
+
+Repaired in this round:
+
+- `RequestOriginForbiddenError` now maps to HTTP 403 in the single server `namedErrorStatus()` source used by `serverErrorResponse()`.
+- `request-origin` rejection through the real `Server.App()` path now returns the structured `RequestOriginForbiddenError` body and prevents `POST /task` state mutation.
+- `onerror-mapping` coverage no longer maintains a copied status table. Its probe uses the real `serverErrorResponse()` function, so future NamedError status drift is observable through the same runtime path.
+- Added explicit mapping coverage for `RequestOriginForbiddenError -> 403`.
+
+Verification commands passed:
+
+- `bun test packages/opencorvus/test/server/request-origin.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts --timeout 60000` failed before the fix with hostile origin returning 500 instead of 403.
+- `bun test packages/opencorvus/test/server/request-origin.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts --timeout 60000`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run api:routes-check`
+
+Still open after this repair:
+
+- Global DB destructive active-session 409 response/body drift.
+- Provider panel directory-owned response/test-result state.
+- Prompt Profile directory-owned mutation reload/notice state.
+- Browser error collector opt-outs for screenshot-producing browser suites.
+- `tool.truncation.cleanup` global scheduler vs project runtime-root ownership mismatch.
+- Task/orchestrator `HTTPException` plain-text response contract drift.
+- Overlay browser sidecar inactivity timeout and route callback failure propagation.
+- Workspace command launcher stale directory-owned GUI state.
+- Tool-output cleanup identifier timestamp wrap data-loss risk.
+- Wait-cron and event scheduler cross-instance activity visibility gaps.
