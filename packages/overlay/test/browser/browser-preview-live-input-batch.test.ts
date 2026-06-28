@@ -540,6 +540,15 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     if (path === "/file") return json([])
     if (path === "/find/file") return json([])
     if (path === "/skill/installed" || path === "/skill") return json([])
+    if (path === "/skill/mounts")
+      return json({
+        scope: "project",
+        skills: [],
+        agents: [],
+        matrix: [],
+        project_mounts: { agents: {} },
+        unmounted_count: 0,
+      })
     if (path === "/skill/market") return json([])
     if (path === "/mcp") return json({})
     if (path === "/panel/knowledge/memory") return json([])

@@ -276,6 +276,14 @@ test("file explorer selected-file expansion is active-gated", () => {
   )
 })
 
+test("file explorer search requests are active-gated", () => {
+  const explorer = readText("src/components/FileExplorerPanel.tsx")
+  expect(explorer).toMatch(
+    /const \[searchResults\] = createResource\(\s*\(\) => \{\s*const currentDirectory = directory\(\)\s*if \(!active\(\) \|\| !currentDirectory\) return undefined\s*return \{ query: deferredQuery\(\), directory: currentDirectory \}/,
+  )
+  expect(explorer).not.toContain("() => deferredQuery()")
+})
+
 test("file explorer rows expose truthful button semantics instead of an incomplete aria tree", () => {
   const explorer = readText("src/components/FileExplorerPanel.tsx")
 

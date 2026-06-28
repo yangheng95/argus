@@ -213,6 +213,17 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    const initiallyHiddenMcpProjection = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
+      active: node.dataset.active || "",
+      lists: node.querySelectorAll("#mcpList").length,
+      rows: node.querySelectorAll(".extension-settings-row").length,
+      text: node.textContent?.trim() || "",
+    }))
+    assert.deepEqual(
+      initiallyHiddenMcpProjection,
+      { active: "false", lists: 0, rows: 0, text: "" },
+      "hidden compact MCP panel must not materialize MCP list DOM before it is opened",
+    )
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.waitForSelector("#leftPanelSkills[data-active='true']")
@@ -224,10 +235,32 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     assert.deepEqual(await page.evaluate(() => (window as any).__openedPaths), [
       "D:/overlay/global/.opencorvus/skills-market",
     ])
+    const mcpProjectionWhileSkillOpen = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
+      active: node.dataset.active || "",
+      lists: node.querySelectorAll("#mcpList").length,
+      rows: node.querySelectorAll(".extension-settings-row").length,
+      text: node.textContent?.trim() || "",
+    }))
+    assert.deepEqual(
+      mcpProjectionWhileSkillOpen,
+      { active: "false", lists: 0, rows: 0, text: "" },
+      "MCP panel must stay unmaterialized while Skills is the active compact tool panel",
+    )
 
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
     await page.waitForSelector("#leftPanelMcp[data-active='true'] #mcpList")
+    const skillProjectionWhileMcpOpen = await page.$eval("#leftPanelSkills", (node: HTMLElement) => ({
+      active: node.dataset.active || "",
+      matrixGrids: node.querySelectorAll(".agent-skill-matrix-grid").length,
+      matrixCells: node.querySelectorAll(".agent-skill-grid-cell").length,
+      text: node.textContent?.trim() || "",
+    }))
+    assert.deepEqual(
+      skillProjectionWhileMcpOpen,
+      { active: "false", matrixGrids: 0, matrixCells: 0, text: "" },
+      "Skills matrix must unmount when MCP becomes the active compact tool panel",
+    )
     await page.waitForFunction(() => document.querySelector("#leftPanelMcp")?.textContent?.includes("browser"))
     const statusScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "skill-mcp-status-pills.png")
     const statusRows = await page.$$eval("#leftPanelMcp .extension-settings-row", (rows: HTMLElement[]) =>

@@ -53,6 +53,11 @@ type BrowserPreviewEvidenceImage = {
   url: string
 }
 
+type PendingBrowserPreviewLiveInput =
+  | { type: "ready"; input: BrowserPreviewLiveInput }
+  | { type: "point"; kind: "click"; clientX: number; clientY: number; button: "left" | "middle" | "right" }
+  | { type: "point"; kind: "wheel"; clientX: number; clientY: number; deltaX: number; deltaY: number }
+
 export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
@@ -338,7 +343,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   let liveFrameRequestSequence = 0
   let liveInputRequestInFlight = false
   let pendingLiveInputScopeKey = ""
-  let pendingLiveInputs: BrowserPreviewLiveInput[] = []
+  let pendingLiveInputs: PendingBrowserPreviewLiveInput[] = []
   let liveImageElement: HTMLImageElement | null = null
   let liveImageScrollElement: HTMLElement | null = null
   let liveImageRect: BrowserPreviewLiveImageRect | undefined
@@ -369,7 +374,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       width: rect.width,
       height: rect.height,
     }
-    liveImageRectScopeKey = browserPreviewLiveScopeKey(scope)
+    const key = browserPreviewLiveScopeKey(scope)
+    liveImageRectScopeKey = key
+    if (pendingLiveInputs.length > 0 && pendingLiveInputScopeKey === key && !liveInputRequestInFlight) {
+      flushLiveInputOnFrame.schedule()
+    }
   })
 
   const scheduleLiveImageRectMeasure = () => {
@@ -496,19 +505,54 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     flushLiveInputOnFrame.cancel()
   }
 
-  const queueLiveInput = (input: BrowserPreviewLiveInput) => {
+  const queueLiveInput = (input: PendingBrowserPreviewLiveInput) => {
     const previous = pendingLiveInputs[pendingLiveInputs.length - 1]
-    if (input.kind === "wheel" && previous?.kind === "wheel") {
+    if (input.type === "point" && input.kind === "wheel" && previous?.type === "point" && previous.kind === "wheel") {
       pendingLiveInputs[pendingLiveInputs.length - 1] = {
+        type: "point",
         kind: "wheel",
-        x: input.x,
-        y: input.y,
+        clientX: input.clientX,
+        clientY: input.clientY,
         deltaX: previous.deltaX + input.deltaX,
         deltaY: previous.deltaY + input.deltaY,
       }
       return
     }
     pendingLiveInputs.push(input)
+  }
+
+  const pendingLiveInputsForScope = (
+    scope: NonNullable<ReturnType<typeof liveScope>>,
+    key: string,
+  ): BrowserPreviewLiveInput[] | undefined => {
+    const rect = liveImageRectScopeKey === key ? liveImageRect : undefined
+    const inputs: BrowserPreviewLiveInput[] = []
+    for (const input of pendingLiveInputs) {
+      if (input.type === "ready") {
+        inputs.push(input.input)
+        continue
+      }
+      if (!rect) {
+        scheduleLiveImageRectMeasure()
+        return undefined
+      }
+      const point = browserPreviewLivePoint(input, rect, scope.viewport)
+      if (!point) {
+        scheduleLiveImageRectMeasure()
+        return undefined
+      }
+      if (input.kind === "click") {
+        inputs.push({ kind: "click", ...point, button: input.button })
+      } else {
+        inputs.push({
+          kind: "wheel",
+          ...point,
+          deltaX: input.deltaX,
+          deltaY: input.deltaY,
+        })
+      }
+    }
+    return inputs
   }
 
   async function flushLiveInputBatch() {
@@ -524,7 +568,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       return
     }
     if (pendingLiveInputs.length === 0) return
-    const inputs = pendingLiveInputs
+    const inputs = pendingLiveInputsForScope(scope, key)
+    if (!inputs) return
     pendingLiveInputs = []
     pendingLiveInputScopeKey = key
     liveInputRequestInFlight = true
@@ -541,20 +586,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
   }
 
-  const livePoint = (event: MouseEvent | WheelEvent) => {
-    const viewport = selectedViewport()
+  const liveInputReadyScopeKey = () => {
     const scope = liveScope()
     const image = liveImage()
-    if (!viewport || !scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return undefined
-    const key = browserPreviewLiveScopeKey(scope)
-    if (!liveImageRect || liveImageRectScopeKey !== key) {
-      scheduleLiveImageRectMeasure()
-      return undefined
-    }
-    return browserPreviewLivePoint(event, liveImageRect, viewport)
+    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
+    return browserPreviewLiveScopeKey(scope)
   }
 
-  const sendLiveInput = (input: BrowserPreviewLiveInput) => {
+  const sendLiveInput = (input: PendingBrowserPreviewLiveInput) => {
     const scope = liveScope()
     const image = liveImage()
     if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return
@@ -576,26 +615,31 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const handleLivePointerDown: JSX.EventHandlerUnion<HTMLElement, PointerEvent> = (event) => {
     if (event.button > 2) return
-    const point = livePoint(event)
-    if (!point) return
+    if (!liveInputReadyScopeKey()) return
     event.currentTarget.focus()
     event.preventDefault()
     const button = event.button === 1 ? "middle" : event.button === 2 ? "right" : "left"
-    sendLiveInput({ kind: "click", ...point, button })
+    sendLiveInput({ type: "point", kind: "click", clientX: event.clientX, clientY: event.clientY, button })
   }
 
   const handleLiveWheel: JSX.EventHandlerUnion<HTMLElement, WheelEvent> = (event) => {
-    const point = livePoint(event)
-    if (!point) return
+    if (!liveInputReadyScopeKey()) return
     event.preventDefault()
-    sendLiveInput({ kind: "wheel", ...point, deltaX: event.deltaX, deltaY: event.deltaY })
+    sendLiveInput({
+      type: "point",
+      kind: "wheel",
+      clientX: event.clientX,
+      clientY: event.clientY,
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+    })
   }
 
   const handleLiveKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent> = (event) => {
     if (event.key === "Shift" || event.key === "Control" || event.key === "Alt" || event.key === "Meta") return
     if (event.key === "Tab" || event.key === "Escape") return
     event.preventDefault()
-    sendLiveInput({ kind: "key", key: event.key })
+    sendLiveInput({ type: "ready", input: { kind: "key", key: event.key } })
   }
 
   createEffect<string | undefined>((previous) => {

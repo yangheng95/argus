@@ -189,10 +189,14 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   })
 
   const [searchResults] = createResource(
-    () => deferredQuery(),
-    async (value) => {
-      if (!value) return []
-      return searchFiles(value)
+    () => {
+      const currentDirectory = directory()
+      if (!active() || !currentDirectory) return undefined
+      return { query: deferredQuery(), directory: currentDirectory }
+    },
+    async (source) => {
+      if (!source.query) return []
+      return searchFiles(source.query)
     },
   )
 

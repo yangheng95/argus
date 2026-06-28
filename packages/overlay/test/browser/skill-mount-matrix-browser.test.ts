@@ -404,6 +404,18 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    const hiddenSkillProjection = await page.$eval("#leftPanelSkills", (node: HTMLElement) => ({
+      active: node.dataset.active || "",
+      matrixGrids: node.querySelectorAll(".agent-skill-matrix-grid").length,
+      matrixCells: node.querySelectorAll(".agent-skill-grid-cell").length,
+      skillRows: node.querySelectorAll(".agent-skill-grid-skill").length,
+      text: node.textContent?.trim() || "",
+    }))
+    assert.deepEqual(
+      hiddenSkillProjection,
+      { active: "false", matrixGrids: 0, matrixCells: 0, skillRows: 0, text: "" },
+      "hidden compact Skills panel must not materialize the matrix DOM before it is opened",
+    )
     const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
     await page.waitForSelector(skillButton)
     await page.click(skillButton)
