@@ -76,6 +76,7 @@ function queueRow(queueTaskID: string) {
 describe("project routes", () => {
   afterEach(async () => {
     mock.restore()
+    Server.resetProjectRoutesAppForTest()
     await resetDatabase()
   })
 
