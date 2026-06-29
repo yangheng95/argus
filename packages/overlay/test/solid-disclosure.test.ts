@@ -1,5 +1,5 @@
 /**
- * Coverage guard for Step 9.A (specs/overlay-flat-redesign/plan.md §9.1).
+ * Coverage guard for Step 9.A (flat redesign migration contract §9.1).
  *
  * Two layers:
  *   1. Behaviour test — the hook itself returns a coherent open/toggle/

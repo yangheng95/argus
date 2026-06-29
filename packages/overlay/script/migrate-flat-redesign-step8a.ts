@@ -1,5 +1,5 @@
 /**
- * One-shot migration for flat-redesign Step 8a (specs/overlay-flat-redesign/plan.md §八 v4).
+ * One-shot migration for flat-redesign Step 8a (flat redesign migration contract §八 v4).
  * Rewrites every `transition:` / `z-index:` / `opacity:` callsite under
  * `packages/overlay/src/styles/**\/*.css` to use the new token sets:
  *   - --ui-duration-{fast,base,slow} + --ui-timing-standard

@@ -1,5 +1,5 @@
 /**
- * Coverage guard for flat-redesign Step 2 (specs/overlay-flat-redesign/plan.md §2.2).
+ * Coverage guard for flat-redesign Step 2 (flat redesign migration contract §2.2).
  *
  * Pins the three border-rule decisions that make the overlay "flat":
  *

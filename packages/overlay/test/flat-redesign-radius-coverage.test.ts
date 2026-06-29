@@ -1,5 +1,5 @@
 /**
- * Coverage guard for flat-redesign Step 1 (specs/overlay-flat-redesign/plan.md).
+ * Coverage guard for flat-redesign Step 1 (flat redesign migration contract).
  *
  * Asserts that every `border-radius:` callsite under
  * `packages/overlay/src/styles/**\/*.css` references one of the four canonical

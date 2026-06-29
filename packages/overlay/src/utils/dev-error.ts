@@ -16,7 +16,7 @@
  * 历史背景: 此 panel 之前因调用方在 createMemo 内部触发副作用 +
  * 自身没有上限/dedup, 导致长任务运行后 DOM 节点累积到数万个，
  * overlay 整体卡顿。修复双管齐下: 调用方移出 memo 副作用 + 此处加固。
- * 详见 specs/实施进度对照.md "性能修复 2026-04-10"。
+ * 详见 historical implementation progress repair note "性能修复 2026-04-10"。
  */
 
 interface DevEntry {

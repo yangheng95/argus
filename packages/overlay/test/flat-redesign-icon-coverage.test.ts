@@ -1,5 +1,5 @@
 /**
- * Coverage guard for flat-redesign Step 3 (specs/overlay-flat-redesign/plan.md §2.3).
+ * Coverage guard for flat-redesign Step 3 (flat redesign migration contract §2.3).
  *
  * Two assertions:
  *

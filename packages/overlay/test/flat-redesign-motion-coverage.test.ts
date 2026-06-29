@@ -1,5 +1,5 @@
 /**
- * Coverage guard for flat-redesign Step 8a (specs/overlay-flat-redesign/plan.md §八 v4).
+ * Coverage guard for flat-redesign Step 8a (flat redesign migration contract §八 v4).
  *
  * Pins the motion token contract: every transition declaration under
  * `packages/overlay/src/styles/**\/*.css` (except the token source

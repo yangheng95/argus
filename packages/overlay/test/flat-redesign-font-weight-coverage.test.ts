@@ -1,5 +1,5 @@
 /**
- * Coverage guard for flat-redesign Step 5 (specs/overlay-flat-redesign/plan.md §八 v3).
+ * Coverage guard for flat-redesign Step 5 (flat redesign migration contract §八 v3).
  *
  * Asserts that every `font-weight:` declaration under
  * `packages/overlay/src/styles/**\/*.css` references one of the three canonical
