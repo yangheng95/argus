@@ -30,7 +30,7 @@
 | **B. 代理网关**                | LiteLLM / OpenRouter   | ✓ 零代码 · 100+ provider · ✗ 额外跳转 · 参数丢失 · 第三方依赖        |
 | **C. 抽象基类**                | LangChain / LlamaIndex | ✓ 清晰分层 · OOP · ✗ 抽象泄漏 · TypeScript 生态弱                    |
 
-**本项目采用方案 A 深度定制**，与 opencode 同源，已支持 20 个 bundled provider（见 `provider/bundled.ts:27-48`），六层适配。
+**本项目采用方案 A 深度定制**，围绕 OpenCorvus runtime 维护 provider 装载、认证与消息适配，已支持 20 个 bundled provider（见 `provider/bundled.ts:27-48`），六层适配。
 
 ## 六层适配架构
 

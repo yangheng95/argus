@@ -4,29 +4,21 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 
 ## Current Sources
 
-| Surface | Source |
-| --- | --- |
-| Current architecture | `specs/current/architecture/README.md` |
-| June 2026 task records | `specs/records/2026-06/` |
-| 2026-06-29 browser preview reference regions tool | `specs/records/2026-06/2026-06-29-browser-preview-reference-regions-tool.md` |
-| 2026-06-29 database I/O incident | `specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md` |
-| 2026-06-29 frontend replica tool ownership prompt | `specs/records/2026-06/2026-06-29-frontend-replica-tool-ownership-prompt.md` |
-| 2026-06-29 model image auto resize | `specs/records/2026-06/2026-06-29-model-image-input-auto-resize.md` |
-| 2026-06-29 operator steer single source | `specs/records/2026-06/2026-06-29-operator-steer-single-source.md` |
-| 2026-06-29 orchestrator goal complete/delete tools | `specs/records/2026-06/2026-06-29-orchestrator-goal-complete-delete-tools.md` |
-| 2026-06-29 project delete unhandled rejection | `specs/records/2026-06/2026-06-29-project-delete-unhandled-rejection.md` |
-| 2026-06-29 sub-agent infrastructure homogeneity | `specs/records/2026-06/2026-06-29-subagent-infrastructure-homogeneity.md` |
-| Prompt and product-reference artifacts | `specs/artifacts/` |
-| Public product docs | `packages/web/src/content/docs/**` |
-| API reference docs | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx` |
+| Surface                                | Source                                                                  |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| Current architecture                   | `specs/current/architecture/README.md`                                  |
+| June 2026 task records                 | `specs/records/2026-06/README.md`                                       |
+| Prompt and product-reference artifacts | `specs/artifacts/`                                                      |
+| Public product docs                    | `packages/web/src/content/docs/**`                                      |
+| API reference docs                     | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx` |
 
 ## Storage Model
 
-| Location | Contents | Authority |
-| --- | --- | --- |
-| `specs/current/architecture/**` | Living architecture chapters and diagrams. | Current architecture source of truth. |
-| `specs/records/2026-06/**` | Dated June 2026 plans, investigations, benchmarks, and audit records. | Historical evidence unless the file explicitly declares current authority. |
-| `specs/artifacts/**` | Input artifacts such as prompts and product-reference notes. | Task input only, not architecture authority. |
+| Location                        | Contents                                                              | Authority                                                                  |
+| ------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `specs/current/architecture/**` | Living architecture chapters and diagrams.                            | Current architecture source of truth.                                      |
+| `specs/records/YYYY-MM/**`      | Dated monthly plans, investigations, benchmarks, and audit records.   | Historical evidence unless the file explicitly declares current authority. |
+| `specs/artifacts/**`            | Input artifacts such as prompts and product-reference notes.          | Task input only, not architecture authority.                               |
 
 ## Hard Rules
 
@@ -36,6 +28,7 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 4. Package-local spec trees are not allowed. OpenCorvus package decisions use this root `specs/` tree.
 5. Root-level files in `specs/` are limited to this index plus the `current/`, `records/`, and `artifacts/` directories.
 6. If a deleted pre-June record must be discussed, use prose such as `deleted pre-June record <name>` rather than recreating a file or link.
+7. Every new landed plan, implementation record, or architecture-change record must include a `Recall` section with the user request, acceptance criteria, hard constraints, sources read, whole-repository search evidence, and independent agent feedback.
 
 ## Verification
 

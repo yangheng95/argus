@@ -73,9 +73,9 @@ function conversationPayload(sessionID: string) {
     transcript: [],
     timeline: [],
     events: [],
-    view: { rootID: "root", cards: {}, order: [] },
-    agentView: { rootID: "root", cards: {}, order: [] },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
     messageWatermark: 0,
   }
 }

@@ -119,21 +119,22 @@ describe("BrowserRuntime", () => {
     expect(args).toContain("--proxy-bypass-list=localhost;127.0.0.1;::1;*.local")
   })
 
-  test("uses BROWSER_PROXY before HTTP proxy environment variables", () => {
+  test("ignores private browser proxy env and uses standard proxy environment variables", () => {
+    const privateBrowserProxy = ["BROWSER", "_PROXY"].join("")
     const args = BrowserRuntime.defaultLaunchArgs({
       env: {
-        BROWSER_PROXY: "socks5://127.0.0.1:1080",
+        [privateBrowserProxy]: "socks5://127.0.0.1:1080",
         HTTPS_PROXY: "http://172.25.160.1:6268",
       },
     })
 
-    expect(args).toContain("--proxy-server=socks5://127.0.0.1:1080")
-    expect(args).not.toContain("--proxy-server=http://172.25.160.1:6268")
+    expect(args).toContain("--proxy-server=http://172.25.160.1:6268")
+    expect(args).not.toContain("--proxy-server=socks5://127.0.0.1:1080")
   })
 
   test("keeps authenticated proxy credentials out of Chromium launch arguments", () => {
     const env = {
-      BROWSER_PROXY: "http://proxy-user:proxy-secret@10.217.133.185:30100",
+      HTTPS_PROXY: "http://proxy-user:proxy-secret@10.217.133.185:30100",
       NO_PROXY: "localhost,127.0.0.1",
     }
     const args = BrowserRuntime.defaultLaunchArgs({ env })

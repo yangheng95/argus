@@ -16,7 +16,7 @@ describe("frontend-design webpage evidence default viewport", () => {
   test("critical capture callpoints consume the shared default instead of local viewport literals", async () => {
     const files = [
       "src/browser/webpage/extract.ts",
-      "src/frontend-design/capture-gate.ts",
+      "src/frontend-design/reference-capture.ts",
       "src/frontend-design/tools/webpage-extract.ts",
       "src/frontend-design/tools/webpage-runtime-state.ts",
       "src/frontend-design/url-screenshot-tool.ts",

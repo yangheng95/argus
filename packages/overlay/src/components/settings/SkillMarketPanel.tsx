@@ -34,7 +34,7 @@ import {
   type AgentSkillMountMatrix,
   type SkillImportPackageFile,
 } from "../../services/extensions"
-import { addMcpServer, deleteAllMcp } from "../../services/mcp"
+import { addMcpServer, deleteAllMcp, type RemoteMcpTransport } from "../../services/mcp"
 import {
   mcpConnectionStatusOrDisabledLabel,
   mcpConnectionStatusOrDisabledTone,
@@ -445,6 +445,11 @@ function ExtensionSettingsPanel(props: {
   const mcpTypeOptions = (): FormSelectOption[] => [
     { value: "remote", label: t("mcp.type.remote") },
     { value: "local", label: t("mcp.type.local") },
+  ]
+
+  const mcpTransportOptions = (): FormSelectOption[] => [
+    { value: "streamable-http", label: t("mcp.transport.streamable_http") },
+    { value: "sse", label: t("mcp.transport.sse") },
   ]
   const [notice, setNotice] = createSignal("")
   const [noticeStatus, setNoticeStatus] = createSignal<"active" | "error" | "warn">("error")
@@ -1034,6 +1039,7 @@ function ExtensionSettingsPanel(props: {
   const [mcpForm, setMcpForm] = createStore({
     name: "",
     type: "remote" as "remote" | "local",
+    transport: "streamable-http" as RemoteMcpTransport,
     url: "",
     command: "",
     args: "",
@@ -1046,18 +1052,26 @@ function ExtensionSettingsPanel(props: {
       return
     }
     try {
+      const request =
+        mcpForm.type === "remote"
+          ? {
+              name: mcpForm.name,
+              type: "remote" as const,
+              transport: mcpForm.transport,
+              url: mcpForm.url,
+            }
+          : {
+              name: mcpForm.name,
+              type: "local" as const,
+              command: mcpForm.command,
+              args: mcpForm.args,
+            }
       await addMcpServer(
-        {
-          name: mcpForm.name,
-          type: mcpForm.type,
-          url: mcpForm.url,
-          command: mcpForm.command,
-          args: mcpForm.args,
-        },
+        request,
         { directory, isCurrentDirectory: sourceMatchesDirectory },
       )
       if (!sourceMatchesDirectory(directory)) return
-      setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" })
+      setMcpForm({ name: "", type: "remote", transport: "streamable-http", url: "", command: "", args: "" })
       setShowAddMcp(false)
       await reloadCurrentPanel({ directory })
     } catch (e) {
@@ -1564,6 +1578,15 @@ function ExtensionSettingsPanel(props: {
                   />
                 </label>
                 <Show when={mcpForm.type === "remote"}>
+                  <label class="field">
+                    <span class="field-label">{t("mcp.transport")}</span>
+                    <FormSelect
+                      value={mcpForm.transport}
+                      options={mcpTransportOptions()}
+                      ariaLabel={t("mcp.transport")}
+                      onChange={(value) => setMcpForm("transport", value as RemoteMcpTransport)}
+                    />
+                  </label>
                   <label class="field">
                     <span class="field-label">{t("mcp.remote_url")}</span>
                     {/* Fixed remote MCP URL example. */}

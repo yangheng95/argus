@@ -202,8 +202,8 @@ export namespace MemorySearch {
     return sources.includes(source)
   }
 
-  function clampScore(value: number | undefined, fallback: number) {
-    if (typeof value !== "number" || Number.isNaN(value)) return fallback
+  function clampScore(value: number | undefined, defaultValue: number) {
+    if (typeof value !== "number" || Number.isNaN(value)) return defaultValue
     return Math.max(0, Math.min(100, Math.round(value)))
   }
 

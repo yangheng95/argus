@@ -1,5 +1,5 @@
 /**
- * Single-source chunk-driven activity gate.
+ * Single-source chunk-driven activity monitor.
  *
  * Purpose: detect "no byte moved in N ms" on any streaming surface
  * (LLM stream.fullStream, executor event queue, SSE bridge) without
@@ -11,20 +11,20 @@
  *   - Caller invokes `observe()` on every real chunk / event. Each call
  *     resets the inactivity timer.
  *   - If `idleMs` elapses with no `observe()` call AND the external
- *     `signal` has not fired, the gate aborts its own controller with
+ *     `signal` has not fired, the monitor aborts its own controller with
  *     an `AbortError` carrying a deterministic reason. The chain then
  *     unwinds naturally through the existing `throwIfAborted()` / abort
  *     listeners — no custom status codes, no separate error taxonomy.
- *   - Disposal is idempotent; after `dispose()` the gate stops all
+ *   - Disposal is idempotent; after `dispose()` the monitor stops all
  *     timers and stops observing.
  *
  * Rules: CLAUDE.md #1 (no fallback — we *abort*, the caller decides),
- * #22 (single source for activity-gating), #24 (pattern is extracted,
+ * #22 (single source for activity monitoring), #24 (pattern is extracted,
  * not copy-pasted into each consumer), #26 (no over-engineering —
  * observe() / dispose() / signal / lastActivityAt and that's it).
  */
 
-export interface StreamActivityGate {
+export interface StreamActivityMonitor {
   /** Abort signal combined from external signal + internal idle controller. */
   readonly signal: AbortSignal
   /** Call on every chunk / event. Resets the inactivity timer. */
@@ -45,18 +45,18 @@ export interface StreamActivityGate {
   resume(): void
   /** Millisecond timestamp of the most recent observe() (or construction). */
   lastActivityAt(): number
-  /** True once the gate's own controller has aborted due to inactivity. */
+  /** True once the monitor's own controller has aborted due to inactivity. */
   timedOut(): boolean
-  /** Abort the gate from an owning session/executor cancel path. */
+  /** Abort the monitor from an owning session/executor cancel path. */
   abort(reason?: unknown): void
   /** Idempotent. Clears all timers and detaches listeners. */
   dispose(): void
 }
 
 export interface StreamActivityOptions {
-  /** Maximum idle window before the gate aborts itself. Must be > 0. */
+  /** Maximum idle window before the monitor aborts itself. Must be > 0. */
   idleMs: number
-  /** Caller-owned signal that the gate propagates alongside its own. */
+  /** Caller-owned signal that the monitor propagates alongside its own. */
   signal?: AbortSignal
   /**
    * Human-readable tag appended to the AbortError reason (e.g.
@@ -74,7 +74,7 @@ export interface StreamActivityOptions {
  * the connection but does not reject an already-pending reader.read()
  * promise, so the consumer's `for await` hangs forever).
  *
- * Pairs with `withStreamActivity` — the gate's combined signal flips, this
+ * Pairs with `withStreamActivity` — the monitor's combined signal flips, this
  * wrapper guarantees the consumer's loop actually exits with the
  * AbortError. Cleans up the upstream iterator via `iter.return?.()` so
  * provider-side resources (response body, fetch socket) get released.
@@ -106,7 +106,7 @@ export async function* abortableIterable<T>(source: AsyncIterable<T>, signal: Ab
   }
 }
 
-export function withStreamActivity(options: StreamActivityOptions): StreamActivityGate {
+export function withStreamActivity(options: StreamActivityOptions): StreamActivityMonitor {
   if (!Number.isFinite(options.idleMs) || options.idleMs <= 0) {
     throw new Error(`withStreamActivity: idleMs must be a positive finite number (got ${options.idleMs})`)
   }
@@ -144,7 +144,7 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
     if (pauseDepth > 0) return
     timer = setTimeout(trip, options.idleMs)
     // Timer is intentionally ref'd: unref would let Bun idle out while an
-    // async iterator is parked on `await new Promise`, defeating the gate.
+    // async iterator is parked on `await new Promise`, defeating the monitor.
   }
 
   schedule()

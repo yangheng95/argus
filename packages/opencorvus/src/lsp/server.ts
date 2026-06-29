@@ -1430,7 +1430,7 @@ export namespace LSPServer {
       // 3) Single-project or module-level build
       const buildRoot = await NearestRoot(["build.gradle.kts", "build.gradle"])(file)
       if (buildRoot) return buildRoot
-      // 4) Maven fallback
+      // 4) Maven project-root detection
       return NearestRoot(["pom.xml"])(file)
     },
     async spawn(root) {
@@ -2094,7 +2094,7 @@ export namespace LSPServer {
       // If no flake.nix, fall back to git repository root
       if (Instance.worktree && Instance.worktree !== Instance.directory) return Instance.worktree
 
-      // Finally, use the instance directory as fallback
+      // Finally, use the configured instance directory
       return Instance.directory
     },
     async spawn(root) {

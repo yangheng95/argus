@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -7,14 +8,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const docsScanRoots = ["specs/current/architecture", "docs", "packages/web/src/content/docs"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
 const datedSpecFileExtensions = new Set([".md", ".txt"])
-const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".md", ".mdx", ".txt"])
-const scratchTextExtensions = new Set([
-  ".md",
-  ".mdx",
-  ".txt",
-  ".patch",
-  ".current",
-  ".json",
+const repositoryExtensions = new Set([
   ".ts",
   ".tsx",
   ".js",
@@ -22,61 +16,24 @@ const scratchTextExtensions = new Set([
   ".mjs",
   ".cjs",
   ".css",
-  ".html",
-  ".htm",
-  ".tmp",
-  ".tsv",
-  ".diff",
-  ".log",
-  ".lock",
-  ".ps1",
-  ".snap",
-  ".astro",
-  ".sh",
-  ".toml",
-  ".ndjson",
-  ".jsonl",
-  ".rs",
-  ".sample",
-  ".nix",
-  ".headers",
-  ".csv",
-  ".editorconfig",
-  ".gitattributes",
-  ".dockerignore",
-  ".vscodeignore",
-  ".webmanifest",
-  ".geojson",
-  ".xml",
-  ".svg",
+  ".md",
+  ".mdx",
+  ".txt",
+  ".json",
+  ".jsonc",
   ".yaml",
   ".yml",
+  ".toml",
+  ".ps1",
+  ".sh",
+  ".astro",
+  ".html",
+  ".htm",
+  ".svg",
+  ".xml",
+  ".rs",
+  ".nix",
 ])
-const scratchBinaryExtensions = new Set([
-  ".bin",
-  ".br",
-  ".dll",
-  ".dylib",
-  ".exe",
-  ".gif",
-  ".gz",
-  ".ico",
-  ".icns",
-  ".jpg",
-  ".jpeg",
-  ".node",
-  ".pdf",
-  ".png",
-  ".so",
-  ".tar",
-  ".tgz",
-  ".wasm",
-  ".webp",
-  ".xz",
-  ".zip",
-  ".zst",
-])
-const scratchTextSampleBytes = 64 * 1024
 const skippedRepositoryDirs = new Set([
   ".git",
   ".opencorvus",
@@ -103,9 +60,10 @@ const deletedPreJuneSpecNamePattern =
 const packageLocalSpecTreePattern = /packages[/\\][^/\\]+[/\\]specs(?:[/\\]|$)/
 const normalizedPackageLocalSpecTreePattern = /(?:^|[/\\])packages[/\\][^/\\]+[/\\]specs(?:[/\\]|$)/
 const scratchEncodedPackageLocalSpecTreePattern = /packages__[^_]+__specs__/
+const retiredPathEnd = "(?:[/\\\\]|$|(?=[\\s`\"')\\]}.,:;]))"
 const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
-  { label: "legacy architecture tree", pattern: /specs[/\\]new-arch(?:[/\\]|$)/ },
-  { label: "legacy singular architecture tree", pattern: /spec[/\\]new-arch(?:[/\\]|$)/ },
+  { label: "legacy architecture tree", pattern: new RegExp(`specs[/\\\\]new-arch${retiredPathEnd}`) },
+  { label: "legacy singular architecture tree", pattern: new RegExp(`spec[/\\\\]new-arch${retiredPathEnd}`) },
   { label: "package-local spec tree", pattern: packageLocalSpecTreePattern },
   { label: "retired reference ledger", pattern: /specs[/\\]retired-reference-ledger\.md/ },
   {
@@ -120,9 +78,30 @@ const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
     label: "deleted pre-June superpowers spec",
     pattern: /docs[/\\]superpowers[/\\]specs[/\\]2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.(?:md|txt)/,
   },
-  { label: "deleted overlay flat redesign plan", pattern: /specs[/\\]overlay-flat-redesign(?:[/\\]|$)/ },
+  {
+    label: "deleted overlay flat redesign plan",
+    pattern: new RegExp(`specs[/\\\\]overlay-flat-redesign${retiredPathEnd}`),
+  },
   { label: "deleted implementation progress note", pattern: new RegExp("specs[/\\\\]\\u5b9e\\u65bd\\u8fdb\\u5ea6") },
 ]
+const skippedScratchContentGlobs = [
+  "!**/.git/**",
+  "!**/.turbo/**",
+  "!**/dist/**",
+  "!**/dist-vite/**",
+  "!**/node_modules/**",
+  "!**/opencorvus-dist/**",
+  "!**/target/**",
+]
+const skippedScratchDirectoryNames = new Set([
+  ".git",
+  ".turbo",
+  "dist",
+  "dist-vite",
+  "node_modules",
+  "opencorvus-dist",
+  "target",
+])
 
 let docsFilesCache: string[] | undefined
 let repositoryFilesCache: string[] | undefined
@@ -216,45 +195,21 @@ function deletedPreJuneSpecNameOffenders(): string[] {
   const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
   const allowedHistoricalMigrationRecord = "specs/records/2026-06/2026-06-29-spec-consolidation.md"
   const allowedHistoricalGuardFile = "packages/opencorvus/test/script/document-health.test.ts"
+  const allowedRetiredPathGuardFile = "packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts"
   return repositoryFiles()
     .map((file) => [file, path.relative(repoRoot, file).replace(/\\/g, "/")] as const)
-    .filter(([, rel]) => rel !== thisFile && rel !== allowedHistoricalMigrationRecord && rel !== allowedHistoricalGuardFile)
+    .filter(
+      ([, rel]) =>
+        rel !== thisFile &&
+        rel !== allowedHistoricalMigrationRecord &&
+        rel !== allowedHistoricalGuardFile &&
+        rel !== allowedRetiredPathGuardFile,
+    )
     .flatMap(([file, rel]) => {
       const text = fs.readFileSync(file, "utf8")
       return Array.from(text.matchAll(deletedPreJuneSpecNamePattern)).map((match) => `${rel}: ${match[0]}`)
     })
     .sort()
-}
-
-function isUtf8TextSample(buffer: Buffer): boolean {
-  if (buffer.includes(0)) return false
-  try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buffer)
-  } catch {
-    return false
-  }
-  let controlCount = 0
-  for (const byte of buffer) {
-    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) controlCount += 1
-  }
-  return controlCount <= Math.max(4, Math.floor(buffer.length / 100))
-}
-
-function shouldScanScratchTextFile(fullPath: string, extension: string, stat = fs.statSync(fullPath)): boolean {
-  if (!stat.isFile()) return false
-  if (scratchTextExtensions.has(extension)) return true
-  if (scratchBinaryExtensions.has(extension)) return false
-
-  if (stat.size === 0) return true
-
-  const sample = Buffer.alloc(Math.min(stat.size, scratchTextSampleBytes))
-  const fd = fs.openSync(fullPath, "r")
-  try {
-    const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0)
-    return isUtf8TextSample(sample.subarray(0, bytesRead))
-  } finally {
-    fs.closeSync(fd)
-  }
 }
 
 function scratchSpecSnapshotOffenders(scratchRoot = path.join(repoRoot, ".scratch")): string[] {
@@ -271,6 +226,7 @@ function scratchSpecSnapshotOffenders(scratchRoot = path.join(repoRoot, ".scratc
           offenders.push(rel)
           continue
         }
+        if (skippedScratchDirectoryNames.has(entry.name)) continue
         walk(fullPath)
         continue
       }
@@ -281,22 +237,51 @@ function scratchSpecSnapshotOffenders(scratchRoot = path.join(repoRoot, ".scratc
       }
       const extension = path.extname(entry.name).toLowerCase()
       if ((extension === ".md" || extension === ".txt") && scratchRootSpecFilePattern.test(rel)) offenders.push(rel)
-      if (!shouldScanScratchTextFile(fullPath, extension, stat)) continue
       if (hasPreJuneDatedSpecFileName(rel)) offenders.push(rel)
-      const text = fs.readFileSync(fullPath, "utf8")
-      if (/specs\/new-arch/.test(text) || packageLocalSpecTreePattern.test(text)) offenders.push(rel)
-      for (const { label, pattern } of retiredSpecPathPatterns) {
-        pattern.lastIndex = 0
-        if (pattern.test(text)) offenders.push(`${rel}: ${label}`)
-      }
-      for (const match of text.matchAll(deletedPreJuneSpecNamePattern)) {
-        offenders.push(`${rel}: ${match[0]}`)
-      }
     }
   }
 
   walk(scratchRoot)
+  offenders.push(...scratchContentOffenders(scratchRoot))
   return offenders.sort()
+}
+
+function rgPatternSource(pattern: RegExp): string {
+  return pattern.source.replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  )
+}
+
+function scratchContentOffenders(scratchRoot: string): string[] {
+  const patterns = retiredSpecPathPatterns.concat([
+    { label: "deleted pre-June spec filename", pattern: deletedPreJuneSpecNamePattern },
+  ])
+  return patterns.flatMap(({ label, pattern }) => {
+    const args = [
+      "--pcre2",
+      "--files-with-matches",
+      "--color",
+      "never",
+      "--no-messages",
+      ...skippedScratchContentGlobs.flatMap((glob) => ["--glob", glob]),
+      "-e",
+      rgPatternSource(pattern),
+      scratchRoot,
+    ]
+    const result = spawnSync("rg", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 50 * 1024 * 1024,
+    })
+    if (result.error) throw result.error
+    if (result.status !== 0 && result.status !== 1) {
+      throw new Error(`rg scratch scan failed for ${label}: ${result.stderr || result.stdout}`)
+    }
+    return result.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((file) => `${normalizeRepositoryPath(file)}: ${label}`)
+  })
 }
 
 function candidatesFor(fromFile: string, rawRef: string): string[] {
@@ -364,11 +349,15 @@ function specTreeFiles(): string[] {
   return walkFiles(path.join(repoRoot, "specs"))
 }
 
+function isMonthlyRecordPath(rel: string): boolean {
+  return /^specs\/records\/20\d{2}-\d{2}\//.test(rel)
+}
+
 function allowedSpecStoragePath(rel: string): boolean {
   return (
     rel === "specs/README.md" ||
     rel.startsWith("specs/current/") ||
-    rel.startsWith("specs/records/2026-06/") ||
+    isMonthlyRecordPath(rel) ||
     rel.startsWith("specs/artifacts/")
   )
 }
@@ -379,6 +368,20 @@ function currentArchitectureMarkdownFiles(): string[] {
 
 function juneTaskRecordFiles(): string[] {
   return walkDocs(path.join(repoRoot, "specs/records/2026-06")).filter((file) => file.endsWith(".md"))
+}
+
+function monthlyRecordFiles(): string[] {
+  return walkDocs(path.join(repoRoot, "specs/records")).filter((file) => {
+    const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
+    return file.endsWith(".md") && isMonthlyRecordPath(rel)
+  })
+}
+
+function recallGovernedRecordFiles(): string[] {
+  return monthlyRecordFiles().filter((file) => {
+    const date = path.basename(file).match(/^20\d{2}-\d{2}-\d{2}/)?.[0]
+    return Boolean(date && date >= "2026-06-29")
+  })
 }
 
 function commandLinesInMarkdown(text: string): string[] {
@@ -397,8 +400,7 @@ function commandLinesInMarkdown(text: string): string[] {
     if (inFence) {
       maybeAddCommand(line)
       if (retiredSpecPathPatterns.some(({ pattern }) => pattern.test(line))) commands.push(line.trim())
-    }
-    else maybeAddCommand(line)
+    } else maybeAddCommand(line)
     for (const match of line.matchAll(/`([^`]+)`/g)) {
       maybeAddCommand(match[1]!)
     }
@@ -409,7 +411,9 @@ function commandLinesInMarkdown(text: string): string[] {
 function linkedFiles(indexPath: string): Set<string> {
   const text = fs.readFileSync(indexPath, "utf8")
   return new Set(
-    Array.from(text.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g)).map((match) => match[1]!).filter(Boolean),
+    Array.from(text.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g))
+      .map((match) => match[1]!)
+      .filter(Boolean),
   )
 }
 
@@ -423,7 +427,7 @@ describe("historical docs repository links", () => {
     const activeFiles = repositoryFiles().filter(
       (file) => {
         const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
-        return rel !== thisFile && !rel.startsWith("specs/records/2026-06/")
+        return rel !== thisFile && !isMonthlyRecordPath(rel)
       },
     )
 
@@ -438,6 +442,12 @@ describe("historical docs repository links", () => {
     expect(packageLocalSpecDirs()).toEqual([])
     expect(fs.existsSync(path.join(repoRoot, "specs", retiredReferenceLedgerFileName))).toBe(false)
     expect(fs.existsSync(path.join(repoRoot, "specs", "records", "README.md"))).toBe(false)
+    const nextMonthRecord = ["specs", "records", "2026-07", "2026-07-01-next-month.md"].join("/")
+    const recordsRootIndex = ["specs", "records", "README.md"].join("/")
+    const nonMonthRecord = ["specs", "records", "not-a-month", "example.md"].join("/")
+    expect(allowedSpecStoragePath(nextMonthRecord)).toBe(true)
+    expect(allowedSpecStoragePath(recordsRootIndex)).toBe(false)
+    expect(allowedSpecStoragePath(nonMonthRecord)).toBe(false)
 
     const rootSpecFiles = fs
       .readdirSync(path.join(repoRoot, "specs"), { withFileTypes: true })
@@ -468,14 +478,51 @@ describe("historical docs repository links", () => {
       expect(agents).toContain(required)
     }
 
-    const requiredRecallRecords = [
-      "specs/records/2026-06/2026-06-29-spec-consolidation.md",
-      "specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md",
+    const recallGovernanceSources = [
+      { rel: "AGENTS.md", required: "必须包含 `Recall` 区块" },
+      { rel: "specs/README.md", required: "must include a `Recall` section" },
+      { rel: "specs/current/architecture/README.md", required: "must include a `Recall` section" },
+      { rel: "specs/records/2026-06/README.md", required: "must include a `Recall` section" },
     ]
-    const missingRecall = requiredRecallRecords
-      .filter((rel) => fs.existsSync(path.join(repoRoot, rel)))
-      .filter((rel) => !/^## Recall$/m.test(fs.readFileSync(path.join(repoRoot, rel), "utf8")))
+    for (const source of recallGovernanceSources) {
+      const text = fs.readFileSync(path.join(repoRoot, source.rel), "utf8")
+      expect(text).toContain(source.required)
+    }
+    const specsReadme = fs.readFileSync(path.join(repoRoot, "specs/README.md"), "utf8")
+    expect(specsReadme).toContain("`specs/records/YYYY-MM/**`")
+    expect(specsReadme).toContain("matching month directory in `specs/records/YYYY-MM/`")
+    const architectureReadme = fs.readFileSync(path.join(repoRoot, "specs/current/architecture/README.md"), "utf8")
+    expect(architectureReadme).toContain("`specs/records/YYYY-MM/`")
+    expect(architectureReadme).not.toContain("task-specific plans live under `specs/records/2026-06/`")
+
+    const governedRecords = recallGovernedRecordFiles().map((file) => path.relative(repoRoot, file).replace(/\\/g, "/"))
+    expect(governedRecords).toContain("specs/records/2026-06/2026-06-29-spec-consolidation.md")
+    const missingRecall = governedRecords.filter(
+      (rel) => !/^## Recall$/m.test(fs.readFileSync(path.join(repoRoot, rel), "utf8")),
+    )
     expect(missingRecall).toEqual([])
+  })
+
+  test("spec consolidation record keeps addendum numbers contiguous", () => {
+    const record = fs.readFileSync(
+      path.join(repoRoot, "specs/records/2026-06/2026-06-29-spec-consolidation.md"),
+      "utf8",
+    )
+    const laterAddenda = record.split("## 2026-06-29 Later Independent Review Addenda")[1]
+    expect(laterAddenda).toBeDefined()
+
+    const malformedHeadings = Array.from(laterAddenda!.matchAll(/^\$\d+:/gm), (match) => match[0])
+    expect(malformedHeadings).toEqual([])
+    const addendumNumbers = Array.from(laterAddenda!.matchAll(/^(\d+)\. /gm), (match) => Number(match[1]))
+    expect(addendumNumbers.length).toBeGreaterThan(50)
+    expect(addendumNumbers).toEqual(addendumNumbers.map((_, index) => index + 1))
+    const addendumNumberSet = new Set(addendumNumbers)
+    const validationNumbers = Array.from(
+      laterAddenda!.matchAll(/^Validation after addendum (\d+):$/gm),
+      (match) => Number(match[1]),
+    )
+    expect(validationNumbers).toContain(addendumNumbers.at(-1))
+    expect(validationNumbers.filter((number) => !addendumNumberSet.has(number))).toEqual([])
   })
 
   test("no pre-June dated spec markdown or text file remains in the spec tree", () => {
@@ -483,28 +530,35 @@ describe("historical docs repository links", () => {
     const staleTextSpec = ["specs", "artifacts", "2026-05-31-stale-input.txt"].join("/")
     const currentTextSpec = ["specs", "artifacts", "2026-06-01-current-input.txt"].join("/")
     const nonSpecJson = ["specs", "current", "architecture", "2026-05-31-non-spec.json"].join("/")
-    expect(
-      preJuneDatedSpecFiles([
-        staleTextSpec,
-        currentTextSpec,
-        nonSpecJson,
-      ]),
-    ).toEqual([staleTextSpec])
+    expect(preJuneDatedSpecFiles([staleTextSpec, currentTextSpec, nonSpecJson])).toEqual([staleTextSpec])
   })
 
-  test("scratch text detection scans unknown UTF-8 snapshot extensions", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-scratch-text-"))
+  test("repository retired-path scan covers structured text artifacts", () => {
+    for (const extension of [".json", ".jsonc", ".yaml", ".yml", ".mjs", ".cjs"]) {
+      expect(repositoryExtensions.has(extension)).toBe(true)
+    }
+  })
+
+  test("scratch content scan covers unknown text snapshot extensions", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-scratch-content-"))
     try {
       const textFile = path.join(tempDir, "snapshot.customtext")
-      const binaryFile = path.join(tempDir, "snapshot.custombin")
       fs.writeFileSync(textFile, "specs/new-arch/probe.md\n")
-      fs.writeFileSync(binaryFile, Buffer.from([0, 159, 146, 150]))
 
-      expect(shouldScanScratchTextFile(textFile, path.extname(textFile).toLowerCase())).toBe(true)
-      expect(shouldScanScratchTextFile(binaryFile, path.extname(binaryFile).toLowerCase())).toBe(false)
+      const offenders = scratchSpecSnapshotOffenders(tempDir)
+      expect(offenders.some((offender) => offender.endsWith("snapshot.customtext: legacy architecture tree"))).toBe(
+        true,
+      )
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  test("retired path guards reject bare paths before punctuation", () => {
+    const legacyArchitecturePattern = retiredSpecPathPatterns.find(({ label }) => label === "legacy architecture tree")
+    expect(legacyArchitecturePattern).toBeDefined()
+    const retiredPath = ["specs", "new-arch"].join("/")
+    expect(legacyArchitecturePattern!.pattern.test(`path = "${retiredPath}"`)).toBe(true)
   })
 
   test("scratch snapshot file names reject pre-June dated spec text", () => {
@@ -538,12 +592,37 @@ describe("historical docs repository links", () => {
     expect(missing).toEqual([])
   })
 
+  test("June record README indexes current-day records", () => {
+    const readmePath = path.join(repoRoot, "specs/records/2026-06/README.md")
+    const text = fs.readFileSync(readmePath, "utf8")
+    const indexed = linkedFiles(readmePath)
+    const missing = fs
+      .readdirSync(path.join(repoRoot, "specs/records/2026-06"))
+      .filter((file) => /^2026-06-29-.*\.md$/.test(file))
+      .filter((file) => !indexed.has(file))
+      .sort()
+
+    expect(text).toContain("current-day governance records only")
+    expect(text).toContain("rg --files specs/records/2026-06")
+    expect(missing).toEqual([])
+  })
+
+  test("specs README links the month index instead of handpicked current-day records", () => {
+    const text = fs.readFileSync(path.join(repoRoot, "specs/README.md"), "utf8")
+    const handpickedCurrentDayLinks = Array.from(
+      text.matchAll(/specs\/records\/2026-06\/2026-06-29-[^`)\s]+\.md/g),
+    ).map((match) => match[0])
+
+    expect(text).toContain("specs/records/2026-06/README.md")
+    expect(handpickedCurrentDayLinks).toEqual([])
+  })
+
   test("legacy spec paths are not referenced as live repository paths", () => {
     const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
     const offenders = repositoryFiles()
       .map((file) => [file, path.relative(repoRoot, file).replace(/\\/g, "/")] as const)
       .filter(([, rel]) => rel !== thisFile)
-      .filter(([, rel]) => !rel.startsWith("specs/records/2026-06/"))
+      .filter(([, rel]) => !isMonthlyRecordPath(rel))
       .flatMap(([file, rel]) => {
         const text = fs.readFileSync(file, "utf8")
         return retiredSpecPathPatterns

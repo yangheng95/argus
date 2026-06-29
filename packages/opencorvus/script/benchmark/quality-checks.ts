@@ -190,7 +190,7 @@ export async function deriveRunMetrics(input: {
   })
 }
 
-export function evaluateQualityGates(input: {
+export function evaluateQualityChecks(input: {
   artifactAudit: ArtifactAuditType
   runMetrics: RunMetricsType
   taskStatus: string
@@ -215,7 +215,7 @@ export function evaluateQualityGates(input: {
   if (input.artifactAudit.readme_proliferation_count > 0 || input.artifactAudit.scaffold_noise_count > 0) {
     failures.push({
       category: "artifact_quality",
-      message: "Documentation or scaffold noise exceeded quality gate",
+      message: "Documentation or scaffold noise exceeded quality evidence check",
       evidence: `readme_proliferation_count=${input.artifactAudit.readme_proliferation_count}, scaffold_noise_count=${input.artifactAudit.scaffold_noise_count}`,
     })
   }
@@ -259,17 +259,17 @@ export function evaluateQualityGates(input: {
     })
   }
 
-  const hardFailCategories = new Set([
+  const blockingCategories = new Set([
     "liveness",
     "scope_drift",
     "artifact_quality",
     "verification_gap",
     "acceptance_gap",
   ])
-  const hardFailures = failures.filter((item) => hardFailCategories.has(item.category))
-  const verdict = hardFailures.some((item) => item.category === "liveness")
+  const blockingFailures = failures.filter((item) => blockingCategories.has(item.category))
+  const verdict = blockingFailures.some((item) => item.category === "liveness")
     ? "blocked"
-    : hardFailures.length > 0
+    : blockingFailures.length > 0
       ? "rejected"
       : "accepted"
   return {
@@ -278,7 +278,7 @@ export function evaluateQualityGates(input: {
     failures,
     manual_review_summary:
       failures.length === 0
-        ? "No quality-gate failures detected."
+        ? "No quality check failures detected."
         : failures.map((item) => `${item.category}: ${item.message}`).join(" | "),
   }
 }

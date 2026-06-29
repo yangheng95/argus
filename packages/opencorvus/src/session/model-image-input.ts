@@ -1,12 +1,27 @@
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import {
+  MAX_MODEL_IMAGE_INPUT_DIMENSION,
+  MODEL_IMAGE_INPUT_PIXEL_BUDGET,
+  modelImageInputTargetDimensions,
+  modelImagePixelSummary,
+  modelImagePixelSummarySchema,
+  type ModelImagePixelSummary,
+} from "./model-image-pixel-summary"
+
+export {
+  MAX_MODEL_IMAGE_INPUT_DIMENSION,
+  MODEL_IMAGE_INPUT_PIXEL_BUDGET,
+  MODEL_IMAGE_INPUT_COMPRESSION_WARNING_RATIO,
+  modelImageInputTargetDimensions,
+  modelImagePixelSummary,
+  modelImagePixelSummarySchema,
+  type ModelImagePixelSummary,
+} from "./model-image-pixel-summary"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
-export const MAX_MODEL_IMAGE_INPUT_DIMENSION = 8000
-export const MODEL_IMAGE_INPUT_PIXEL_BUDGET = 1_048_576
-export const MODEL_IMAGE_INPUT_COMPRESSION_WARNING_RATIO = 2
 const BLANK_MARGIN_CROP_THRESHOLD = 10
 
 export interface ImageDimensions {
@@ -43,18 +58,6 @@ export interface PreparedModelImageInput {
   note?: string
 }
 
-export const modelImagePixelSummarySchema = z.object({
-  currentPixels: z.number(),
-  compressedPixels: z.number(),
-  compressedWidth: z.number(),
-  compressedHeight: z.number(),
-  compressionRatio: z.number(),
-  preferPartialScreenshot: z.boolean(),
-  text: z.string(),
-})
-
-export type ModelImagePixelSummary = z.infer<typeof modelImagePixelSummarySchema>
-
 export const ModelImageInputTooLargeError = NamedError.create(
   "ModelImageInputTooLargeError",
   z.object({
@@ -85,35 +88,6 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 
 export function readModelImageDimensions(bytes: Buffer): ImageDimensions | undefined {
   return readPngDimensions(bytes) ?? readJpegDimensions(bytes) ?? readWebpDimensions(bytes)
-}
-
-export const modelImagePixelSummary = (
-  width: number,
-  height: number,
-  maxPixels = MODEL_IMAGE_INPUT_PIXEL_BUDGET,
-): ModelImagePixelSummary => {
-  const currentPixels = width * height
-  const target = modelImageInputTargetDimensions({ width, height, maxPixels })
-  const compressedWidth = target.width
-  const compressedHeight = target.height
-  const compressedPixels = compressedWidth * compressedHeight
-  const compressionRatio =
-    compressedWidth > 0 && compressedHeight > 0
-      ? Number(Math.max(width / compressedWidth, height / compressedHeight).toFixed(2))
-      : 1
-  const preferPartialScreenshot = compressionRatio >= MODEL_IMAGE_INPUT_COMPRESSION_WARNING_RATIO
-  return {
-    currentPixels,
-    compressedPixels,
-    compressedWidth,
-    compressedHeight,
-    compressionRatio,
-    preferPartialScreenshot,
-    text:
-      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels} (${compressedWidth}x${compressedHeight}); ` +
-      `压缩率: ${compressionRatio.toFixed(2)}x` +
-      (preferPartialScreenshot ? "; 压缩率过大，请优先使用 selector 或 clip 做局部截图。" : ""),
-  }
 }
 
 export function assertModelImageInputWithinLimits(input: {
@@ -228,39 +202,6 @@ export async function prepareModelImageInput(input: {
     ...(crop ? { crop } : {}),
     ...(resize ? { resize } : {}),
     ...(note ? { note } : {}),
-  }
-}
-
-export function modelImageInputTargetDimensions(input: {
-  width: number
-  height: number
-  maxDimension?: number
-  maxPixels?: number
-}): { width: number; height: number; scale: number } {
-  const maxDimension = input.maxDimension ?? MAX_MODEL_IMAGE_INPUT_DIMENSION
-  const maxPixels = input.maxPixels ?? MODEL_IMAGE_INPUT_PIXEL_BUDGET
-  const pixels = input.width * input.height
-  const scale = Math.min(
-    1,
-    maxDimension / input.width,
-    maxDimension / input.height,
-    pixels > maxPixels ? Math.sqrt(maxPixels / pixels) : 1,
-  )
-  let width = Math.max(1, Math.round(input.width * scale))
-  let height = Math.max(1, Math.round(input.height * scale))
-  while (width > maxDimension) width--
-  while (height > maxDimension) height--
-  while (width * height > maxPixels && (width > 1 || height > 1)) {
-    if (width / input.width >= height / input.height && width > 1) {
-      width--
-    } else {
-      height--
-    }
-  }
-  return {
-    width,
-    height,
-    scale,
   }
 }
 

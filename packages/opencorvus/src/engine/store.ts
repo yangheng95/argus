@@ -852,7 +852,7 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
  * AcceptanceVerdict (summary, issues_found, rejection_details,
  * startup_verification, frontend_check). Surfaced by `buildSystemParts` into
  * the orchestrator prompt so the LLM sees historical acceptance evidence on
- * its next decision turn — a snapshot read, not a workflow gate.
+ * its next decision turn — a snapshot read, not a workflow decision boundary.
  */
 export function findLatestAcceptanceVerdictArtifact(taskID: string) {
   return Database.use((db) =>
@@ -872,8 +872,8 @@ export type IntegrityAttemptArtifactQuery = {
   taskID: string
   lineage: SpecSnapshotLineage
   /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
-   *  any phase. The acceptance freshness gate uses `phase: "post_build"` so a
-   *  pre-build review cannot satisfy the post-build completion requirement. */
+   *  any phase. The post-build freshness evidence uses `phase: "post_build"`
+   *  so a pre-build review cannot satisfy the completion requirement. */
   phase?: "pre_build" | "post_build"
 }
 
@@ -1387,7 +1387,7 @@ export function listGoalWorkspacesForProject(projectID: string): Array<{
  * Source: durable `session.status` supplies task/goal attribution and the
  * latest published lifecycle status. The process-owned SessionStatus latch
  * supplies live ownership. A recent-activity window is the wrong source: a
- * legitimate LLM turn can be silent until the activity idle gate fires. But
+ * legitimate LLM turn can be silent until the activity idle timer fires. But
  * durable history alone is also wrong after process restart: a killed process
  * cannot finish its last `streaming` session, so the restarted sidecar must
  * not render that old row as currently active.
@@ -2069,8 +2069,8 @@ function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunR
   }
   return {
     // run-kind artifact: id === run_id (self-reference) on first row; both
-    // are filled for follow-ups. Fallback to row.id covers the self-ref case
-    // where run_id may not yet be persisted (defensive).
+    // are filled for follow-ups. The first row uses row.id as the canonical
+    // run id when run_id is null by construction.
     id: row.run_id ?? row.id,
     task_id: row.task_id,
     plan_version_id: payload.plan_version_id ?? null,

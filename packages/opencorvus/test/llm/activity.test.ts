@@ -83,7 +83,7 @@ test("first_byte timeout retries and eventually succeeds", async () => {
     async (run) => {
       calls++
       if (calls < 2) {
-        // never bump → first-byte gate trips
+        // never bump -> first-byte timer expires
         await new Promise<void>((resolve, reject) => {
           run.signal.addEventListener("abort", () => reject(run.signal.reason), { once: true })
         })
@@ -109,7 +109,7 @@ test("idle timeout retries and eventually succeeds", async () => {
     new AbortController().signal,
     async (run) => {
       calls++
-      run.bump("text-delta") // first byte → idle gate starts
+      run.bump("text-delta") // first byte -> idle monitor starts
       if (calls < 2) {
         await new Promise<void>((resolve, reject) => {
           run.signal.addEventListener("abort", () => reject(run.signal.reason), { once: true })
@@ -508,7 +508,7 @@ test("external abort during pause beats a successful return", async () => {
   expect(term.cls).toBe("external_abort")
 })
 
-test("policy accepts firstByteMs below idleMs because the gates cover different phases", async () => {
+test("policy accepts firstByteMs below idleMs because the monitors cover different phases", async () => {
   const { events, sink } = record()
   const result = await withLLMActivity(
     CTX,
@@ -623,7 +623,7 @@ test("retry attempt counter is monotonically increasing", async () => {
   expect(attempts).toEqual([1, 2, 3])
 })
 
-test("pause/resume suspends idle gate; nested pause requires nested resume", async () => {
+test("pause/resume suspends idle monitor; nested pause requires nested resume", async () => {
   const { events, sink } = record()
   const ext = new AbortController()
   const result = await withLLMActivity(
@@ -631,7 +631,7 @@ test("pause/resume suspends idle gate; nested pause requires nested resume", asy
     fastPolicy({ firstByteMs: 200, idleMs: 80 }),
     ext.signal,
     async (run) => {
-      run.bump("text-delta") // first byte → idle gate starts
+      run.bump("text-delta") // first byte -> idle monitor starts
       run.pause("tool-execution")
       run.pause("nested-tool")
       // Both paused: idle should not trip even after > idleMs.

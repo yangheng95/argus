@@ -1848,6 +1848,14 @@ LINE:
 
 ## Batch P1-Y: BH-026 direct-reply failures stay structured instead of becoming task-root wakes
 
+> Superseded for overlay targeted steer on 2026-06-29 by
+> [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md).
+> The historical `/task/:taskID/message` `target: { kind: "build_session" }`
+> guidance described below is no longer current. Current runtime keeps direct
+> reply separate, routes every targeted sub-agent steer through
+> `/task/:taskID/session/:sessionID/operator-steer`, and rejects task-message
+> `target` fields before writing a root message.
+
 ### Findings
 
 - BH-026 was recorded against the generic task agent direct-reply path: direct-reply failures were suspected to become `202` task-root wakes while the route documented structured 4xx/410 errors.

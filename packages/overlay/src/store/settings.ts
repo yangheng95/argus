@@ -111,8 +111,9 @@ function sanitizeAutoServer(value: any, serverUrl: string): boolean {
 
 export function sanitizeExecutor(value: any): ExecutorID {
   const text = String(value || "").trim()
+  if (!text) return DEFAULT_SETTINGS.executor
   if (text === "opencorvus" || text === "codex" || text === "claude-code") return text
-  return DEFAULT_SETTINGS.executor
+  throw new Error(`invalid executor id: ${text}`)
 }
 
 export function sanitizeProjectEditor(value: any): ProjectEditorID {
@@ -316,8 +317,8 @@ export function overlayTestConfig(): Record<string, unknown> | null {
   return value && typeof value === "object" ? value : null
 }
 
-export function overlayTiming(name: string, fallback: number, min = 50): number {
+export function overlayTiming(name: string, defaultValue: number, min = 50): number {
   const value = Number(overlayTestConfig()?.[name])
-  if (!Number.isFinite(value)) return fallback
+  if (!Number.isFinite(value)) return defaultValue
   return Math.max(min, Math.floor(value))
 }

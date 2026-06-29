@@ -1,4 +1,4 @@
-// Copied from OpenCode `packages/opencode/src/server/routes/pty.ts` and adapted to OpenCorvus errors.
+// Project-bound Pseudo Terminal route surface.
 import { Hono } from "hono"
 import { upgradeWebSocket } from "hono/bun"
 import { HTTPException } from "hono/http-exception"

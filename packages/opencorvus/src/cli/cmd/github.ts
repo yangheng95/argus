@@ -138,12 +138,22 @@ const AGENT_REACTION = "eyes"
 const WORKFLOW_FILE = ".github/workflows/opencorvus.yml"
 
 // Event categories for routing
+// COMMENT_EVENTS: user events with a comment body that can contain an inline OpenCorvus command
 // USER_EVENTS: triggered by user actions, have actor/issueId, support reactions/comments
 // REPO_EVENTS: triggered by automation, no actor/issueId, output to logs/PR only
-const USER_EVENTS = ["issue_comment", "pull_request_review_comment", "issues", "pull_request"] as const
+const COMMENT_EVENTS = ["issue_comment", "pull_request_review_comment"] as const
 const REPO_EVENTS = ["schedule", "workflow_dispatch"] as const
+const PROMPT_REQUIRED_EVENTS = ["issues", ...REPO_EVENTS] as const
+const PROMPT_REQUIRED_EVENT_DESCRIPTIONS: Record<(typeof PROMPT_REQUIRED_EVENTS)[number], string> = {
+  issues: "issues",
+  schedule: "scheduled and workflow_dispatch",
+  workflow_dispatch: "scheduled and workflow_dispatch",
+}
+const USER_EVENTS = [...COMMENT_EVENTS, "issues", "pull_request"] as const
 const SUPPORTED_EVENTS = [...USER_EVENTS, ...REPO_EVENTS] as const
 
+type CommentEvent = (typeof COMMENT_EVENTS)[number]
+type PromptRequiredEvent = (typeof PROMPT_REQUIRED_EVENTS)[number]
 type UserEvent = (typeof USER_EVENTS)[number]
 type RepoEvent = (typeof REPO_EVENTS)[number]
 
@@ -440,8 +450,8 @@ export const GithubRunCommand = cmd({
       // REPO_EVENTS: no actor/issueId, output to logs/PR only
       const isUserEvent = USER_EVENTS.includes(context.eventName as UserEvent)
       const isRepoEvent = REPO_EVENTS.includes(context.eventName as RepoEvent)
-      const isCommentEvent = ["issue_comment", "pull_request_review_comment"].includes(context.eventName)
-      const isIssuesEvent = context.eventName === "issues"
+      const isCommentEvent = COMMENT_EVENTS.includes(context.eventName as CommentEvent)
+      const isPromptRequiredEvent = PROMPT_REQUIRED_EVENTS.includes(context.eventName as PromptRequiredEvent)
       const isScheduleEvent = context.eventName === "schedule"
       const isWorkflowDispatchEvent = context.eventName === "workflow_dispatch"
 
@@ -545,11 +555,7 @@ export const GithubRunCommand = cmd({
               summary,
               `${response}\n\nTriggered by ${triggerType}${footer()}`,
             )
-            if (pr) {
-              console.log(`Created PR #${pr}`)
-            } else {
-              console.log("Skipped PR creation (no new commits)")
-            }
+            console.log(`Created PR #${pr}`)
           } else {
             console.log("Response:", response)
           }
@@ -615,11 +621,7 @@ export const GithubRunCommand = cmd({
               summary,
               `${response}\n\nCloses #${issueId}${footer()}`,
             )
-            if (pr) {
-              await createComment(`Created PR #${pr}${footer()}`)
-            } else {
-              await createComment(`${response}${footer()}`)
-            }
+            await createComment(`Created PR #${pr}${footer()}`)
             await removeReaction(commentType)
           } else {
             await createComment(`${response}${footer()}`)
@@ -711,9 +713,9 @@ export const GithubRunCommand = cmd({
       async function getUserPrompt() {
         const customPrompt = process.env["PROMPT"]
         // For repo events and issues events, PROMPT is required since there's no comment to extract from
-        if (isRepoEvent || isIssuesEvent) {
+        if (isPromptRequiredEvent) {
           if (!customPrompt) {
-            const eventType = isRepoEvent ? "scheduled and workflow_dispatch" : "issues"
+            const eventType = PROMPT_REQUIRED_EVENT_DESCRIPTIONS[context.eventName as PromptRequiredEvent]
             throw new Error(`PROMPT input is required for ${eventType} events`)
           }
           return { userPrompt: customPrompt, promptFiles: [] }
@@ -1124,19 +1126,18 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         }
       }
 
-      // Verify commits exist between base ref and a branch using rev-list.
-      // Falls back to fetching from origin when local refs are missing
-      // (common in shallow clones from actions/checkout).
-      async function hasNewCommits(base: string, head: string) {
-        const result = await $`git rev-list --count ${base}..${head}`.nothrow()
-        if (result.exitCode !== 0) {
-          console.log(`rev-list failed, fetching origin/${base}...`)
-          await $`git fetch origin ${base} --depth=1`.nothrow()
-          const retry = await $`git rev-list --count origin/${base}..${head}`.nothrow()
-          if (retry.exitCode !== 0) return true // assume dirty if we can't tell
-          return parseInt(retry.stdout.toString().trim()) > 0
+      async function assertRemoteBranchHasCommits(base: string, head: string) {
+        const comparison = await withRetry(() =>
+          octoRest.rest.repos.compareCommitsWithBasehead({
+            owner,
+            repo,
+            basehead: `${base}...${head}`,
+          }),
+        )
+        const aheadBy = comparison.data.ahead_by
+        if (typeof aheadBy !== "number" || aheadBy <= 0) {
+          throw new Error(`No commits between ${base} and ${head}`)
         }
-        return parseInt(result.stdout.toString().trim()) > 0
       }
 
       async function assertPermissions() {
@@ -1258,61 +1259,37 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         })
       }
 
-      async function createPR(base: string, branch: string, title: string, body: string): Promise<number | null> {
+      async function createPR(base: string, branch: string, title: string, body: string): Promise<number> {
         console.log("Creating pull request...")
 
-        // Check if an open PR already exists for this head→base combination
-        // This handles the case where the agent created a PR via gh pr create during its run
-        try {
-          const existing = await withRetry(() =>
-            octoRest.rest.pulls.list({
-              owner,
-              repo,
-              head: `${owner}:${branch}`,
-              base,
-              state: "open",
-            }),
-          )
+        const existing = await withRetry(() =>
+          octoRest.rest.pulls.list({
+            owner,
+            repo,
+            head: `${owner}:${branch}`,
+            base,
+            state: "open",
+          }),
+        )
 
-          if (existing.data.length > 0) {
-            console.log(`PR #${existing.data[0].number} already exists for branch ${branch}`)
-            return existing.data[0].number
-          }
-        } catch (e) {
-          // If the check fails, proceed to create - we'll get a clear error if a PR already exists
-          console.log(`Failed to check for existing PR: ${e}`)
+        if (existing.data.length > 0) {
+          console.log(`PR #${existing.data[0].number} already exists for branch ${branch}`)
+          return existing.data[0].number
         }
 
-        // Verify there are commits between base and head before creating the PR.
-        // In shallow clones, the branch can appear dirty but share the same
-        // commit as the base, causing a 422 from GitHub.
-        if (!(await hasNewCommits(base, branch))) {
-          console.log(`No commits between ${base} and ${branch}, skipping PR creation`)
-          return null
-        }
+        await assertRemoteBranchHasCommits(base, branch)
 
-        try {
-          const pr = await withRetry(() =>
-            octoRest.rest.pulls.create({
-              owner,
-              repo,
-              head: branch,
-              base,
-              title,
-              body,
-            }),
-          )
-          return pr.data.number
-        } catch (e: unknown) {
-          // Handle "No commits between X and Y" validation error from GitHub.
-          // This can happen when the branch was pushed but has no new commits
-          // relative to the base (e.g. shallow clone edge cases).
-          if (e instanceof Error && e.message.includes("No commits between")) {
-            console.log(`GitHub rejected PR: ${e.message}`)
-            return null
-          }
-          throw e
-        }
+        const pr = await withRetry(() =>
+          octoRest.rest.pulls.create({
+            owner,
+            repo,
+            head: branch,
+            base,
+            title,
+            body,
+          }),
+        )
+        return pr.data.number
       }
 
       async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 5000): Promise<T> {

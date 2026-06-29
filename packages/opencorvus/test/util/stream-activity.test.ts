@@ -3,50 +3,50 @@ import { abortableIterable, withStreamActivity } from "@/util/stream-activity"
 
 describe("withStreamActivity", () => {
   test("aborts own signal once idleMs elapses with no observe()", async () => {
-    const gate = withStreamActivity({ idleMs: 40, label: "test-idle" })
-    expect(gate.signal.aborted).toBe(false)
+    const monitor = withStreamActivity({ idleMs: 40, label: "test-idle" })
+    expect(monitor.signal.aborted).toBe(false)
     await Bun.sleep(90)
-    expect(gate.signal.aborted).toBe(true)
-    expect(gate.timedOut()).toBe(true)
-    expect(String(gate.signal.reason)).toContain("stream idle")
-    expect(String(gate.signal.reason)).toContain("test-idle")
-    gate.dispose()
+    expect(monitor.signal.aborted).toBe(true)
+    expect(monitor.timedOut()).toBe(true)
+    expect(String(monitor.signal.reason)).toContain("stream idle")
+    expect(String(monitor.signal.reason)).toContain("test-idle")
+    monitor.dispose()
   })
 
   test("observe() resets the timer and keeps the signal live", async () => {
-    const gate = withStreamActivity({ idleMs: 80 })
+    const monitor = withStreamActivity({ idleMs: 80 })
     for (let i = 0; i < 5; i++) {
       await Bun.sleep(30)
-      gate.observe()
+      monitor.observe()
     }
-    expect(gate.signal.aborted).toBe(false)
-    gate.dispose()
+    expect(monitor.signal.aborted).toBe(false)
+    monitor.dispose()
   })
 
   test("propagates external abort without waiting for idle window", async () => {
     const external = new AbortController()
-    const gate = withStreamActivity({ idleMs: 60_000, signal: external.signal })
+    const monitor = withStreamActivity({ idleMs: 60_000, signal: external.signal })
     external.abort(new Error("caller cancelled"))
-    expect(gate.signal.aborted).toBe(true)
-    expect(gate.timedOut()).toBe(false) // external cancel, not idle
-    gate.dispose()
+    expect(monitor.signal.aborted).toBe(true)
+    expect(monitor.timedOut()).toBe(false) // external cancel, not idle
+    monitor.dispose()
   })
 
   test("can be aborted by the owning session cancel path", () => {
-    const gate = withStreamActivity({ idleMs: 60_000, label: "session-owned" })
-    gate.abort(new DOMException("session cancelled", "AbortError"))
-    expect(gate.signal.aborted).toBe(true)
-    expect(gate.timedOut()).toBe(false)
-    expect((gate.signal.reason as DOMException).message).toBe("session cancelled")
-    gate.dispose()
+    const monitor = withStreamActivity({ idleMs: 60_000, label: "session-owned" })
+    monitor.abort(new DOMException("session cancelled", "AbortError"))
+    expect(monitor.signal.aborted).toBe(true)
+    expect(monitor.timedOut()).toBe(false)
+    expect((monitor.signal.reason as DOMException).message).toBe("session cancelled")
+    monitor.dispose()
   })
 
   test("dispose() is idempotent and stops the timer", async () => {
-    const gate = withStreamActivity({ idleMs: 20 })
-    gate.dispose()
-    gate.dispose()
+    const monitor = withStreamActivity({ idleMs: 20 })
+    monitor.dispose()
+    monitor.dispose()
     await Bun.sleep(60)
-    expect(gate.signal.aborted).toBe(false)
+    expect(monitor.signal.aborted).toBe(false)
   })
 
   test("rejects non-positive idleMs", () => {
@@ -60,7 +60,7 @@ describe("abortableIterable", () => {
   // Mimics Bun fetch + AI SDK reader: reader.read() promise stays pending
   // forever on a stalled socket; closing the underlying signal does NOT
   // reject the read. Without abortableIterable, a `for await` over this
-  // would hang forever even with the gate's signal aborted.
+  // would hang forever even with the monitor's signal aborted.
   function stalledSource<T>(): AsyncIterable<T> {
     return {
       [Symbol.asyncIterator]() {

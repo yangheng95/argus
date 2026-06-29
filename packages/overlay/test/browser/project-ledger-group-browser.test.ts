@@ -40,6 +40,8 @@ function taskItem(index: number, directory = PROJECT_DIR): any {
       request: `Review project group ${index}`,
       directory,
       status: "queued",
+      priority: "normal",
+      queue: { order: index },
       sessionID: `session-${id}`,
       time: {
         created,
@@ -121,13 +123,36 @@ async function verifyProjectGroup(
     expectedName?: string
     expectedProjectActions: boolean
     screenshot: string
+    requestLog?: string[]
   },
 ) {
   await page.click(`[data-ui="side-activity-button"][data-side="left"][data-activity="${input.activity}"]`)
-  await page.waitForSelector(`${input.groupSelector} [data-ui="project-group-toggle"]`, {
-    visible: true,
-    timeout: 10_000,
-  })
+  try {
+    await page.waitForSelector(`${input.groupSelector} [data-ui="project-group-toggle"]`, {
+      visible: true,
+      timeout: 10_000,
+    })
+  } catch (error) {
+    const diagnostics = await page.evaluate(
+      (requestLog) => ({
+        selectedLeftActivity: (window as any).selectedLeftPanelActivity?.(),
+        taskCount: ((window as any).boardStore?.tasks || []).length,
+        tasksLoaded: (window as any).boardStore?.tasksLoaded,
+        tasksError: (window as any).boardStore?.tasksError,
+        leftPanels: Array.from(document.querySelectorAll<HTMLElement>("[id^='leftPanel']")).map((item) => ({
+          id: item.id,
+          active: item.dataset.active || "",
+          groupCount: item.querySelectorAll(".project-group").length,
+          text: item.textContent?.replace(/\s+/g, " ").trim().slice(0, 240) || "",
+        })),
+        requestLog,
+      }),
+      input.requestLog || [],
+    )
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostics, null, 2)}`,
+    )
+  }
 
   const openState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
@@ -420,9 +445,11 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
+    const requestLog: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
+      requestLog.push(`${req.method} ${path}${url.search}`)
       if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
 
@@ -479,7 +506,8 @@ test(
       if (path === "/channel/runtime") return json({ status: "disabled", channels: [] })
       if (path === "/gateway/stats") return json({ active: 0, queued: tasks.length, completed: 0, failed: 0 })
       if (path === "/skill/installed" || path === "/skill") return json([])
-      if (path === "/skill/mounts") return json({})
+      if (path === "/skill/mounts")
+        return json({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
       if (path === "/skill/directories") {
         return json({
           global_config: "D:/ledger/config",
@@ -529,8 +557,11 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
+          messageWatermark: 0,
           lastSequence: 0,
         })
       }
@@ -540,13 +571,23 @@ test(
         return session ? json({ session }) : json({ error: "session not found" }, 404)
       }
       if (/^\/session\/[^/]+\/conversation$/.test(path)) {
+        const sessionID = decodeURIComponent(path.split("/")[2] || "")
+        const session = sessionsByID.get(sessionID)
         return json({
+          board: {
+            kind: "session",
+            sessionID,
+            status: "active",
+            title: session?.title ?? null,
+            directory: session?.directory ?? PROJECT_DIR,
+          },
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
           messageWatermark: 0,
           lastSequence: 0,
         })
@@ -607,6 +648,7 @@ test(
         expectedName: PROJECT_NAME,
         expectedProjectActions: true,
         screenshot: "project-ledger-group-tasks.png",
+        requestLog,
       })
       await verifyProjectGroup(page, {
         activity: "mission",
@@ -614,6 +656,7 @@ test(
         expectedCount: "2",
         expectedProjectActions: false,
         screenshot: "project-ledger-group-mission.png",
+        requestLog,
       })
       await verifyProjectGroup(page, {
         activity: "assistant",
@@ -621,6 +664,7 @@ test(
         expectedCount: "2",
         expectedProjectActions: false,
         screenshot: "project-ledger-group-coding-assistant.png",
+        requestLog,
       })
       await page.setViewport({ width: 390, height: 720 })
       await verifyProjectGroup(page, {
@@ -630,6 +674,7 @@ test(
         expectedName: PROJECT_NAME,
         expectedProjectActions: true,
         screenshot: "project-ledger-group-tasks-mobile.png",
+        requestLog,
       })
 
       assert.deepEqual(

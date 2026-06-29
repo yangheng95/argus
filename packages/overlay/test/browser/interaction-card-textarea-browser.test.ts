@@ -184,7 +184,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })

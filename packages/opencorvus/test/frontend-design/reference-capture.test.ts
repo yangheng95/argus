@@ -8,7 +8,7 @@ import {
   CaptureReferenceError,
   captureReferenceManifest,
   type CaptureManifestType,
-} from "../../src/frontend-design/capture-gate"
+} from "../../src/frontend-design/reference-capture"
 
 function manifest(overrides: Partial<CaptureManifestType>): CaptureManifestType {
   return {
@@ -60,7 +60,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("does not keep an in-process browser capture override", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/reference-capture.ts"), "utf8")
 
     expect(source).not.toContain("OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS")
     expect(source).not.toContain("captureBrowserEvidenceInProcess")
@@ -68,7 +68,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("node capture script uses the shared launch timeout instead of a hard-coded Chrome startup cap", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/reference-capture.ts"), "utf8")
 
     expect(source).toContain("timeout: input.launchTimeoutMs")
     expect(source).not.toContain("timeout: 15000")
@@ -77,14 +77,14 @@ describe("capture reference diagnostics", () => {
   })
 
   test("node capture script does not require networkidle for initial navigation", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/reference-capture.ts"), "utf8")
 
     expect(source).toContain('waitUntil: "domcontentloaded"')
     expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
   })
 
   test("node capture script owns navigation by browser inactivity and classifies failed subresources", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/reference-capture.ts"), "utf8")
 
     expect(source).toContain("opencorvusWithBrowserInactivity")
     expect(source).toContain('() => page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 0 })')
@@ -101,7 +101,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("node capture script passes browser proxy credentials to the Playwright context", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/reference-capture.ts"), "utf8")
 
     expect(source).toContain("browserProxy?: BrowserRuntime.BrowserProxyConfig")
     expect(source).toContain("proxyServer: browserProxy?.server")
@@ -116,7 +116,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("captures a local HTTP visual reference through the browser runtime", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-runtime-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-runtime-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,
@@ -151,7 +151,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("rejects a real blank local HTTP capture before materializing reference artifacts", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-blank-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-blank-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,
@@ -180,7 +180,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("rejects HTTP error pages before materializing reference artifacts", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-http-error-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-http-error-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,
@@ -215,7 +215,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("rejects 200 reference pages with failed subresources before materializing artifacts", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-subresource-error-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-subresource-error-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,
@@ -254,7 +254,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("captures 200 reference pages with third-party failed script diagnostics", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-third-party-diagnostics-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-third-party-diagnostics-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const thirdPartyServer = Bun.serve({
       port: 0,
@@ -296,7 +296,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("rejects late page errors before materializing reference artifacts", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-late-pageerror-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-late-pageerror-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,
@@ -332,7 +332,7 @@ describe("capture reference diagnostics", () => {
   }, 60_000)
 
   test("captures reference artifacts when console diagnostics fire", async () => {
-    const outDir = path.join(os.tmpdir(), `capture-gate-late-console-${process.pid}-${Date.now()}`)
+    const outDir = path.join(os.tmpdir(), `reference-capture-late-console-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
     const server = Bun.serve({
       port: 0,

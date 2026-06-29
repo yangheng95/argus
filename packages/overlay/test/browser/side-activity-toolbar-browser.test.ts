@@ -51,9 +51,9 @@ function conversationPayload(sessionID: string) {
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { sessions: [] },
-    agentView: { sessions: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
   }
 }
 
@@ -89,9 +89,9 @@ function taskConversationPayload() {
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { rootID: "root", cards: {}, order: [] },
-    agentView: { rootID: "root", cards: {}, order: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     messageWatermark: 0,
   }
 }
@@ -264,9 +264,9 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { rootID: "root", cards: {}, order: [] },
-          agentView: { rootID: "root", cards: {}, order: [] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
           messageWatermark: 0,
         })
       }
@@ -302,9 +302,9 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { rootID: "root", cards: {}, order: [] },
-          agentView: { rootID: "root", cards: {}, order: [] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
           messageWatermark: 0,
         })
       }
@@ -387,9 +387,9 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { rootID: "root", cards: {}, order: [] },
-          agentView: { rootID: "root", cards: {}, order: [] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
           messageWatermark: 0,
         })
       }
@@ -2093,9 +2093,9 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { rootID: "root", cards: {}, order: [] },
-          agentView: { rootID: "root", cards: {}, order: [] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
           messageWatermark: 0,
         })
       }
@@ -2256,9 +2256,9 @@ test(
           transcript: [],
           timeline: [],
           events: [],
-          view: { rootID: "root", cards: {}, order: [] },
-          agentView: { rootID: "root", cards: {}, order: [] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
           messageWatermark: 0,
         })
       }

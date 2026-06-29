@@ -20,6 +20,7 @@ import {
   testEventOrderKey,
   testMessageOrderKey,
   testPartOrderKey,
+  testTaskOrderKey,
 } from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 installRealOverlayI18n()
@@ -132,12 +133,17 @@ function validateTranscriptMessage(message: any): any {
   }
 }
 
+function requireCreatedTime(value: unknown, owner: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${owner} missing finite created time`)
+  return value
+}
+
 function viewMessagesForTranscript(transcript: any[]): any[] {
   return transcript.map((message) => ({
     messageID: String(message.info.id || ""),
     sessionID: String(message.info.sessionID || ""),
     stage: String(message.info.channel || ""),
-    time: Number(message.info.time?.created || 0),
+    time: requireCreatedTime(message.info.time?.created, `perf fixture view ${String(message.info.id || "<unknown>")}`),
     orderKey: message.info.orderKey,
     placement: "top_level",
   }))
@@ -146,6 +152,7 @@ function viewMessagesForTranscript(transcript: any[]): any[] {
 const INITIAL_BOARD = {
   task: {
     id: TASK_ID,
+    orderKey: testTaskOrderKey(TASK_ID, 1_776_000_000_000),
     status: "active",
     request: "perf test",
     sessionID: SID,

@@ -114,7 +114,6 @@ let browserShutdownGeneration = 0
 const log = (msg: string) => console.error(`[browser-mcp] ${new Date().toISOString()} ${msg}`)
 
 const HEADLESS = process.env.BROWSER_HEADLESS !== "false"
-const PROXY_SERVER = process.env.BROWSER_PROXY || undefined
 const SESSION_TIMEOUT_MS = Number(process.env.SESSION_TIMEOUT_MIN ?? 30) * 60 * 1000
 
 const acquireBrowser = async (): Promise<Browser> => {
@@ -124,7 +123,7 @@ const acquireBrowser = async (): Promise<Browser> => {
     const launchGeneration = browserShutdownGeneration
     browserLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess({
       headless: HEADLESS,
-      proxyServer: PROXY_SERVER,
+      args: BrowserRuntime.defaultLaunchArgs({ env: {} }),
     })
       .then(async (launched) => {
         if (launchGeneration !== browserShutdownGeneration) {
@@ -230,7 +229,7 @@ const getReusableProfile = async (profileId: string) => {
 
 const createProfile = async (opts: SessionCreateOpts, now: number) => {
   const b = await acquireBrowser()
-  const proxy = opts.proxy ?? (PROXY_SERVER ? { server: PROXY_SERVER } : undefined)
+  const proxy = opts.proxy
   const profileId = "prof_" + crypto.randomUUID().replace(/-/g, "").slice(0, 12)
   const viewport = opts.viewport ?? { width: 1280, height: 720 }
   const context = await b.newContext({

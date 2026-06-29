@@ -200,7 +200,10 @@ export interface AgentCoordinationRequestDesc {
   time_created: number
   session_id: string
   agent: string
-  message_id: string
+  origin?: "worker_request" | "operator_steer"
+  message_id?: string
+  operator_steer_id?: string
+  operator_message?: string
   goal_id?: string
   goal_run_id?: string
   blocking: boolean
@@ -337,8 +340,8 @@ export interface TaskDesc {
    *  session cards: provider quota, network, schema, and terminal session
    *  errors that would otherwise live only in User Interface (UI) / log status. */
   recent_agent_failures?: AgentFailureDesc[]
-  /** Pending worker-to-orchestrator coordination requests. These are durable
-   *  A2A facts: a worker asked the host for an explicit scheduling decision.
+  /** Pending worker/operator-to-orchestrator coordination requests. These are durable
+   *  coordination facts: a worker or operator asked for an explicit scheduling decision.
    *  The orchestrator must answer through `respond_agent_coordination` or take
    *  another visible lifecycle action; do not inject private steering without
    *  a request id. */
@@ -891,7 +894,10 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       time_created: row.timeCreated,
       session_id: row.payload.session_id,
       agent: row.payload.agent,
+      origin: row.payload.origin,
       message_id: row.payload.message_id,
+      operator_steer_id: row.payload.operator_steer_id,
+      operator_message: row.payload.operator_message,
       goal_id: row.payload.goal_id,
       goal_run_id: row.payload.goal_run_id,
       blocking: row.payload.blocking,
@@ -1251,10 +1257,15 @@ export function renderTaskDescription(desc: TaskDesc): string {
       const goal = request.goal_id ? ` goal=${request.goal_id}` : ""
       const goalRun = request.goal_run_id ? ` goal_run=${request.goal_run_id}` : ""
       const refs = request.evidence_refs.length > 0 ? ` refs=${request.evidence_refs.join(",")}` : ""
+      const origin = request.origin ?? "worker_request"
+      const messageID = request.message_id ? ` message=${request.message_id}` : ""
       lines.push(
-        `- ${ts} request=${request.request_id} agent=${request.agent} session=${request.session_id}${goal}${goalRun} ` +
+        `- ${ts} request=${request.request_id} origin=${origin} agent=${request.agent} session=${request.session_id}${messageID}${goal}${goalRun} ` +
           `blocking=${request.blocking} severity=${request.severity}: ${truncate(request.summary, 220)}`,
       )
+      if (request.operator_message) {
+        lines.push(`  operator_message: ${truncate(request.operator_message, 420)}`)
+      }
       lines.push(`  requested_decision: ${truncate(request.requested_decision, 240)}`)
       lines.push(`  details: ${truncate(request.details, 420)}${refs}`)
       if (request.last_failed_action_id || request.last_action_error) {
@@ -1267,7 +1278,7 @@ export function renderTaskDescription(desc: TaskDesc): string {
       }
     }
     lines.push(
-      `These requests are durable worker-to-orchestrator A2A messages. Answer a request with ` +
+      `These requests are durable worker/operator-to-orchestrator coordination messages. Answer a request with ` +
         `respond_agent_coordination(request_id=...) or choose another visible lifecycle action. ` +
         `Do not use private steering without a request id.`,
     )

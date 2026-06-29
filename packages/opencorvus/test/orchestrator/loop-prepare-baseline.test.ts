@@ -19,7 +19,7 @@ import { tmpdir } from "../fixture/fixture"
  *   WARN service=engine-acceptance adapter=workspace_export
  *   error=Error: workspace_export requires task.metadata.git.baseline.commit
  *   ...
- *   publish_gate_rework_<ts>: This is a rework signal, not a terminal
+ *   artifact_export_rework_<ts>: This is a rework signal, not a terminal
  *   task failure. The orchestrator must fix the workspace/export
  *   mismatch, then run deliver again.
  *

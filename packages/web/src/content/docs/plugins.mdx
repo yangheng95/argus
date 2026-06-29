@@ -18,7 +18,7 @@ Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts
 
 ## Default plugins
 
-**GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts`).
+**GitLab Auth** (internal) — runtime code statically imports `@gitlab/opencorvus-gitlab-auth`, no npm install (`src/plugin/index.ts`). `packages/opencorvus/package.json` maps that internal name to the upstream npm package as a package-manager alias because the registry package has not been renamed; source code and public plugin examples must use only `@gitlab/opencorvus-gitlab-auth`.
 
 Third-party npm plugins load only when declared explicitly in the `plugin` config array.
 

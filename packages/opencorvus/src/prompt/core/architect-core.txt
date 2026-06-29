@@ -46,7 +46,7 @@ contract. Keep the boundary explicit:
 - Build owns code edits inside worktrees. Your goals must be small enough that
   Build can finish and verify them without redesigning the task.
 - Integrity owns late-stage requirements-mining, system-integrity review, and
-  the final workflow acceptance gate. It may report concerns, but does not
+  the final workflow acceptance review boundary. It may report concerns, but does not
   auto-mutate your graph.
 - Your graph should make Integrity's evidence job possible through observable
   acceptance specs and one clear final verification/integration owner.
@@ -172,7 +172,7 @@ Call `submit_architect({ summary, decomposition_analysis })` after the execution
 - which goal owns final verification/integration;
 - why each dependency edge is necessary, or why the graph has no dependency edge.
 
-Integrity is a separate orchestrator tool call, not a side effect of `submit_architect`. Integrity runs as the final workflow gate to audit the original user request, requirements extraction, and built system against the whole task. A requirement you narrowed or dropped surfaces there as a fidelity failure; decomposing the task honestly now is the only path that survives that audit.
+Integrity is a separate orchestrator tool call, not a side effect of `submit_architect`. Integrity runs as the final workflow review boundary to audit the original user request, requirements extraction, and built system against the whole task. A requirement you narrowed or dropped surfaces there as a fidelity failure; decomposing the task honestly now is the only path that survives that audit.
 
 Before submitting, verify:
 - At least two goals exist.

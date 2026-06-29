@@ -42,8 +42,6 @@ const frontendDesignProcessTracePath = process.env.OPENCORVUS_FRONTEND_DESIGN_PR
 const frontendDesignIterationStatePath = process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE
   ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_ITERATION_STATE)
   : undefined
-const threshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_THRESHOLD ?? 96))
-const worstThreshold = normalizeVisualThreshold(Number(process.env.OPENCORVUS_WEB_CLONE_E2E_WORST_THRESHOLD ?? 75))
 
 const ctx = {
   sessionID: "test-web-clone-source-project-e2e",
@@ -385,6 +383,7 @@ describe("web clone source project E2E", () => {
   e2eTest(
     "runs the OpenCorvus tool chain and enforces the visual threshold",
     async () => {
+      const { threshold, worstThreshold, browserLaunchTimeoutMs } = requireWebCloneE2EVisualInputs()
       await assertDirectory(webpageEvidenceDir)
       if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
       if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
@@ -516,6 +515,7 @@ describe("web clone source project E2E", () => {
             outDir: path.join(acceptanceDir, "html-skeleton-workflow"),
             threshold,
             worstThreshold,
+            browserLaunchTimeoutMs,
             headless: true,
           })
           trace.audits.htmlSkeletonWorkflow = htmlSkeletonWorkflow
@@ -934,6 +934,28 @@ async function assertFile(file: string): Promise<void> {
 }
 
 function normalizeVisualThreshold(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0.96
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`invalid web clone e2e visual threshold: ${value}`)
   return value > 1 ? value / 100 : value
+}
+
+function requirePositiveEnvNumber(name: string): number {
+  const raw = process.env[name]?.trim()
+  if (!raw) throw new Error(`${name} is required for web clone e2e visual verification`)
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number, got ${raw}`)
+  }
+  return value
+}
+
+function requireWebCloneE2EVisualInputs(): {
+  threshold: number
+  worstThreshold: number
+  browserLaunchTimeoutMs: number
+} {
+  return {
+    threshold: normalizeVisualThreshold(requirePositiveEnvNumber("OPENCORVUS_WEB_CLONE_E2E_THRESHOLD")),
+    worstThreshold: normalizeVisualThreshold(requirePositiveEnvNumber("OPENCORVUS_WEB_CLONE_E2E_WORST_THRESHOLD")),
+    browserLaunchTimeoutMs: requirePositiveEnvNumber("OPENCORVUS_WEB_CLONE_E2E_BROWSER_LAUNCH_TIMEOUT_MS"),
+  }
 }

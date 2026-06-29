@@ -22,7 +22,9 @@ test("runtime render rejects local files instead of starting a server", async ()
       rendered: htmlPath,
       outDir: dir,
       viewport: { width: 320, height: 240 },
-      settleMs: 0,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
     }),
   ).rejects.toThrow("URL-only")
 })
@@ -42,6 +44,16 @@ test("runtime visual render uses the shared browser launch timeout resolver", as
   const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/runtime/visual-page.ts"), "utf8")
 
   expect(source).toContain("BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.browserLaunchTimeoutMs)")
+  expect(source).toContain("browserLaunchTimeoutMs: number")
+  expect(source).toContain("navigationTimeoutMs: number")
+  expect(source).toContain("settleMs: number")
+  expect(source).toContain("runVisualDiff: invalid browserLaunchTimeoutMs")
+  expect(source).toContain("runVisualDiff: invalid navigationTimeoutMs")
+  expect(source).toContain("runVisualDiff: invalid settleMs")
+  expect(source).not.toContain("opts.threshold ?? 0.85")
+  expect(source).not.toContain("opts.worstThreshold ?? 0.55")
+  expect(source).not.toContain(["input.navigationTimeoutMs", "?? 90_000"].join(" "))
+  expect(source).not.toContain(["input.settleMs", "?? 2_500"].join(" "))
   expect(source).not.toContain("OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000")
 })
 
@@ -54,7 +66,10 @@ test("runtime visual render owns navigation by browser inactivity", async () => 
   expect(source).toContain("() => page.waitForSelector(input.waitForSelector, { timeout: 0 })")
   expect(source).not.toContain('page.goto(input.target, { waitUntil: "load", timeout: input.navigationTimeoutMs })')
   expect(source).not.toContain(
-    "const inactivityTimeoutMs = launchTimeoutMs + navigationTimeoutMs + (input.settleMs ?? 2_500) + 30_000",
+    [
+      "const inactivityTimeoutMs = launchTimeoutMs + navigationTimeoutMs + (input.settleMs",
+      "?? 2_500) + 30_000",
+    ].join(" "),
   )
 })
 
@@ -99,7 +114,9 @@ test("visual diff fails runtime capture layers even when screenshot similarity p
       rendered: server.url,
       outDir: referenceDir,
       viewport,
-      settleMs: 0,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
       minDomDescendants: 1,
     })
@@ -113,13 +130,16 @@ test("visual diff fails runtime capture layers even when screenshot similarity p
       viewport,
       threshold: 0.85,
       worstThreshold: 0.55,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
     const persisted = JSON.parse(await fs.readFile(path.join(diffDir, "diff.json"), "utf8"))
 
-    expect(report.gate.meanPassed).toBe(true)
-    expect(report.gate.worstPassed).toBe(true)
-    expect(report.gate.runtimePassed).toBe(false)
+    expect(report.checks.meanPassed).toBe(true)
+    expect(report.checks.worstPassed).toBe(true)
+    expect(report.checks.runtimePassed).toBe(false)
     expect(report.runtime.failedLayers).toContain("js")
     expect(report.reason).toBe("runtime_layers")
     expect(report.passed).toBe(false)

@@ -155,6 +155,20 @@ describe("executor routes", () => {
         })
         expect(unsupported.status).toBe(404)
         await expect(unsupported.json()).resolves.toMatchObject({ name: "NotFoundError" })
+
+        const unknown = await app.request("/executor/unsupported-executor/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ model: "gpt-5.4" }),
+        })
+        expect(unknown.status).toBe(404)
+        await expect(unknown.json()).resolves.toMatchObject({
+          name: "NotFoundError",
+          data: { message: "unknown executor: unsupported-executor" },
+        })
       },
     })
   })

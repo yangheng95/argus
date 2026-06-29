@@ -11,7 +11,7 @@ import type { AcceptanceRow, RunRow, TaskRow } from "../../src/engine/store"
 
 describe("Publisher acceptance export", () => {
   test("publisher does not run a second declared-files acceptance check", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-gate-"))
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-export-"))
     try {
       await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
       await $`git init`.cwd(dir).quiet()
@@ -169,10 +169,10 @@ describe("Publisher acceptance export", () => {
 function taskRow(input: { baseline: string }): TaskRow {
   const now = Date.now()
   return {
-    id: "tsk_publish_gate",
-    project_id: "project_publish_gate",
+    id: "tsk_publish_export",
+    project_id: "project_publish_export",
     source: "test",
-    title: "Publisher gate test",
+    title: "Publisher export test",
     request: "Publish a acceptance with declared changed files",
     kind: "workflow",
     priority: "normal",
@@ -197,8 +197,8 @@ function taskRow(input: { baseline: string }): TaskRow {
 function runRow(): RunRow {
   const now = Date.now()
   return {
-    id: "run_publish_gate",
-    task_id: "tsk_publish_gate",
+    id: "run_publish_export",
+    task_id: "tsk_publish_export",
     plan_version_id: null,
     status: "running",
     phase: "deliver",
@@ -215,9 +215,9 @@ function acceptanceRow(input?: { changedFiles?: string[] }): AcceptanceRow {
   const now = Date.now()
   const changedFiles = input?.changedFiles ?? ["file.txt"]
   return {
-    id: "dlv_publish_gate",
-    task_id: "tsk_publish_gate",
-    run_id: "run_publish_gate",
+    id: "dlv_publish_export",
+    task_id: "tsk_publish_export",
+    run_id: "run_publish_export",
     goal_run_id: null,
     status: "candidate",
     summary: "Declared changes",

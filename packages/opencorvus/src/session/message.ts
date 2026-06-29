@@ -169,7 +169,7 @@ export namespace Message {
     type: z.literal("text"),
     text: z.string(),
     kind: z.enum(["user_content", "control", "context"]).optional(),
-    source: z.enum(["user", "system", "evaluator", "goal_gate", "task_tool"]).optional(),
+    source: z.enum(["user", "system", "evaluator", "goal_evidence", "task_tool"]).optional(),
     time: z
       .object({
         start: z.number(),

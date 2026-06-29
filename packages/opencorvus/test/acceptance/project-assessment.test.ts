@@ -7,7 +7,7 @@ import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { ProjectTable } from "../../src/project/project.sql"
-import { buildAcceptanceEvidenceManifest } from "../../src/acceptance/checks/project-gate"
+import { buildAcceptanceEvidenceManifest } from "../../src/acceptance/checks/project-assessment"
 import {
   ensureProjectReadyForRuntime,
   runtimeReadinessInstallCommand,
@@ -28,7 +28,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
-describe("acceptance project evidence gate", () => {
+describe("acceptance project evidence assessment", () => {
   test("runtime readiness requires packageManager when package.json declares scripts", async () => {
     const dir = await runtimePackageFixture({
       packageJson: {
@@ -179,8 +179,8 @@ describe("acceptance project evidence gate", () => {
     })
 
     expect(manifest.runtimeReadiness?.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
-    expect(manifest.finalGate.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
-    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.evidenceDecision.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
+    expect(manifest.evidenceDecision.status).toBe("failed")
     expect(manifest.functionalAssessment).toMatchObject({
       status: "incomplete",
       primaryFailureIds: ["runtime-readiness:package-manager"],
@@ -217,9 +217,9 @@ describe("acceptance project evidence gate", () => {
     })
 
     expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test", "typecheck"])
-    expect(manifest.finalGate.failedReadinessIds).toEqual([])
-    expect(manifest.finalGate.failedCheckIds).toEqual(["test#1", "typecheck#1"])
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.evidenceDecision.failedReadinessIds).toEqual([])
+    expect(manifest.evidenceDecision.failedCheckIds).toEqual(["test#1", "typecheck#1"])
+    expect(manifest.evidenceDecision.status).toBe("passed")
     expect(manifest.functionalAssessment?.primaryFailureIds).toEqual([])
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).toEqual(["test#1", "typecheck#1"])
   })
@@ -250,15 +250,15 @@ describe("acceptance project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
     // Lint (and other required programmatic checks) is advisory under the
     // current model. The lint failure surfaces in failedCheckIds and
-    // auxiliaryFailureIds so the LLM agent can weigh it, but the gate
-    // status itself is `passed`.
-    expect(manifest.finalGate.status).toBe("passed")
+    // auxiliaryFailureIds so the LLM agent can weigh it, but the evidence
+    // decision status itself is `passed`.
+    expect(manifest.evidenceDecision.status).toBe("passed")
     expect(manifest.functionalAssessment).toMatchObject({
       status: "complete",
       primaryFailureIds: [],
     })
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("lint#1")
-    expect(manifest.finalGate.failedCheckIds).toContain("lint#1")
+    expect(manifest.evidenceDecision.failedCheckIds).toContain("lint#1")
   })
 
   test("skips discovered lint by default because typecheck and tests are the acceptance signal", async () => {
@@ -281,7 +281,7 @@ describe("acceptance project evidence gate", () => {
 
     expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test"])
     expect(manifest.checkResults.map((item) => item.name)).toEqual(["build", "test"])
-    expect(manifest.finalGate.failedCheckIds).toEqual([])
+    expect(manifest.evidenceDecision.failedCheckIds).toEqual([])
   })
 
   test("rejects package scripts that coerce shell failure into success", async () => {
@@ -306,9 +306,9 @@ describe("acceptance project evidence gate", () => {
     expect(lint?.failureReason).toContain("Forbidden shell success coercion")
     // Forbidden shell coercion is detected and surfaced as a failed check, but
     // lint itself is advisory. Coverage / integrity stay clean here, so the
-    // gate is `passed` while failedCheckIds carries the diagnostic.
-    expect(manifest.finalGate.status).toBe("passed")
-    expect(manifest.finalGate.failedCheckIds).toContain("lint#1")
+    // evidence decision is `passed` while failedCheckIds carries the diagnostic.
+    expect(manifest.evidenceDecision.status).toBe("passed")
+    expect(manifest.evidenceDecision.failedCheckIds).toContain("lint#1")
   })
 
   test("runs required checks from a source snapshot that excludes opencorvus internal worktrees", async () => {
@@ -353,7 +353,7 @@ console.log("lint scope ok", cwd())
     expect(lint?.executionCwd).toContain(ProjectRuntimePaths.acceptancePaths(dir, taskID).checkWorkspaces)
     expect(lint?.executionCwd).not.toBe(dir)
     expect(lint?.outputExcerpt).toContain("lint scope ok")
-    expect(manifest.finalGate.failedCheckIds).toEqual([])
+    expect(manifest.evidenceDecision.failedCheckIds).toEqual([])
   })
 
   test("validator rejects missing required check results", () => {
@@ -378,7 +378,7 @@ console.log("lint scope ok", cwd())
       requirementCoverage: [],
       reviewEvidence: [],
       changedFiles: ["src/app.ts"],
-      finalGate: {
+      evidenceDecision: {
         status: "passed",
         summary: "stale caller verdict",
         failedCheckIds: [],
@@ -390,7 +390,7 @@ console.log("lint scope ok", cwd())
 
     expect(validateAcceptanceEvidenceManifest(manifest)).toEqual({
       status: "failed",
-      summary: "Acceptance evidence gate failed 1 required check(s).",
+      summary: "Acceptance evidence failed 1 required check(s).",
       failedReadinessIds: [],
       failedCheckIds: ["lint#1"],
       failedCoverageIds: [],
@@ -435,13 +435,13 @@ console.log("lint scope ok", cwd())
       },
     ])
     expect(manifest.requirementCoverage[0]?.status).toBe("uncovered")
-    expect(manifest.finalGate.status).toBe("failed")
-    expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance", "requirement:REQ-1"])
+    expect(manifest.evidenceDecision.status).toBe("failed")
+    expect(manifest.evidenceDecision.failedCoverageIds).toEqual(["goal:gol_missing_acceptance", "requirement:REQ-1"])
     expect(manifest.functionalAssessment).toMatchObject({
       status: "incomplete",
       primaryFailureIds: ["goal:gol_missing_acceptance", "requirement:REQ-1"],
     })
-    expect(manifest.finalGate.summary).toContain("Functional completion failed")
+    expect(manifest.evidenceDecision.summary).toContain("Functional completion failed")
   })
 
   test("skips auxiliary programmatic checks when functional completion already failed", async () => {
@@ -480,8 +480,8 @@ console.log("lint scope ok", cwd())
           "Skipped because acceptance completion or runtime readiness evidence failed before auxiliary programmatic checks.",
       },
     ])
-    expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance"])
-    expect(manifest.finalGate.failedCheckIds).toEqual([])
+    expect(manifest.evidenceDecision.failedCoverageIds).toEqual(["goal:gol_missing_acceptance"])
+    expect(manifest.evidenceDecision.failedCheckIds).toEqual([])
     expect(manifest.functionalAssessment).toMatchObject({
       status: "incomplete",
       primaryFailureIds: ["goal:gol_missing_acceptance"],
@@ -578,13 +578,13 @@ console.log("lint scope ok", cwd())
       category: "security",
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
-    expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
+    expect(manifest.evidenceDecision.failedReviewIds).toContain("specialist:security_data")
     // Specialist reviews are advisory under the current model. The evidence
     // status stays `passed`; the security_data finding surfaces in
     // failedReviewIds + auxiliaryFailureIds for acceptance review to weigh.
     expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.evidenceDecision.status).toBe("passed")
   })
 
   test("does not consume integrity attempts as acceptance review evidence", async () => {
@@ -611,9 +611,9 @@ console.log("lint scope ok", cwd())
     })
 
     expect(manifest.reviewEvidence.find((item) => item.id === "review:integrity")).toBeUndefined()
-    expect(manifest.finalGate.failedReviewIds).not.toContain("review:integrity")
+    expect(manifest.evidenceDecision.failedReviewIds).not.toContain("review:integrity")
     expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("review:integrity")
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.evidenceDecision.status).toBe("passed")
   })
 
   test("fails acceptance when declared changed files are absent from workspace export diff", async () => {
@@ -637,9 +637,9 @@ console.log("lint scope ok", cwd())
 
     // workspace_export is an artifact-shape review (not architect-level);
     // it stays advisory. The diagnostic still appears in failedReviewIds so
-    // the LLM agent can read it, but the gate is `passed`.
-    expect(manifest.finalGate.status).toBe("passed")
-    expect(manifest.finalGate.failedReviewIds).toContain("review:workspace_export")
+    // the LLM agent can read it, but the evidence decision is `passed`.
+    expect(manifest.evidenceDecision.status).toBe("passed")
+    expect(manifest.evidenceDecision.failedReviewIds).toContain("review:workspace_export")
     expect(
       manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"),
     ).toContain("missing_declared_files=src/app.ts")
@@ -654,7 +654,7 @@ async function packageFixture(
     files?: Record<string, string>
   },
 ) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "oc-acceptance-gate-"))
+  const dir = await mkdtemp(path.join(os.tmpdir(), "oc-acceptance-assessment-"))
   tempDirs.push(dir)
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.writeFile(path.join(dir, "src", "app.ts"), "export const ok = true\n")
@@ -744,7 +744,7 @@ function manifestWithFailures(input: {
     requirementCoverage: [],
     reviewEvidence: [],
     changedFiles: ["src/app.ts"],
-    finalGate: {
+    evidenceDecision: {
       status: "failed",
       summary: "failed",
       failedCheckIds: ["lint#1"],
@@ -808,10 +808,11 @@ function recordIntegrity(
     correctionsCount: number
     missingCount: number
     /** Defaults to post_build so the existing tests, which simulate a fully
-     *  reviewed build, satisfy the acceptance freshness gate. Pre-build cases
-     *  pass "pre_build" explicitly to assert the gate rejects them. */
+     *  reviewed build, satisfy the acceptance freshness evidence. Pre-build
+     *  cases pass "pre_build" explicitly to assert the evidence decision
+     *  rejects them. */
     phase?: "pre_build" | "post_build"
-    /** Override the artifact's time_created so freshness-gate tests can
+    /** Override the artifact's time_created so freshness evidence tests can
      *  position the attempt before a later goal_run_attempt artifact. */
     now?: number
   },

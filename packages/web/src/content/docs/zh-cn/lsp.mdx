@@ -26,7 +26,7 @@ LSP 懒启动——agent 首次接触语言 X 的文件时启动对应 server。
 
 ## 配置
 
-LSP server 自动发现。`opencorvus.jsonc` 当前没有按语言的 LSP 配置；若 server 不在 `PATH`，OpenCorvus 静默跳过，agent 回退到纯文本 diagnostics。
+LSP server 自动发现。`opencorvus.jsonc` 当前没有按语言的 LSP 配置；若 server 不在 `PATH`，OpenCorvus 不会为该语言产生 semantic LSP diagnostics。
 
 如需非标准 server 二进制，按惯例名安装到 `PATH`；当前 LSP 层不支持任意路径。
 

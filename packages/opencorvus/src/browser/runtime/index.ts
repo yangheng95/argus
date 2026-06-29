@@ -188,7 +188,6 @@ export namespace BrowserRuntime {
 
   export function resolveBrowserProxyServer(env: NodeJS.ProcessEnv = process.env): string | undefined {
     return firstNonBlank([
-      env.BROWSER_PROXY,
       env.HTTPS_PROXY,
       env.https_proxy,
       env.HTTP_PROXY,

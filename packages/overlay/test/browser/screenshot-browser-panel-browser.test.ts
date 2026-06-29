@@ -14,11 +14,12 @@ await ensureOverlayDist()
 
 const TASK = {
   id: "tsk_screenshot_browser",
+  orderKey: taskOrderKey("tsk_screenshot_browser", 1_780_000_000_000),
   title: "Screenshot browser task",
   status: "active",
   directory: "D:/overlay/workspace/app",
   sessionID: "ses_screenshot_browser",
-  time: { created: 1_780_000_000_000, updated: 1_780_000_060_000 },
+  time: { created: 1_780_000_000_000, started: 1_780_000_000_000, updated: 1_780_000_060_000 },
 }
 
 const SCREENSHOT_COUNT = 120
@@ -92,13 +93,17 @@ function route(url: URL) {
 }
 
 function orderKey(
-  domain: "board" | "message" | "part" | "session",
+  domain: "task" | "board" | "message" | "part" | "session",
   rank: number,
   time: number,
   id: string,
   sequence = 0,
 ): string {
   return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return orderKey("task", 10, time, id)
 }
 
 function boardOrderKey(id: string, time: number, rank: number): string {
@@ -255,6 +260,27 @@ function conversationPayload() {
   }))
   const firstMessage = transcript[0]!
   const lastMessage = transcript.at(-1)!
+  const buildSessionView = {
+    sessionID: SCREENSHOT_BUILD_SESSION_ID,
+    orderKey: sessionOrderKey(SCREENSHOT_BUILD_SESSION_ID, firstMessage.info.time.created),
+    stage: "build",
+    parentSessionID: TASK.sessionID,
+    goalID: SCREENSHOT_GOAL_ID,
+    messageIDs: transcript.map((message) => message.info.id),
+    lastDisplayMessageID: lastMessage.info.id,
+    firstMessageTime: firstMessage.info.time.created,
+    lastMessageTime: lastMessage.info.time.created,
+    firstObservedAt: firstMessage.info.time.created,
+    lastObservedAt: lastMessage.info.time.created,
+    status: "completed",
+    placement: "goal_phase",
+    phase: { stepID: "build", phaseID: "build" },
+  }
+  const viewSessions = [buildSessionView]
+  const topLevelSessionIDs = viewSessions
+    .filter((session) => session.placement === "top_level" && session.messageIDs.length > 0)
+    .map((session) => session.sessionID)
+
   return {
     lastSequence: 1,
     board: {
@@ -299,34 +325,16 @@ function conversationPayload() {
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: {
-      rootID: "root",
-      order: [],
-      cards: {},
-      sessions: [],
+      sessions: viewSessions,
       messages: viewMessages,
+      topLevelSessionIDs,
     },
     agentView: {
-      sessions: [
-        {
-          sessionID: SCREENSHOT_BUILD_SESSION_ID,
-          orderKey: sessionOrderKey(SCREENSHOT_BUILD_SESSION_ID, firstMessage.info.time.created),
-          stage: "build",
-          parentSessionID: TASK.sessionID,
-          goalID: SCREENSHOT_GOAL_ID,
-          messageIDs: transcript.map((message) => message.info.id),
-          lastDisplayMessageID: lastMessage.info.id,
-          firstMessageTime: firstMessage.info.time.created,
-          lastMessageTime: lastMessage.info.time.created,
-          firstObservedAt: firstMessage.info.time.created,
-          lastObservedAt: lastMessage.info.time.created,
-          status: "completed",
-          placement: "goal_phase",
-          phase: { stepID: "build", phaseID: "build" },
-        },
-      ],
+      sessions: viewSessions,
       messages: viewMessages,
+      topLevelSessionIDs,
     },
     messageWatermark: 0,
   }

@@ -26,7 +26,6 @@ const {
   ROOT_SID,
   EXECUTOR_SID,
   BUILD_SID,
-  PLANNER_SID,
   REQUIREMENTS_SID,
   DESIGN_SID,
   ARCHITECT_SID,
@@ -69,17 +68,27 @@ function sessionOrderKey(id: string, time: number): string {
   return testOrderKey(50, time, id, 0, "session")
 }
 
+function stampBoardPhase(goal: any, step: any, phaseID: string, phase: any): any {
+  return {
+    ...phase,
+    orderKey: requireExplicitOrderKey(
+      phase?.orderKey,
+      `goal phase ${String(goal?.goalID || "goal")}/${String(step?.stepID || "step")}/${phaseID}`,
+      "board",
+    ),
+  }
+}
+
 function stampBoard(board: any): any {
   if (!board || typeof board !== "object" || Array.isArray(board)) return board
   const task = board.task && typeof board.task === "object" ? board.task : undefined
-  const taskCreated = Number(task?.time?.created || 1)
   return {
     ...board,
     ...(task
       ? {
           task: {
             ...task,
-            orderKey: task.orderKey || taskOrderKey(String(task.id || TASK_ID), taskCreated),
+            orderKey: requireExplicitOrderKey(task.orderKey, `task ${String(task.id || TASK_ID)}`, "task"),
           },
         }
       : {}),
@@ -90,77 +99,58 @@ function stampBoard(board: any): any {
             steps: Array.isArray(board.workflow.steps)
               ? board.workflow.steps.map((step: any) => ({
                   ...step,
-                  orderKey:
-                    step.orderKey ||
-                    boardOrderKey(`${String(task?.id || TASK_ID)}-${String(step?.id || "step")}`, taskCreated, 61),
+                  orderKey: requireExplicitOrderKey(
+                    step.orderKey,
+                    `workflow step ${String(task?.id || TASK_ID)}/${String(step?.id || step?.stepID || "step")}`,
+                    "board",
+                  ),
                 }))
               : board.workflow.steps,
           }
         : board.workflow,
     goalWorkflows: Array.isArray(board.goalWorkflows)
-      ? board.goalWorkflows.map((goal: any) => {
-          const goalCreated = Number(goal?.time?.created || taskCreated)
-          return {
-            ...goal,
-            orderKey: goal.orderKey || boardOrderKey(String(goal?.goalID || "goal"), goalCreated, 60),
-            steps: Array.isArray(goal?.steps)
-              ? goal.steps.map((step: any) => {
-                  const stepStarted = Number(step?.startedAt || goalCreated)
-                  return {
-                    ...step,
-                    orderKey:
-                      step.orderKey ||
-                      boardOrderKey(
-                        `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}`,
-                        stepStarted,
-                        61,
-                      ),
-                    phases:
-                      step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
-                        ? Object.fromEntries(
-                            Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => {
-                              const phaseStarted = Number(phase?.startedAt || stepStarted)
-                              return [
-                                phaseID,
-                                {
-                                  ...phase,
-                                  orderKey:
-                                    phase?.orderKey ||
-                                    boardOrderKey(
-                                      `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}-${phaseID}`,
-                                      phaseStarted,
-                                      62,
-                                    ),
-                                },
-                              ]
-                            }),
-                          )
-                        : step.phases,
-                  }
-                })
-              : goal?.steps,
-          }
-        })
+      ? board.goalWorkflows.map((goal: any) => ({
+          ...goal,
+          orderKey: requireExplicitOrderKey(goal?.orderKey, `goal ${String(goal?.goalID || "goal")}`, "board"),
+          steps: Array.isArray(goal?.steps)
+            ? goal.steps.map((step: any) => ({
+                ...step,
+                orderKey: requireExplicitOrderKey(
+                  step?.orderKey,
+                  `goal step ${String(goal?.goalID || "goal")}/${String(step?.stepID || "step")}`,
+                  "board",
+                ),
+                phases:
+                  step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
+                    ? Object.fromEntries(
+                        Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => [
+                          phaseID,
+                          stampBoardPhase(goal, step, phaseID, phase),
+                        ]),
+                      )
+                    : step.phases,
+              }))
+            : goal?.steps,
+        }))
       : board.goalWorkflows,
     interactions: Array.isArray(board.interactions)
-      ? board.interactions.map((interaction: any) => {
-          const interactionCreated = Number(interaction?.time?.created || taskCreated)
-          return {
-            ...interaction,
-            orderKey:
-              interaction.orderKey || interactionOrderKey(String(interaction?.id || "interaction"), interactionCreated),
-          }
-        })
+      ? board.interactions.map((interaction: any) => ({
+          ...interaction,
+          orderKey: requireExplicitOrderKey(
+            interaction?.orderKey,
+            `interaction ${String(interaction?.id || "interaction")}`,
+            "interaction",
+          ),
+        }))
       : board.interactions,
   }
 }
-
 function setBoardStore(...args: any[]): any {
   if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampBoard(args[1]))
   return (setBoardStoreRaw as any)(...args)
 }
 
-function requireExplicitOrderKey(value: unknown, label: string, domain: "message" | "part" | "session"): string {
+function requireExplicitOrderKey(value: unknown, label: string, domain: "message" | "part" | "session" | "task" | "board" | "interaction"): string {
   const key = typeof value === "string" ? value.trim() : ""
   if (!key) throw new Error(`${label} missing explicit ${domain} orderKey`)
   const actualDomain = key.split(":", 6)[4] || ""
@@ -287,8 +277,8 @@ function requireHydrateView(view: any): any {
 test("phase cards absorb goal-scoped session parts — no nested session cards", async () => {
   // 正本清源 pass:
   //   - session.kind="executor" is a CONTAINER (no LLM), filtered from UI.
-  //   - session.kind="planner" / "build" / "evaluator" all routed DIRECTLY
-  //     to their phase card (ensureSessionCard → resolvePhaseOrSessionCardID).
+  //   - session.kind="build" is routed DIRECTLY to its phase card
+  //     (ensureSessionCard → resolvePhaseOrSessionCardID).
   //     No separate `<stage>:session:<sid>` card is created; the phase card
   //     owns the session's parts. This eliminates the "Build (phase) / 构建
   //     (session)" label mirror that existed when phases had nested agent
@@ -300,31 +290,25 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   // 2026-04-19 flatten: the goal-group wrapper card is gone. Each goal's
   // single goal-scope executor step is now a top-level card with goal
   // title / round / description / contracts stamped on it.
-  // 2026-04-20: per-goal evaluator removed; build step has plan + build
-  // phases only (`evaluate` phase dropped with the deterministic runner).
+  // Current workflow declares one per-goal phase: build.
   const stepCardID = `step:${GOAL_ID}:build` // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
-  const planPhaseID = `${stepCardID}:phase:plan`
   const buildPhaseID = `${stepCardID}:phase:build`
 
   // One real message turn = one card: `<stage>:session:<sid>:message:<mid>`.
   const executorCardID = `executor:session:${EXECUTOR_SID}:message:msg_exec_1`
   const buildWorkerCardID = `build:session:${BUILD_SID}:message:msg_build_1`
-  const plannerCardID = `planner:session:${PLANNER_SID}:message:msg_planner_1`
   const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}:message:msg_requirements_1`
   const designCardID = `frontend-design:session:${DESIGN_SID}:message:msg_design_1`
   const architectCardID = `architect:session:${ARCHITECT_SID}:message:msg_architect_1`
   const rootCardID = `assistant:session:${ROOT_SID}:message:msg_orch_1`
 
-  // Step card exists and has the two phase cards in order — no session
+  // Step card exists and has the build phase card — no session
   // cards between step and phase.
   expect(snapshot.nodes[stepCardID]).toBeDefined()
-  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID])
+  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([buildPhaseID])
 
   // Each phase card exists with the declared kind + phase metadata.
-  for (const [id, phaseID] of [
-    [planPhaseID, "plan"],
-    [buildPhaseID, "build"],
-  ] as const) {
+  for (const [id, phaseID] of [[buildPhaseID, "build"]] as const) {
     const node = snapshot.nodes[id]
     expect(node).toBeDefined()
     expect(node!.kind).toBe("phase")
@@ -344,23 +328,18 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   // The phase-absorbed session cards DO NOT exist as independent cards.
   // Their parts live on the phase card they were routed to.
   expect(snapshot.nodes[buildWorkerCardID]).toBeUndefined()
-  expect(snapshot.nodes[plannerCardID]).toBeUndefined()
 
   // Phase cards must surface the absorbed sessionID via `phaseSessionID` so
   // the inline AgentSessionReplyBox in Card.tsx can target the running
-  // sub-agent session. Without this, absorbed build / planner sessions
+  // sub-agent session. Without this, absorbed build sessions
   // would have no visible operator input on the phase card.
   expect(snapshot.nodes[buildPhaseID]!.phaseSessionID).toBe(BUILD_SID)
-  expect(snapshot.nodes[planPhaseID]!.phaseSessionID).toBe(PLANNER_SID)
 
   // Build phase's parts include the tool call + text from the build worker
-  // session (msg_build_1). Planner phase's parts include the planner's text.
+  // session (msg_build_1).
   const buildParts = snapshot.nodes[buildPhaseID]!.parts
   expect(buildParts.some((p) => p.type === "tool" && p.tool === "bash")).toBe(true)
   expect(buildParts.some((p) => p.type === "text" && p.text === "Build passed.")).toBe(true)
-
-  const planParts = snapshot.nodes[planPhaseID]!.parts
-  expect(planParts.some((p) => p.type === "text" && p.text === "Planned the build sequence.")).toBe(true)
 
   // Executor container is NOT rendered as its own card and NOT in top-level.
   expect(snapshot.order).not.toContain(executorCardID)
@@ -378,6 +357,7 @@ test("executor sessions surface when they contain visible reasoning", () => {
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "show executor reasoning",
       sessionID: ROOT_SID,
@@ -454,6 +434,7 @@ test("non-goal agent message shells stay hidden until display content arrives", 
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "hide blank architect shell",
       sessionID: ROOT_SID,
@@ -513,6 +494,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "trace hierarchy",
       sessionID: ROOT_SID,
@@ -560,13 +542,13 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   })
   applyEvent({
     type: "message.part.updated",
-    orderKey: messageOrderKey("msg_root", 1_776_000_000_500),
+    orderKey: messageOrderKey("msg_root", 1_776_000_000_000),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("assistant", {
         id: "part_root",
         orderKey: partOrderKey("part_root", 1_776_000_000_500),
-        owningMessageOrderKey: messageOrderKey("msg_root", 1_776_000_000_500),
+        owningMessageOrderKey: messageOrderKey("msg_root", 1_776_000_000_000),
         messageID: "msg_root",
         sessionID: ROOT_SID,
         type: "text",
@@ -605,6 +587,7 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "initial request",
       sessionID: ROOT_SID,
@@ -665,23 +648,44 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "trace payloads",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
     },
-    workflow: INITIAL_BOARD.workflow,
+    workflow: {
+      id: "pipeline",
+      name: "Pipeline",
+      goalLoopStepIDs: ["build"],
+      steps: [
+        {
+          id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
+          label: "Executor",
+          tool: "execute_goal",
+          scope: "goal",
+          skippable: false,
+          status: "pending",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
     goalWorkflows: [
       {
         goalID: GOAL_ID,
+        orderKey: boardOrderKey(GOAL_ID, 1_776_000_001_000, 60),
         goalRunID: GOAL_RUN_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
+        time: { created: 1_776_000_001_000 },
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey(`${GOAL_ID}-build`, 1_776_000_001_000, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_776_000_001_000,
@@ -691,9 +695,11 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
               buildSessionID: BUILD_SID,
             },
             phases: {
-              plan: { status: "completed", startedAt: 1_776_000_001_000, completedAt: 1_776_000_001_500 },
-              build: { status: "running", startedAt: 1_776_000_001_500 },
-              evaluate: { status: "pending" },
+              build: {
+                status: "running",
+                startedAt: 1_776_000_001_500,
+                orderKey: boardOrderKey(`${GOAL_ID}-build-phase`, 1_776_000_001_500, 62),
+              },
             },
           },
         ],
@@ -731,6 +737,7 @@ test("tree-writer projects interactions into session children and top-level card
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "trace interactions",
       sessionID: ROOT_SID,
@@ -741,6 +748,7 @@ test("tree-writer projects interactions into session children and top-level card
     interactions: [
       {
         id: "int_claimed",
+        orderKey: interactionOrderKey("int_claimed", 1_776_000_001_000),
         sessionID: ROOT_SID,
         type: "permission",
         status: "pending",
@@ -750,6 +758,7 @@ test("tree-writer projects interactions into session children and top-level card
       },
       {
         id: "int_orphan",
+        orderKey: interactionOrderKey("int_orphan", 1_776_000_002_000),
         type: "question",
         status: "pending",
         title: "Need input",
@@ -854,6 +863,7 @@ test("tree-writer keeps background Mission questions available for the popup hos
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_780_600_000_000),
       status: "active",
       request: "active task while mission runs",
       sessionID: ROOT_SID,
@@ -911,6 +921,7 @@ test("tree-writer does not duplicate task questions from raw question events", (
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "task question",
       sessionID: ROOT_SID,
@@ -951,6 +962,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "virtual root",
       sessionID: TASK_VIRTUAL_SID,
@@ -1006,6 +1018,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "trace pending sessions",
       sessionID: ROOT_SID,
@@ -1106,11 +1119,12 @@ test("channel-stamped part.updated materializes the correct session card immedia
   expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(plannerRaceCardID)
 })
 
-test("part-first display message requires event time for ordering", () => {
+test("part-first display message uses message orderKey time for ordering", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "part-first timestamp contract",
       sessionID: ROOT_SID,
@@ -1122,25 +1136,26 @@ test("part-first display message requires event time for ordering", () => {
   })
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
-  expect(() =>
-    applyEvent({
-      type: "message.part.updated",
-      orderKey: messageOrderKey("msg_no_time", 1),
-      properties: {
-        taskID: TASK_ID,
-        ...stampedPartEvent("planner", {
-          id: "prt_no_time",
-          orderKey: partOrderKey("prt_no_time", 1),
-          owningMessageOrderKey: messageOrderKey("msg_no_time", 1),
-          messageID: "msg_no_time",
-          sessionID: "ses_no_time",
-          type: "text",
-          text: "display part without event timestamp",
-          parentSessionID: ROOT_SID,
-        }),
-      },
-    }),
-  ).toThrow(/missing emittedAt\/timestamp for display message ordering/)
+  applyEvent({
+    type: "message.part.updated",
+    orderKey: messageOrderKey("msg_no_time", 1),
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("planner", {
+        id: "prt_no_time",
+        orderKey: partOrderKey("prt_no_time", 1),
+        owningMessageOrderKey: messageOrderKey("msg_no_time", 1),
+        messageID: "msg_no_time",
+        sessionID: "ses_no_time",
+        type: "text",
+        text: "display part without event timestamp",
+        parentSessionID: ROOT_SID,
+      }),
+    },
+  })
+
+  const cardID = "planner:session:ses_no_time:message:msg_no_time"
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1)
 })
 
 test("part-first consecutive build messages merge before message.updated arrives", () => {
@@ -1212,6 +1227,7 @@ test("integrity completed event materializes an integrity session card with stru
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity ordering",
       sessionID: ROOT_SID,
@@ -1294,6 +1310,7 @@ test("integrity completed event can materialize before any message stream arrive
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity race",
       sessionID: ROOT_SID,
@@ -1357,6 +1374,7 @@ test("integrity event missing sessionID throws (schema became required)", () => 
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity schema",
       sessionID: ROOT_SID,
@@ -1399,6 +1417,7 @@ test("integrity progress no longer writes elapsed string into subtitle", () => {
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity elapsed single source",
       sessionID: ROOT_SID,
@@ -1471,6 +1490,7 @@ test("integrity reasoning chunks append byte-identical text without changing the
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity reasoning streaming",
       sessionID: ROOT_SID,
@@ -1527,6 +1547,7 @@ test("resetWriter clears integrity session cards materialized from protocol even
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "integrity reset",
       sessionID: ROOT_SID,
@@ -1587,6 +1608,7 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "trace no-op events",
       sessionID: ROOT_SID,
@@ -1694,6 +1716,7 @@ test("session.status without a message does not materialize a blank frontend res
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "frontend research preparation failure",
       sessionID: ROOT_SID,
@@ -1733,6 +1756,7 @@ test("message arrival applies buffered lifecycle status without creating a dupli
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "frontend design starts before first message",
       sessionID: ROOT_SID,
@@ -1805,13 +1829,14 @@ test("message arrival applies buffered lifecycle status without creating a dupli
   expect(cardTreeStore.order).toContain(messageCardID)
 })
 
-test("goal phase stub title is an i18n role key, not the raw phase id", () => {
+test("goal phase message rejects missing backend board projection", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
-      request: "planner starts before board phase projection",
+      request: "build starts before board phase projection",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
@@ -1821,27 +1846,27 @@ test("goal phase stub title is an i18n role key, not the raw phase id", () => {
   })
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
 
-  applyEvent({
-    type: "message.updated",
-    orderKey: messageOrderKey("msg_planner_phase_stub", 1_776_000_003_000),
-    properties: {
-      taskID: TASK_ID,
-      info: stampedInfo("planner", {
-        id: "msg_planner_phase_stub",
-        orderKey: messageOrderKey("msg_planner_phase_stub", 1_776_000_003_000),
-        sessionID: "ses_planner_phase_stub",
-        role: "assistant",
-        parentSessionID: ROOT_SID,
-        goalID: "goal_phase_stub",
-        time: { created: 1_776_000_003_000 },
-      }),
-    },
-  })
+  expect(() =>
+    applyEvent({
+      type: "message.updated",
+      orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
+      properties: {
+        taskID: TASK_ID,
+        info: stampedInfo("build", {
+          id: "msg_build_phase_stub",
+          orderKey: messageOrderKey("msg_build_phase_stub", 1_776_000_003_000),
+          sessionID: "ses_build_phase_stub",
+          role: "assistant",
+          parentSessionID: ROOT_SID,
+          goalID: "goal_phase_stub",
+          time: { created: 1_776_000_003_000 },
+        }),
+      },
+    }),
+  ).toThrow("goal phase goal_phase_stub/build/build missing backend board projection")
 
-  const phaseCardID = "step:goal_phase_stub:build:phase:plan"
-  expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
-  expect(cardTreeStore.cards[phaseCardID]?.title).toBe("chat.role.planner")
-  expect(cardTreeStore.cards[phaseCardID]?.goalID).toBe("goal_phase_stub")
+  const phaseCardID = "step:goal_phase_stub:build:phase:build"
+  expect(cardTreeStore.cards[phaseCardID]).toBeUndefined()
 })
 
 test("session.error marks the session card with the original stream error", () => {
@@ -1986,6 +2011,7 @@ function seedTurnBoard(request: string): void {
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request,
       sessionID: ROOT_SID,
@@ -1998,6 +2024,241 @@ function seedTurnBoard(request: string): void {
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 }
+
+function setStrictGoalBoard(input: {
+  goalID: string
+  stepStatus: string
+  goalFields: Record<string, any>
+  workflowPhases: Array<{ id: string; label: string; sessionKind: string }>
+  stepPayload?: Record<string, any>
+  phaseStatus?: string
+}): void {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
+      status: "active",
+      request: `strict board ${input.goalID}`,
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
+          label: "Build",
+          phases: input.workflowPhases,
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: input.goalID,
+        orderKey: boardOrderKey(input.goalID, 1_776_000_000_100, 60),
+        goalRunID: `${input.goalID}_run`,
+        goalTitle: `Strict ${input.goalID}`,
+        goalStatus: "running",
+        ...input.goalFields,
+        steps: [
+          {
+            stepID: "build",
+            orderKey: boardOrderKey(`${input.goalID}-build`, 1_776_000_000_100, 61),
+            label: "Build",
+            status: input.stepStatus,
+            startedAt: 1_776_000_000_100,
+            ...(input.stepPayload ? { payload: input.stepPayload } : {}),
+            ...(input.phaseStatus
+              ? {
+                  phases: {
+                    build: {
+                      orderKey: boardOrderKey(`${input.goalID}-build-phase`, 1_776_000_000_200, 62),
+                      status: input.phaseStatus,
+                      startedAt: 1_776_000_000_200,
+                    },
+                  },
+                }
+              : {}),
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+}
+
+test("message.part.updated rejects orderKey drift from an existing message owner", () => {
+  seedTurnBoard("existing message owner drift")
+  const messageID = "msg_existing_owner_drift"
+  const ownerKey = messageOrderKey(messageID, 1_776_000_000_100)
+  const driftKey = messageOrderKey(messageID, 1_776_000_000_200)
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: ownerKey,
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("assistant", {
+        id: messageID,
+        orderKey: ownerKey,
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_100 },
+      }),
+    },
+  })
+
+  expect(() =>
+    applyEvent({
+      type: "message.part.updated",
+      emittedAt: 1_776_000_000_200,
+      orderKey: driftKey,
+      properties: {
+        taskID: TASK_ID,
+        orderKey: driftKey,
+        channel: "assistant",
+        resolvedRole: "assistant",
+        part: {
+          id: "prt_existing_owner_drift",
+          orderKey: partOrderKey("prt_existing_owner_drift", 1_776_000_000_200),
+          sessionID: ROOT_SID,
+          messageID,
+          type: "text",
+          text: "drift",
+        },
+      },
+    }),
+  ).toThrow(/drift from existing message owner/)
+})
+
+test("message.updated rejects orderKey drift from a pending part-first owner", () => {
+  seedTurnBoard("pending part-first owner drift")
+  const messageID = "msg_pending_owner_drift"
+  const ownerKey = messageOrderKey(messageID, 1_776_000_000_100)
+  const driftKey = messageOrderKey(messageID, 1_776_000_000_200)
+
+  applyEvent({
+    type: "message.part.updated",
+    emittedAt: 1_776_000_000_100,
+    orderKey: ownerKey,
+    properties: {
+      taskID: TASK_ID,
+      orderKey: ownerKey,
+      channel: "assistant",
+      resolvedRole: "assistant",
+      part: {
+        id: "prt_pending_owner_drift",
+        orderKey: partOrderKey("prt_pending_owner_drift", 1_776_000_000_100),
+        sessionID: ROOT_SID,
+        messageID,
+        type: "text",
+        text: "first token",
+      },
+    },
+  })
+
+  expect(() =>
+    applyEvent({
+      type: "message.updated",
+      orderKey: driftKey,
+      properties: {
+        taskID: TASK_ID,
+        info: stampedInfo("assistant", {
+          id: messageID,
+          orderKey: driftKey,
+          sessionID: ROOT_SID,
+          role: "assistant",
+          resolvedRole: "assistant",
+          agent: "assistant",
+          time: { created: 1_776_000_000_200 },
+        }),
+      },
+    }),
+  ).toThrow(/drift from pending part-first owner/)
+})
+
+test("goal workflow aborted status renders as skipped", () => {
+  resetWriter()
+  const goalID = "goal_aborted_status"
+  setStrictGoalBoard({
+    goalID,
+    stepStatus: "aborted",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [],
+  })
+
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
+
+  expect(cardTreeStore.cards[`step:${goalID}:build`]?.status).toBe("skipped")
+})
+
+test("goal workflow rejects unknown step status", () => {
+  resetWriter()
+  setStrictGoalBoard({
+    goalID: "goal_unknown_status",
+    stepStatus: "paused",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [],
+  })
+
+  expect(() => applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })).toThrow(
+    /unknown workflow status/,
+  )
+})
+
+test("goal workflow requires backend orderIndex and retryCount", () => {
+  resetWriter()
+  setStrictGoalBoard({
+    goalID: "goal_missing_order_index",
+    stepStatus: "running",
+    goalFields: { retryCount: 0 },
+    workflowPhases: [],
+  })
+  expect(() => applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })).toThrow(
+    /missing integer orderIndex/,
+  )
+
+  resetWriter()
+  setStrictGoalBoard({
+    goalID: "goal_missing_retry_count",
+    stepStatus: "running",
+    goalFields: { orderIndex: 0 },
+    workflowPhases: [],
+  })
+  expect(() => applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })).toThrow(
+    /missing non-negative integer retryCount/,
+  )
+})
+
+test("goal workflow phase projection requires declared phases and build session ownership", () => {
+  resetWriter()
+  setStrictGoalBoard({
+    goalID: "goal_unknown_phase",
+    stepStatus: "running",
+    phaseStatus: "running",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [{ id: "review", label: "Review", sessionKind: "review" }],
+    stepPayload: { buildSessionID: "ses_unknown_phase_build" },
+  })
+  expect(() => applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })).toThrow(
+    /phase build is not declared in workflow/,
+  )
+
+  resetWriter()
+  setStrictGoalBoard({
+    goalID: "goal_missing_build_session",
+    stepStatus: "running",
+    phaseStatus: "running",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [{ id: "build", label: "Build", sessionKind: "build" }],
+  })
+  expect(() => applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })).toThrow(
+    /missing buildSessionID/,
+  )
+})
 
 test("hydrate rejects non-message orderKey domains in view message metadata", () => {
   seedTurnBoard("hydrate wrong message domain")
@@ -2560,13 +2821,13 @@ test("repeated message.updated for the same agent message does not reset card st
   })
   applyEvent({
     type: "message.part.updated",
-    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
+    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       ...stampedPartEvent("frontend-research", {
         id: "prt_timer_stable",
         orderKey: partOrderKey("prt_timer_stable", 1_776_000_012_000),
-        owningMessageOrderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
+        owningMessageOrderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
         messageID: "msg_timer_stable",
         sessionID: "ses_timer_stable",
         type: "text",
@@ -2579,12 +2840,12 @@ test("repeated message.updated for the same agent message does not reset card st
 
   applyEvent({
     type: "message.updated",
-    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
+    orderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
     properties: {
       taskID: TASK_ID,
       info: stampedInfo("frontend-research", {
         id: "msg_timer_stable",
-        orderKey: messageOrderKey("msg_timer_stable", 1_776_000_012_000),
+        orderKey: messageOrderKey("msg_timer_stable", 1_776_000_000_100),
         sessionID: "ses_timer_stable",
         role: "assistant",
         resolvedRole: "frontend-research",
@@ -2795,6 +3056,7 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "phase interruption",
       sessionID: ROOT_SID,
@@ -2805,6 +3067,7 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
           label: "Executor",
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
@@ -2813,17 +3076,26 @@ test("phase-absorbed agent does not merge surrounding orchestrator turns", () =>
     goalWorkflows: [
       {
         goalID: phaseGoalID,
+        orderKey: boardOrderKey(phaseGoalID, 1_776_000_000_150, 60),
         goalTitle: "Phase interruption",
         goalStatus: "running",
+        time: { created: 1_776_000_000_150 },
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey(`${phaseGoalID}-build`, 1_776_000_000_150, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_776_000_000_150,
+            payload: { buildSessionID: "ses_phase_build_interrupt" },
             phases: {
-              build: { status: "running", startedAt: 1_776_000_000_150 },
+              build: {
+                status: "running",
+                startedAt: 1_776_000_000_150,
+                orderKey: boardOrderKey(`${phaseGoalID}-build-phase`, 1_776_000_000_150, 62),
+              },
             },
           },
         ],
@@ -3004,6 +3276,7 @@ test("late goal step materialization splits an already merged top-level segment"
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "late step boundary",
       sessionID: ROOT_SID,
@@ -3014,6 +3287,7 @@ test("late goal step materialization splits an already merged top-level segment"
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
           label: "Executor",
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
@@ -3022,17 +3296,26 @@ test("late goal step materialization splits an already merged top-level segment"
     goalWorkflows: [
       {
         goalID: phaseGoalID,
+        orderKey: boardOrderKey(phaseGoalID, 1_776_000_000_150, 60),
         goalTitle: "Late step boundary",
         goalStatus: "running",
+        time: { created: 1_776_000_000_150 },
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey(`${phaseGoalID}-build`, 1_776_000_000_150, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_776_000_000_150,
+            payload: { buildSessionID: "ses_late_step_boundary_build" },
             phases: {
-              build: { status: "running", startedAt: 1_776_000_000_150 },
+              build: {
+                status: "running",
+                startedAt: 1_776_000_000_150,
+                orderKey: boardOrderKey(`${phaseGoalID}-build-phase`, 1_776_000_000_150, 62),
+              },
             },
           },
         ],
@@ -3067,6 +3350,7 @@ test("goal phase internals do not repeatedly split adjacent top-level build segm
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "phase internals are not repeated top-level boundaries",
       sessionID: ROOT_SID,
@@ -3077,6 +3361,7 @@ test("goal phase internals do not repeatedly split adjacent top-level build segm
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
           label: "Executor",
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
@@ -3085,17 +3370,26 @@ test("goal phase internals do not repeatedly split adjacent top-level build segm
     goalWorkflows: [
       {
         goalID: phaseGoalID,
+        orderKey: boardOrderKey(phaseGoalID, 1_776_000_000_150, 60),
         goalTitle: "Visible goal step boundary",
         goalStatus: "running",
+        time: { created: 1_776_000_000_150 },
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey(`${phaseGoalID}-build`, 1_776_000_000_150, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_776_000_000_150,
+            payload: { buildSessionID: phaseSessionID },
             phases: {
-              build: { status: "running", startedAt: 1_776_000_000_150 },
+              build: {
+                status: "running",
+                startedAt: 1_776_000_000_150,
+                orderKey: boardOrderKey(`${phaseGoalID}-build-phase`, 1_776_000_000_150, 62),
+              },
             },
           },
         ],
@@ -3267,6 +3561,15 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
   const goalID = "goal_empty_build"
   const sessionID = "ses_empty_build"
   const messageID = "msg_empty_build"
+  setStrictGoalBoard({
+    goalID,
+    stepStatus: "running",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [{ id: "build", label: "Build", sessionKind: "build" }],
+    stepPayload: { buildSessionID: sessionID },
+    phaseStatus: "running",
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
   const hasEmptyBoundary = () =>
     Object.values(cardTreeStore.cards).some((card: any) =>
       (card?.parts || []).some((part: any) => part.type === "boundary" && part.messageID === messageID),
@@ -3358,6 +3661,15 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
   const sessionID = "ses_phase_prompt_order"
   const promptMessageID = "msg_phase_prompt_order_user"
   const assistantMessageID = "msg_phase_prompt_order_assistant"
+  setStrictGoalBoard({
+    goalID,
+    stepStatus: "running",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [{ id: "build", label: "Build", sessionKind: "build" }],
+    stepPayload: { buildSessionID: sessionID },
+    phaseStatus: "running",
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
 
   applyEvent({
     type: "message.updated",
@@ -3458,6 +3770,7 @@ test("phase card ignores stale lifecycle from older replaced session owner", () 
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "phase stale lifecycle owner",
       sessionID: ROOT_SID,
@@ -3468,6 +3781,7 @@ test("phase card ignores stale lifecycle from older replaced session owner", () 
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`${TASK_ID}-build`, 1_776_000_000_000, 61),
           label: "Executor",
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
@@ -3476,15 +3790,20 @@ test("phase card ignores stale lifecycle from older replaced session owner", () 
     goalWorkflows: [
       {
         goalID,
+        orderKey: boardOrderKey(goalID, 1_776_000_000_100, 60),
         goalTitle: "Phase stale owner",
         goalStatus: "running",
+        time: { created: 1_776_000_000_100 },
         orderIndex: 10,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: boardOrderKey(`${goalID}-build`, 1_776_000_000_100, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_776_000_000_100,
+            payload: { buildSessionID: currentSessionID },
             phases: {
               build: {
                 status: "running",
@@ -3520,24 +3839,26 @@ test("phase card ignores stale lifecycle from older replaced session owner", () 
   })
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
 
-  applyEvent({
-    type: "message.updated",
-    orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
-    properties: {
-      taskID: TASK_ID,
-      info: stampedInfo("build", {
-        id: "msg_phase_stale",
-        orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
-        sessionID: staleSessionID,
-        role: "assistant",
-        resolvedRole: "build",
-        agent: "build",
-        parentSessionID: ROOT_SID,
-        goalID,
-        time: { created: 1_776_000_000_200 },
-      }),
-    },
-  })
+  expect(() =>
+    applyEvent({
+      type: "message.updated",
+      orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+      properties: {
+        taskID: TASK_ID,
+        info: stampedInfo("build", {
+          id: "msg_phase_stale",
+          orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+          sessionID: staleSessionID,
+          role: "assistant",
+          resolvedRole: "build",
+          agent: "build",
+          parentSessionID: ROOT_SID,
+          goalID,
+          time: { created: 1_776_000_000_200 },
+        }),
+      },
+    }),
+  ).toThrow(`goal phase ${goalID}/build/build expected session ${currentSessionID}, got ${staleSessionID}`)
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
 
   applyEvent({
@@ -3570,32 +3891,28 @@ test("hydrate skips empty build transcript messages before boundary projection",
   seedTurnBoard("hydrate empty build envelope")
 
   const goalID = "goal_hydrate_empty"
-  const emptySessionID = "ses_hydrate_empty"
   const visibleSessionID = "ses_hydrate_visible"
+  setStrictGoalBoard({
+    goalID,
+    stepStatus: "running",
+    goalFields: { orderIndex: 0, retryCount: 0 },
+    workflowPhases: [{ id: "build", label: "Build", sessionKind: "build" }],
+    stepPayload: { buildSessionID: visibleSessionID },
+    phaseStatus: "running",
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
   hydrateConversationView(
     {
       sessions: [
-        {
-          sessionID: emptySessionID,
-          orderKey: sessionOrderKey(emptySessionID, 1_776_000_000_150),
-          stage: "build",
-          parentSessionID: ROOT_SID,
-          goalID,
-          messageIDs: ["msg_hydrate_empty"],
-          firstMessageTime: 1_776_000_000_150,
-          lastMessageTime: 1_776_000_000_150,
-          placement: "goal_phase",
-          phase: { stepID: "build", phaseID: "build" },
-        },
         {
           sessionID: visibleSessionID,
           orderKey: sessionOrderKey(visibleSessionID, 1_776_000_000_200),
           stage: "build",
           parentSessionID: ROOT_SID,
           goalID,
-          messageIDs: ["msg_hydrate_visible"],
+          messageIDs: ["msg_hydrate_empty", "msg_hydrate_visible"],
           lastDisplayMessageID: "msg_hydrate_visible",
-          firstMessageTime: 1_776_000_000_200,
+          firstMessageTime: 1_776_000_000_150,
           lastMessageTime: 1_776_000_000_200,
           placement: "goal_phase",
           phase: { stepID: "build", phaseID: "build" },
@@ -3621,7 +3938,7 @@ test("hydrate skips empty build transcript messages before boundary projection",
         info: stampedInfo("build", {
           id: "msg_hydrate_empty",
           orderKey: messageOrderKey("msg_hydrate_empty", 1_776_000_000_150),
-          sessionID: emptySessionID,
+          sessionID: visibleSessionID,
           role: "assistant",
           parentSessionID: ROOT_SID,
           goalID,
@@ -3667,11 +3984,13 @@ test("hydrate skips empty build transcript messages before boundary projection",
     ],
   )
 
-  expect(Object.values(cardTreeStore.cards).some((card: any) => card?.phaseSessionID === emptySessionID)).toBe(false)
   const phaseCard = Object.values(cardTreeStore.cards).find(
     (card: any) => card?.phaseSessionID === visibleSessionID,
   ) as any
   expect(phaseCard).toBeDefined()
+  expect(phaseCard.parts.some((part: any) => part.type === "boundary" && part.messageID === "msg_hydrate_empty")).toBe(
+    false,
+  )
   expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "hydrated build output")).toBe(true)
   expect(phaseCard.parts.some((part: any) => part.id === "prt_hydrate_step_start")).toBe(false)
   expect(phaseCard.parts.some((part: any) => part.id === "prt_hydrate_step_finish")).toBe(false)
@@ -3681,6 +4000,7 @@ test("interaction remains attached to the turn active at interaction time", () =
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "interaction turn ownership",
       sessionID: ROOT_SID,
@@ -3691,6 +4011,7 @@ test("interaction remains attached to the turn active at interaction time", () =
     interactions: [
       {
         id: "int_turn_owner",
+        orderKey: interactionOrderKey("int_turn_owner", 1_776_000_000_150),
         sessionID: ROOT_SID,
         type: "permission",
         status: "pending",
@@ -3910,6 +4231,7 @@ test("hydrate merges consecutive same-agent messages into one adjacent segment c
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, 1_776_000_000_000),
       status: "active",
       request: "hydrate multi message",
       sessionID: ROOT_SID,

@@ -18,7 +18,7 @@ test("orchestrator workflow retires deliver and completes through explicit integ
   expect(prompt).not.toContain("Accepted deliveries complete the task inside the tool")
   expect(prompt).not.toContain("Rejected `deliver` returns evidence")
 
-  expect(workflow).toContain("integrity 是 session-bound final gate")
+  expect(workflow).toContain("integrity 是 session-bound final review boundary")
   expect(workflow).not.toContain('tool: "deliver"')
   expect(workflow).not.toContain("deliver →")
   expect(workflow).not.toContain("deliver 是唯一接受闸")

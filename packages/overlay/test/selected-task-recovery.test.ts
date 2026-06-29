@@ -20,6 +20,7 @@ import {
   testMessageOrderKey,
   testPartOrderKey,
   testSessionOrderKey,
+  testTaskOrderKey,
 } from "./fixtures/timeline-order"
 
 const { boardStore, setBoardStore } = await import("../src/store/board")
@@ -211,11 +212,12 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
       snapshotVersion: `board:${taskID}`,
       task: {
         id: taskID,
+        orderKey: testTaskOrderKey(taskID, 1_776_000_400_000),
         directory: TEST_DIRECTORY,
         sessionID: `ses_${taskID}`,
         status: "active",
         request: "tail repair",
-        time: { created: 1_776_000_400_000 },
+        time: { created: 1_776_000_400_000, started: 1_776_000_400_000 },
         attachments: [],
       },
       goalWorkflows: [],
@@ -225,7 +227,7 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
     timeline: [],
     events: [],
     eventReplay: { cursor: 5, latestSequence: 5, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: {
       ...viewRecord,
       sessions,
@@ -276,10 +278,11 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
     snapshotVersion: "board:live",
     task: {
       id: "tsk_live",
+      orderKey: testTaskOrderKey("tsk_live", 1_776_000_100_000),
       sessionID: "ses_live",
       status: "active",
       request: "live",
-      time: { created: 1_776_000_100_000 },
+      time: { created: 1_776_000_100_000, started: 1_776_000_100_000 },
       attachments: [],
     },
   })
@@ -318,6 +321,32 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
           agent: "assistant",
           time: { created: 1_776_000_200_000 },
           orderKey: testMessageOrderKey("msg_live", 1_776_000_200_000),
+        },
+      },
+    }),
+  ).toBe(true)
+  expect(
+    routeStampedSSEEvent({
+      type: "message.part.updated",
+      taskID: "tsk_live",
+      sequence: 0,
+      live_sequence: 7,
+      live_epoch: 1776,
+      emittedAt: 1_776_000_200_001,
+      orderKey: testMessageOrderKey("msg_live", 1_776_000_200_000),
+      properties: {
+        taskID: "tsk_live",
+        orderKey: testMessageOrderKey("msg_live", 1_776_000_200_000),
+        channel: "assistant",
+        resolvedRole: "assistant",
+        parentSessionID: "ses_live",
+        part: {
+          id: "part_live",
+          messageID: "msg_live",
+          sessionID: "ses_live",
+          orderKey: testPartOrderKey("part_live", 1_776_000_200_001),
+          type: "text",
+          text: "Live reply.",
         },
       },
     }),
@@ -445,10 +474,11 @@ test("selected task part-first message attaches the materialized card to an exec
     snapshotVersion: "board:part-first",
     task: {
       id: "tsk_part_first",
+      orderKey: testTaskOrderKey("tsk_part_first", 1_776_000_490_000),
       sessionID: "ses_root",
       status: "active",
       request: "part first",
-      time: { created: 1_776_000_490_000 },
+      time: { created: 1_776_000_490_000, started: 1_776_000_490_000 },
       attachments: [],
     },
   })
@@ -560,10 +590,11 @@ test("selected task session.status creates an execution rail record without a bl
     snapshotVersion: "board:status",
     task: {
       id: "tsk_status",
+      orderKey: testTaskOrderKey("tsk_status", 1_776_000_590_000),
       sessionID: "ses_root",
       status: "active",
       request: "status",
-      time: { created: 1_776_000_590_000 },
+      time: { created: 1_776_000_590_000, started: 1_776_000_590_000 },
       attachments: [],
     },
   })
@@ -609,6 +640,30 @@ test("selected task session.status creates an execution rail record without a bl
           parentSessionID: "ses_root",
           time: { created: 1_776_000_601_000 },
           orderKey: testMessageOrderKey("msg_status", 1_776_000_601_000),
+        },
+      },
+    }),
+  ).toBe(true)
+  expect(
+    routeStampedSSEEvent({
+      type: "message.part.updated",
+      taskID: "tsk_status",
+      sequence: 42,
+      emittedAt: 1_776_000_601_001,
+      orderKey: testMessageOrderKey("msg_status", 1_776_000_601_000),
+      properties: {
+        taskID: "tsk_status",
+        orderKey: testMessageOrderKey("msg_status", 1_776_000_601_000),
+        channel: "frontend-research",
+        resolvedRole: "frontend-research",
+        parentSessionID: "ses_root",
+        part: {
+          id: "part_status",
+          messageID: "msg_status",
+          sessionID: "ses_status_only",
+          orderKey: testPartOrderKey("part_status", 1_776_000_601_001),
+          type: "text",
+          text: "Status reply.",
         },
       },
     }),

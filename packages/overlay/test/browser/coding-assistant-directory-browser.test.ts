@@ -62,9 +62,9 @@ function taskConversationPayload() {
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { rootID: "root", cards: {}, order: [] },
-    agentView: { rootID: "root", cards: {}, order: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     messageWatermark: 0,
   }
 }
@@ -81,9 +81,9 @@ function sessionConversationPayload() {
     transcript: [],
     timeline: [],
     events: [],
-    view: { rootID: "root", cards: {}, order: [] },
-    agentView: { rootID: "root", cards: {}, order: [] },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
     messageWatermark: 0,
   }
 }
@@ -155,7 +155,8 @@ test(
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
       if (path === "/gateway/stats") return send({ active: 0, queued: 0, completed: 0, failed: 0 })
       if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
-      if (path === "/skill/mounts") return send({ scope: "project", skills: [], agents: [], source: TASK_DIRECTORY })
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])

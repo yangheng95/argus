@@ -75,13 +75,17 @@ describe("browser MCP node launcher", () => {
     expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "win32" }).detached).toBe(false)
   })
 
-  test("signal and stdin termination promises are observed", () => {
+  test("signal and stdin termination promises are observed without fallback termination paths", () => {
     const source = readFileSync(path.resolve(import.meta.dir, "../../src/mcp/browser/node-launcher.ts"), "utf8")
     expect(source).toContain('.catch((error) => logLauncherError("SIGINT terminate failed", error))')
     expect(source).toContain('.catch((error) => logLauncherError("SIGTERM terminate failed", error))')
     expect(source).toContain(
       'void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))',
     )
-    expect(source).toContain('logLauncherError("process group force kill fallback failed", error)')
+    expect(source).toContain('spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"]')
+    expect(source).toContain("process.kill(-pid, signal)")
+    expect(source).toContain('process.kill(-pid, "SIGKILL")')
+    expect(source).not.toContain("fallback")
+    expect(source).not.toContain("child.kill")
   })
 })

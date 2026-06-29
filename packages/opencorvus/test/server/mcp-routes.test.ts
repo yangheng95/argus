@@ -18,18 +18,31 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
     authProvider:
-      | { redirectToAuthorization?: (url: URL) => Promise<void>; state?: () => string | Promise<string> }
+      | {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
       | undefined
     url: string
     constructor(
       url: URL,
-      options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void>; state?: () => string | Promise<string> } },
+      options?: {
+        authProvider?: {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
+      },
     ) {
       this.url = url.toString()
       this.authProvider = options?.authProvider
     }
     async start() {
       if (startAuthFailure) throw startAuthFailure
+      if (await this.authProvider?.tokens?.()) return
       const state = (await this.authProvider?.state?.()) ?? "route"
       const authorizationUrl = new URL("https://auth.example.test/authorize")
       authorizationUrl.searchParams.set("state", state)
@@ -39,6 +52,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
     async finishAuth() {
       finishedAuthUrls.push(this.url)
       if (finishAuthFailure) throw finishAuthFailure
+      await this.authProvider?.saveTokens?.({ access_token: `token:${this.url}`, token_type: "Bearer" })
     }
     async close() {}
   },
@@ -58,8 +72,11 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
-    async connect(transport: { start?: () => Promise<void> } | undefined) {
-      if (transport?.start) await transport.start()
+    async connect(transport: { start?: () => Promise<void>; url?: string } | undefined) {
+      if (transport?.start) {
+        await transport.start()
+        if (transport.url) return
+      }
       throw new Error("route connect unavailable")
     }
     async close() {}
@@ -126,7 +143,7 @@ describe("MCP routes", () => {
         mcp: {
           broken: {
             type: "local",
-            command: [process.execPath, "-e", ""],
+            command: ["opencorvus-mcp-command-that-does-not-exist"],
             timeout: 1,
           },
           browser: {
@@ -178,7 +195,7 @@ describe("MCP routes", () => {
           await expect(response.json()).resolves.toMatchObject({
             success: false,
             data: { message: "MCP server local does not support OAuth" },
-            errors: [{ message: "MCP server local does not support OAuth" }],
+            error: [{ message: "MCP server local does not support OAuth" }],
           })
         }
       },
@@ -369,6 +386,29 @@ describe("MCP routes", () => {
           data: { message: expect.stringContaining("OAuth state mismatch") },
         })
         expect(finishedAuthUrls).toEqual([])
+      },
+    })
+  })
+
+  test("OAuth route callback invalid body returns validator BadRequestError shape", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/mcp/oauth/auth/callback", {
+          method: "POST",
+          headers: { "x-opencorvus-directory": tmp.path, "content-type": "application/json" },
+          body: JSON.stringify({ code: "route-code" }),
+        })
+        expect(response.status).toBe(400)
+        const body = await response.json()
+        expect(body).toMatchObject({ success: false })
+        expect(body.name).toBeUndefined()
+        expect(Array.isArray(body.error)).toBe(true)
+        expect(body.errors).toBeUndefined()
+        expect(JSON.stringify(body)).toContain("state")
       },
     })
   })

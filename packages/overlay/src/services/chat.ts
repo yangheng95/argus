@@ -19,7 +19,7 @@ import {
 import { boardStore, setTasksData, loadBoard, loadTasks, activeTaskID, activeSessionID } from "../store/board"
 import { appStore, setConnectionStatus } from "../store/app"
 import { workspaceMode } from "./workspace"
-import { selectTask, createTask } from "./task"
+import { selectTask, createTask, currentOpenCorvusModel } from "./task"
 import { patchSessionConfig } from "./config"
 import { ingestPersistedConversationMessage } from "./tree-writer"
 import { conversationSourceDirectory } from "./conversation"
@@ -482,6 +482,7 @@ export async function panelMessage(
         text,
         attachments,
         metadata: requestMetadata,
+        model: currentOpenCorvusModel(),
         promptProfile,
         signal: controller.signal,
       })

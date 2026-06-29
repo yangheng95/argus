@@ -2,8 +2,6 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import {
-  DEFAULT_MISSION_BENCHMARK_REQUEST,
-  DEFAULT_MISSION_VERIFY_CMD,
   MISSION_BENCHMARK_STAGES,
   evaluateMissionBenchmarkReport,
   missionTasksReadyForBenchmarkEvaluation,
@@ -16,14 +14,17 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const scriptPath = path.join(repoRoot, "packages/opencorvus/script/benchmark/mission-benchmark.ts")
 
 describe("mission benchmark scenario", () => {
-  test("default request pins the simple investigation -> write project -> project test loop", () => {
-    for (const stage of MISSION_BENCHMARK_STAGES) {
-      expect(DEFAULT_MISSION_BENCHMARK_REQUEST).toContain(stage.requiredText)
-    }
-    expect(DEFAULT_MISSION_BENCHMARK_REQUEST).toContain("panel.create_task")
-    expect(DEFAULT_MISSION_BENCHMARK_REQUEST).toContain("panel.query_task")
-    expect(DEFAULT_MISSION_BENCHMARK_REQUEST).toContain("Do not edit files yourself")
-    expect(DEFAULT_MISSION_VERIFY_CMD).toBe("bun test")
+  test("scenario stages stay separate from benchmark task input", () => {
+    expect(MISSION_BENCHMARK_STAGES.map((stage) => stage.requiredText)).toEqual([
+      "Simple investigation",
+      "Write project",
+      "Project test",
+    ])
+    const script = readFileSync(scriptPath, "utf8")
+    expect(script).toContain("--acceptance-verify-cmd is required for mission benchmark acceptance evidence")
+    expect(script).toContain("--request-file is required for mission benchmark task input")
+    expect(script).toContain("--request-file must not be empty for mission benchmark task input")
+    expect(script).not.toContain("DEFAULT_MISSION_BENCHMARK_REQUEST")
   })
 
   test("filters only server-provenanced Mission -> Squad tasks", () => {

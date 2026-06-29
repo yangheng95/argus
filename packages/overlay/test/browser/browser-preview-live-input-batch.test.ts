@@ -629,9 +629,9 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
         transcript: [],
         timeline: [],
         events: [],
-        view: { rootID: "root", cards: {}, order: [] },
-        agentView: { rootID: "root", cards: {}, order: [] },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         messageWatermark: 0,
       })

@@ -2,6 +2,22 @@
 
 Date: 2026-06-29
 
+## Recall
+
+- User request: remove the separate agent-callable region diff wrapper while
+  preserving formal browser-preview comparison evidence.
+- Acceptance: no agent exposes the removed wrapper, prompts stop naming it,
+  backend region/reference comparison evidence remains intact, and tests prove
+  absence from tool registries/prompts.
+- Hard constraints: no fallback tool alias, no deleted tool compatibility path,
+  no broad git reset, and no weakening of `reference_comparison_evidence_refs`.
+- Read before implementation: `AGENTS.md`, region comparison evidence records,
+  browser-preview tools, build/visual QA prompts, and tool registry tests.
+- Repository sweep: `browser preview region comparison`,
+  `reference-comparison`, `include_diff`, and `browser-preview/compare`.
+- Independent feedback: current replacement is the combined
+  `browser_preview_reference_regions` tool, not a restoration of split wrappers.
+
 ## Supersession Note
 
 This record remains current only for removing the old separate region diff
@@ -38,15 +54,15 @@ rg -n "browser preview region comparison|reference-comparison|include_diff|brows
 
 Affected surfaces:
 
-| Surface | Current role | Change |
-| --- | --- | --- |
-| Agent private tool registry | Exposes the region diff tool to coding/build/visual review roles. | Remove the entry. |
-| Visual review static tool list | Includes the region diff tool. | Remove the entry. |
-| Integrity preview tools | Loads the region diff tool with preview helpers. | Remove the loader entry. |
-| Build and visual review prompts | Direct agents to call the wrapper by name. | Remove that call path while preserving region comparison evidence and reference-comparison refs. |
-| Binding puzzle tool text | Describes itself as input to the region diff wrapper. | Keep it as source-binding investigation evidence only. |
-| Tool-specific tests | Assert tool visibility and schema behavior. | Delete or rewrite as absence checks. |
-| Backend comparison route/evidence store | Owns persisted region/reference comparison evidence. | Preserve. |
+| Surface                                 | Current role                                                      | Change                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Agent private tool registry             | Exposes the region diff tool to coding/build/visual review roles. | Remove the entry.                                                                                |
+| Visual review static tool list          | Includes the region diff tool.                                    | Remove the entry.                                                                                |
+| Integrity preview tools                 | Loads the region diff tool with preview helpers.                  | Remove the loader entry.                                                                         |
+| Build and visual review prompts         | Direct agents to call the wrapper by name.                        | Remove that call path while preserving region comparison evidence and reference-comparison refs. |
+| Binding puzzle tool text                | Describes itself as input to the region diff wrapper.             | Keep it as source-binding investigation evidence only.                                           |
+| Tool-specific tests                     | Assert tool visibility and schema behavior.                       | Delete or rewrite as absence checks.                                                             |
+| Backend comparison route/evidence store | Owns persisted region/reference comparison evidence.              | Preserve.                                                                                        |
 
 ## Acceptance
 

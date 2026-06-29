@@ -38,7 +38,7 @@ export type FailureSignature = {
   affectedFiles: string[]
 }
 
-export type AcceptanceGateVerdict = {
+export type AcceptanceEvidenceDecision = {
   status: "passed" | "failed"
   summary: string
   failedReadinessIds?: string[]
@@ -98,7 +98,7 @@ export type AcceptanceEvidenceManifest = {
   specialistReviews?: AcceptanceSpecialistReview[]
   functionalAssessment?: AcceptanceManifestFunctionalAssessment
   changedFiles: string[]
-  finalGate: AcceptanceGateVerdict
+  evidenceDecision: AcceptanceEvidenceDecision
   timeCreated: number
 }
 
@@ -143,7 +143,7 @@ function normalizeFailureOutput(output: string) {
 export function validateAcceptanceEvidenceManifest(
   manifest: AcceptanceEvidenceManifest,
   options: { skippedChecksPass?: boolean } = {},
-): AcceptanceGateVerdict {
+): AcceptanceEvidenceDecision {
   const resultById = new Map(manifest.checkResults.map((item) => [item.id, item]))
   const failedCheckIds: string[] = []
 
@@ -173,8 +173,8 @@ export function validateAcceptanceEvidenceManifest(
     failedReviewIds: [],
     summary:
       failedCheckIds.length === 0
-        ? `Acceptance evidence gate passed ${manifest.requiredChecks.length} required check(s).`
-        : `Acceptance evidence gate failed ${failedCheckIds.length} required check(s).`,
+        ? `Acceptance evidence passed ${manifest.requiredChecks.length} required check(s).`
+        : `Acceptance evidence failed ${failedCheckIds.length} required check(s).`,
   }
 }
 
@@ -196,10 +196,10 @@ export function validateAcceptanceCoverage(input: {
 export function acceptanceManifestFailureDetails(
   manifest: AcceptanceEvidenceManifest,
 ): AcceptanceManifestFailureDetail[] {
-  const failedReadinessIds = new Set(manifest.finalGate.failedReadinessIds ?? [])
-  const failedCheckIds = new Set(manifest.finalGate.failedCheckIds)
-  const failedCoverageIds = new Set(manifest.finalGate.failedCoverageIds)
-  const failedReviewIds = new Set(manifest.finalGate.failedReviewIds ?? [])
+  const failedReadinessIds = new Set(manifest.evidenceDecision.failedReadinessIds ?? [])
+  const failedCheckIds = new Set(manifest.evidenceDecision.failedCheckIds)
+  const failedCoverageIds = new Set(manifest.evidenceDecision.failedCoverageIds)
+  const failedReviewIds = new Set(manifest.evidenceDecision.failedReviewIds ?? [])
 
   const readinessDetails = (manifest.runtimeReadiness?.checks ?? [])
     .filter((item) => failedReadinessIds.has(item.id) || item.status === "failed")
@@ -360,10 +360,10 @@ export function persistAcceptanceEvidenceManifest(input: { manifest: AcceptanceE
       acceptanceID: input.manifest.acceptanceId!,
       manifestID: input.manifest.id,
       iteration: input.manifest.iteration,
-      status: input.manifest.finalGate.status,
-      summary: input.manifest.finalGate.summary,
-      failedCheckCount: input.manifest.finalGate.failedCheckIds.length,
-      failedReviewCount: (input.manifest.finalGate.failedReviewIds ?? []).length,
+      status: input.manifest.evidenceDecision.status,
+      summary: input.manifest.evidenceDecision.summary,
+      failedCheckCount: input.manifest.evidenceDecision.failedCheckIds.length,
+      failedReviewCount: (input.manifest.evidenceDecision.failedReviewIds ?? []).length,
       failureDetails: acceptanceManifestFailureDetails(input.manifest).slice(0, 20),
     },
     { source: "acceptance.manifest" },
@@ -442,7 +442,7 @@ export function findAcceptanceEvidenceManifestHistory(input: {
 }
 
 export function acceptanceFailureSignatureKeys(manifest: AcceptanceEvidenceManifest): string[] {
-  const readinessKeys = (manifest.finalGate.failedReadinessIds ?? []).map((item) => `readiness:${item}`)
+  const readinessKeys = (manifest.evidenceDecision.failedReadinessIds ?? []).map((item) => `readiness:${item}`)
   const checkKeys = manifest.checkResults
     .filter((item) => item.status === "failed")
     .map((item) =>
@@ -450,8 +450,8 @@ export function acceptanceFailureSignatureKeys(manifest: AcceptanceEvidenceManif
         ? `check:${item.failureSignature.checkId}:${item.failureSignature.commandDigest}:${item.failureSignature.normalizedError}`
         : `check:${item.id}:${item.commandDigest}:${item.failureReason ?? item.outputExcerpt}`,
     )
-  const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
-  const reviewKeys = (manifest.finalGate.failedReviewIds ?? []).map((item) => `review:${item}`)
+  const coverageKeys = manifest.evidenceDecision.failedCoverageIds.map((item) => `coverage:${item}`)
+  const reviewKeys = (manifest.evidenceDecision.failedReviewIds ?? []).map((item) => `review:${item}`)
   const specialistKeys = (manifest.specialistReviews ?? []).flatMap((review) =>
     review.findings
       .filter((finding) => finding.proposedSeverity === "blocking")

@@ -16,8 +16,6 @@ let runnerImpl: ((input: any) => Promise<any>) | undefined
 mock.module("@/agent/runner", () => ({
   AgentRunError: class AgentRunError extends Error {},
   buildHardErrorFromFinalMessage: () => null,
-  extractInformationMissingBlock: () => undefined,
-  messageHasInformationMissing: () => false,
   toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")

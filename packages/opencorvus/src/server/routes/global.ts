@@ -13,7 +13,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
-import { ActiveExecutorSessionsResponse, errors } from "../error"
+import { ActiveExecutorSessionsResponse, badRequestBody, errors } from "../error"
 import { canRestartServer, startServerRestart } from "../restart"
 import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import {
@@ -37,14 +37,6 @@ const DatabaseResetRequest = z
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return String(error)
-}
-
-function badRequest(message: string) {
-  return {
-    success: false as const,
-    data: { message },
-    errors: [{ message }],
-  }
 }
 
 export const GlobalRoutes = lazy(() =>
@@ -340,7 +332,7 @@ export const GlobalRoutes = lazy(() =>
         const currentDatabase = Database.Path()
         if (database !== currentDatabase) {
           return c.json(
-            badRequest(`DB reset target must match current Database.Path(): expected ${currentDatabase}`),
+            badRequestBody(`DB reset target must match current Database.Path(): expected ${currentDatabase}`),
             400,
           )
         }
@@ -433,14 +425,7 @@ export const GlobalRoutes = lazy(() =>
         try {
           result = importMysqlTransferSnapshot(snapshot)
         } catch (err) {
-          return c.json(
-            {
-              success: false as const,
-              data: { message: err instanceof Error ? err.message : String(err) },
-              errors: [],
-            },
-            400,
-          )
+          return c.json(badRequestBody(err instanceof Error ? err.message : String(err)), 400)
         }
         log.warn("db import via /global/db/mysql/import", {
           schemaFingerprint: result.schemaFingerprint,

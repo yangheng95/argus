@@ -60,8 +60,8 @@ function conversationForTask(item: any): any {
     transcript: [],
     timeline: [],
     events: [],
-    view: { sessions: [] },
-    agentView: { sessions: [] },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
     history: { hasMore: false, oldestTimestamp: null, oldestMessageID: null, limit: 160 },
     messageWatermark: 0,
@@ -125,7 +125,8 @@ test("URL taskID deep link selects the linked task before persisted restore", as
       })
     }
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
-    if (path === "/skill/mounts") return send({ scope: "project", skills: [], agents: [], source: DIRECTORY })
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/deep-link/config",
@@ -271,7 +272,8 @@ test("directory-only URL parameters keep task row operations usable", async () =
       })
     }
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
-    if (path === "/skill/mounts") return send({ scope: "project", skills: [], agents: [], source: DIRECTORY })
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/deep-link/config",
@@ -344,6 +346,11 @@ test("directory-only URL parameters keep task row operations usable", async () =
     )
 
     const deleteSelector = `[data-task-delete="${TASK_ID}"]`
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+    await page.waitForSelector(`#leftPanelTasks[data-active="true"] .task-row-main[data-task-id="${TASK_ID}"]`, {
+      visible: true,
+      timeout: 15_000,
+    })
     await page.hover(`.task-row-main[data-task-id="${TASK_ID}"]`)
     await page.waitForSelector(deleteSelector, { visible: true, timeout: 15_000 })
     await page.click(deleteSelector)

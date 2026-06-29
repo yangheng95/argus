@@ -32,11 +32,12 @@ import {
 import { formatPerfText } from "./perf.js"
 import { clickGuardProfile, doubleClickGuardProfile, runPointGuard, type GuardResult } from "./guard.js"
 import { captureBrowserMcpViewportScreenshot, pngDimensionsStrict } from "./screenshot.js"
+import { resolveBrowserMcpSessionProxy } from "./session-proxy.js"
 import {
   modelImagePixelSummary,
   modelImagePixelSummarySchema,
   type ModelImagePixelSummary,
-} from "@/session/model-image-input"
+} from "@/session/model-image-pixel-summary"
 
 type Download = any
 
@@ -554,7 +555,7 @@ export const registerTools = (server: McpServer) => {
             password: z.string().optional(),
           })
           .optional()
-          .describe("HTTP 代理配置。未设置时回退到 BROWSER_PROXY 环境变量。"),
+          .describe("HTTP 代理配置。未设置时使用 network.proxy.webResearch；该配置未启用时不使用代理。"),
         hosts: z
           .record(z.string(), z.string())
           .optional()
@@ -581,7 +582,7 @@ export const registerTools = (server: McpServer) => {
           ),
       },
     },
-    async (args) => ok(await createSession(args)),
+    async (args) => ok(await createSession({ ...args, proxy: await resolveBrowserMcpSessionProxy(args.proxy) })),
   )
 
   server.registerTool(

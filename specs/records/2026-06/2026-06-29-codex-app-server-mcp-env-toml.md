@@ -1,5 +1,23 @@
 # Codex app-server MCP env TOML fix - 2026-06-29
 
+## Recall
+
+- User request: fix Codex app-server MCP startup so live executor smoke uses
+  the configured OpenCorvus MCP tool rather than a shell workaround.
+- Acceptance: Codex receives TOML-valid MCP server config, exposes the
+  executor-facing OpenCorvus tools, and live smoke proves an MCP tool call
+  rather than Bash.
+- Hard constraints: no alternate launch fallback, no compatibility parser, no
+  broad git reset, and failing advertised MCP capabilities must remain fatal.
+- Read before implementation: `AGENTS.md`, Codex app-server help output,
+  executor bootstrap, MCP serve/index code, and existing executor/MCP tests.
+- Repository sweep: `mcp_servers.opencorvus`, runtime env, `enabled_tools`,
+  prompt/resource listing, source-mode Bun command, and live executor smoke
+  call sites.
+- Independent feedback: direct SDK stdio smoke reproduced the startup failure,
+  proving the root defect was OpenCorvus MCP startup rather than Codex tool
+  choice.
+
 ## Evidence
 
 - Local `codex --version` reports `codex-cli 0.141.0`.
@@ -17,17 +35,17 @@
 
 ## Call-point Inventory
 
-| Area | File | Decision |
-| --- | --- | --- |
-| Codex app-server bootstrap | `packages/opencorvus/src/executor/bootstrap.ts` | Replace JSON object serialization for `mcp_servers.opencorvus.env` with a TOML inline table. Keep command and args on their existing TOML-compatible string/array values. |
-| Runtime env source | `packages/opencorvus/src/executor/contract.ts` | Keep `codingRuntimeEnv(...)` as the single source for OpenCorvus executor env keys. |
-| Executor-facing MCP definitions | `packages/opencorvus/src/mcp/serve.ts` | Use `MCPServe.toolDefinitions("executor")` as the single source for Codex `enabled_tools`, including runtime tools and allowed project proxied tools. |
-| Executor MCP source command | `packages/opencorvus/src/mcp/serve.ts` | Launch source-mode Bun with Bun's process cwd set to the OpenCorvus package root, and pass the target project cwd only through the server argument. |
-| MCP prompt/resource listing | `packages/opencorvus/src/mcp/index.ts` | Use the MCP client's advertised capabilities as the single source for whether prompts/resources exist. If a capability is advertised, list failures still fail fast and close the connection. |
-| Bootstrap regression | `packages/opencorvus/test/executor/bootstrap.test.ts` | Assert the env argument is a TOML inline table, including empty and populated runtime env cases. |
-| Live smoke | `packages/opencorvus/test/executor/live-official.test.ts` | Require the event stream to contain `fixture_magic_lookup` and reject Bash, so the smoke cannot pass through a shell workaround. |
-| MCP serving regression | `packages/opencorvus/test/mcp/serve.test.ts` | Assert project-configured external MCP tools are loaded into executor-facing tool definitions and callable through the OpenCorvus proxy, including direct stdio startup through the generated command. |
-| Prompt/resource regression | `packages/opencorvus/test/mcp/prompt-resource-fail-fast.test.ts` and `packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts` | Assert unsupported prompt/resource capabilities are skipped without calling unsupported methods, and advertised prompt/resource list failures remain fatal. Keep SDK module mocks isolated from same-process MCP serve tests. |
+| Area                            | File                                                                                                                                      | Decision                                                                                                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex app-server bootstrap      | `packages/opencorvus/src/executor/bootstrap.ts`                                                                                           | Replace JSON object serialization for `mcp_servers.opencorvus.env` with a TOML inline table. Keep command and args on their existing TOML-compatible string/array values.                                                     |
+| Runtime env source              | `packages/opencorvus/src/executor/contract.ts`                                                                                            | Keep `codingRuntimeEnv(...)` as the single source for OpenCorvus executor env keys.                                                                                                                                           |
+| Executor-facing MCP definitions | `packages/opencorvus/src/mcp/serve.ts`                                                                                                    | Use `MCPServe.toolDefinitions("executor")` as the single source for Codex `enabled_tools`, including runtime tools and allowed project proxied tools.                                                                         |
+| Executor MCP source command     | `packages/opencorvus/src/mcp/serve.ts`                                                                                                    | Launch source-mode Bun with Bun's process cwd set to the OpenCorvus package root, and pass the target project cwd only through the server argument.                                                                           |
+| MCP prompt/resource listing     | `packages/opencorvus/src/mcp/index.ts`                                                                                                    | Use the MCP client's advertised capabilities as the single source for whether prompts/resources exist. If a capability is advertised, list failures still fail fast and close the connection.                                 |
+| Bootstrap regression            | `packages/opencorvus/test/executor/bootstrap.test.ts`                                                                                     | Assert the env argument is a TOML inline table, including empty and populated runtime env cases.                                                                                                                              |
+| Live smoke                      | `packages/opencorvus/test/executor/live-official.test.ts`                                                                                 | Require the event stream to contain `fixture_magic_lookup` and reject Bash, so the smoke cannot pass through a shell workaround.                                                                                              |
+| MCP serving regression          | `packages/opencorvus/test/mcp/serve.test.ts`                                                                                              | Assert project-configured external MCP tools are loaded into executor-facing tool definitions and callable through the OpenCorvus proxy, including direct stdio startup through the generated command.                        |
+| Prompt/resource regression      | `packages/opencorvus/test/mcp/prompt-resource-fail-fast.test.ts` and `packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts` | Assert unsupported prompt/resource capabilities are skipped without calling unsupported methods, and advertised prompt/resource list failures remain fatal. Keep SDK module mocks isolated from same-process MCP serve tests. |
 
 ## Fix Shape
 

@@ -23,17 +23,24 @@ function transcriptMessageHasDisplay(message: any): boolean {
   return Array.isArray(message?.parts) && message.parts.some((part: any) => String(part?.text || "").trim())
 }
 
+function requirePositiveTime(value: unknown, label: string): number {
+  const time = Number(value)
+  if (!Number.isFinite(time) || time <= 0) throw new Error(`${label} missing positive time`)
+  return time
+}
+
 function viewMessagesForTranscript(transcript: any[]): any[] {
   return transcript.filter(transcriptMessageHasDisplay).map((message) => {
     const info = message.info
+    const messageID = String(info.id || "")
     const channel = String(info.channel || "")
     return {
-      messageID: String(info.id || ""),
+      messageID,
       sessionID: String(info.sessionID || ""),
       stage: channel === "main" ? "user" : channel,
       parentSessionID: info.parentSessionID || undefined,
       goalID: info.goalID || undefined,
-      time: Number(info.time?.created || 0),
+      time: requirePositiveTime(info.time?.created, `view message ${messageID}`),
       orderKey: info.orderKey,
       placement: info.goalID ? "goal_phase" : "top_level",
       phase: info.goalID && channel === "build" ? { stepID: "build", phaseID: "build" } : undefined,
@@ -177,10 +184,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
       steps: [
         {
           id: "build",
-          phases: [
-            { id: "plan", label: "Plan", sessionKind: "planner" },
-            { id: "build", label: "Build", sessionKind: "build" },
-          ],
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
       ],
     },
@@ -192,6 +196,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
         goalStatus: "running",
         orderKey: orderKey("board_goal", 1_776_000_000_100, "goal_1"),
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
@@ -200,6 +205,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
             startedAt: 1_776_000_000_100,
             orderKey: orderKey("board_step", 1_776_000_000_100, "goal_1-build"),
             summary: "restore",
+            payload: { buildSessionID: "ses_build" },
             phases: {
               build: {
                 status: "running",
@@ -296,6 +302,7 @@ test("hydrateConversationView restores persisted goal-phase parts with backend-o
         goalStatus: "running",
         orderKey: orderKey("board_goal", 1_776_000_010_100, "goal_persisted_parts"),
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
@@ -303,6 +310,7 @@ test("hydrateConversationView restores persisted goal-phase parts with backend-o
             status: "running",
             startedAt: 1_776_000_010_100,
             orderKey: orderKey("board_step", 1_776_000_010_100, "goal_persisted_parts-build"),
+            payload: { buildSessionID: "ses_build_persisted" },
             phases: {
               build: {
                 status: "running",

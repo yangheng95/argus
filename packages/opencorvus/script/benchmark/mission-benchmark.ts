@@ -7,8 +7,6 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Shell } from "../../src/shell/shell"
 import { ensureStandaloneGitRepo } from "./git"
 import {
-  DEFAULT_MISSION_BENCHMARK_REQUEST,
-  DEFAULT_MISSION_VERIFY_CMD,
   MISSION_BENCHMARK_TITLE,
   evaluateMissionBenchmarkReport,
   missionTasksReadyForBenchmarkEvaluation,
@@ -94,7 +92,13 @@ const missionID = stripWrappingQuotes(flag("--mission-id")) ?? `mission-bench-${
 const idleTimeoutMs = parsePositiveInt("--idle-timeout-ms", 45 * 60 * 1000)
 const pollMs = parsePositiveInt("--poll-ms", 2_000)
 const keep = !process.argv.includes("--no-keep")
-const acceptanceVerifyCmd = stripWrappingQuotes(flag("--acceptance-verify-cmd")) ?? DEFAULT_MISSION_VERIFY_CMD
+const acceptanceVerifyCmd = stripWrappingQuotes(flag("--acceptance-verify-cmd"))
+if (!acceptanceVerifyCmd) {
+  throw new Error("--acceptance-verify-cmd is required for mission benchmark acceptance evidence")
+}
+if (!requestFile) {
+  throw new Error("--request-file is required for mission benchmark task input")
+}
 
 const temp = {
   home: await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-mission-benchmark-home-")),
@@ -117,9 +121,10 @@ const reportFile = reportFlag
   : path.join(defaultReportDir, `mission-benchmark-report-${Date.now()}.json`)
 await fs.mkdir(path.dirname(reportFile), { recursive: true })
 
-const requestText = requestFile
-  ? await fs.readFile(path.resolve(requestFile), "utf8")
-  : DEFAULT_MISSION_BENCHMARK_REQUEST
+const requestText = (await fs.readFile(path.resolve(requestFile), "utf8")).trim()
+if (!requestText) {
+  throw new Error("--request-file must not be empty for mission benchmark task input")
+}
 const missionPrompt = [
   requestText,
   "",
@@ -484,9 +489,6 @@ async function writeBenchmarkConfig(dir: string, configDir: string, model: strin
       lsp: {
         biome: { disabled: true },
         eslint: { disabled: true },
-      },
-      assistant: {
-        debug: { fail_on_information_missing: true },
       },
     },
     null,

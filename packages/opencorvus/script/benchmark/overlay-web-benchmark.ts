@@ -97,7 +97,7 @@ import { Shell } from "../../src/shell/shell"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "../../src/util/pixel-stats"
 import { parseSSE } from "../../src/util/sse"
 import { ensureStandaloneGitRepo } from "./git"
-import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
+import { auditWorkspace, deriveRunMetrics, evaluateQualityChecks, moduleBlocksFromRequest } from "./quality-checks"
 
 type OverlayBenchmarkWindow = Window & {
   applyDirectory: (
@@ -154,6 +154,9 @@ function stripWrappingQuotes(value: string | undefined): string | undefined {
 // to start in that case rather than silently using defaults.
 const KNOWN_FLAGS = new Set<string>([
   "--acceptance-verify-cmd",
+  "--browser-launch-timeout-ms",
+  "--navigation-timeout-ms",
+  "--settle-ms",
   "--executor",
   "--idle-timeout-ms",
   "--max-executor-groups",
@@ -167,7 +170,9 @@ const KNOWN_FLAGS = new Set<string>([
   "--resume-home-dir",
   "--resume-message",
   "--resume-task-id",
+  "--threshold",
   "--title",
+  "--worst-threshold",
   "--figma-url",
   // boolean (no value) switches
   "--no-keep",
@@ -229,7 +234,13 @@ if (resumeMessage !== undefined && resumeMessage.trim().length === 0) {
   process.stderr.write("[overlay-benchmark] --resume-message must not be empty when provided\n")
   process.exit(2)
 }
-const executor = (flag("--executor") || "opencorvus") as "opencorvus" | "codex" | "claude-code"
+type ExecutorName = "opencorvus" | "codex" | "claude-code"
+function parseExecutor(value: string | undefined): ExecutorName {
+  if (!value) return "opencorvus"
+  if (value === "opencorvus" || value === "codex" || value === "claude-code") return value
+  throw new Error(`unsupported executor: ${value}`)
+}
+const executor = parseExecutor(flag("--executor"))
 const requestFile = flag("--request-file")
 const requestAttachment = flag("--request-attachment")
 const rawReferenceImages =
@@ -247,59 +258,25 @@ const stopAfterArchitect = process.argv.includes("--stop-after-architect")
 // Only set task-level budget when explicitly provided via CLI flag.
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
-const WEB_CLONE_VISUAL_THRESHOLD = process.env.OPENCORVUS_WEB_CLONE_BENCHMARK_THRESHOLD?.trim() || "0.96"
-const WEB_CLONE_VISUAL_WORST_THRESHOLD = process.env.OPENCORVUS_WEB_CLONE_BENCHMARK_WORST_THRESHOLD?.trim() || "0.75"
+function requireVisualNumberFlag(name: string): string {
+  const raw = flag(name)
+  if (!raw) throw new Error(`${name} is required when --reference-images is used`)
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number, got ${raw}`)
+  return raw
+}
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
-// The default brief is a text-only chat-app spec — there is no canonical
-// visual reference for it. A benchmark run still needs an explicit local
-// acceptance command, either provided by the caller or derived from reference
-// images, so acceptance cannot pass without executable evidence.
 const referenceImages = rawReferenceImages
-const DEFAULT_TASK_REQUEST = `帮我做一个生产级的多模型 AI Chat Web 应用（Vite + React + TypeScript），整体定位对标 ChatGPT / Claude.ai / Poe，UI/UX 现代专业，深色/浅色主题切换，可在 Chrome 桌面端正常运行，本地启动后即可进入。
-
-【账户与权限】
-1. 启动页支持 "Google 一键登录"（mock 异步延迟 800-1200ms 后登录成功）和 "邮箱+密码" 登录两种入口，登录态持久化到 localStorage，刷新后自动恢复。
-2. 顶部右上角头像菜单包含：账户设置、API Keys、订阅信息（mock 显示"免费版 / 已用 X / Y 次"）、深浅色主题、语言（中/英）、退出登录。
-3. API Keys 页面分别支持 Deepseek、OpenAI、Anthropic 三家 Key 的填写、保存（加密存储到 IndexedDB）、连通性测试按钮（实际打 /v1/models 或同等端点验证可用性）。
-
-【模型与对话】
-4. 顶部模型选择器是分组下拉，按 provider 分组展示：Deepseek（deepseek-chat / deepseek-reasoner）、OpenAI（gpt-4o-mini mock 占位）、Anthropic（claude-3-5-sonnet mock 占位）。仅 Deepseek 走真实 SSE，其他在未配置 Key 时按 mock 流返回。
-5. 流式对话使用 SSE，必须支持：发送中可中断（停止生成）、生成失败可一键 Retry、对任意助手消息可 "Regenerate"、对任意用户消息可 Edit 后从该点重新分支（保留旧分支可切换）。
-6. 会话级断点续传：用户在生成中刷新页面，重新打开后能从最后一条增量继续渲染，不丢字（通过保存增量到 IndexedDB + 重连同一 SSE 通道实现）。
-7. 推理类模型（如 deepseek-reasoner）需在助手气泡内显示可折叠的"思考过程"块，与最终回答分离。
-
-【输入与多模态】
-8. 输入框支持：粘贴/拖拽上传图片、PDF、txt、md、代码文件，附件展示为缩略卡片可删除；图片附件随消息发送，PDF/文本类附件提取纯文本拼接到 prompt 末尾。
-9. 输入框支持斜杠命令：/clear 清空当前会话，/system 编辑系统提示词，/temp 调整 temperature，/model 快速切换模型，输入即弹出补全列表。
-10. 支持 @ 引用历史消息：在输入框内 @ 可弹出当前会话消息列表，选中后将该消息作为上下文片段附加。
-
-【消息渲染】
-11. 助手消息渲染需支持：GitHub Flavored Markdown、代码块语法高亮（多语言）、行内 / 块级数学公式（KaTeX）、Mermaid 图表、表格、任务列表、链接预览。
-12. 代码块右上角提供 复制 / 下载 / "Run in Sandbox"（mock 弹窗显示 stdout）按钮。
-13. 每条消息底部展示 token 用量、生成耗时、模型标签；可复制全文、点赞/点踩反馈、分享单条（生成只读分享链接，路由 /s/:id）。
-
-【会话管理】
-14. 左侧会话列表分组：Pinned / Today / Yesterday / Last 7 days / Older，支持新建文件夹、拖拽分组、重命名、删除（带确认）、置顶、搜索（标题+内容全文）、导出（Markdown / JSON）。
-15. 支持会话标签（多色），列表可按标签过滤；空状态有插图与 New chat 引导。
-16. 全局搜索（Cmd/Ctrl+K）：跨会话搜索消息，结果可点击跳转并高亮匹配。
-
-【New Chat 起始页】
-17. 未发起对话时展示 "示例 Prompt 卡片网格"（写作 / 代码 / 数学 / 角色扮演 / 数据分析 5 类，每类 2-3 张卡），点击直接预填到输入框。
-18. 起始页底部展示当日 Tips 与最近 3 条会话快捷入口。
-
-【设置与高级】
-19. 设置面板支持：默认模型 / temperature / max_tokens / top_p / 系统提示词模板（支持多套切换）、自定义快捷键、上下文窗口截断策略。
-20. 提供 keyboard shortcut 浮层（按 ?）说明所有快捷键。
-
-【数据与存储】
-21. 所有会话与设置以 IndexedDB 持久化（schema 含 conversations / messages / settings / api_keys 四个 store），刷新无损；提供"清空所有数据"按钮（带二次确认）。
-
-【非功能要求】
-22. 整体响应：移动端宽度 360px 以上可用，桌面端居中最大宽度 1280px。
-23. 真实可跑：使用真实 Deepseek API 完成至少一次端到端 streaming 对话；UI 完成度对标 chatgpt.com/claude.ai 视觉水平（无占位文字、无 lorem ipsum）。
-24. 代码质量：TypeScript strict、组件分层清晰（features / components / hooks / lib / store）、无 console.error 红字、初次加载 < 5s。`
-let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
+if (!requestFile && !requestAttachment) {
+  process.stderr.write("[overlay-benchmark] --request-file or --request-attachment is required\n")
+  process.exit(2)
+}
+let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : ""
+if (requestFile && TASK_REQUEST.length === 0) {
+  process.stderr.write("[overlay-benchmark] --request-file must not be empty\n")
+  process.exit(2)
+}
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
 
@@ -339,7 +316,7 @@ if (requestAttachment) {
 // Reference images are NOT injected as task attachments — the agent owns its
 // visual capture path (e.g. url_screenshot tool against the URL in the
 // request). When `--reference-images` is supplied, each file stays at its
-// original absolute path and only feeds the visual-diff gate below.
+// original absolute path and only feeds the visual-diff check below.
 const TASK_TITLE =
   flag("--title")?.trim() ||
   (requestFile ? path.parse(requestFile).name : undefined) ||
@@ -348,13 +325,14 @@ const TASK_TITLE =
 // ACCEPTANCE_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --acceptance-verify-cmd is supplied:
 //   1. --reference-images provided → task-scoped HTML skeleton workflow check
-//   2. no reference images (default chat-app brief, or external --request-file) → no auto-verify
-// Web-clone SSIM thresholds are explicit. Generic project-root visual-diff
-// checks do not prove the frontend-design visual HTML skeleton workflow ran.
+//      with explicit --threshold, --worst-threshold, --browser-launch-timeout-ms,
+//      --navigation-timeout-ms, and --settle-ms.
+//   2. no reference images → fail before task creation because no acceptance
+//      verification command exists.
+// Web-clone SSIM thresholds are explicit inputs. Generic project-root
+// visual-diff checks do not prove the frontend-design visual HTML skeleton
+// workflow ran.
 let ACCEPTANCE_VERIFY_CMD = ""
-
-const AUTO_REPLY =
-  "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
 
 const FINAL = new Set(["completed", "failed", "cancelled"])
 const STREAM_PLACEHOLDERS = new Set(["", "...", "â€¦â€¦", "æ€è€ƒä¸­", "Thinking"])
@@ -572,6 +550,11 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
       path.dirname(reportFile),
       path.basename(reportFile, ".json") + ".html-skeleton-workflow-out",
     )
+    const threshold = requireVisualNumberFlag("--threshold")
+    const worstThreshold = requireVisualNumberFlag("--worst-threshold")
+    const browserLaunchTimeoutMs = requireVisualNumberFlag("--browser-launch-timeout-ms")
+    const navigationTimeoutMs = requireVisualNumberFlag("--navigation-timeout-ms")
+    const settleMs = requireVisualNumberFlag("--settle-ms")
     return refs
       .map((ref, index) => {
         const outDir = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
@@ -579,8 +562,11 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
           `bun run ${safe(htmlSkeletonWorkflowCheckScript)}`,
           `--reference=${safe(path.resolve(ref))}`,
           `--out=${safe(outDir)}`,
-          `--threshold=${WEB_CLONE_VISUAL_THRESHOLD}`,
-          `--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}`,
+          `--threshold=${threshold}`,
+          `--worst-threshold=${worstThreshold}`,
+          `--browser-launch-timeout-ms=${browserLaunchTimeoutMs}`,
+          `--navigation-timeout-ms=${navigationTimeoutMs}`,
+          `--settle-ms=${settleMs}`,
         ].join(" ")
       })
       .join(" && ")
@@ -681,7 +667,7 @@ function formatEventLine(
   }
   // Integrity reviewer events. `chunk` is reasoning-delta — too noisy to print
   // line-per-event; the alive-stall timer is what we care about. `progress` is
-  // throttled to ~once per 20s by the reviewer but still gets gated here to one
+  // throttled to ~once per 20s by the reviewer but still gets limited here to one
   // log line per 10s to keep stdout readable. `started` and `completed` always
   // print — they're the lifecycle bookends a human reading the log needs.
   if (entry.type === "orchestrator.integrity.review.chunk") return ""
@@ -1302,17 +1288,6 @@ async function writeBenchmarkModelConfig(model: string) {
       // glm51/glm51 resolves through the built-in provider catalog; adding
       // provider.glm51={options:{}} shadows that catalog entry and erases its
       // model list.
-      // Bench runs always fail-fast on context drops. When any agent
-      // emits <INFORMATION MISSING>...</INFORMATION MISSING> the host
-      // process.exits with code 99 (see prompt/information-missing.ts +
-      // agent/runner.ts). Surfaces dispatcher-level context drops as
-      // hard signals instead of letting agents guess past them — the
-      // primary signal benchmarks exist to catch.
-      assistant: {
-        debug: {
-          fail_on_information_missing: true,
-        },
-      },
     },
     null,
     2,
@@ -1515,7 +1490,7 @@ async function buildBenchmarkReport(error?: unknown) {
     moduleBlocks,
   })
   const qualityVerdict = applyBenchmarkErrorVerdict(
-    evaluateQualityGates({
+    evaluateQualityChecks({
       artifactAudit,
       runMetrics,
       taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
@@ -1742,7 +1717,7 @@ async function reportApiJson(pathname: string) {
   }
 }
 
-function applyBenchmarkErrorVerdict(base: ReturnType<typeof evaluateQualityGates>, error?: string) {
+function applyBenchmarkErrorVerdict(base: ReturnType<typeof evaluateQualityChecks>, error?: string) {
   void error
   return base
 }
@@ -2090,8 +2065,8 @@ function pickOptionLabel(options: Array<{ label?: unknown }>): string | undefine
 
 // Build a positional answers array for a question interaction whose questions
 // carry inline options (codex 0.125 elicitations like mcp_tool_call_approval).
-// Returns undefined when ANY question is free-text — caller falls back to
-// AUTO_REPLY in that case.
+// Returns undefined when ANY question is free-text; the benchmark then fails
+// because unattended free-text clarification would require invented task input.
 //
 // Server schema (engine/model.ts ReplyInteractionInput): `answers: string[][]`
 // where outer index is the question position and inner is the answer list for
@@ -2113,7 +2088,7 @@ function pickOptionAnswers(item: { payload?: unknown }): string[][] | undefined 
     if (!raw || typeof raw !== "object") return undefined
     const q = raw as { options?: unknown }
     const options = Array.isArray(q.options) ? (q.options as Array<{ label?: unknown }>) : []
-    if (options.length === 0) return undefined // free-text — caller falls back to AUTO_REPLY
+    if (options.length === 0) return undefined
     const label = pickOptionLabel(options)
     if (!label) return undefined
     out.push([label])
@@ -2129,7 +2104,7 @@ async function settle(progress: any, api: (pathname: string, init?: RequestInit)
     if (item.type === "permission") {
       // ReplyInteractionInput.autoReply is non-optional per engine/model.ts;
       // omitting it was the silent cause of HTTP 400 on benchmark reply that
-      // turned every clarification gate into an abort.
+      // turned every clarification interaction into an abort.
       await api(`/interaction/${item.id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2140,7 +2115,7 @@ async function settle(progress: any, api: (pathname: string, init?: RequestInit)
     // Question interactions with fixed options (e.g. codex 0.125 emits
     // `mcp_tool_call_approval` elicitations with
     // `options: [{label:"Allow"},{label:"Allow for this session"},{label:"Cancel"}]`).
-    // Free-text AUTO_REPLY falls outside the option set — codex treats
+    // Free-text replies fall outside the option set — codex treats
     // unrecognized text as Cancel and the MCP tool never produces a
     // tool_result, surfacing as `tool_call ... ended without a matching
     // tool_result` in the build agent. Caught on _session-20260429-002531.out.
@@ -2155,13 +2130,7 @@ async function settle(progress: any, api: (pathname: string, init?: RequestInit)
       })
       continue
     }
-    // Free-text question: server falls back to `answersFromMessage(message)`
-    // when `answers` isn't provided.
-    await api(`/interaction/${item.id}/reply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ autoReply: true, message: AUTO_REPLY }),
-    })
+    throw new Error(`overlay benchmark cannot auto-answer free-text interaction ${item.id}`)
   }
   if (pending.length === 0) return progress
   return api(`/task/${progress.task.id}/progress`).then((res) => res.json())

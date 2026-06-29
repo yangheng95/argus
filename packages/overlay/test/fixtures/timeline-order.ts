@@ -41,17 +41,27 @@ function requireExplicitOrderKey(value: unknown, label: string, domain?: string)
   return value
 }
 
+function stampBoardPhase(goal: any, step: any, phaseID: string, phase: any): any {
+  return {
+    ...phase,
+    orderKey: requireExplicitOrderKey(
+      phase?.orderKey,
+      `goal phase ${String(goal?.goalID || "goal")}/${String(step?.stepID || "step")}/${phaseID}`,
+      "board",
+    ),
+  }
+}
+
 export function stampTestBoard(board: any): any {
   if (!board || typeof board !== "object" || Array.isArray(board)) return board
   const task = board.task && typeof board.task === "object" ? board.task : undefined
-  const taskCreated = Number(task?.time?.created || 1)
   return {
     ...board,
     ...(task
       ? {
           task: {
             ...task,
-            orderKey: task.orderKey || testTaskOrderKey(String(task.id || "task"), taskCreated),
+            orderKey: requireExplicitOrderKey(task.orderKey, `task ${String(task.id || "task")}`, "task"),
           },
         }
       : {}),
@@ -62,75 +72,52 @@ export function stampTestBoard(board: any): any {
             steps: Array.isArray(board.workflow.steps)
               ? board.workflow.steps.map((step: any) => ({
                   ...step,
-                  orderKey:
-                    step.orderKey ||
-                    testBoardOrderKey(
-                      `${String(task?.id || "task")}-${String(step?.stepID || step?.id || "step")}`,
-                      taskCreated,
-                      61,
-                    ),
+                  orderKey: requireExplicitOrderKey(
+                    step.orderKey,
+                    `workflow step ${String(task?.id || "task")}/${String(step?.stepID || step?.id || "step")}`,
+                    "board",
+                  ),
                 }))
               : board.workflow.steps,
           }
         : board.workflow,
     goalWorkflows: Array.isArray(board.goalWorkflows)
-      ? board.goalWorkflows.map((goal: any) => {
-          const goalCreated = Number(goal?.time?.created || goal?.startedAt || taskCreated)
-          return {
-            ...goal,
-            orderKey: goal.orderKey || testBoardOrderKey(String(goal?.goalID || "goal"), goalCreated, 60),
-            steps: Array.isArray(goal?.steps)
-              ? goal.steps.map((step: any) => {
-                  const stepStarted = Number(step?.startedAt || goalCreated)
-                  return {
-                    ...step,
-                    orderKey:
-                      step.orderKey ||
-                      testBoardOrderKey(
-                        `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}`,
-                        stepStarted,
-                        61,
-                      ),
-                    phases:
-                      step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
-                        ? Object.fromEntries(
-                            Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => {
-                              const phaseStarted = Number(phase?.startedAt || stepStarted)
-                              return [
-                                phaseID,
-                                {
-                                  ...phase,
-                                  orderKey:
-                                    phase?.orderKey ||
-                                    testBoardOrderKey(
-                                      `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}-${phaseID}`,
-                                      phaseStarted,
-                                      62,
-                                    ),
-                                },
-                              ]
-                            }),
-                          )
-                        : step.phases,
-                  }
-                })
-              : goal?.steps,
-          }
-        })
+      ? board.goalWorkflows.map((goal: any) => ({
+          ...goal,
+          orderKey: requireExplicitOrderKey(goal?.orderKey, `goal ${String(goal?.goalID || "goal")}`, "board"),
+          steps: Array.isArray(goal?.steps)
+            ? goal.steps.map((step: any) => ({
+                ...step,
+                orderKey: requireExplicitOrderKey(
+                  step?.orderKey,
+                  `goal step ${String(goal?.goalID || "goal")}/${String(step?.stepID || "step")}`,
+                  "board",
+                ),
+                phases:
+                  step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
+                    ? Object.fromEntries(
+                        Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => [
+                          phaseID,
+                          stampBoardPhase(goal, step, phaseID, phase),
+                        ]),
+                      )
+                    : step.phases,
+              }))
+            : goal?.steps,
+        }))
       : board.goalWorkflows,
     interactions: Array.isArray(board.interactions)
-      ? board.interactions.map((interaction: any) => {
-          const created = Number(interaction?.time?.created || taskCreated)
-          return {
-            ...interaction,
-            orderKey:
-              interaction.orderKey || testInteractionOrderKey(String(interaction?.id || "interaction"), created),
-          }
-        })
+      ? board.interactions.map((interaction: any) => ({
+          ...interaction,
+          orderKey: requireExplicitOrderKey(
+            interaction?.orderKey,
+            `interaction ${String(interaction?.id || "interaction")}`,
+            "interaction",
+          ),
+        }))
       : board.interactions,
   }
 }
-
 export function stampTestTranscript(transcript: any[]): any[] {
   return (Array.isArray(transcript) ? transcript : []).map((message) => {
     const info = message?.info || {}

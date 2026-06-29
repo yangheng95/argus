@@ -109,8 +109,8 @@ function MenuItem(props: {
   disabled?: boolean
   testid?: string
 }) {
-  const fallbackTitle = () => (typeof props.children === "string" ? props.children : undefined)
-  const tooltip = () => props.title || props.meta || fallbackTitle()
+  const childrenTitle = () => (typeof props.children === "string" ? props.children : undefined)
+  const tooltip = () => props.title || props.meta || childrenTitle()
   return (
     <Menubar.Item
       as="button"

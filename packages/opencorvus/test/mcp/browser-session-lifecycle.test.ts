@@ -78,6 +78,7 @@ class FakeContext {
 
 class FakeBrowser {
   readonly contexts: FakeContext[] = []
+  readonly contextOptions: any[] = []
   private disconnectedHandlers: Handler[] = []
   private closed = false
 
@@ -87,7 +88,8 @@ class FakeBrowser {
     return !this.closed
   }
 
-  async newContext() {
+  async newContext(options?: any) {
+    this.contextOptions.push(options)
     const context = this.contextFactory()
     this.contexts.push(context)
     return context
@@ -151,6 +153,59 @@ describe("browser MCP session lifecycle", () => {
     expect(first.sessionId).not.toBe(second.sessionId)
     expect(launchCount).toBe(1)
     expect(browser.contexts.length).toBe(2)
+  })
+
+  test("does not use process proxy environment when session proxy is omitted", async () => {
+    const originalHttpsProxy = process.env.HTTPS_PROXY
+    let launchInput: Parameters<typeof BrowserRuntime.launchPlaywrightBrowserInNodeProcess>[0] | undefined
+    const browser = new FakeBrowser(() => new FakeContext())
+    launchedBrowsers.push(browser)
+    ;(
+      BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }
+    ).launchPlaywrightBrowserInNodeProcess = async (input) => {
+      launchInput = input
+      return browser as never
+    }
+
+    try {
+      process.env.HTTPS_PROXY = "http://env-proxy.example:8080"
+      const session = await createSession({ virtualCursor: false })
+
+      expect(session.sessionId).toMatch(/^sess_/)
+      expect(launchInput?.args?.some((arg) => arg.startsWith("--proxy-server="))).toBe(false)
+      expect(browser.contextOptions[0]?.proxy).toBeUndefined()
+    } finally {
+      if (originalHttpsProxy === undefined) delete process.env.HTTPS_PROXY
+      else process.env.HTTPS_PROXY = originalHttpsProxy
+    }
+  })
+  test("uses explicit session proxy without reading process proxy environment for browser launch", async () => {
+    const originalHttpsProxy = process.env.HTTPS_PROXY
+    let launchInput: Parameters<typeof BrowserRuntime.launchPlaywrightBrowserInNodeProcess>[0] | undefined
+    const browser = new FakeBrowser(() => new FakeContext())
+    launchedBrowsers.push(browser)
+    ;(
+      BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }
+    ).launchPlaywrightBrowserInNodeProcess = async (input) => {
+      launchInput = input
+      return browser as never
+    }
+
+    try {
+      process.env.HTTPS_PROXY = "http://env-proxy.example:8080"
+      const session = await createSession({
+        virtualCursor: false,
+        proxy: { server: "http://explicit-session-proxy.example:9090" },
+      })
+
+      expect(session.sessionId).toMatch(/^sess_/)
+      expect(launchInput?.args).not.toContain("--proxy-server=http://env-proxy.example:8080")
+      expect(launchInput?.args?.some((arg) => arg.startsWith("--proxy-server="))).toBe(false)
+      expect(browser.contextOptions[0]?.proxy).toEqual({ server: "http://explicit-session-proxy.example:9090" })
+    } finally {
+      if (originalHttpsProxy === undefined) delete process.env.HTTPS_PROXY
+      else process.env.HTTPS_PROXY = originalHttpsProxy
+    }
   })
 
   test("closes a newly created profile when page creation fails", async () => {

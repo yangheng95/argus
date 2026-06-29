@@ -63,7 +63,7 @@ function block(info: Inline, output?: string) {
   UI.empty()
 }
 
-function fallback(part: ToolPart) {
+function renderToolPartDefault(part: ToolPart) {
   const state = part.state
   const input = "input" in state ? state.input : undefined
   const title =
@@ -423,9 +423,9 @@ export const RunCommand = cmd({
           if (part.tool === "task") return task(props<typeof TaskTool>(part))
           if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part))
           if (part.tool === "skill") return skill(props<typeof SkillTool>(part))
-          return fallback(part)
+          return renderToolPartDefault(part)
         } catch {
-          return fallback(part)
+          return renderToolPartDefault(part)
         }
       }
 

@@ -254,7 +254,7 @@ export function projectConversationView(
     const info = message?.info
     const messageID = String(info?.id || "")
     const sessionID = String(info?.sessionID || "")
-    const created = Number(info?.time?.created || 0)
+    const created = Number(info?.time?.created)
     if (!messageID || !sessionID) {
       throw new Error("projectConversationView: transcript message missing id/sessionID")
     }

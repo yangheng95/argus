@@ -72,8 +72,6 @@ import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
-import { EngineConfig } from "@/engine"
-import { appendInformationMissingDiagnostic } from "@/prompt/information-missing"
 import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
@@ -443,73 +441,6 @@ async function recordToolExecuteErrorsForFinalMessage(input: {
   }
 }
 
-/**
- * Pure check: does the final assistant message carry an INFORMATION
- * MISSING XML diagnostic block? When the operator flips
- * `debug.fail_on_information_missing` (default OFF), the host appends
- * the diagnostic section to every agent's system prompt at runtime
- * (`appendInformationMissingDiagnostic`); the prompt then instructs the
- * agent to emit this block (and ONLY this block) when invocation
- * context drops required information, and the host treats the block
- * as a non-retryable run failure. Information-missing debug toggle contract
- * INFORMATION MISSING debug toggle; `prompt/information-missing.ts`
- * owns the diagnostic text. The companion test
- * `test/agent/information-missing-diagnostic.test.ts` pins (a) the
- * helper / constant surface and (b) the contract that .txt core
- * prompts must NOT carry the section so the toggle stays binary.
- *
- * Detection is a typed-tag substring (rule 20 boundary): the tag
- * `<INFORMATION MISSING>` is a structured marker the prompt asks the
- * LLM to emit verbatim — it is NOT an LLM natural-language phrase, so
- * substring containment is the same shape as XML element matching, not
- * keyword-match rule logic.
- */
-export function messageHasInformationMissing(finalMessage: {
-  info: { role: string }
-  parts: ReadonlyArray<{ type?: string; text?: string }>
-}): boolean {
-  if (finalMessage.info.role !== "assistant") return false
-  for (const part of finalMessage.parts) {
-    if (part.type !== "text") continue
-    if (typeof part.text !== "string") continue
-    if (part.text.includes("<INFORMATION MISSING>")) return true
-  }
-  return false
-}
-
-/**
- * Returns the verbatim INFORMATION MISSING XML block from the first
- * matching text part, or null when no part carries the marker. Used
- * by the runner to log the agent's diagnostic before failing the run.
- */
-export function extractInformationMissingBlock(finalMessage: {
-  info: { role: string }
-  parts: ReadonlyArray<{ type?: string; text?: string }>
-}): string | null {
-  if (finalMessage.info.role !== "assistant") return null
-  for (const part of finalMessage.parts) {
-    if (part.type !== "text") continue
-    if (typeof part.text !== "string") continue
-    const start = part.text.indexOf("<INFORMATION MISSING>")
-    if (start === -1) continue
-    const end = part.text.indexOf("</INFORMATION MISSING>", start)
-    if (end === -1) return part.text.slice(start)
-    return part.text.slice(start, end + "</INFORMATION MISSING>".length)
-  }
-  return null
-}
-
-export function buildInformationMissingError(input: {
-  kind: SessionKind
-  agentName: string
-  block: string
-}): AgentRunError {
-  return new AgentRunError(input.kind, `INFORMATION MISSING detected in ${input.agentName}: ${input.block}`, {
-    nonRetryable: true,
-    cause: new Error(input.block),
-  })
-}
-
 export function terminalToolMissingErrorFor(input: {
   finalMessage: { info: { role: string; error?: unknown } }
   toolName: string
@@ -667,19 +598,10 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     ? { prompt: input.core }
     : await composeSystemPrompt(agentName, input.core, configScope)
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
-  // INFORMATION MISSING debug toggle: when on, append the diagnostic block
-  // to the system prompt; the matching host-side detection further down
-  // exits the process when any agent emits <INFORMATION MISSING>. Toggle
-  // is exposed via overlay GeneralPanel → PATCH /config →
-  // opencorvus.jsonc. Default off — runs go through unchanged in
-  // production. Information-missing debug toggle contract.
-  const debugCfg = (await EngineConfig.get()).debug
   const baseSystemPrompt = [composed.prompt, liveContext.trim().length > 0 ? liveContext : undefined]
     .filter((section): section is string => typeof section === "string" && section.trim().length > 0)
     .join("\n\n")
-  const systemPrompt = debugCfg.fail_on_information_missing
-    ? appendInformationMissingDiagnostic(baseSystemPrompt)
-    : baseSystemPrompt
+  const systemPrompt = baseSystemPrompt
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = input.continuation ? buildContinuationUserPrompt(input.continuation) : await input.buildUserPrompt()
@@ -999,35 +921,6 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     }
     if (!finalMessage) {
       throw new AgentRunError(kind, "SessionPrompt.prompt returned no message")
-    }
-    // INFORMATION MISSING signal — when the operator has flipped
-    // `debug.fail_on_information_missing`, the host injected the
-    // diagnostic section into the system prompt above and now runs
-    // detection on the final assistant message. The agent emits
-    // `<INFORMATION MISSING><item>...</item></INFORMATION MISSING>`
-    // (and ONLY that block) when this invocation arrived with required
-    // context dropped. The host treats the block as a fatal diagnostic
-    // and fails the current run so the operator immediately sees the
-    // upstream-context drop signal instead of a long log of guessed-default
-    // work. When the toggle is off, this guard is a
-    // no-op — production runs are unaffected. Information-missing debug toggle contract
-    // INFORMATION MISSING debug toggle; detection helpers pinned via
-    // test/agent/information-missing-detection.test.ts.
-    if (debugCfg.fail_on_information_missing && messageHasInformationMissing(finalMessage)) {
-      const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
-      log.error("INFORMATION MISSING signal — failing run", {
-        agentName,
-        kind,
-        sessionID: session.id,
-        block: block.slice(0, 1200),
-      })
-      // eslint-disable-next-line no-console
-      console.error(
-        `\n[FATAL] INFORMATION MISSING detected in ${agentName} (${kind}) stream — failing run.\n` +
-          `Session: ${session.id}\n` +
-          `${block}\n`,
-      )
-      throw buildInformationMissingError({ kind, agentName, block })
     }
     // Propagate hard LLM errors (HTTP 4xx/5xx, schema-rejected payloads,
     // missing terminal-tool calls). The processor stamps them onto the

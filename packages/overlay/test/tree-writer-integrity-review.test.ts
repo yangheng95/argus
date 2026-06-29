@@ -70,7 +70,7 @@ test("retired legacy gate event is not accepted by the tree writer", () => {
   ).toThrow(/unhandled event type/)
 })
 
-test("legacy acceptance evidence remains pass-through and does not materialize a card", () => {
+test("acceptance evidence updates remain pass-through and do not materialize a card", () => {
   resetWriter()
 
   applyEvent({
@@ -84,7 +84,7 @@ test("legacy acceptance evidence remains pass-through and does not materialize a
       manifestID: "artifact_manifest",
       iteration: 2,
       status: "failed",
-      summary: "Legacy evidence failed 1 required check.",
+      summary: "Evidence failed 1 required check.",
       failedCheckCount: 1,
       failedReviewCount: 1,
       failureDetails: [

@@ -45,7 +45,7 @@ export const EvaluatorAnalysis = z.object({
 
 export type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 
-/** Alias used by the orchestrator persist layer and legacy acceptance evidence. */
+/** Alias used by the orchestrator persist layer and acceptance evidence manifests. */
 export type GoalJudgmentType = EvaluatorAnalysisType
 
 // ---------------------------------------------------------------------------
@@ -99,11 +99,9 @@ export interface AcceptanceInfo {
     deletions?: number
     status?: string
   }>
-  // Host deterministic-gate conclusions (manifestGate / hostGateFailures /
-  // manifestFailureDetails / manifestFailures / runtimeEvidenceFailures /
-  // visualMetricFailures) were intentionally REMOVED. New acceptance review
-  // runs inside the integrity session and must investigate from session-owned
-  // evidence, not host failure conclusions.
+  // Host-side deterministic conclusions were intentionally removed from this
+  // contract. Current acceptance review runs inside the integrity session and
+  // must investigate from session-owned evidence, not host failure summaries.
   /**
    * Structured per-goal implementation reports emitted by goal executors via
    * the `goal_report` tool call. One entry per delivered goal. Length 1 for

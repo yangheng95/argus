@@ -10,6 +10,7 @@ import {
   type RuntimeCaptureInput,
   type RuntimeCaptureResult,
 } from "@/runtime/capture-contract"
+import { BrowserRuntime } from "@/browser/runtime"
 
 export * from "@/runtime/capture-contract"
 
@@ -29,6 +30,7 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
       viewport: useReferenceViewport ? undefined : viewport,
       referenceForViewport: input.referenceForViewport,
       browserExecutable: input.browserExecutable,
+      browserLaunchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
       headless: input.headless,
       navigationTimeoutMs: args.wait_timeout_ms,
       settleMs: args.settle_ms,

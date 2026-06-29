@@ -8,7 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 type BadRequestBody = {
   success: false
   data: { message: string }
-  errors: Array<{ message: string }>
+  error: Array<{ message: string }>
 }
 
 // What this pins
@@ -76,7 +76,7 @@ describe("config PATCH provider sub-shape validation", () => {
         const body = (await res.json()) as BadRequestBody
         expect(body.success).toBe(false)
         expect(body.data.message).toMatch(/must be a record/i)
-        expect(body.errors[0]?.message).toBe(body.data.message)
+        expect(body.error[0]?.message).toBe(body.data.message)
       },
     })
   })
@@ -98,7 +98,7 @@ describe("config PATCH provider sub-shape validation", () => {
         expect(body.success).toBe(false)
         expect(body.data.message).toContain("config.provider.broken")
         expect(body.data.message).toContain("name")
-        expect(body.errors[0]?.message).toBe(body.data.message)
+        expect(body.error[0]?.message).toBe(body.data.message)
       },
     })
   })
@@ -127,7 +127,7 @@ describe("config PATCH provider sub-shape validation", () => {
         expect(body.success).toBe(false)
         expect(body.data.message).toContain("config.provider.broken")
         expect(body.data.message).toContain("models.retired.status")
-        expect(body.errors[0]?.message).toBe(body.data.message)
+        expect(body.error[0]?.message).toBe(body.data.message)
       },
     })
   })

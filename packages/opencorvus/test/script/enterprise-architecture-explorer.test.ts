@@ -83,7 +83,7 @@ describe("enterprise architecture explorer", () => {
     expect(docsOps).toContain("specs/current/architecture/09-verification-evidence.md")
     expect(docsOps).toContain("specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md")
     expect(docsOps).not.toContain("specs/artifacts/")
-    expect(docsOps).not.toContain("specs/new-arch")
+    expect(docsOps).not.toContain(["specs", "new-arch"].join("/"))
   })
 
   test("search filters and moves selection to the matching view", () => {

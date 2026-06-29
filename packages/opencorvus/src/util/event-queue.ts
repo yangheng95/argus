@@ -11,7 +11,7 @@
  *
  * createEventQueue() is the single implementation. Source code adapts to
  * it via three primitive writes (push / complete / abort); consumers read
- * via the returned `iterable`. The built-in withStreamActivity gate aborts
+ * via the returned `iterable`. The built-in withStreamActivity monitor aborts
  * the stream with a standard AbortError when `idleMs` elapses without a
  * push — the same unwinding path external aborts use.
  *
@@ -49,7 +49,7 @@ export function createEventQueue<T>(options: EventQueueOptions): EventQueue<T> {
   let aborted: { reason: unknown } | null = null
   let wake: (() => void) | undefined
 
-  const gate = withStreamActivity({
+  const monitor = withStreamActivity({
     idleMs: options.idleMs,
     signal: options.signal,
     label: options.label ?? "event-queue",
@@ -61,10 +61,10 @@ export function createEventQueue<T>(options: EventQueueOptions): EventQueue<T> {
     w?.()
   }
 
-  // Gate abort (idle OR external) — wake the consumer so it can observe.
-  const onGateAbort = () => bumpWake()
-  if (!gate.signal.aborted) {
-    gate.signal.addEventListener("abort", onGateAbort, { once: true })
+  // Monitor abort (idle OR external) wakes the consumer so it can observe.
+  const onMonitorAbort = () => bumpWake()
+  if (!monitor.signal.aborted) {
+    monitor.signal.addEventListener("abort", onMonitorAbort, { once: true })
   }
 
   const iterable: AsyncIterable<T> = {
@@ -80,9 +80,9 @@ export function createEventQueue<T>(options: EventQueueOptions): EventQueue<T> {
               return { value: buffer.shift()!, done: false }
             }
             if (done) return { value: undefined, done: true }
-            if (gate.signal.aborted) {
+            if (monitor.signal.aborted) {
               // External abort with Error reason → throw; otherwise end clean.
-              const reason = gate.signal.reason
+              const reason = monitor.signal.reason
               if (reason instanceof Error) throw reason
               return { value: undefined, done: true }
             }
@@ -93,8 +93,8 @@ export function createEventQueue<T>(options: EventQueueOptions): EventQueue<T> {
         },
         async return(value?: T): Promise<IteratorResult<T>> {
           done = true
-          gate.dispose()
-          gate.signal.removeEventListener("abort", onGateAbort)
+          monitor.dispose()
+          monitor.signal.removeEventListener("abort", onMonitorAbort)
           return { value: value as T, done: true }
         },
       }
@@ -105,28 +105,28 @@ export function createEventQueue<T>(options: EventQueueOptions): EventQueue<T> {
     push(item) {
       if (done || aborted) return
       buffer.push(item)
-      gate.observe()
+      monitor.observe()
       bumpWake()
     },
     complete() {
       if (done || aborted) return
       done = true
-      gate.dispose()
-      gate.signal.removeEventListener("abort", onGateAbort)
+      monitor.dispose()
+      monitor.signal.removeEventListener("abort", onMonitorAbort)
       bumpWake()
     },
     abort(reason) {
       if (done || aborted) return
       aborted = { reason }
-      gate.dispose()
-      gate.signal.removeEventListener("abort", onGateAbort)
+      monitor.dispose()
+      monitor.signal.removeEventListener("abort", onMonitorAbort)
       bumpWake()
     },
     get iterable() {
       return iterable
     },
     lastActivityAt() {
-      return gate.lastActivityAt()
+      return monitor.lastActivityAt()
     },
   }
 }

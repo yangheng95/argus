@@ -8,6 +8,7 @@ import {
   testEventOrderKey,
   testMessageOrderKey,
   testPartOrderKey,
+  testTaskOrderKey,
 } from "./fixtures/timeline-order"
 
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
@@ -31,6 +32,7 @@ function seedVisibleMessage(): void {
     stampTestBoard({
       task: {
         id: TASK_ID,
+        orderKey: testTaskOrderKey(TASK_ID, BASE_TIME),
         status: "active",
         request: "delta order stability",
         sessionID: SESSION_ID,

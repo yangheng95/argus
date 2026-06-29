@@ -2,6 +2,23 @@
 
 Date: 2026-06-29
 
+## Recall
+
+- User request: keep a single side-by-side browser preview comparison helper
+  exposed to agents and remove the local source-binding wrapper surface.
+- Acceptance: build and visual QA expose the selected side-by-side helper,
+  prompts use that evidence surface, backend comparison evidence remains
+  intact, and tests/typecheck prove removed wrapper absence.
+- Hard constraints: no fallback alias, no duplicate agent tool surface, no
+  weakening of formal reference-comparison evidence, and no broad git reset.
+- Read before implementation: `AGENTS.md`, local module source-binding record,
+  visual scroll-slice record, remove-region-diff record, prompt/tool registries,
+  and browser-preview evidence code.
+- Repository sweep: `local source-binding helper`,
+  `browser_preview_compare_scroll_slices`, `source-binding`, and `visual_diff`.
+- Independent feedback: scroll-slice SSIM diagnostics are supporting evidence,
+  not formal reference-parity proof.
+
 ## Supersession Note
 
 This record is superseded for the agent-facing tool surface by
@@ -39,14 +56,14 @@ Command used:
 rg -n "local source-binding helper|browser_preview_compare_scroll_slices|BrowserPreviewCompareScrollSlices|source-binding|visual_diff" packages/opencorvus/src packages/opencorvus/test specs/current/architecture specs/records/2026-06 -S --glob '!**/target*'
 ```
 
-| Surface | Current role | Change |
-| --- | --- | --- |
-| Build private tools | Exposes the binding wrapper. | Expose `browser_preview_compare_scroll_slices` instead. |
-| Visual QA tools | Exposes the binding wrapper and scroll-slice helper. | Keep only `browser_preview_compare_scroll_slices`. |
-| Integrity preview tools | Loads browser preview plus binding wrapper. | Load browser preview plus side-by-side helper. |
-| Build and visual QA prompts | Mention binding/source-binding puzzle evidence. | Direct agents to side-by-side scroll-slice evidence. |
-| Binding wrapper file | Agent-callable local module binding tool. | Delete the wrapper. |
-| Backend evidence code | Owns stored source-binding and reference-comparison semantics. | Preserve unless separately retired. |
+| Surface                     | Current role                                                   | Change                                                  |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
+| Build private tools         | Exposes the binding wrapper.                                   | Expose `browser_preview_compare_scroll_slices` instead. |
+| Visual QA tools             | Exposes the binding wrapper and scroll-slice helper.           | Keep only `browser_preview_compare_scroll_slices`.      |
+| Integrity preview tools     | Loads browser preview plus binding wrapper.                    | Load browser preview plus side-by-side helper.          |
+| Build and visual QA prompts | Mention binding/source-binding puzzle evidence.                | Direct agents to side-by-side scroll-slice evidence.    |
+| Binding wrapper file        | Agent-callable local module binding tool.                      | Delete the wrapper.                                     |
+| Backend evidence code       | Owns stored source-binding and reference-comparison semantics. | Preserve unless separately retired.                     |
 
 ## Acceptance
 

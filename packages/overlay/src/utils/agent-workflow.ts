@@ -19,6 +19,7 @@ export interface AgentWorkflowRecord {
   parentSessionID: string
   agentName: string
   stage: string
+  rawStage?: string
   status: AgentWorkflowStatus
   orderKey?: string
   startedAt: number

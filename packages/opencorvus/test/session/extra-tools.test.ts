@@ -126,23 +126,23 @@ describe("SessionLoop session runtime contract", () => {
     }
   })
 
-  test("SessionPrompt.cancel aborts a registered activity gate", async () => {
+  test("SessionPrompt.cancel aborts a registered activity monitor", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "assistant", title: "activity gate cancel" })
+        const session = await Session.create({ kind: "assistant", title: "activity monitor cancel" })
         const sessionID = session.id
-        const gate = withStreamActivity({ idleMs: 60_000, label: "session-cancel-test" })
-        const unregister = SessionStatus.registerActivityGate(sessionID, gate)
+        const monitor = withStreamActivity({ idleMs: 60_000, label: "session-cancel-test" })
+        const unregister = SessionStatus.registerActivityMonitor(sessionID, monitor)
         try {
           SessionPrompt.cancel(sessionID)
-          expect(gate.signal.aborted).toBe(true)
-          expect(gate.timedOut()).toBe(false)
-          expect(String(gate.signal.reason)).toContain("session cancelled")
+          expect(monitor.signal.aborted).toBe(true)
+          expect(monitor.timedOut()).toBe(false)
+          expect(String(monitor.signal.reason)).toContain("session cancelled")
         } finally {
           unregister()
-          gate.dispose()
+          monitor.dispose()
         }
       },
     })

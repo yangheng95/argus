@@ -1,4 +1,14 @@
 #!/usr/bin/env bun
+/**
+ * Required CLI flags:
+ * - `--reference=PATH`
+ * - `--out=PATH`
+ * - `--threshold=NUMBER`
+ * - `--worst-threshold=NUMBER`
+ * - `--browser-launch-timeout-ms=NUMBER`
+ * - `--navigation-timeout-ms=NUMBER`
+ * - `--settle-ms=NUMBER`
+ */
 
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -32,7 +42,9 @@ export interface HtmlSkeletonWorkflowCheckInput {
   outDir: string
   threshold: number
   worstThreshold: number
-  browserLaunchTimeoutMs?: number
+  browserLaunchTimeoutMs: number
+  navigationTimeoutMs: number
+  settleMs: number
   headless: boolean
 }
 
@@ -66,12 +78,20 @@ function flag(name: string): string | undefined {
   return undefined
 }
 
-function parseNumberFlag(name: string, fallback: number): number {
+function parseRequiredNumberFlag(name: string): number {
   const raw = flag(name)
-  if (!raw) return fallback
+  if (!raw) throw new Error(`Missing required numeric flag ${name}`)
   const value = Number(raw)
-  if (!Number.isFinite(value)) throw new Error(`Invalid numeric flag ${name}: ${raw}`)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`Invalid numeric flag ${name}: ${raw}`)
   return value
+}
+
+function requirePositiveNumberInput(value: unknown, name: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number`)
+  }
+  return parsed
 }
 
 function defaultOutDir(): string {
@@ -93,12 +113,11 @@ export function parseHtmlSkeletonWorkflowCheckArgs(): HtmlSkeletonWorkflowCheckI
     logDir: flag("--log-dir"),
     reference: flag("--reference"),
     outDir: path.resolve(flag("--out") ?? defaultOutDir()),
-    threshold: parseNumberFlag("--threshold", 0.95),
-    worstThreshold: parseNumberFlag("--worst-threshold", 0.8),
-    browserLaunchTimeoutMs: parseNumberFlag(
-      "--browser-launch-timeout-ms",
-      Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000),
-    ),
+    threshold: parseRequiredNumberFlag("--threshold"),
+    worstThreshold: parseRequiredNumberFlag("--worst-threshold"),
+    browserLaunchTimeoutMs: parseRequiredNumberFlag("--browser-launch-timeout-ms"),
+    navigationTimeoutMs: parseRequiredNumberFlag("--navigation-timeout-ms"),
+    settleMs: parseRequiredNumberFlag("--settle-ms"),
     headless: process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1",
   }
 }
@@ -127,6 +146,8 @@ export async function runHtmlSkeletonWorkflowCheck(
         worstThreshold: resolved.worstThreshold,
         outDir: resolved.outDir,
         browserLaunchTimeoutMs: resolved.browserLaunchTimeoutMs,
+        navigationTimeoutMs: resolved.navigationTimeoutMs,
+        settleMs: resolved.settleMs,
         headless: resolved.headless,
       })
     } finally {
@@ -158,7 +179,18 @@ export async function runHtmlSkeletonWorkflowCheck(
 }
 
 async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
-  Required<Pick<HtmlSkeletonWorkflowCheckInput, "outDir" | "threshold" | "worstThreshold" | "headless">> & {
+  Required<
+    Pick<
+      HtmlSkeletonWorkflowCheckInput,
+      | "outDir"
+      | "threshold"
+      | "worstThreshold"
+      | "browserLaunchTimeoutMs"
+      | "navigationTimeoutMs"
+      | "settleMs"
+      | "headless"
+    >
+  > & {
     frontendDesignDir?: string
     frontendResearchDir?: string
     visualRoot: string
@@ -169,7 +201,6 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
     iterationStatePath?: string
     logDir?: string
     reference: string
-    browserLaunchTimeoutMs?: number
   }
 > {
   const taskID = input.taskID ?? process.env.OPENCORVUS_TASK_ID
@@ -221,10 +252,12 @@ async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<
   const reference = path.resolve(input.reference ?? path.join(sourcePackageDir ?? visualRoot, "reference.png"))
   return {
     outDir: path.resolve(input.outDir),
-    threshold: input.threshold,
-    worstThreshold: input.worstThreshold,
+    threshold: requirePositiveNumberInput(input.threshold, "threshold"),
+    worstThreshold: requirePositiveNumberInput(input.worstThreshold, "worstThreshold"),
     headless: input.headless,
-    browserLaunchTimeoutMs: input.browserLaunchTimeoutMs,
+    browserLaunchTimeoutMs: requirePositiveNumberInput(input.browserLaunchTimeoutMs, "browserLaunchTimeoutMs"),
+    navigationTimeoutMs: requirePositiveNumberInput(input.navigationTimeoutMs, "navigationTimeoutMs"),
+    settleMs: requirePositiveNumberInput(input.settleMs, "settleMs"),
     frontendDesignDir,
     frontendResearchDir,
     visualRoot,

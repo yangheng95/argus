@@ -1492,7 +1492,7 @@ export namespace EngineService {
     // (orchestrator, acceptance, ...) layer on top via setPermission. Operators
     // restrict via explicit `deny` / `ask` rules under `tool_permissions`
     // in their config — only those keys appear here. We intentionally do
-    // NOT inject a `*: "ask"` catch-all; that turned the LLM autonomy gate
+    // NOT inject a `*: "ask"` catch-all; that turned the LLM autonomy path
     // into an indefinite block whenever the agent reached for a tool the
     // catch-all lookup happened to land on (todoread, planner, panel, …).
     const cfg = taskConfigSnapshot
@@ -1519,9 +1519,9 @@ export namespace EngineService {
       const projectID = Instance.project.id
       for (const { attachment: att, bytes } of decodedAttachments) {
         const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
-        // Default intent: image MIMEs are visual references (SSIM gate
+        // Default intent: image MIMEs are visual references (SSIM check
         // consumes them). Anything else is generic spec material until a
-        // specific evaluator gate claims it.
+        // specific evaluator check claims it.
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
         attachmentRefs.push({ ...ref, intent, source: "user-upload" })
       }
@@ -1765,7 +1765,7 @@ export namespace EngineService {
   /**
    * Merge a batch of evaluation checks into `engine_task.criteria_results`.
    * Upsert by `name` — the latest write for a given check name wins. Called
-   * by the in-process visual-diff gate (orchestrator/tools.ts) and by the
+   * by the in-process visual-diff check (orchestrator/tools.ts) and by the
    * acceptance-verdict sink that flattens AcceptanceVerdict.deferred_checks +
    * rejection_details into the unified criteria stream. Does not change
    * task.status.

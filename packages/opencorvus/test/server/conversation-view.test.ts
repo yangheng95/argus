@@ -87,6 +87,21 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
   })
 })
 
+test("projectConversationView rejects transcript messages without backend created time", () => {
+  expect(() =>
+    projectConversationView({}, [
+      {
+        info: {
+          id: "msg_missing_time",
+          sessionID: "ses_missing_time",
+          channel: "assistant",
+        },
+        parts: [{ type: "text", text: "missing time" }],
+      },
+    ]),
+  ).toThrow("projectConversationView: message msg_missing_time missing info.time.created")
+})
+
 test("projectConversationView tracks the last message with displayable content", () => {
   const transcript = [
     {

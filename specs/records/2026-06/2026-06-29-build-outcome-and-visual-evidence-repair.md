@@ -2,6 +2,24 @@
 
 Date: 2026-06-29
 
+## Recall
+
+- User request: make build terminal outcomes and formal visual evidence
+  durable and diagnosable for the affected workflow.
+- Acceptance: every terminal build attempt records an outcome artifact,
+  positive acceptance remains separate, full-region and content-well evidence
+  cannot satisfy each other, and reference parity remains tied to persisted
+  comparison evidence.
+- Hard constraints: no fallback, no acceptance-as-negative-signal shortcut, no
+  gate workaround, and no broad git reset.
+- Read before implementation: `AGENTS.md`, current build persistence paths,
+  browser-preview evidence records, and relevant June visual-evidence records.
+- Repository sweep: build outcome, `goal_run_attempt`, `acceptance`,
+  `reference-comparison`, crop intent, and browser-preview artifact call sites.
+- Independent feedback: visual-evidence review required formal
+  reference-comparison proof to stay distinct from supporting scroll-slice
+  diagnostics.
+
 ## Incident
 
 Task `tsk_f0e5c0272001djBGw2eLvbkgkH` exposed two related fact-source gaps.

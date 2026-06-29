@@ -7,9 +7,8 @@
 ## engine 域（13 张表）
 
 所有表定义在 `src/engine/engine.sql.ts`，命名前缀 `engine_`（历史文档里的
-`orchestrator_*` 已全部重命名为 `engine_*`）。Phase 6 把 5 张过程表（`engine_run` /
-`engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`）合并
-为单一 `engine_artifact`，按 `kind` 区分语义。
+`orchestrator_*` 已全部重命名为 `engine_*`）。旧的多张过程表已合并为单一
+`engine_artifact`，按 `kind` 区分语义。
 
 ### 顶层与规格
 
@@ -25,7 +24,7 @@
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engine_plan_version` | status ∈ {active, superseded}                                                                                                                                                                                                                                                                                                                                                                                   |
 | `engine_milestone`    | status ∈ {pending, active, passed, failed}                                                                                                                                                                                                                                                                                                                                                                      |
-| `engine_goal`         | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，2026-05-05 Phase E 退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（Phase B+E 2026-05-05 退役，单一来源迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
+| `engine_goal`         | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，旧 goal 状态列已退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（这些过程字段的单一来源已迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
 | `engine_requirement`  | 需求追溯记录（`requirements` agent 写入）                                                                                                                                                                                                                                                                                                                                                                       |
 | `engine_plan_node`    | 计划步骤                                                                                                                                                                                                                                                                                                                                                                                                        |
 
@@ -33,7 +32,7 @@
 
 | 表                         | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。`EngineArtifactKind` 的唯一真源是 `packages/opencorvus/src/engine/engine.sql.ts`，本文档禁止复制完整枚举。 |
+| `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的多表过程模型。`EngineArtifactKind` 的唯一真源是 `packages/opencorvus/src/engine/engine.sql.ts`，本文档禁止复制完整枚举。 |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ### 交互与绑定

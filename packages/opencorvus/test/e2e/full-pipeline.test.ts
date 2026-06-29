@@ -6,7 +6,7 @@
  *   → retry/replan (small budget) → assert final state
  *
  * 任务: 实现一个最小可用的 NoteStore 闭环。
- * Slack: 任务状态变更通知到 #argus-opencode 频道（Bus.subscribe + chat.postMessage）。
+ * Slack: 任务状态变更通知到 #opencorvus-build 频道（Bus.subscribe + chat.postMessage）。
  *
  * 运行: bun test test/e2e/full-pipeline.test.ts
  */

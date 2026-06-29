@@ -60,8 +60,8 @@ describe("isolated acceptance LKG evaluation", () => {
           expect("rolledBackTo" in result.outcome ? result.outcome.rolledBackTo : "").toBe(previousSha)
           expect(result.evaluatedSha).toBe(roundSha)
           expect(result.metric.passed).toBe(false)
-          expect(result.metric.gates.find((gate) => gate.name === "text_hit_ratio")?.passed).toBe(false)
-          expect(result.metric.gates.find((gate) => gate.name === "text_hit_ratio")?.note).toContain(
+          expect(result.metric.checks.find((check) => check.name === "text_hit_ratio")?.passed).toBe(false)
+          expect(result.metric.checks.find((check) => check.name === "text_hit_ratio")?.note).toContain(
             "missing referenceStrings/renderedText evidence",
           )
           expect(await head(dir)).toBe(primaryBefore)

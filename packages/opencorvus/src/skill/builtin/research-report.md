@@ -67,4 +67,4 @@ If the brief is research-shaped (the activation signals above) and you call `ext
 - Generic vendor brochures rephrased into Chinese / English. The whole point of a research report is the synthesis — comparing, contrasting, and recommending — not paraphrasing one source.
 - Inventing URLs, version numbers, or capability claims. If `websearch` returns nothing useful for a claim, say so in the report — do not fabricate.
 - A `.tsx` / `.ts` file. The deliverable is markdown.
-- Multiple files, build outputs, or a test suite. There is no software to test; the acceptance gate is the report itself.
+- Multiple files, build outputs, or a test suite. There is no software to test; the acceptance evidence is the report itself.

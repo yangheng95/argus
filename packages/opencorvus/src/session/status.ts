@@ -1,7 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import z from "zod"
-import type { StreamActivityGate } from "@/util/stream-activity"
+import type { StreamActivityMonitor } from "@/util/stream-activity"
 import { Database, eq } from "@/storage/db"
 import { SessionTable } from "./session.sql"
 import { timelineOrderKey, timelineOrderKeyDomain } from "@/timeline/order"
@@ -95,7 +95,7 @@ export namespace SessionStatus {
   // duplicate-terminal shape audit §11.3 documented at bench lines
   // 19182-19183. One process = one map = one latch (rule 8 single source).
   const state: Record<string, Info> = {}
-  const activityGates: Record<string, StreamActivityGate> = {}
+  const activityMonitors: Record<string, StreamActivityMonitor> = {}
 
   export function get(sessionID: string) {
     return (
@@ -109,25 +109,25 @@ export namespace SessionStatus {
     return state
   }
 
-  export function registerActivityGate(sessionID: string, gate: StreamActivityGate): () => void {
-    activityGates[sessionID] = gate
+  export function registerActivityMonitor(sessionID: string, monitor: StreamActivityMonitor): () => void {
+    activityMonitors[sessionID] = monitor
     return () => {
-      if (activityGates[sessionID] === gate) {
-        delete activityGates[sessionID]
+      if (activityMonitors[sessionID] === monitor) {
+        delete activityMonitors[sessionID]
       }
     }
   }
 
   export function getActivity(sessionID: string) {
-    const gate = activityGates[sessionID]
-    if (!gate) return undefined
+    const monitor = activityMonitors[sessionID]
+    if (!monitor) return undefined
     return {
-      last_activity_at: gate.lastActivityAt(),
+      last_activity_at: monitor.lastActivityAt(),
     }
   }
 
-  export function abortActivityGate(sessionID: string, reason?: unknown) {
-    activityGates[sessionID]?.abort(reason)
+  export function abortActivityMonitor(sessionID: string, reason?: unknown) {
+    activityMonitors[sessionID]?.abort(reason)
   }
 
   export function set(sessionID: string, status: Info, options?: { publish?: boolean }) {
@@ -166,7 +166,7 @@ export namespace SessionStatus {
     // terminal calls could both pass the line-97 check before either wrote.
     if (status.type === "idle") {
       delete state[sessionID]
-      delete activityGates[sessionID]
+      delete activityMonitors[sessionID]
     } else {
       state[sessionID] = status
     }

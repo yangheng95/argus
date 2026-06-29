@@ -2,195 +2,180 @@
   <defs>
     <style>
       text { font-family: 'Segoe UI', Arial, sans-serif; }
-      .group-top    { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.5; rx: 10; }
-      .group-plan   { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; rx: 10; }
-      .group-run    { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; rx: 10; }
-      .group-inter  { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; rx: 10; }
-      .group-sess   { fill: #fce7f3; stroke: #db2777; stroke-width: 1.5; rx: 10; }
-      .group-ctrl   { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 10; }
-      .group-aux    { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 10; }
+      .group-top { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.5; rx: 10; }
+      .group-plan { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; rx: 10; }
+      .group-artifact { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.5; rx: 10; }
+      .group-inter { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; rx: 10; }
+      .group-sess { fill: #fce7f3; stroke: #db2777; stroke-width: 1.5; rx: 10; }
+      .group-ctrl { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 10; }
+      .group-aux { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 10; }
       .tbl { fill: #fff; stroke: #cbd5e1; stroke-width: 1; rx: 4; }
       .hot { fill: #fff; stroke: #7c3aed; stroke-width: 1.5; rx: 4; }
+      .artifact { fill: #fff; stroke: #2563eb; stroke-width: 2; rx: 6; }
       .cross { fill: #fefce8; stroke: #ca8a04; stroke-width: 2; rx: 10; }
-      .title{ font-size: 18px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
-      .subtitle{ font-size: 12px; fill: #64748b; text-anchor: middle; }
+      .title { font-size: 18px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .subtitle { font-size: 12px; fill: #64748b; text-anchor: middle; }
       .h1 { font-size: 14px; font-weight: 700; fill: #0f172a; text-anchor: start; }
       .h2 { font-size: 12px; font-weight: 600; fill: #1e293b; text-anchor: start; }
       .h3 { font-size: 11px; font-weight: 600; fill: #334155; text-anchor: middle; }
-      .code { font-family: 'Cascadia Code',Consolas,monospace; font-size: 10px; fill: #334155; text-anchor: middle; }
-      .code-s { font-family: 'Cascadia Code',Consolas,monospace; font-size: 9.5px; fill: #475569; text-anchor: start; }
-      .tag { font-size: 10px; fill: #64748b; text-anchor: middle; }
+      .code { font-family: 'Cascadia Code', Consolas, monospace; font-size: 10px; fill: #334155; text-anchor: middle; }
+      .code-s { font-family: 'Cascadia Code', Consolas, monospace; font-size: 9.5px; fill: #475569; text-anchor: start; }
       .note { font-size: 10px; fill: #94a3b8; text-anchor: start; font-style: italic; }
     </style>
   </defs>
 
   <text class="title" x="620" y="28">图 2 — 数据面</text>
-  <text class="subtitle" x="620" y="48">orchestrator 域 18 张表 · session/control/辅助域 · Trace/Bus 横切</text>
+  <text class="subtitle" x="620" y="48">engine 域 13 张表 · session/control/辅助域 · Trace/Bus 横切</text>
 
-  <!-- ====== orchestrator 域（大块） ====== -->
-  <rect class="group-top" x="40" y="72" width="780" height="96"/>
-  <text class="h1" x="56" y="94">orchestrator 域 — 顶层与规格（3 表）</text>
-  <text class="code-s" x="56" y="110">orchestrator/orchestrator.sql.ts · 唯一写入者: service.ts + store.ts</text>
+  <!-- ====== engine 域（大块） ====== -->
+  <rect class="group-top" x="40" y="72" width="780" height="96" />
+  <text class="h1" x="56" y="94">engine 域 — 顶层与规格（3 表）</text>
+  <text class="code-s" x="56" y="110">engine/engine.sql.ts · writers: task-api/index.ts + engine/persist/store/state</text>
 
-  <rect class="hot" x="56" y="120" width="240" height="40"/>
+  <rect class="hot" x="56" y="120" width="240" height="44" />
   <text class="h3" x="176" y="136">engine_task</text>
-  <text class="code" x="176" y="152">queued→active→completed/failed/cancelled · kind: workflow/build</text>
+  <text class="code" x="176" y="150">queued → active → terminal</text>
+  <text class="code" x="176" y="160">kind: workflow / build</text>
 
-  <rect class="tbl" x="310" y="120" width="246" height="40"/>
+  <rect class="tbl" x="310" y="120" width="246" height="44" />
   <text class="h3" x="433" y="136">engine_spec_snapshot</text>
   <text class="code" x="433" y="152">规格快照（requirements 输出）</text>
 
-  <rect class="tbl" x="568" y="120" width="240" height="40"/>
+  <rect class="tbl" x="568" y="120" width="240" height="44" />
   <text class="h3" x="688" y="136">engine_spec_item</text>
   <text class="code" x="688" y="152">规格明细项</text>
 
   <!-- 计划与目标 -->
-  <rect class="group-plan" x="40" y="184" width="780" height="132"/>
-  <text class="h1" x="56" y="206">计划与目标（6 表）</text>
+  <rect class="group-plan" x="40" y="184" width="780" height="132" />
+  <text class="h1" x="56" y="206">计划与目标（5 表）</text>
 
-  <rect class="tbl" x="56" y="216" width="180" height="40"/>
-  <text class="h3" x="146" y="232">plan_version</text>
+  <rect class="tbl" x="56" y="216" width="180" height="40" />
+  <text class="h3" x="146" y="232">engine_plan_version</text>
   <text class="code" x="146" y="248">active / superseded</text>
 
-  <rect class="tbl" x="246" y="216" width="180" height="40"/>
-  <text class="h3" x="336" y="232">milestone</text>
-  <text class="code" x="336" y="248">pending→active→passed/failed</text>
+  <rect class="tbl" x="246" y="216" width="180" height="40" />
+  <text class="h3" x="336" y="232">engine_milestone</text>
+  <text class="code" x="336" y="248">pending → active → terminal</text>
 
-  <rect class="hot" x="436" y="216" width="180" height="40"/>
-  <text class="h3" x="526" y="232">goal</text>
+  <rect class="hot" x="436" y="216" width="180" height="40" />
+  <text class="h3" x="526" y="232">engine_goal</text>
   <text class="code" x="526" y="248">blocking / advisory</text>
 
-  <rect class="tbl" x="626" y="216" width="184" height="40"/>
-  <text class="h3" x="718" y="232">requirement</text>
+  <rect class="tbl" x="626" y="216" width="184" height="40" />
+  <text class="h3" x="718" y="232">engine_requirement</text>
   <text class="code" x="718" y="248">需求追溯</text>
 
-  <rect class="tbl" x="56" y="266" width="376" height="40"/>
-  <text class="h3" x="244" y="282">goal_snapshot</text>
-  <text class="code" x="244" y="298">goal 快照</text>
-
-  <rect class="tbl" x="442" y="266" width="368" height="40"/>
-  <text class="h3" x="626" y="282">plan_node</text>
-  <text class="code" x="626" y="298">计划内步骤</text>
+  <rect class="tbl" x="56" y="266" width="752" height="40" />
+  <text class="h3" x="432" y="282">engine_plan_node</text>
+  <text class="code" x="432" y="298">计划内步骤；Goal live 状态由 describe 派生</text>
 
   <!-- 执行与交付 -->
-  <rect class="group-run" x="40" y="332" width="780" height="180"/>
-  <text class="h1" x="56" y="354">执行与交付（7 表）</text>
+  <rect class="group-artifact" x="40" y="332" width="780" height="180" />
+  <text class="h1" x="56" y="354">执行与交付（2 表 · artifact-centric）</text>
 
-  <rect class="hot" x="56" y="364" width="240" height="44"/>
-  <text class="h3" x="176" y="380">run</text>
-  <text class="code" x="176" y="396">queued→accepted→running→completed/...</text>
-  <text class="code" x="176" y="408">phase: plan/execute/evaluate/deliver/dispatch/retry</text>
+  <rect class="artifact" x="56" y="366" width="500" height="132" />
+  <text class="h3" x="306" y="384">engine_artifact</text>
+  <text class="code" x="306" y="402">single process artifact table</text>
+  <text class="code" x="306" y="420">kind: run / goal_run_attempt / acceptance</text>
+  <text class="code" x="306" y="438">kind: verification-evidence / browser_preview_evidence</text>
+  <text class="code" x="306" y="456">kind: architect_contract_graph / integrity_attempt / ...</text>
+  <text class="code" x="306" y="474">EngineArtifactKind in engine.sql.ts is the only enum source</text>
+  <text class="code" x="306" y="492">payload carries process-specific fields</text>
 
-  <rect class="tbl" x="310" y="364" width="246" height="44"/>
-  <text class="h3" x="433" y="380">goal_run</text>
-  <text class="code" x="433" y="396">goal × run 关联</text>
-
-  <rect class="tbl" x="568" y="364" width="240" height="44"/>
-  <text class="h3" x="688" y="380">acceptance</text>
-  <text class="code" x="688" y="396">交付记录</text>
-
-  <rect class="tbl" x="56" y="420" width="240" height="40"/>
-  <text class="h3" x="176" y="436">artifact</text>
-  <text class="code" x="176" y="452">产物</text>
-
-  <rect class="tbl" x="310" y="420" width="246" height="40"/>
-  <text class="h3" x="433" y="436">evaluation</text>
-  <text class="code" x="433" y="452">评估结果</text>
-
-  <rect class="tbl" x="568" y="420" width="240" height="40"/>
-  <text class="h3" x="688" y="436">progress_snapshot</text>
-  <text class="code" x="688" y="452">进度快照</text>
-
-  <rect class="tbl" x="56" y="472" width="752" height="32"/>
-  <text class="h3" x="432" y="488">executor_session — 执行器会话绑定</text>
+  <rect class="tbl" x="578" y="366" width="230" height="132" />
+  <text class="h3" x="693" y="386">engine_progress_snapshot</text>
+  <text class="code" x="693" y="406">compiled workflow view</text>
+  <text class="code" x="693" y="424">SSE / Overlay projection input</text>
+  <text class="code" x="693" y="442">not a second process source</text>
 
   <!-- 交互与绑定 -->
-  <rect class="group-inter" x="40" y="528" width="780" height="72"/>
+  <rect class="group-inter" x="40" y="528" width="780" height="72" />
   <text class="h1" x="56" y="550">交互与绑定（2 表）</text>
 
-  <rect class="tbl" x="56" y="560" width="376" height="36"/>
-  <text class="h3" x="244" y="576">interaction_request</text>
-  <text class="code" x="244" y="590">type: permission/question</text>
+  <rect class="tbl" x="56" y="560" width="376" height="36" />
+  <text class="h3" x="244" y="576">engine_interaction_request</text>
+  <text class="code" x="244" y="590">type: permission / question</text>
 
-  <rect class="hot" x="442" y="560" width="366" height="36"/>
-  <text class="h3" x="625" y="576">channel_binding</text>
+  <rect class="hot" x="442" y="560" width="366" height="36" />
+  <text class="h3" x="625" y="576">engine_channel_binding</text>
   <text class="code" x="625" y="590">channel ↔ task · ChannelIngress 查询入口</text>
 
   <!-- ====== session 域（右上） ====== -->
-  <rect class="group-sess" x="840" y="72" width="360" height="244"/>
+  <rect class="group-sess" x="840" y="72" width="360" height="244" />
   <text class="h1" x="856" y="94">session 域（5 表）</text>
   <text class="code-s" x="856" y="110">session/session.sql.ts</text>
 
-  <rect class="hot" x="856" y="120" width="328" height="50"/>
+  <rect class="hot" x="856" y="120" width="328" height="50" />
   <text class="h3" x="1020" y="136">session</text>
-  <text class="code" x="1020" y="152">kind: gateway/agent/... · channel_key</text>
-  <text class="code" x="1020" y="166">部分唯一索引: session_gateway_singleton_idx</text>
+  <text class="code" x="1020" y="152">kind: root / orchestrator / build / ...</text>
+  <text class="code" x="1020" y="166">goal_id · parent_id · directory</text>
 
-  <rect class="tbl" x="856" y="180" width="100" height="32"/>
+  <rect class="tbl" x="856" y="180" width="100" height="32" />
   <text class="h3" x="906" y="200">message</text>
 
-  <rect class="tbl" x="970" y="180" width="100" height="32"/>
+  <rect class="tbl" x="970" y="180" width="100" height="32" />
   <text class="h3" x="1020" y="200">part</text>
 
-  <rect class="tbl" x="1084" y="180" width="100" height="32"/>
+  <rect class="tbl" x="1084" y="180" width="100" height="32" />
   <text class="h3" x="1134" y="200">todo</text>
 
-  <rect class="tbl" x="856" y="222" width="328" height="32"/>
+  <rect class="tbl" x="856" y="222" width="328" height="32" />
   <text class="h3" x="1020" y="242">permission</text>
 
   <text class="note" x="856" y="274">part 存 tool_call / text 分片</text>
   <text class="note" x="856" y="290">permission 驱动 UI 授权弹窗</text>
-  <text class="note" x="856" y="306">gateway session 一 channel 一个</text>
+  <text class="note" x="856" y="306">ControlMessage 不通过独立 session kind 承载</text>
 
   <!-- ====== 控制 / 工作区 ====== -->
-  <rect class="group-ctrl" x="840" y="332" width="360" height="180"/>
+  <rect class="group-ctrl" x="840" y="332" width="360" height="180" />
   <text class="h1" x="856" y="354">控制 / 工作区（4 表）</text>
 
-  <rect class="tbl" x="856" y="364" width="328" height="36"/>
+  <rect class="tbl" x="856" y="364" width="328" height="36" />
   <text class="h3" x="1020" y="380">workspace</text>
   <text class="code" x="1020" y="394">workspace/workspace.sql.ts</text>
 
-  <rect class="tbl" x="856" y="410" width="160" height="36"/>
+  <rect class="tbl" x="856" y="410" width="160" height="36" />
   <text class="h3" x="936" y="426">control_account</text>
   <text class="code" x="936" y="440">control/control.sql</text>
 
-  <rect class="tbl" x="1024" y="410" width="160" height="36"/>
+  <rect class="tbl" x="1024" y="410" width="160" height="36" />
   <text class="h3" x="1104" y="426">control_message</text>
   <text class="code" x="1104" y="440">入站消息</text>
 
-  <rect class="tbl" x="856" y="456" width="328" height="44"/>
+  <rect class="tbl" x="856" y="456" width="328" height="44" />
   <text class="h3" x="1020" y="474">project</text>
   <text class="code" x="1020" y="490">project/project.sql · 项目根</text>
 
   <!-- ====== 辅助域（右下） ====== -->
-  <rect class="group-aux" x="840" y="528" width="360" height="72"/>
+  <rect class="group-aux" x="840" y="528" width="360" height="72" />
   <text class="h1" x="856" y="550">辅助域（若干）</text>
-  <text class="code-s" x="856" y="570">decision_log · workbench_* · memory_* · scratchpad</text>
-  <text class="code-s" x="856" y="586">task_plan · quick_note · session_share · protocol_* · scheduler_*</text>
+  <text class="code-s" x="856" y="568">decision_log · workbench_* · memory_*</text>
+  <text class="code-s" x="856" y="584">scratchpad · task_plan · quick_note · session_share</text>
+  <text class="code-s" x="856" y="596">protocol_* · scheduler_*</text>
 
   <!-- ====== 横切（底部大块） ====== -->
-  <rect class="cross" x="40" y="620" width="1160" height="160"/>
+  <rect class="cross" x="40" y="620" width="1160" height="160" />
   <text class="h1" x="56" y="644" style="fill:#854d0e">横切（非表）— 所有 workflow 事件必经</text>
 
   <!-- Trace -->
-  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="64" y="658" width="560" height="108" rx="8"/>
+  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="64" y="658" width="560" height="108" rx="8" />
   <text class="h2" x="80" y="678">Trace — 统一 workflow 追踪</text>
-  <text class="code-s" x="80" y="696">trace/index.ts · 替代 AgentTrace + env-gated LLMTrace</text>
-  <text class="code-s" x="80" y="714">Trace.event() ──→ 追加 &lt;instance&gt;/.opencorvus/trace/&lt;taskID&gt;.jsonl</text>
-  <text class="code-s" x="80" y="732">           └──→ Bus.publish (SSE 消费者实时读)</text>
-  <text class="note" x="80" y="752">session/llm.ts hook 自动捕获所有 LLM 调用，agent 无需手工埋点</text>
+  <text class="code-s" x="80" y="696">trace/index.ts · AgentTrace 自动记录 LLM / tool / helper 事件</text>
+  <text class="code-s" x="80" y="714">AgentTrace.record* ──→ &lt;instance&gt;/.opencorvus/trace/&lt;sessionID&gt;.jsonl</text>
+  <text class="code-s" x="80" y="732">                    └──→ Bus.publish (SSE 消费者实时读)</text>
+  <text class="note" x="80" y="752">session/llm.ts + agent/runner.ts + orchestrator/agent.ts 自动埋点</text>
 
   <!-- Bus -->
-  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="640" y="658" width="560" height="54" rx="8"/>
+  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="640" y="658" width="560" height="54" rx="8" />
   <text class="h2" x="656" y="678">Bus — 全局事件总线</text>
-  <text class="code-s" x="656" y="696">bus/bus-event.ts · BusEvent.define(name, zodSchema) · GlobalBus.publish</text>
+  <text class="code-s" x="656" y="696">bus/bus-event.ts · BusEvent.define(name, zodSchema) · Bus.publish</text>
 
   <!-- Decision Log -->
-  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="640" y="720" width="560" height="46" rx="8"/>
+  <rect fill="#fff" stroke="#ca8a04" stroke-width="1.5" x="640" y="720" width="560" height="46" rx="8" />
   <text class="h2" x="656" y="740">Decision Log — 全局共享上下文（表 + 语义）</text>
   <text class="code-s" x="656" y="758">decision-log/ · append-only · 所有 agent R/W · 传 WHY 不只 WHAT</text>
 
   <!-- 指引 -->
-  <text class="note" x="40" y="810">详细字段与状态机见 02-data.md · 调用关系见 01-agents.md · 入站路径见 03-control.md</text>
-  <text class="note" x="40" y="828">热点表（高频读写）用紫色边框 · 其余为普通灰边</text>
+  <text class="note" x="40" y="810">详细字段与 artifact kind 见 02-data.md · 调用关系见 01-agents.md · 入站路径见 03-control.md</text>
+  <text class="note" x="40" y="828">热点表（高频读写）用紫色边框 · artifact-centric 过程真源用蓝色边框</text>
 </svg>

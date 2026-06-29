@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { runProcessWithInactivityTimeout } from "../../src/acceptance/checks/inactivity-timeout-process"
 
 describe("acceptance inactivity timeout process runner", () => {
@@ -39,5 +42,18 @@ describe("acceptance inactivity timeout process runner", () => {
 
     expect(result.exitCode).toBeUndefined()
     expect(result.stderr).toContain("Command timed out after 80ms without stdout/stderr activity.")
+  })
+
+  test("returns after process handles release the working directory", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "oc-inactivity-close-"))
+    const result = await runProcessWithInactivityTimeout({
+      executable: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      cwd,
+      timeoutMs: 500,
+    })
+
+    expect(result.exitCode).toBe(0)
+    await expect(fs.rm(cwd, { recursive: true, force: true })).resolves.toBeUndefined()
   })
 })

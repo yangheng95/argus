@@ -80,9 +80,9 @@ function buildSmartSteps(analysis: { files: Array<{ ref: string }>; requirements
 
 describe("eval task: middleware router", () => {
   const EVAL_REQUEST = `工作目录
-本任务的工作目录是 eval-workspace-1772975037078/e5（绝对路径: D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace-1772975037078/e5）。
+本任务的工作目录是 eval-workspace-1772975037078/e5（绝对路径: D:/myhexin-local/opencorvus-local/packages/opencorvus/eval-workspace-1772975037078/e5）。
 所有源代码文件都在这个目录下。请先用以下命令切换到工作目录：
-cd "D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace-1772975037078/e5"
+cd "D:/myhexin-local/opencorvus-local/packages/opencorvus/eval-workspace-1772975037078/e5"
 然后查看目录结构和文件内容，理解当前代码后再开始修改。
 任务描述
 src/router.ts 中有一个简单的 Router 类，只支持 GET/POST 路由。
@@ -98,7 +98,7 @@ src/router.ts 中有一个简单的 Router 类，只支持 GET/POST 路由。
 
   test("extracts working directory", () => {
     const workDir = extractWorkDir(EVAL_REQUEST)
-    expect(workDir).toBe("D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace-1772975037078/e5")
+    expect(workDir).toBe("D:/myhexin-local/opencorvus-local/packages/opencorvus/eval-workspace-1772975037078/e5")
   })
 
   test("extracts all file references", () => {

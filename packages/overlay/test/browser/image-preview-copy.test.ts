@@ -269,7 +269,7 @@ test(
               },
             ],
           },
-          agentView: { sessions: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
           lastSequence: 0,
         })

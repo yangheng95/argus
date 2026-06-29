@@ -162,11 +162,11 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
-        agentView: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-        history: { hasMoreBefore: false },
-        messageWatermark: null,
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
+        messageWatermark: 0,
         lastSequence: 0,
       })
     if (path === `/task/${TASK_ID}/events`) return eventStream()

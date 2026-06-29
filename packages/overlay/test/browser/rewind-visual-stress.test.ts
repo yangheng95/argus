@@ -26,13 +26,20 @@ type FixtureMessage = {
     resolvedRole: string
     channel: string
     agent: string
+    orderKey: string
     time: { created: number }
     providerID?: string
     modelID?: string
     tokens?: { input: number; output: number; reasoning: number; total: number; cache: { read: number; write: number } }
     cost?: number
   }
-  parts: Array<{ id: string; messageID: string; sessionID: string; type: "text"; text: string }>
+  parts: Array<{ id: string; messageID: string; sessionID: string; orderKey: string; type: "text"; text: string }>
+}
+
+type FixtureSession = {
+  sessionID: string
+  parentSessionID?: string
+  goalID?: string
 }
 
 type SseClient = {
@@ -65,6 +72,26 @@ function text(value: string, init?: ResponseInit) {
   })
 }
 
+function orderKey(domain: string, rank: number, time: number, id: string, sequence = 0): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return orderKey("task", 10, time, id)
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return orderKey("message", 30, time, id)
+}
+
+function partOrderKey(id: string, time: number): string {
+  return orderKey("part", 31, time, id)
+}
+
+function sessionOrderKey(id: string, time: number): string {
+  return orderKey("session", 50, time, id)
+}
+
 function message(input: {
   id: string
   sessionID: string
@@ -87,6 +114,7 @@ function message(input: {
       resolvedRole: input.resolvedRole,
       channel: input.channel,
       agent: input.agent,
+      orderKey: messageOrderKey(input.id, input.created),
       time: { created: input.created },
       ...(input.providerID ? { providerID: input.providerID } : {}),
       ...(input.modelID ? { modelID: input.modelID } : {}),
@@ -94,9 +122,59 @@ function message(input: {
       ...(typeof input.cost === "number" ? { cost: input.cost } : {}),
     },
     parts: [
-      { id: `part_${input.id}`, messageID: input.id, sessionID: input.sessionID, type: "text", text: input.body },
+      {
+        id: `part_${input.id}`,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: partOrderKey(`part_${input.id}`, input.created + 1),
+        type: "text",
+        text: input.body,
+      },
     ],
   }
+}
+
+function viewMessagesForTranscript(messages: FixtureMessage[], sessions: FixtureSession[]) {
+  const sessionByID = new Map(sessions.map((session) => [session.sessionID, session]))
+  return messages.map((item) => {
+    const session = sessionByID.get(item.info.sessionID)
+    return {
+      messageID: item.info.id,
+      orderKey: item.info.orderKey,
+      sessionID: item.info.sessionID,
+      stage: item.info.resolvedRole,
+      ...(session?.parentSessionID ? { parentSessionID: session.parentSessionID } : {}),
+      ...(session?.goalID ? { goalID: session.goalID } : {}),
+      time: item.info.time.created,
+      placement: "top_level",
+    }
+  })
+}
+
+function viewSessionsForTranscript(sessions: FixtureSession[], messages: FixtureMessage[]) {
+  return sessions.flatMap((session) => {
+    const sessionMessages = messages.filter((message) => message.info.sessionID === session.sessionID)
+    const first = sessionMessages[0]
+    const last = sessionMessages.at(-1)
+    if (!first || !last) return []
+    const firstTime = first.info.time.created
+    const lastTime = last.info.time.created
+    return [{
+      sessionID: session.sessionID,
+      orderKey: sessionOrderKey(session.sessionID, firstTime),
+      stage: first.info.resolvedRole,
+      ...(session.parentSessionID ? { parentSessionID: session.parentSessionID } : {}),
+      ...(session.goalID ? { goalID: session.goalID } : {}),
+      messageIDs: sessionMessages.map((message) => message.info.id),
+      lastDisplayMessageID: last.info.id,
+      firstMessageTime: firstTime,
+      lastMessageTime: lastTime,
+      firstObservedAt: firstTime,
+      lastObservedAt: lastTime,
+      status: "completed",
+      placement: "top_level",
+    }]
+  })
 }
 
 function messageUpdatedEvent(item: FixtureMessage, sequence: number) {
@@ -104,6 +182,7 @@ function messageUpdatedEvent(item: FixtureMessage, sequence: number) {
     type: "message.updated",
     taskID: TASK_ID,
     sequence,
+    orderKey: item.info.orderKey,
     emittedAt: item.info.time.created,
     properties: { taskID: TASK_ID, info: item.info },
   }
@@ -114,8 +193,15 @@ function partUpdatedEvent(item: FixtureMessage, sequence: number) {
     type: "message.part.updated",
     taskID: TASK_ID,
     sequence,
+    orderKey: item.info.orderKey,
     emittedAt: item.info.time.created,
-    properties: { taskID: TASK_ID, part: item.parts[0] },
+    properties: {
+      taskID: TASK_ID,
+      orderKey: item.info.orderKey,
+      channel: item.info.channel,
+      resolvedRole: item.info.resolvedRole,
+      part: item.parts[0],
+    },
   }
 }
 
@@ -808,7 +894,7 @@ test(
       tokens: { input: 47_000, output: 275_000, reasoning: 0, total: 322_000, cache: { read: 0, write: 0 } },
       cost: 0.42,
     }
-    const sessions = [
+    const sessions: FixtureSession[] = [
       { sessionID: "ses_root", parentSessionID: "", goalID: "" },
       { sessionID: "ses_req", parentSessionID: "ses_root", goalID: "" },
       { sessionID: "ses_arch", parentSessionID: "ses_root", goalID: "" },
@@ -918,13 +1004,14 @@ test(
 
     const task = {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, times.t1),
       directory: PROJECT_ROOT,
       status: "active",
       sessionID: "ses_root",
       request: "RW-T1 user request",
       title: "Rewind visual stress",
       attachments: [],
-      time: { created: times.t1, updated: times.t8 },
+      time: { created: times.t1, started: times.t1, updated: times.t8 },
     }
     const promptProfileCatalog = {
       active: "front",
@@ -1007,24 +1094,32 @@ test(
       goalWorkflows: [],
       rewindCursor,
     })
-    const conversation = () => ({
-      lastSequence: sequence,
-      messageWatermark: sequence,
-      board: board(),
-      transcript: visibleMessages(),
-      timeline: [],
-      events: [],
-      eventReplay: {
-        cursor: sequence,
-        latestSequence: sequence,
-        complete: true,
-        limit: 100,
-        sinceTimestamp: null,
-      },
-      history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-      view: { rootID: "root", sessions, cards: {}, order: [] },
-      agentView: { rootID: "root", sessions, cards: {}, order: [] },
-    })
+    const conversation = () => {
+      const messages = visibleMessages()
+      const viewSessions = viewSessionsForTranscript(sessions, messages)
+      const viewMessages = viewMessagesForTranscript(messages, sessions)
+      const topLevelSessionIDs = viewSessions
+        .filter((session) => session.placement === "top_level" && session.messageIDs.length > 0)
+        .map((session) => session.sessionID)
+      return {
+        lastSequence: sequence,
+        messageWatermark: sequence,
+        board: board(),
+        transcript: messages,
+        timeline: [],
+        events: [],
+        eventReplay: {
+          cursor: sequence,
+          latestSequence: sequence,
+          complete: true,
+          limit: 100,
+          sinceTimestamp: null,
+        },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        view: { topLevelSessionIDs, sessions: viewSessions, messages: viewMessages },
+        agentView: { topLevelSessionIDs, sessions: viewSessions, messages: viewMessages },
+      }
+    }
     const emitTaskRewound = (cursorTime: number, resetWorktree = false) => {
       sequence += 1
       const event = {
@@ -1123,6 +1218,15 @@ test(
         if (path === "/executor") return json([])
         if (path === "/agent") return json([])
         if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return json([])
+        if (path === "/skill/mounts")
+          return json({
+            scope: "project",
+            skills: [],
+            agents: [],
+            matrix: [],
+            project_mounts: { agents: {} },
+            unmounted_count: 0,
+          })
         if (path === "/mcp") return json({})
         if (path === "/panel/knowledge/memory") return json([])
         if (path === "/panel/knowledge/preference") return json([])
@@ -1334,6 +1438,19 @@ test(
       let snapshot = await visualSnapshot(page)
       assertNoLayoutBreakage(snapshot)
       assertCardsContain(snapshot, ["RW-T1 user request", "RW-T4 plan anchor", "RW-T8 final orchestration tail"])
+      await page.evaluate(() => {
+        const scroll = document.getElementById("chatScroll")
+        if (!scroll) throw new Error("chatScroll missing")
+        scroll.scrollTop = scroll.scrollHeight
+        scroll.dispatchEvent(new Event("scroll", { bubbles: true }))
+      })
+      snapshot = await waitForVisualState(
+        page,
+        "baseline final orchestration tail visible",
+        (item) => item.text.includes("RW-T8 final orchestration tail"),
+        () => ({ requestLog, errors }),
+      )
+      assertNoLayoutBreakage(snapshot)
       assertVisible(snapshot, ["RW-T8 final orchestration tail"])
       await captureScreenshot("01-baseline")
       markStage("01-baseline")

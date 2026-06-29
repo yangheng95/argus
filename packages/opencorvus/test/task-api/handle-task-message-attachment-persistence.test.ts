@@ -93,7 +93,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         expect(ref?.mime).toBe("image/png")
         expect(ref?.filename).toBe("follow-up.png")
         // Image MIMEs must carry visual_reference intent so acceptance
-        // visual-diff gate can pick them up.
+        // visual-diff check can pick them up.
         expect(ref?.intent).toBe("visual_reference")
         expect(ref?.source).toBe("user-upload")
       },

@@ -6,8 +6,8 @@
  * Design: LLM activity redesign contract
  *
  * Composition:
- *   - Reuses util/stream-activity.ts as the inner mid-stream idle gate;
- *     the activity layer adds first-byte gate, total deadline (across
+ *   - Reuses util/stream-activity.ts as the inner mid-stream idle monitor;
+ *     the activity layer adds first-byte timer, total deadline (across
  *     retries + sleeps), retry scheduler with classified backoff, and
  *     three-state terminal events.
  *
@@ -16,7 +16,7 @@
  *   2. terminal outcome ∈ { "done", "failed", "aborted" }, mutually exclusive.
  *   3. heartbeat / paused / resumed events do not appear after terminal.
  *   4. retry attempts are monotonically increasing (1, 2, 3, …).
- *   5. winner cause (which gate aborted first) is preserved on the abort
+ *   5. winner cause (which abort source fired first) is preserved on the abort
  *     reason via the `_activity_cause` marker; classify() reads it from
  *     there, NEVER from string-matching AbortError.message.
  *
@@ -28,13 +28,13 @@
 
 import { Identifier } from "@/id/id"
 import { SessionStatus } from "@/session/status"
-import { withStreamActivity, type StreamActivityGate } from "@/util/stream-activity"
+import { withStreamActivity, type StreamActivityMonitor } from "@/util/stream-activity"
 import { APICallError } from "ai"
 import { ProviderError } from "@/provider/error"
 
 /**
  * Mutually exclusive error categories. Priority (high → low) when multiple
- * gates fire near-simultaneously: external_abort > total_timeout > first_byte
+ * abort sources fire near-simultaneously: external_abort > total_timeout > first_byte
  * > idle > everything else. Priority is enforced via AbortSignal.any()'s
  * spec'd behaviour (first source to abort wins) plus our `_activity_cause`
  * marker on the reason DOMException.
@@ -58,10 +58,10 @@ export type ErrorClass =
 
 /**
  * The provider adapter MUST emit one of these on every real upstream event
- * so the idle gate has accurate liveness signal. Missing kinds is the most
+ * so the idle monitor has accurate liveness signal. Missing kinds is the most
  * common cause of false-positive idle trips, so this list is the canonical
  * boundary, not a suggestion. See HEARTBEAT_FIRST_BYTE for which kinds count
- * as the first byte that hands off from first-byte gate to idle gate.
+ * as the first byte that hands off from the first-byte timer to the idle monitor.
  */
 export type HeartbeatKind =
   | "first-byte"
@@ -126,7 +126,7 @@ export function chunkHeartbeatKind(chunk: { type?: string }): HeartbeatKind {
   }
 }
 
-/** Any of these counts as "first byte received" for gate handoff purposes. */
+/** Any of these counts as "first byte received" for the monitor handoff. */
 const HEARTBEAT_FIRST_BYTE: ReadonlySet<HeartbeatKind> = new Set([
   "first-byte",
   "text-delta",
@@ -190,11 +190,11 @@ export interface LLMActivityPolicy {
   totalMs: number
 
   /** Mid-stream silence threshold. Started lazily on first heartbeat;
-   *  before that the first-byte gate is responsible. */
+   *  before that the first-byte timer is responsible. */
   idleMs: number
 
   /** Maximum gap between request dispatch and first heartbeat. Once any
-   *  heartbeat is observed, this gate is dropped and idle takes over. */
+   *  heartbeat is observed, this timer is cleared and idle monitoring takes over. */
   firstByteMs: number
 
   /** Per-class retry caps. Non-retryable classes (external_abort,
@@ -240,7 +240,7 @@ export interface LLMActivityRun {
   signal: AbortSignal
   /** Refresh liveness on every real upstream event. */
   bump(kind: HeartbeatKind): void
-  /** Suspend idle gate (e.g. while a long synchronous tool call runs).
+  /** Suspend idle monitoring (e.g. while a long synchronous tool call runs).
    *  Calls nest; pair with resume(). Reason is for event log readability,
    *  not control flow. */
   pause(reason: string): void
@@ -545,7 +545,7 @@ export async function withLLMActivity<T>(
         throw new LLMActivityError("total_timeout", attempt, reason)
       }
 
-      // Per-attempt: first-byte gate + lazy idle gate.
+      // Per-attempt: first-byte timer + lazy idle monitor.
       const firstByteCtrl = new AbortController()
       const firstByteTimer = setTimeout(() => {
         firstByteCtrl.abort(makeAbortReason("first_byte", `LLMActivity first byte > ${policy.firstByteMs}ms`))
@@ -554,31 +554,31 @@ export async function withLLMActivity<T>(
 
       // Held in a 1-element holder so TypeScript narrowing inside the inner
       // closures (bump/pause/resume) doesn't collapse the type to null after
-      // the synchronous initialiser. With `let idleGate: T | null = null`
-      // the compiler narrows `idleGate` to `never` when it sees `idleGate?.x`
+      // the synchronous initialiser. With `let idleMonitor: T | null = null`
+      // the compiler narrows `idleMonitor` to `never` when it sees `idleMonitor?.x`
       // because no in-scope assignment widens it back.
-      const idleHolder: { gate: StreamActivityGate | null } = { gate: null }
-      let unregisterActivityGate: (() => void) | undefined
+      const idleHolder: { monitor: StreamActivityMonitor | null } = { monitor: null }
+      let unregisterActivityMonitor: (() => void) | undefined
       const idleCtrl = new AbortController()
 
       const composed = AbortSignal.any([externalProxy.signal, totalCtrl.signal, firstByteCtrl.signal, idleCtrl.signal])
 
-      const startIdleGate = () => {
-        if (idleHolder.gate) return
-        const gate = withStreamActivity({ idleMs: policy.idleMs, label: `act:${id}` })
-        idleHolder.gate = gate
-        unregisterActivityGate = SessionStatus.registerActivityGate(ctx.sessionID, gate)
-        gate.signal.addEventListener("abort", () => {
-          if (gate.timedOut() && !idleCtrl.signal.aborted) {
+      const startIdleMonitor = () => {
+        if (idleHolder.monitor) return
+        const monitor = withStreamActivity({ idleMs: policy.idleMs, label: `act:${id}` })
+        idleHolder.monitor = monitor
+        unregisterActivityMonitor = SessionStatus.registerActivityMonitor(ctx.sessionID, monitor)
+        monitor.signal.addEventListener("abort", () => {
+          if (monitor.timedOut() && !idleCtrl.signal.aborted) {
             idleCtrl.abort(makeAbortReason("idle", `LLMActivity idle > ${policy.idleMs}ms`))
           }
         })
       }
-      const disposeIdleGate = () => {
-        unregisterActivityGate?.()
-        unregisterActivityGate = undefined
-        idleHolder.gate?.dispose()
-        idleHolder.gate = null
+      const disposeIdleMonitor = () => {
+        unregisterActivityMonitor?.()
+        unregisterActivityMonitor = undefined
+        idleHolder.monitor?.dispose()
+        idleHolder.monitor = null
       }
 
       const run: LLMActivityRun = {
@@ -589,24 +589,24 @@ export async function withLLMActivity<T>(
           if (!firstByteSeen && HEARTBEAT_FIRST_BYTE.has(kind)) {
             firstByteSeen = true
             clearTimeout(firstByteTimer)
-            startIdleGate()
+            startIdleMonitor()
             sink({ type: "heartbeat", id, ts: Date.now(), kind: "first-byte" })
             // Fall through and also emit the original kind unless caller
             // explicitly bumped "first-byte" (in which case we already did).
             if (kind === "first-byte") return
           }
-          idleHolder.gate?.observe()
+          idleHolder.monitor?.observe()
           sink({ type: "heartbeat", id, ts: Date.now(), kind })
         },
         pause: (reason: string) => {
           if (terminalEmitted) return
           beginPause()
-          idleHolder.gate?.pause()
+          idleHolder.monitor?.pause()
           sink({ type: "paused", id, ts: Date.now(), reason })
         },
         resume: (reason: string) => {
           if (terminalEmitted) return
-          idleHolder.gate?.resume()
+          idleHolder.monitor?.resume()
           endPause()
           sink({ type: "resumed", id, ts: Date.now(), reason })
         },
@@ -616,7 +616,7 @@ export async function withLLMActivity<T>(
         const value = await attemptFn(run)
         closePauseWindow()
         clearTimeout(firstByteTimer)
-        disposeIdleGate()
+        disposeIdleMonitor()
         if (externalProxy.signal.aborted || external.aborted) {
           emitTerminal("aborted", "external_abort", externalProxy.signal.reason)
           throw new LLMActivityAbortedError(attempt, externalProxy.signal.reason)
@@ -634,7 +634,7 @@ export async function withLLMActivity<T>(
       } catch (err) {
         closePauseWindow()
         clearTimeout(firstByteTimer)
-        disposeIdleGate()
+        disposeIdleMonitor()
 
         // External takes priority over everything else — even if the throw
         // looks like a different class, an external abort means the caller

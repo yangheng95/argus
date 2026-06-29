@@ -58,7 +58,7 @@ function pickErrorInfo(err: unknown): ReplyErrorInfo {
   return { name }
 }
 
-function messageForError(info: ReplyErrorInfo, fallback: string): string {
+function messageForError(info: ReplyErrorInfo, defaultMessage: string): string {
   switch (info.name) {
     case "SessionRuntimeContractMissingError":
       return t("card.agent_reply_contract_gone")
@@ -69,7 +69,7 @@ function messageForError(info: ReplyErrorInfo, fallback: string): string {
     case "OperatorSteerWakeError":
       return t("card.agent_reply_wake_failed")
     default:
-      return fallback || t("card.agent_reply_failed")
+      return defaultMessage || t("card.agent_reply_failed")
   }
 }
 
@@ -99,8 +99,8 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
       setText("")
     } catch (e) {
       const info = pickErrorInfo(e)
-      const fallback = e instanceof Error ? e.message : String(e)
-      setError(messageForError(info, fallback))
+      const defaultMessage = e instanceof Error ? e.message : String(e)
+      setError(messageForError(info, defaultMessage))
     } finally {
       setSending(false)
     }

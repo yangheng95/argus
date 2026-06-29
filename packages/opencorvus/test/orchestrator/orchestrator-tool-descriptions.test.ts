@@ -91,6 +91,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.select_expert_squad.description).toContain("root session config overlay")
     expect(tools.select_expert_squad.description).toContain("does not dispatch work")
     expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")
+    const profileID = tools.select_expert_squad.inputSchema!.shape.profile_id as { description?: string }
+    expect(profileID.description).toContain("frontend-innovate")
 
     expect(tools.skill.description).toContain("Scheduler-only")
     expect(tools.skill.description).toContain("mounted Orchestrator expert-squad skills")
@@ -232,7 +234,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).not.toContain("webpage_render")
     expect(tools.visual_qa.description).not.toContain("webpage_evaluate")
     expect(tools.visual_qa.description).toContain("task-scoped browser_preview evidence")
-    expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
+    expect(tools.visual_qa.description).toContain("NOT the final acceptance authority")
     expect(tools.visual_qa.description).toContain("Visual QA and integrity are peer review agents")
     expect(tools.visual_qa.description).toContain("does not replace integrity")
     expect(tools.visual_qa.description).toContain("not integrity's workflow prerequisite")

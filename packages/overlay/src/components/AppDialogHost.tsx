@@ -138,6 +138,7 @@ export function AppDialogHost() {
             options={decisionOptions()}
             value={dialogStore.app.selectValue}
             ariaLabel={dialogStore.app.selectLabel || ""}
+            onChange={chooseTaskDecision}
             onActivate={chooseTaskDecision}
             itemAttributes={(option) => ({
               "data-recommended": dialogStore.app.recommendedValue === option.value ? "true" : "false",

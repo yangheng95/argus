@@ -9,9 +9,20 @@ import { tmpdir } from "../fixture/fixture"
 
 const octokitCalls = {
   comments: [] as Array<{ body: string }>,
+  compareCommits: [] as Array<{ basehead: string }>,
+  listPulls: [] as Array<{ head: string; base: string }>,
   createPulls: [] as Array<{ title: string }>,
 }
 const setFailedCalls: unknown[] = []
+let compareCommitsImpl: (input: { basehead: string }) => Promise<{ data: { ahead_by: number } }> = async () => ({
+  data: { ahead_by: 1 },
+})
+let listPullsImpl: (input: { head: string; base: string }) => Promise<{ data: Array<{ number: number }> }> =
+  async () => ({ data: [] })
+let createPullImpl: (input: { title: string }) => Promise<{ data: { number: number } }> = async (input) => {
+  octokitCalls.createPulls.push({ title: input.title })
+  return { data: { number: 123 } }
+}
 
 mock.module("@actions/core", () => ({
   setFailed: mock((message: unknown) => {
@@ -52,6 +63,10 @@ mock.module("@octokit/rest", () => ({
     rest = {
       repos: {
         get: mock(async () => ({ data: { default_branch: "main" } })),
+        compareCommitsWithBasehead: mock(async (input: { basehead: string }) => {
+          octokitCalls.compareCommits.push({ basehead: input.basehead })
+          return await compareCommitsImpl(input)
+        }),
       },
       reactions: {
         createForIssue: mock(async () => ({ data: { id: 1 } })),
@@ -65,11 +80,11 @@ mock.module("@octokit/rest", () => ({
         }),
       },
       pulls: {
-        list: mock(async () => ({ data: [] })),
-        create: mock(async (input: { title: string }) => {
-          octokitCalls.createPulls.push({ title: input.title })
-          return { data: { number: 123 } }
+        list: mock(async (input: { head: string; base: string }) => {
+          octokitCalls.listPulls.push({ head: input.head, base: input.base })
+          return await listPullsImpl(input)
         }),
+        create: mock(async (input: { title: string }) => await createPullImpl(input)),
       },
     }
   },
@@ -117,6 +132,85 @@ async function gitStatus(cwd: string) {
   return (await $`git status --porcelain`.cwd(cwd).quiet().text()).trim()
 }
 
+async function configureIssueRemote(cwd: string, remotePath: string) {
+  await $`git branch -M main`.cwd(cwd).quiet()
+  await $`git init --bare`.cwd(remotePath).quiet()
+  await $`git remote add origin ${remotePath}`.cwd(cwd).quiet()
+  await $`git push -u origin main`.cwd(cwd).quiet()
+}
+
+function configureActionEnv(prompt = "fix the issue") {
+  previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as typeof previousEnv
+  process.env.MODEL = "openai/gpt-test"
+  process.env.GITHUB_RUN_ID = "123456"
+  process.env.PROMPT = prompt
+}
+
+function configureActionFetch() {
+  globalThis.fetch = (async (input, init) => {
+    const url = String(input)
+    const headers = new Headers(init?.headers)
+    fetchCalls.push({ url, method: init?.method, authorization: headers.get("Authorization") })
+    if (url === "https://api.opencorvus.ai/exchange_github_app_token") {
+      return Response.json({ token: "app-token" })
+    }
+    if (url === "https://api.github.com/installation/token") {
+      return new Response(null, { status: 204 })
+    }
+    throw new Error(`Unexpected fetch: ${url}`)
+  }) as typeof fetch
+}
+
+function issueOpenedEvent() {
+  return {
+    eventName: "issues",
+    actor: "alice",
+    repo: { owner: "owner", repo: "repo" },
+    payload: {
+      action: "opened",
+      issue: {
+        number: 42,
+        title: "Original issue title",
+      },
+    },
+  }
+}
+
+async function runDirtyIssueFlowExpectingExit() {
+  await using tmp = await tmpdir({ git: true })
+  await using remote = await tmpdir()
+  await configureIssueRemote(tmp.path, remote.path)
+  const cwd = process.cwd()
+  process.chdir(tmp.path)
+
+  const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    const text = input.parts.find((part) => part.type === "text")?.text ?? ""
+    if (text.startsWith("Summarize the following")) return assistantText(input.sessionID, "Fix issue")
+    await Bun.write(path.join(tmp.path, "dirty.txt"), "dirty work")
+    return assistantText(input.sessionID, "Implemented dirty work.")
+  })
+  const sleep = spyOn(Bun, "sleep").mockImplementation(async () => {})
+  const exitCodes: Array<string | number | null | undefined> = []
+  const exit = spyOn(process, "exit").mockImplementation((code?: string | number | null) => {
+    exitCodes.push(code)
+    throw new Error(`process.exit:${code}`)
+  })
+
+  try {
+    const { GithubRunCommand } = await import("../../src/cli/cmd/github")
+    await expect(GithubRunCommand.handler?.({ event: JSON.stringify(issueOpenedEvent()) } as never)).rejects.toThrow(
+      "process.exit:1",
+    )
+  } finally {
+    process.chdir(cwd)
+    promptSpy.mockRestore()
+    sleep.mockRestore()
+    exit.mockRestore()
+  }
+
+  return { exitCodes }
+}
+
 describe("github action run", () => {
   afterEach(async () => {
     for (const key of envKeys) {
@@ -128,30 +222,24 @@ describe("github action run", () => {
     globalThis.fetch = originalFetch
     fetchCalls.length = 0
     octokitCalls.comments.length = 0
+    octokitCalls.compareCommits.length = 0
+    octokitCalls.listPulls.length = 0
     octokitCalls.createPulls.length = 0
     setFailedCalls.length = 0
+    compareCommitsImpl = async () => ({ data: { ahead_by: 1 } })
+    listPullsImpl = async () => ({ data: [] })
+    createPullImpl = async (input) => {
+      octokitCalls.createPulls.push({ title: input.title })
+      return { data: { number: 123 } }
+    }
     mock.restore()
     await Instance.disposeAll()
     await resetDatabase()
   })
 
   test("summary failure stops issue dirty flow before git mutation or pull request creation", async () => {
-    previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as typeof previousEnv
-    process.env.MODEL = "openai/gpt-test"
-    process.env.GITHUB_RUN_ID = "123456"
-    process.env.PROMPT = "fix the issue"
-    globalThis.fetch = (async (input, init) => {
-      const url = String(input)
-      const headers = new Headers(init?.headers)
-      fetchCalls.push({ url, method: init?.method, authorization: headers.get("Authorization") })
-      if (url === "https://api.opencorvus.ai/exchange_github_app_token") {
-        return Response.json({ token: "app-token" })
-      }
-      if (url === "https://api.github.com/installation/token") {
-        return new Response(null, { status: 204 })
-      }
-      throw new Error(`Unexpected fetch: ${url}`)
-    }) as typeof fetch
+    configureActionEnv()
+    configureActionFetch()
 
     await using tmp = await tmpdir({ git: true })
     const cwd = process.cwd()
@@ -180,20 +268,7 @@ describe("github action run", () => {
     try {
       const { GithubRunCommand } = await import("../../src/cli/cmd/github")
       await expect(
-        GithubRunCommand.handler?.({
-          event: JSON.stringify({
-            eventName: "issues",
-            actor: "alice",
-            repo: { owner: "owner", repo: "repo" },
-            payload: {
-              action: "opened",
-              issue: {
-                number: 42,
-                title: "Original issue title",
-              },
-            },
-          }),
-        } as never),
+        GithubRunCommand.handler?.({ event: JSON.stringify(issueOpenedEvent()) } as never),
       ).rejects.toThrow("process.exit:1")
     } finally {
       process.chdir(cwd)
@@ -223,5 +298,76 @@ describe("github action run", () => {
     expect(await gitCommitCount(tmp.path)).toBe(commitCountBeforeSummary)
     expect(await gitCachedNames(tmp.path)).toBe(cachedNamesBeforeSummary)
     expect(await gitStatus(tmp.path)).toContain("dirty.txt")
+  }, 60_000)
+
+  test("pull request list failure stops issue dirty flow before compare or creation", async () => {
+    configureActionEnv()
+    configureActionFetch()
+    listPullsImpl = async () => {
+      throw new Error("pull request list unavailable")
+    }
+
+    const { exitCodes } = await runDirtyIssueFlowExpectingExit()
+
+    expect(exitCodes).toEqual([1])
+    expect(octokitCalls.listPulls).toHaveLength(2)
+    expect(octokitCalls.compareCommits).toEqual([])
+    expect(octokitCalls.createPulls).toEqual([])
+    expect(setFailedCalls).toEqual(["pull request list unavailable"])
+    expect(octokitCalls.comments[0]?.body).toContain("pull request list unavailable")
+  }, 60_000)
+
+  test("pull request compare failure stops issue dirty flow before pull request creation", async () => {
+    configureActionEnv()
+    configureActionFetch()
+    compareCommitsImpl = async () => {
+      throw new Error("pull request compare unavailable")
+    }
+
+    const { exitCodes } = await runDirtyIssueFlowExpectingExit()
+
+    expect(exitCodes).toEqual([1])
+    expect(octokitCalls.listPulls).toHaveLength(1)
+    expect(octokitCalls.compareCommits).toHaveLength(2)
+    expect(octokitCalls.compareCommits[0]?.basehead).toMatch(/^main\.\.\.opencorvus\/issue42-/)
+    expect(octokitCalls.createPulls).toEqual([])
+    expect(setFailedCalls).toEqual(["pull request compare unavailable"])
+    expect(octokitCalls.comments[0]?.body).toContain("pull request compare unavailable")
+    expect(octokitCalls.comments[0]?.body).not.toContain("Created PR #")
+  }, 60_000)
+
+  test("remote branch without commits stops issue dirty flow before pull request creation", async () => {
+    configureActionEnv()
+    configureActionFetch()
+    compareCommitsImpl = async () => ({ data: { ahead_by: 0 } })
+
+    const { exitCodes } = await runDirtyIssueFlowExpectingExit()
+
+    expect(exitCodes).toEqual([1])
+    expect(octokitCalls.listPulls.length).toBe(1)
+    expect(octokitCalls.compareCommits).toHaveLength(1)
+    expect(octokitCalls.compareCommits[0]?.basehead).toMatch(/^main\.\.\.opencorvus\/issue42-/)
+    expect(octokitCalls.createPulls).toEqual([])
+    expect(String(setFailedCalls[0])).toMatch(/^No commits between main and opencorvus\/issue42-/)
+    expect(octokitCalls.comments[0]?.body).toContain("No commits between main and opencorvus/issue42-")
+  }, 60_000)
+
+  test("pull request create failure is surfaced without success comment", async () => {
+    configureActionEnv()
+    configureActionFetch()
+    createPullImpl = async (input) => {
+      octokitCalls.createPulls.push({ title: input.title })
+      throw new Error("pull request create unavailable")
+    }
+
+    const { exitCodes } = await runDirtyIssueFlowExpectingExit()
+
+    expect(exitCodes).toEqual([1])
+    expect(octokitCalls.listPulls).toHaveLength(1)
+    expect(octokitCalls.compareCommits).toHaveLength(1)
+    expect(octokitCalls.createPulls).toHaveLength(2)
+    expect(setFailedCalls).toEqual(["pull request create unavailable"])
+    expect(octokitCalls.comments[0]?.body).toContain("pull request create unavailable")
+    expect(octokitCalls.comments[0]?.body).not.toContain("Created PR #")
   }, 60_000)
 })

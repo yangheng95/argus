@@ -8,6 +8,7 @@ import {
   testEventOrderKey,
   testMessageOrderKey,
   testPartOrderKey,
+  testTaskOrderKey,
 } from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
@@ -31,6 +32,17 @@ const TASK_ID = "tsk_message_tokens"
 const SID = "ses_message_tokens"
 const T0 = 1_780_000_000_000
 
+function activeTaskFixture(): any {
+  return {
+    id: TASK_ID,
+    status: "active",
+    time: { created: T0 },
+    orderKey: testTaskOrderKey(TASK_ID, T0),
+    request: "test",
+    attachments: [],
+  }
+}
+
 function setBoardStore(...args: any[]): any {
   if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampTestBoard(args[1]))
   return (setBoardStoreRaw as any)(...args)
@@ -45,13 +57,18 @@ function validateEventForTest(event: any): any {
   return event
 }
 
+function requireCreatedTime(value: unknown, owner: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${owner} missing finite created time`)
+  return value
+}
+
 function hydrateConversationView(view: any, transcript: any[]): void {
   hydrateConversationViewRaw({ ...view, messages: stampTestViewMessages(view?.messages || []) }, stampTestTranscript(transcript))
 }
 
 function messageUpdated(info: Record<string, any>) {
   const id = String(info.id || "")
-  const time = Number(info.time?.created || T0)
+  const time = requireCreatedTime(info.time?.created, `message token fixture ${id || "<unknown>"}`)
   const orderKey = testMessageOrderKey(id, time)
   return {
     type: "message.updated",
@@ -78,11 +95,11 @@ function partUpdated(input: {
   partID: string
   text: string
   role: string
-  messageTime?: number
-  partTime?: number
+  messageTime: number
+  partTime: number
 }) {
-  const messageTime = Number(input.messageTime || T0)
-  const partTime = Number(input.partTime || messageTime)
+  const messageTime = requireCreatedTime(input.messageTime, `message token part owner ${input.messageID}`)
+  const partTime = requireCreatedTime(input.partTime, `message token part ${input.partID}`)
   const ownerOrderKey = testMessageOrderKey(input.messageID, messageTime)
   const partOrderKey = testPartOrderKey(input.partID, partTime)
   return {
@@ -124,7 +141,7 @@ function viewForTranscript(sessions: any[], transcript: any[]): any {
         stage: channel === "main" ? "user" : channel,
         parentSessionID: info.parentSessionID || undefined,
         goalID: info.goalID || undefined,
-        time: Number(info.time?.created || 0),
+        time: requireCreatedTime(info.time?.created, `message token fixture view ${String(info.id || "<unknown>")}`),
         orderKey: info.orderKey,
         placement: info.goalID ? "goal_phase" : "top_level",
       }
@@ -141,7 +158,7 @@ function viewForTranscript(sessions: any[], transcript: any[]): any {
 // renders.
 test("handleMessageUpdated projects info.tokens + info.cost onto the turn card", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -182,7 +199,7 @@ test("handleMessageUpdated projects info.tokens + info.cost onto the turn card",
 
 test("live message regroup keeps user and assistant turns on the real timeline", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -227,7 +244,7 @@ test("live message regroup keeps user and assistant turns on the real timeline",
 
 test("hydrateConversationView keeps user and assistant turns on the real timeline", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -338,7 +355,7 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
 
 test("message regroup merges only adjacent compatible non-phase messages", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -367,6 +384,8 @@ test("message regroup merges only adjacent compatible non-phase messages", async
         partID: `part_${item.id}`,
         text: item.text,
         role: item.role,
+        messageTime: item.time,
+        partTime: item.time,
       }),
     )
   }
@@ -392,7 +411,7 @@ test("message regroup merges only adjacent compatible non-phase messages", async
 
 test("handleMessageUpdated projects the actual assistant model from message info", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -421,7 +440,7 @@ test("handleMessageUpdated projects the actual assistant model from message info
 
 test("multi-message assistant segment clears card model when model-bearing messages differ", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -458,7 +477,7 @@ test("multi-message assistant segment clears card model when model-bearing messa
 
 test("multi-message assistant segment keeps card model when only one message has model fields", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -497,7 +516,7 @@ test("multi-message assistant segment keeps card model when only one message has
 
 test("handleMessageUpdated leaves card.usage unset for assistant messages with zero usage", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -529,7 +548,7 @@ test("handleMessageUpdated leaves card.usage unset for assistant messages with z
 
 test("hydrateConversationView restores usage and context tokens from transcript messages", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -581,7 +600,7 @@ test("hydrateConversationView restores usage and context tokens from transcript 
 
 test("hydrateConversationView restores actual model from transcript message info", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -628,7 +647,7 @@ test("hydrateConversationView restores actual model from transcript message info
 
 test("context token hint and usage aggregate across an adjacent assistant segment", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -672,7 +691,7 @@ test("context token hint and usage aggregate across an adjacent assistant segmen
 
 test("external executor cumulative usage does not masquerade as current context", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -702,7 +721,7 @@ test("external executor cumulative usage does not masquerade as current context"
 
 test("user messages do not get a usage chip even when tokens accidentally appear on info", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -732,7 +751,7 @@ test("user messages do not get a usage chip even when tokens accidentally appear
 
 test("user messages do not get a model chip even when provider fields accidentally appear", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -760,7 +779,7 @@ test("user messages do not get a model chip even when provider fields accidental
 // its own per-message tokens (not cumulative); the aggregator sums them.
 test("aggregateUsageAcrossSessions sums per-message usage across multiple sessions", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],
@@ -813,7 +832,7 @@ test("aggregateUsageAcrossSessions sums per-message usage across multiple sessio
 
 test("message.removed subtracts deleted card usage from the store aggregate", async () => {
   setBoardStore("board", {
-    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    task: activeTaskFixture(),
     goals: [],
     interactions: [],
     goalWorkflows: [],

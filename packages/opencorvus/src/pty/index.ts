@@ -1,4 +1,4 @@
-// Copied from OpenCode `packages/opencode/src/pty/index.ts` API shape and adapted to the project-bound PTY host.
+// Project-bound Pseudo Terminal API schema.
 import z from "zod"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"

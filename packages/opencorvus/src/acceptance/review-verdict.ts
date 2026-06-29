@@ -1,9 +1,6 @@
 /**
- * Structured final acceptance verdict.
- *
- * This is the neutral schema for the post-build acceptance reviewer. The legacy
- * legacy acceptance evidence re-exports it as AcceptanceVerdict for historical tests and
- * artifacts, while the current workflow uses it from integrity.
+ * Structured acceptance review verdict used by post-build evidence checks and
+ * integrity-facing review artifacts.
  */
 import z from "zod"
 

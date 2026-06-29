@@ -25,11 +25,33 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const now = Date.now()
+    const orderKey = (
+      domain: "task" | "session" | "message" | "part" | "board_goal" | "board_step" | "interaction",
+      time: number,
+      id: string,
+    ): string => {
+      const rank =
+        domain === "task"
+          ? 10
+          : domain === "message"
+            ? 30
+            : domain === "part"
+              ? 31
+              : domain === "session"
+                ? 50
+                : domain === "board_goal"
+                  ? 60
+                  : domain === "board_step"
+                    ? 61
+                    : 70
+      return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+    }
     const task = {
       id: "task-1",
       directory: "D:/overlay/workspace/app",
       status: "active",
       sessionID: "session-1",
+      orderKey: orderKey("task", now - 90_000, "task-1"),
       budget: {
         maxExecutorGroups: 3,
       },
@@ -45,6 +67,58 @@ test(
         },
       },
     }
+    const makeGoalWorkflow = (input: {
+      id: string
+      title: string
+      detail: string
+      status?: string
+      orderIndex: number
+      createdAt: number
+    }) => ({
+      goalID: input.id,
+      goalRunID: `${input.id}-run`,
+      orderKey: orderKey("board_goal", input.createdAt, input.id),
+      goalTitle: input.title,
+      goalObjective: input.detail,
+      goalStatus: input.status ?? "pending",
+      orderIndex: input.orderIndex,
+      retryCount: 0,
+      priority: "blocking",
+      steps: [
+        {
+          stepID: "build",
+          orderKey: orderKey("board_step", input.createdAt + 1, `${input.id}-build`),
+          label: "Executor",
+          status: "completed",
+          summary: "1 file",
+          payload: {
+            buildSessionID: "session-1",
+            changedFiles: ["src/app.js"],
+            changedFileDiffs: [
+              {
+                file: "src/app.js",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+            diffStats: {
+              files: 1,
+              additions: 1,
+              deletions: 1,
+            },
+          },
+          phases: {
+            build: {
+              orderKey: orderKey("board_step", input.createdAt + 2, `${input.id}-build-phase`),
+              status: "completed",
+              startedAt: input.createdAt + 1,
+              completedAt: input.createdAt + 2,
+            },
+          },
+        },
+      ],
+    })
     const data = {
       config: {
         model: "openai/gpt-4o-mini",
@@ -68,6 +142,7 @@ test(
         mcp: {
           docs: {
             type: "remote",
+            transport: "streamable-http",
             url: "https://mcp.example.com",
             enabled: true,
           },
@@ -154,6 +229,50 @@ test(
           executor: "opencorvus",
           phase: "execute",
         },
+        workflow: {
+          id: "pipeline",
+          name: "Pipeline",
+          steps: [
+            {
+              id: "requirements",
+              orderKey: orderKey("board_step", now - 74_000, "workflow-requirements"),
+              label: "Requirements",
+              tool: "requirements",
+              scope: "task",
+              skippable: true,
+              status: "completed",
+            },
+            {
+              id: "architect",
+              orderKey: orderKey("board_step", now - 73_000, "workflow-architect"),
+              label: "Architect",
+              tool: "architect",
+              scope: "task",
+              skippable: true,
+              status: "completed",
+            },
+            {
+              id: "build",
+              orderKey: orderKey("board_step", now - 72_000, "workflow-build"),
+              label: "Executor",
+              tool: "build",
+              scope: "goal",
+              skippable: false,
+              status: "completed",
+              phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+            },
+            {
+              id: "integrity",
+              orderKey: orderKey("board_step", now - 71_000, "workflow-integrity"),
+              label: "Review",
+              tool: "integrity",
+              scope: "task",
+              skippable: false,
+              status: "pending",
+            },
+          ],
+          goalLoopStepIDs: ["build"],
+        },
         overview: {
           headline: "### Overlay task headline",
           summary: "Overlay summary with **markdown**.",
@@ -223,22 +342,14 @@ test(
             goalID: index === 0 ? null : `goal-${index}`,
           })),
         },
-        lanes: [
-          {
-            id: "goals",
-            cards: [
-              {
-                id: "goal-1",
-                title: "Verify the overlay controls",
-                detail: "Every control opens, closes, saves, or triggers as expected.",
-                status: "pending",
-                metadata: {
-                  origin: "test",
-                  priority: "high",
-                },
-              },
-            ],
-          },
+        goalWorkflows: [
+          makeGoalWorkflow({
+            id: "goal-1",
+            title: "Verify the overlay controls",
+            detail: "Every control opens, closes, saves, or triggers as expected.",
+            orderIndex: 0,
+            createdAt: now - 65_000,
+          }),
         ],
         evaluation: {
           verdict: "pending",
@@ -289,6 +400,7 @@ test(
             status: "pending",
             title: "Approve tool usage",
             body: "Allow the overlay action to continue.",
+            orderKey: orderKey("interaction", now - 5_000, "interaction-1"),
             time: { created: now - 5_000 },
           },
         ],
@@ -343,12 +455,46 @@ test(
         task: {
           "task-1": [
             {
-              parts: [{ type: "text", text: "Please validate the overlay." }],
-              info: { role: "user", time: { created: now - 20_000 } },
+              parts: [
+                {
+                  id: "part-user-text",
+                  messageID: "msg-user",
+                  sessionID: "session-user",
+                  orderKey: orderKey("part", now - 19_999, "part-user-text"),
+                  type: "text",
+                  text: "Please validate the overlay.",
+                },
+              ],
+              info: {
+                id: "msg-user",
+                sessionID: "session-user",
+                role: "user",
+                resolvedRole: "user",
+                channel: "main",
+                orderKey: orderKey("message", now - 20_000, "msg-user"),
+                time: { created: now - 20_000 },
+              },
             },
             {
-              parts: [{ type: "text", text: "I am validating the overlay controls now." }],
-              info: { role: "assistant", time: { created: now - 19_000 } },
+              parts: [
+                {
+                  id: "part-assistant-text",
+                  messageID: "msg-assistant",
+                  sessionID: "session-1",
+                  orderKey: orderKey("part", now - 18_999, "part-assistant-text"),
+                  type: "text",
+                  text: "I am validating the overlay controls now.",
+                },
+              ],
+              info: {
+                id: "msg-assistant",
+                sessionID: "session-1",
+                role: "assistant",
+                resolvedRole: "assistant",
+                channel: "assistant",
+                orderKey: orderKey("message", now - 19_000, "msg-assistant"),
+                time: { created: now - 19_000 },
+              },
             },
           ],
         },
@@ -515,30 +661,33 @@ test(
       }
       if (msg.startsWith("/goal ")) {
         const detail = msg.includes("\nCriteria:") ? msg.split("\nCriteria:")[1]?.trim() || "" : ""
-        data.board.lanes[0].cards.push({
-          id: `goal-${data.counters.nextGoal++}`,
-          title: msg
-            .replace(/^\/goal\s+/, "")
-            .split("\nCriteria:")[0]
-            .trim(),
-          detail,
-          status: "pending",
-          metadata: { origin: "panel", priority: "medium" },
-        })
+        const goalID = `goal-${data.counters.nextGoal++}`
+        data.board.goalWorkflows.push(
+          makeGoalWorkflow({
+            id: goalID,
+            title: msg
+              .replace(/^\/goal\s+/, "")
+              .split("\nCriteria:")[0]
+              .trim(),
+            detail,
+            orderIndex: data.board.goalWorkflows.length,
+            createdAt: ts,
+          }),
+        )
       }
       if (msg.startsWith("Update goal ")) {
         const meta =
           body.metadata && typeof body.metadata === "object" ? (body.metadata as Record<string, unknown>) : {}
         const id = String(meta.goalID || "")
-        const card = data.board.lanes[0].cards.find((item) => item.id === id)
-        if (card) {
-          card.title = String(meta.description || card.title)
-          card.detail = String(meta.criteria || card.detail || "")
+        const workflow = data.board.goalWorkflows.find((item) => item.goalID === id)
+        if (workflow) {
+          workflow.goalTitle = String(meta.description || workflow.goalTitle)
+          workflow.goalObjective = String(meta.criteria || workflow.goalObjective || "")
         }
       }
       if (msg.startsWith("Delete goal ")) {
         const id = msg.replace("Delete goal ", "").replace(/\.$/, "").trim()
-        data.board.lanes[0].cards = data.board.lanes[0].cards.filter((item) => item.id !== id)
+        data.board.goalWorkflows = data.board.goalWorkflows.filter((item) => item.goalID !== id)
       }
       return {
         ok: true,
@@ -612,6 +761,13 @@ test(
         },
       ],
     }
+    const skillPool = () =>
+      data.skills.map((skill) => ({
+        ...skill,
+        mounted_agents: [],
+        unmounted: true,
+        warning: "unmounted",
+      }))
     const requests: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -661,6 +817,15 @@ test(
       }
       if (path === "/channel") return send(data.channels)
       if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+      if (path === "/skill/mounts")
+        return send({
+          scope: "project",
+          skills: skillPool(),
+          agents: [],
+          matrix: [],
+          project_mounts: {},
+          unmounted_count: skillPool().length,
+        })
       if (path === "/skill/directories")
         return send({
           global_config: "D:/skills/config",
@@ -795,13 +960,35 @@ test(
       }
       if (path === "/task/task-1/conversation") {
         const timeline = data.timeline.task["task-1"] || []
+        const viewMessages = timeline.map((item) => ({
+          messageID: item.info.id,
+          sessionID: item.info.sessionID,
+          stage: item.info.channel,
+          orderKey: item.info.orderKey,
+          time: item.info.time.created,
+          placement: "top_level",
+        }))
+        const viewSessions = [
+          {
+            sessionID: "session-1",
+            orderKey: orderKey("session", now - 19_000, "session-1"),
+            stage: "assistant",
+            messageIDs: ["msg-assistant"],
+            firstMessageTime: now - 19_000,
+            lastMessageTime: now - 19_000,
+            placement: "top_level",
+          },
+        ]
         return send({
           board: data.board,
           transcript: timeline,
           timeline,
           events: [],
-          view: { sessions: [] },
+          view: { sessions: viewSessions, messages: viewMessages, topLevelSessionIDs: ["session-1"] },
+          agentView: { sessions: viewSessions, messages: viewMessages, topLevelSessionIDs: ["session-1"] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
+          messageWatermark: 0,
           lastSequence: 0,
         })
       }
@@ -1317,7 +1504,65 @@ test(
       assert.equal(workflowPanels.archDecisionCode, "streaming cursors")
       assert.ok(workflowPanels.archDecisionReasonList.includes("Keeps resume and export flows"))
       assert.equal(workflowPanels.archSummaryText.includes("architect decisions across"), false)
+      const diffPanelOpen = await page.evaluate(
+        () =>
+          document.querySelector<HTMLElement>(
+            '[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]',
+          )?.dataset.active === "true",
+      )
+      if (!diffPanelOpen) {
+        await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')
+      }
+      try {
+        await page.waitForFunction(
+          () =>
+            document.querySelector<HTMLElement>(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]',
+            )?.dataset.active === "true",
+        )
+      } catch (error) {
+        const snapshot = await page.evaluate(() => ({
+          centerDiff: {
+            active: document.querySelector<HTMLElement>("#centerWorkbenchDiff")?.dataset.active || "",
+            open: document.querySelector<HTMLElement>("#centerWorkbenchDiff")?.dataset.open || "",
+          },
+          toolbarDiff:
+            document.querySelector<HTMLElement>(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]',
+            )?.outerHTML || "",
+          toolbarRight: Array.from(
+            document.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]'),
+          ).map((item) => ({
+            activity: item.dataset.activity || "",
+            active: item.dataset.active || "",
+            pressed: item.getAttribute("aria-pressed") || "",
+          })),
+          fileChanges: document.querySelector<HTMLElement>(".file-changes-panel")?.outerHTML.slice(0, 1200) || "",
+        }))
+        assert.fail(
+          `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+            { requests, errors, snapshot },
+            null,
+            2,
+          )}`,
+        )
+      }
       await page.waitForSelector(".change-row", { state: "attached" })
+      const inspectorPanelOpen = await page.evaluate(
+        () =>
+          document.querySelector<HTMLElement>(
+            '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+          )?.dataset.active === "true",
+      )
+      if (!inspectorPanelOpen) {
+        await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      }
+      await page.waitForFunction(
+        () =>
+          document.querySelector<HTMLElement>(
+            '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+          )?.dataset.active === "true",
+      )
       await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']", {
         state: "attached",
       })

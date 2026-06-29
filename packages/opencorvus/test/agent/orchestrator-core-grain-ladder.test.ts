@@ -44,7 +44,7 @@ describe("orchestrator-core workflow backtracking prohibition", () => {
  * specialist agent team via the workflow pipeline. The orchestrator was
  * shortcutting `kind=workflow` tasks straight to `build({ request })`,
  * skipping requirements/architect (no goal graph, no contracts, nothing
- * for integrity to gate). Direct build is reserved for kind=build and
+ * for integrity to verify). Direct build is reserved for kind=build and
  * post-review scoped fixes only. Prompt-only fix (rule 6.1); pin the
  * load-bearing copy + the absence of the prior permissive phrasing so a
  * future edit cannot silently re-open the bypass.

@@ -1109,7 +1109,7 @@ export function createGoalRun(input: {
 //
 // These all wrote to engine_goal.cascade_state, a cached "deps permanently
 // failed / verification outcome" projection that was read by the dispatch
-// gate. Both the cache column and the dispatch gate are gone. Dep-failure
+// branch. Both the cache column and the dispatch branch are gone. Dep-failure
 // handling is the LLM's call (it reads each goal's depends_on + describe
 // layer flags and chooses build({ goalID }) / modify_goal / fail_task).
 // Verification-goal outcome is recorded on the goal's goal_run chain.
@@ -1492,7 +1492,7 @@ function emitGoalRunStatusChanged(input: {
 export function updateGoalRun(goalRunID: string, values: Partial<import("./store").GoalRunRow>) {
   const row = findGoalRun(goalRunID)
   if (!row) return undefined
-  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
+  // Rule 23: no state-machine transition boundary. LLM / orchestrator may drive
   // goal_run.status to any value at any time; timestamp heuristics below are
   // informational, not blocking.
   const now = Date.now()
@@ -1678,11 +1678,11 @@ function writeAcceptanceRow(
 // pipeline/executor.ts in commit 54c382858 and replaced by the inline write,
 // keeping a single source of truth for goal-run acceptance persistence.
 
-// Task-level acceptance compatibility writer. Current task completion is driven
+// Task-level acceptance artifact writer. Current task completion is driven
 // by orchestrator `complete_task` from the latest post-build integrity_attempt;
 // verification evidence lives in engine_artifact
-// (kind="verification-evidence"). This function preserves the legacy row shape
-// for callers that still need the acceptance artifact projection.
+// (kind="verification-evidence"). This function writes the task acceptance
+// row and emits the AcceptanceReady event used by task detail projections.
 export function persistTaskAcceptance(input: {
   task: TaskRow
   run: RunRow
@@ -2108,7 +2108,7 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
  * overlay invalidates the board and materializes the goal step card with a
  * spinner immediately — instead of waiting for the build to terminate (the
  * old `recordBuildAttempt` insert wrote a row with `time_started == time_completed`,
- * so overlay's `startedAt > 0` gate was only met post-completion and the goal
+ * so overlay's `startedAt > 0` predicate was only met post-completion and the goal
  * card "appeared" already-finished).
  *
  * The orchestrator's build tool calls this after the build session exists; the same
@@ -2216,7 +2216,7 @@ export function beginBuildAttempt(input: {
   //      insert with supersede_of pointing at it.
   //   3. First-ever attempt: no prior tip, parentTipID undefined → null.
   //
-  // Never use a live tip as the fallback parent. `openGoalImplementationVersion`
+  // Never use a live tip as the retry parent. `openGoalImplementationVersion`
   // intentionally returns no supersededTipID for live rows; treating that as
   // "link to whatever tip exists" was the bug that let a retry supersede a
   // still-running executor and launch a duplicate build session.
@@ -2284,7 +2284,7 @@ export function beginBuildAttempt(input: {
   syncGoalStatus(input.goalID, `beginBuildAttempt`)
   // Emit goal_run.updated so the overlay's board-invalidating subscription
   // refetches and `goalWorkflows[i].steps[build].startedAt` becomes > 0;
-  // tree-writer's lazy-materialization gate then renders the step card.
+  // tree-writer's lazy-materialization predicate then renders the step card.
   Database.effect(() =>
     EngineProtocol.emit(
       Event.GoalRunUpdated,
@@ -2579,7 +2579,7 @@ export function recordIntegrityAttempt(input: {
    *  but solution_quality flagged 3 weak_acceptance specs" — losing this
    *  granularity behind a single aggregate would defeat the redesign. */
   /** Phase marker. `pre_build` attempts audit decomposition only — they cannot
-   *  satisfy the post-build acceptance freshness gate (a green pre-build attempt
+   *  satisfy the post-build freshness evidence (a green pre-build attempt
    *  must not let an unrun graph through). `post_build` attempts have access
    *  to a Requirement Status Snapshot and represent real end-to-end completion
    *  evidence. The orchestrator decides phase from whether any claiming goal

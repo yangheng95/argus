@@ -29,4 +29,4 @@ export {
   type VisualDiffReport,
 } from "@/runtime/visual-page"
 export { findBrowserExecutable } from "@/browser/runtime"
-export { buildAcceptanceEvidenceManifest } from "./project-gate"
+export { buildAcceptanceEvidenceManifest } from "./project-assessment"

@@ -1,7 +1,7 @@
 /**
  * One-shot helper: screenshot https://www.ainvest.com homepage and write it
  * to script/benchmark/assets/ainvest.png so the unattended benchmark default
- * case has a reference image for the visual-diff gate.
+ * case has a reference image for the visual-diff check.
  *
  * Usage: bun run script/benchmark/capture-ainvest-reference.ts
  *

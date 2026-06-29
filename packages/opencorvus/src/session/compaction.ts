@@ -722,7 +722,7 @@ export namespace SessionCompaction {
         }
         continue
       }
-      if (!keep) log.info("tail fallback", { budget, size, total })
+      if (!keep) log.info("tail boundary unavailable", { budget, size, total })
       break
     }
 

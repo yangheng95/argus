@@ -501,7 +501,7 @@ async function declaredFilesPresentInWorktree(files: string[], cwd: string) {
       const stat = await fs.stat(absolute)
       if (stat.isFile()) unique.add(normalized)
     } catch {
-      // Missing declared files remain visible to the publish gate instead of
+      // Missing declared files remain visible to artifact export instead of
       // being synthesized into the commit.
     }
   }

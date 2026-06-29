@@ -1538,20 +1538,7 @@ export namespace Config {
             })
             .optional()
             .describe(
-              "Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue).",
-            ),
-          debug: z
-            .object({
-              fail_on_information_missing: z
-                .boolean()
-                .optional()
-                .describe(
-                  "When true, the host injects an INFORMATION MISSING diagnostic section into every agent's system prompt and fails the current run the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
-                ),
-            })
-            .optional()
-            .describe(
-              "Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.",
+              "Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).",
             ),
           max_executor_groups: z
             .number()

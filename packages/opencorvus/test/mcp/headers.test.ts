@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { test, expect, mock, beforeEach, afterEach } from "bun:test"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -7,18 +7,60 @@ const transportCalls: Array<{
   options: { authProvider?: unknown; requestInit?: RequestInit }
 }> = []
 
+class MockUnauthorizedError extends Error {
+  constructor() {
+    super("Unauthorized")
+    this.name = "UnauthorizedError"
+  }
+}
+
+mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
+  UnauthorizedError: MockUnauthorizedError,
+}))
+
 // Mock the transport constructors to capture their arguments
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
-    constructor(url: URL, options?: { authProvider?: unknown; requestInit?: RequestInit }) {
+    authProvider:
+      | {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
+      | undefined
+    url: string
+    constructor(
+      url: URL,
+      options?: {
+        authProvider?: {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
+        requestInit?: RequestInit
+      },
+    ) {
+      this.url = url.toString()
+      this.authProvider = options?.authProvider
       transportCalls.push({
         type: "streamable",
-        url: url.toString(),
+        url: this.url,
         options: options ?? {},
       })
     }
     async start() {
+      if (await this.authProvider?.tokens?.()) return
+      const state = (await this.authProvider?.state?.()) ?? "headers"
+      const authorizationUrl = new URL("https://auth.example.test/authorize")
+      authorizationUrl.searchParams.set("state", state)
+      await this.authProvider?.redirectToAuthorization?.(authorizationUrl)
+      if (this.authProvider) throw new MockUnauthorizedError()
       throw new Error("Mock transport cannot connect")
+    }
+    async finishAuth() {
+      await this.authProvider?.saveTokens?.({ access_token: `token:${this.url}`, token_type: "Bearer" })
     }
     async close() {}
   },
@@ -26,22 +68,76 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
-    constructor(url: URL, options?: { authProvider?: unknown; requestInit?: RequestInit }) {
+    authProvider:
+      | {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
+      | undefined
+    url: string
+    constructor(
+      url: URL,
+      options?: {
+        authProvider?: {
+          redirectToAuthorization?: (url: URL) => Promise<void>
+          saveTokens?: (tokens: { access_token: string; token_type: string }) => Promise<void>
+          state?: () => string | Promise<string>
+          tokens?: () => Promise<unknown>
+        }
+        requestInit?: RequestInit
+      },
+    ) {
+      this.url = url.toString()
+      this.authProvider = options?.authProvider
       transportCalls.push({
         type: "sse",
-        url: url.toString(),
+        url: this.url,
         options: options ?? {},
       })
     }
     async start() {
+      if (await this.authProvider?.tokens?.()) return
+      const state = (await this.authProvider?.state?.()) ?? "headers"
+      const authorizationUrl = new URL("https://auth.example.test/authorize")
+      authorizationUrl.searchParams.set("state", state)
+      await this.authProvider?.redirectToAuthorization?.(authorizationUrl)
+      if (this.authProvider) throw new MockUnauthorizedError()
       throw new Error("Mock transport cannot connect")
+    }
+    async finishAuth() {
+      await this.authProvider?.saveTokens?.({ access_token: `token:${this.url}`, token_type: "Bearer" })
     }
     async close() {}
   },
 }))
 
+mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
+  Client: class MockClient {
+    async connect(transport: { start?: () => Promise<void>; url?: string } | undefined) {
+      if (transport?.start) {
+        await transport.start()
+        if (transport.url) return
+      }
+      throw new Error("Mock MCP client cannot connect")
+    }
+    async close() {}
+    setNotificationHandler() {}
+    async listTools() {
+      return { tools: [] }
+    }
+  },
+}))
+
 beforeEach(() => {
   transportCalls.length = 0
+})
+
+afterEach(async () => {
+  const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
+  await McpOAuthCallback.stop()
+  await Instance.disposeAll()
 })
 
 function expectHeaders(requestInit: RequestInit | undefined, expected: Record<string, string>) {

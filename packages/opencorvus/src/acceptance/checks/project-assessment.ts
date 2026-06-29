@@ -9,7 +9,7 @@ import { clip } from "./types"
 import { commandGroups, discoverPackageRoot, discoverChecks, resolveConfig, resolvedChecks } from "./discovery"
 import { detectAcceptanceSurfaces } from "../surface-detector"
 import type { AcceptanceSurfaceManifest } from "../surface-detector"
-import { arbitrateAcceptanceGate } from "../arbiter"
+import { arbitrateAcceptanceEvidenceDecision } from "../arbiter"
 import { buildContractAuditReviewEvidence, type ContractAuditCriteriaStatus } from "./contract-audit-review"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
@@ -157,9 +157,9 @@ export async function buildAcceptanceEvidenceManifest(input: {
     surfaceManifest,
     specialistReviews,
     changedFiles: input.changedFiles,
-    finalGate: {
+    evidenceDecision: {
       status: "failed",
-      summary: "Acceptance evidence gate not evaluated.",
+      summary: "Acceptance evidence not evaluated.",
       failedReadinessIds: [],
       failedCheckIds: [],
       failedCoverageIds: [],
@@ -178,7 +178,7 @@ export async function buildAcceptanceEvidenceManifest(input: {
     specialistReviews,
   })
   manifest.functionalAssessment = functionalAssessment
-  manifest.finalGate = arbitrateAcceptanceGate({
+  manifest.evidenceDecision = arbitrateAcceptanceEvidenceDecision({
     checks,
     failedReadinessIds,
     failedCoverageIds,

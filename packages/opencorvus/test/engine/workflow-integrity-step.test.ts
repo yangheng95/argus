@@ -3,13 +3,16 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "../../src/frontend-design/handoff"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
+import { visualQaReportAcceptanceSemantics } from "../../src/visual-qa/acceptance-semantics"
+import { VisualQaReportSchema } from "../../src/visual-qa/schema"
 import {
   WorkflowRegistry,
   createWorkflowState,
+  projectGoalSteps,
   projectTaskSteps,
   renderWorkflowPrompt,
 } from "../../src/engine/workflow"
@@ -59,6 +62,21 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function visualQaDecisionRecord(reportInput: unknown, acceptanceOverrides: Record<string, unknown> = {}) {
+  const report = VisualQaReportSchema.parse(reportInput)
+  const semantics = visualQaReportAcceptanceSemantics(report)
+  return {
+    report,
+    acceptance: {
+      submittedAccepted: semantics.submittedAccepted,
+      effectiveAccepted: semantics.effectiveAccepted,
+      selfReportIssues: semantics.selfReportIssues,
+      blockingIssues: semantics.selfReportIssues,
+      ...acceptanceOverrides,
+    },
+  }
+}
+
 describe("pipeline workflow review topology", () => {
   beforeEach(async () => {
     await resetDatabase()
@@ -102,6 +120,82 @@ describe("pipeline workflow review topology", () => {
     expect(stepIDs.indexOf("workload_analysis")).toBeLessThan(stepIDs.indexOf("build"))
   })
 
+  test("projects the current single build phase as running for running goal attempts", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_build_phase_${stamp}`
+    const taskID = `tsk_workflow_build_phase_${stamp}`
+    const goalID = `goal_workflow_build_phase_${stamp}`
+    const goalRunID = `glr_workflow_build_phase_${stamp}`
+    const runID = `run_workflow_build_phase_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const buildStep = pipeline.steps.find((step) => step.id === "build")
+
+    expect(buildStep?.phases).toEqual([{ id: "build", label: "Build", sessionKind: "build" }])
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: "/tmp/workflow-build-phase",
+          branch: "main",
+          status: "active",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "single build phase",
+          request: "project the active build phase",
+          priority: "normal",
+          time_started: now,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineGoalTable)
+        .values({
+          id: goalID,
+          task_id: taskID,
+          title: "Build the feature",
+          slug: "build-feature",
+          objective: "Run the executor.",
+          order_index: 0,
+          time_created: now,
+          time_updated: now,
+        } as any)
+        .run()
+      db.insert(EngineArtifactTable)
+        .values({
+          id: goalRunID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "running",
+          payload: {
+            goal_id: goalID,
+            status: "running",
+            retry_count: 0,
+            time_started: now,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    const projected = projectGoalSteps(taskID, pipeline)
+    expect(projected[goalID]?.steps.build?.status).toBe("running")
+    expect(projected[goalID]?.stepPhases?.build?.build?.status).toBe("running")
+    expect(projected[goalID]?.stepPhases?.build?.plan).toBeUndefined()
+  })
+
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
     const direct = WorkflowRegistry.resolveSync("direct")!
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
@@ -116,9 +210,9 @@ describe("pipeline workflow review topology", () => {
     expect(text).not.toContain("evaluator as plan/build/evaluate phases")
     expect(text).not.toContain("per-goal[build + architecture_review]")
     expect(text).not.toContain("goal build 完成后自动跑一次 architecture_review")
-    expect(text).toContain("Pipeline 的最后 gate 是 `integrity`")
+    expect(text).toContain("Pipeline 的最终 review boundary 是 `integrity`")
     expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
-    expect(text).toContain("最终系统完整性 gate")
+    expect(text).toContain("最终系统完整性 review boundary")
     expect(text).toContain("所有 blocking build terminal 后、final acceptance 前的一次性 GUI")
     expect(text).not.toContain("post-integrity 前端 GUI 修复")
   })
@@ -308,44 +402,46 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "Full visual QA report accepted.",
-        coverage: [
-          {
-            region: "dashboard",
-            viewports: [{ width: 1440, height: 900 }],
-            states: ["default"],
-            source_refs: ["visual_qa"],
-            evidence_refs: ["artifacts/dashboard.png"],
-            notes: "Checked the dashboard surface.",
+      value: JSON.stringify(
+        visualQaDecisionRecord({
+          accepted: true,
+          summary: "Full visual QA report accepted.",
+          coverage: [
+            {
+              region: "dashboard",
+              viewports: [{ width: 1440, height: 900 }],
+              states: ["default"],
+              source_refs: ["visual_qa"],
+              evidence_refs: ["artifacts/dashboard.png"],
+              notes: "Checked the dashboard surface.",
+            },
+          ],
+          findings: [],
+          production_blockers: [],
+          unresolved_code_module_problems: [],
+          repairs: [],
+          evidence: [
+            {
+              type: "screenshot",
+              ref: "artifacts/dashboard.png",
+              viewport: { width: 1440, height: 900 },
+              state: "default",
+              note: "Fresh visual QA screenshot.",
+            },
+          ],
+          reference_parity: {
+            required: false,
+            required_regions: [],
+            reference_comparison_evidence_refs: [],
+            missing_regions: [],
+            blocker_ids: [],
           },
-        ],
-        findings: [],
-        production_blockers: [],
-        unresolved_code_module_problems: [],
-        repairs: [],
-        evidence: [
-          {
-            type: "screenshot",
-            ref: "artifacts/dashboard.png",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Fresh visual QA screenshot.",
-          },
-        ],
-        reference_parity: {
-          required: false,
-          required_regions: [],
-          reference_comparison_evidence_refs: [],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-        commands: [],
-        changed_files: [],
-        open_questions: [],
-        fact_check_items: [],
-      }),
+          commands: [],
+          changed_files: [],
+          open_questions: [],
+          fact_check_items: [],
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
     createDecisionLog(taskID).append({
@@ -397,11 +493,13 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "Bare accepted report projects completion through schema defaults.",
-        production_blockers: [],
-      }),
+      value: JSON.stringify(
+        visualQaDecisionRecord({
+          accepted: true,
+          summary: "Bare accepted report projects completion through schema defaults.",
+          production_blockers: [],
+        }),
+      ),
       reason: "Schema-defaulted frontend GUI and functional QA report.",
     })
 
@@ -448,16 +546,18 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaReport({
-          summary: "Report claimed acceptance but cited no comparison evidence.",
-          reference_parity: {
-            required: true,
-            required_regions: ["region_header@desktop"],
-            reference_comparison_evidence_refs: [],
-            missing_regions: [],
-            blocker_ids: [],
-          },
-        }),
+        visualQaDecisionRecord(
+          visualQaReport({
+            summary: "Report claimed acceptance but cited no comparison evidence.",
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
@@ -505,25 +605,27 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaReport({
-          summary: "Report claimed acceptance while listing missing reference regions.",
-          evidence: [
-            {
-              type: "reference_comparison",
-              ref: "browser_preview_evidence:art_header",
-              viewport: { width: 1440, height: 900 },
-              state: "default",
-              note: "Header reference comparison.",
+        visualQaDecisionRecord(
+          visualQaReport({
+            summary: "Report claimed acceptance while listing missing reference regions.",
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: "browser_preview_evidence:art_header",
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Header reference comparison.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop", "region_footer@desktop"],
+              reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
+              missing_regions: ["region_footer@desktop"],
+              blocker_ids: [],
             },
-          ],
-          reference_parity: {
-            required: true,
-            required_regions: ["region_header@desktop", "region_footer@desktop"],
-            reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
-            missing_regions: ["region_footer@desktop"],
-            blocker_ids: [],
-          },
-        }),
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
@@ -577,16 +679,18 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaReport({
-          summary: "Screenshot-only report claimed parity not required.",
-          reference_parity: {
-            required: false,
-            required_regions: [],
-            reference_comparison_evidence_refs: [],
-            missing_regions: [],
-            blocker_ids: [],
-          },
-        }),
+        visualQaDecisionRecord(
+          visualQaReport({
+            summary: "Screenshot-only report claimed parity not required.",
+            reference_parity: {
+              required: false,
+              required_regions: [],
+              reference_comparison_evidence_refs: [],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
@@ -683,16 +787,18 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaReport({
-          summary: "Screenshot-only report claimed parity not required.",
-          reference_parity: {
-            required: false,
-            required_regions: [],
-            reference_comparison_evidence_refs: [],
-            missing_regions: [],
-            blocker_ids: [],
-          },
-        }),
+        visualQaDecisionRecord(
+          visualQaReport({
+            summary: "Screenshot-only report claimed parity not required.",
+            reference_parity: {
+              required: false,
+              required_regions: [],
+              reference_comparison_evidence_refs: [],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
@@ -702,7 +808,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("projects reference task visual_qa as completed from unverified comparison ref strings", () => {
+  test("projects reference task visual_qa as failed from verified unaccepted comparison ref strings", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_bogus_refs`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -745,53 +851,63 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "Report cited unverified string refs.",
-        coverage: [
+      value: JSON.stringify(
+        visualQaDecisionRecord(
           {
-            region: "dashboard",
-            viewports: [{ width: 1440, height: 900 }],
-            states: ["default"],
-            source_refs: ["visual_qa"],
-            evidence_refs: ["art_missing_comparison"],
-            notes: "Claimed dashboard reference comparison.",
+            accepted: true,
+            summary: "Report cited unverified string refs.",
+            coverage: [
+              {
+                region: "dashboard",
+                viewports: [{ width: 1440, height: 900 }],
+                states: ["default"],
+                source_refs: ["visual_qa"],
+                evidence_refs: ["art_missing_comparison"],
+                notes: "Claimed dashboard reference comparison.",
+              },
+            ],
+            findings: [],
+            production_blockers: [],
+            unresolved_code_module_problems: [],
+            repairs: [],
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: "art_missing_comparison",
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Unverified comparison ref string.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["dashboard@desktop"],
+              reference_comparison_evidence_refs: ["art_missing_comparison"],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+            commands: [],
+            changed_files: [],
+            open_questions: [],
+            fact_check_items: [],
           },
-        ],
-        findings: [],
-        production_blockers: [],
-        unresolved_code_module_problems: [],
-        repairs: [],
-        evidence: [
           {
-            type: "reference_comparison",
-            ref: "art_missing_comparison",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Unverified comparison ref string.",
+            effectiveAccepted: false,
+            blockingIssues: [
+              "no submitted reference comparison refs resolved to readable passed browser_preview_evidence.",
+            ],
           },
-        ],
-        reference_parity: {
-          required: true,
-          required_regions: ["dashboard@desktop"],
-          reference_comparison_evidence_refs: ["art_missing_comparison"],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-        commands: [],
-        changed_files: [],
-        open_questions: [],
-        fact_check_items: [],
-      }),
+        ),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa as completed from self-reported reference parity refs", () => {
+  test("projects visual_qa as failed from self-reported reference parity refs rejected by acceptance record", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_self_reference_bogus_refs`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -828,50 +944,60 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "Report self-reported reference parity evidence.",
-        coverage: [
+      value: JSON.stringify(
+        visualQaDecisionRecord(
           {
-            region: "dashboard",
-            viewports: [{ width: 1440, height: 900 }],
-            states: ["default"],
-            source_refs: ["visual_qa"],
-            evidence_refs: ["art_missing_comparison"],
-            notes: "Claimed dashboard reference comparison.",
+            accepted: true,
+            summary: "Report self-reported reference parity evidence.",
+            coverage: [
+              {
+                region: "dashboard",
+                viewports: [{ width: 1440, height: 900 }],
+                states: ["default"],
+                source_refs: ["visual_qa"],
+                evidence_refs: ["art_missing_comparison"],
+                notes: "Claimed dashboard reference comparison.",
+              },
+            ],
+            findings: [],
+            production_blockers: [],
+            unresolved_code_module_problems: [],
+            repairs: [],
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: "art_missing_comparison",
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Unverified comparison ref string.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["dashboard@desktop"],
+              reference_comparison_evidence_refs: ["art_missing_comparison"],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+            commands: [],
+            changed_files: [],
+            open_questions: [],
+            fact_check_items: [],
           },
-        ],
-        findings: [],
-        production_blockers: [],
-        unresolved_code_module_problems: [],
-        repairs: [],
-        evidence: [
           {
-            type: "reference_comparison",
-            ref: "art_missing_comparison",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Unverified comparison ref string.",
+            effectiveAccepted: false,
+            blockingIssues: [
+              "no submitted reference comparison refs resolved to readable passed browser_preview_evidence.",
+            ],
           },
-        ],
-        reference_parity: {
-          required: true,
-          required_regions: ["dashboard@desktop"],
-          reference_comparison_evidence_refs: ["art_missing_comparison"],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-        commands: [],
-        changed_files: [],
-        open_questions: [],
-        fact_check_items: [],
-      }),
+        ),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
   test("keeps visual_qa pending when summary lacks a full report", () => {
@@ -1003,17 +1129,116 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "A report with blockers must not project as complete.",
-        production_blockers: [{ id: "blocker_map" }],
-      }),
+      value: JSON.stringify(
+        visualQaDecisionRecord({
+          accepted: true,
+          summary: "A report with blockers must not project as complete.",
+          production_blockers: [
+            {
+              id: "blocker_map",
+              principle_ids: ["component-truth"],
+              region: "dashboard",
+              reason: "The visible map is a placeholder instead of the required production component.",
+              impact: "Users would see a misleading placeholder surface.",
+              required_correction: "Replace the placeholder with the production map component.",
+              source_refs: ["visual_qa"],
+              evidence_refs: ["artifacts/dashboard.png"],
+            },
+          ],
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
     expect(taskSteps.visual_qa?.status).toBe("failed")
+  })
+
+  test("projects visual_qa from the effective acceptance record rather than report fields", () => {
+    const now = Date.now()
+    const stamp = `${now.toString(16)}_effective_record_source`
+    const projectID = `proj_workflow_visual_qa_${stamp}`
+    const taskID = `tsk_workflow_visual_qa_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow visual QA effective record source test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow visual QA effective record source status",
+          request: "Render visual QA from acceptance record",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "visual_qa",
+      key: "report_1",
+      value: JSON.stringify(
+        visualQaDecisionRecord(
+          {
+            accepted: true,
+            summary: "Projection should trust the effective acceptance record.",
+            coverage: [],
+            findings: [],
+            production_blockers: [
+              {
+                id: "blocker_ignored_by_projection",
+                principle_ids: ["component-truth"],
+                region: "dashboard",
+                reason: "This report field is intentionally inconsistent with the acceptance record.",
+                impact: "Projection must not recompute acceptance from report fields.",
+                required_correction: "Use the persisted acceptance record.",
+                source_refs: ["visual_qa"],
+                evidence_refs: ["artifacts/dashboard.png"],
+              },
+            ],
+            unresolved_code_module_problems: [],
+            repairs: [],
+            evidence: [],
+            reference_parity: {
+              required: false,
+              required_regions: [],
+              reference_comparison_evidence_refs: [],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+            commands: [],
+            changed_files: [],
+            open_questions: [],
+            fact_check_items: [],
+          },
+          {
+            effectiveAccepted: true,
+            selfReportIssues: [],
+            blockingIssues: [],
+          },
+        ),
+      ),
+      reason: "Dedicated frontend GUI and functional QA report.",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
   test("projects visual_qa as failed when accepted report relies on schema-defaulted blocker fields", () => {
@@ -1053,10 +1278,12 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify({
-        accepted: true,
-        summary: "Accepted report relies on schema-defaulted blocker fields.",
-      }),
+      value: JSON.stringify(
+        visualQaDecisionRecord({
+          accepted: true,
+          summary: "Accepted report relies on schema-defaulted blocker fields.",
+        }),
+      ),
       reason: "Schema-defaulted report is accepted by its own submitted fields.",
     })
 
@@ -1142,7 +1369,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.build).toBeUndefined()
   })
 
-  test("projects needs_correction integrity as failed because integrity is the workflow gate", () => {
+  test("projects needs_correction integrity as failed because integrity is the final review boundary", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_integrity_failed_${stamp}`

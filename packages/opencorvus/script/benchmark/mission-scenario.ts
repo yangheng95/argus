@@ -20,29 +20,6 @@ export const MISSION_BENCHMARK_STAGES = [
   },
 ] as const
 
-export const DEFAULT_MISSION_VERIFY_CMD = "bun test"
-
-export const DEFAULT_MISSION_BENCHMARK_REQUEST = [
-  "Run a focused Mission-mode benchmark in this scratch workspace.",
-  "",
-  "You are the Mission coordinator. Do not edit files yourself and do not run shell commands yourself.",
-  "Use mission_state for durable state and dispatch one OpenCorvus task with panel.create_task.",
-  "The dispatched task must execute this three-stage loop:",
-  "",
-  "1. Simple investigation: inspect the current scratch project structure and record what already exists.",
-  "2. Write project: create a minimal TypeScript utility project that exposes word and character metrics.",
-  "3. Project test: add Bun tests for the utility and run the project test command.",
-  "",
-  "The dispatched task acceptance criteria are:",
-  "- Only create or modify package.json, tsconfig.json, src/text-metrics.ts, and src/text-metrics.test.ts unless the executor proves another file is strictly required.",
-  "- src/text-metrics.ts exports countWords(input: string): number and countCharacters(input: string): number.",
-  "- src/text-metrics.test.ts covers empty strings, whitespace, punctuation, and multibyte text.",
-  "- package.json contains a test script that runs Bun tests.",
-  "- The executor runs bun test and reports the result.",
-  "",
-  "After the task reaches a terminal state, the next Mission wake must use panel.query_task, update tasks.md, update frontier.md, and write handoff.md with the remaining status.",
-].join("\n")
-
 export type MissionBenchmarkTask = {
   task?: {
     id?: string

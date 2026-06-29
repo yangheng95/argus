@@ -4,7 +4,7 @@
  *
  * Runs end-to-end against the real Snapshot module (no mocks). Each suite
  * either passes silently or throws — main aggregates and exits with the
- * failure count so the harness can gate on it.
+ * failure count so the harness can report it.
  *
  * Scope: see docs/snapshot-benchmark-plan.md
  *

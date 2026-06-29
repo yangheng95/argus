@@ -191,8 +191,8 @@ export namespace BuildAgent {
      *  and dependency reasons by id; it must not infer dependency meaning from
      *  removed prose contract fields. */
     contractGraph?: BuildContractGraphContext
-    /** Dependency goals listed in `target.depends_on`. The orchestrator gates
-     *  dispatch on these having passed and merged, so their files SHOULD be
+    /** Dependency goals listed in `target.depends_on`. The orchestrator waits
+     *  for these to pass and merge before dispatch, so their files SHOULD be
      *  in the worktree base. Keep this as a compact index; details live in
      *  the Architect Contract Graph and workload brief. */
     dependencies?: Array<{
@@ -203,7 +203,7 @@ export namespace BuildAgent {
     /** Pre-rendered "Persistent Integrity Findings" section composed by
      *  orchestrator from integrity_attempt artifacts, spec snapshot lineage,
      *  shared prompt capping/sanitization, and the shared root-history helper.
-     *  Build renders it before retry guidance because workflow-gate findings
+     *  Build renders it before retry guidance because workflow integrity findings
      *  outrank the orchestrator's hand-written summary. */
     integrityFeedback?: string
     /** First-class retry guidance from the orchestrator LLM for this
@@ -1791,7 +1791,7 @@ async function runWithExternalProviderImpl(args: {
   })
 
   const configuredTools = resolveOption(options.tools)
-  // Per-build idle gate. The external executor's `provider.run` yields events
+  // Per-build idle monitor. The external executor's `provider.run` yields events
   // by streaming over its own subprocess stdio; if the LLM-side connection
   // stalls (e.g. the 2026-04-27 codex benchmark caught a build subprocess
   // sitting silent for 47+ minutes with sessions=[]), the for-await loop
@@ -1799,17 +1799,17 @@ async function runWithExternalProviderImpl(args: {
   // not on stream inactivity. Compose `args.signal` with a fresh
   // `withStreamActivity` watchdog (idleMs = activity.executor_events_idle_ms,
   // the layer reserved for external executor event queues per
-  // engine/config.ts §86) and feed `gate.signal` to the provider so codex /
+  // engine/config.ts §86) and feed `monitor.signal` to the provider so codex /
   // claude-code subprocesses receive the abort the same way they receive
   // a caller cancel — no new error surface, the existing catch maps the
   // AbortError to `errored` and the build returns status=failed.
   const idleMs = engineConfig.activity.executor_events_idle_ms
-  const gate = withStreamActivity({
+  const monitor = withStreamActivity({
     idleMs,
     signal: args.signal,
     label: `build-agent-external:${args.executor}:${session.id}`,
   })
-  const unregisterActivityGate = SessionStatus.registerActivityGate(session.id, gate)
+  const unregisterActivityMonitor = SessionStatus.registerActivityMonitor(session.id, monitor)
   const runInput = {
     sessionID: session.id,
     model: resolveOption(options.model),
@@ -1822,7 +1822,7 @@ async function runWithExternalProviderImpl(args: {
     system: composedSystem.system,
     maxTurns: resolveOption(options.maxTurns),
     tools: configuredTools,
-    signal: gate.signal,
+    signal: monitor.signal,
   }
   const providerInput = args.resumeExistingProviderSession
     ? {
@@ -1845,8 +1845,8 @@ async function runWithExternalProviderImpl(args: {
 
   try {
     const stream = args.resumeExistingProviderSession ? provider.resume(providerInput) : provider.run(providerInput)
-    for await (const event of abortableIterable(stream, gate.signal)) {
-      gate.observe()
+    for await (const event of abortableIterable(stream, monitor.signal)) {
+      monitor.observe()
       events.push(event)
       const sessionRef = extractExecutorSessionRef(event)
       if (sessionRef) {
@@ -2036,8 +2036,8 @@ async function runWithExternalProviderImpl(args: {
   } catch (err) {
     errored = err instanceof Error ? err.message : String(err)
   } finally {
-    unregisterActivityGate()
-    gate.dispose()
+    unregisterActivityMonitor()
+    monitor.dispose()
   }
 
   // Finalize any open tool parts so overlay sees the closing state.

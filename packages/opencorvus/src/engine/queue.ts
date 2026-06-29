@@ -175,6 +175,24 @@ function discardPendingQueuedOperatorWakes(taskID: string): void {
   )
 }
 
+export function discardPendingQueuedOperatorWakeForRequest(input: { taskID: string; requestID: string }): void {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .update(EngineArtifactTable)
+      .set({ label: "discarded", time_updated: now })
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "queued_operator_wake"),
+          eq(EngineArtifactTable.label, "pending"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.request_id') = ${input.requestID}`,
+        ),
+      )
+      .run(),
+  )
+}
+
 function takeQueuedTaskEvent(taskID: string): OrchestratorEvent | undefined {
   const durable = findNextPendingQueuedOperatorWake(taskID)
   if (!durable) return undefined
@@ -240,7 +258,7 @@ function loopInFlightFor(taskID: string): boolean {
 }
 
 function isOperatorWakeEvent(event: OrchestratorEvent | undefined): boolean {
-  return Boolean(event?.operatorIntent || event?.operatorMessage)
+  return Boolean(event?.operatorIntent || event?.operatorMessage || event?.coordinationRequest)
 }
 
 function suppressPassiveStreamErrorWake(taskID: string, event: OrchestratorEvent | undefined): boolean {

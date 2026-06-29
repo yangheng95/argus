@@ -68,9 +68,9 @@ export interface NormalizedOutput {
   metadata: Record<string, unknown>
 }
 
-export function normalizeToolOutput(raw: unknown, fallbackTitle: string | undefined): NormalizedOutput {
+export function normalizeToolOutput(raw: unknown, defaultTitle: string | undefined): NormalizedOutput {
   if (typeof raw === "string") {
-    return { output: raw, title: fallbackTitle, metadata: {} }
+    return { output: raw, title: defaultTitle, metadata: {} }
   }
   if (isPlainObject(raw)) {
     const outputField = (raw as { output?: unknown }).output
@@ -81,13 +81,13 @@ export function normalizeToolOutput(raw: unknown, fallbackTitle: string | undefi
           ? JSON.stringify(outputField)
           : JSON.stringify(raw)
     const titleField = (raw as { title?: unknown }).title
-    const title = typeof titleField === "string" ? titleField : fallbackTitle
+    const title = typeof titleField === "string" ? titleField : defaultTitle
     const metadataField = (raw as { metadata?: unknown }).metadata
     const metadata = isPlainObject(metadataField) ? metadataField : {}
     return { output, title, metadata }
   }
   if (raw === undefined || raw === null) {
-    return { output: "", title: fallbackTitle, metadata: {} }
+    return { output: "", title: defaultTitle, metadata: {} }
   }
-  return { output: JSON.stringify(raw), title: fallbackTitle, metadata: {} }
+  return { output: JSON.stringify(raw), title: defaultTitle, metadata: {} }
 }

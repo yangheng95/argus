@@ -366,11 +366,11 @@ describe("config prompt routes", () => {
         const body = (await response.json()) as {
           success: false
           data: { message: string }
-          errors: Array<{ message: string }>
+          error: Array<{ message: string }>
         }
         expect(body.success).toBe(false)
         expect(body.data.message).toContain("Unknown prompt profile")
-        expect(body.errors[0]?.message).toBe(body.data.message)
+        expect(body.error[0]?.message).toBe(body.data.message)
         expect((await Config.get()).prompt_profile.active).toBe("frontend-replica")
       },
     })

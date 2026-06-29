@@ -50,6 +50,11 @@ describe("executor runtime model env", () => {
     expect(getModelOverride("codex")).toBe("gpt-5.5")
   })
 
+  test("rejects unknown executor names at the enum boundary", () => {
+    expect(() => getModelOverride("unsupported-executor" as any)).toThrow()
+    expect(() => setModelOverride("unsupported-executor" as any, "gpt-5.5")).toThrow()
+  })
+
   test("normalizes Anthropic base URL for Claude Agent SDK requests", () => {
     const env = claudeSdkEnv({
       ANTHROPIC_BASE_URL: "https://example.test/proxy/v1/",
