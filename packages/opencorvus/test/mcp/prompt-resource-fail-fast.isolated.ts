@@ -217,6 +217,11 @@ async function withRemoteMcp(fn: () => Promise<void>) {
   })
 }
 
+function expectTransportSignal(value: unknown) {
+  expect(value && typeof value === "object" && "signal" in value).toBe(true)
+  expect((value as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal)
+}
+
 describe("MCP prompt and resource listing", () => {
   test("startup tool list failures reject tools instead of returning an empty map", async () => {
     toolErrorDuringStartup = new Error("startup tool list unavailable")
@@ -406,6 +411,7 @@ describe("MCP prompt and resource listing", () => {
 
     expect(connectOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
     expect(listToolOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expectTransportSignal(transportRequestInits[0])
   })
 
   test("OAuth startAuth closes the probe client and transport after an already-authenticated probe", async () => {
@@ -434,6 +440,7 @@ describe("MCP prompt and resource listing", () => {
         await expect(MCP.startAuth("remote")).resolves.toEqual({ authorizationUrl: "" })
         expect(closeCalls - closeCallsBefore).toBe(1)
         expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+        expectTransportSignal(transportRequestInits.at(-1))
       },
     })
 
@@ -468,6 +475,7 @@ describe("MCP prompt and resource listing", () => {
         await expect(MCP.startAuth("remote")).rejects.toThrow("connect exploded")
         expect(closeCalls - closeCallsBefore).toBe(1)
         expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+        expectTransportSignal(transportRequestInits.at(-1))
       },
     })
   })
@@ -499,13 +507,13 @@ describe("MCP prompt and resource listing", () => {
         await expect(MCP.startAuth("remote")).resolves.toEqual({ authorizationUrl: "https://auth.example.test/authorize" })
         expect(closeCalls - closeCallsBefore).toBe(1)
         expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+        expectTransportSignal(transportRequestInits.at(-1))
 
         oauthConnectRequiresAuth = false
         const transportCloseCallsBeforeFinish = transportCloseCalls
         await expect(MCP.finishAuth("remote", "code")).resolves.toEqual({ status: "connected" })
         expect(finishAuthCalls).toBe(1)
-        const finishRequestInit = finishAuthRequestInits.at(-1) as { signal?: AbortSignal } | undefined
-        expect(finishRequestInit?.signal).toBeInstanceOf(AbortSignal)
+        expectTransportSignal(finishAuthRequestInits.at(-1))
         expect(transportCloseCalls - transportCloseCallsBeforeFinish).toBeGreaterThanOrEqual(1)
       },
     })

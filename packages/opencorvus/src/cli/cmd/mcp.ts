@@ -1,6 +1,5 @@
 import { cmd } from "./cmd"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
@@ -787,11 +786,12 @@ export const McpDebugCommand = cmd({
 
             prompts.log.info("Testing OAuth flow (without completing authorization)...")
 
-            // Try creating transport with auth provider to trigger discovery
-            const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
+            // Try creating the configured remote transport with auth provider to trigger discovery.
+            const { name: transportName, transport } = MCP.createRemoteTransport(
+              serverConfig,
               authProvider,
-              requestInit: MCP.mcpFetchRequestInit(debugTimeout),
-            })
+              MCP.mcpFetchRequestInit(debugTimeout),
+            )
 
             let client: Client | undefined
             try {
@@ -800,7 +800,7 @@ export const McpDebugCommand = cmd({
                 version: Installation.VERSION,
               })
               await client.connect(transport, MCP.mcpRequestOptions(debugTimeout))
-              prompts.log.success("Connection successful (already authenticated)")
+              prompts.log.success(`Connection successful via ${transportName} (already authenticated)`)
             } catch (error) {
               if (error instanceof UnauthorizedError) {
                 prompts.log.info(`OAuth flow triggered: ${error.message}`)

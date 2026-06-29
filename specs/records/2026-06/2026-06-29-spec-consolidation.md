@@ -204,6 +204,17 @@ Later independent review rounds found and fixed these remaining drift classes:
     `pull_request_review_comment`, `issues`, `pull_request`, `schedule`, and
     `workflow_dispatch`; `document-health.test.ts` checks the same event list
     in the website docs and the published Action README.
+19. A later MCP timeout review found normal remote connect and `startAuth`
+    probes still created transports without the timeout `AbortSignal` used by
+    `finishAuth`, and CLI debug hard-coded the streamable HTTP transport. The
+    runtime now passes `mcpFetchRequestInit(...)` into remote connect,
+    `startAuth`, and `finishAuth`; CLI debug reuses the exported remote
+    transport selector so SSE and streamable HTTP debug the same configured
+    path as runtime connections.
+20. A later `.scratch` review found more text-like snapshot extensions and
+    extensionless UTF-8 files outside the fixed scan list. The scratch guard now
+    keeps the known text-extension list but also samples unknown extensions as
+    UTF-8 text, while known binary extensions are skipped before content scans.
 
 Validation after these addenda includes:
 
