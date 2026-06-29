@@ -717,7 +717,7 @@ export const TaskBoardWorkflowStep = z.object({
   tool: z.string(),
   scope: z.enum(["task", "goal"]),
   skippable: z.boolean(),
-  status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  status: z.enum(["pending", "running", "completed", "skipped", "failed", "aborted"]),
   /** Sub-phase definitions for steps that decompose a single tool-call
    *  into multiple internal phases (e.g. pipeline.build → plan / build /
    *  evaluate). Absent for steps that map 1:1 to a tool call. Per-goal
@@ -834,7 +834,7 @@ export const TaskBoardGoalWorkflowStep = z.object({
   stepID: z.string(),
   orderKey: z.string().min(1),
   label: z.string(),
-  status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  status: z.enum(["pending", "running", "completed", "skipped", "failed", "aborted"]),
   startedAt: z.number().optional(),
   completedAt: z.number().optional(),
   /** Human-readable summary: "5 steps", "12 files", "3/4 checks" */
@@ -852,7 +852,7 @@ export const TaskBoardGoalWorkflowStep = z.object({
       z.string(),
       z.object({
         orderKey: z.string().min(1),
-        status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+        status: z.enum(["pending", "running", "completed", "skipped", "failed", "aborted"]),
         startedAt: z.number().optional(),
         completedAt: z.number().optional(),
       }),
@@ -1524,7 +1524,7 @@ export const Event = {
       taskID: Identifier.schema("task"),
       stepID: z.string(),
       goalID: z.string().optional(),
-      status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+      status: z.enum(["pending", "running", "completed", "skipped", "failed", "aborted"]),
       summary: z.string(),
     }),
     { tier: 3 },
