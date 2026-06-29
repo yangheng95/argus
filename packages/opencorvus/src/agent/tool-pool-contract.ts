@@ -48,6 +48,8 @@ export namespace AgentToolPool {
     "explore",
     "add_goal",
     "modify_goal",
+    "complete_goal",
+    "delete_goal",
     "refine",
     "complete_task",
     "fail_task",

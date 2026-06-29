@@ -416,6 +416,13 @@ contract.
   When `updates.acceptance_specs` is included, each scorer `type` is exactly one
   of `heuristic`/`llm_judge`/`prebuilt`/`contract_audit` (shell/script go under
   `spec.kind`, never as a scorer `type`) — same shape as `register_goal`.
+- `complete_goal`: mark one existing goal complete only when visible task
+  evidence proves it is already satisfied or no longer needs build work while
+  staying in the graph for dependency/traceability. Do not use it for failed,
+  unverified, or currently live work.
+- `delete_goal`: remove one obsolete goal from the current graph when evidence
+  proves it is out of scope, redundant, or replaced. It prunes dependency
+  references; do not use it while the goal has live work.
 - `integrity`: final adversarial review after all blocking goal builds are terminal.
   A post-build pass verdict returns integrity_attempt evidence for `complete_task`.
   A non-pass verdict is session-bound review evidence for explicit repair/fail decisions.

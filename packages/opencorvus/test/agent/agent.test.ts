@@ -772,6 +772,8 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "inject_operator_message",
         "cancel_subagent",
         "add_goal",
+        "complete_goal",
+        "delete_goal",
         "select_expert_squad",
         "wait",
         "skill",
@@ -800,6 +802,8 @@ test("task lifecycle tools are exposed only to the orchestrator scheduler", () =
     "cancel_task",
     "retry_task",
     "inject_operator_message",
+    "complete_goal",
+    "delete_goal",
   ]
 
   for (const [role, assignment] of Object.entries(AgentToolPool.roleAssignments)) {

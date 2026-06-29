@@ -1987,6 +1987,97 @@ export function deleteGoal(goalID: string) {
   })
 }
 
+export function completeGoal(input: { goalID: string; reason: string; now?: number }): GoalRunRow {
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`completeGoal: goal ${input.goalID} not found`)
+  }
+  const now = input.now ?? Date.now()
+  const tip = findLatestTipGoalRun(input.goalID)
+  if (tip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(tip.status)) {
+    throw new Error(
+      `completeGoal: goal ${input.goalID} has live goal_run ${tip.id} ` +
+        `(status=${tip.status}); finish or abort the live attempt before marking the goal complete.`,
+    )
+  }
+  if (tip?.status === "completed" && !tip.superseded_reason) {
+    return tip
+  }
+  const completionMetadata = {
+    ...(tip?.metadata && typeof tip.metadata === "object" && !Array.isArray(tip.metadata) ? tip.metadata : {}),
+    manual_completion: {
+      source: "orchestrator.complete_goal",
+      reason: input.reason,
+      time_completed: now,
+    },
+  }
+
+  if (!tip) {
+    const id = Identifier.uuid4First8()
+    Database.use((db) =>
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id,
+          task_id: goal.task_id,
+          run_id: null,
+          goal_run_id: id,
+          kind: "goal_run_attempt",
+          label: "attempt-completed",
+          payload: {
+            goal_id: input.goalID,
+            plan_node_id: null,
+            session_id: null,
+            status: "completed",
+            retry_count: 0,
+            blocking_reason: null,
+            error: null,
+            workspace_dir: null,
+            workspace_branch: null,
+            workspace_base_ref: null,
+            base_ref: null,
+            merge_ref: null,
+            supersede_of: null,
+            superseded_reason: null,
+            superseded_at: null,
+            metadata: completionMetadata,
+            owner: null,
+            time_started: now,
+            time_completed: now,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+    syncGoalStatus(input.goalID, "completeGoal")
+    const row = findGoalRun(id)
+    if (!row) throw new Error(`completeGoal: inserted goal run ${id} not found after insert`)
+    return row
+  }
+
+  appendGoalRunArtifact({
+    goalRunID: tip.id,
+    existing: tip,
+    patch: {
+      status: "completed",
+      blocking_reason: null,
+      error: null,
+      superseded_reason: null,
+      superseded_at: null,
+      metadata: completionMetadata,
+      time_started: tip.time_started ?? now,
+      time_completed: now,
+    },
+    label: "attempt-completed",
+    now,
+  })
+  syncGoalStatus(input.goalID, "completeGoal")
+  const row = findGoalRun(tip.id)
+  if (!row) throw new Error(`completeGoal: updated goal run ${tip.id} not found after append`)
+  return row
+}
+
 /**
  * Record a build agent attempt as a `goal_run_attempt` artifact so the
  * derived goal status reflects the build outcome.
