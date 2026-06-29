@@ -6,6 +6,7 @@ import path from "node:path"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const docsScanRoots = ["specs/current/architecture", "docs", "packages/web/src/content/docs"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
+const datedSpecFileExtensions = new Set([".md", ".txt"])
 const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".md", ".mdx", ".txt"])
 const scratchTextExtensions = new Set([
   ".md",
@@ -99,10 +100,13 @@ const skippedRepositoryPrefixes = [
 const retiredReferenceLedgerFileName = `${["retired", "reference", "ledger"].join("-")}.md`
 const deletedPreJuneSpecNamePattern =
   /\b[A-Za-z0-9_@%+.-]*2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.(?:md|txt)\b|\bretired-reference-ledger\.md\b/g
+const packageLocalSpecTreePattern = /packages[/\\][^/\\]+[/\\]specs(?:[/\\]|$)/
+const normalizedPackageLocalSpecTreePattern = /(?:^|[/\\])packages[/\\][^/\\]+[/\\]specs(?:[/\\]|$)/
+const scratchEncodedPackageLocalSpecTreePattern = /packages__[^_]+__specs__/
 const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
   { label: "legacy architecture tree", pattern: /specs[/\\]new-arch(?:[/\\]|$)/ },
   { label: "legacy singular architecture tree", pattern: /spec[/\\]new-arch(?:[/\\]|$)/ },
-  { label: "package-local spec tree", pattern: /packages[/\\]opencorvus[/\\]specs(?:[/\\]|$)/ },
+  { label: "package-local spec tree", pattern: packageLocalSpecTreePattern },
   { label: "retired reference ledger", pattern: /specs[/\\]retired-reference-ledger\.md/ },
   {
     label: "root-level spec file",
@@ -123,6 +127,17 @@ const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
 let docsFilesCache: string[] | undefined
 let repositoryFilesCache: string[] | undefined
 const refsByFileCache = new Map<string, string[]>()
+
+function normalizeRepositoryPath(file: string): string {
+  return path.isAbsolute(file) ? path.relative(repoRoot, file).replace(/\\/g, "/") : file.replace(/\\/g, "/")
+}
+
+function hasPreJuneDatedSpecFileName(file: string): boolean {
+  const normalized = normalizeRepositoryPath(file)
+  if (!datedSpecFileExtensions.has(path.extname(normalized).toLowerCase())) return false
+  const date = path.basename(normalized).match(/20\d{2}-\d{2}-\d{2}/)?.[0]
+  return Boolean(date && date < "2026-06-01")
+}
 
 function walkDocs(dir: string, out: string[] = []): string[] {
   if (!fs.existsSync(dir)) return out
@@ -185,6 +200,18 @@ function repositoryFiles(): string[] {
   return repositoryFilesCache
 }
 
+function packageLocalSpecDirs(): string[] {
+  const packagesRoot = path.join(repoRoot, "packages")
+  if (!fs.existsSync(packagesRoot)) return []
+  return fs
+    .readdirSync(packagesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(packagesRoot, entry.name, "specs"))
+    .filter((dir) => fs.existsSync(dir))
+    .map((dir) => path.relative(repoRoot, dir).replace(/\\/g, "/"))
+    .sort()
+}
+
 function deletedPreJuneSpecNameOffenders(): string[] {
   const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
   const allowedHistoricalMigrationRecord = "specs/records/2026-06/2026-06-29-spec-consolidation.md"
@@ -230,8 +257,7 @@ function shouldScanScratchTextFile(fullPath: string, extension: string, stat = f
   }
 }
 
-function scratchSpecSnapshotOffenders(): string[] {
-  const scratchRoot = path.join(repoRoot, ".scratch")
+function scratchSpecSnapshotOffenders(scratchRoot = path.join(repoRoot, ".scratch")): string[] {
   if (!fs.existsSync(scratchRoot)) return []
   const offenders: string[] = []
   const scratchRootSpecFilePattern = /\/specs\/(?!README\.md$)[^/]+\.(?:md|txt)$/
@@ -241,7 +267,7 @@ function scratchSpecSnapshotOffenders(): string[] {
       const fullPath = path.join(dir, entry.name)
       const rel = path.relative(repoRoot, fullPath).replace(/\\/g, "/")
       if (entry.isDirectory()) {
-        if (rel.endsWith("/specs/new-arch") || rel.endsWith("/packages/opencorvus/specs")) {
+        if (rel.endsWith("/specs/new-arch") || normalizedPackageLocalSpecTreePattern.test(rel)) {
           offenders.push(rel)
           continue
         }
@@ -250,14 +276,15 @@ function scratchSpecSnapshotOffenders(): string[] {
       }
       const stat = fs.statSync(fullPath)
       if (!stat.isFile()) continue
-      if (/specs__new-arch__|packages__opencorvus__specs__/.test(entry.name)) offenders.push(rel)
+      if (/specs__new-arch__/.test(entry.name) || scratchEncodedPackageLocalSpecTreePattern.test(entry.name)) {
+        offenders.push(rel)
+      }
       const extension = path.extname(entry.name).toLowerCase()
       if ((extension === ".md" || extension === ".txt") && scratchRootSpecFilePattern.test(rel)) offenders.push(rel)
       if (!shouldScanScratchTextFile(fullPath, extension, stat)) continue
-      const date = entry.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
-      if (extension === ".md" && date && date < "2026-06-01") offenders.push(rel)
+      if (hasPreJuneDatedSpecFileName(rel)) offenders.push(rel)
       const text = fs.readFileSync(fullPath, "utf8")
-      if (/specs\/new-arch|packages\/opencorvus\/specs/.test(text)) offenders.push(rel)
+      if (/specs\/new-arch/.test(text) || packageLocalSpecTreePattern.test(text)) offenders.push(rel)
       for (const { label, pattern } of retiredSpecPathPatterns) {
         pattern.lastIndex = 0
         if (pattern.test(text)) offenders.push(`${rel}: ${label}`)
@@ -327,6 +354,10 @@ function missingReferences(files: string[]): string[] {
 
 function specsFiles(): string[] {
   return walkDocs(path.join(repoRoot, "specs"))
+}
+
+function preJuneDatedSpecFiles(files = specsFiles()): string[] {
+  return files.map(normalizeRepositoryPath).filter(hasPreJuneDatedSpecFileName)
 }
 
 function specTreeFiles(): string[] {
@@ -400,7 +431,7 @@ describe("historical docs repository links", () => {
     expect(fs.existsSync(path.join(repoRoot, "specs/current/architecture/README.md"))).toBe(true)
     expect(fs.existsSync(path.join(repoRoot, "specs/records/2026-06/2026-06-29-spec-consolidation.md"))).toBe(true)
     expect(fs.existsSync(path.join(repoRoot, "specs/new-arch"))).toBe(false)
-    expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/specs"))).toBe(false)
+    expect(packageLocalSpecDirs()).toEqual([])
     expect(fs.existsSync(path.join(repoRoot, "specs", retiredReferenceLedgerFileName))).toBe(false)
     expect(fs.existsSync(path.join(repoRoot, "specs", "records", "README.md"))).toBe(false)
 
@@ -443,16 +474,15 @@ describe("historical docs repository links", () => {
     expect(missingRecall).toEqual([])
   })
 
-  test("no pre-June dated spec markdown remains in the spec tree", () => {
-    const preJuneSpecs = specsFiles()
-      .map((file) => path.relative(repoRoot, file).replace(/\\/g, "/"))
-      .filter((file) => path.extname(file).toLowerCase() === ".md")
-      .filter((file) => {
-        const date = path.basename(file).match(/20\d{2}-\d{2}-\d{2}/)?.[0]
-        return Boolean(date && date < "2026-06-01")
-      })
-
-    expect(preJuneSpecs).toEqual([])
+  test("no pre-June dated spec markdown or text file remains in the spec tree", () => {
+    expect(preJuneDatedSpecFiles()).toEqual([])
+    expect(
+      preJuneDatedSpecFiles([
+        "specs/artifacts/2026-05-31-stale-input.txt",
+        "specs/artifacts/2026-06-01-current-input.txt",
+        "specs/current/architecture/2026-05-31-non-spec.json",
+      ]),
+    ).toEqual(["specs/artifacts/2026-05-31-stale-input.txt"])
   })
 
   test("scratch text detection scans unknown UTF-8 snapshot extensions", () => {
@@ -465,6 +495,22 @@ describe("historical docs repository links", () => {
 
       expect(shouldScanScratchTextFile(textFile, path.extname(textFile).toLowerCase())).toBe(true)
       expect(shouldScanScratchTextFile(binaryFile, path.extname(binaryFile).toLowerCase())).toBe(false)
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  test("scratch snapshot file names reject pre-June dated spec text", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-scratch-spec-name-"))
+    try {
+      const staleText = path.join(tempDir, "2026-05-31-stale-spec.txt")
+      const currentText = path.join(tempDir, "2026-06-01-current-spec.txt")
+      fs.writeFileSync(staleText, "plain stale snapshot\n")
+      fs.writeFileSync(currentText, "plain current snapshot\n")
+
+      const offenders = scratchSpecSnapshotOffenders(tempDir)
+      expect(offenders.some((offender) => offender.endsWith("2026-05-31-stale-spec.txt"))).toBe(true)
+      expect(offenders.some((offender) => offender.endsWith("2026-06-01-current-spec.txt"))).toBe(false)
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }

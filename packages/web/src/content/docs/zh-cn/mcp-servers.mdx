@@ -131,17 +131,15 @@ opencorvus mcp logout <server-name>
 }
 ```
 
-**远程 GitHub（Bearer Token）：**
+**远程 OAuth Server：**
 
 ```jsonc
 {
   "mcp": {
-    "github": {
+    "remote-tools": {
       "type": "remote",
       "transport": "streamable-http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": { "Authorization": "Bearer ghp_xxx" },
-      "oauth": false,
+      "url": "https://mcp.example.com/rpc",
     },
   },
 }

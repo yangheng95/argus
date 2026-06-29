@@ -95,17 +95,15 @@ Status: `opencorvus mcp list`. Remove credentials: `opencorvus mcp logout <serve
 }
 ```
 
-**Remote GitHub (Bearer Token):**
+**Remote OAuth server:**
 
 ```jsonc
 {
   "mcp": {
-    "github": {
+    "remote-tools": {
       "type": "remote",
       "transport": "streamable-http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": { "Authorization": "Bearer ghp_xxx" },
-      "oauth": false,
+      "url": "https://mcp.example.com/rpc",
     },
   },
 }

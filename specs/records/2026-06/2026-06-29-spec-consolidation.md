@@ -215,11 +215,37 @@ Later independent review rounds found and fixed these remaining drift classes:
     extensionless UTF-8 files outside the fixed scan list. The scratch guard now
     keeps the known text-extension list but also samples unknown extensions as
     UTF-8 text, while known binary extensions are skipped before content scans.
+21. A later storage-guard review found package-local spec checks still named
+    only `packages/opencorvus/specs` even though the storage contract forbids
+    `packages/*/specs`. `historical-docs-links.test.ts` now detects any
+    package-local `specs` directory and rejects generic
+    `packages/<package>/specs` references in repository and scratch scans.
+22. A later SDK/OpenAPI review found the MCP OAuth callback server route had
+    moved to `{ code, state }` with `MCPOAuthStateError`, while generated
+    OpenAPI and TypeScript SDK artifacts still exposed only `{ code }` and
+    `BadRequestError`. The SDK/OpenAPI artifacts were regenerated from the
+    route source, API docs were rerendered, and
+    `sdk-build-format-contract.test.ts` now checks the callback body and 400
+    error union.
+23. A later GitHub/MCP review found the HTTP OAuth callback route still bypassed
+    the state validation path used by browser authentication, public MCP docs
+    still showed a GitHub personal-token remote example, the GitHub event test
+    duplicated the runtime event list, and per-server MCP timeout override lacked
+    behavior coverage. The route now requires callback `state` and calls the
+    same state-validating finish path, public MCP docs use an OAuth remote
+    example, document health derives GitHub events from the runtime constants,
+    and MCP tests cover per-server timeout precedence.
+24. Validation found the same-name MCP OAuth route test cleaned project auth
+    storage directly, leaving the second project's pending callback flow for the
+    global test hook to tear down. The test now cleans each project through
+    `MCP.removeAuth("oauth")`, so the regression coverage exercises the same
+    pending-flow cancellation contract as production code.
 
 Validation after these addenda includes:
 
 - `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/overlay/test/mcp-service.test.ts`
-- `bun test ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts packages/opencorvus/test/util/timeout.test.ts`
+- `bun test packages/opencorvus/test/mcp/headers.test.ts ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/opencorvus/test/server/mcp-routes.test.ts packages/opencorvus/test/script/sdk-build-format-contract.test.ts packages/opencorvus/test/util/timeout.test.ts`
+- `bun test packages/overlay/test/sse-active-elapsed.test.ts packages/overlay/test/conversation-hydrate-replay.test.ts`
 - `bun test packages/opencorvus/test/provider/models-snapshot.test.ts packages/opencorvus/test/provider/transform.test.ts`
 - `bun test packages/opencorvus/test/session/model-image-input.test.ts packages/opencorvus/test/session/message.test.ts packages/opencorvus/test/mcp/browser-tools-resource.test.ts`
 - `bun run --cwd packages/overlay test:browser test/browser/task-status-header-missing-completion-browser.test.ts`

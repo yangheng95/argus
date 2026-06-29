@@ -17,15 +17,23 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
-    authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
+    authProvider:
+      | { redirectToAuthorization?: (url: URL) => Promise<void>; state?: () => string | Promise<string> }
+      | undefined
     url: string
-    constructor(url: URL, options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> } }) {
+    constructor(
+      url: URL,
+      options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void>; state?: () => string | Promise<string> } },
+    ) {
       this.url = url.toString()
       this.authProvider = options?.authProvider
     }
     async start() {
       if (startAuthFailure) throw startAuthFailure
-      await this.authProvider?.redirectToAuthorization?.(new URL("https://auth.example.test/authorize?state=route"))
+      const state = (await this.authProvider?.state?.()) ?? "route"
+      const authorizationUrl = new URL("https://auth.example.test/authorize")
+      authorizationUrl.searchParams.set("state", state)
+      await this.authProvider?.redirectToAuthorization?.(authorizationUrl)
       throw new MockUnauthorizedError()
     }
     async finishAuth() {
@@ -104,7 +112,7 @@ describe("MCP routes", () => {
           await app.request("/mcp/missing/auth/callback", {
             method: "POST",
             headers: { ...headers, "content-type": "application/json" },
-            body: JSON.stringify({ code: "unused" }),
+            body: JSON.stringify({ code: "unused", state: "unused" }),
           }),
         )
       },
@@ -236,15 +244,15 @@ describe("MCP routes", () => {
 
         const start = await app.request("/mcp/oauth/auth", { method: "POST", headers })
         expect(start.status).toBe(200)
-        await expect(start.json()).resolves.toEqual({
-          authorizationUrl: "https://auth.example.test/authorize?state=route",
-        })
+        const started = await start.json()
+        const state = new URL(started.authorizationUrl).searchParams.get("state")
+        expect(state).toBeTruthy()
 
         finishAuthFailure = new Error("oauth finish exploded")
         const callback = await app.request("/mcp/oauth/auth/callback", {
           method: "POST",
           headers: { ...headers, "content-type": "application/json" },
-          body: JSON.stringify({ code: "route-code" }),
+          body: JSON.stringify({ code: "route-code", state }),
         })
         expect(callback.status).toBe(500)
         await expect(callback.json()).resolves.toMatchObject({
@@ -299,25 +307,70 @@ describe("MCP routes", () => {
 
       const startA = await app.request("/mcp/oauth/auth", { method: "POST", headers: headersA })
       expect(startA.status).toBe(200)
+      const stateA = new URL((await startA.json()).authorizationUrl).searchParams.get("state")
+      expect(stateA).toBeTruthy()
       const startB = await app.request("/mcp/oauth/auth", { method: "POST", headers: headersB })
       expect(startB.status).toBe(200)
+      const stateB = new URL((await startB.json()).authorizationUrl).searchParams.get("state")
+      expect(stateB).toBeTruthy()
 
       const callbackA = await app.request("/mcp/oauth/auth/callback", {
         method: "POST",
         headers: { ...headersA, "content-type": "application/json" },
-        body: JSON.stringify({ code: "project-a-code" }),
+        body: JSON.stringify({ code: "project-a-code", state: stateA }),
       })
       expect(callbackA.status).toBe(200)
       expect(finishedAuthUrls).toEqual(["https://project-a.example.test/rpc"])
 
       const credentials = await McpAuth.all()
-      expect(credentials[authKeyA]?.oauthState).toBeTruthy()
-      expect(credentials[authKeyB]?.oauthState).toBeTruthy()
+      expect(credentials[authKeyA]?.oauthState).toBeUndefined()
+      expect(credentials[authKeyB]?.oauthState).toBe(stateB)
       expect(credentials.oauth).toBeUndefined()
     } finally {
-      await McpAuth.remove(authKeyA).catch(() => undefined)
-      await McpAuth.remove(authKeyB).catch(() => undefined)
+      await Instance.provide({ directory: projectA.path, fn: () => MCP.removeAuth("oauth") })
+      await Instance.provide({ directory: projectB.path, fn: () => MCP.removeAuth("oauth") })
     }
+  })
+
+  test("OAuth route callback rejects mismatched state before token exchange", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        mcp: {
+          oauth: {
+            type: "remote",
+            transport: "streamable-http",
+            url: "https://mcp.example.test/rpc",
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const headers = { "x-opencorvus-directory": tmp.path }
+
+        const start = await app.request("/mcp/oauth/auth", { method: "POST", headers })
+        expect(start.status).toBe(200)
+
+        const callback = await app.request("/mcp/oauth/auth/callback", {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({ code: "route-code", state: "wrong-state" }),
+        })
+        expect(callback.status).toBe(400)
+        await expect(callback.json()).resolves.toMatchObject({
+          name: "MCPOAuthStateError",
+          data: { message: expect.stringContaining("OAuth state mismatch") },
+        })
+        expect(finishedAuthUrls).toEqual([])
+      },
+    })
   })
 
   test("OAuth start failures return a documented route error", async () => {

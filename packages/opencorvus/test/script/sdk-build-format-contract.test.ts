@@ -237,6 +237,13 @@ describe("SDK build format contract", () => {
       "404",
       "500",
     ])
+    const mcpAuthCallbackRequestSchema =
+      openapi.paths["/mcp/{name}/auth/callback"].post.requestBody.content["application/json"].schema
+    expect(mcpAuthCallbackRequestSchema.required.sort()).toEqual(["code", "state"])
+    expect(Object.keys(mcpAuthCallbackRequestSchema.properties).sort()).toEqual(["code", "state"])
+    expect(JSON.stringify(openapi.paths["/mcp/{name}/auth/callback"].post.responses["400"])).toContain(
+      "MCPOAuthStateError",
+    )
     expect(Object.keys(openapi.paths["/mcp/{name}/auth/authenticate"].post.responses).sort()).toEqual([
       "200",
       "400",
@@ -264,7 +271,11 @@ describe("SDK build format contract", () => {
     expect(mcpAuthStartErrorsBlock).toContain('name: "UnknownError"')
     const mcpAuthCallbackErrorsBlock = generatedTypeBlock(types, "McpAuthCallbackErrors")
     expect(mcpAuthCallbackErrorsBlock).toContain("BadRequestError")
+    expect(mcpAuthCallbackErrorsBlock).toContain("MCPOAuthStateError")
     expect(mcpAuthCallbackErrorsBlock).toContain('name: "UnknownError"')
+    const mcpAuthCallbackDataBlock = generatedTypeBlock(types, "McpAuthCallbackData")
+    expect(mcpAuthCallbackDataBlock).toContain("code: string")
+    expect(mcpAuthCallbackDataBlock).toContain("state: string")
     const mcpAuthRemoveErrorsBlock = generatedTypeBlock(types, "McpAuthRemoveErrors")
     expect(mcpAuthRemoveErrorsBlock).toContain("500: UnknownError")
     const experimentalResourceListErrorsBlock = generatedTypeBlock(types, "ExperimentalResourceListErrors")
