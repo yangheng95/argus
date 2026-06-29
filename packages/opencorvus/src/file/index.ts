@@ -436,13 +436,47 @@ export namespace File {
     return value
   }
 
-  async function canonicalPath(input: string) {
-    const absolute = path.resolve(input)
-    const real = await fs.promises.realpath(absolute).catch(() => absolute)
-    let normalized = trimTrailingSeparators(real)
+  function isMissingPathError(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      ((error as { code?: unknown }).code === "ENOENT" || (error as { code?: unknown }).code === "ENOTDIR")
+    )
+  }
+
+  async function realpathIfExists(input: string): Promise<string | undefined> {
+    try {
+      return await fs.promises.realpath(input)
+    } catch (error) {
+      if (isMissingPathError(error)) return undefined
+      throw error
+    }
+  }
+
+  function normalizeCanonicalPath(input: string): string {
+    let normalized = trimTrailingSeparators(input)
     normalized = Filesystem.normalizePath(normalized)
     if (process.platform === "win32") normalized = normalized.toLowerCase()
     return normalized
+  }
+
+  async function canonicalPath(input: string) {
+    const absolute = path.resolve(input)
+    const exact = await realpathIfExists(absolute)
+    if (exact) return normalizeCanonicalPath(exact)
+
+    const suffix: string[] = []
+    let current = absolute
+    while (true) {
+      const parent = path.dirname(current)
+      const name = path.basename(current)
+      if (name) suffix.unshift(name)
+      if (parent === current) return normalizeCanonicalPath(absolute)
+      current = parent
+      const existingParent = await realpathIfExists(current)
+      if (existingParent) return normalizeCanonicalPath(path.join(existingParent, ...suffix))
+    }
   }
 
   function isWithin(base: string, target: string) {
@@ -543,21 +577,12 @@ export namespace File {
     })
   }
 
-  function isMissingFileError(error: unknown): boolean {
-    return (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      ((error as { code?: unknown }).code === "ENOENT" || (error as { code?: unknown }).code === "ENOTDIR")
-    )
-  }
-
   async function statReadableFile(file: string, full: string): Promise<fs.Stats> {
     let stat: fs.Stats
     try {
       stat = await fs.promises.stat(full)
     } catch (error) {
-      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      if (isMissingPathError(error)) throw fileNotFound({ path: file })
       throw error
     }
     if (!stat.isFile()) {
@@ -570,7 +595,7 @@ export namespace File {
     try {
       await fs.promises.access(full, fs.constants.R_OK)
     } catch (error) {
-      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      if (isMissingPathError(error)) throw fileNotFound({ path: file })
       throw error
     }
   }
@@ -579,7 +604,7 @@ export namespace File {
     try {
       return await Filesystem.readBytes(full)
     } catch (error) {
-      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      if (isMissingPathError(error)) throw fileNotFound({ path: file })
       throw error
     }
   }
@@ -588,7 +613,7 @@ export namespace File {
     try {
       return await Filesystem.readText(full)
     } catch (error) {
-      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      if (isMissingPathError(error)) throw fileNotFound({ path: file })
       throw error
     }
   }

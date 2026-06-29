@@ -9,7 +9,7 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
-import { tmpdir } from "../fixture/fixture"
+import { createDirectoryAlias, tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
@@ -288,6 +288,52 @@ describe("file routes", () => {
         await expect(fs.stat(path.join(tmp.path, "docs"))).rejects.toThrow()
       },
     })
+  })
+
+  test("PATCH /file/item moves to a non-existing destination under a project path alias", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, ".nova-vibecoding-template"), { recursive: true })
+    await fs.mkdir(path.join(tmp.path, ".agents"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".agents", "config.md"), "agent config", "utf-8")
+    const alias = await createDirectoryAlias(tmp.path)
+
+    try {
+      await Instance.provide({
+        directory: alias,
+        fn: async () => {
+          const response = await Server.App().request("/file/item", {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              "x-opencorvus-directory": alias,
+            },
+            body: JSON.stringify({
+              path: ".agents",
+              newPath: path.join(".nova-vibecoding-template", ".agents"),
+            }),
+          })
+
+          expect(response.status).toBe(200)
+          await expect(response.json()).resolves.toMatchObject({
+            previousPath: ".agents",
+            path: path.join(".nova-vibecoding-template", ".agents"),
+            node: {
+              name: ".agents",
+              type: "directory",
+            },
+          })
+          expect(
+            await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents", "config.md"), "utf-8"),
+          ).toBe("agent config")
+        },
+      })
+    } finally {
+      await Instance.tryProvideActive({
+        directory: alias,
+        fn: () => Instance.dispose(),
+      })
+      await fs.rm(alias, { recursive: true, force: true })
+    }
   })
 
   test("POST /file/item returns named 400 errors for invalid project paths", async () => {

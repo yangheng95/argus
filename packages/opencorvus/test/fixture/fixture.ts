@@ -47,3 +47,15 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   }
   return result
 }
+
+export async function createDirectoryAlias(target: string): Promise<string> {
+  const alias = sanitizePath(
+    path.join(
+      path.dirname(target),
+      `${path.basename(target)}-alias-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ),
+  )
+  await fs.rm(alias, { recursive: true, force: true })
+  await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir")
+  return alias
+}

@@ -5,7 +5,7 @@ import fs from "fs/promises"
 import { File } from "../../src/file"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
-import { tmpdir } from "../fixture/fixture"
+import { createDirectoryAlias, tmpdir } from "../fixture/fixture"
 
 describe("file/index Filesystem patterns", () => {
   describe("File.read() - text content", () => {
@@ -276,6 +276,106 @@ describe("file/index Filesystem patterns", () => {
           expect(await fs.readFile(path.join(tmp.path, "docs", "new.md"), "utf-8")).toBe("content")
         },
       })
+    })
+
+    test("resolves non-existing mutation targets under a selected directory alias", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, ".nova-vibecoding-template"), { recursive: true })
+      await fs.mkdir(path.join(tmp.path, ".agents"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, ".agents", "config.md"), "agent config", "utf-8")
+      const alias = await createDirectoryAlias(tmp.path)
+
+      try {
+        await Instance.provide({
+          directory: alias,
+          fn: async () => {
+            const moved = await File.move({
+              path: ".agents",
+              newPath: path.join(".nova-vibecoding-template", ".agents"),
+            })
+            expect(moved).toMatchObject({
+              previousPath: ".agents",
+              path: path.join(".nova-vibecoding-template", ".agents"),
+              node: {
+                name: ".agents",
+                type: "directory",
+              },
+            })
+            expect(
+              await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents", "config.md"), "utf-8"),
+            ).toBe("agent config")
+
+            const created = await File.create({
+              path: path.join(".nova-vibecoding-template", "created.md"),
+              type: "file",
+              content: "created",
+            })
+            expect(created.path).toBe(path.join(".nova-vibecoding-template", "created.md"))
+
+            const uploaded = await File.upload({
+              targetDir: ".nova-vibecoding-template",
+              files: [
+                {
+                  name: "dropped.txt",
+                  contentBase64: Buffer.from("dropped", "utf-8").toString("base64"),
+                },
+              ],
+            })
+            expect(uploaded).toEqual([
+              {
+                name: "dropped.txt",
+                path: path.join(".nova-vibecoding-template", "dropped.txt"),
+                bytes: 7,
+              },
+            ])
+          },
+        })
+      } finally {
+        await Instance.tryProvideActive({
+          directory: alias,
+          fn: () => Instance.dispose(),
+        })
+        await fs.rm(alias, { recursive: true, force: true })
+      }
+    })
+
+    test("rejects mutation targets through a symlinked parent outside the selected directory", async () => {
+      await using tmp = await tmpdir()
+      await using outside = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "source.md"), "source", "utf-8")
+      const escapeLink = path.join(tmp.path, "escape-link")
+      await fs.rm(escapeLink, { recursive: true, force: true })
+      await fs.symlink(outside.path, escapeLink, process.platform === "win32" ? "junction" : "dir")
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(
+              File.create({
+                path: path.join("escape-link", "created.md"),
+                type: "file",
+                content: "created",
+              }),
+            ).rejects.toThrow("FileInvalidPathError")
+            await expect(
+              File.move({
+                path: "source.md",
+                newPath: path.join("escape-link", "source.md"),
+              }),
+            ).rejects.toThrow("FileInvalidPathError")
+            expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("source")
+            await expect(fs.stat(path.join(outside.path, "created.md"))).rejects.toThrow()
+            await expect(fs.stat(path.join(outside.path, "source.md"))).rejects.toThrow()
+          },
+        })
+      } finally {
+        await Instance.tryProvideActive({
+          directory: tmp.path,
+          fn: () => Instance.dispose(),
+        })
+        await fs.rm(escapeLink, { recursive: true, force: true })
+      }
     })
 
     test("deletes files and directories recursively", async () => {
