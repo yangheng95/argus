@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 ## Problem
 
-`browser_preview_bind_local_module` captures the implementation module before creating a source/local binding puzzle. The local module sidecar only checked `locator.count()`, then used `getBoundingClientRect()` and coerced zero dimensions with `Math.max(1, ...)`. Hidden or collapsed modules can therefore produce passed binding evidence before `browser_preview_compare_regions` has a chance to reject the locator.
+`browser_preview_bind_local_module` captures the implementation module before creating a source/local binding puzzle. The local module sidecar only checked `locator.count()`, then used `getBoundingClientRect()` and coerced zero dimensions with `Math.max(1, ...)`. Hidden or collapsed modules can therefore produce passed binding evidence before `region comparison tool` has a chance to reject the locator.
 
 ## Recall
 
@@ -22,7 +22,7 @@ Date: 2026-06-17
 | `src/tool/browser-preview-bind-local-module.ts`            | Tool exists and delegates to `bindLocalModuleToSourceRegion`.                                                  | Keep the tool as the public product entry.                                                                   |
 | `src/tool/registry.ts`                                     | Tool is not registered, making the documented workflow unavailable and hiding the capture bug from tool tests. | Register `BrowserPreviewBindLocalModuleTool` next to other browser preview tools.                            |
 | `test/browser-preview/local-module-source-binding.test.ts` | Covers scoring and artifact materialization only.                                                              | Add real browser capture coverage for hidden and zero-size implementation locators.                          |
-| `test/tool/browser-preview.test.ts`                        | Registry currently asserts only `browser_preview` and `browser_preview_compare_regions`.                       | Add registry coverage for `browser_preview_bind_local_module`.                                               |
+| `test/tool/browser-preview.test.ts`                        | Registry currently asserts only `browser_preview` and `region comparison tool`.                       | Add registry coverage for `browser_preview_bind_local_module`.                                               |
 
 ## Acceptance
 

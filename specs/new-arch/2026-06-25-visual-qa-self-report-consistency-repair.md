@@ -51,14 +51,14 @@ Context-derived warnings such as "the task context expects reference parity but 
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Repair |
-| --- | --- | --- |
-| `packages/opencorvus/src/visual-qa/output-tools.ts` | Records all schema-valid reports and emits advisories only. | Reuse the self-report helper, show `effective_accepted`, and keep recording the report. |
-| `packages/opencorvus/src/engine/workflow.ts` | Projects completed from raw `accepted && production_blockers.length === 0`. | Project completed only when `effectiveAccepted=true`; project failed for self-contradictory reports. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Decision-log summary and tool headline expose only submitted `accepted`. | Add effective acceptance and self-report issue count to decision-log summary and tool result fields. |
-| `packages/opencorvus/src/visual-qa/agent.ts` | Says passing report "should" include evidence and blockers absence. | Restore "must" wording for self-report semantics. |
-| `packages/opencorvus/src/prompt/core/visual-qa-core.txt` | Says passed/failed result "should". | Restore "must" wording. |
-| Tests | Several tests intentionally assert weak advisory-only completion. | Reverse those tests for self-report contradictions while preserving evidence-artifact advisories. |
+| Surface                                                  | Current behavior                                                            | Repair                                                                                               |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/visual-qa/output-tools.ts`      | Records all schema-valid reports and emits advisories only.                 | Reuse the self-report helper, show `effective_accepted`, and keep recording the report.              |
+| `packages/opencorvus/src/engine/workflow.ts`             | Projects completed from raw `accepted && production_blockers.length === 0`. | Project completed only when `effectiveAccepted=true`; project failed for self-contradictory reports. |
+| `packages/opencorvus/src/orchestrator/tools.ts`          | Decision-log summary and tool headline expose only submitted `accepted`.    | Add effective acceptance and self-report issue count to decision-log summary and tool result fields. |
+| `packages/opencorvus/src/visual-qa/agent.ts`             | Says passing report "should" include evidence and blockers absence.         | Restore "must" wording for self-report semantics.                                                    |
+| `packages/opencorvus/src/prompt/core/visual-qa-core.txt` | Says passed/failed result "should".                                         | Restore "must" wording.                                                                              |
+| Tests                                                    | Several tests intentionally assert weak advisory-only completion.           | Reverse those tests for self-report contradictions while preserving evidence-artifact advisories.    |
 
 ## Verification
 

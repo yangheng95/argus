@@ -12,7 +12,7 @@ continued and later passed.
 
 - Task `tsk_efea03e47001KSBTaoTmewSnTp` failed at
   `2026-06-25T12:58:01Z` with `Stream-error fuse tripped after 3 consecutive
-  failures`.
+failures`.
 - Trace rows at `12:57:31Z`, `12:57:50Z`, and `12:58:00Z` were no-decision
   contract failures, not provider stream failures.
 - Goal runs #3, #4, #5, and #6 later reported successful child work. Goals #7
@@ -42,17 +42,17 @@ continued and later passed.
 
 ## Callpoint Inventory
 
-| Surface | Current role | Required action |
-| --- | --- | --- |
-| `engine/runtime.ts::syncTerminalGoalRefills` | Finds terminal goal runs, dispatches root wake, then writes refill facts. | Make the refill fact durable before any accepted root loop can observe context. |
-| `engine/runtime.ts::recordTerminalGoalRefillWakeFact` | Writes `goal_refill_notification` with dispatch metadata. | Keep a single durable fact source and preserve final dispatch result. |
-| `engine/queue.ts::dispatchTaskLoop` | Starts or queues root wakes. | Keep as the single wake path. If a caller needs pre-launch durable facts, expose a pre-start hook instead of duplicating launch logic. |
-| `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope` | Records no-decision as stream error and evaluates stream-error fuse. | Keep no-decision self-wake, but stop counting it as stream error. |
-| `engine/persist.ts::recordOrchestratorStreamError` | Records provider/session stream failures. | Do not write no-decision contract failures here. |
-| `engine/store.ts::listOrchestratorStreamErrorArtifacts` | Reads provider/session stream failures for describe and fuse. | Add a separate no-decision contract failure reader. |
-| `engine/describe.ts::recent_stream_failures` | Renders provider/session stream failures. | Add a separate recent no-decision section. |
-| `test/engine/runtime-goal-run-convergence.test.ts` | Covers refill wake facts. | Add ordering regression: facts exist when the launched loop reads context. |
-| `test/orchestrator/no-decision-stop-process.test.ts` | Covers no-decision self-wake and old stream-error fuse reuse. | Assert no-decision writes the separate artifact and does not trip stream-error fuse. |
+| Surface                                                         | Current role                                                              | Required action                                                                                                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine/runtime.ts::syncTerminalGoalRefills`                    | Finds terminal goal runs, dispatches root wake, then writes refill facts. | Make the refill fact durable before any accepted root loop can observe context.                                                        |
+| `engine/runtime.ts::recordTerminalGoalRefillWakeFact`           | Writes `goal_refill_notification` with dispatch metadata.                 | Keep a single durable fact source and preserve final dispatch result.                                                                  |
+| `engine/queue.ts::dispatchTaskLoop`                             | Starts or queues root wakes.                                              | Keep as the single wake path. If a caller needs pre-launch durable facts, expose a pre-start hook instead of duplicating launch logic. |
+| `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope` | Records no-decision as stream error and evaluates stream-error fuse.      | Keep no-decision self-wake, but stop counting it as stream error.                                                                      |
+| `engine/persist.ts::recordOrchestratorStreamError`              | Records provider/session stream failures.                                 | Do not write no-decision contract failures here.                                                                                       |
+| `engine/store.ts::listOrchestratorStreamErrorArtifacts`         | Reads provider/session stream failures for describe and fuse.             | Add a separate no-decision contract failure reader.                                                                                    |
+| `engine/describe.ts::recent_stream_failures`                    | Renders provider/session stream failures.                                 | Add a separate recent no-decision section.                                                                                             |
+| `test/engine/runtime-goal-run-convergence.test.ts`              | Covers refill wake facts.                                                 | Add ordering regression: facts exist when the launched loop reads context.                                                             |
+| `test/orchestrator/no-decision-stop-process.test.ts`            | Covers no-decision self-wake and old stream-error fuse reuse.             | Assert no-decision writes the separate artifact and does not trip stream-error fuse.                                                   |
 
 ## Decision
 

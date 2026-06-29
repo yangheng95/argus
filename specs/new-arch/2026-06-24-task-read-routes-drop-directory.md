@@ -20,16 +20,16 @@ callers to pass `directory` even though the task row already owns
 
 ## Call Points
 
-| Surface | Decision |
-| --- | --- |
-| `packages/transport-protocol/src/index.ts` | Add explicit method-aware task record GET read bypasses. |
-| `packages/opencorvus/src/server/routes/orchestrator.ts` | Remove the `Instance.project.id` dependency from `GET /task/:taskID/events`. |
-| `packages/opencorvus/src/task-api/index.ts` | Make `task.operatorModelContext` read the task record directly instead of requiring current-project context. |
-| `packages/sdk/openapi.json` and generated SDK | Remove `directory` query parameters from task record read operations. |
-| Overlay API directory injection tests | Expect task read routes not to inject `directory`; project routes and write routes still inject. |
-| Server directory middleware tests | Prove task read routes work without `directory`; prove `/tasks` still rejects missing directory. |
-| `packages/web/src/content/docs/**` | Document the directory boundary in generated API docs, quickstarts, architecture docs, overlay docs, and Mission/Task integration guides. |
-| `specs/new-arch/spec-vscode-extension.md` | Update the IDE integration contract so Inspector task reads use `taskID` ownership instead of directory switching. |
+| Surface                                                 | Decision                                                                                                                                  |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/transport-protocol/src/index.ts`              | Add explicit method-aware task record GET read bypasses.                                                                                  |
+| `packages/opencorvus/src/server/routes/orchestrator.ts` | Remove the `Instance.project.id` dependency from `GET /task/:taskID/events`.                                                              |
+| `packages/opencorvus/src/task-api/index.ts`             | Make `task.operatorModelContext` read the task record directly instead of requiring current-project context.                              |
+| `packages/sdk/openapi.json` and generated SDK           | Remove `directory` query parameters from task record read operations.                                                                     |
+| Overlay API directory injection tests                   | Expect task read routes not to inject `directory`; project routes and write routes still inject.                                          |
+| Server directory middleware tests                       | Prove task read routes work without `directory`; prove `/tasks` still rejects missing directory.                                          |
+| `packages/web/src/content/docs/**`                      | Document the directory boundary in generated API docs, quickstarts, architecture docs, overlay docs, and Mission/Task integration guides. |
+| `specs/new-arch/spec-vscode-extension.md`               | Update the IDE integration contract so Inspector task reads use `taskID` ownership instead of directory switching.                        |
 
 ## Acceptance
 

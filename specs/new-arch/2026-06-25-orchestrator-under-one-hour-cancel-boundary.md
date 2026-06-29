@@ -29,11 +29,11 @@ Command basis:
 rg -n "cancel_subagent|recover_stale|stale|live build|terminal refill|no live ownership|ghost|orphan|running for" packages/opencorvus/src/prompt/core/orchestrator-core.txt packages/opencorvus/test/agent/orchestrator-stale-recovery-prompt.test.ts packages/opencorvus/test/orchestrator/orchestrator-core-prompt.test.ts specs/new-arch/2026-06-22-orchestrator-live-build-park-prompt.md specs/new-arch/2026-06-24-a2a-agent-lifecycle-coordination.md specs/new-arch/2026-06-24-scheduler-compact-read-context.md
 ```
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Add the one-hour self-cancel boundary in the existing lifecycle/control tool paragraph. |
+| Surface                                                                     | Decision                                                                                  |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`                 | Add the one-hour self-cancel boundary in the existing lifecycle/control tool paragraph.   |
 | `packages/opencorvus/test/agent/orchestrator-stale-recovery-prompt.test.ts` | Pin the prompt text so future edits cannot reintroduce short-duration stale cancellation. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | No host gate; this is a scheduler prompt correction per prompt-over-host rules. |
+| `packages/opencorvus/src/orchestrator/tools.ts`                             | No host gate; this is a scheduler prompt correction per prompt-over-host rules.           |
 
 ## Decision
 

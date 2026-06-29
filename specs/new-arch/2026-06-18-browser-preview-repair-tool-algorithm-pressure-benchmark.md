@@ -21,7 +21,7 @@ the correct result across representative module scenarios:
 1. `browser_preview` must persist a task-scoped preview target.
 2. `browser_preview_bind_local_module` must capture only visible, non-zero local
    modules and bind them to the correct source module candidate.
-3. `browser_preview_compare_regions` must consume those bindings and persist
+3. `region comparison tool` must consume those bindings and persist
    `reference-comparison` evidence without direct URL or whole-page substitution.
 4. Build-stage registry tools must receive the same task context as stage
    runtime tools, otherwise the algorithms cannot be reached in real tasks.
@@ -103,7 +103,7 @@ database/session setup overhead.
 | Same visual region across multiple interaction states                                    | Region comparison       | Include `state_id` in comparison identity so default, expanded, hover, or modal states cannot overwrite each other's crops or evidence IDs.                                       |
 | Multiple routes in one viewport                                                          | Region runner           | Navigate per binding and restore route-specific region coordinates.                                                                                                               |
 | Playwright sidecar lifecycle errors                                                      | Evidence runner         | Propagate locator and close errors instead of converting them into missing regions or successful captures.                                                                        |
-| Tool-level bind output feeds compare input                                               | Toolchain integration   | `browser_preview_bind_local_module` metadata binding is accepted by `browser_preview_compare_regions`, which persists `reference-comparison` evidence and side-by-side artifacts. |
+| Tool-level bind output feeds compare input                                               | Toolchain integration   | `browser_preview_bind_local_module` metadata binding is accepted by `region comparison tool`, which persists `reference-comparison` evidence and side-by-side artifacts. |
 | Build registry tools on task-backed sessions                                             | Tool context            | `SessionPrompt.prompt(...).extra.taskID` equals the current task ID.                                                                                                              |
 
 ## Acceptance
@@ -116,7 +116,7 @@ database/session setup overhead.
 - Build sessions can execute task-scoped registry preview tools because taskID
   is present in the tool context.
 - The repair toolchain has at least one successful tool-level
-  `browser_preview_bind_local_module` -> `browser_preview_compare_regions`
+  `browser_preview_bind_local_module` -> `region comparison tool`
   regression, proving the screenshot comparison tool is reachable through the
   same path agents use.
 - No raw URL, output directory, whole-page comparison, or adjacent-region

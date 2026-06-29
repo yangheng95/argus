@@ -15,14 +15,14 @@ Per-goal build attempts publish durable evidence, and the task's final review is
 
 ## Evidence Surfaces
 
-| Surface | Current source |
-| --- | --- |
-| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts` |
-| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts` |
-| Visual QA semantics | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
-| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
-| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
-| Completion guard | `packages/opencorvus/src/orchestrator/tools.ts` |
+| Surface                         | Current source                                              |
+| ------------------------------- | ----------------------------------------------------------- |
+| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts`                   |
+| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts`           |
+| Visual QA semantics             | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
+| Integrity team review           | `packages/opencorvus/src/integrity/team-agent.ts`           |
+| Integrity schemas               | `packages/opencorvus/src/integrity/team-schema.ts`          |
+| Completion guard                | `packages/opencorvus/src/orchestrator/tools.ts`             |
 
 ## Artifact Records
 
@@ -41,11 +41,11 @@ Checks are audit evidence for operators and downstream review. They are not a re
 
 ## Integrity Verdict Semantics
 
-| Integrity outcome | Orchestrator meaning |
-| --- | --- |
-| pass | The integrated system is acceptable for this task; the orchestrator may call `complete_task` with the latest post-build `integrity_attempt` id. |
-| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence. |
-| thrown / artifact missing | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
+| Integrity outcome               | Orchestrator meaning                                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| pass                            | The integrated system is acceptable for this task; the orchestrator may call `complete_task` with the latest post-build `integrity_attempt` id. |
+| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence.                                 |
+| thrown / artifact missing       | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card.                         |
 
 ## What's Next
 

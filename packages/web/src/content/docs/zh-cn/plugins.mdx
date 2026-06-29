@@ -1,20 +1,20 @@
 ---
 title: Plugins（插件）
-description: 用 TypeScript 编写插件，hook 进 OpenCorvus 的工具、LLM 请求与评估流水线。
+description: 用 TypeScript 编写插件，hook 进 OpenCorvus 的工具、LLM 请求与 review 集成。
 ---
 
-Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具显式加载 Markdown 工作流）不同，Plugin 是 TypeScript/JavaScript 代码，可在运行时 hook 进核心事件链——注册工具、修改 LLM 请求参数、拦截权限检查、订阅评估结果，甚至完整替换评估分析流程。
+Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具显式加载 Markdown 工作流）不同，Plugin 是 TypeScript/JavaScript 代码，可在运行时 hook 进核心事件链——注册工具、修改 LLM 请求参数、拦截权限检查，或集成 verification / review hooks。
 
 源码：`packages/opencorvus/src/plugin/index.ts`、`packages/plugin/src/index.ts`（接口）
 
 ## 1. Plugin vs Skill
 
-| 维度 | Skill                       | Plugin                                         |
-| ---- | --------------------------- | ---------------------------------------------- |
-| 实现 | Markdown + YAML             | TypeScript/JavaScript 模块                     |
-| 加载 | agent 调用 `skill` 工具加载 | 服务启动时，全局常驻                           |
-| 能力 | 给 agent 提供可加载工作流   | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展评估 |
-| 门槛 | 零代码                      | 实现 `Plugin` 函数接口                         |
+| 维度 | Skill                       | Plugin                                            |
+| ---- | --------------------------- | ------------------------------------------------- |
+| 实现 | Markdown + YAML             | TypeScript/JavaScript 模块                        |
+| 加载 | agent 调用 `skill` 工具加载 | 服务启动时，全局常驻                              |
+| 能力 | 给 agent 提供可加载工作流   | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展 review |
+| 门槛 | 零代码                      | 实现 `Plugin` 函数接口                            |
 
 ## 2. 默认插件
 
@@ -90,25 +90,25 @@ export const MyPlugin: Plugin = async (ctx) => {
 
 完整列表见 `packages/plugin/src/index.ts`。常用：
 
-| Hook                                 | 时机                              |
-| ------------------------------------ | --------------------------------- |
-| `event`                              | 任意 Bus 事件发布                 |
-| `config`                             | 配置加载后                        |
-| `tool`                               | 静态注册额外工具                  |
-| `auth`                               | provider 认证扩展                 |
-| `chat.message`                       | 收到新消息                        |
-| `chat.params`                        | LLM 请求参数构建后、发送前        |
-| `chat.headers`                       | LLM HTTP 头构建后                 |
-| `permission.ask`                     | 权限询问（可覆盖 ask→allow/deny） |
-| `shell.env`                          | shell 命令前注入 env              |
-| `tool.execute.before`                | 工具执行前（可改 args）           |
-| `tool.execute.after`                 | 工具执行后（可改输出）            |
-| `tool.definition`                    | 工具定义发给 LLM 前               |
-| `evaluation.checks`                  | 评估阶段注入自定义检查            |
-| `evaluation.result`                  | 评估完成后（通知 / 写外部）       |
-| `evaluation.analysis`                | 完整替换默认 LLM 评估分析         |
-| `acceptance.ready`                   | 交付持久化后（部署钩子）          |
-| `experimental.chat.system.transform` | system prompt 构建后              |
+| Hook                                 | 时机                                |
+| ------------------------------------ | ----------------------------------- |
+| `event`                              | 任意 Bus 事件发布                   |
+| `config`                             | 配置加载后                          |
+| `tool`                               | 静态注册额外工具                    |
+| `auth`                               | provider 认证扩展                   |
+| `chat.message`                       | 收到新消息                          |
+| `chat.params`                        | LLM 请求参数构建后、发送前          |
+| `chat.headers`                       | LLM HTTP 头构建后                   |
+| `permission.ask`                     | 权限询问（可覆盖 ask→allow/deny）   |
+| `shell.env`                          | shell 命令前注入 env                |
+| `tool.execute.before`                | 工具执行前（可改 args）             |
+| `tool.execute.after`                 | 工具执行后（可改输出）              |
+| `tool.definition`                    | 工具定义发给 LLM 前                 |
+| `evaluation.checks`                  | review hook 注入自定义检查          |
+| `evaluation.result`                  | review hook 完成后（通知 / 写外部） |
+| `evaluation.analysis`                | 替换 review-analysis hook           |
+| `acceptance.ready`                   | 交付持久化后（部署钩子）            |
+| `experimental.chat.system.transform` | system prompt 构建后                |
 
 ## 6. 在 config 中声明
 
@@ -126,7 +126,7 @@ Plugin 不直接替换 Provider 或 Executor，但可通过：
 
 - `auth` hook — 为特定 Provider 实现自定义认证
 - `chat.headers` / `chat.params` — 请求前修改参数
-- `evaluation.analysis` — 完整接管评估
+- `evaluation.analysis` — 接管 review-analysis hook
 - `acceptance.ready` — 交付后触发部署
 
 Executor 选择（OpenCorvus / Codex / Claude Code）由 Orchestrator 控制，Plugin 不干预。

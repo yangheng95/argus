@@ -12,7 +12,7 @@ Date: 2026-06-20
 
 ## Problem
 
-`browser_preview_compare_regions` is the authoritative Reference vs
+`region comparison tool` is the authoritative Reference vs
 Implementation proof for bound regions, but it is too heavy for final
 whole-page visual QA. A finished clone can still need a quick visual sweep at a
 known scroll offset, where a reviewer wants to compare the same vertical slice
@@ -52,7 +52,7 @@ The tool does not persist `browser_preview_evidence` and must not produce
 
 ## Non-Negotiable Constraints
 
-- Build agent keeps using `browser_preview_compare_regions`; this tool is not
+- Build agent keeps using `region comparison tool`; this tool is not
   included in build tools or prompts.
 - Visual QA may use this tool only after the page is believed to be complete
   enough that absolute scroll offsets are meaningful.
@@ -93,7 +93,7 @@ The tool does not persist `browser_preview_evidence` and must not produce
 - The implementation side is captured from a persisted task preview target.
 - The returned tool result includes a side-by-side PNG attachment.
 - Scroll-slice output cannot be used as
-  `browser_preview_compare_regions`/`reference-comparison` proof.
+  `region comparison tool`/`reference-comparison` proof.
 - Focused tests pass and no existing reference-comparison tests are weakened.
 
 ## Validation Findings

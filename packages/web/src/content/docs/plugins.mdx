@@ -1,9 +1,9 @@
 ---
 title: Plugins
-description: Write TypeScript plugins to extend OpenCorvus with hooks, tools, and custom evaluators.
+description: Write TypeScript plugins to extend OpenCorvus with hooks, tools, and review integrations.
 ---
 
-Plugins are OpenCorvus's deep extension mechanism. Unlike Skills (Markdown instructions), a plugin is TypeScript/JavaScript code that hooks into core event chains — register tools, modify LLM request params, intercept permissions, subscribe to evaluation results, or fully replace evaluation analysis.
+Plugins are OpenCorvus's deep extension mechanism. Unlike Skills (Markdown instructions), a plugin is TypeScript/JavaScript code that hooks into core event chains — register tools, modify LLM request params, intercept permissions, or integrate with verification/review hooks.
 
 Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts` (interface)
 
@@ -57,16 +57,16 @@ export const MyPlugin: Plugin = async (ctx) => {
 
 Full hooks: `packages/plugin/src/index.ts`.
 
-| Hook                                 | When                      |
-| ------------------------------------ | ------------------------- |
-| `tool`                               | Register static tools     |
-| `chat.params` / `chat.headers`       | Modify LLM request        |
-| `permission.ask`                     | Override ask → allow/deny |
-| `shell.env`                          | Inject env before shell   |
-| `evaluation.checks`                  | Add custom checks         |
-| `evaluation.analysis`                | Fully replace evaluator   |
-| `acceptance.ready`                   | Post-acceptance hook      |
-| `experimental.chat.system.transform` | Append to system prompt   |
+| Hook                                 | When                         |
+| ------------------------------------ | ---------------------------- |
+| `tool`                               | Register static tools        |
+| `chat.params` / `chat.headers`       | Modify LLM request           |
+| `permission.ask`                     | Override ask → allow/deny    |
+| `shell.env`                          | Inject env before shell      |
+| `evaluation.checks`                  | Add custom checks            |
+| `evaluation.analysis`                | Replace review analysis hook |
+| `acceptance.ready`                   | Post-acceptance hook         |
+| `experimental.chat.system.transform` | Append to system prompt      |
 
 ## Declaring plugins
 
@@ -80,4 +80,4 @@ Files in `.opencorvus/plugin/*.{ts,js}` auto-discovered (`src/config/config.ts`)
 
 ## Relation to providers and executors
 
-Plugins don't directly replace providers or executors. They influence them via `auth` (custom auth flows), `chat.headers`/`chat.params` (request mutation), `evaluation.analysis` (full replacement), and `acceptance.ready` (post-acceptance hooks). Executor choice stays under the orchestrator.
+Plugins don't directly replace providers or executors. They influence them via `auth` (custom auth flows), `chat.headers`/`chat.params` (request mutation), `evaluation.analysis` (review-analysis hook), and `acceptance.ready` (post-acceptance hooks). Executor choice stays under the orchestrator.

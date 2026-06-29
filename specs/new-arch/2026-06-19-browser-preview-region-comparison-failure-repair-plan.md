@@ -59,8 +59,8 @@ relevant tool parts:
 | -------------------------------- | ----------------------------------- | ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `prt_edc374667001PWlSAr40fKipB1` | `browser_preview_bind_local_module` | `error`     | `2026-06-18 19:31:10` | Agent passed `.opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png` as `sourceReferenceArtifactID`; runtime rejected it. |
 | `prt_edc377f7c001EpbG6dWCzxj54l` | `browser_preview_bind_local_module` | `completed` | `2026-06-18 19:31:25` | Binding succeeded with canonical `web-clone-source/reference.png`.                                                              |
-| `prt_edc37c44c001Y5my538NRJYucd` | `browser_preview_compare_regions`   | `completed` | `2026-06-18 19:31:42` | Comparison ran but failed coverage: source `1408x936`, implementation `1216x889`.                                               |
-| `prt_eddb64f0d001NROpcxWRxaxEEH` | `browser_preview_compare_regions`   | `completed` | `2026-06-19 02:29:33` | Comparison ran but opened a not-found page and reported the failure as missing locator.                                         |
+| `prt_edc37c44c001Y5my538NRJYucd` | `region comparison tool`   | `completed` | `2026-06-18 19:31:42` | Comparison ran but failed coverage: source `1408x936`, implementation `1216x889`.                                               |
+| `prt_eddb64f0d001NROpcxWRxaxEEH` | `region comparison tool`   | `completed` | `2026-06-19 02:29:33` | Comparison ran but opened a not-found page and reported the failure as missing locator.                                         |
 
 Task evidence counts in `engine_artifact` now include:
 
@@ -226,7 +226,7 @@ new URL(route || "/", base).toString()
 
 ### Artifact Root Split
 
-`browser_preview_compare_regions` and `browser_preview_bind_local_module` call
+`region comparison tool` and `browser_preview_bind_local_module` call
 runtime code with:
 
 ```ts
@@ -344,7 +344,7 @@ Use it in:
 
 - `packages/opencorvus/src/tool/browser-preview.ts`
 - `packages/opencorvus/src/tool/browser-preview-bind-local-module.ts`
-- `packages/opencorvus/src/tool/browser-preview-compare-regions.ts`
+- `packages/opencorvus/src/tool/region-comparison-tool.ts`
 - `packages/opencorvus/src/server/routes/browser-preview.ts` for evidence
   reads and writes.
 
@@ -518,7 +518,7 @@ The repair is complete only when all of these are true:
 
 - `browser_preview_bind_local_module` cannot accept arbitrary `.opencorvus/...`
   source paths.
-- `browser_preview_compare_regions` writes artifacts under the task evidence
+- `region comparison tool` writes artifacts under the task evidence
   root even when invoked from a goal worktree.
 - Evidence paths stored in DB are readable from the task project root.
 - A not-found implementation page is reported as route health failure, not as a

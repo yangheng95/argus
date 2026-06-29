@@ -13,7 +13,7 @@ The current frontend review workflow still has three wrong incentives:
 - Build sessions receive task-wide requirements and visual context when they
   should receive only the context relevant to the target goal.
 
-This plan intentionally does not change `browser_preview_compare_regions`.
+This plan intentionally does not change `region comparison tool`.
 That runner is treated as a separate repair item. This goal prevents the other
 workflow paths from continuing to use the legacy `webpage_*` visual tools as
 acceptance evidence.
@@ -73,5 +73,5 @@ acceptance evidence.
   active, and cannot create a second inheriting task for the same parent.
 - Build prompt tests prove a target goal receives only its mapped requirements,
   filtered contract/fidelity context, and no sibling requirement text.
-- Existing `browser_preview_compare_regions` implementation is untouched by this
+- Existing `region comparison tool` implementation is untouched by this
   goal.

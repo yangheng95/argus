@@ -59,7 +59,6 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 **字段**：
 
 - 连接：`serverUrl` · `autoServer` · `password`
-- 窗口：`alwaysOnTop` · `opacity`
 - 工作区：`directory` · `directoryMode` · `initGit`
 - 外观：`theme` · `zoom` · `locale` · `sidebarCollapsed`
 - 布局：`sidebarWidth` · `sectionsWidth` · `showTranscriptDetails`

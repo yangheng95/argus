@@ -10,14 +10,14 @@ The observed failure mode is structural:
 
 - The failed frontend-design task produced no goals and no region binding package.
 - A later replacement task wrote `docs/visual-region-binding.json`, but its region "crops" were handwritten SVG wrappers around a full-page screenshot.
-- Build-side `browser_preview_compare_regions` has real region crop/comparison behavior, but that is not available as a frontend-design handoff materializer.
+- Build-side `region comparison tool` has real region crop/comparison behavior, but that is not available as a frontend-design handoff materializer.
 - A direct experiment against `https://www.tradingview.com/markets/world-economy/` showed that DOM-driven section detection is not a reliable source of crop boundaries: TradingView parent containers can wrap multiple visible modules, producing duplicate huge crops such as a whole content column plus nested map crops.
 
 Prompt wording alone cannot fix this because the agent needs direct visual coordinates in the model context, not prose instructions to infer bboxes from DOM structure.
 
 ## Call-Site Review
 
-`rg "submit_frontend_template|record_frontend_region_selection|webpage_render|FRONTEND_DESIGN_SESSION_TOOL_IDS|browser_preview_compare_regions|cropPng" packages/opencorvus/src packages/opencorvus/test`
+`rg "submit_frontend_template|record_frontend_region_selection|webpage_render|FRONTEND_DESIGN_SESSION_TOOL_IDS|region comparison tool|cropPng" packages/opencorvus/src packages/opencorvus/test`
 
 | Area                                   | Current behavior                                                                          | Decision                                                                                                                                      |
 | -------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -73,7 +73,7 @@ This avoids the misleading pattern `1440x900-region.png` when the crop is taken 
 Non-goals:
 
 - Do not add a numeric quality gate.
-- Do not make frontend-design run implementation comparison; build/integrity keeps `browser_preview_compare_regions`.
+- Do not make frontend-design run implementation comparison; build/integrity keeps `region comparison tool`.
 - Do not accept SVG wrappers, prose-only references, missing source images, or out-of-bounds boxes.
 - Do not let the agent finalize without inspecting the generated coordinate atlas first, then the overlay/contact sheet, and rerunning the materializer when region boundaries are wrong.
 - Do not derive crop bboxes from DOM parent containers.

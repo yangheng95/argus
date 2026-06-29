@@ -38,14 +38,14 @@ supervised children are released automatically.
 
 ## Call Point Sweep
 
-| Area | Current behavior | Decision |
-| --- | --- | --- |
-| `goal/runner.ts::cleanupGoalWorkspace` | Calls `Instance.dispose()` before `Worktree.remove()`. | Leave as the single cleanup entry. |
-| `lsp/index.ts` and `lsp/client.ts` | Shutdown uses the server dispose hook when present. | Leave; it already delegates to the supervisor. |
-| `lsp/server.ts::spawnSupervisedStdio` | Returns a dispose hook backed by `ProcessSupervisor.dispose()`. | Leave; supervisor handle semantics must be corrected. |
-| `shell/process-supervisor.ts::spawnWindows` | Returns the child PID but disposes the helper handle. | Terminate the reported child PID tree, then dispose the helper. |
-| `Worktree.isValid` / `recoverRecorded` | Rejects non-empty directories missing `.git` linkage. | Leave; this prevents automatic reuse of corrupted directories. |
-| Orchestrator retry/recover paths | May see an unrecoverable recorded worktree. | Do not add automatic worktree switching. |
+| Area                                        | Current behavior                                                | Decision                                                        |
+| ------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
+| `goal/runner.ts::cleanupGoalWorkspace`      | Calls `Instance.dispose()` before `Worktree.remove()`.          | Leave as the single cleanup entry.                              |
+| `lsp/index.ts` and `lsp/client.ts`          | Shutdown uses the server dispose hook when present.             | Leave; it already delegates to the supervisor.                  |
+| `lsp/server.ts::spawnSupervisedStdio`       | Returns a dispose hook backed by `ProcessSupervisor.dispose()`. | Leave; supervisor handle semantics must be corrected.           |
+| `shell/process-supervisor.ts::spawnWindows` | Returns the child PID but disposes the helper handle.           | Terminate the reported child PID tree, then dispose the helper. |
+| `Worktree.isValid` / `recoverRecorded`      | Rejects non-empty directories missing `.git` linkage.           | Leave; this prevents automatic reuse of corrupted directories.  |
+| Orchestrator retry/recover paths            | May see an unrecoverable recorded worktree.                     | Do not add automatic worktree switching.                        |
 
 ## Tests
 

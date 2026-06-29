@@ -9,17 +9,17 @@ The visual repair loop was modeled around pre-cut source webpage regions. That i
 1. Capture the local module currently being edited.
 2. Use its locator, component files, and visible anchors to find the corresponding source webpage module.
 3. Produce a source/local binding puzzle image that the model receives as a tool attachment.
-4. Feed the resulting binding into `browser_preview_compare_regions`.
+4. Feed the resulting binding into `region comparison tool`.
 
 The source crop does not need pixel-perfect bbox alignment. It must fully contain the corresponding source module and avoid binding to the wrong neighboring module.
 
 ## Impact Review
 
-`rg "browser_preview_compare_regions|BrowserPreviewCompareRegionsTool|BrowserPreviewRegionBinding|reference.png|layout-map|sourceDomRegions" packages/opencorvus/src packages/opencorvus/test`
+`rg "region comparison tool|RegionComparisonTool|BrowserPreviewRegionBinding|reference.png|layout-map|sourceDomRegions" packages/opencorvus/src packages/opencorvus/test`
 
 | Area                                   | Current behavior                                                                                                                              | Decision                                                                                                                                            |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser_preview_compare_regions`      | Requires a preauthored source bbox.                                                                                                           | Keep it as the comparison consumer. Do not make build agents invent bboxes.                                                                         |
+| `region comparison tool`      | Requires a preauthored source bbox.                                                                                                           | Keep it as the comparison consumer. Do not make build agents invent bboxes.                                                                         |
 | `browser-preview/region-comparison.ts` | Crops source and local screenshots once binding exists.                                                                                       | Reuse the binding schema and source reference resolution.                                                                                           |
 | `browser-preview/evidence-runner.ts`   | Captures local regions from browser preview targets.                                                                                          | Add a separate local-module capture path that extracts anchors and full-page local screenshot for binding.                                          |
 | `web-clone-source` evidence            | Contains `reference.png`, `visual-surface-candidates.json`, `source-ir/layout-map.json`, and sometimes frontend-design `sourceDomRegions.ts`. | Use these as candidate evidence for source module matching.                                                                                         |
@@ -51,7 +51,7 @@ Process:
    - `frontend-design-skeleton/src/data/sourceDomRegions.ts`
 4. Score candidates using local anchors, region id, and component file words. Prefer source-dom regions and visual surfaces over tiny layout nodes when they match the same anchors.
 5. Expand the selected source bbox and local bbox, crop both, create a source context crop with the selected bbox marked, and compose a `binding-puzzle.png`.
-6. Return the puzzle as a tool image attachment and return `metadata.binding`, compatible with `browser_preview_compare_regions`.
+6. Return the puzzle as a tool image attachment and return `metadata.binding`, compatible with `region comparison tool`.
 
 Outputs:
 
@@ -68,7 +68,7 @@ Outputs:
 - Do not use global source webpage segmentation as the primary workflow.
 - Do not require exact bbox equality.
 - Do not ask the model to browse files manually to find the puzzle; the tool result attaches the puzzle image directly.
-- Do not replace `browser_preview_compare_regions`; this tool creates its input binding.
+- Do not replace `region comparison tool`; this tool creates its input binding.
 
 ## Test Plan
 

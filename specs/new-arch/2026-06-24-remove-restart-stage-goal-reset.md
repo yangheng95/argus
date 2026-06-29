@@ -17,14 +17,14 @@ open a separate inheriting task with `propose_task`, or choose `fail_task` /
 
 ## Call Inventory
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Defines and executes the stage rewind tool, advertises it in tool results, and blocks `propose_task` while the parent task is active. | Delete the rewind tool and helper, route live workflow contract replacement through `propose_task`, and remove restart wording from tool descriptions. |
-| `packages/opencorvus/src/orchestrator/scheduler.ts` | Exists only to compute restart-stage plans. | Delete the file after moving the remaining live-run status import to the engine catalog. |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | Lists restart as a valid next action and permits rerunning requirements after restart selection. | State that workflow tasks do not go backward in place; use same-task repair tools or `propose_task` for a new inheriting workflow task. |
-| `packages/opencorvus/src/prompt/core/fact-check-core.txt` and fact-check schema | Allow fact-check to recommend restart. | Remove restart from the structured action enum and copy. |
-| `packages/opencorvus/src/agent/tool-pool-contract.ts` | Exposes the restart tool to orchestrator sessions. | Remove it from the private tool list. |
-| Engine describe/writer/comments/tests | Still name restart as a runtime decision path. | Rewrite to the remaining explicit decisions: retry, re-dispatch, `modify_goal`, `architect`, `propose_task`, `fail_task`, or `question`. |
+| Surface                                                                         | Current behavior                                                                                                                      | Change                                                                                                                                                 |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/orchestrator/tools.ts`                                 | Defines and executes the stage rewind tool, advertises it in tool results, and blocks `propose_task` while the parent task is active. | Delete the rewind tool and helper, route live workflow contract replacement through `propose_task`, and remove restart wording from tool descriptions. |
+| `packages/opencorvus/src/orchestrator/scheduler.ts`                             | Exists only to compute restart-stage plans.                                                                                           | Delete the file after moving the remaining live-run status import to the engine catalog.                                                               |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`                     | Lists restart as a valid next action and permits rerunning requirements after restart selection.                                      | State that workflow tasks do not go backward in place; use same-task repair tools or `propose_task` for a new inheriting workflow task.                |
+| `packages/opencorvus/src/prompt/core/fact-check-core.txt` and fact-check schema | Allow fact-check to recommend restart.                                                                                                | Remove restart from the structured action enum and copy.                                                                                               |
+| `packages/opencorvus/src/agent/tool-pool-contract.ts`                           | Exposes the restart tool to orchestrator sessions.                                                                                    | Remove it from the private tool list.                                                                                                                  |
+| Engine describe/writer/comments/tests                                           | Still name restart as a runtime decision path.                                                                                        | Rewrite to the remaining explicit decisions: retry, re-dispatch, `modify_goal`, `architect`, `propose_task`, `fail_task`, or `question`.               |
 
 ## Acceptance
 

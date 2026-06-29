@@ -29,12 +29,12 @@ rg -n "ORCHESTRATOR_WAIT|WAIT_MAX|WAIT_MIN|duration_ms|wait\(" packages/opencorv
 rg -n "duration_ms\s*[:=][^\n]*(60_000|60000|1_200|30_000|1200)|60_000|60000|one minute|1 minute|一分钟|1分钟|recommended|推荐" packages/opencorvus/src/tool packages/opencorvus/src/orchestrator packages/opencorvus/src/prompt packages/opencorvus/test/orchestrator packages/opencorvus/test/agent -g "*.ts" -g "*.txt"
 ```
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/tool/wait.ts` | Add `WAIT_RECOMMENDED_MS = 20 * 60 * 1000`; set `WAIT_MAX_MS` to the same value; update schema and description to recommend one 20-minute pause for real external waits, explicitly default goal-execution waits to that duration, and forbid repeated 60-second waits. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Keep deriving orchestrator wait bounds from `wait.ts`; expose the recommended value only if tests need an orchestrator-level contract. Do not add a second independent duration. |
-| `packages/opencorvus/test/orchestrator/wait-tool.test.ts` | Update the bound test to 20 minutes and assert the description carries the 20-minute recommendation and anti-60-second chaining instruction. |
-| Other `duration_ms` hits | Unrelated capture metrics, test fixture waits, and browser timeout strings. Do not change. |
+| Surface                                                   | Decision                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/tool/wait.ts`                    | Add `WAIT_RECOMMENDED_MS = 20 * 60 * 1000`; set `WAIT_MAX_MS` to the same value; update schema and description to recommend one 20-minute pause for real external waits, explicitly default goal-execution waits to that duration, and forbid repeated 60-second waits. |
+| `packages/opencorvus/src/orchestrator/tools.ts`           | Keep deriving orchestrator wait bounds from `wait.ts`; expose the recommended value only if tests need an orchestrator-level contract. Do not add a second independent duration.                                                                                        |
+| `packages/opencorvus/test/orchestrator/wait-tool.test.ts` | Update the bound test to 20 minutes and assert the description carries the 20-minute recommendation and anti-60-second chaining instruction.                                                                                                                            |
+| Other `duration_ms` hits                                  | Unrelated capture metrics, test fixture waits, and browser timeout strings. Do not change.                                                                                                                                                                              |
 
 ## Acceptance
 

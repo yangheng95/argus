@@ -9,15 +9,15 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 
 当前注册表内置以下代理。`mode` 表示调用方式：`primary` 作为会话顶层 agent 运行；`subagent` 由其他 agent 通过 `task` 工具派发。`hidden` 表示路由槽——不会出现在选择器里，但模型 / prompt 仍可在 config 中覆盖。
 
-| Agent          | 模式              | 角色                                                                                                                                                                                                               |
-| -------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `coding`       | primary           | 普通本地会话的交互式 coding agent。                                                                                                                                                                                |
-| `build`        | primary（hidden） | 实现 agent。由 orchestrator 或 direct workflow 派发后执行 read / edit / bash 类实现工具。                                                                                                                          |
-| `visual-qa`    | primary（hidden） | 视觉 QA 阶段 agent，使用固定视觉证据工具面。                                                                                                                                                                       |
-| `general`      | subagent          | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。                                                                                                                                                                |
-| `explore`      | subagent          | 代码库探索——快速文件 / 代码搜索，默认只读。                                                                                                                                                                        |
+| Agent          | 模式              | 角色                                                                                                                                                                                                         |
+| -------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coding`       | primary           | 普通本地会话的交互式 coding agent。                                                                                                                                                                          |
+| `build`        | primary（hidden） | 实现 agent。由 orchestrator 或 direct workflow 派发后执行 read / edit / bash 类实现工具。                                                                                                                    |
+| `visual-qa`    | primary（hidden） | 视觉 QA 阶段 agent，使用固定视觉证据工具面。                                                                                                                                                                 |
+| `general`      | subagent          | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。                                                                                                                                                          |
+| `explore`      | subagent          | 代码库探索——快速文件 / 代码搜索，默认只读。                                                                                                                                                                  |
 | `orchestrator` | primary（hidden） | 编排 agent。拥有任务生命周期决策权，并调用 `frontend_design`、`frontend_research`、`analyze_intent`、`requirements`、`architect`、`build`、`integrity`、`modify_goal`、`propose_task` 等显式 workflow 工具。 |
-| `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策。                                                                                                                                                                             |
+| `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策。                                                                                                                                                                       |
 
 其他注册的代理（`architect`、`frontend-design`、`frontend-research`、`intent-analysis`、`integrity`、`fact-check`、`deep-research`、`goal-workload-analyst`、`summary`、`title`、`compaction`、`mission`、`control`）是由 orchestrator、mission runtime 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但除非有专门 runtime 暴露，否则不可用户选择。
 

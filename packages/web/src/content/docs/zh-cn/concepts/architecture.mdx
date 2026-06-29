@@ -21,9 +21,9 @@ HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两
 
 内置 workflow 定义在 `packages/opencorvus/src/engine/workflow.ts`，当前只有两条：
 
-| Workflow   | 形态                                                                                                                            | 适用场景                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `direct`   | 按需 `analyze_intent`，然后 `build`                                                                                             | 显式 `kind=build`、局部编辑、bugfix、短调试       |
+| Workflow   | 形态                                                                                                                                                                          | 适用场景                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `direct`   | 按需 `analyze_intent`，然后 `build`                                                                                                                                           | 显式 `kind=build`、局部编辑、bugfix、短调试       |
 | `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → 按需 `workload_analysis` → per-goal `build` → 按需 `visual_qa` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
 
 workflow 定义是给 orchestrator 的 prompt 上下文。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review。

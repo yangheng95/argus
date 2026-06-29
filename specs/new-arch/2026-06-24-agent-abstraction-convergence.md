@@ -20,28 +20,28 @@ in the skill matrix.
 
 ### Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, inspect plans before edits, write tests for every behavior change. |
-| `specs/new-arch/01-agents.md` | Orchestrator is the only lifecycle decision host; integrity owns final acceptance. |
-| `specs/new-arch/08-agent-tool-adapter.md` | Specialist agents use ToolRegistry; integrity review/output tools are runtime extras. |
-| `specs/new-arch/2026-06-23-agent-skill-mount-matrix.md` | Matrix is a single backend projection; incompatible or non-skill agents must be server-derived, not guessed in overlay. |
-| `specs/new-arch/2026-06-24-orchestrator-expert-squad-skill.md` | Mounted skill visibility must go through canonical `skill` tool and mounted `SKILL.md` frontmatter. |
-| `packages/opencorvus/src/agent/runner.ts` | Worker agents already share one runner; orchestrator is explicitly the host of that abstraction, not another worker shape. |
+| Source                                                         | Constraint                                                                                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                    | No fallback, no double source, inspect plans before edits, write tests for every behavior change.                          |
+| `specs/new-arch/01-agents.md`                                  | Orchestrator is the only lifecycle decision host; integrity owns final acceptance.                                         |
+| `specs/new-arch/08-agent-tool-adapter.md`                      | Specialist agents use ToolRegistry; integrity review/output tools are runtime extras.                                      |
+| `specs/new-arch/2026-06-23-agent-skill-mount-matrix.md`        | Matrix is a single backend projection; incompatible or non-skill agents must be server-derived, not guessed in overlay.    |
+| `specs/new-arch/2026-06-24-orchestrator-expert-squad-skill.md` | Mounted skill visibility must go through canonical `skill` tool and mounted `SKILL.md` frontmatter.                        |
+| `packages/opencorvus/src/agent/runner.ts`                      | Worker agents already share one runner; orchestrator is explicitly the host of that abstraction, not another worker shape. |
 
 ### Impact Inventory
 
-| Surface | Evidence | Required change |
-| --- | --- | --- |
-| Agent registry | `packages/opencorvus/src/agent/agent.ts` | Stop treating role-specific metadata as ad hoc per-file knowledge; add shared role metadata fields such as `archetype` and `skill_mountable`. |
-| Role contract | `packages/opencorvus/src/agent/role-contract.ts` | Promote this file into the single source for role metadata consumed by registry, runtime metadata, prompt profiles, and skill matrix. |
-| Runtime metadata | `packages/opencorvus/src/session/agent-runtime-metadata.ts` | Derive worker/host session sets from the shared role metadata instead of maintaining parallel hard-coded lists. Preserve explicit non-agent session kinds separately. |
-| Prompt profile targets | `packages/opencorvus/src/agent/prompt-profile.ts` | Derive prompt-profile target groups from the shared role metadata instead of hand-maintained target arrays. |
-| Skill matrix backend | `packages/opencorvus/src/skill/mounts.ts` | Return explicit `skill_mountable` and reject mount/unmount for roles with the flag disabled. |
-| Skill matrix overlay | `packages/overlay/src/services/extensions.ts`, `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Filter by backend `skill_mountable` instead of inferring from `skill_tool_available`. |
-| Integrity skill surface | `packages/opencorvus/src/agent/agent.ts`, `packages/opencorvus/src/integrity/static-tools.ts`, `packages/opencorvus/src/integrity/team-agent.ts` | Integrity must remain a worker with runtime extra review tools while also exposing canonical `skill` for mounted skill search/load. |
-| API/schema/docs | `packages/opencorvus/src/server/routes/app.ts`, generated SDK/OpenAPI/docs | New agent metadata fields must be reflected in public schemas. |
-| Tests | agent, integrity, skill-route, skill-tool, prompt-profile, runtime-metadata tests | Pin the new single-source metadata behavior and matrix visibility contract. |
+| Surface                 | Evidence                                                                                                                                         | Required change                                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent registry          | `packages/opencorvus/src/agent/agent.ts`                                                                                                         | Stop treating role-specific metadata as ad hoc per-file knowledge; add shared role metadata fields such as `archetype` and `skill_mountable`.                         |
+| Role contract           | `packages/opencorvus/src/agent/role-contract.ts`                                                                                                 | Promote this file into the single source for role metadata consumed by registry, runtime metadata, prompt profiles, and skill matrix.                                 |
+| Runtime metadata        | `packages/opencorvus/src/session/agent-runtime-metadata.ts`                                                                                      | Derive worker/host session sets from the shared role metadata instead of maintaining parallel hard-coded lists. Preserve explicit non-agent session kinds separately. |
+| Prompt profile targets  | `packages/opencorvus/src/agent/prompt-profile.ts`                                                                                                | Derive prompt-profile target groups from the shared role metadata instead of hand-maintained target arrays.                                                           |
+| Skill matrix backend    | `packages/opencorvus/src/skill/mounts.ts`                                                                                                        | Return explicit `skill_mountable` and reject mount/unmount for roles with the flag disabled.                                                                          |
+| Skill matrix overlay    | `packages/overlay/src/services/extensions.ts`, `packages/overlay/src/components/settings/SkillMarketPanel.tsx`                                   | Filter by backend `skill_mountable` instead of inferring from `skill_tool_available`.                                                                                 |
+| Integrity skill surface | `packages/opencorvus/src/agent/agent.ts`, `packages/opencorvus/src/integrity/static-tools.ts`, `packages/opencorvus/src/integrity/team-agent.ts` | Integrity must remain a worker with runtime extra review tools while also exposing canonical `skill` for mounted skill search/load.                                   |
+| API/schema/docs         | `packages/opencorvus/src/server/routes/app.ts`, generated SDK/OpenAPI/docs                                                                       | New agent metadata fields must be reflected in public schemas.                                                                                                        |
+| Tests                   | agent, integrity, skill-route, skill-tool, prompt-profile, runtime-metadata tests                                                                | Pin the new single-source metadata behavior and matrix visibility contract.                                                                                           |
 
 ### Current Problem
 

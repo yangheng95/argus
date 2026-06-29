@@ -52,9 +52,9 @@
 
 **代码**：`src/control/message.ts` · `src/panel/capability.ts`
 
-旧 Gateway Agent / `channel_key` / `session_gateway_singleton_idx` **全部删除**。对话层统一由 `ControlMessage` 承担。
+旧 Gateway Agent / `channel_key` / `session_gateway_singleton_idx` / gateway SessionKind **全部删除**。对话层统一由 `ControlMessage` 承担。
 
-> 注：`src/gateway/` 目录**未整删**，残留 3 个文件（`session.ts` / `cwd-state.ts` / `tools.ts`），承担"SDK gateway 客户端"轻量职责（按 `metadata.gateway.channelKey` 维护一个 SDK 侧的 gateway session，提供 `enqueue_task` / `forward_clarification` / `switch_cwd` / `cancel_task` 等工具）。它和 `ControlMessage` 是两个独立入口，不重叠。
+> 注：当前代码没有旧 gateway 包；gateway 只作为 `server/routes/gateway.ts` 暴露的 control-plane surface 存在，并复用 `PanelCapabilityRegistry` / `ControlMessage`。
 
 - 每次 `ControlMessage.handle()` 启动（或复用）一个 `control` session（非 `engine_task`）
 - 使用通用 `Agent.defaultAgent()` + 注入 `PanelCapabilityRegistry` 为白名单
@@ -62,17 +62,7 @@
 - 支持流式 `ControlMessage.handleStream`（SSE，overlay 实时消费）
 - `surface` 区分入口：`panel` · `gateway` · `ChannelId` 枚举（Slack、Telegram、Discord 等，见 `channel/catalog.ts` / `packages/channel-config/src/index.ts`）
 
-**完整 Capability 列表**（来源：`panel/capability.ts`，2026-05-11 共 20 个 action，按文件顺序）：
-
-| 类别             | actions                                                                            |
-| ---------------- | ---------------------------------------------------------------------------------- |
-| 查询视图         | `view_plan` · `view_board` · `view_tasks`                                          |
-| Task 生命周期    | `create_task` · `send_task_message` · `retry_task` · `replan_task` · `cancel_task` |
-| Interaction 回复 | `reply_interaction` · `reject_interaction`                                         |
-| Goal / Checks    | `update_checks` · `update_goal` · `delete_goal`                                    |
-| 视觉证据         | `capture_overlay_screenshot`                                                       |
-| Executor / 选择  | `set_executor` · `select_task` · `select_session`                                  |
-| Session 操作     | `create_session` · `fork_session` · `delete_session`                               |
+**Capability action 真源**：`packages/opencorvus/src/panel/capability.ts` 的 `PanelCapabilityRegistry`。本文档只说明控制流职责，不复制完整 action 清单或数量。
 
 > `PanelLocalActionType`（前端 only，不属于 capability registry）当前是 `set_executor` /
 > `select_task` / `select_session` / `invalidate_session` 四个；其中 `invalidate_session`
@@ -151,7 +141,7 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
 - 关键路由（`src/server/routes/` 共 28 个文件，2026-06-17）：
   - `routes/channel.ts` — `ChannelIngress.message` HTTP 端点
   - `routes/panel.ts` — `ControlMessage.handle` / `handleStream`（含 panel SSE 流）
-  - `routes/orchestrator.ts` — EngineService.createTask 等 task API（共 42 个 describeRoute；含 task-list change stream 与 task event stream 两条 SSE 主线）
+  - `routes/orchestrator.ts` — EngineService.createTask 等 task API（含 task-list change stream 与 task event stream 两条 SSE 主线；`describeRoute` 数量以源码为唯一真源）
   - `routes/session.ts` — session mutation
   - `routes/control.ts` · `routes/executor.ts` — 控制平面（外部账号 / executor profile）
   - `routes/permission.ts` · `routes/project.ts` · `routes/config.ts` · `routes/question.ts` ·

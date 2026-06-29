@@ -99,13 +99,22 @@ Coalesce duplicate overlay acceptance diff requests without changing result sema
 
 ## Fourth Fix Contract
 
-Avoid deep signature work for loaded messages that already carry a stable server id:
+Superseded by `2026-06-27-message-card-orderkey-convergence.md`.
 
-1. Keep `messageSignature(...)` as the id generator for messages without `info.id`.
-2. Preserve the exact generated id format for id-less messages: `loaded-msg:${hashText(messageSignature(message))}`.
-3. For messages with a non-empty `info.id`, use the trimmed id without calling `messageSignature(...)`.
-4. Preserve part normalization and duplicate suppression semantics.
-5. Add a regression test proving explicit-id message normalization does not inspect body fields that are only needed by the signature path.
+The historical version of this section allowed id-less loaded messages to
+generate `loaded-msg:*` IDs from `messageSignature(...)`. That is no longer an
+accepted contract. Loaded conversation rows must carry backend message IDs,
+roles, channels, and order keys; missing visible message identity is a data
+error and must fail loudly instead of generating `loaded-msg:*` or
+`loaded-part:*`.
+
+Current contract:
+
+1. Messages with a non-empty `info.id` use that server ID.
+2. Messages without `info.id` fail immediately.
+3. Parts without explicit `id`, `messageID`, `sessionID`, or display
+   `orderKey` fail immediately.
+4. Tests assert fail-fast behavior rather than generated fallback IDs.
 
 ## Fourth Verification Plan
 

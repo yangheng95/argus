@@ -9,7 +9,7 @@
 
 ## Problem
 
-`browser_preview_bind_local_module` and `browser_preview_compare_regions` are
+`browser_preview_bind_local_module` and `region comparison tool` are
 registered `Tool.define` tools, but stage-agent runtimes can still drift when
 each agent writes its own `Tool.Info -> ai.tool` adapter. The current risk is
 highest in integrity because its runtime `createSingleSessionIntegrityToolKit`
@@ -31,7 +31,7 @@ The repair toolchain must have one definition source:
   workflow tools are a separate self-built dispatch/control surface.
 - `2026-06-16-local-module-source-binding.md` introduces
   `browser_preview_bind_local_module` as the source/local binding step before
-  `browser_preview_compare_regions`.
+  `region comparison tool`.
 - `2026-06-17-browser-preview-region-runner-single-source.md` keeps region
   comparison capture owned by task-scoped target/evidence runner state, not a
   direct URL or output-directory input.
@@ -44,14 +44,14 @@ The repair toolchain must have one definition source:
 Command set:
 
 ```powershell
-rg -n "initialized\.execute|inputSchema:\s*initialized\.parameters|Tool\.Info|BrowserPreviewToolParameters|browser_preview_bind_local_module|browser_preview_compare_regions|ToolRegistry\.tools|tools:\s*\{\s*include" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
+rg -n "initialized\.execute|inputSchema:\s*initialized\.parameters|Tool\.Info|BrowserPreviewToolParameters|browser_preview_bind_local_module|region comparison tool|ToolRegistry\.tools|tools:\s*\{\s*include" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 rg -n "create[A-Za-z0-9_]*Tool\b|create[A-Za-z0-9_]*Tools\b|tool\(\{\s*description|inputSchema:\s*|execute:\s*async" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
-rg -n "browser_preview|BrowserPreviewTool|BrowserPreviewBindLocalModuleTool|BrowserPreviewCompareRegionsTool|INTEGRITY_PREVIEW_TOOL|VISUAL_QA_STATIC_TOOL|FRONTEND_DESIGN_STATIC_TOOL" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
+rg -n "browser_preview|BrowserPreviewTool|BrowserPreviewBindLocalModuleTool|RegionComparisonTool|INTEGRITY_PREVIEW_TOOL|VISUAL_QA_STATIC_TOOL|FRONTEND_DESIGN_STATIC_TOOL" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 ```
 
 | Surface                                | Finding                                                                                                                                    | Decision                                                                                                                                                                                           |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/tool/registry.ts`                 | Registers `browser_preview`, `browser_preview_bind_local_module`, and `browser_preview_compare_regions`.                                   | Keep registry as the public tool definition surface.                                                                                                                                               |
+| `src/tool/registry.ts`                 | Registers `browser_preview`, `browser_preview_bind_local_module`, and `region comparison tool`.                                   | Keep registry as the public tool definition surface.                                                                                                                                               |
 | `src/agent/agent.ts` visual-qa         | Whitelist uses `VISUAL_QA_STATIC_TOOL_IDS`, which includes all three preview tools.                                                        | Keep; test runtime matches this static contract.                                                                                                                                                   |
 | `src/visual-qa/agent.ts`               | Local `createVisualQaTool` copies initialized description/schema/execute.                                                                  | Replace with one shared `Tool.Info` AI SDK adapter.                                                                                                                                                |
 | `src/integrity/static-tools.ts`        | `INTEGRITY_PREVIEW_TOOL_INFOS` is the intended single source for integrity preview IDs.                                                    | Keep; use it for whitelist tests and runtime construction.                                                                                                                                         |
@@ -84,7 +84,7 @@ rg -n "browser_preview|BrowserPreviewTool|BrowserPreviewBindLocalModuleTool|Brow
 - Integrity runtime preview tools use the same initialized descriptions and
   schemas as their `Tool.define` sources.
 - Visual QA runtime exposes `browser_preview`,
-  `browser_preview_bind_local_module`, and `browser_preview_compare_regions`.
+  `browser_preview_bind_local_module`, and `region comparison tool`.
 - Orchestrator exposes `browser_preview` only, never bind/compare.
 - Required targeted tests and `bun run --cwd packages/opencorvus typecheck`
   pass.

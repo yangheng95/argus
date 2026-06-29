@@ -8,12 +8,12 @@ their session title instead of keeping the product placeholder titles
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
+| Source                                           | Constraint                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `2026-06-11-coding-assistant-session-history.md` | Coding Assistant history is backed by canonical `Session` rows; title updates must use `Session.setTitle`. |
-| `2026-06-01-mission-panel-mission-list.md` | Mission records are `kind="mission"` sessions; Mission list titles come from the session row. |
-| `session/prompt/title.ts` | LLM-generated titles only apply to generic `New session - ...` defaults, not product placeholder titles. |
-| `engine/helpers.ts::deriveTitle` | Generic task title derivation already defines the first-message/request title display rule. |
+| `2026-06-01-mission-panel-mission-list.md`       | Mission records are `kind="mission"` sessions; Mission list titles come from the session row.              |
+| `session/prompt/title.ts`                        | LLM-generated titles only apply to generic `New session - ...` defaults, not product placeholder titles.   |
+| `engine/helpers.ts::deriveTitle`                 | Generic task title derivation already defines the first-message/request title display rule.                |
 
 ## Call-Point Sweep
 
@@ -23,14 +23,14 @@ Command:
 rg -n "Coding assistant|Mission Control|deriveTitle|SessionWake\.wake|prompt_async|SessionPrompt\.prompt|Session\.setTitle|createUserMessage" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md"
 ```
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Coding session creation | `server/routes/coding.ts` creates right-sidebar sessions with title `Coding assistant`. | Keep this as the pre-message placeholder only. |
-| Coding first user message | `/session/:sessionID/prompt_async` persists the visible user message through `SessionPrompt.createUserMessage`. | After the first user message is persisted, replace the placeholder title with that text. |
-| Mission session creation | `mission/session.ts::ensureMissionSession` creates `kind="mission"` sessions with title `Mission Control`. | Keep this as the pre-message placeholder only. |
-| Mission first user message | `SessionWake.wake` persists the Mission operator text as a normal user message. | After the first wake message is persisted, replace the placeholder title with that text. |
-| Manual rename | `/coding/session/:id` and `/mission/:id/title` already call `Session.setTitle`. | Do not overwrite any non-placeholder title. |
-| Task title mechanism | `EngineService.createTask` resolves generic task titles with `deriveTitle(request)` when no explicit `input.title` exists. Mission-created tasks still require `create_task.title` and get a host `Phase xx:` prefix. | Reuse the same `deriveTitle` implementation for Coding Assistant and Mission Control session titles once their first user message is persisted. Lifecycle differs, title derivation must not. |
+| Surface                    | Evidence                                                                                                                                                                                                              | Decision                                                                                                                                                                                      |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Coding session creation    | `server/routes/coding.ts` creates right-sidebar sessions with title `Coding assistant`.                                                                                                                               | Keep this as the pre-message placeholder only.                                                                                                                                                |
+| Coding first user message  | `/session/:sessionID/prompt_async` persists the visible user message through `SessionPrompt.createUserMessage`.                                                                                                       | After the first user message is persisted, replace the placeholder title with that text.                                                                                                      |
+| Mission session creation   | `mission/session.ts::ensureMissionSession` creates `kind="mission"` sessions with title `Mission Control`.                                                                                                            | Keep this as the pre-message placeholder only.                                                                                                                                                |
+| Mission first user message | `SessionWake.wake` persists the Mission operator text as a normal user message.                                                                                                                                       | After the first wake message is persisted, replace the placeholder title with that text.                                                                                                      |
+| Manual rename              | `/coding/session/:id` and `/mission/:id/title` already call `Session.setTitle`.                                                                                                                                       | Do not overwrite any non-placeholder title.                                                                                                                                                   |
+| Task title mechanism       | `EngineService.createTask` resolves generic task titles with `deriveTitle(request)` when no explicit `input.title` exists. Mission-created tasks still require `create_task.title` and get a host `Phase xx:` prefix. | Reuse the same `deriveTitle` implementation for Coding Assistant and Mission Control session titles once their first user message is persisted. Lifecycle differs, title derivation must not. |
 
 ## Contract
 

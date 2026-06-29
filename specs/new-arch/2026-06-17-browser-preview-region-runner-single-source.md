@@ -24,7 +24,7 @@ sidecar behavior beside `browser-preview/evidence-runner.ts`.
 Command:
 
 ```powershell
-rg -n "runImplementationCapture|REGION_COMPARISON_SCRIPT|runBrowserPreviewRegionComparisonCapture|BrowserPreviewRegionComparisonInput|url:" packages/opencorvus/src/browser-preview packages/opencorvus/test/browser-preview packages/opencorvus/src/server/routes/browser-preview.ts packages/opencorvus/src/tool/browser-preview-compare-regions.ts -g "*.ts"
+rg -n "runImplementationCapture|REGION_COMPARISON_SCRIPT|runBrowserPreviewRegionComparisonCapture|BrowserPreviewRegionComparisonInput|url:" packages/opencorvus/src/browser-preview packages/opencorvus/test/browser-preview packages/opencorvus/src/server/routes/browser-preview.ts packages/opencorvus/src/tool/region-comparison-tool.ts -g "*.ts"
 ```
 
 Findings:
@@ -33,7 +33,7 @@ Findings:
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | Product function input        | `BrowserPreviewRegionComparisonInput` contains `url: string`.                                                                          | Remove direct URL input; `taskID/targetID` are the product authority.               |
 | Server route                  | `/task/:taskID/browser-preview/compare` looks up target then passes `url: target.url`.                                                 | Keep target existence check if useful for 404, but do not pass URL into comparison. |
-| Tool route                    | `browser_preview_compare_regions` looks up target then passes `url: target.url`.                                                       | Keep missing-target error, but do not pass URL into comparison.                     |
+| Tool route                    | `region comparison tool` looks up target then passes `url: target.url`.                                                       | Keep missing-target error, but do not pass URL into comparison.                     |
 | Region implementation capture | `region-comparison.ts` owns `runImplementationCapture` and `REGION_COMPARISON_SCRIPT`.                                                 | Delete them and call `runBrowserPreviewRegionComparisonCapture`.                    |
 | Evidence runner               | `evidence-runner.ts` already exposes `runBrowserPreviewRegionComparisonCapture` and resolves target URL / output directory internally. | Use this runner as the single runtime capture source.                               |
 

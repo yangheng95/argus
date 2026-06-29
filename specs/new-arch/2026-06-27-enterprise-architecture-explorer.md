@@ -45,36 +45,36 @@ Current facts are taken from the checked-in repository, not from historical diag
 
 ## Callpoint and file inventory
 
-| Surface | Action |
-| --- | --- |
-| `packages/web/astro.config.mjs` | Add the new Concepts sidebar page. |
-| `packages/web/src/components/EnterpriseArchitectureExplorer.astro` | Add the interactive explorer component. |
-| `packages/web/src/pages/architecture-explorer.astro` | Add the English full-screen architecture workbench route. |
-| `packages/web/src/pages/zh-cn/architecture-explorer.astro` | Add the Chinese full-screen architecture workbench route. |
-| `packages/web/src/content/docs/concepts/enterprise-architecture.mdx` | Add English docs page using the component. |
-| `packages/web/src/content/docs/zh-cn/concepts/enterprise-architecture.mdx` | Add Chinese docs page using the component. |
-| `packages/web/src/content/docs/concepts/architecture.mdx` | Correct adjacent stale durable-artifact wording and link the explorer. |
-| `packages/web/src/content/docs/zh-cn/concepts/architecture.mdx` | Correct adjacent stale durable-artifact wording and link the explorer. |
-| `packages/web/src/content/docs/concepts/goal-run-task.mdx` | Correct Concepts data-model wording for current artifact-backed goal attempts and verification evidence. |
-| `packages/web/src/content/docs/zh-cn/concepts/goal-run-task.mdx` | Correct Chinese Concepts data-model wording for current artifact-backed goal attempts and verification evidence. |
-| `packages/web/src/content/docs/index.mdx` | Correct stale durable-state wording and link the explorer. |
-| `packages/web/src/content/docs/zh-cn/index.mdx` | Correct stale durable-state wording and link the explorer. |
-| `packages/web/src/content/docs/reference/evaluator.mdx` | Rename the current reference surface to Integrity Review and remove current-runtime evaluation row wording. |
-| `packages/web/src/content/docs/zh-cn/reference/evaluator.mdx` | Chinese Integrity Review reference with the same current completion contract. |
-| `packages/web/src/content/docs/concepts/agent-loop.mdx` | Update the reference link text away from evaluation wording. |
-| `packages/web/src/content/docs/zh-cn/concepts/agent-loop.mdx` | Chinese link text update. |
-| `packages/web/src/content/docs/start/quickstart.mdx` | Update stale evaluator troubleshooting wording. |
-| `packages/web/src/content/docs/zh-cn/start/quickstart.mdx` | Chinese troubleshooting wording update. |
-| `packages/web/src/content/docs/models.mdx` | Update stale evaluator regression wording. |
-| `packages/web/src/content/docs/zh-cn/models.mdx` | Chinese model guidance wording update. |
-| `packages/web/src/content/docs/custom-tools.mdx` | Update stale evaluator role wording while preserving hook names. |
-| `packages/web/src/content/docs/zh-cn/custom-tools.mdx` | Chinese custom tool wording update. |
-| `packages/opencorvus/src/engine/engine.sql.ts` | Add the current `agent_coordination_action` artifact kind to the source union and update the task kind comment to current explicit workflow terminology. |
-| `packages/opencorvus/src/engine/model.ts` | Comment-only update for the public task model kind description. |
-| `packages/opencorvus/src/engine/persist.ts` | Comment-only update away from retired deliver-tool acceptance wording. |
-| `packages/opencorvus/src/orchestrator/loop.ts` | Comment-only update for current lifecycle tool names. |
+| Surface                                                                    | Action                                                                                                                                                   |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/web/astro.config.mjs`                                            | Add the new Concepts sidebar page.                                                                                                                       |
+| `packages/web/src/components/EnterpriseArchitectureExplorer.astro`         | Add the interactive explorer component.                                                                                                                  |
+| `packages/web/src/pages/architecture-explorer.astro`                       | Add the English full-screen architecture workbench route.                                                                                                |
+| `packages/web/src/pages/zh-cn/architecture-explorer.astro`                 | Add the Chinese full-screen architecture workbench route.                                                                                                |
+| `packages/web/src/content/docs/concepts/enterprise-architecture.mdx`       | Add English docs page using the component.                                                                                                               |
+| `packages/web/src/content/docs/zh-cn/concepts/enterprise-architecture.mdx` | Add Chinese docs page using the component.                                                                                                               |
+| `packages/web/src/content/docs/concepts/architecture.mdx`                  | Correct adjacent stale durable-artifact wording and link the explorer.                                                                                   |
+| `packages/web/src/content/docs/zh-cn/concepts/architecture.mdx`            | Correct adjacent stale durable-artifact wording and link the explorer.                                                                                   |
+| `packages/web/src/content/docs/concepts/goal-run-task.mdx`                 | Correct Concepts data-model wording for current artifact-backed goal attempts and verification evidence.                                                 |
+| `packages/web/src/content/docs/zh-cn/concepts/goal-run-task.mdx`           | Correct Chinese Concepts data-model wording for current artifact-backed goal attempts and verification evidence.                                         |
+| `packages/web/src/content/docs/index.mdx`                                  | Correct stale durable-state wording and link the explorer.                                                                                               |
+| `packages/web/src/content/docs/zh-cn/index.mdx`                            | Correct stale durable-state wording and link the explorer.                                                                                               |
+| `packages/web/src/content/docs/reference/evaluator.mdx`                    | Rename the current reference surface to Integrity Review and remove current-runtime evaluation row wording.                                              |
+| `packages/web/src/content/docs/zh-cn/reference/evaluator.mdx`              | Chinese Integrity Review reference with the same current completion contract.                                                                            |
+| `packages/web/src/content/docs/concepts/agent-loop.mdx`                    | Update the reference link text away from evaluation wording.                                                                                             |
+| `packages/web/src/content/docs/zh-cn/concepts/agent-loop.mdx`              | Chinese link text update.                                                                                                                                |
+| `packages/web/src/content/docs/start/quickstart.mdx`                       | Update stale evaluator troubleshooting wording.                                                                                                          |
+| `packages/web/src/content/docs/zh-cn/start/quickstart.mdx`                 | Chinese troubleshooting wording update.                                                                                                                  |
+| `packages/web/src/content/docs/models.mdx`                                 | Update stale evaluator regression wording.                                                                                                               |
+| `packages/web/src/content/docs/zh-cn/models.mdx`                           | Chinese model guidance wording update.                                                                                                                   |
+| `packages/web/src/content/docs/custom-tools.mdx`                           | Update stale evaluator role wording while preserving hook names.                                                                                         |
+| `packages/web/src/content/docs/zh-cn/custom-tools.mdx`                     | Chinese custom tool wording update.                                                                                                                      |
+| `packages/opencorvus/src/engine/engine.sql.ts`                             | Add the current `agent_coordination_action` artifact kind to the source union and update the task kind comment to current explicit workflow terminology. |
+| `packages/opencorvus/src/engine/model.ts`                                  | Comment-only update for the public task model kind description.                                                                                          |
+| `packages/opencorvus/src/engine/persist.ts`                                | Comment-only update away from retired deliver-tool acceptance wording.                                                                                   |
+| `packages/opencorvus/src/orchestrator/loop.ts`                             | Comment-only update for current lifecycle tool names.                                                                                                    |
 | `packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts` | Lock the repaired explorer against stale artifact counts, fake component evidence, no-op search, nested button regressions, and evaluator wording drift. |
-| `packages/web/package.json` | Reuse existing `check`, `build`, and `dev` scripts. No dependency changes planned. |
+| `packages/web/package.json`                                                | Reuse existing `check`, `build`, and `dev` scripts. No dependency changes planned.                                                                       |
 
 No existing architecture page is removed in this task because it is a broader conceptual overview. Stale neighboring durable-state wording is updated so the new explorer does not coexist with contradictory current-architecture claims.
 

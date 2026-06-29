@@ -41,14 +41,14 @@ and workload analysis. They agreed on these algorithm boundaries:
 
 ## Callpoint Inventory
 
-| Surface | Current issue | Repair |
-| --- | --- | --- |
-| `orchestrator/agent.ts::classifyOrchestratorDecisionStop` | Treats every no-tool stop on an active task as `OrchestratorNoDecisionStopError`, including the prompt-directed "park this wake" case. | Accept an explicit `schedulerParkAllowed` fact derived from the same `describeTask` snapshot rendered to the model. |
-| `orchestrator/agent.ts::buildSystemParts` | Renders `describeTask` but does not expose that same snapshot to the classifier. | Return the rendered prompt parts plus the task snapshot, keeping one state source. |
-| `prompt/core/orchestrator-core.txt` | Already tells the model to park on healthy live builds, but the classifier contradicts it. | Pin wording that legal park is a scheduler decision when only live non-orphan workers remain. |
-| `orchestrator/tools.ts::cancel_subagent` | `recover_stale` refuses streaming/retry sessions but otherwise relies on model-provided stale reasoning. | Add tests first; follow-up implementation should bind recovery to concrete lifecycle evidence instead of elapsed time or workload size. |
-| `engine/task-agent-lifecycle.ts` | Existing collection is the right cancellation fact source. | Keep cancellation convergence on this report; do not add parallel session/goal scans. |
-| `goal-workload-analyst` and workload artifact consumers | Workload concern can be misread as scheduling pressure. | Tests assert workload concern/stale does not mutate goal dispatch or cancel live goal runs. |
+| Surface                                                   | Current issue                                                                                                                          | Repair                                                                                                                                  |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `orchestrator/agent.ts::classifyOrchestratorDecisionStop` | Treats every no-tool stop on an active task as `OrchestratorNoDecisionStopError`, including the prompt-directed "park this wake" case. | Accept an explicit `schedulerParkAllowed` fact derived from the same `describeTask` snapshot rendered to the model.                     |
+| `orchestrator/agent.ts::buildSystemParts`                 | Renders `describeTask` but does not expose that same snapshot to the classifier.                                                       | Return the rendered prompt parts plus the task snapshot, keeping one state source.                                                      |
+| `prompt/core/orchestrator-core.txt`                       | Already tells the model to park on healthy live builds, but the classifier contradicts it.                                             | Pin wording that legal park is a scheduler decision when only live non-orphan workers remain.                                           |
+| `orchestrator/tools.ts::cancel_subagent`                  | `recover_stale` refuses streaming/retry sessions but otherwise relies on model-provided stale reasoning.                               | Add tests first; follow-up implementation should bind recovery to concrete lifecycle evidence instead of elapsed time or workload size. |
+| `engine/task-agent-lifecycle.ts`                          | Existing collection is the right cancellation fact source.                                                                             | Keep cancellation convergence on this report; do not add parallel session/goal scans.                                                   |
+| `goal-workload-analyst` and workload artifact consumers   | Workload concern can be misread as scheduling pressure.                                                                                | Tests assert workload concern/stale does not mutate goal dispatch or cancel live goal runs.                                             |
 
 ## Algorithm
 

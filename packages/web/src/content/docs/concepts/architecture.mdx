@@ -21,9 +21,9 @@ Route handlers do not read `process.env`, open SQL tables directly, or use `z.an
 
 OpenCorvus has two built-in workflows in `packages/opencorvus/src/engine/workflow.ts`:
 
-| Workflow   | Shape                                                                                                                      | Use case                                                                                   |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `direct`   | `analyze_intent` as needed, then `build`                                                                                   | Explicit `kind=build`, scoped edits, bug fixes, short debugging                            |
+| Workflow   | Shape                                                                                                                                                                          | Use case                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `direct`   | `analyze_intent` as needed, then `build`                                                                                                                                       | Explicit `kind=build`, scoped edits, bug fixes, short debugging                            |
 | `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → workload_analysis as needed → per-goal build → visual_qa as needed → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
 
 The workflow definition is prompt context for the orchestrator. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline.

@@ -194,7 +194,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STARTUP-011 Startup 必须安装 global bridges 后再执行依赖桥接的测试 hook。
 - STARTUP-012 Startup 必须安装 dialog backdrop close 行为。
 - STARTUP-013 Startup 必须初始化 i18n locale。
-- STARTUP-014 Startup 必须恢复 zoom、opacity、theme 和 pane layout。
+- STARTUP-014 Startup 必须恢复 zoom、theme 和 pane layout。
 - STARTUP-015 Startup 必须启动必要 sync timers，并在 teardown 时停止。
 
 ## 11. Surface requirements
@@ -290,7 +290,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - STATE-002 boardStore is the source for active task, task list, and board snapshot.
 - STATE-003 cardTreeStore is the source for conversation cards.
 - STATE-004 messageStore.chatRequest is the source for composer busy/stopping.
-- STATE-005 settingsStore is the source for directory, theme, zoom, opacity, and pane widths.
+- STATE-005 settingsStore is the source for directory, theme, zoom, and pane widths.
 - STATE-006 appStore is the source for server health, engine paths, and config load state.
 - STATE-007 rightPanelTab signal is the source for right panel active tab.
 - STATE-008 workspaceOpen signal is the source for bottom workspace visibility.
