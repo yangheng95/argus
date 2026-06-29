@@ -8,12 +8,12 @@ import {
 } from "../../src/browser/webpage/default-viewport"
 
 describe("frontend-design webpage evidence default viewport", () => {
-  test("uses a common 2K desktop viewport", () => {
-    expect(DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT).toEqual({ width: 2560, height: 1440 })
-    expect(describeDefaultWebpageEvidenceViewport()).toBe("2560x1440")
+  test("uses the requested 1440px-wide desktop viewport", () => {
+    expect(DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT).toEqual({ width: 1440, height: 1440 })
+    expect(describeDefaultWebpageEvidenceViewport()).toBe("1440x1440")
   })
 
-  test("critical capture callpoints consume the shared default instead of local 1440x900 defaults", async () => {
+  test("critical capture callpoints consume the shared default instead of local viewport literals", async () => {
     const files = [
       "src/browser/webpage/extract.ts",
       "src/frontend-design/capture-gate.ts",
