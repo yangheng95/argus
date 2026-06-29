@@ -120,5 +120,6 @@ implementation progress repair note`) without restoring the deleted specs.
 
 Validation after this addendum:
 
-- `git grep -n -E "specs/new-arch|spec/new-arch|packages/opencorvus/specs|retired-reference-ledger|docs/superpowers/specs/2026-0[1-5]|specs/overlay-flat-redesign|specs/fact-check-agent|specs/实施进度|实施进度对照" HEAD -- . ...`
+- HEAD-level retired spec path grep returned no active hits outside the
+  migration evidence record and negative guard tests.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
