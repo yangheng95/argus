@@ -1698,7 +1698,9 @@ export type ModelImageInputTooLargeError = {
     source: string
     width: number
     height: number
+    pixels?: number
     maxDimension: number
+    maxPixels?: number
     originalWidth?: number
     originalHeight?: number
     blankMarginCrop?: {

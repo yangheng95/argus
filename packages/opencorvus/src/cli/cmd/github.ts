@@ -242,7 +242,7 @@ export const GithubInstallCommand = cmd({
                 "",
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://opencorvus.ai/docs/github/#usage-examples",
+                "   Learn more about the GitHub agent - https://opencorvus.ai/docs/operations/github-action/",
               ].join("\n"),
             )
           }
@@ -424,17 +424,10 @@ export const GithubRunCommand = cmd({
       .option("event", {
         type: "string",
         describe: "GitHub mock event to run the agent for",
-      })
-      .option("token", {
-        type: "string",
-        describe: "GitHub personal access token (github_pat_********)",
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
-      const isMock = Boolean(args.token || args.event)
-      if (isMock && (!args.token || !args.event)) {
-        throw new Error("Both --token and --event are required for local GitHub Action runs.")
-      }
+      const isMock = Boolean(args.event)
 
       const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
       if (!SUPPORTED_EVENTS.includes(context.eventName as (typeof SUPPORTED_EVENTS)[number])) {
@@ -493,7 +486,7 @@ export const GithubRunCommand = cmd({
         : undefined
 
       try {
-        const actionToken = isMock ? args.token! : await getOidcToken()
+        const actionToken = await getOidcToken()
         appToken = await exchangeForAppToken(actionToken)
         octoRest = new Octokit({ auth: appToken })
         octoGraph = graphql.defaults({
@@ -978,20 +971,12 @@ export const GithubRunCommand = cmd({
       }
 
       async function exchangeForAppToken(token: string) {
-        const response = token.startsWith("github_pat_")
-          ? await fetch(`${oidcBaseUrl}/exchange_github_app_token_with_pat`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ owner, repo }),
-            })
-          : await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            })
+        const response = await fetch(`${oidcBaseUrl}/exchange_github_app_token`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
         if (!response.ok) {
           const responseJson = (await response.json()) as { error?: string }

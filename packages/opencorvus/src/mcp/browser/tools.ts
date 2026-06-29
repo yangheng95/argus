@@ -32,6 +32,11 @@ import {
 import { formatPerfText } from "./perf.js"
 import { clickGuardProfile, doubleClickGuardProfile, runPointGuard, type GuardResult } from "./guard.js"
 import { captureBrowserMcpViewportScreenshot, pngDimensionsStrict } from "./screenshot.js"
+import {
+  modelImagePixelSummary,
+  modelImagePixelSummarySchema,
+  type ModelImagePixelSummary,
+} from "@/session/model-image-input"
 
 type Download = any
 
@@ -148,46 +153,11 @@ const failJson = <T extends Record<string, unknown>>(data: T) => ({
   structuredContent: data,
 })
 
-const SCREENSHOT_MODEL_PIXEL_BUDGET = 1_048_576
-const SCREENSHOT_COMPRESSION_WARNING_RATIO = 2
+const screenshotPixelSummarySchema = modelImagePixelSummarySchema
 
-const screenshotPixelSummarySchema = z.object({
-  currentPixels: z.number(),
-  compressedPixels: z.number(),
-  compressedWidth: z.number(),
-  compressedHeight: z.number(),
-  compressionRatio: z.number(),
-  preferPartialScreenshot: z.boolean(),
-  text: z.string(),
-})
+type ScreenshotPixelSummary = ModelImagePixelSummary
 
-type ScreenshotPixelSummary = z.infer<typeof screenshotPixelSummarySchema>
-
-export const screenshotPixelSummary = (width: number, height: number): ScreenshotPixelSummary => {
-  const currentPixels = width * height
-  const dimensionScale =
-    currentPixels > SCREENSHOT_MODEL_PIXEL_BUDGET ? Math.sqrt(SCREENSHOT_MODEL_PIXEL_BUDGET / currentPixels) : 1
-  const compressedWidth = Math.max(1, Math.floor(width * dimensionScale))
-  const compressedHeight = Math.max(1, Math.floor(height * dimensionScale))
-  const compressedPixels = compressedWidth * compressedHeight
-  const compressionRatio =
-    compressedWidth > 0 && compressedHeight > 0
-      ? Number(Math.max(width / compressedWidth, height / compressedHeight).toFixed(2))
-      : 1
-  const preferPartialScreenshot = compressionRatio >= SCREENSHOT_COMPRESSION_WARNING_RATIO
-  return {
-    currentPixels,
-    compressedPixels,
-    compressedWidth,
-    compressedHeight,
-    compressionRatio,
-    preferPartialScreenshot,
-    text:
-      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels} (${compressedWidth}x${compressedHeight}); ` +
-      `压缩率: ${compressionRatio.toFixed(2)}x` +
-      (preferPartialScreenshot ? "; 压缩率过大，请优先使用 selector 或 clip 做局部截图。" : ""),
-  }
-}
+export const screenshotPixelSummary = modelImagePixelSummary
 
 // 图片响应：content 放 image 类型（模型可视化）+ 像素摘要文本（防止模型压缩图片后坐标失准），structuredContent 放 base64 数据（script.ts 可编程访问）
 const okImage = (base64: string, width: number, height: number) => {

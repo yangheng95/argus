@@ -34,7 +34,8 @@ import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-str
 import { AppLog } from "../utils/log"
 import {
   pauseSelectedTaskSseActivity,
-  recordSelectedTaskSseActivity,
+  recordSelectedTaskSseEventActivity,
+  selectedTaskSseLifecycleStatus,
   taskRuntimeActivityKey,
 } from "./task-runtime-activity"
 
@@ -115,35 +116,16 @@ function selectedTaskRuntimeKey(taskID: string): string {
   return taskRuntimeActivityKey({ taskID, createdAt: Number(boardTask?.time?.created) })
 }
 
-function sseActivityNow(): number {
-  if (typeof performance === "undefined" || typeof performance.now !== "function") {
-    throw new Error("Selected-task SSE activity requires performance.now")
-  }
-  return performance.now()
-}
-
-function eventLifecycleStatus(event: any): string {
-  const properties = eventProperties(event)
-  const status = properties.status
-  if (typeof status === "string" && status) return status
-  const type = String(event?.type || "")
-  if (type === "task.completed") return "completed"
-  if (type === "task.failed") return "failed"
-  if (type === "task.cancelled") return "cancelled"
-  return ""
-}
-
 function recordSelectedTaskSseUpdate(event: any, taskID: string): void {
-  const key = selectedTaskRuntimeKey(taskID)
-  if (!key) return
-  const lifecycleStatus = eventLifecycleStatus(event)
-  const activeBeforeEvent = boardStore.board?.task?.status === "active"
-  const eventAt = sseActivityNow()
-  recordSelectedTaskSseActivity({
-    key,
-    active: activeBeforeEvent || lifecycleStatus === "active",
-    eventAt,
+  const task = boardStore.board?.task
+  const lifecycleStatus = selectedTaskSseLifecycleStatus(event)
+  recordSelectedTaskSseEventActivity({
+    event,
+    task,
+    taskID,
+    active: task?.status === "active" || lifecycleStatus === "active",
   })
+  const key = selectedTaskRuntimeKey(taskID)
   if (lifecycleStatus && lifecycleStatus !== "active") {
     pauseSelectedTaskSseActivity(key)
   }

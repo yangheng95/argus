@@ -85,9 +85,9 @@ That runtime parses the GitHub event, creates the session, and calls `SessionPro
            with:
              persist-credentials: false
 
-      - name: Run OpenCorvus
-        uses: yangheng95/opencorvus/github@latest
-        env:
+         - name: Run OpenCorvus
+           uses: yangheng95/opencorvus/github@latest
+           env:
              ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
              OPENCORVUS_PERMISSION: '{"bash": "deny"}'
            with:
@@ -102,31 +102,13 @@ This is an early release. If you encounter issues or have feedback, please creat
 
 ## Development
 
-To test locally:
+To validate changes locally, use the repository test suite instead of a personal repository token:
 
-1. Navigate to a test repo (e.g. `hello-world`):
+```bash
+bun test packages/opencorvus/test/cli/github-action-run.test.ts
+```
 
-   ```bash
-   cd hello-world
-   ```
-
-2. Run:
-
-   ```bash
-   MODEL=alibaba-coding-plan-cn/qwen3.5-plus \
-     ALIBABA_CODING_PLAN_API_KEY=sk-1234567890 \
-     GITHUB_RUN_ID=dummy \
-     bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run \
-       --token github_pat_1234567890 \
-       --event '{"eventName":"issue_comment",...}'
-   ```
-
-   - `MODEL`: The model used by opencorvus. Same as the `MODEL` defined in the GitHub workflow.
-   - `ALIBABA_CODING_PLAN_API_KEY`: Your coding-plan model provider API key. Same as the key defined in the GitHub workflow.
-   - `GITHUB_RUN_ID`: Dummy value to emulate GitHub action environment.
-   - `--token`: A GitHub personal access token. This token is used to verify you have `admin` or `write` access to the test repo. Generate a token [here](https://github.com/settings/personal-access-tokens).
-   - `--event`: Mock GitHub event payload (see templates below).
-   - `/path/to/opencorvus`: Path to your cloned opencorvus repo. `bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run` runs the current CLI GitHub Action runtime.
+The runtime also accepts `--event` for repository tests that mock the GitHub event payload. Token exchange remains the same OIDC App-token path used by the published Action.
 
 ### Issue comment event
 

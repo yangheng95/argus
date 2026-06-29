@@ -18,6 +18,10 @@ description: 在 PR 或 Issue 评论区用 /oc 或 /opencorvus 触发 AI 编码�
 
 - `issue_comment` — Issue 评论、PR 评论（通过 `issue.pull_request` 区分）
 - `pull_request_review_comment` — PR "Files" 标签页的行级 review 评论
+- `issues` — Issue 生命周期事件
+- `pull_request` — PR 生命周期事件
+- `schedule` — 定时仓库自动化
+- `workflow_dispatch` — 手动触发的仓库自动化
 
 ## 输入参数
 
@@ -120,11 +124,12 @@ jobs:
 ## 代码流转
 
 ```
-issue_comment / pull_request_review_comment
+issue_comment / pull_request_review_comment / issues / pull_request / schedule / workflow_dispatch
   ├─ isPullRequest()
   │  ├─ 同仓库 PR → checkoutLocalBranch → chat → pushToLocalBranch
   │  └─ Fork PR   → checkoutForkBranch  → chat → pushToForkBranch
-  └─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
+  ├─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
+  └─ 仓库自动化 → checkoutNewBranch → chat → pushToNewBranch
 ```
 
 （`packages/opencorvus/src/cli/cmd/github.ts`）
@@ -132,14 +137,7 @@ issue_comment / pull_request_review_comment
 ## 本地调试
 
 ```bash
-cd /path/to/test-repo
-
-MODEL=alibaba-coding-plan-cn/qwen3.5-plus \
-  ALIBABA_CODING_PLAN_API_KEY=sk-... \
-  GITHUB_RUN_ID=dummy \
-  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run \
-    --token github_pat_... \
-    --event '{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}'
+bun test packages/opencorvus/test/cli/github-action-run.test.ts
 ```
 
-`--token` 需 `admin` 或 `write` 权限的 PAT。
+仓库测试会模拟 event payload，并继续走与发布 Action 相同的 OIDC App Token 交换路径。

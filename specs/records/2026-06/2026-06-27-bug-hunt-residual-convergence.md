@@ -1332,7 +1332,7 @@ Reviewed visual evidence:
 
 Independent backend/runtime audit found six new non-duplicate issue locations:
 
-- MCP OAuth pending authentication is globally keyed by MCP server name. Two active projects using the same MCP name can overwrite `pendingOAuthTransports`, `mcp-auth.json` OAuth state, and the callback `mcpNameToState` entry, allowing project A's callback to finish project B's pending transport/state.
+- At this audit point, MCP OAuth pending authentication was globally keyed by MCP server name. Two active projects using the same MCP name could overwrite the pending OAuth transport ownership, `mcp-auth.json` OAuth state, and the callback state entry, allowing project A's callback to finish project B's pending transport/state.
 - ACP `unstable_listSessions()` still uses timestamp-only cursor pagination. Sessions sharing the page boundary `time.updated` can be skipped because the next page filters `updated < cursor`.
 - Browser-preview live commands use a host-side elapsed `LIVE_COMMAND_TIMEOUT_MILLISECONDS` timer. A live snapshot/input command can fail by wall-clock even while the browser sidecar is active.
 - Browser-preview persisted evidence helpers collapse existing but corrupt/unreadable evidence into `undefined`, and routes then return `NotFoundError`. This hides payload/schema/hash/artifact corruption as a missing-resource 404.
@@ -1356,7 +1356,7 @@ Independent browser/tooling audit found six new non-duplicate issue locations:
 
 Call point recall for this repair:
 
-- MCP OAuth ownership: `mcp/index.ts` `pendingOAuthTransports`, `startAuth()`, `authenticate()`, `finishAuth()`, `removeAuth()`, `mcp/auth.ts` token/state persistence, `mcp/oauth-callback.ts` `pendingAuths` / `mcpNameToState`, MCP auth routes and tests.
+- MCP OAuth ownership: `mcp/index.ts` pending flow ownership, `startAuth()`, `authenticate()`, `finishAuth()`, `removeAuth()`, `mcp/auth.ts` token/state persistence, `mcp/oauth-callback.ts` pending auth state, MCP auth routes and tests.
 - ACP pagination: `acp/agent.ts` `unstable_listSessions()`, ACP `ListSessionsRequest` cursor contract, SDK session list shape, ACP event/session tests, and any `/session/global` compound pagination tests for parity.
 - Browser-preview live timeout: `browser-preview/live.ts` `BrowserPreviewLiveSidecar.command()`, live sidecar stdout/stderr protocol, snapshot/input routes in `server/routes/browser-preview.ts`, live-input browser-preview tests.
 - Browser-preview evidence corruption: `browser-preview/persist.ts` evidence find/readability helpers, artifact SHA checks, `server/routes/browser-preview.ts` evidence/capture/artifact routes, OpenAPI error schemas, route tests.
@@ -1373,6 +1373,7 @@ Call point recall for this repair:
 ## Thirtieth Round Repair And Verification
 
 - ACP list-sessions pagination now uses a compound cursor so rows sharing the boundary `updated` timestamp are not skipped.
+- MCP OAuth pending auth now records a project-scoped flow key instead of retaining a pending transport handle, and start/finish auth close their short-lived probe and token-exchange transports.
 - Browser-preview live commands now use sidecar activity as the timeout owner instead of `LIVE_COMMAND_TIMEOUT_MILLISECONDS` wall-clock ownership.
 - Browser-preview persisted evidence corruption now fails as corruption instead of collapsing to missing evidence. Executor and channel attachment not-found routes return documented named error shapes.
 - Acceptance walkthroughs and Node browser sidecars now fail on request failures/page errors and refresh timeouts on stdout/stderr activity.

@@ -17,6 +17,7 @@ const scratchTextExtensions = new Set([
   ".tsx",
   ".js",
   ".jsx",
+  ".css",
   ".tmp",
   ".tsv",
   ".diff",
@@ -112,11 +113,20 @@ function docsFiles(): string[] {
     .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
     .concat([
       path.join(repoRoot, "specs", "README.md"),
-      path.join(repoRoot, "specs", "records", "README.md"),
       path.join(repoRoot, "specs", "records", "2026-06", "README.md"),
     ])
     .concat(rootDocFiles().filter((filePath) => fs.existsSync(filePath)))
   return docsFilesCache
+}
+
+function walkFiles(dir: string, out: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return out
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) walkFiles(fullPath, out)
+    else out.push(fullPath)
+  }
+  return out
 }
 
 function repositoryFiles(): string[] {
@@ -164,6 +174,10 @@ function scratchSpecSnapshotOffenders(): string[] {
       if (extension === ".md" && date && date < "2026-06-01") offenders.push(rel)
       const text = fs.readFileSync(fullPath, "utf8")
       if (/specs\/new-arch|packages\/opencorvus\/specs/.test(text)) offenders.push(rel)
+      for (const { label, pattern } of retiredSpecPathPatterns) {
+        pattern.lastIndex = 0
+        if (pattern.test(text)) offenders.push(`${rel}: ${label}`)
+      }
       for (const match of text.matchAll(deletedPreJuneSpecNamePattern)) {
         offenders.push(`${rel}: ${match[0]}`)
       }
@@ -231,6 +245,19 @@ function specsFiles(): string[] {
   return walkDocs(path.join(repoRoot, "specs"))
 }
 
+function specTreeFiles(): string[] {
+  return walkFiles(path.join(repoRoot, "specs"))
+}
+
+function allowedSpecStoragePath(rel: string): boolean {
+  return (
+    rel === "specs/README.md" ||
+    rel.startsWith("specs/current/") ||
+    rel.startsWith("specs/records/2026-06/") ||
+    rel.startsWith("specs/artifacts/")
+  )
+}
+
 function currentArchitectureMarkdownFiles(): string[] {
   return walkDocs(path.join(repoRoot, "specs/current/architecture")).filter((file) => file.endsWith(".md"))
 }
@@ -291,6 +318,7 @@ describe("historical docs repository links", () => {
     expect(fs.existsSync(path.join(repoRoot, "specs/new-arch"))).toBe(false)
     expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/specs"))).toBe(false)
     expect(fs.existsSync(path.join(repoRoot, "specs", retiredReferenceLedgerFileName))).toBe(false)
+    expect(fs.existsSync(path.join(repoRoot, "specs", "records", "README.md"))).toBe(false)
 
     const rootSpecFiles = fs
       .readdirSync(path.join(repoRoot, "specs"), { withFileTypes: true })
@@ -298,6 +326,37 @@ describe("historical docs repository links", () => {
       .map((entry) => entry.name)
       .sort()
     expect(rootSpecFiles).toEqual(["README.md"])
+
+    const misplacedSpecFiles = specTreeFiles()
+      .map((file) => path.relative(repoRoot, file).replace(/\\/g, "/"))
+      .filter((rel) => !allowedSpecStoragePath(rel))
+      .sort()
+    expect(misplacedSpecFiles).toEqual([])
+  })
+
+  test("AGENTS preserves spec storage and Recall governance", () => {
+    const agents = fs.readFileSync(path.join(repoRoot, "AGENTS.md"), "utf8")
+    for (const required of [
+      "**32.1（spec / 方案集中落盘单一来源 — 2026-06-29）**",
+      "**32.2（pre-June spec 删除规则 — 2026-06-29）**",
+      "**32.3（Recall 区块 — 2026-06-29）**",
+      "**32.4（压缩/续跑保真 — 2026-06-29）**",
+      "**32.5（spec 索引与验证 — 2026-06-29）**",
+      "specs/current/architecture/**",
+      "specs/records/YYYY-MM/**",
+      "specs/artifacts/**",
+    ]) {
+      expect(agents).toContain(required)
+    }
+
+    const requiredRecallRecords = [
+      "specs/records/2026-06/2026-06-29-spec-consolidation.md",
+      "specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md",
+    ]
+    const missingRecall = requiredRecallRecords
+      .filter((rel) => fs.existsSync(path.join(repoRoot, rel)))
+      .filter((rel) => !/^## Recall$/m.test(fs.readFileSync(path.join(repoRoot, rel), "utf8")))
+    expect(missingRecall).toEqual([])
   })
 
   test("no pre-June dated spec markdown remains in the spec tree", () => {

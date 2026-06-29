@@ -7,6 +7,7 @@ The 2026-06-29 consolidation moved June records here from scattered spec locatio
 Current incident records:
 
 - [2026-06-29-database-ioerr-runtime-boundary.md](2026-06-29-database-ioerr-runtime-boundary.md) records the SQLite `SQLITE_IOERR_READ` backend crash root cause and runtime-boundary fix plan.
+- [2026-06-29-model-image-input-auto-resize.md](2026-06-29-model-image-input-auto-resize.md) records the model-bound image auto-resize plan for oversized screenshot and attachment inputs.
 
 ## Rules
 

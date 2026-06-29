@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 
 let connectError: Error | undefined
+let oauthConnectRequiresAuth = false
 let promptError: Error | undefined
 let resourceError: Error | undefined
 let toolErrorDuringStartup: Error | undefined
@@ -14,6 +15,7 @@ let listPromptOptions: unknown[] = []
 let listResourceOptions: unknown[] = []
 let getPromptOptions: unknown[] = []
 let readResourceOptions: unknown[] = []
+let finishAuthCalls = 0
 let listToolsCalls = 0
 let listPromptsCalls = 0
 let listResourcesCalls = 0
@@ -23,11 +25,23 @@ let toolList: Array<{ name: string; description?: string; inputSchema: Record<st
 let resourceList: Array<{ uri: string; name: string; title?: string; description?: string; mimeType?: string }> = []
 let serverCapabilities: Record<string, Record<string, unknown>> = {}
 
+class MockUnauthorizedError extends Error {
+  constructor() {
+    super("Unauthorized")
+    this.name = "UnauthorizedError"
+  }
+}
+
+mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
+  UnauthorizedError: MockUnauthorizedError,
+}))
+
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
-    async connect(_transport?: unknown, options?: unknown) {
+    async connect(transport?: { start?: () => Promise<void> }, options?: unknown) {
       connectOptions.push(options)
       if (connectError) throw connectError
+      if (transport?.start) await transport.start()
     }
     async close() {
       closeCalls += 1
@@ -74,7 +88,19 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
-    constructor(_url: URL, _options?: unknown) {}
+    authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
+    constructor(_url: URL, options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> } }) {
+      this.authProvider = options?.authProvider
+    }
+    async start() {
+      if (oauthConnectRequiresAuth) {
+        await this.authProvider?.redirectToAuthorization?.(new URL("https://auth.example.test/authorize"))
+        throw new MockUnauthorizedError()
+      }
+    }
+    async finishAuth() {
+      finishAuthCalls += 1
+    }
     async close() {
       transportCloseCalls += 1
     }
@@ -83,7 +109,19 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSEClientTransport {
-    constructor(_url: URL, _options?: unknown) {}
+    authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
+    constructor(_url: URL, options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> } }) {
+      this.authProvider = options?.authProvider
+    }
+    async start() {
+      if (oauthConnectRequiresAuth) {
+        await this.authProvider?.redirectToAuthorization?.(new URL("https://auth.example.test/authorize"))
+        throw new MockUnauthorizedError()
+      }
+    }
+    async finishAuth() {
+      finishAuthCalls += 1
+    }
     async close() {
       transportCloseCalls += 1
     }
@@ -98,6 +136,7 @@ const { tmpdir } = await import("../fixture/fixture")
 
 beforeEach(async () => {
   connectError = undefined
+  oauthConnectRequiresAuth = false
   promptError = undefined
   resourceError = undefined
   toolErrorDuringStartup = undefined
@@ -111,6 +150,7 @@ beforeEach(async () => {
   listResourceOptions = []
   getPromptOptions = []
   readResourceOptions = []
+  finishAuthCalls = 0
   resourceList = []
   toolList = []
   listToolsCalls = 0
@@ -403,6 +443,43 @@ describe("MCP prompt and resource listing", () => {
         await expect(MCP.startAuth("remote")).rejects.toThrow("connect exploded")
         expect(closeCalls - closeCallsBefore).toBe(1)
         expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+      },
+    })
+  })
+
+  test("OAuth authorization flow closes probe and token-exchange transports", async () => {
+    oauthConnectRequiresAuth = true
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const closeCallsBefore = closeCalls
+        const transportCloseCallsBefore = transportCloseCalls
+        await expect(MCP.startAuth("remote")).resolves.toEqual({ authorizationUrl: "https://auth.example.test/authorize" })
+        expect(closeCalls - closeCallsBefore).toBe(1)
+        expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+
+        oauthConnectRequiresAuth = false
+        const transportCloseCallsBeforeFinish = transportCloseCalls
+        await expect(MCP.finishAuth("remote", "code")).resolves.toEqual({ status: "connected" })
+        expect(finishAuthCalls).toBe(1)
+        expect(transportCloseCalls - transportCloseCallsBeforeFinish).toBeGreaterThanOrEqual(1)
       },
     })
   })

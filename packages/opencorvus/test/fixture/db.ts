@@ -27,15 +27,28 @@ function isBusyRemovalError(error: unknown) {
 }
 
 async function removeDatabaseFile(file: string) {
-  for (let attempt = 0; ; attempt++) {
+  const started = Date.now()
+  let attempt = 0
+  let lastBusyError: unknown
+  for (;;) {
     try {
       await rm(file, { force: true })
       return
     } catch (error) {
-      if (!isBusyRemovalError(error) || attempt >= 99) throw error
+      if (!isBusyRemovalError(error)) throw error
+      lastBusyError = error
+      const elapsed = Date.now() - started
+      if (elapsed >= 60_000) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(
+          `Timed out removing locked test database file after ${elapsed}ms and ${attempt + 1} attempts: ${file}. Last busy error: ${message}`,
+          { cause: lastBusyError },
+        )
+      }
       Database.close()
       Bun.gc(true)
-      await Bun.sleep(100)
+      await Bun.sleep(Math.min(100 + attempt * 25, 500))
+      attempt++
     }
   }
 }

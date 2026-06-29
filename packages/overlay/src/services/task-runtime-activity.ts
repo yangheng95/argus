@@ -17,7 +17,49 @@ export function taskRuntimeActivityKey(input: { taskID: string; createdAt: numbe
   return `${taskID}:${input.createdAt}`
 }
 
-export function recordSelectedTaskSseActivity(input: { key: string; active: boolean; eventAt: number }): void {
+function eventProperties(event: any): Record<string, any> {
+  const properties = event?.properties
+  if (properties && typeof properties === "object" && !Array.isArray(properties)) return properties
+  const payload = event?.payload
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload
+  return {}
+}
+
+function eventTaskID(event: any): string {
+  const properties = eventProperties(event)
+  return String(event?.taskID || event?.task_id || properties.taskID || properties.task_id || "")
+}
+
+export function selectedTaskSseActivityAt(event: any): number {
+  const type = String(event?.type || "")
+  const properties = eventProperties(event)
+  if (type === "task.messages.changed") {
+    const watermark = Number(properties.watermark)
+    if (Number.isFinite(watermark) && watermark > 0) return watermark
+    throw new Error("task.messages.changed missing positive payload.watermark")
+  }
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || event?.timestamp || 0)
+  if (Number.isFinite(emittedAt) && emittedAt > 0) return emittedAt
+  throw new Error(`selected-task SSE event ${type || "<unknown>"} missing positive emittedAt/timestamp`)
+}
+
+export function selectedTaskSseLifecycleStatus(event: any): string {
+  const properties = eventProperties(event)
+  const status = properties.status
+  if (typeof status === "string" && status) return status
+  const type = String(event?.type || "")
+  if (type === "task.completed") return "completed"
+  if (type === "task.failed") return "failed"
+  if (type === "task.cancelled") return "cancelled"
+  return ""
+}
+
+export function recordSelectedTaskSseActivity(input: {
+  activityAt: number
+  active: boolean
+  key: string
+  startedAt: number
+}): void {
   if (!input.key) return
   const previous = elapsedByKey.get(input.key) ?? { key: input.key, elapsedMs: 0 }
   const next = advanceSseActiveElapsed(previous, input)
@@ -25,6 +67,41 @@ export function recordSelectedTaskSseActivity(input: { key: string; active: bool
   if (next.elapsedMs !== previous.elapsedMs || next.observedAt !== previous.observedAt) {
     setActivityRevision((revision) => revision + 1)
   }
+}
+
+export function recordSelectedTaskSseEventActivity(input: {
+  active: boolean
+  event: any
+  task: any
+  taskID: string
+}): void {
+  const taskID = String(input.taskID || "")
+  if (!taskID || String(input.task?.id || "") !== taskID) return
+  if (eventTaskID(input.event) && eventTaskID(input.event) !== taskID) return
+  recordSelectedTaskSseActivity({
+    key: taskRuntimeActivityKey({ taskID, createdAt: Number(input.task?.time?.created) }),
+    active: input.active,
+    startedAt: Number(input.task?.time?.started),
+    activityAt: selectedTaskSseActivityAt(input.event),
+  })
+}
+
+export function recordSelectedTaskSseSnapshot(input: {
+  active: boolean
+  activityAt: number
+  task: any
+  taskID: string
+}): void {
+  const taskID = String(input.taskID || "")
+  if (!taskID || String(input.task?.id || "") !== taskID) return
+  if (!input.active) return
+  if (!Number.isFinite(input.activityAt) || input.activityAt <= 0) return
+  recordSelectedTaskSseActivity({
+    key: taskRuntimeActivityKey({ taskID, createdAt: Number(input.task?.time?.created) }),
+    active: true,
+    startedAt: Number(input.task?.time?.started),
+    activityAt: input.activityAt,
+  })
 }
 
 export function pauseSelectedTaskSseActivity(key: string): void {

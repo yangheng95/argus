@@ -12,6 +12,7 @@ import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
+import { withTimeout } from "../../util/timeout"
 import path from "path"
 import { Global } from "../../global"
 import { modify, applyEdits } from "jsonc-parser"
@@ -784,20 +785,21 @@ export const McpDebugCommand = cmd({
             )
 
             prompts.log.info("Testing OAuth flow (without completing authorization)...")
+            const debugTimeout = MCP.effectiveTimeout(serverConfig, config.experimental?.mcp_timeout)
 
             // Try creating transport with auth provider to trigger discovery
             const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
               authProvider,
             })
 
+            let client: Client | undefined
             try {
-              const client = new Client({
+              client = new Client({
                 name: "opencorvus-debug",
                 version: Installation.VERSION,
               })
-              await client.connect(transport)
+              await withTimeout(client.connect(transport, MCP.mcpRequestOptions(debugTimeout)), debugTimeout)
               prompts.log.success("Connection successful (already authenticated)")
-              await client.close()
             } catch (error) {
               if (error instanceof UnauthorizedError) {
                 prompts.log.info(`OAuth flow triggered: ${error.message}`)
@@ -812,6 +814,17 @@ export const McpDebugCommand = cmd({
               } else {
                 prompts.log.error(`Connection error: ${error instanceof Error ? error.message : String(error)}`)
               }
+            } finally {
+              await client?.close().catch((closeError) => {
+                prompts.log.error(
+                  `Failed to close debug MCP client: ${closeError instanceof Error ? closeError.message : String(closeError)}`,
+                )
+              })
+              await transport.close().catch((closeError) => {
+                prompts.log.error(
+                  `Failed to close debug MCP transport: ${closeError instanceof Error ? closeError.message : String(closeError)}`,
+                )
+              })
             }
           } else if (response.status >= 200 && response.status < 300) {
             prompts.log.success("Server responded successfully (no auth required or already authenticated)")

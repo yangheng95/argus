@@ -47973,7 +47973,13 @@
               "height": {
                 "type": "number"
               },
+              "pixels": {
+                "type": "number"
+              },
               "maxDimension": {
+                "type": "number"
+              },
+              "maxPixels": {
                 "type": "number"
               },
               "originalWidth": {
