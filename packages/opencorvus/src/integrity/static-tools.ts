@@ -9,9 +9,9 @@ export const INTEGRITY_DECLARED_TOOL_IDS = [
 ] as const
 
 export async function loadIntegrityPreviewToolInfos(): Promise<readonly Tool.Info[]> {
-  const [{ BrowserPreviewTool }, { BrowserPreviewBindLocalModuleTool }] = await Promise.all([
+  const [{ BrowserPreviewTool }, { BrowserPreviewCompareScrollSlicesTool }] = await Promise.all([
     import("@/tool/browser-preview"),
-    import("@/tool/browser-preview-bind-local-module"),
+    import("@/tool/browser-preview-compare-scroll-slices"),
   ])
-  return [BrowserPreviewTool, BrowserPreviewBindLocalModuleTool] as const
+  return [BrowserPreviewTool, BrowserPreviewCompareScrollSlicesTool] as const
 }

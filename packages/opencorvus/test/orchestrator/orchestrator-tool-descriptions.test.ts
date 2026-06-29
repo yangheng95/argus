@@ -241,7 +241,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.browser_preview.description).toContain("ordinary command output does not update preview targets")
     expect(tools.browser_preview.description).toBe(BrowserPreviewToolStaticDefinition.description)
     expect(tools.browser_preview.inputSchema).toBe(BrowserPreviewToolStaticDefinition.parameters)
-    expect(tools.browser_preview_bind_local_module).toBeUndefined()
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {

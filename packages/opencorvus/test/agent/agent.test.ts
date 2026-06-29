@@ -112,7 +112,7 @@ test("build agent has correct default properties", async () => {
       expect(ids.has("web_clone_prepare_context")).toBe(false)
       expect(ids.has("web_clone_source_audit")).toBe(false)
       expect(ids.has("web_clone_generate_source_project")).toBe(false)
-      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
+      expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
     },
   })
 }, 30_000)
@@ -134,14 +134,12 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "webpage_render")).not.toBe("allow")
       expect(evalPerm(visualQa, "webpage_vision_judge")).not.toBe("allow")
       expect(evalPerm(visualQa, "browser_preview")).toBe("allow")
-      expect(evalPerm(visualQa, "browser_preview_bind_local_module")).toBe("allow")
       expect(evalPerm(visualQa, "browser_preview_compare_scroll_slices")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
       const visible = visibleToolIDs(visualQa)
       expect([...visible].sort()).toEqual([...VISUAL_QA_STATIC_TOOL_IDS].sort())
       expect(visible.has("webpage_extract")).toBe(false)
       expect(visible.has("browser_preview")).toBe(true)
-      expect(visible.has("browser_preview_bind_local_module")).toBe(true)
       expect(visible.has("browser_preview_compare_scroll_slices")).toBe(true)
       expect(visible.has("webpage_render")).toBe(false)
       expect(visible.has("webpage_evaluate")).toBe(false)
@@ -155,7 +153,6 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(ids.has("webpage_render")).toBe(false)
       expect(ids.has("webpage_evaluate")).toBe(false)
       expect(ids.has("webpage_vision_judge")).toBe(false)
-      expect(ids.has("browser_preview_bind_local_module")).toBe(true)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
     },
   })
@@ -379,7 +376,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(visible.has("add_goal")).toBe(true)
       expect(visible.has("select_expert_squad")).toBe(true)
       expect(visible.has("browser_preview")).toBe(true)
-      expect(visible.has("browser_preview_bind_local_module")).toBe(false)
       expect(visible.has("wait")).toBe(true)
       expect(visible.has("panel")).toBe(false)
       expect(visible.has("task")).toBe(false)
@@ -393,7 +389,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(tools.map((tool) => tool.id)).toContain("skill")
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
-      expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_bind_local_module")
     },
   })
 })
@@ -627,7 +622,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualVisible.has("skill")).toBe(true)
       expect(visualVisible.has("request_orchestrator_decision")).toBe(true)
       expect(visualVisible.has("browser_preview")).toBe(true)
-      expect(visualVisible.has("browser_preview_bind_local_module")).toBe(true)
+      expect(visualVisible.has("browser_preview_compare_scroll_slices")).toBe(true)
       expect(visualVisible.has("bash")).toBe(true)
       expect(visualVisible.has("webpage_render")).toBe(false)
       expect(visualVisible.has("webpage_evaluate")).toBe(false)
@@ -823,7 +818,6 @@ test("orchestrator tool pool covers every self-built orchestrator tool", async (
         agentSessionID: "ses_orchestrator_tool_surface_audit",
         signal: new AbortController().signal,
       })
-      expect(Object.keys(tools)).not.toContain("browser_preview_bind_local_module")
 
       for (const toolName of Object.keys(tools)) {
         expect(visible.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)

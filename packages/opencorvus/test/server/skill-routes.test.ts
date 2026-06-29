@@ -755,7 +755,7 @@ describe("skill routes", () => {
             "name: integrity-preview-review",
             "description: Integrity preview review workflow.",
             "required_tools:",
-            "  - browser_preview_bind_local_module",
+            "  - browser_preview_compare_scroll_slices",
             "agents:",
             "  - integrity",
             "---",

@@ -79,6 +79,50 @@ describe("browser preview scroll-slice comparison", () => {
   )
 
   test(
+    "adds low SSIM diagnostics when scroll slices are probably mismatched",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await makeMismatchedReferencePng(path.join(paths.sourcePackageAbsolute, "reference.png"), 360, 900)
+      const server = await startScrollPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const result = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            compareBrowserPreviewScrollSlice({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              viewportID: "desktop",
+              sourceReferenceArtifactID: "reference.png",
+              route: "/scroll",
+              scrollY: 300,
+              sliceHeight: 180,
+            }),
+        })
+
+        expect(result.status).toBe("completed")
+        expect(result.visual.ssim_score).toBeLessThan(0.8)
+        const diagnostics = result.diagnostics.join("\n")
+        expect(diagnostics).toContain("Low SSIM precheck")
+        expect(diagnostics).toContain("screenshots may not match")
+        expect(diagnostics).toContain("page should be calibrated as a whole")
+        const sideBySide = resolveRuntimeRelativePath(tmp.path, result.artifacts.side_by_side)
+        await expectPngDimensions(sideBySide, { width: 736, height: 288 })
+      } finally {
+        await server.close()
+      }
+    },
+    SCROLL_SLICE_TEST_TIMEOUT_MILLISECONDS,
+  )
+
+  test(
     "tool result attaches the composed side-by-side image and rejects raw URL-shaped parameters",
     async () => {
       expect(
@@ -295,6 +339,37 @@ async function makeReferencePng(
             <text x="24" y="80" font-family="Arial" font-size="32" fill="#111827">Reference top</text>
             <text x="24" y="${Math.floor(input.height / 3) + 80}" font-family="Arial" font-size="32" fill="#111827">Reference middle</text>
           </svg>`,
+        ),
+        left: 0,
+        top: 0,
+      },
+    ])
+    .png()
+    .toFile(outputPath)
+}
+
+async function makeMismatchedReferencePng(outputPath: string, width: number, height: number) {
+  const stripes = Array.from({ length: Math.ceil(height / 20) }, (_, index) => {
+    const y = index * 20
+    const fill = index % 2 === 0 ? "#020617" : "#f8fafc"
+    return `<rect x="0" y="${y}" width="${width}" height="20" fill="${fill}"/>`
+  }).join("")
+  const diagonals = Array.from({ length: Math.ceil(width / 24) }, (_, index) => {
+    const x = index * 24 - height
+    return `<path d="M ${x} ${height} L ${x + height} 0" stroke="#dc2626" stroke-width="5"/>`
+  }).join("")
+  await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: "#020617",
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${stripes}${diagonals}</svg>`,
         ),
         left: 0,
         top: 0,
