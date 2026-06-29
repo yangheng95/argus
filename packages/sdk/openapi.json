@@ -41500,11 +41500,52 @@
             }
           },
           "400": {
-            "description": "Bad request",
+            "description": "Invalid MCP OAuth callback request",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestError"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "BadRequestError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "MCPOAuthStateError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
                 }
               }
             }
@@ -41597,10 +41638,15 @@
                   "code": {
                     "description": "Authorization code from OAuth callback",
                     "type": "string"
+                  },
+                  "state": {
+                    "description": "OAuth state parameter from OAuth callback",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "code"
+                  "code",
+                  "state"
                 ]
               }
             }

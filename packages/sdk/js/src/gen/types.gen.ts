@@ -17674,6 +17674,10 @@ export type McpAuthCallbackData = {
      * Authorization code from OAuth callback
      */
     code: string
+    /**
+     * OAuth state parameter from OAuth callback
+     */
+    state: string
   }
   path: {
     name: string
@@ -17689,9 +17693,21 @@ export type McpAuthCallbackData = {
 
 export type McpAuthCallbackErrors = {
   /**
-   * Bad request
+   * Invalid MCP OAuth callback request
    */
-  400: BadRequestError
+  400:
+    | {
+        name: "BadRequestError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "MCPOAuthStateError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Not found
    */

@@ -414,6 +414,42 @@ describe("MCP prompt and resource listing", () => {
     expectTransportSignal(transportRequestInits[0])
   })
 
+  test("connect and startup tool discovery prefer the per-server MCP timeout override", async () => {
+    toolList = []
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        experimental: {
+          mcp_timeout: 12_345,
+        },
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            timeout: 6_789,
+            oauth: false,
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.tools()
+      },
+    })
+
+    expect(connectOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 6_789 })
+    expect(listToolOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 6_789 })
+    expectTransportSignal(transportRequestInits[0])
+  })
+
   test("OAuth startAuth closes the probe client and transport after an already-authenticated probe", async () => {
     await using tmp = await tmpdir({
       git: true,

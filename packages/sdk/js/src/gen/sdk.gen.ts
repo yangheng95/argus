@@ -8896,6 +8896,7 @@ export class Auth2 extends HeyApiClient {
       name: string
       directory?: string
       code: string
+      state: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8907,6 +8908,7 @@ export class Auth2 extends HeyApiClient {
             { in: "path", key: "name" },
             { in: "query", key: "directory" },
             { in: "body", key: "code" },
+            { in: "body", key: "state" },
           ],
         },
       ],

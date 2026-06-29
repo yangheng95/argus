@@ -79,6 +79,14 @@ export namespace MCP {
     }),
   )
 
+  export const OAuthStateError = NamedError.create(
+    "MCPOAuthStateError",
+    z.object({
+      mcpName: z.string(),
+      message: z.string(),
+    }),
+  )
+
   type MCPClient = Client
 
   export const Status = z
@@ -1115,17 +1123,43 @@ export namespace MCP {
     // Wait for callback using the already-registered promise
     const code = await callbackPromise
 
-    // Validate and clear the state
+    return finishAuthCallback(mcpName, code, oauthState)
+  }
+
+  async function assertOAuthState(mcpName: string, authKey: string, oauthState: string): Promise<void> {
     const storedState = await McpAuth.getOAuthState(authKey)
+    if (!storedState) {
+      pendingOAuthFlows.delete(authKey)
+      throw new OAuthStateError({ mcpName, message: "OAuth state not found" })
+    }
     if (storedState !== oauthState) {
       await McpAuth.clearOAuthState(authKey)
-      throw new Error("OAuth state mismatch - potential CSRF attack")
+      pendingOAuthFlows.delete(authKey)
+      throw new OAuthStateError({ mcpName, message: "OAuth state mismatch - potential CSRF attack" })
     }
+  }
 
-    await McpAuth.clearOAuthState(authKey)
-
-    // Finish auth
-    return finishAuth(mcpName, code)
+  export async function finishAuthCallback(
+    mcpName: string,
+    authorizationCode: string,
+    oauthState: string,
+  ): Promise<Status> {
+    const cfg = await Config.get()
+    const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
+    const mcpConfig = requireMcpEntry(config, mcpName)
+    if (!isMcpConfigured(mcpConfig)) {
+      throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
+    }
+    if (mcpConfig.type !== "remote") {
+      throw new Error(`MCP server ${mcpName} is not a remote server`)
+    }
+    const authKey = mcpAuthKey(mcpName)
+    await assertOAuthState(mcpName, authKey, oauthState)
+    try {
+      return await finishAuth(mcpName, authorizationCode)
+    } finally {
+      await McpAuth.clearOAuthState(authKey)
+    }
   }
 
   /**

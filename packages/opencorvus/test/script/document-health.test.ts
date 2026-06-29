@@ -28,6 +28,17 @@ function markdownCodeBlocks(text: string, language: string) {
   )
 }
 
+function stringLiteralArrayFromConst(source: string, constName: string): string[] {
+  const match = source.match(new RegExp(`const ${constName} = \\[([^\\]]+)\\] as const`))
+  expect(match).not.toBeNull()
+  return Array.from(match![1]!.matchAll(/"([^"]+)"/g)).map((item) => item[1]!)
+}
+
+function supportedGitHubEventsFromRuntime(): string[] {
+  const source = read("packages/opencorvus/src/cli/cmd/github.ts")
+  return [...stringLiteralArrayFromConst(source, "USER_EVENTS"), ...stringLiteralArrayFromConst(source, "REPO_EVENTS")]
+}
+
 function walkTextFiles(relativeDir: string, out: string[] = []) {
   const dir = path.join(repoRoot, relativeDir)
   if (!fs.existsSync(dir)) return out
@@ -371,17 +382,12 @@ describe("document health audit regressions", () => {
       "packages/web/src/content/docs/operations/github-action.mdx",
       "packages/web/src/content/docs/zh-cn/operations/github-action.mdx",
     ]
-    const supportedGitHubEvents = [
-      "issue_comment",
-      "pull_request_review_comment",
-      "issues",
-      "pull_request",
-      "schedule",
-      "workflow_dispatch",
-    ]
+    const supportedGitHubEvents = supportedGitHubEventsFromRuntime()
 
     for (const file of githubActionDocs) {
       const text = read(file)
+      expect(text).not.toContain("description: Trigger the OpenCorvus AI coding agent from a PR or Issue comment")
+      expect(text).not.toContain("description: 在 PR 或 Issue 评论区")
       expect(text).not.toContain("actions/checkout@v4")
       expect(text).not.toContain("model: openai/gpt-5.5")
       expect(text).toContain("actions/checkout@v7")
@@ -477,6 +483,21 @@ describe("document health audit regressions", () => {
     expect(githubCli).not.toContain("github_pat")
     expect(githubCli).toContain("https://opencorvus.ai/docs/operations/github-action/")
     expect(githubCli).not.toContain("https://opencorvus.ai/docs/github/#usage-examples")
+  })
+
+  test("public MCP server docs do not publish GitHub PAT remote examples", () => {
+    const mcpDocs = [
+      "packages/web/src/content/docs/mcp-servers.mdx",
+      "packages/web/src/content/docs/zh-cn/mcp-servers.mdx",
+    ]
+    for (const file of mcpDocs) {
+      const text = read(file)
+      expect(text).not.toContain("Remote GitHub (Bearer Token)")
+      expect(text).not.toContain("远程 GitHub（Bearer Token）")
+      expect(text).not.toContain("api.githubcopilot.com/mcp")
+      expect(text).not.toContain("ghp_")
+      expect(text).not.toContain('"Authorization": "Bearer ghp_')
+    }
   })
 
   test("public model examples use real agent config keys", () => {

@@ -120,7 +120,8 @@ export const McpRoutes = lazy(() => {
                 },
               },
             },
-            ...errors(400, 404),
+            400: namedErrorResponse("Invalid MCP OAuth callback request", "BadRequestError", "MCPOAuthStateError"),
+            ...errors(404),
             500: namedErrorResponse("MCP OAuth completion failed", "UnknownError"),
           },
         }),
@@ -128,12 +129,13 @@ export const McpRoutes = lazy(() => {
           "json",
           z.object({
             code: z.string().describe("Authorization code from OAuth callback"),
+            state: z.string().describe("OAuth state parameter from OAuth callback"),
           }),
         ),
         async (c) => {
           const name = c.req.param("name")
-          const { code } = c.req.valid("json")
-          const status = await MCP.finishAuth(name, code)
+          const { code, state } = c.req.valid("json")
+          const status = await MCP.finishAuthCallback(name, code, state)
           return c.json(status)
         },
       )
