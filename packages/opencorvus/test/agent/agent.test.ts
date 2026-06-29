@@ -106,6 +106,7 @@ test("build agent has correct default properties", async () => {
       expect(visible.has("request_orchestrator_decision")).toBe(true)
       expect(visible.has("web_clone_prepare_context")).toBe(false)
       expect(visible.has("web_clone_generate_source_project")).toBe(false)
+      expect(visible.has("browser_preview_layout_geometry")).toBe(false)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -113,7 +114,7 @@ test("build agent has correct default properties", async () => {
       expect(ids.has("web_clone_source_audit")).toBe(false)
       expect(ids.has("web_clone_generate_source_project")).toBe(false)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
-      expect(ids.has("browser_preview_layout_geometry")).toBe(true)
+      expect(ids.has("browser_preview_layout_geometry")).toBe(false)
     },
   })
 }, 30_000)

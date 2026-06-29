@@ -16,10 +16,7 @@ export namespace AgentToolPool {
     "web_clone_generate_source_project",
   ] as const
 
-  const BUILD_PRIVATE_TOOL_IDS = [
-    "browser_preview_compare_scroll_slices",
-    "browser_preview_layout_geometry",
-  ] as const
+  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_compare_scroll_slices"] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
     "read",

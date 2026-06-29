@@ -25,8 +25,8 @@ not produce a typed geometry contract for:
 - source-to-implementation size and edge deltas;
 - same-component width behavior across explicit desktop samples.
 
-This leaves Build and Visual QA with screenshots and prose instead of structured
-evidence they can cite and repair against.
+This leaves final Visual QA with screenshots and prose instead of structured
+evidence it can cite for layout findings and in-scope repairs.
 
 ## Recall
 
@@ -53,9 +53,9 @@ rg -n "browser_preview|BrowserPreview|MCP|reference-comparison|layout-map|style-
 | `packages/opencorvus/src/browser-preview/region-comparison.ts` | Produces source/local true-size comparison evidence for bound regions. | Keep separate; layout geometry diagnostics are not `reference-comparison` proof. |
 | `packages/opencorvus/src/browser-preview/scroll-slice-comparison.ts` | Produces Visual QA supporting `visual_diff` slices. | Keep separate; scroll slices remain supporting evidence only. |
 | `packages/opencorvus/src/mcp/browser/tools.ts` | Generic browser automation tools such as screenshot and observe. | Do not add task layout geometry diagnostics here. |
-| `packages/opencorvus/src/agent/tool-pool-contract.ts` | Single source for agent tool assignment. | Add the new internal tool through this contract only. |
+| `packages/opencorvus/src/agent/tool-pool-contract.ts` | Single source for agent tool assignment. | Keep the new internal tool out of Build private tools; Visual QA is the only agent role that exposes it. |
 | `packages/opencorvus/src/visual-qa/static-tools.ts` | Visual QA static preview tool list. | Expose the diagnostic to Visual QA for final layout review. |
-| `packages/opencorvus/src/prompt/core/visual-qa-core.txt` and Build prompt text | Tell agents to inspect layout and screenshots. | Mention structured layout geometry evidence as the precise tool for margin/edge/scale claims. |
+| `packages/opencorvus/src/prompt/core/visual-qa-core.txt` | Tells Visual QA to inspect layout and screenshots. | Mention structured layout geometry evidence as the precise tool for margin/edge/scale claims. |
 
 ## Decision
 
@@ -64,8 +64,8 @@ Implement an internal browser-preview tool named
 
 The core implementation lives under `packages/opencorvus/src/browser-preview`
 and resolves the URL only from persisted `taskID` plus `targetID`. The model
-wrapper lives under `packages/opencorvus/src/tool` and is exposed through
-`AgentToolPool`.
+wrapper lives under `packages/opencorvus/src/tool` and is exposed only through
+the Visual QA tool surface.
 
 The tool writes a task-runtime manifest and persists a
 `browser_preview_evidence` row with `operationKind="layout-geometry"`. That
@@ -103,7 +103,8 @@ Output:
 - The manifest includes page overflow, region box/style/edge metrics, and
   optional source deltas.
 - Persisted evidence uses the explicit `layout-geometry` operation kind.
-- Visual QA can call the tool; Build can call it when repairing layout geometry.
+- Visual QA can call the tool.
+- Build cannot call the tool and must not be prompted to call it.
 - Prompts describe it as supporting geometry evidence, not reference-comparison
   proof.
 - Targeted tests cover schema strictness, source delta math, tool assignment, and
