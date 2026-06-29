@@ -75,8 +75,10 @@ mock.module("@octokit/rest", () => ({
   },
 }))
 
-const envKeys = ["MODEL", "GITHUB_RUN_ID", "USE_GITHUB_TOKEN", "GITHUB_TOKEN", "PROMPT"] as const
+const envKeys = ["MODEL", "GITHUB_RUN_ID", "PROMPT"] as const
 let previousEnv: Partial<Record<(typeof envKeys)[number], string | undefined>> = {}
+const originalFetch = globalThis.fetch
+const fetchCalls: Array<{ url: string; method?: string; authorization?: string | null }> = []
 
 function assistantText(sessionID: string, text: string) {
   const now = Date.now()
@@ -123,6 +125,8 @@ describe("github action run", () => {
       else process.env[key] = value
     }
     previousEnv = {}
+    globalThis.fetch = originalFetch
+    fetchCalls.length = 0
     octokitCalls.comments.length = 0
     octokitCalls.createPulls.length = 0
     setFailedCalls.length = 0
@@ -135,9 +139,19 @@ describe("github action run", () => {
     previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as typeof previousEnv
     process.env.MODEL = "openai/gpt-test"
     process.env.GITHUB_RUN_ID = "123456"
-    process.env.USE_GITHUB_TOKEN = "true"
-    process.env.GITHUB_TOKEN = "github-token"
     process.env.PROMPT = "fix the issue"
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input)
+      const headers = new Headers(init?.headers)
+      fetchCalls.push({ url, method: init?.method, authorization: headers.get("Authorization") })
+      if (url === "https://api.opencorvus.ai/exchange_github_app_token_with_pat") {
+        return Response.json({ token: "app-token" })
+      }
+      if (url === "https://api.github.com/installation/token") {
+        return new Response(null, { status: 204 })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as typeof fetch
 
     await using tmp = await tmpdir({ git: true })
     const cwd = process.cwd()
@@ -167,6 +181,7 @@ describe("github action run", () => {
       const { GithubRunCommand } = await import("../../src/cli/cmd/github")
       await expect(
         GithubRunCommand.handler?.({
+          token: "github_pat_test",
           event: JSON.stringify({
             eventName: "issues",
             actor: "alice",
@@ -188,6 +203,16 @@ describe("github action run", () => {
     }
 
     expect(promptCalls).toHaveLength(2)
+    expect(fetchCalls).toContainEqual({
+      url: "https://api.opencorvus.ai/exchange_github_app_token_with_pat",
+      method: "POST",
+      authorization: "Bearer github_pat_test",
+    })
+    expect(fetchCalls).toContainEqual({
+      url: "https://api.github.com/installation/token",
+      method: "DELETE",
+      authorization: "Bearer app-token",
+    })
     expect(promptCalls[1]).toBe("Summarize the following in less than 40 characters:\n\nImplemented dirty work.")
     expect(setFailedCalls).toEqual(["summary model failed"])
     expect(exitCodes).toEqual([1])

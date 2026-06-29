@@ -50,7 +50,6 @@ describe("document health audit regressions", () => {
       ".github/workflows/generate.yml",
       ".github/workflows/build-vscode-extension.yml",
       ".github/workflows/opencorvus.yml",
-      "github/index.ts",
       "github/README.md",
       "github/action.yml",
       "packages/web/README.md",
@@ -110,6 +109,28 @@ describe("document health audit regressions", () => {
       "OPENCORVUS_EMBEDDED_OVERLAY_B64",
       "OPENCORVUS_EMBEDDED_OVERLAY_HASH",
       "OPENCORVUS_MODEL_",
+      "CODING_DASHSCOPE_API_KEY",
+      "DASHSCOPE_CODING_BASE_URL",
+      "DASHSCOPE_INTL_BASE_URL",
+      "DASHSCOPE_API_URL",
+      "/mcp/transport",
+      "MCPServe.url",
+      "webpage_extract",
+      "webpage_compile",
+      "webpage_analyze",
+      "webpage_runtime_state",
+      "webpage_render",
+      "webpage_evaluate",
+      "webpage_text_diff",
+      "webpage_vision_judge",
+      "refuses to expose without password",
+      "`--format default       | json`",
+      "anthropic/claude-haiku-4-6",
+      "packages/channel-runtime/packages/channel-runtime",
+      "src/packages/channel-runtime/src/main.ts",
+      "latest local package run produced",
+      "172 MiB",
+      "171 MiB",
       "--tool-timeout-ms",
       "--stall-timeout-ms",
       "--planning-stall-timeout-ms",
@@ -137,15 +158,37 @@ describe("document health audit regressions", () => {
 
   test("repository GitHub workflows use current action majors", () => {
     const githubFiles = walkTextFiles(".github")
-    expectFilesNotToContain(githubFiles, ["actions/checkout@v4", "actions/setup-node@v4", "actions/github-script@v7"])
+    expectFilesNotToContain(githubFiles, [
+      "actions/checkout@v4",
+      "actions/checkout@v6",
+      "actions/setup-node@v4",
+      "actions/github-script@v8",
+      "actions/github-script@v7",
+      "actions/cache@v4",
+      "actions/upload-artifact@v4",
+      "actions/download-artifact@v4",
+    ])
 
     expect(read(".github/actions/setup-bun/action.yml")).toContain("actions/setup-node@v6")
+    expect(read(".github/actions/setup-bun/action.yml")).toContain("actions/cache@v6")
     expect(read("github/action.yml")).toContain("oven-sh/setup-bun@v2")
     expect(read("github/action.yml")).toContain(
       'bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run',
     )
+    expect(fs.existsSync(path.join(repoRoot, "github/index.ts"))).toBe(false)
+    expect(fs.existsSync(path.join(repoRoot, "github/package.json"))).toBe(false)
+    expect(fs.existsSync(path.join(repoRoot, "github/bun.lock"))).toBe(false)
+    expect(read("github/README.md")).toContain(
+      'bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run',
+    )
+    expect(read("github/README.md")).toContain("SessionPrompt.prompt")
+    expect(read("github/README.md")).not.toContain("./.github/actions/setup-bun")
+    expect(read("github/README.md")).not.toContain("opencorvus github install")
+    expect(read("github/README.md")).not.toContain("@opencorvus-ai/sdk")
     expect(read("github/action.yml")).not.toContain("https://opencorvus.ai/install")
     expect(read("github/action.yml")).not.toContain("~/.opencorvus/bin")
+    expect(read("packages/opencorvus/src/cli/cmd/github.ts")).toContain("actions/checkout@v7")
+    expect(read("packages/opencorvus/src/cli/cmd/github.ts")).not.toContain("actions/checkout@v6")
 
     for (const file of [
       ".github/workflows/typecheck.yml",
@@ -156,12 +199,12 @@ describe("document health audit regressions", () => {
       ".github/workflows/opencorvus.yml",
     ]) {
       const text = read(file)
-      expect(text).toContain("actions/checkout@v6")
+      expect(text).toContain("actions/checkout@v7")
       expect(text).toContain("persist-credentials: false")
     }
 
     const generateWorkflow = read(".github/workflows/generate.yml")
-    expect(generateWorkflow).toContain("actions/checkout@v6")
+    expect(generateWorkflow).toContain("actions/checkout@v7")
     expect(generateWorkflow).toContain("token: ${{ github.token }}")
   })
 
@@ -323,18 +366,67 @@ describe("document health audit regressions", () => {
       const text = read(file)
       expect(text).not.toContain("actions/checkout@v4")
       expect(text).not.toContain("model: openai/gpt-5.5")
-      expect(text).toContain("actions/checkout@v6")
+      expect(text).toContain("actions/checkout@v7")
       expect(text).toContain("persist-credentials: false")
-      expect(text).toContain("model: alibaba-cn/qwen3.5-plus")
+      expect(text).toContain('bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run')
+      expect(text).toContain("SessionPrompt.prompt")
+      expect(text).not.toContain("starts `opencorvus serve`")
+      expect(text).not.toContain("通过 `@opencorvus-ai/sdk`")
+      expect(text).not.toContain("via `@opencorvus-ai/sdk`")
+      expect(text).toContain("model: alibaba-coding-plan-cn/qwen3.5-plus")
+      expect(text).toContain("ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}")
+      expect(text).not.toContain("model: alibaba-cn/qwen3.5-plus")
+      expect(text).not.toContain("DASHSCOPE_API_KEY")
+      expect(text).not.toContain("MOCK_TOKEN")
+      expect(text).not.toContain("MOCK_EVENT")
+      expect(text).not.toContain("use_github_token")
+      expect(text).not.toContain("GITHUB_TOKEN")
+      expect(text).not.toContain("contents: write")
+      expect(text).not.toContain("pull-requests: write")
+      expect(text).not.toContain("issues: write")
+      expect(text).not.toContain("OPENCORVUS_CONFIG_CONTENT")
+      expect(text).not.toContain("https://coding.dashscope.aliyuncs.com/v1")
     }
 
     const workflow = read(".github/workflows/opencorvus.yml")
-    expect(workflow).toContain("uses: actions/checkout@v6")
+    expect(workflow).toContain("uses: actions/checkout@v7")
     expect(workflow).toContain("persist-credentials: false")
-    expect(workflow).toContain("model: alibaba-cn/qwen3.5-plus")
+    expect(workflow).toContain("model: alibaba-coding-plan-cn/qwen3.5-plus")
+    expect(workflow).toContain("ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}")
+    expect(workflow).not.toContain("OPENCORVUS_CONFIG_CONTENT")
+    expect(workflow).not.toContain("https://coding.dashscope.aliyuncs.com/v1")
     expect(workflow).toContain("contents: read")
     expect(workflow).toContain("pull-requests: read")
     expect(workflow).toContain("issues: read")
+
+    const actionReadme = read("github/README.md")
+    expect(actionReadme).toContain("uses: actions/checkout@v7")
+    expect(actionReadme).toContain("persist-credentials: false")
+    expect(actionReadme).toContain("id-token: write")
+    expect(actionReadme).toContain("contents: read")
+    expect(actionReadme).toContain("pull-requests: read")
+    expect(actionReadme).toContain("issues: read")
+    expect(actionReadme).toContain("OPENCORVUS_PERMISSION: '{\"bash\": \"deny\"}'")
+    expect(actionReadme).toContain("model: alibaba-coding-plan-cn/qwen3.5-plus")
+    expect(actionReadme).toContain("MODEL=alibaba-coding-plan-cn/qwen3.5-plus")
+    expect(actionReadme).toContain("ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}")
+    expect(actionReadme).toContain("ALIBABA_CODING_PLAN_API_KEY=sk-1234567890")
+    expect(actionReadme).not.toContain("contents: write")
+    expect(actionReadme).not.toContain("use_github_token: true")
+    expect(actionReadme).not.toContain("MOCK_TOKEN")
+    expect(actionReadme).not.toContain("MOCK_EVENT")
+    expect(actionReadme).not.toContain("GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
+    expect(actionReadme).not.toContain("DASHSCOPE_API_KEY")
+
+    const actionDefinition = read("github/action.yml")
+    expect(actionDefinition).not.toContain("use_github_token")
+    expect(actionDefinition).not.toContain("USE_GITHUB_TOKEN")
+    expect(actionDefinition).not.toContain("GITHUB_TOKEN")
+
+    const githubCli = read("packages/opencorvus/src/cli/cmd/github.ts")
+    expect(githubCli).not.toContain("normalizeUseGithubToken")
+    expect(githubCli).not.toContain("USE_GITHUB_TOKEN")
+    expect(githubCli).not.toContain('process.env["GITHUB_TOKEN"]')
   })
 
   test("public model examples use real agent config keys", () => {
@@ -353,13 +445,76 @@ describe("document health audit regressions", () => {
     }
   })
 
+  test("command docs use model examples from the current snapshot", () => {
+    const snapshot = read("packages/opencorvus/src/provider/models-snapshot.ts")
+    const commandDocs = [
+      "packages/web/src/content/docs/commands.mdx",
+      "packages/web/src/content/docs/zh-cn/commands.mdx",
+    ]
+    const missing = commandDocs.flatMap((file) => {
+      const models = Array.from(read(file).matchAll(/"model": "([^"]+)"/g)).map((match) => match[1]!)
+      return models
+        .filter((model) => !snapshot.includes(`"${model}":`) && !snapshot.includes(`"id":"${model}"`))
+        .map((model) => `${file}: ${model}`)
+    })
+
+    expect(missing).toEqual([])
+  })
+
+  test("provider and environment docs match current env contracts", () => {
+    const files = [
+      "packages/web/src/content/docs/reference/env.mdx",
+      "packages/web/src/content/docs/zh-cn/reference/env.mdx",
+      "packages/web/src/content/docs/providers.mdx",
+      "packages/web/src/content/docs/zh-cn/providers.mdx",
+      "packages/web/src/content/docs/operations/benchmark.mdx",
+      "packages/web/src/content/docs/zh-cn/operations/benchmark.mdx",
+      "packages/channel-runtime/.env.example",
+      ".env.example",
+    ]
+
+    expectFilesNotToContain(files, [
+      "CODING_DASHSCOPE_API_KEY",
+      "DASHSCOPE_CODING_BASE_URL",
+      "DASHSCOPE_INTL_BASE_URL",
+      "DASHSCOPE_MAINLAND_BASE_URL",
+      "DASHSCOPE_API_URL",
+      "DASHSCOPE_API=",
+      "OPENCORVUS_DEFAULT_MODEL",
+      "OPENCORVUS_MODEL_",
+      "STT_PROVIDERS",
+      "routed by key prefix",
+      "按 key 前缀",
+      "按 key 前缀自动路由",
+    ])
+
+    for (const file of [
+      "packages/web/src/content/docs/reference/env.mdx",
+      "packages/web/src/content/docs/zh-cn/reference/env.mdx",
+    ]) {
+      expect(read(file)).toContain("OPENCORVUS_EXECUTOR_OPENCORVUS_BIN")
+      expect(read(file)).toContain("OPENCORVUS_EXECUTOR_CODEX_BIN")
+      expect(read(file)).toContain("OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN")
+      expect(read(file)).toContain("DASHSCOPE_API_KEY")
+      expect(read(file)).toContain("ALIBABA_CODING_PLAN_API_KEY")
+    }
+    expect(read(".env.example")).toContain("DASHSCOPE_API_KEY")
+    expect(read(".env.example")).toContain("ALIBABA_CODING_PLAN_API_KEY")
+    expect(read(".env.example")).not.toContain("GITHUB_TOKEN=")
+    expect(read(".env.example")).not.toContain("USE_GITHUB_TOKEN=")
+  })
+
   test("CLAUDE delegates agent rules to AGENTS as the single source", () => {
     const claude = read("CLAUDE.md")
+    const agents = read("AGENTS.md")
 
     expect(claude).toContain("`AGENTS.md` is the single source of truth")
     expect(claude).toContain("Do not copy or fork those rules")
     expect(claude).not.toContain("## 一、核心思维原则")
     expect(claude).not.toContain("**1.**")
+    expect(agents).toContain("**4.1（dispatcher 输入缺失信号）**")
+    expect(agents).toContain("XML（Extensible Markup Language，可扩展标记语言）")
+    expect(agents).not.toContain("\n的 XML 块时")
   })
 
   test("operator docs do not publish retired browser or package-manager aliases", () => {
@@ -393,7 +548,6 @@ describe("document health audit regressions", () => {
       expect(read(file)).not.toMatch(/^bun run dev$/m)
     }
     expect(read("packages/web/config.mjs")).not.toContain("socialCard")
-    expect(read("github/index.ts")).not.toContain("social-cards.sst.dev")
     expect(read("packages/web/src/content/docs/commands.mdx")).not.toContain("OpenCorvus inherits OpenCorvus")
     expect(read("packages/web/src/content/docs/zh-cn/commands.mdx")).not.toContain("OpenCorvus 继承 OpenCorvus")
   })
@@ -426,6 +580,43 @@ describe("document health audit regressions", () => {
       "API reference pages are generated from live OpenAPI route metadata by `packages/opencorvus/script/docs/render-api-md.ts`.",
     )
     expect(read("packages/web/README.md")).not.toContain("generated from `packages/sdk/openapi.json`")
+  })
+
+  test("server docs list mounted route modules from AppRoutes", () => {
+    const appRoutes = read("packages/opencorvus/src/server/routes/app.ts")
+    const serverRouteModules = fs
+      .readdirSync(path.join(repoRoot, "packages/opencorvus/src/server/routes"))
+      .filter((file) => file.endsWith(".ts"))
+      .sort()
+    const server = read("packages/opencorvus/src/server/server.ts")
+    const serverDocs = [
+      "packages/web/src/content/docs/server.mdx",
+      "packages/web/src/content/docs/zh-cn/server.mdx",
+    ]
+
+    for (const token of [
+      "TerminalRoutes",
+      "MissionRoutes",
+      "PluginRoutes",
+      "BrowserPreviewRoutes",
+      "QuickNoteRoutes",
+    ]) {
+      expect(appRoutes).toContain(token)
+    }
+    expect(appRoutes).toContain('from "@/quicknote/routes"')
+    expect(appRoutes).toContain('.route("/api/v1", QuickNoteRoutes())')
+    expect(server).toContain('from "./routes/documentation"')
+
+    for (const file of serverDocs) {
+      const text = read(file)
+      for (const module of serverRouteModules) {
+        expect(text).toContain(`\`${module}\``)
+      }
+      expect(text).toContain("`packages/opencorvus/src/quicknote/routes.ts`")
+      expect(text).toContain("`QuickNoteRoutes`")
+      expect(text).toContain("`/api/v1/notes`")
+      expect(text).not.toContain("`quick-note.ts`")
+    }
   })
 
   test("public website docs do not pin source references to brittle line numbers", () => {
@@ -497,6 +688,10 @@ describe("document health audit regressions", () => {
     expect(read("script/package-local.ts")).not.toContain("build:overlay:docker")
     expect(read("script/package-local.ts")).not.toContain("skipping Linux overlay builds")
     expect(read("docs/packaging.md")).not.toContain("Older local aggregate")
+    expect(read("docs/packaging.md")).not.toContain("latest local package run produced")
+    expect(read("docs/packaging.md")).not.toContain("172 MiB")
+    expect(read("docs/packaging.md")).not.toContain("171 MiB")
+    expect(read("docs/packaging.md")).toContain("Linux Binary Smoke Expectations")
     expect(read("packages/overlay/src/services/default-server.ts")).not.toContain("legacyPrefixed")
     expect(read("packages/overlay/src/services/diff.ts")).not.toContain("fetchVcsDiffs")
     expect(read("packages/overlay/src/services/diff.ts")).not.toContain("normalizeVcsDiffs")
@@ -809,8 +1004,46 @@ describe("document health audit regressions", () => {
     expect(mcpSource).not.toContain("for (const { name, transport } of transports)")
 
     expect(read("packages/opencorvus/src/config/config.ts")).toContain("Remote MCP transport")
+    expect(read("packages/opencorvus/src/config/config.ts")).toContain("Defaults to 30000 (30 seconds)")
+    expect(read("packages/opencorvus/src/config/config.ts")).not.toContain("Defaults to 5000 (5 seconds)")
     expect(read("packages/web/src/content/docs/mcp-servers.mdx")).not.toContain("falls back to SSE")
     expect(read("packages/web/src/content/docs/zh-cn/mcp-servers.mdx")).not.toContain("失败降级")
+
+    const executorDocs = [
+      "packages/web/src/content/docs/mcp-servers.mdx",
+      "packages/web/src/content/docs/zh-cn/mcp-servers.mdx",
+    ]
+    expectFilesNotToContain(executorDocs, [
+      "/mcp/transport",
+      "MCPServe.url",
+      "McpHttpServerConfig",
+      "mcp_servers.opencorvus.url",
+      "webpage_extract",
+      "webpage_compile",
+      "webpage_analyze",
+      "webpage_runtime_state",
+      "webpage_render",
+      "webpage_evaluate",
+      "webpage_text_diff",
+      "webpage_vision_judge",
+    ])
+    for (const file of executorDocs) {
+      const text = read(file)
+      expect(text).toContain("MCPServe.command(cwd)")
+      expect(text).toContain("stdio")
+      expect(text).toContain("`skill`")
+      expect(text).toContain("`memory`")
+      expect(text).toContain("`task_report`")
+      expect(text).toContain('"transport": "streamable-http"')
+      expect(text).toMatch(/(?:Default timeout: 30000 ms|默认超时 30000ms)/)
+      expect(text).not.toContain('"timeout": 15000')
+      expect(text).not.toContain("30 000 ms")
+      expect(text).toContain("`sse`")
+      expect(text).not.toContain("streamable-http` by default")
+      expect(text).not.toContain("默认 `streamable-http`")
+    }
+    expect(read("packages/opencorvus/src/mcp/serve.ts")).toContain("new StdioServerTransport()")
+    expect(read("packages/opencorvus/src/mcp/serve.ts")).not.toContain("webpage_extract")
   })
 
   test("historical specs that conflict with current runtime are marked as history", () => {

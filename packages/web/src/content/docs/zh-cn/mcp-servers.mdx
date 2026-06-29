@@ -8,7 +8,7 @@ MCP 是 Anthropic 主导、社区维护的开放协议，定义 LLM 应用与外
 OpenCorvus 同时扮演：
 
 1. **MCP Client** — 连接外部 MCP Server，将其工具/提示词/资源暴露给内部 agent
-2. **MCP Server** — 运行中的 `opencorvus serve` 进程通过 Streamable HTTP 在 `/mcp/transport` 暴露自身工具给外部编码执行器
+2. **Executor MCP Server** — OpenCorvus 为外部编码执行器启动 stdio MCP 子进程，并通过该子进程暴露 OpenCorvus 自有 executor toolset
 
 源码：`packages/opencorvus/src/mcp/index.ts`、`packages/opencorvus/src/mcp/serve.ts`
 
@@ -19,7 +19,7 @@ OpenCorvus 同时扮演：
 1. 服务启动读 config `mcp` 字段（`src/mcp/index.ts`）
 2. 按 `type` 创建 transport：
    - `"local"` → `StdioClientTransport`（子进程 stdin/stdout）
-   - `"remote"` → 使用配置中的 `transport`：默认 `streamable-http`，显式设置时用 `sse`
+   - `"remote"` → 必须显式配置 `transport`：标准远程 MCP endpoint 使用 `streamable-http`，仅支持 SSE 的 server 使用 `sse`
 3. 连接后 `client.listTools()`
 4. 工具名经 sanitize（非字母数字 → `_`）后以 `{clientName}_{toolName}` 注册到 session 工具集
 
@@ -65,7 +65,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`
       "headers": { "Authorization": "Bearer sk-..." },
       "oauth": false,
       "enabled": true,
-      "timeout": 15000,
+      "timeout": 30000,
     },
   },
 }
@@ -138,6 +138,7 @@ opencorvus mcp logout <server-name>
   "mcp": {
     "github": {
       "type": "remote",
+      "transport": "streamable-http",
       "url": "https://api.githubcopilot.com/mcp/",
       "headers": { "Authorization": "Bearer ghp_xxx" },
       "oauth": false,
@@ -149,25 +150,19 @@ opencorvus mcp logout <server-name>
 **禁用某个已配置的 Server：**
 
 ```jsonc
-{ "mcp": { "github": { "type": "remote", "url": "...", "enabled": false } } }
+{ "mcp": { "github": { "type": "remote", "transport": "streamable-http", "url": "...", "enabled": false } } }
 ```
 
-## 6. OpenCorvus 作为 MCP Server
+## 6. OpenCorvus Executor MCP Server
 
-executor 用的 MCP transport 内嵌于主 `opencorvus serve` 的 HTTP 服务器，无需单独进程。外部执行器（Claude Code 走 Anthropic Agent SDK、Codex 走 app-server）连接到：
+外部编码执行器不会通过主 `opencorvus serve` HTTP server 连接 executor MCP surface。OpenCorvus 使用 `MCPServe.command(cwd)` 构造 stdio 命令，并把该命令注入执行器配置：
 
-```
-POST/GET/DELETE http://<host>:<port>/mcp/transport
-```
+- **Claude Code**：Anthropic Agent SDK 集成收到 stdio MCP server config。
+- **Codex**：`codex app-server` 收到 stdio `mcp_servers.opencorvus` config。
 
-按 MCP 2025 规范走 Streamable HTTP。每个 MCP session 在 initialize 时通过 `X-Opencorvus-Directory` 请求头锁定一个工作目录；当配置了 `OPENCORVUS_SERVER_PASSWORD` 时，与其他 API 同一道 HTTP Basic 鉴权也保护此 transport。
+stdio server 会为传入工作目录创建 executor-scoped session。它暴露 OpenCorvus 自有 executor 工具 `skill`、`memory`、`task_report`，并在允许给 coding executor 使用时代理已配置外部 MCP client 的 tools、prompts 和 resources。
 
-OpenCorvus 自动把这个 URL 注入到执行器配置里：
-
-- **Claude Code**：`MCPServe.url(...)` 返回 `McpHttpServerConfig`（`{ type: "http", url, headers }`），由 Anthropic Agent SDK 通过 `--mcp-config` 转发给 claude-code CLI。
-- **Codex**：opencorvus 给 `codex app-server` 注入 `-c mcp_servers.opencorvus.url=...`。
-
-暴露工具（`src/mcp/serve.ts`）：`memory`、`task_report`、网页证据工具（`webpage_extract`、`webpage_compile`、`webpage_analyze`、`webpage_runtime_state`、`webpage_render`、`webpage_evaluate`、`webpage_text_diff`、`webpage_vision_judge`）。本地已连接的外部 MCP Server 工具也会作为代理工具一并暴露。
+浏览器证据工具不通过 executor MCP server 暴露。前端证据由上游 frontend-design workflow 生成，build 阶段应读取已持久化的 evidence artifacts。
 
 ## 7. 连接状态
 

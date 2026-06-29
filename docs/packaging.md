@@ -99,14 +99,11 @@ curl -fsS http://127.0.0.1:7878/ui/ | grep -i '<!doctype html'
 docker rm -f opencorvus-smoke
 ```
 
-## Current Linux Binary Outputs
+## Linux Binary Smoke Expectations
 
-The latest local package run produced:
+A current Linux single-binary package is valid when the built executable:
 
-| File                                                                       |    Size |
-| -------------------------------------------------------------------------- | ------: |
-| `packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus`          | 172 MiB |
-| `packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus` | 171 MiB |
-
-Both files report version `0.0.1` and serve `/ui/` without a sibling `ui/`
-directory.
+1. Reports the repository package version with `opencorvus --version`.
+2. Starts `opencorvus serve` from an empty directory with its packaged `bin/rg`.
+3. Serves `/ui/` from the embedded overlay UI.
+4. Does not require a sibling `ui/` directory next to the executable.

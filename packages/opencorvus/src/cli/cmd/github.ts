@@ -398,7 +398,7 @@ jobs:
       issues: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -431,7 +431,10 @@ export const GithubRunCommand = cmd({
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
-      const isMock = args.token || args.event
+      const isMock = Boolean(args.token || args.event)
+      if (isMock && (!args.token || !args.event)) {
+        throw new Error("Both --token and --event are required for local GitHub Action runs.")
+      }
 
       const context = isMock ? (JSON.parse(args.event!) as Context) : github.context
       if (!SUPPORTED_EVENTS.includes(context.eventName as (typeof SUPPORTED_EVENTS)[number])) {
@@ -483,7 +486,6 @@ export const GithubRunCommand = cmd({
       const triggerCommentId = isCommentEvent
         ? (payload as IssueCommentEvent | PullRequestReviewCommentEvent).comment.id
         : undefined
-      const useGithubToken = normalizeUseGithubToken()
       const commentType = isCommentEvent
         ? context.eventName === "pull_request_review_comment"
           ? "pr_review"
@@ -491,27 +493,15 @@ export const GithubRunCommand = cmd({
         : undefined
 
       try {
-        if (useGithubToken) {
-          const githubToken = process.env["GITHUB_TOKEN"]
-          if (!githubToken) {
-            throw new Error(
-              "GITHUB_TOKEN environment variable is not set. When using use_github_token, you must provide GITHUB_TOKEN.",
-            )
-          }
-          appToken = githubToken
-        } else {
-          const actionToken = isMock ? args.token! : await getOidcToken()
-          appToken = await exchangeForAppToken(actionToken)
-        }
+        const actionToken = isMock ? args.token! : await getOidcToken()
+        appToken = await exchangeForAppToken(actionToken)
         octoRest = new Octokit({ auth: appToken })
         octoGraph = graphql.defaults({
           headers: { authorization: `token ${appToken}` },
         })
 
         const { userPrompt, promptFiles } = await getUserPrompt()
-        if (!useGithubToken) {
-          await configureGit(appToken)
-        }
+        await configureGit(appToken)
         // Skip permission check and reactions for repo events (no actor to check, no issue to react to)
         if (isUserEvent) {
           await assertPermissions()
@@ -660,10 +650,8 @@ export const GithubRunCommand = cmd({
         // Also output the clean error message for the action to capture
         //core.setOutput("prepare_error", e.message);
       } finally {
-        if (!useGithubToken) {
-          await restoreGitConfig()
-          await revokeAppToken()
-        }
+        await restoreGitConfig()
+        await revokeAppToken()
       }
       process.exit(exitCode)
 
@@ -690,14 +678,6 @@ export const GithubRunCommand = cmd({
         if (value === "true") return true
         if (value === "false") return false
         throw new Error(`Invalid share value: ${value}. Share must be a boolean.`)
-      }
-
-      function normalizeUseGithubToken() {
-        const value = process.env["USE_GITHUB_TOKEN"]
-        if (!value) return false
-        if (value === "true") return true
-        if (value === "false") return false
-        throw new Error(`Invalid use_github_token value: ${value}. Must be a boolean.`)
       }
 
       function normalizeOidcBaseUrl(): string {
@@ -1030,7 +1010,7 @@ export const GithubRunCommand = cmd({
 
         console.log("Configuring git...")
         const config = "http.https://github.com/.extraheader"
-        // actions/checkout@v6 no longer stores credentials in .git/config,
+        // actions/checkout@v7 no longer stores credentials in .git/config,
         // so this may not exist - use nothrow() to handle gracefully
         const ret = await $`git config --local --get ${config}`.nothrow()
         if (ret.exitCode === 0) {

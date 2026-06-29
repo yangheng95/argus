@@ -11,10 +11,10 @@ Source: `github/action.yml` (Action definition), `packages/opencorvus/src/cli/cm
 
 Published as a **composite action**. Runtime sequence:
 
-1. Installs the `opencorvus` CLI (with cache)
-2. Runs `opencorvus github run`, which starts `opencorvus serve` locally on `127.0.0.1:7878`
-3. Parses the GitHub event payload, builds a prompt, sends it via `@opencorvus-ai/sdk`
-4. Writes the reply back via Octokit; on dirty working tree, commits, pushes, and opens a PR
+1. Sets up Bun for the runner.
+2. Runs the repository source entrypoint: `bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run`.
+3. Parses the GitHub event payload, opens the target project, creates a session, and calls `SessionPrompt.prompt` in-process.
+4. Writes the reply back via Octokit; on dirty working tree, commits, pushes, and opens a PR.
 
 Supported triggers (`packages/opencorvus/src/cli/cmd/github.ts`):
 
@@ -25,10 +25,9 @@ Supported triggers (`packages/opencorvus/src/cli/cmd/github.ts`):
 
 | Parameter          | Required | Default                     | Description                                               |
 | ------------------ | -------- | --------------------------- | --------------------------------------------------------- |
-| `model`            | ✓        | —                           | `provider/model`, e.g. `alibaba-cn/qwen3.5-plus`          |
+| `model`            | ✓        | —                           | `provider/model`, e.g. `alibaba-coding-plan-cn/qwen3.5-plus` |
 | `share`            | —        | `true` (public repos)       | Share at `opencorvus.ai/s/<id>`                           |
 | `prompt`           | —        | —                           | Custom prompt overriding default                          |
-| `use_github_token` | —        | `false`                     | Use `GITHUB_TOKEN` directly; skip OIDC & permission check |
 | `mentions`         | —        | `/opencorvus,/oc`           | Comma-separated trigger phrases                           |
 | `variant`          | —        | —                           | Provider reasoning variant (`high`, `max`, `minimal`)     |
 | `oidc_base_url`    | —        | `https://api.opencorvus.ai` | OIDC exchange URL for custom App installs                 |
@@ -48,59 +47,36 @@ No declared `outputs:`. Runtime artifacts:
 
 ## Secrets
 
-### Option A: OpenCorvus GitHub App (default)
+### OpenCorvus GitHub App
 
-Requires `id-token: write`. OIDC exchange runs automatically — no manual GitHub token.
+Requires `id-token: write`. OIDC exchange runs automatically; do not wire a repository token manually.
 
 ```yaml
 env:
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
 ```
 
-### Option B: Direct `GITHUB_TOKEN`
+## Workflow permissions
 
-```yaml
-with:
-  use_github_token: true
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-Skips OIDC and the permission check.
-
-## `GITHUB_TOKEN` permissions
-
-Default App/OIDC installs keep `GITHUB_TOKEN` read-only. Write access comes from
-the App token after OIDC exchange:
+Default App/OIDC installs keep the repository token read-only. Write access comes from the App token after OIDC exchange:
 
 ```yaml
 permissions:
-  id-token: write # OIDC (Option A)
+  id-token: write # OIDC
   contents: read
   pull-requests: read
   issues: read
 ```
 
-When `use_github_token: true`, the workflow uses `GITHUB_TOKEN` directly and
-must grant write permissions explicitly:
-
-```yaml
-permissions:
-  contents: write # git push / branches
-  pull-requests: write # open PRs / comment
-  issues: write # create/update Issue comments
-```
-
-This repo's own `.github/workflows/opencorvus.yml` declares `read`-only because write capability is carried by the App token (Option A). For Option B, declare write explicitly.
+This repo's own `.github/workflows/opencorvus.yml` declares read-only repository permissions because write capability is carried by the App token.
 
 ## Permission check
 
-When a user posts `/oc`, collaboration permission must be `admin` or `write`; otherwise rejected. Skipped under Option B.
+When a user posts `/oc`, collaboration permission must be `admin` or `write`; otherwise rejected.
 
 ## Workflow examples
 
-### Default (App + DashScope)
+### App + Coding Plan
 
 ```yaml
 name: opencorvus
@@ -121,42 +97,15 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: yangheng95/opencorvus/github@latest
         env:
-          DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
-        with:
-          model: alibaba-cn/qwen3.5-plus
-```
-
-### Alibaba DashScope (this repo's actual config)
-
-```yaml
-jobs:
-  opencorvus:
-    if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc')
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: read
-      issues: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: yangheng95/opencorvus/github@latest
-        env:
-          DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
-          OPENCORVUS_CONFIG_CONTENT: >-
-            {"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}
+          ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
           OPENCORVUS_PERMISSION: '{"bash": "deny"}'
         with:
-          model: alibaba-cn/qwen3.5-plus
+          model: alibaba-coding-plan-cn/qwen3.5-plus
 ```
 
 ## Comment triggers
@@ -185,12 +134,12 @@ issue_comment / pull_request_review_comment
 ```bash
 cd /path/to/test-repo
 
-MODEL=alibaba-cn/qwen3.5-plus \
-  DASHSCOPE_API_KEY=sk-... \
+MODEL=alibaba-coding-plan-cn/qwen3.5-plus \
+  ALIBABA_CODING_PLAN_API_KEY=sk-... \
   GITHUB_RUN_ID=dummy \
-  MOCK_TOKEN=github_pat_... \
-  MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}' \
-  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run
+  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run \
+    --token github_pat_... \
+    --event '{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}'
 ```
 
-`MOCK_TOKEN` needs a PAT with `admin` or `write`.
+`--token` needs a PAT with `admin` or `write`.

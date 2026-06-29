@@ -14,9 +14,8 @@ Benchmark 体系用于**端到端质量回归**。它模拟一次真实任务请
 ```bash
 cd packages/opencorvus
 
-CODING_DASHSCOPE_API_KEY=sk-sp-... \
+DASHSCOPE_API_KEY=sk-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
-DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=D:/path/to/prd.txt" \
   "--idle-timeout-ms=2700000"
@@ -92,7 +91,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 ```yaml
 - name: Benchmark
   env:
-    CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
+    DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \

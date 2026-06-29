@@ -37,7 +37,7 @@ platform : channel : thread
 ```bash
 cd packages/channel-runtime
 cp .env.example .env    # 填入你要启用的 channel 的 token
-bun run dev             # 实际执行 bun run src/packages/channel-runtime/src/main.ts
+bun run dev             # 实际执行 bun run src/main.ts
 ```
 
 `registerAdapters()`（`packages/channel-runtime/src/registry.ts`）会自动扫描 env，**只启动配置了必要 token 的 channel**，其他跳过——不会因为某个 channel 没配置就崩。
@@ -81,8 +81,8 @@ handleEvent(event)                  [packages/channel-runtime/src/core.ts]
 ## 扩展新 channel 的三步
 
 1. **注册**：在 `packages/channel-config/src/index.ts` 的 `ChannelCatalog` 里 `define({...})`，声明 id、必填字段、对应 env 名。
-2. **适配器**：在 `packages/channel-runtime/packages/channel-runtime/src/adapters/` 下实现 `ChannelAdapter` 接口（`packages/channel-runtime/src/adapter.ts`），至少实现 `start / stop / sendMessage / onMessage`，可选 `uploadImage / startThread`。
-3. **接线**：在 `packages/channel-runtime/packages/channel-runtime/src/registry.ts` 的 `AdapterOptions` 与 `build()` switch 里加 case；在 `packages/channel-runtime/src/main.ts` 的 `registerAdapters()` 传入工厂函数。
+2. **适配器**：在 `packages/channel-runtime/src/adapters/` 下实现 `ChannelAdapter` 接口（`packages/channel-runtime/src/adapter.ts`），至少实现 `start / stop / sendMessage / onMessage`，可选 `uploadImage / startThread`。
+3. **接线**：在 `packages/channel-runtime/src/registry.ts` 的 `AdapterOptions` 与 `build()` switch 里加 case；在 `packages/channel-runtime/src/main.ts` 的 `registerAdapters()` 传入工厂函数。
 
 详见 [Slack 实现](./slack.md) 作为参考样板。
 

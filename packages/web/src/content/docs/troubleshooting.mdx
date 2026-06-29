@@ -13,7 +13,7 @@ Diagnose by symptom. Each entry gives a **check path**, not "try restarting".
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `opencorvus doctor`          | Run the full diagnostic first                                                                                |
 | Port in use                  | Default 7878; `netstat -ano \| findstr 7878` on Windows                                                      |
-| `OPENCORVUS_SERVER_PASSWORD` | Required when exposing beyond localhost; otherwise startup rejects with `refuses to expose without password` |
+| `OPENCORVUS_SERVER_PASSWORD` | Enables HTTP Basic Auth. If unset, `serve` logs `server is unsecured` and starts without Basic Auth. |
 | `ENOSPC`                     | The resolved OpenCorvus data or config directory is full                                                     |
 
 ### Overlay launches but can't reach the backend

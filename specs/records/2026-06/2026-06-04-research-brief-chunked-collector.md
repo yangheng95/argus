@@ -1,6 +1,6 @@
 # Research Brief Chunked Collector
 
-Supersedes retired root note `specs/research-bundle-structured-tool-input-2026-06-04.md`.
+Supersedes the retired root note named `research-bundle-structured-tool-input-2026-06-04.md`.
 
 ## Problem
 

@@ -95,6 +95,7 @@ describe("MCP overlay service", () => {
         mcp: {
           docs: {
             type: "remote",
+            transport: "streamable-http",
             url: "https://mcp.example.com/api",
           },
         },
@@ -130,7 +131,9 @@ describe("MCP overlay service", () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
     configure({ directory: "D:/current/project" })
-    setAppStore("config", { mcp: { current: { type: "remote", url: "https://current.example.com/mcp" } } })
+    setAppStore("config", {
+      mcp: { current: { type: "remote", transport: "streamable-http", url: "https://current.example.com/mcp" } },
+    })
 
     await addMcpServer(
       {
@@ -146,7 +149,24 @@ describe("MCP overlay service", () => {
 
     expect(requests.map((req) => req.query?.directory)).toEqual([PROJECT_DIR, PROJECT_DIR, PROJECT_DIR])
     expect(appStore.config).toEqual({
-      mcp: { current: { type: "remote", url: "https://current.example.com/mcp" } },
+      mcp: { current: { type: "remote", transport: "streamable-http", url: "https://current.example.com/mcp" } },
+    })
+  })
+
+  test("builds remote MCP config with an explicit streamable HTTP transport", () => {
+    expect(
+      buildMcpAddRequest({
+        name: "docs",
+        type: "remote",
+        url: "https://mcp.example.com/api",
+      }),
+    ).toEqual({
+      name: "docs",
+      config: {
+        type: "remote",
+        transport: "streamable-http",
+        url: "https://mcp.example.com/api",
+      },
     })
   })
 

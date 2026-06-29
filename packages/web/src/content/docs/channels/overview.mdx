@@ -82,7 +82,7 @@ handleEvent(event)                      [packages/channel-runtime/src/core.ts]
 
 1. **Register** — add a `define({...})` entry to `ChannelCatalog` in `packages/channel-config/src/index.ts`; add the id to the `ChannelId` enum.
 2. **Adapter** — implement the `ChannelAdapter` interface (`packages/channel-runtime/src/adapter.ts`): `start / stop / sendMessage / onMessage`; optionally `uploadImage / startThread`.
-3. **Wire** — add a case to `AdapterOptions` and `build()` in `packages/channel-runtime/packages/channel-runtime/src/registry.ts`; pass the factory into `registerAdapters()` in `packages/channel-runtime/src/main.ts`.
+3. **Wire** — add a case to `AdapterOptions` and `build()` in `packages/channel-runtime/src/registry.ts`; pass the factory into `registerAdapters()` in `packages/channel-runtime/src/main.ts`.
 
 Reference: [Slack implementation](./slack.md).
 

@@ -18,4 +18,10 @@ describe("util.timeout", () => {
 
     await expect(withTimeout(slowPromise, 50)).rejects.toThrow("Operation timed out after 50ms")
   })
+
+  test("clears timeout when the inner promise rejects first", async () => {
+    const inner = new Error("inner failure")
+    await expect(withTimeout(Promise.reject(inner), 10_000)).rejects.toBe(inner)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
 })

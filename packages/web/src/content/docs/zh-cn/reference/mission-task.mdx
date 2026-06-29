@@ -354,7 +354,21 @@ Mission
   -> Task C
 ```
 
-所以下载代码仍然下载某个 Task 的 `project-archive`，不是下载 Mission。
+Mission 也有项目归档接口：`GET /mission/{missionID}/project-archive`。它是 project-scoped route，必须带 `directory`，用于下载该 Mission 当前项目目录的 ZIP。单个 Task 的执行流归档仍然使用 `GET /task/{taskID}/project-archive`。
+
+SDK：
+
+```typescript
+const archive = await client.mission.projectArchive({ missionID })
+if (archive.error) throw archive.error
+```
+
+curl：
+
+```bash
+curl -L "http://127.0.0.1:7878/mission/mission-1/project-archive?directory=D%3A%5Crepo%5Cmy-project" \
+  -o mission-project.zip
+```
 
 ## 启动 Mission
 
@@ -477,7 +491,7 @@ await client.mission.delete({ missionID })
 
 ## 目录和认证
 
-项目作用域接口要带项目目录，例如 `GET /tasks`、`POST /task`、Task 写操作、browser preview 路由和 `GET /task/{taskID}/project-archive`。单个 Task 记录读取以 `taskID` 为主键，不需要目录，例如 `GET /task/{taskID}/status`、`GET /task/{taskID}/board`、`GET /task/{taskID}/events`。
+项目作用域接口要带项目目录，例如 `GET /tasks`、`POST /task`、Task 写操作、browser preview 路由、`GET /task/{taskID}/project-archive`、`GET /mission/{missionID}/status` 和 `GET /mission/{missionID}/project-archive`。单个 Task 记录读取以 `taskID` 为主键，不需要目录，例如 `GET /task/{taskID}/status`、`GET /task/{taskID}/board`、`GET /task/{taskID}/events`。
 
 推荐在 SDK client 上统一传目录；SDK 只会给项目作用域请求追加 `directory` query：
 

@@ -62,7 +62,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -133,7 +133,7 @@ jobs:
             --target "${{ matrix.target }}"
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opencorvus-vsix-${{ matrix.target }}
           path: packages/vscode-extension/dist-vsix/*.vsix

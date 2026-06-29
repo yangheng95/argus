@@ -43,9 +43,9 @@ export GOOGLE_GENERATIVE_AI_API_KEY=...
 export DEEPSEEK_API_KEY=...
 export OPENROUTER_API_KEY=...
 
-# Alibaba DashScope (routed by key prefix)
-export CODING_DASHSCOPE_API_KEY=sk-sp-...   # Coding Plan
-export DASHSCOPE_API_KEY=sk-...             # Intl
+# Alibaba DashScope
+export DASHSCOPE_API_KEY=sk-...                 # alibaba-cn and shared DashScope key
+export ALIBABA_CODING_PLAN_API_KEY=sk-sp-...    # alibaba-coding-plan-cn
 ```
 
 ### B. Custom provider (OpenAI-compatible)
@@ -67,7 +67,7 @@ In `opencorvus.jsonc`:
 }
 ```
 
-`env` declares required env names; missing keys fail loud — no fallback.
+`env` declares required env names; missing keys fail loud — no fallback. Provider base URLs come from the model database; key prefixes do not override provider routing.
 
 ## Model selection
 

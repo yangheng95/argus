@@ -17,11 +17,6 @@ inputs:
     description: "Custom prompt to override the default prompt"
     required: false
 
-  use_github_token:
-    description: "Use GITHUB_TOKEN directly instead of OpenCorvus App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var."
-    required: false
-    default: "false"
-
   mentions:
     description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/opencorvus,/oc'"
     required: false
@@ -54,7 +49,6 @@ runs:
         MODEL: ${{ inputs.model }}
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
-        USE_GITHUB_TOKEN: ${{ inputs.use_github_token }}
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc_base_url }}

@@ -13,7 +13,7 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 | ---------------------------- | ------------------------------------------------------------------- |
 | `opencorvus doctor`          | 先跑一次全面诊断                                                    |
 | 端口占用                     | 默认 7878，`netstat -ano \| findstr 7878`                           |
-| `OPENCORVUS_SERVER_PASSWORD` | 若对外监听，必须设；否则启动报 `refuses to expose without password` |
+| `OPENCORVUS_SERVER_PASSWORD` | 启用 HTTP Basic Auth；未设置时 `serve` 会打印 `server is unsecured` 并在无 Basic Auth 下启动 |
 | 权限：`ENOSPC`               | 解析后的 OpenCorvus data 或 config 目录磁盘满                       |
 
 ### Overlay 启动后连不上后端

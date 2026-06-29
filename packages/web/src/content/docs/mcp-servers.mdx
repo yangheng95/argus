@@ -8,7 +8,7 @@ MCP is an open protocol led by Anthropic that defines a standard interface betwe
 OpenCorvus plays two roles:
 
 1. **MCP Client** — connects to external MCP Servers, exposing their tools/prompts/resources to internal agents.
-2. **MCP Server** — the running `opencorvus serve` process exposes its own tools to external coding executors over Streamable HTTP at `/mcp/transport`.
+2. **Executor MCP Server** — OpenCorvus starts a stdio MCP subprocess for external coding executors and exposes the OpenCorvus-owned executor toolset through that subprocess.
 
 Source: `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/serve.ts`
 
@@ -17,7 +17,7 @@ Source: `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/ser
 At startup, OpenCorvus reads every `mcp` config entry and connects (`src/mcp/index.ts`):
 
 - `"local"` → `StdioClientTransport` (subprocess stdin/stdout)
-- `"remote"` → uses the configured `transport`: `streamable-http` by default, or `sse` when explicitly set.
+- `"remote"` → requires an explicit `transport`: `streamable-http` for standard remote MCP endpoints, or `sse` for SSE-only servers.
 
 After connecting, `client.listTools()` runs; tool names are sanitized and registered as `{clientName}_{toolName}` on the agent's tool set.
 
@@ -52,7 +52,7 @@ Source: `src/config/config.ts`.
       "url": "https://mcp.example.com/api",
       "headers": { "Authorization": "Bearer sk-..." },
       "oauth": false,
-      "timeout": 15000,
+      "timeout": 30000,
     },
   },
 }
@@ -102,6 +102,7 @@ Status: `opencorvus mcp list`. Remove credentials: `opencorvus mcp logout <serve
   "mcp": {
     "github": {
       "type": "remote",
+      "transport": "streamable-http",
       "url": "https://api.githubcopilot.com/mcp/",
       "headers": { "Authorization": "Bearer ghp_xxx" },
       "oauth": false,
@@ -113,25 +114,19 @@ Status: `opencorvus mcp list`. Remove credentials: `opencorvus mcp logout <serve
 **Disable a configured server:**
 
 ```jsonc
-{ "mcp": { "github": { "type": "remote", "url": "...", "enabled": false } } }
+{ "mcp": { "github": { "type": "remote", "transport": "streamable-http", "url": "...", "enabled": false } } }
 ```
 
-## OpenCorvus as MCP Server
+## OpenCorvus Executor MCP Server
 
-The executor MCP transport is embedded in the main `opencorvus serve` HTTP server — no separate process. External executors (Claude Code via Anthropic Agent SDK, Codex via app-server) connect to:
+External coding executors do not connect to the main `opencorvus serve` HTTP server for the executor MCP surface. OpenCorvus builds a stdio command with `MCPServe.command(cwd)` and injects that command into the executor configuration:
 
-```
-POST/GET/DELETE http://<host>:<port>/mcp/transport
-```
+- **Claude Code** receives an stdio MCP server config from the Anthropic Agent SDK integration.
+- **Codex** receives an stdio `mcp_servers.opencorvus` config for `codex app-server`.
 
-It speaks Streamable HTTP per the MCP 2025 spec. Each MCP session pins to a working directory via the `X-Opencorvus-Directory` header at initialize time. When `OPENCORVUS_SERVER_PASSWORD` is set, the same HTTP Basic auth that protects the rest of the API gates the transport.
+The stdio server creates an executor-scoped session for the supplied working directory. It exposes the OpenCorvus-owned executor tools `skill`, `memory`, and `task_report`, then proxies tools, prompts, and resources from configured external MCP clients when those tools are allowed for coding executors.
 
-OpenCorvus injects this URL into executors automatically:
-
-- **Claude Code**: `MCPServe.url(...)` produces an `McpHttpServerConfig` (`{ type: "http", url, headers }`) which the Anthropic Agent SDK forwards to the claude-code CLI as `--mcp-config`.
-- **Codex**: opencorvus passes `-c mcp_servers.opencorvus.url=...` to `codex app-server`.
-
-Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the webpage evidence tools (`webpage_extract`, `webpage_compile`, `webpage_analyze`, `webpage_runtime_state`, `webpage_render`, `webpage_evaluate`, `webpage_text_diff`, `webpage_vision_judge`), and every tool from locally connected MCP clients as a proxied tool.
+Browser evidence tools are not exposed through the executor MCP server. Frontend evidence is prepared by the upstream frontend-design workflow and must be read from persisted evidence artifacts.
 
 ## Connection status
 
@@ -143,4 +138,4 @@ Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the webpage evidence tool
 | `needs_auth`                | OAuth required                              |
 | `needs_client_registration` | Server requires a pre-registered `clientId` |
 
-Default timeout: 30 000 ms (`src/mcp/index.ts`); override via per-server `timeout` or global `experimental.mcp_timeout`.
+Default timeout: 30000 ms (`src/mcp/index.ts`); override via per-server `timeout` or global `experimental.mcp_timeout`.

@@ -1,6 +1,6 @@
 export default {
-  entry: ["github/index.ts", "nix/scripts/**/*.ts", "script/**/*.ts"],
-  project: ["github/**/*.ts", "nix/scripts/**/*.ts", "script/**/*.ts"],
+  entry: ["nix/scripts/**/*.ts", "script/**/*.ts"],
+  project: ["nix/scripts/**/*.ts", "script/**/*.ts"],
   ignore: [
     "backups/**",
     "packages/overlay/src-tauri/**",
