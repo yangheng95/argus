@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
@@ -34,11 +35,47 @@ const scratchTextExtensions = new Set([
   ".toml",
   ".ndjson",
   ".jsonl",
+  ".rs",
+  ".sample",
+  ".nix",
+  ".headers",
+  ".csv",
+  ".editorconfig",
+  ".gitattributes",
+  ".dockerignore",
+  ".vscodeignore",
+  ".webmanifest",
+  ".geojson",
   ".xml",
   ".svg",
   ".yaml",
   ".yml",
 ])
+const scratchBinaryExtensions = new Set([
+  ".bin",
+  ".br",
+  ".dll",
+  ".dylib",
+  ".exe",
+  ".gif",
+  ".gz",
+  ".ico",
+  ".icns",
+  ".jpg",
+  ".jpeg",
+  ".node",
+  ".pdf",
+  ".png",
+  ".so",
+  ".tar",
+  ".tgz",
+  ".wasm",
+  ".webp",
+  ".xz",
+  ".zip",
+  ".zst",
+])
+const scratchTextSampleBytes = 64 * 1024
 const skippedRepositoryDirs = new Set([
   ".git",
   ".opencorvus",
@@ -162,6 +199,37 @@ function deletedPreJuneSpecNameOffenders(): string[] {
     .sort()
 }
 
+function isUtf8TextSample(buffer: Buffer): boolean {
+  if (buffer.includes(0)) return false
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buffer)
+  } catch {
+    return false
+  }
+  let controlCount = 0
+  for (const byte of buffer) {
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) controlCount += 1
+  }
+  return controlCount <= Math.max(4, Math.floor(buffer.length / 100))
+}
+
+function shouldScanScratchTextFile(fullPath: string, extension: string, stat = fs.statSync(fullPath)): boolean {
+  if (!stat.isFile()) return false
+  if (scratchTextExtensions.has(extension)) return true
+  if (scratchBinaryExtensions.has(extension)) return false
+
+  if (stat.size === 0) return true
+
+  const sample = Buffer.alloc(Math.min(stat.size, scratchTextSampleBytes))
+  const fd = fs.openSync(fullPath, "r")
+  try {
+    const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0)
+    return isUtf8TextSample(sample.subarray(0, bytesRead))
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
 function scratchSpecSnapshotOffenders(): string[] {
   const scratchRoot = path.join(repoRoot, ".scratch")
   if (!fs.existsSync(scratchRoot)) return []
@@ -180,10 +248,12 @@ function scratchSpecSnapshotOffenders(): string[] {
         walk(fullPath)
         continue
       }
+      const stat = fs.statSync(fullPath)
+      if (!stat.isFile()) continue
       if (/specs__new-arch__|packages__opencorvus__specs__/.test(entry.name)) offenders.push(rel)
       const extension = path.extname(entry.name).toLowerCase()
       if ((extension === ".md" || extension === ".txt") && scratchRootSpecFilePattern.test(rel)) offenders.push(rel)
-      if (!scratchTextExtensions.has(extension)) continue
+      if (!shouldScanScratchTextFile(fullPath, extension, stat)) continue
       const date = entry.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
       if (extension === ".md" && date && date < "2026-06-01") offenders.push(rel)
       const text = fs.readFileSync(fullPath, "utf8")
@@ -383,6 +453,21 @@ describe("historical docs repository links", () => {
       })
 
     expect(preJuneSpecs).toEqual([])
+  })
+
+  test("scratch text detection scans unknown UTF-8 snapshot extensions", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-scratch-text-"))
+    try {
+      const textFile = path.join(tempDir, "snapshot.customtext")
+      const binaryFile = path.join(tempDir, "snapshot.custombin")
+      fs.writeFileSync(textFile, "specs/new-arch/probe.md\n")
+      fs.writeFileSync(binaryFile, Buffer.from([0, 159, 146, 150]))
+
+      expect(shouldScanScratchTextFile(textFile, path.extname(textFile).toLowerCase())).toBe(true)
+      expect(shouldScanScratchTextFile(binaryFile, path.extname(binaryFile).toLowerCase())).toBe(false)
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 
   test("scratch snapshots do not retain deleted spec trees", () => {

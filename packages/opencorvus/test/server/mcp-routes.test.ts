@@ -255,7 +255,7 @@ describe("MCP routes", () => {
     })
   })
 
-  test("same-name OAuth pending transports are isolated by active project", async () => {
+  test("same-name OAuth pending flows are isolated by active project", async () => {
     await using projectA = await tmpdir({
       git: true,
       config: {

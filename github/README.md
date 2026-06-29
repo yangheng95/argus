@@ -56,12 +56,12 @@ That runtime parses the GitHub event, creates the session, and calls `SessionPro
 
 Supported triggers:
 
-- `issue_comment` — Issue and PR comments
-- `pull_request_review_comment` — line-level PR review comments
-- `issues` — issue lifecycle events
-- `pull_request` — PR lifecycle events
-- `schedule` — scheduled repository automation
-- `workflow_dispatch` — manually triggered repository automation
+- `issue_comment` - Issue and PR comments
+- `pull_request_review_comment` - line-level PR review comments
+- `issues` - issue lifecycle events
+- `pull_request` - PR lifecycle events
+- `schedule` - scheduled repository automation
+- `workflow_dispatch` - manually triggered repository automation
 
 Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body.
 

@@ -183,7 +183,7 @@ export namespace MCP {
 
   type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
   type McpEntry = NonNullable<Config.Info["mcp"]>[string]
-  type RemoteMcpConfig = Extract<Config.Mcp, { type: "remote" }>
+  export type RemoteMcpConfig = Extract<Config.Mcp, { type: "remote" }>
   function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
     return typeof entry === "object" && entry !== null && "type" in entry
   }
@@ -240,7 +240,7 @@ export namespace MCP {
     return effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, cfg.experimental?.mcp_timeout)
   }
 
-  function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider, requestInit?: RequestInit) {
+  export function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider, requestInit?: RequestInit) {
     const headers = new Headers(requestInit?.headers)
     let hasHeaders = requestInit?.headers !== undefined
     for (const [name, value] of Object.entries(mcp.headers ?? {})) {
@@ -549,7 +549,11 @@ export namespace MCP {
         )
       }
 
-      const { name: transportName, transport } = createRemoteTransport(mcp, authProvider)
+      const { name: transportName, transport } = createRemoteTransport(
+        mcp,
+        authProvider,
+        mcpFetchRequestInit(requestTimeout),
+      )
 
       let client: Client | undefined
       try {
@@ -1019,7 +1023,11 @@ export namespace MCP {
       },
     )
 
-    const { name: transportName, transport } = createRemoteTransport(mcpConfig, authProvider)
+    const { name: transportName, transport } = createRemoteTransport(
+      mcpConfig,
+      authProvider,
+      mcpFetchRequestInit(authTimeout),
+    )
     let client: Client | undefined
 
     // Try to connect - this will trigger the OAuth flow

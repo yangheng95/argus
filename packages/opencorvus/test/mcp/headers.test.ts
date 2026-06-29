@@ -44,6 +44,18 @@ beforeEach(() => {
   transportCalls.length = 0
 })
 
+function expectHeaders(requestInit: RequestInit | undefined, expected: Record<string, string>) {
+  expect(requestInit).toBeDefined()
+  const headers = new Headers(requestInit?.headers)
+  for (const [name, value] of Object.entries(expected)) {
+    expect(headers.get(name)).toBe(value)
+  }
+}
+
+function expectTimeoutSignal(requestInit: RequestInit | undefined) {
+  expect(requestInit?.signal).toBeInstanceOf(AbortSignal)
+}
+
 // Import MCP after mocking
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
@@ -68,11 +80,11 @@ test("headers are passed to transports when oauth is enabled (default)", async (
       expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
-        expect(call.options.requestInit).toBeDefined()
-        expect(call.options.requestInit?.headers).toEqual({
+        expectHeaders(call.options.requestInit, {
           Authorization: "Bearer test-token",
           "X-Custom-Header": "custom-value",
         })
+        expectTimeoutSignal(call.options.requestInit)
         // OAuth should be enabled by default, so authProvider should exist
         expect(call.options.authProvider).toBeDefined()
       }
@@ -100,10 +112,10 @@ test("headers are passed to transports when oauth is explicitly disabled", async
       expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
-        expect(call.options.requestInit).toBeDefined()
-        expect(call.options.requestInit?.headers).toEqual({
+        expectHeaders(call.options.requestInit, {
           Authorization: "Bearer test-token",
         })
+        expectTimeoutSignal(call.options.requestInit)
         // OAuth is disabled, so no authProvider
         expect(call.options.authProvider).toBeUndefined()
       }
@@ -111,7 +123,7 @@ test("headers are passed to transports when oauth is explicitly disabled", async
   })
 })
 
-test("no requestInit when headers are not provided", async () => {
+test("timeout requestInit is passed when headers are not provided", async () => {
   await using tmp = await tmpdir()
 
   await Instance.provide({
@@ -127,8 +139,8 @@ test("no requestInit when headers are not provided", async () => {
       expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
-        // No headers means requestInit should be undefined
-        expect(call.options.requestInit).toBeUndefined()
+        expectTimeoutSignal(call.options.requestInit)
+        expect(new Headers(call.options.requestInit?.headers).has("Authorization")).toBe(false)
       }
     },
   })

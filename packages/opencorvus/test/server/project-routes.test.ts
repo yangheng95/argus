@@ -101,6 +101,7 @@ describe("project routes", () => {
       },
     })
     expect(current.status).toBe(200)
+    await current.text()
   }, 30_000)
 
   test("GET /project/current with directory query creates project using the visible alias path", async () => {
@@ -181,6 +182,7 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(400)
+    await response.text()
   }, 30_000)
 
   test("PATCH /project/:projectID rejects foreign projects under the current directory", async () => {
@@ -210,6 +212,7 @@ describe("project routes", () => {
     })
 
     expect(foreignResponse.status).toBe(404)
+    await foreignResponse.text()
     expect(projectRow(projectB.id)?.name).toBe(projectBNameBefore)
     expect(projectRow(projectB.id)?.name).not.toBe("should not write foreign project")
 
@@ -669,6 +672,7 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(404)
+    await response.text()
     expect(await Filesystem.exists(activeDir)).toBe(true)
   }, 30_000)
 
@@ -748,6 +752,7 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(404)
+    await response.text()
     expect(await Filesystem.exists(activeDir)).toBe(true)
     expect(await Bun.file(sentinel).text()).toBe("active worktree must not be cleaned")
   }, 30_000)
@@ -845,6 +850,7 @@ describe("project routes", () => {
       })
 
       expect(response.status).toBe(404)
+      await response.text()
       expect(await Filesystem.exists(victimDir)).toBe(true)
       expect(await Bun.file(sentinel).text()).toBe("keep")
     },
