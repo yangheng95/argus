@@ -2,6 +2,15 @@
 
 Date: 2026-06-29
 
+## Supersession Note
+
+This record is superseded for the agent-facing tool surface by
+`2026-06-29-browser-preview-reference-regions-tool.md`. The current surface is:
+build and visual QA both receive `browser_preview_reference_regions` for the
+combined source-binding plus reference-region comparison flow, and both also
+receive `browser_preview_compare_scroll_slices` for scroll-slice evidence. The
+SSIM precheck addendum below remains current for the scroll-slice helper.
+
 ## Task
 
 Keep the side-by-side browser preview comparison tool as the single

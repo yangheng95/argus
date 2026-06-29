@@ -10,6 +10,7 @@ import { Log } from "@/util/log"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
+import { BrowserPreviewReferenceRegionsTool } from "@/tool/browser-preview-reference-regions"
 import { BrowserPreviewCompareScrollSlicesTool } from "@/tool/browser-preview-compare-scroll-slices"
 import { BrowserPreviewLayoutGeometryTool } from "@/tool/browser-preview-layout-geometry"
 import { BrowserPreviewTool } from "@/tool/browser-preview"
@@ -25,7 +26,7 @@ import {
   VISUAL_QA_UTILITY_TOOL_IDS,
 } from "./static-tools"
 import { createVisualQaOutputTools, type VisualQaCollector } from "./output-tools"
-import type { VisualQaReport } from "./schema"
+import type { VisualQaAcceptance, VisualQaReport } from "./schema"
 import { renderVisualQaProductDesignPrinciples } from "./product-design-principles"
 
 import VISUAL_QA_CORE from "@/prompt/core/visual-qa-core.txt"
@@ -59,6 +60,7 @@ export namespace VisualQaAgent {
 
   export interface AnalyzeResult {
     report: VisualQaReport
+    acceptance: VisualQaAcceptance
     sessionID: string
   }
 
@@ -122,21 +124,25 @@ export namespace VisualQaAgent {
     if (!collector.final) {
       throw new Error("Visual QA agent did not call submit_visual_qa_report.")
     }
+    if (!collector.acceptance) {
+      throw new Error("Visual QA agent submitted a report without an acceptance record.")
+    }
 
     log.info("visual QA finished", {
       sessionID: out.session.id,
-      accepted: collector.final.accepted,
+      accepted: collector.acceptance.effectiveAccepted,
+      submittedAccepted: collector.acceptance.submittedAccepted,
       findings: collector.final.findings.length,
       evidence: collector.final.evidence.length,
     })
 
-    return { report: collector.final, sessionID: out.session.id }
+    return { report: collector.final, acceptance: collector.acceptance, sessionID: out.session.id }
   }
 }
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run the final frontend visual GUI and functional product review for the task. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. Do not chase visual scores or external judge verdicts; Visual QA acceptance is the structured report's own accepted/blocker fields. Reference/clone fidelity is in scope only when the current task, current goal, or acceptance evidence explicitly requires reference parity. For explicitly required reference/clone regions with source evidence and local implementation regions, prioritize screenshot comparison, inspect fresh task-scoped screenshots and screen-by-screen visual evidence against the source contract, use `browser_preview_compare_scroll_slices` for side-by-side evidence when the source reference screenshot and implementation scroll offset are meaningful, and cite fresh `reference-comparison` evidence when that evidence can be produced. For edge alignment, margin, padding, gap, overflow, or desktop width scaling claims, call `browser_preview_layout_geometry` against the persisted preview target and affected implementation regions, and cite it only as supporting geometry evidence. For completed-page visual sweeps, inspect the page screen by screen: call `browser_preview_compare_scroll_slices` repeatedly for viewport-sized slices and cite them only as supporting visual_diff evidence. Do not judge the whole webpage from one full-page screenshot, one giant screenshot attachment, or a one-shot visual judge verdict. For frontend replica / clone / visual parity / reference-page recreation tasks, request only `desktop` evidence by default. Do not request, evaluate, or block on mobile/tablet reference evidence unless the latest current operator instruction explicitly asks for tablet/mobile/responsive/multi-end migration as a separate task scope.",
+    "# Delegation\n\nOrchestrator is asking visual-qa to run the final frontend visual GUI and functional product review for the task. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. Do not chase visual scores or external judge verdicts; Visual QA acceptance is the structured report's own accepted/blocker fields. Reference/clone fidelity is in scope only when the current task, current goal, or acceptance evidence explicitly requires reference parity. For explicitly required reference/clone regions with source evidence and local implementation regions, prioritize screenshot comparison, inspect fresh task-scoped screenshots and screen-by-screen visual evidence against the source contract, use `browser_preview_reference_regions` for formal bound-region proof, use `browser_preview_compare_scroll_slices` for supporting side-by-side page-slice evidence when the source reference screenshot and implementation scroll offset are meaningful, and cite fresh `reference-comparison` evidence when that evidence can be produced. For edge alignment, margin, padding, gap, overflow, or desktop width scaling claims, call `browser_preview_layout_geometry` against the persisted preview target and affected implementation regions, and cite it only as supporting geometry evidence. For completed-page visual sweeps, inspect the page screen by screen: call `browser_preview_compare_scroll_slices` repeatedly for viewport-sized slices and cite them only as supporting visual_diff evidence. Do not judge the whole webpage from one full-page screenshot, one giant screenshot attachment, or a one-shot visual judge verdict. For frontend replica / clone / visual parity / reference-page recreation tasks, request only `desktop` evidence by default. Do not request, evaluate, or block on mobile/tablet reference evidence unless the latest current operator instruction explicitly asks for tablet/mobile/responsive/multi-end migration as a separate task scope.",
     renderUserRequestSection({
       heading: "# Task",
       title: input.taskTitle,
@@ -191,6 +197,7 @@ async function createVisualQaContextTools(input: { taskID?: string; sessionID?: 
 async function createVisualQaImplementationTools(input: { taskID?: string; signal?: AbortSignal }): Promise<ToolSet> {
   const tools = {
     browser_preview: await createVisualQaTool(BrowserPreviewTool, input),
+    browser_preview_reference_regions: await createVisualQaTool(BrowserPreviewReferenceRegionsTool, input),
     browser_preview_compare_scroll_slices: await createVisualQaTool(BrowserPreviewCompareScrollSlicesTool, input),
     browser_preview_layout_geometry: await createVisualQaTool(BrowserPreviewLayoutGeometryTool, input),
     bash: await createVisualQaTool(BashTool, input),

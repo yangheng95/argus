@@ -208,6 +208,7 @@ export namespace Agent {
             question: "allow",
             webfetch: "allow",
             browser_preview: "allow",
+            browser_preview_reference_regions: "allow",
             browser_preview_compare_scroll_slices: "allow",
             browser_preview_layout_geometry: "allow",
           }),
