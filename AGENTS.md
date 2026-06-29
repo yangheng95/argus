@@ -42,7 +42,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **6.** 禁止过度工程，承认 LLM 模型的能力足够解决大多数问题，不要为了追求完美而引入不必要的复杂性。相反，要利用 LLM 的智能来简化设计和实现，确保系统的灵活性和可维护性。
 
-**6.1（rule 6 应用细则 — prompt-over-host-invariant）**：当 bug 表现为"LLM 选错工具 / 走错升级路径 / 反复重启而不使用细粒度工具"时，**默认修复路径是 prompt 和真实根因修复**，不是 host 端 preflight invariant、route bypass、状态机式拦截、gate/门规则或任何绕行机制。host 端只能保留两类非流程控制约束：(a) 数据完整性约束（Zod schema、DB constraint、worktree 三件套是否完整等纯数据形态）；(b) 显式不可逆操作的二次确认。它们不得被包装成流程 gate，不得用于教 LLM 走哪条路，更不得掩盖根因。其他形式的"教 LLM 应该走哪条路"必须通过 prompt 和具体问题修复实现。reviewer 必须在自己起草方案时拦截这种倾向（rule 11），不要等用户来纠正。教训日：2026-05-07，spec `orchestrator-grain-discipline-2026-05-07.md` §0 worked example。
+**6.1（rule 6 应用细则 — prompt-over-host-invariant）**：当 bug 表现为"LLM 选错工具 / 走错升级路径 / 反复重启而不使用细粒度工具"时，**默认修复路径是 prompt 和真实根因修复**，不是 host 端 preflight invariant、route bypass、状态机式拦截、gate/门规则或任何绕行机制。host 端只能保留两类非流程控制约束：(a) 数据完整性约束（Zod schema、DB constraint、worktree 三件套是否完整等纯数据形态）；(b) 显式不可逆操作的二次确认。它们不得被包装成流程 gate，不得用于教 LLM 走哪条路，更不得掩盖根因。其他形式的"教 LLM 应该走哪条路"必须通过 prompt 和具体问题修复实现。reviewer 必须在自己起草方案时拦截这种倾向（rule 11），不要等用户来纠正。教训日：2026-05-07；当前原则归档在 `specs/current/architecture/99-principles.md`。
 
 ---
 
@@ -137,6 +137,16 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 ### 6.3 方案落盘与版本管理
 
 **32.** 编写方案必须落盘，实施的时候查看硬盘上的方案。当改动涉及已有设计决策、架构约束或历史方案时，应先查看相关记录再修改。
+
+**32.1（spec / 方案集中落盘单一来源 — 2026-06-29）**：所有 spec、方案、架构记录、调查记录和 benchmark 记录只能落在根目录 `specs/` 的统一结构内：当前架构放 `specs/current/architecture/**`，按月历史记录放 `specs/records/YYYY-MM/**`，任务输入或参考 artifact 放 `specs/artifacts/**`。禁止新增包内 spec 树、临时 spec 目录、平行历史索引或散落在根目录的 spec 文件。
+
+**32.2（pre-June spec 删除规则 — 2026-06-29）**：仓库不保留 2026-06-01 之前日期的 spec 文件。需要引用已删除的六月前记录时，只能写成自然语言事实（例如“deleted pre-June record <name>”），禁止重建空文件、兼容路径、retired ledger 或任何双源索引。
+
+**32.3（Recall 区块 — 2026-06-29）**：任何新落盘方案在实施前必须包含 `Recall` 区块，记录用户原始要求、验收指标、硬约束、已读取的落盘资料、全仓 grep 结果和独立 agent 反馈。上下文压缩后继续任务时，必须先读取该 Recall 区块再改代码或文档。
+
+**32.4（压缩/续跑保真 — 2026-06-29）**：任务要求、验收指标和关键约束不能因上下文压缩、agent 交接或 resume 丢失。续跑时必须显式核对当前目标、已完成项、未完成项和验证命令；发现目标缩水或旧方案与当前硬盘状态冲突时，先更新方案并说明冲突，再继续实施。
+
+**32.5（spec 索引与验证 — 2026-06-29）**：移动、删除、新增 spec 后，必须同步更新 `specs/README.md`、相关子目录 README 和文档健康测试。验证至少包含 `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`；涉及产品 docs 或架构 docs 时，还必须跑对应的 docs 单源与 document-health 测试。
 
 **33.** 必须主动在任何改动前后 commit + push（不绕 hook；hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
 

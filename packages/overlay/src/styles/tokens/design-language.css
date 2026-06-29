@@ -5,7 +5,7 @@
    * `--radius`, `--radius-lg`, `--panel-radius`, `--card-radius`,
    * `--section-corner`, `--oc-button-radius`, `--oc-titlebar-status-radius`
    * were retired here on 2026-05-04 (flat-redesign Step 1) — see
-   * `specs/overlay-flat-redesign/plan.md` and the migration script
+   * deleted overlay flat redesign plan and the migration script
    * `packages/overlay/script/migrate-flat-redesign-step1.ts`. */
   --oc-radius-none: 0;
   --oc-radius-soft: calc(4px * var(--ui-scale, 1));

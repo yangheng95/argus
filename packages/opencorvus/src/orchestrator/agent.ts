@@ -1,7 +1,7 @@
 /**
  * Orchestrator — master agent in the Agent Team architecture.
  *
- * Per spec/new-arch/16-unified-teardown.md §3, the orchestrator has no typed
+ * Per specs/current/architecture/16-unified-teardown.md §3, the orchestrator has no typed
  * trigger enum — it is woken by *events* (task creation, goal refill wake,
  * goal-run update, acceptance verdict, operator message) carried as a free-form note. On every
  * wake it reads its full state from the describe layer + the artifact stream
@@ -479,7 +479,7 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
 
 // ---------------------------------------------------------------------------
 // Wake event — context about WHY the orchestrator is being woken.
-// Replaces the old typed trigger enum per specs/new-arch/16-unified-teardown.md
+// Replaces the old typed trigger enum per specs/current/architecture/16-unified-teardown.md
 // §3. Callers that previously sent trigger.kind="X" now synthesize the relevant
 // context string into `note`. The structured fields below carry user/operator
 // payload that host code must not infer from free-form text.

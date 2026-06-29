@@ -1523,7 +1523,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
         zh: "架构由已落盘 specs、生成 API 文档、benchmark 脚本和视觉证据规则治理。",
       },
       responsibilities: [
-        { en: "Keep current docs aligned with source and retired-ledger corrections.", zh: "保持当前文档与源码、退役台账修正一致。" },
+        { en: "Keep current docs aligned with source and the consolidated spec index.", zh: "保持当前文档与源码、集中 spec 索引一致。" },
         { en: "Generate API reference instead of manually editing generated docs.", zh: "生成 API reference，而不是手工编辑生成文档。" },
         { en: "Use screenshot-based validation for frontend-visible deliverables.", zh: "对前端可见交付使用截图验收。" },
       ],
@@ -1531,11 +1531,11 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
         { en: "Docs are not an alternate runtime truth source.", zh: "文档不是另一个 runtime 事实源。" },
         { en: "Benchmarks do not replace final artifact review.", zh: "benchmark 不替代最终交付物复审。" },
       ],
-      records: ["specs/new-arch/**", "packages/web docs", "OpenAPI generated reference", "benchmark evidence"],
+      records: ["specs/current/architecture/**", "specs/records/2026-06/**", "packages/web docs", "OpenAPI generated reference", "benchmark evidence"],
       sources: [
-        "specs/new-arch/01-agents.md",
-        "specs/new-arch/2026-06-25-visual-evidence-no-hard-gate-root-repair.md",
-        "specs/tv2ainvest.md",
+        "specs/current/architecture/01-agents.md",
+        "specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md",
+        "specs/artifacts/tv2ainvest.md",
         "packages/web/src/content/docs/concepts/architecture.mdx",
         "packages/web/src/content/docs/reference/api.mdx",
         "packages/opencorvus/test/script/document-health.test.ts",
@@ -1545,7 +1545,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
           id: "spec-ledger",
           title: "New architecture specs",
           responsibility: { en: "Checked-in decision records for current architecture constraints.", zh: "当前架构约束的已落盘决策记录。" },
-          sources: ["specs/new-arch/01-agents.md", "specs/new-arch/HISTORY.md"],
+          sources: ["specs/current/architecture/01-agents.md", "specs/records/2026-06/README.md"],
         },
         {
           id: "web-docs",
