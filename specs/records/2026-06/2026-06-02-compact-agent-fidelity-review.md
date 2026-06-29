@@ -6,7 +6,7 @@ User report: the compact agent loses too much context after compaction, making t
 
 ## Call-Point Audit
 
-`rg -n 'SessionCompaction\.create|SessionCompaction\.process|SessionCompaction\.prune|filterCompacted|assistant\.summary|isValidSummaryMessage|maintenanceSummaryFailureMessage|selectPromptFinalMessageFromNewest|flushPromptFinalMessage|result_mode|experimental\.session\.compacting|agent\.compaction\.prompt|tail_start_id|anchor_id' packages/opencorvus/src packages/opencorvus/test packages/plugin/src specs/new-arch`
+`rg -n 'SessionCompaction\.create|SessionCompaction\.process|SessionCompaction\.prune|filterCompacted|assistant\.summary|isValidSummaryMessage|maintenanceSummaryFailureMessage|selectPromptFinalMessageFromNewest|flushPromptFinalMessage|result_mode|experimental\.session\.compacting|agent\.compaction\.prompt|tail_start_id|anchor_id' packages/opencorvus/src packages/opencorvus/test packages/plugin/src specs`
 
 Relevant decisions:
 

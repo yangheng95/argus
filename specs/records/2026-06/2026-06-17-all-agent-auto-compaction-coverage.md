@@ -70,7 +70,7 @@ Key recall conclusions:
 Command:
 
 ```powershell
-rg -n "SESSION_KINDS|AGENT_OWNED_SESSION_KINDS|RUNTIME_CONTRACT_REQUIRED_AGENT_KINDS|LIVE_RUNTIME_CONTINUATION_SESSION_KINDS|DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS|AutomaticCompaction\.decision|SessionLoop\.automaticCompactionDecision|SessionCompaction\.create|disabledAutomaticCompactionMessage|stopTurnWithPredictiveBudgetError|compaction_request" packages/opencorvus/src packages/opencorvus/test/session specs/new-arch -S
+rg -n "SESSION_KINDS|AGENT_OWNED_SESSION_KINDS|RUNTIME_CONTRACT_REQUIRED_AGENT_KINDS|LIVE_RUNTIME_CONTINUATION_SESSION_KINDS|DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS|AutomaticCompaction\.decision|SessionLoop\.automaticCompactionDecision|SessionCompaction\.create|disabledAutomaticCompactionMessage|stopTurnWithPredictiveBudgetError|compaction_request" packages/opencorvus/src packages/opencorvus/test/session specs -S
 ```
 
 | Surface                               | Decision                                                                                                                                                                                   |

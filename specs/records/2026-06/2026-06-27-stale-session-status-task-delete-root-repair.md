@@ -32,7 +32,7 @@ Commands:
 
 ```powershell
 rg -n "SessionPrompt.cancel|no live prompt state matched session directory|assertSessionPromptSubtreeFinished|requestTaskAgentLifecycleCancellation|SessionStatus.set|SessionPromptState.finish" packages/opencorvus/src packages/opencorvus/test -S
-rg -n "deleteTask\(|deleteSession\(|awaitTaskLoopIdle\(|orchestrator-stream-error|streaming|terminal" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S
+rg -n "deleteTask\(|deleteSession\(|awaitTaskLoopIdle\(|orchestrator-stream-error|streaming|terminal" packages/opencorvus/src packages/opencorvus/test specs -S
 ```
 
 Relevant surfaces:

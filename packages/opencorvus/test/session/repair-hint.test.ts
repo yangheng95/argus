@@ -1,7 +1,7 @@
 /**
  * Regression guard for the discriminated-union tool-call death loop.
  *
- * Root cause (spec specs/new-arch/2026-05-19-...md §6, task
+ * Root cause (spec deleted pre-June record 2026-05-19-.. §6, task
  * tsk_e3f3a5e13001sIKjGs1nVHLkBD): architect `register_contract` rejected on
  * `ir.kind` / `ir.fields[].valueDomain.kind`; zod4's `invalid_union` issue
  * carries no legal values, the repair channel returned null, the SDK relayed

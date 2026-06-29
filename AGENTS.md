@@ -36,7 +36,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **4.** 不要只关注特定的 Agent、LLM 等的问题，由于继承和多态的特性，任何一个问题都可能是系统性的。你需要从整体上分析问题，找到根本原因，而不是只修复表面症状。
 
-的 XML 块时，那是上游 dispatcher 信息丢失的**结构化信号**——查 dispatcher（orchestrator / build wrapper / integrity caller 等）而非 agent 自己。修 dispatcher 的 input 构造或 prompt template，**不要**改 agent prompt 让它"宽容"这种缺失（rule 6.1 — 这是 prompt-over-host 的反向应用，agent 已经在做对的事）。
+**4.1（dispatcher 输入缺失信号）**：当 agent 收到的任务缺少上游约定的 XML（Extensible Markup Language，可扩展标记语言）块时，那是上游 dispatcher 信息丢失的**结构化信号**——查 dispatcher（orchestrator / build wrapper / integrity caller 等）而非 agent 自己。修 dispatcher 的 input 构造或 prompt template，**不要**改 agent prompt 让它"宽容"这种缺失（rule 6.1 — 这是 prompt-over-host 的反向应用，agent 已经在做对的事）。
 
 **5.** 遵守第一性原因，禁止任何形式的过度工程。所有的设计和实现必须以实际需求为导向，禁止为了追求完美或过度抽象而引入不必要的复杂性。
 

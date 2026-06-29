@@ -14,7 +14,7 @@
 Command:
 
 ```powershell
-rg -n "evidence_ids|evidence_id|fact_ids|based_on_fact_ids|related_fact_ids|citation_map|update_research_citation|update_research_evidence_note|update_research_bundle_section|validateResearchBundleInputSemantics|inspect_research_result_status|submit_research_brief" packages/opencorvus/src/research packages/opencorvus/test/research specs/new-arch -S
+rg -n "evidence_ids|evidence_id|fact_ids|based_on_fact_ids|related_fact_ids|citation_map|update_research_citation|update_research_evidence_note|update_research_bundle_section|validateResearchBundleInputSemantics|inspect_research_result_status|submit_research_brief" packages/opencorvus/src/research packages/opencorvus/test/research specs -S
 ```
 
 Relevant findings:

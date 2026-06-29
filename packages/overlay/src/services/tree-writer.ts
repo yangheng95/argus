@@ -340,7 +340,7 @@ const pendingIntegrity = new Map<string, PendingIntegrityPayload>()
  *
  *  Replaces the per-phase `pendingSubagentTerminal` buffer. Single source of
  *  truth for every session's lifecycle (orchestrator root, all subagent
- *  phases, future phases) — see specs/new-arch/07-panel-reactivity.md. */
+ *  phases, future phases) — see specs/current/architecture/07-panel-reactivity.md. */
 interface ProjectedSessionStatus {
   cardStatus: CardStatus
   terminalReason?: "completed" | "error" | "aborted"
@@ -579,7 +579,7 @@ export function applyEvent(event: any): void {
   // Applies to every session — orchestrator root, requirements / architect /
   // frontend-design / frontend-research / workload_analysis / visual_qa /
   // integrity / build / refine / analyze_intent / modify_goal, future phases. See
-  // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
+  // specs/current/architecture/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {
     return applyVisibleCardTreeEvent(() => handleSessionStatus(event))
   }
@@ -3801,7 +3801,7 @@ function normalizeStepStatus(raw: any): CardStatus {
 // requirements, architect, planner, build, ...), goal-step cards, orphan
 // interactions (question / permission), and optimistic bubbles
 // all interleave on a single durable timeline axis. Card identity rules
-// (see specs/new-arch/07-panel-reactivity.md §身份规则) still decide
+// (see specs/current/architecture/07-panel-reactivity.md §身份规则) still decide
 // *whether* a card surfaces at the top level — not where.
 //
 // Invariants this function relies on, enforced by the writer elsewhere:

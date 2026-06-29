@@ -147,7 +147,7 @@ export interface GoalDesc {
   /** True when the tip goal_run is in a live status but its `owner` stamp is a
    *  foreign (restarted) process — physically orphaned, mid-stream turn cannot
    *  resume. The orchestrator should treat it as a dead attempt and re-dispatch.
-   *  Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md */
+   *  Spec: deleted pre-June record 2026-05-29-goal-run-owner-orphan-liveness */
   is_orphaned: boolean
 }
 

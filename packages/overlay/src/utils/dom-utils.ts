@@ -137,7 +137,7 @@ export function setupAutoScroll(el: HTMLElement, opts: AutoScrollOptions): AutoS
       // frame the user sees the conversation drift upward by exactly
       // the height the late layout gained. The spec forbids
       // MutationObserver / ResizeObserver inside setupAutoScroll
-      // (specs/new-arch/2026-05-15-overlay-scroll-single-source-plan.md)
+      // (deleted pre-June record 2026-05-15-overlay-scroll-single-source-plan)
       // — a single extra rAF re-pin is the bounded, observer-free way
       // to catch the drift. Gated on `isTracking()` so a user who has
       // scrolled away never gets yanked back.

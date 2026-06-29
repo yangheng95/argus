@@ -20,7 +20,7 @@ their session title instead of keeping the product placeholder titles
 Command:
 
 ```powershell
-rg -n "Coding assistant|Mission Control|deriveTitle|SessionWake\.wake|prompt_async|SessionPrompt\.prompt|Session\.setTitle|createUserMessage" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md"
+rg -n "Coding assistant|Mission Control|deriveTitle|SessionWake\.wake|prompt_async|SessionPrompt\.prompt|Session\.setTitle|createUserMessage" packages/opencorvus/src packages/opencorvus/test specs -S -g "*.ts" -g "*.md"
 ```
 
 | Surface                    | Evidence                                                                                                                                                                                                              | Decision                                                                                                                                                                                      |

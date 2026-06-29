@@ -27,7 +27,7 @@ serving as a task-state refresh surface for normal scheduling.
 Command basis:
 
 ```powershell
-rg -n -F "read_context" packages/opencorvus/src packages/opencorvus/test specs/new-arch -g "!packages/opencorvus/src/provider/models-snapshot.ts"
+rg -n -F "read_context" packages/opencorvus/src packages/opencorvus/test specs -g "!packages/opencorvus/src/provider/models-snapshot.ts"
 rg -n -F "renderTaskDescription" packages/opencorvus/src packages/opencorvus/test -g "!packages/opencorvus/src/provider/models-snapshot.ts"
 rg -n -F "createDecisionLog" packages/opencorvus/src/orchestrator packages/opencorvus/src/engine
 ```

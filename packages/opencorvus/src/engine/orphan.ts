@@ -24,7 +24,7 @@ import { Ownership } from "./ownership"
  *
  * Never-dispatched / queued rows carry no owner and are not orphaned.
  *
- * Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md
+ * Spec: deleted pre-June record 2026-05-29-goal-run-owner-orphan-liveness
  */
 export function isGoalRunOrphaned(
   row: GoalRunRow,

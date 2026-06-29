@@ -1,7 +1,7 @@
 /**
  * Build agent types — the contract the orchestrator's `build` tool returns.
  *
- * Phase 5-b of specs/new-arch/16-unified-teardown.md §7-5. This file defines
+ * Phase 5-b of specs/current/architecture/16-unified-teardown.md §7-5. This file defines
  * the wire shape only — the implementation lands in src/build/agent.ts
  * alongside its system prompt + tool set in a separate commit. Separating
  * the schema from the run() body keeps the next cron cycle's

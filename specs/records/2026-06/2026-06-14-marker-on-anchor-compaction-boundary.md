@@ -38,7 +38,7 @@ Three independent read-only reviews agreed on the core defect and constraints:
 
 Command basis:
 
-`rg -n "filterCompacted|latestCompactionPruneRange|prunableToolParts|completedCompactions|hasCompletedCompactionForSource|SessionCompaction.create|SessionCompaction.process|compaction_request|manual_summarize|CompactionHandoff.isValidSummaryMessage|toModelMessages|predictiveCompactionDecision|PromptBudgetOverflowError" packages/opencorvus/src packages/opencorvus/test specs/new-arch`
+`rg -n "filterCompacted|latestCompactionPruneRange|prunableToolParts|completedCompactions|hasCompletedCompactionForSource|SessionCompaction.create|SessionCompaction.process|compaction_request|manual_summarize|CompactionHandoff.isValidSummaryMessage|toModelMessages|predictiveCompactionDecision|PromptBudgetOverflowError" packages/opencorvus/src packages/opencorvus/test specs`
 
 | Surface                                       | Decision                                                                                                                                                                                                                                                                                                                                                                              |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

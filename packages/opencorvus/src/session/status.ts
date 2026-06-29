@@ -29,7 +29,7 @@ function isSessionOrderKey(value: string): boolean {
 export namespace SessionStatus {
   /**
    * Session lifecycle phase. Single source of truth for overlay card spinner
-   * state and terminal display — see `specs/new-arch/07-panel-reactivity.md`.
+   * state and terminal display — see `specs/current/architecture/07-panel-reactivity.md`.
    *
    *   streaming = LLM round-trip in flight (overlay shows spinner)
    *   retry     = streaming, currently sleeping between provider retries

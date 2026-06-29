@@ -27,7 +27,7 @@ does not exist.
 
 | Sweep              | Result  |
 | ------------------ | ------- | ----------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rg -n "ndjson-log | ndjson- | log-divider | LogViewer" packages/overlay/src packages/overlay/test specs/new-arch` | `ndjson-log.css` was linked by `index.html`, but live LogViewer code uses `.log-viewer` / `.log-line`; `.ndjson-*` selectors had no production DOM owner. |
+| `rg -n "ndjson-log | ndjson- | log-divider | LogViewer" packages/overlay/src packages/overlay/test specs` | `ndjson-log.css` was linked by `index.html`, but live LogViewer code uses `.log-viewer` / `.log-line`; `.ndjson-*` selectors had no production DOM owner. |
 
 ## Fix
 

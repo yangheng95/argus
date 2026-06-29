@@ -3,7 +3,7 @@
  * including all internal retries, heartbeat monitoring, error classification,
  * backoff, and terminal events.
  *
- * Design: specs/new-arch/2026-04-30-llm-activity-redesign.md
+ * Design: deleted pre-June record 2026-04-30-llm-activity-redesign
  *
  * Composition:
  *   - Reuses util/stream-activity.ts as the inner mid-stream idle gate;

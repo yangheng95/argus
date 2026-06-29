@@ -27,7 +27,7 @@ composer chip should stay in the shared Button primitive spacing contract.
 
 | Sweep                                             | Result                                                                                                                                |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `rg -n "executor-chip-slot \\.oc-button           | oc-button-padding-x                                                                                                                   | oc-button-gap | columnGap | paddingLeft" specs/new-arch packages/overlay/src packages/overlay/test` | The executor chip local Button override is the only live composer chip spacing source. |
+| `rg -n "executor-chip-slot \\.oc-button           | oc-button-padding-x                                                                                                                   | oc-button-gap | columnGap | paddingLeft" specs packages/overlay/src packages/overlay/test` | The executor chip local Button override is the only live composer chip spacing source. |
 | Browser `titlebar-menubar.test.ts` density sample | The real app shell measured `[data-ui^="executor-chip-"]` at 10.4px column gap and horizontal padding, exceeding the compact ceiling. |
 
 ## Fix

@@ -16,7 +16,7 @@ This creates false completed evidence: the comparison artifact no longer represe
 
 ## Callsite Inventory
 
-`rg "cropPng\\(|clamp\\(|assertBoxInsideImage|source_bbox|materializeRegionComparison" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S`
+`rg "cropPng\\(|clamp\\(|assertBoxInsideImage|source_bbox|materializeRegionComparison" packages/opencorvus/src packages/opencorvus/test specs -S`
 
 | Area                                                 | Finding                                                                                                                                                                                                                                                                                           | Decision                                                                                                             |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |

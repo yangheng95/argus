@@ -30,7 +30,7 @@ beside the live TaskProgressBar and current task directory shell.
 
 | Sweep                  | Result           |
 | ---------------------- | ---------------- | --------- | ------------- | ---------------- | --------- | ----------------- | --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rg -n "chatGoalsStrip | chat-goals-strip | goal-chip | task-bar-main | task-cwd-actions | task-flag | chat-follow-label | TaskProgressBar | task-progress\_\_pill" packages/overlay/src packages/overlay/test specs/new-arch` | Retired selectors were static HTML/CSS/test-only. `Conversation.tsx` renders `TaskProgressBar`, and `card.css` owns `.task-progress__pill`. |
+| `rg -n "chatGoalsStrip | chat-goals-strip | goal-chip | task-bar-main | task-cwd-actions | task-flag | chat-follow-label | TaskProgressBar | task-progress\_\_pill" packages/overlay/src packages/overlay/test specs` | Retired selectors were static HTML/CSS/test-only. `Conversation.tsx` renders `TaskProgressBar`, and `card.css` owns `.task-progress__pill`. |
 
 ## Fix
 

@@ -20,7 +20,7 @@ Support common VS Code-style Explorer operations in the overlay, including multi
 
 | Sweep | Result | Decision |
 | --- | --- | --- |
-| `rg -n "FileEditorPane|CodeEditor|codemirror|syntax|highlight" packages/overlay/src packages/overlay/test specs/new-arch` | `FileEditorPane` passes text content into `CodeEditor`; `CodeEditor` currently uses `basicSetup` only. | Add a `path` prop to `CodeEditor` and select a CodeMirror language extension from the file extension. |
+| `rg -n "FileEditorPane|CodeEditor|codemirror|syntax|highlight" packages/overlay/src packages/overlay/test specs` | `FileEditorPane` passes text content into `CodeEditor`; `CodeEditor` currently uses `basicSetup` only. | Add a `path` prop to `CodeEditor` and select a CodeMirror language extension from the file extension. |
 | `rg -n "moveItems|moveItem|renameItem|deleteItems|uploadDroppedFiles" packages/overlay/src/components/FileExplorerPanel.tsx` | Context-menu move/delete/upload already own the project-scoped mutation and refresh behavior. | Extract drag/drop move/upload through the same existing functions; do not create a second backend path. |
 | `rg -n "draggable|data-drag|onDrag" packages/overlay/src packages/overlay/test` | Other drag surfaces use dataset state and CSS; Explorer currently has no row drag after context-menu-only change. | Add Explorer-specific drag state and row drop indicators without touching unrelated drag systems. |
 | `bun add --cwd packages/overlay @codemirror/lang-*` | Official CodeMirror language packages installed for JavaScript/TypeScript/JSX/TSX, HTML, CSS, Markdown, JSON, and Python. | Use mature CodeMirror language packages for common code files; plain text remains editable without invented highlighting. |

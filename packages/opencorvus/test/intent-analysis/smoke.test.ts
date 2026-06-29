@@ -1,6 +1,6 @@
 /**
  * Real-LLM smoke test for the phase-3 intent-analysis migration
- * (specs/new-arch/16-unified-teardown.md §7-3-b).
+ * (specs/current/architecture/16-unified-teardown.md §7-3-b).
  *
  * Verifies the migrated agent actually produces an IntentAnalysisResult
  * against a live DASHSCOPE model. Gated behind `OPENCORVUS_RUN_LIVE_E2E=1`

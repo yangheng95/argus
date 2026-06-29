@@ -30,7 +30,7 @@ fallback is not a valid repair.
 Command:
 
 ```text
-rg -n 'assistantPrefill|prefill|runOnce|orchestrator-wake|MAX_STEPS|role: "assistant" as const|role: "assistant"|ProviderTransform\.message|normalizeVendorMessages|toModelMessages|LLM\.stream\(' packages/opencorvus/src packages/opencorvus/test specs/new-arch -S
+rg -n 'assistantPrefill|prefill|runOnce|orchestrator-wake|MAX_STEPS|role: "assistant" as const|role: "assistant"|ProviderTransform\.message|normalizeVendorMessages|toModelMessages|LLM\.stream\(' packages/opencorvus/src packages/opencorvus/test specs -S
 ```
 
 Relevant call sites:

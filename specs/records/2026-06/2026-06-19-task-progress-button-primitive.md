@@ -21,7 +21,7 @@ theme changes can drift from the rest of the overlay.
 | `2026-06-18-retire-conversation-goal-strip-residue.md`                   | `TaskProgressBar` is the single live conversation goal progress surface; retired `goal-chip`/`chatGoalsStrip` selectors must not return. |
 | `2026-06-18-task-progress-pill-focus.md`                                 | Goal pill keyboard focus must stay visible and pill click must keep the existing card-scroll request path.                               |
 | `packages/overlay/test/browser/task-progress-pill-focus-browser.test.ts` | Existing browser evidence fixture checks real focus styling and Enter activation for a progress pill.                                    |
-| `rg -n "task-progress\_\_fold                                            | task-progress\_\_pill                                                                                                                    | task-progress\_\_toggle" packages/overlay/src packages/overlay/test specs/new-arch` | The old private selectors are owned by `TaskProgressBar`, `card.css`, and tests. |
+| `rg -n "task-progress\_\_fold                                            | task-progress\_\_pill                                                                                                                    | task-progress\_\_toggle" packages/overlay/src packages/overlay/test specs` | The old private selectors are owned by `TaskProgressBar`, `card.css`, and tests. |
 
 ## Fix
 

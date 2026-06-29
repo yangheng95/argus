@@ -62,7 +62,7 @@ const PathCommand = cmd({
 /**
  * `opencorvus db reset` — phase-6 style atomic DB + disk reset.
  *
- * Follows CLAUDE.md rule 13 (reset DB, no migrations) + specs/new-arch/16-unified-teardown.md §7-6
+ * Follows CLAUDE.md rule 13 (reset DB, no migrations) + specs/current/architecture/16-unified-teardown.md §7-6
  * (schema-zero rebuild). Wipes:
  *   - Global SQLite db + WAL + SHM (`${Global.Path.data}/opencorvus.db*`)
  *   - Project runtime scratch under <primary>/.opencorvus/r/

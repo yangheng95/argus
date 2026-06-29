@@ -80,7 +80,7 @@ The causal chain is:
 Commands used:
 
 ```powershell
-rg -n "dispatchTaskLoop|interruptTaskLoop|reopenActiveRunForOperatorWake|syncTerminalGoalRefills|orchestrator_stream_error|PromptBudgetOverflowError|abortLiveOrchestratorToolOwnership" packages/opencorvus/src packages/opencorvus/test specs/new-arch
+rg -n "dispatchTaskLoop|interruptTaskLoop|reopenActiveRunForOperatorWake|syncTerminalGoalRefills|orchestrator_stream_error|PromptBudgetOverflowError|abortLiveOrchestratorToolOwnership" packages/opencorvus/src packages/opencorvus/test specs
 rg -n "abortLiveOrchestratorToolOwnership\(|abortLiveExecutionForTask\(|abortDeadOwnerLiveExecutionForTasks\(|interruptTaskLoop\(" packages/opencorvus/src packages/opencorvus/test
 rg -n "dispatchTaskLoop\(\{[^\n]*(interrupt|operatorMessage|operatorIntent)|interrupt:" packages/opencorvus/src packages/opencorvus/test
 ```

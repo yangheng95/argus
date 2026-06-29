@@ -3,7 +3,7 @@ import { AgentRunError, classifyAttemptOutcome } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
 /**
- * Phase F of specs/new-arch/2026-04-28-structured-output-systemic-fix.md:
+ * Phase F of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
  * `runAgentSessionWithRetry` must NOT loop on deterministic structural
  * failures (prompt-budget / tool-schema-budget overflow), and must NOT
  * loop after the caller's `isComplete` signals a deterministic completed

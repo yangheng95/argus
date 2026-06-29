@@ -605,7 +605,7 @@ export namespace SessionLoop {
   }
 
   // ---------------------------------------------------------------------------
-  // Ephemeral per-session step-finish hook (phase 3-a-4 of specs/new-arch/16-unified-teardown.md)
+  // Ephemeral per-session step-finish hook (phase 3-a-4 of specs/current/architecture/16-unified-teardown.md)
   //
   // Agents that dispatch work via a tool and then want to stop the LLM
   // generation once the tool has acknowledged the dispatch (the orchestrator
@@ -739,7 +739,7 @@ export namespace SessionLoop {
    * StructuredOutput recovery channel (stamp `StructuredOutputError` on the
    * current assistant message and stop).
    *
-   * Rules — see specs/new-arch/2026-04-28-structured-output-systemic-fix.md §D:
+   * Rules — see deleted pre-June record 2026-04-28-structured-output-systemic-fix §D:
    *
    *   1. Only the json_schema output contract requires a terminal
    *      StructuredOutput call; for `text` output we never stamp.
@@ -866,7 +866,7 @@ export namespace SessionLoop {
    * Pure decision: given the budget metrics for the next turn, should we
    * predictively compact, fail fast, or just send the request?
    *
-   * Per specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C the
+   * Per deleted pre-June record 2026-04-28-structured-output-systemic-fix §C the
    * old behaviour ("totalTokens > limit → always compact") spun forever on
    * context-cold sessions whose overflow came entirely from the
    * non-compressible prompt face (system + tool schemas). The new logic:
@@ -1001,7 +1001,7 @@ export namespace SessionLoop {
    * backed tools, walks the Zod object's internal `_def` graph and produces
    * char counts that bear no relation to the actual outgoing payload — that
    * inflated count was triggering predictive compaction on context-cold
-   * sessions (see specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+   * sessions (see deleted pre-June record 2026-04-28-structured-output-systemic-fix
    * §A). Counting `name + description + jsonSchema` keeps the estimate tied
    * to what the provider really receives. ProviderSchema is the single
    * schema-normalisation entry point; the estimator never re-runs the

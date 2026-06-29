@@ -16,10 +16,10 @@ Leaving the selector in the global scrollbar whitelist creates a false style sou
 
 | Search                                                                                           | Result                                                              |
 | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `rg -n -F "mission-conversation-body" packages/overlay/src packages/overlay/test specs/new-arch` | Only `base.css` and old `2026-06-05` spec.                          |
-| `rg -n -F "MissionConversation" packages/overlay/src packages/overlay/test specs/new-arch`       | Current source has no owner; tests assert it is absent.             |
-| `rg -n -F "mission-conversation" packages/overlay/src packages/overlay/test specs/new-arch`      | Only `base.css`, old spec, and absence tests.                       |
-| `rg -n -F "chat-scroll" packages/overlay/src packages/overlay/test specs/new-arch`               | Shared center chat remains owned by `#chatScroll` / `.chat-scroll`. |
+| `rg -n -F "mission-conversation-body" packages/overlay/src packages/overlay/test specs` | Only `base.css` and old `2026-06-05` spec.                          |
+| `rg -n -F "MissionConversation" packages/overlay/src packages/overlay/test specs`       | Current source has no owner; tests assert it is absent.             |
+| `rg -n -F "mission-conversation" packages/overlay/src packages/overlay/test specs`      | Only `base.css`, old spec, and absence tests.                       |
+| `rg -n -F "chat-scroll" packages/overlay/src packages/overlay/test specs`               | Shared center chat remains owned by `#chatScroll` / `.chat-scroll`. |
 
 ## Fix Plan
 

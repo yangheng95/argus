@@ -31,7 +31,7 @@ settled before task/session rows are physically deleted.
 Command used before this plan:
 
 ```powershell
-rg -n "deleteTask\(|cancelTask\(|awaitTaskLoopIdle\(|dispatchTaskLoop\(|runTaskLoop\(|TaskQueueService.cancelSessionPrompts\(|Session.removeInProject|DELETE /task/:taskID" packages/opencorvus/src packages/opencorvus/test specs/new-arch
+rg -n "deleteTask\(|cancelTask\(|awaitTaskLoopIdle\(|dispatchTaskLoop\(|runTaskLoop\(|TaskQueueService.cancelSessionPrompts\(|Session.removeInProject|DELETE /task/:taskID" packages/opencorvus/src packages/opencorvus/test specs
 ```
 
 | Surface                            | File                                                                   | Decision                                                                                                                                                                                     |

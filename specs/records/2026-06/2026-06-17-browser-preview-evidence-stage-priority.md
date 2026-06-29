@@ -24,7 +24,7 @@ visual evidence artifact invisible in the GUI surface that should be reviewed.
 Command:
 
 ```powershell
-rg -n "liveImageUrl|renderedEvidence|data-ui=\"browser-preview-screenshot\"|browser-preview-live-screenshot|browser-preview-evidence-status" packages/overlay/src/components/BrowserPreviewPanel.tsx packages/overlay/test/browser/browser-preview-evidence.test.ts packages/overlay/test/browser-preview-panel.test.ts specs/new-arch -g "*.tsx" -g "*.ts" -g "*.md"
+rg -n "liveImageUrl|renderedEvidence|data-ui=\"browser-preview-screenshot\"|browser-preview-live-screenshot|browser-preview-evidence-status" packages/overlay/src/components/BrowserPreviewPanel.tsx packages/overlay/test/browser/browser-preview-evidence.test.ts packages/overlay/test/browser-preview-panel.test.ts specs -g "*.tsx" -g "*.ts" -g "*.md"
 ```
 
 Findings:

@@ -36,7 +36,7 @@ Commands:
 ```powershell
 rg -n "attachmentToBase64|toModelOutput|image-data|state\.attachments|dataUrlFromReference" packages/opencorvus/src/session packages/opencorvus/src/storage packages/opencorvus/test -S -g "*.ts"
 rg -n "url_screenshot|webfetch|read image|buildMultimodalToolResult|attachments.*image" packages/opencorvus/src packages/opencorvus/test -S -g "*.ts" -g "*.txt"
-rg -n "PNG|JPEG|WebP|image dimensions|8000|sharp|pngjs" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md" -g "*.txt"
+rg -n "PNG|JPEG|WebP|image dimensions|8000|sharp|pngjs" packages/opencorvus/src packages/opencorvus/test specs -S -g "*.ts" -g "*.md" -g "*.txt"
 ```
 
 | Surface                                                          | Finding                                                         | Decision                                                                       |
