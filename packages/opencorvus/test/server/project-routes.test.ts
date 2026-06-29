@@ -491,6 +491,140 @@ describe("project routes", () => {
     expect(sessionRow(sessionID)).toBeUndefined()
   }, 30_000)
 
+  test("DELETE /project/current waits for terminal task queue wake before removing state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const releaseQueue = deferred()
+    const sourceSentinel = path.join(tmp.path, "source-terminal-queue-sentinel.txt")
+    const runtimeSentinel = path.join(
+      ProjectRuntimePaths.projectRuntimeRoot(tmp.path),
+      "delete-terminal-queue-sentinel.txt",
+    )
+    let projectID = ""
+    let sessionID = ""
+    let taskID = ""
+    let queueTaskID = ""
+    let queueRun!: Promise<void>
+    let queueWakeStarted = false
+    let queueCancellationRequested = false
+
+    const loop = spyOn(SessionPrompt, "loop").mockImplementation((async () => {
+      queueWakeStarted = true
+      await releaseQueue.promise
+      return { info: {} as never, parts: [] } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+    }) as never)
+    const originalCancel = SessionPrompt.cancel
+    spyOn(SessionPrompt, "cancel").mockImplementation(((id: string, directory?: string) => {
+      if (id === sessionID) queueCancellationRequested = true
+      return originalCancel(id, directory)
+    }) as never)
+
+    await Bun.write(sourceSentinel, "keep-source")
+    await fs.mkdir(path.dirname(runtimeSentinel), { recursive: true })
+    await Bun.write(runtimeSentinel, "delete-runtime")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        const session = await Session.create({ kind: "root", title: "terminal task queued wake" })
+        sessionID = session.id
+        taskID = `tsk_project_delete_terminal_queue_${Date.now()}`
+        queueTaskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: sessionID,
+              source: "test",
+              title: "terminal task with queued wake",
+              request: "terminal task queue wake must settle before project delete",
+              priority: "normal",
+              kind: "workflow",
+              queue_order: 0,
+              system_artifacts: [],
+              design_specs: [],
+              criteria_results: [],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now,
+            })
+            .run()
+          db.insert(TaskQueueTable)
+            .values({
+              id: queueTaskID,
+              session_id: sessionID,
+              prompt: "terminal task queued wake",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_wake",
+                messageID: Identifier.ascending("message"),
+                input: { parts: [{ type: "text", text: "terminal task queued wake" }] },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        queueRun = TaskQueueService.runNow()
+        await waitUntil(() => queueWakeStarted, "terminal task queued wake start")
+      },
+    })
+
+    await expectNoProcessErrors(async () => {
+      const responsePromise = app.request("/project/current", {
+        method: "DELETE",
+        headers: {
+          "x-opencorvus-directory": tmp.path,
+        },
+      })
+      void responsePromise.catch(() => undefined)
+      try {
+        await waitUntil(() => queueCancellationRequested, "terminal task project delete queue cancellation")
+
+        expect(projectRow(projectID)?.id).toBe(projectID)
+        expect(sessionRow(sessionID)?.id).toBe(sessionID)
+        expect(queueRow(queueTaskID)).toMatchObject({
+          status: "running",
+          error_message: null,
+        })
+        expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(true)
+        expect(await Filesystem.exists(sourceSentinel)).toBe(true)
+
+        releaseQueue.resolve()
+        const response = await responsePromise
+        await queueRun
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({
+          ok: true,
+          projectID,
+          directory: tmp.path,
+          deletedTaskCount: 1,
+        })
+      } finally {
+        releaseQueue.resolve()
+        await responsePromise.catch(() => undefined)
+        await queueRun.catch(() => undefined)
+      }
+    })
+
+    expect(loop).toHaveBeenCalledTimes(1)
+    expect(await Filesystem.exists(sourceSentinel)).toBe(true)
+    expect(await Bun.file(sourceSentinel).text()).toBe("keep-source")
+    expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(false)
+    expect(projectRow(projectID)).toBeUndefined()
+    expect(sessionRow(sessionID)).toBeUndefined()
+    expect(
+      Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get()),
+    ).toBeUndefined()
+  }, 30_000)
+
   test("GET /project/current/worktrees marks live goal bindings and expired worktrees", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()

@@ -295,6 +295,47 @@ async function awaitTaskQueuePromptsIdle(input: {
   }
 }
 
+async function settleTaskSessionWorkBeforePhysicalDelete(task: TaskRow, options?: DeleteTaskOptions): Promise<void> {
+  const lifecycle = await requestTaskAgentLifecycleCancellation({
+    task,
+    reason: "task deleted",
+    handle: "task-api.delete-task",
+  })
+  const queueCancelledInCurrentInstance = Boolean(Instance.current())
+  TaskQueueService.cancelSessionPrompts({
+    sessionIDs: lifecycle.sessionIDs,
+    reason: "task deleted",
+  })
+  if (queueCancelledInCurrentInstance) {
+    await awaitTaskQueuePromptsIdle({
+      sessionIDs: lifecycle.sessionIDs,
+      timeoutMs: options?.cleanupTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS,
+      taskID: task.id,
+      handle: "EngineService.deleteTask.TaskQueueService.awaitSessionPromptsIdle",
+    })
+  } else {
+    await provideActiveTaskRootSessionInstance(task, async () => {
+      TaskQueueService.cancelSessionPrompts({
+        sessionIDs: lifecycle.sessionIDs,
+        reason: "task deleted",
+      })
+      await awaitTaskQueuePromptsIdle({
+        sessionIDs: lifecycle.sessionIDs,
+        timeoutMs: options?.cleanupTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS,
+        taskID: task.id,
+        handle: "EngineService.deleteTask.TaskQueueService.awaitSessionPromptsIdle",
+      })
+    })
+  }
+  await assertSessionPromptSubtreeFinished({
+    sessions: lifecycle.cancelledSessions,
+    failures: lifecycle.cancellationFailures,
+    taskID: task.id,
+    handle: "EngineService.deleteTask",
+    inactivityTimeoutMs: options?.promptSettleInactivityMs,
+  })
+}
+
 async function recordTaskPhysicalDeleteBreadcrumb(
   task: TaskRow,
   origin: "EngineService.deleteTask" | "EngineService.deleteSession.deleteTasks",
@@ -1922,6 +1963,7 @@ export namespace EngineService {
     // Wait for any in-progress pipeline stage to settle after abort
     await awaitPipelineSettled(taskID)
     await awaitTaskLoopIdleForDelete(taskID, options?.taskLoopIdleTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS)
+    await settleTaskSessionWorkBeforePhysicalDelete(task, options)
     await recordTaskPhysicalDeleteBreadcrumb(task, "EngineService.deleteTask")
     // Delete session tree (CASCADE handles plans, goals, runs, etc.)
     if (task.session_id) {
