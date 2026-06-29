@@ -81,6 +81,7 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("cite fresh `reference-comparison` artifacts when they already exist")
     expect(normalized).toContain("Treat scroll-slice side-by-side output as supporting `visual_diff` evidence")
     expect(normalized).toContain("not formal `reference-comparison` proof")
+    expect(normalized).not.toContain("browser_preview_layout_geometry")
     expect(normalized).toContain("route-health failure")
     expect(normalized).toContain("Viewport width differences remain visible in side-by-side evidence")
     expect(normalized).toContain("reference-parity mismatch")
