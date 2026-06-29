@@ -8273,7 +8273,7 @@ export function createOrchestratorTools(input: {
 
     // -----------------------------------------------------------------------
     // Fact-check — verifies factual claims registered by a worker agent's
-    // terminal report.  Specs: specs/fact-check-agent-2026-05-25.md §4.3.
+    // terminal report.  Specs: deleted pre-June record fact-check-agent-2026-05-25 §4.3.
     //
     // Trigger rule (rule 13 — you, the orchestrator LLM, decide):
     //   You MAY call fact_check after integrity verdict = pass when
@@ -9278,7 +9278,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "fact_checks") {
-          // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
+          // Fact-check attempts (one-line per row) — deleted pre-June record fact-check-agent-2026-05-25
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
           // via listFactCheckAttempts; surfacing summaries in read_context
           // gives the orchestrator LLM a quick "what was already verified"
@@ -13215,7 +13215,7 @@ export function createOrchestratorTools(input: {
           // a thrown error skipped finalizeBuildAttempt entirely, leaving
           // the goal_run in attempt-running forever (see incident report
           // tsk_ddc529dfd0011ajJTgBqdlroyk G4 in
-          // specs/new-arch/2026-04-30-llm-activity-redesign.md). Step 4
+          // deleted pre-June record 2026-04-30-llm-activity-redesign). Step 4
           // closes that gap by ALWAYS finalising the goal_run when one
           // was opened, with status derived from the BuildAgent outcome
           // or, on throw, from the underlying error class.
@@ -13309,7 +13309,7 @@ export function createOrchestratorTools(input: {
                   // Host-synthesised BuildResult on contract violation: the LLM
                   // never reached its terminal tool, so it has no chance to
                   // populate fact_check_items. Empty array is the honest
-                  // construction-site default (specs/fact-check-agent-...md
+                  // construction-site default (deleted pre-June record fact-check-agent-2026-05-25
                   // §6.1.3 — same rationale as external executor factory).
                   fact_check_items: [],
                 }

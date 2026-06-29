@@ -264,16 +264,16 @@ describe("document health audit regressions", () => {
   })
 
   test("new architecture docs do not retain stale gateway session kind or package paths", () => {
-    const files = ["specs/new-arch/README.md", "specs/new-arch/02-data.md", "specs/new-arch/03-control.md"]
+    const files = ["specs/current/architecture/README.md", "specs/current/architecture/02-data.md", "specs/current/architecture/03-control.md"]
 
     expectFilesNotToContain(files, ["kind='gateway'", "src/gateway", "`assistant` · `gateway`"])
-    expect(read("specs/new-arch/02-data.md")).toContain("共 21 种")
-    expect(read("specs/new-arch/02-data.md")).toContain("gateway` 不再是 SessionKind")
+    expect(read("specs/current/architecture/02-data.md")).toContain("共 21 种")
+    expect(read("specs/current/architecture/02-data.md")).toContain("gateway` 不再是 SessionKind")
   })
 
   test("new architecture data doc does not duplicate engine schema inventories", () => {
     const engineSql = read("packages/opencorvus/src/engine/engine.sql.ts")
-    const dataDoc = read("specs/new-arch/02-data.md")
+    const dataDoc = read("specs/current/architecture/02-data.md")
     const engineTables = Array.from(engineSql.matchAll(/export const (Engine[A-Za-z0-9]+Table) = sqliteTable/g)).map(
       (match) => match[1],
     )
@@ -300,7 +300,7 @@ describe("document health audit regressions", () => {
   test("new architecture control doc does not duplicate capability or orchestrator route inventories", () => {
     const capabilitySource = read("packages/opencorvus/src/panel/capability.ts")
     const orchestratorRoutes = read("packages/opencorvus/src/server/routes/orchestrator.ts")
-    const controlDoc = read("specs/new-arch/03-control.md")
+    const controlDoc = read("specs/current/architecture/03-control.md")
     const actions = Array.from(capabilitySource.matchAll(/action: "([^"]+)"/g)).map((match) => match[1])
     const routeCount = (orchestratorRoutes.match(/describeRoute\(/g) ?? []).length
 
@@ -351,6 +351,15 @@ describe("document health audit regressions", () => {
       expect(text).not.toMatch(/"assistant"\s*:\s*\{\s*"requirements"\s*:\s*\{\s*"model"/)
       expect(text).toContain('"architect": { "model": "anthropic/claude-sonnet-4-6" }')
     }
+  })
+
+  test("CLAUDE delegates agent rules to AGENTS as the single source", () => {
+    const claude = read("CLAUDE.md")
+
+    expect(claude).toContain("`AGENTS.md` is the single source of truth")
+    expect(claude).toContain("Do not copy or fork those rules")
+    expect(claude).not.toContain("## 一、核心思维原则")
+    expect(claude).not.toContain("**1.**")
   })
 
   test("operator docs do not publish retired browser or package-manager aliases", () => {
@@ -432,14 +441,14 @@ describe("document health audit regressions", () => {
   test("current architecture chapters do not describe retired live paths as current", () => {
     expectFilesNotToContain(
       [
-        "specs/new-arch/01-agents.md",
-        "specs/new-arch/03-control.md",
-        "specs/new-arch/03-control.svg",
-        "specs/new-arch/04-extensions.md",
-        "specs/new-arch/09-verification-evidence.md",
-        "specs/new-arch/11-agent-oop-protocol.md",
-        "specs/new-arch/13-agent-communication-matrix.md",
-        "specs/new-arch/99-principles.md",
+        "specs/current/architecture/01-agents.md",
+        "specs/current/architecture/03-control.md",
+        "specs/current/architecture/03-control.svg",
+        "specs/current/architecture/04-extensions.md",
+        "specs/current/architecture/09-verification-evidence.md",
+        "specs/current/architecture/11-agent-oop-protocol.md",
+        "specs/current/architecture/13-agent-communication-matrix.md",
+        "specs/current/architecture/99-principles.md",
       ],
       [
         "src/integrity/agent.ts",
@@ -454,7 +463,7 @@ describe("document health audit regressions", () => {
       ],
     )
 
-    const controlChapter = read("specs/new-arch/03-control.md")
+    const controlChapter = read("specs/current/architecture/03-control.md")
     expect(controlChapter).toContain("共 28 个文件，2026-06-17")
     expect(controlChapter).toContain("routes/pty.ts")
     expect(controlChapter).toContain("routes/browser-preview.ts")
@@ -493,7 +502,7 @@ describe("document health audit regressions", () => {
     expect(read("packages/overlay/src/services/diff.ts")).not.toContain("normalizeVcsDiffs")
     expect(read("packages/overlay/src/services/diff.ts")).not.toContain("stub FileChange")
     expect(read("packages/overlay/test/diff-resolve-inflight-cache.test.ts")).not.toContain("vcs-backfill")
-    expect(read("specs/new-arch/2026-06-05-diff-preview-vcs-fallback-plan.md")).toContain("Status: Superseded")
+    expect(read("specs/records/2026-06/2026-06-05-diff-preview-vcs-fallback-plan.md")).toContain("Status: Superseded")
     expect(read("packages/opencorvus/script/screenshot-overlay.ts")).not.toContain("script/screenshot.ts")
     expect(read("packages/opencorvus/script/verify-executor-shim.ts")).not.toContain("SPA fallback")
     expect(read("packages/opencorvus/script/benchmark/audit-calculator.ts")).not.toContain(
@@ -806,39 +815,38 @@ describe("document health audit regressions", () => {
 
   test("historical specs that conflict with current runtime are marked as history", () => {
     for (const file of [
-      "specs/coding-agent-tui-independent-plugin-2026-06-06.md",
-      "specs/tui-home-layout-density-2026-06-06.md",
-      "specs/new-arch/right-sidebar-opencode-tui-copy-implementation-plan-2026-06-04.md",
-      "specs/new-arch/right-sidebar-opencode-tui-upgrade-2026-06-04.md",
-      "specs/new-arch/2026-06-04-right-panel-frontend-preview-mature-toolchain.md",
-      "specs/new-arch/2026-06-05-vscode-style-activity-toolbars.md",
-      "specs/new-arch/2026-06-04-right-sidebar-coding-assistant.md",
-      "specs/new-arch/2026-06-11-browser-preview-manual-url-input.md",
-      "specs/instance-stale-global-worktree-refresh-2026-06-16.md",
-      "specs/task-global-project-forbidden-2026-06-16.md",
-      "specs/task-execution-terminalization-2026-06-16.md",
-      "specs/tui-tank-battle-usability-case-2026-06-06.md",
+      "specs/records/2026-06/coding-agent-tui-independent-plugin-2026-06-06.md",
+      "specs/records/2026-06/tui-home-layout-density-2026-06-06.md",
+      "specs/records/2026-06/right-sidebar-opencode-tui-copy-implementation-plan-2026-06-04.md",
+      "specs/records/2026-06/right-sidebar-opencode-tui-upgrade-2026-06-04.md",
+      "specs/records/2026-06/2026-06-04-right-panel-frontend-preview-mature-toolchain.md",
+      "specs/records/2026-06/2026-06-05-vscode-style-activity-toolbars.md",
+      "specs/records/2026-06/2026-06-04-right-sidebar-coding-assistant.md",
+      "specs/records/2026-06/2026-06-11-browser-preview-manual-url-input.md",
+      "specs/records/2026-06/instance-stale-global-worktree-refresh-2026-06-16.md",
+      "specs/records/2026-06/task-global-project-forbidden-2026-06-16.md",
+      "specs/records/2026-06/task-execution-terminalization-2026-06-16.md",
+      "specs/records/2026-06/tui-tank-battle-usability-case-2026-06-06.md",
     ]) {
       const head = read(file).split(/\r?\n/).slice(0, 12).join("\n")
       expect(head).toMatch(/Superseded|superseded/)
     }
 
-    expect(read("specs/new-arch/2026-06-06-mission-session-agent-identity.md")).not.toContain("| TUI runtime")
-    expect(read("specs/task-row-action-rail-visual-alignment-2026-06-05.md")).not.toContain("TUI host")
-    expect(read("specs/new-arch/2026-06-15-browser-preview-consensus-closure.md")).toContain(
+    expect(read("specs/records/2026-06/2026-06-06-mission-session-agent-identity.md")).not.toContain("| TUI runtime")
+    expect(read("specs/records/2026-06/task-row-action-rail-visual-alignment-2026-06-05.md")).not.toContain("TUI host")
+    expect(read("specs/records/2026-06/2026-06-15-browser-preview-consensus-closure.md")).toContain(
       "manual URL branch was retired",
     )
 
+    const retiredPackageSpecDir = ["packages", "opencorvus", "specs"]
     for (const file of [
-      "packages/opencorvus/specs/acceptance-spec-scope-discipline-2026-05-23.md",
-      "packages/opencorvus/specs/build-agent-review-uptake-2026-05-23.md",
-      "packages/opencorvus/specs/integrity-severity-discipline-2026-05-23.md",
-      "packages/opencorvus/specs/integrity-team-replay-aware-2026-05-23.md",
-      "packages/opencorvus/specs/orchestrator-stuck-integrity-loop-2026-05-23.md",
+      "acceptance-spec-scope-discipline-2026-05-23.md",
+      "build-agent-review-uptake-2026-05-23.md",
+      "integrity-severity-discipline-2026-05-23.md",
+      "integrity-team-replay-aware-2026-05-23.md",
+      "orchestrator-stuck-integrity-loop-2026-05-23.md",
     ]) {
-      const head = read(file).split(/\r?\n/).slice(0, 12).join("\n")
-      expect(head).toContain("implemented history")
-      expect(head).not.toContain("Status: design draft")
+      expect(fs.existsSync(path.join(repoRoot, ...retiredPackageSpecDir, file))).toBe(false)
     }
   })
 })

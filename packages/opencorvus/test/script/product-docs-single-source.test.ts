@@ -6,12 +6,12 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const deletedProductDocsPath = ["docs", "product"].join("/")
 const allowedHistoricalProductDocReferences = new Set([
   "specs/README.md",
-  "specs/new-arch/README.md",
-  "specs/new-arch/2026-06-04-docs-sdk-single-source.md",
-  "specs/new-arch/2026-06-15-historical-docs-consolidation.md",
-  "specs/new-arch/2026-06-17-document-health-audit.md",
+  "specs/current/architecture/README.md",
+  "specs/records/2026-06/2026-06-04-docs-sdk-single-source.md",
+  "specs/records/2026-06/2026-06-15-historical-docs-consolidation.md",
+  "specs/records/2026-06/2026-06-17-document-health-audit.md",
 ])
-const docsReferenceScanRoots = ["specs", "docs", "packages/opencorvus/specs", "packages/web/src/content/docs"]
+const docsReferenceScanRoots = ["specs", "docs", "packages/web/src/content/docs"]
 const textExtensions = new Set([".md", ".mdx", ".txt"])
 
 function walkTextFiles(dir: string, out: string[] = []): string[] {

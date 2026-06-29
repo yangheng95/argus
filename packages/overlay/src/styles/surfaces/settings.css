@@ -329,7 +329,7 @@ button.s-row:focus-visible {
    former perm-panel / perm-row / perm-action-btn class family was
    the canonical source for the segmented control + row layout;
    that contract now lives in the primitive layer above.
-   See specs/overlay-settings-primitives-2026-05-26.md. */
+   See deleted pre-June record overlay-settings-primitives-2026-05-26. */
 
 /* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
 
