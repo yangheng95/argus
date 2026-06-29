@@ -1,20 +1,16 @@
 // ── AgentSessionReplyBox ──
 // Inline textarea + steer button rendered at the END of an agent/session
-// card. Most cards reply directly to a sub-agent session; build cards route
-// through task-level operator guidance because build runtime ownership is
-// managed by the orchestrator/build attempt lifecycle.
+// card. All callers route through one target-scoped operator steer API that
+// persists a visible coordination request for the orchestrator to answer.
 //
 // Replaces the previous CardHeader collapsible toggle (a hidden button
 // in the top-right of the card that expanded a form). Always visible at
 // the bottom of the card body — matches the user's "末尾的文本回复框和
 // 确认按钮" intent.
 //
-// Backend routing is supplied by the caller. Non-build cards use
-// POST /task/:taskID/session/:sessionID/reply via replyToAgentSession().
-// Build cards use POST /task/:taskID/message via sendTaskOperatorMessage().
-//
 // Error handling: structural backend errors are visible diagnostics only. The
-// reply route must not rewrite a failed direct reply into task-root input.
+// operator steer route must not rewrite failed steer into task-root input or a
+// direct child-session reply.
 
 import { createSignal, Show } from "solid-js"
 import { t } from "../utils/i18n"
@@ -22,30 +18,22 @@ import { Icon } from "./Icon"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { Button } from "./ui/Button"
 
-/** Backend NamedError names the reply route may surface. Mirrored from
- *  packages/opencorvus/src/orchestrator/direct-reply.ts — kept here as a
+/** Backend NamedError names the operator steer route may surface. Kept here as a
  *  closed string union so the JSX branches stay exhaustive at the type
  *  level. If the backend adds a new name, TS will surface the missing
  *  branch via `(errorName satisfies undefined)` in the default arm. */
 type ReplyErrorName =
-  | "InvalidReplyTargetKindError"
-  | "BuildSessionDirectReplyError"
-  | "ReplyTargetEnvelopeMissingError"
   | "AgentSessionPendingCoordinationError"
-  | "AgentSessionAttachmentReferenceError"
+  | "OperatorSteerTargetError"
+  | "OperatorSteerWakeError"
   | "SessionRuntimeContractMissingError"
 
 interface ReplyErrorInfo {
   name: ReplyErrorName | undefined
-  /** NamedError body data — currently only BuildSessionDirectReplyError
-   *  carries fields the overlay branches on (sessionKind, envelopeAgent
-   *  to pick the hybrid-specific copy when sessionKind !== "build" but
-   *  envelopeAgent === "build"). Other errors don't need this yet. */
-  data: Record<string, unknown> | undefined
 }
 
 function pickErrorInfo(err: unknown): ReplyErrorInfo {
-  if (!err || typeof err !== "object") return { name: undefined, data: undefined }
+  if (!err || typeof err !== "object") return { name: undefined }
   // ApiError attaches the parsed JSON body verbatim. NamedError.toObject()
   // shape is `{ name: "...", data: {...} }` — read body.name when
   // available, falling back to top-level name on raw error objects.
@@ -56,51 +44,30 @@ function pickErrorInfo(err: unknown): ReplyErrorInfo {
       : undefined
   const fromError = typeof (err as { name?: unknown }).name === "string" ? (err as { name: string }).name : undefined
   const candidate = fromBody ?? fromError
-  const rawData = body && typeof body === "object" ? (body as { data?: unknown }).data : undefined
-  const data =
-    rawData && typeof rawData === "object" && !Array.isArray(rawData) ? (rawData as Record<string, unknown>) : undefined
   let name: ReplyErrorName | undefined
   switch (candidate) {
-    case "InvalidReplyTargetKindError":
-    case "BuildSessionDirectReplyError":
-    case "ReplyTargetEnvelopeMissingError":
     case "AgentSessionPendingCoordinationError":
-    case "AgentSessionAttachmentReferenceError":
+    case "OperatorSteerTargetError":
+    case "OperatorSteerWakeError":
     case "SessionRuntimeContractMissingError":
       name = candidate
       break
     default:
       name = undefined
   }
-  return { name, data }
+  return { name }
 }
 
 function messageForError(info: ReplyErrorInfo, fallback: string): string {
   switch (info.name) {
     case "SessionRuntimeContractMissingError":
       return t("card.agent_reply_contract_gone")
-    case "InvalidReplyTargetKindError":
+    case "OperatorSteerTargetError":
       return t("card.agent_reply_kind_not_allowed")
-    case "BuildSessionDirectReplyError": {
-      // Hybrid case (session.kind !== "build" but envelope.agent ===
-      // "build") gets its own copy: the SESSION is fine, but its last
-      // envelope is tagged to resume under the build agent. Generic
-      // "kind not allowed" would be misleading because the session.kind
-      // IS in the reply whitelist. Falls back to kind_not_allowed when
-      // backend data is malformed. codex review round 2 — minor.
-      const sessionKind = typeof info.data?.sessionKind === "string" ? info.data.sessionKind : ""
-      const envelopeAgent = typeof info.data?.envelopeAgent === "string" ? info.data.envelopeAgent : ""
-      if (sessionKind && sessionKind !== "build" && envelopeAgent === "build") {
-        return t("card.agent_reply_build_envelope")
-      }
-      return t("card.agent_reply_kind_not_allowed")
-    }
-    case "ReplyTargetEnvelopeMissingError":
-      return t("card.agent_reply_envelope_missing")
     case "AgentSessionPendingCoordinationError":
       return t("card.agent_reply_pending_coordination")
-    case "AgentSessionAttachmentReferenceError":
-      return t("card.agent_reply_attachment_reference")
+    case "OperatorSteerWakeError":
+      return t("card.agent_reply_wake_failed")
     default:
       return fallback || t("card.agent_reply_failed")
   }

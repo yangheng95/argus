@@ -13,6 +13,8 @@ import {
 import {
   Artifact,
   AgentSessionCancelResult,
+  AgentSessionOperatorSteerInput,
+  AgentSessionOperatorSteerResult,
   AgentSessionReplyInput,
   AgentSessionReplyResult,
   Budget,
@@ -55,7 +57,7 @@ import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { compileBoard } from "@/workbench/board"
 import { buildTaskProjectArchive, ProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
-import { errors, replyRouteErrors } from "../error"
+import { errors, operatorSteerRouteErrors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
 import {
@@ -69,7 +71,7 @@ import {
   taskSession,
 } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
-import { AgentSessionPendingCoordinationError, DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
+import { AgentSessionPendingCoordinationError, canReceiveDirectAgentSessionControl } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -1337,6 +1339,35 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .post(
+      "/task/:taskID/session/:sessionID/operator-steer",
+      describeRoute({
+        summary: "Steer a task agent session through operator coordination",
+        description:
+          "Accept a human-authored steer message for one target sub-agent session. " +
+          "The route records a durable operator-originated agent_coordination_request and wakes the orchestrator. " +
+          "It never appends a task-root operator message and never writes a direct child-session reply.",
+        operationId: "task.session.operatorSteer",
+        responses: {
+          202: {
+            description: "Operator steer request accepted",
+            content: {
+              "application/json": {
+                schema: resolver(AgentSessionOperatorSteerResult),
+              },
+            },
+          },
+          ...operatorSteerRouteErrors(400, 404, 409, 410),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),
+      validator("json", AgentSessionOperatorSteerInput),
+      async (c) => {
+        const params = c.req.valid("param")
+        const input = c.req.valid("json")
+        return c.json(await EngineService.operatorSteerAgentSession(params.taskID, params.sessionID, input), 202)
+      },
+    )
+    .post(
       "/task/:taskID/session/:sessionID/reply",
       describeRoute({
         summary: "Reply directly to a task agent session",
@@ -1935,13 +1966,10 @@ async function assertDirectAgentSession(taskID: string, sessionID: string) {
       message: `Session ${sessionID} has no task agent kind`,
     })
   }
-  // The cancel route is a SESSION CONTROL surface, not the reply surface
-  // — its allowed kinds include "build" (per DIRECT_AGENT_SESSION_CONTROL_KINDS).
-  // Until this fix the route reused DIRECT_REPLY_AGENT_KINDS, which
-  // excludes build, so cancelling a build session 400'd. The two sets
-  // exist precisely to keep these two surfaces distinct (rule 8 single
-  // source per concept).
-  if (!DIRECT_AGENT_SESSION_CONTROL_KINDS.has(kind)) {
+  // The cancel route is a session-control surface, not the direct-reply
+  // surface. Its task-worker membership is derived from AgentRoleContract
+  // through canReceiveDirectAgentSessionControl().
+  if (!canReceiveDirectAgentSessionControl(kind)) {
     throw new HTTPException(400, {
       message: `Session ${sessionID} has kind "${kind}" and cannot be controlled through the direct agent session control surface`,
     })

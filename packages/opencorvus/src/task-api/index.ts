@@ -3,6 +3,7 @@ import { Output } from "ai"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
+import { AgentRoleContract } from "@/agent/role-contract"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
@@ -17,6 +18,7 @@ import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { ProviderSchema } from "@/provider/schema"
 import { ProtocolStore } from "@/protocol/store"
+import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { EngineProtocol } from "@/engine/protocol"
 import { clearRewindCursor } from "@/engine/rewind"
 import { ensureGitignore } from "@/engine/git"
@@ -33,7 +35,7 @@ import { decodeRawBase64Payload } from "@/session/text-mime"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { SessionAgentIdentity } from "@/session/agent-identity"
-import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { compileBoard, boardTag } from "@/workbench/board"
 import { compileBrief } from "@/workbench/brief"
@@ -52,18 +54,19 @@ import {
   Budget,
   CreateTaskInput,
   Event,
+  AgentSessionOperatorSteerInput,
   RejectInteractionInput,
   ReplyInteractionInput,
   TaskMessageInput,
   CheckConfig,
   UpdateGoalInput,
   UpdateTaskChecksInput,
-  type TaskMessageTargetInput,
 } from "@/engine/model"
 import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import {
+  discardPendingQueuedOperatorWakeForRequest,
   discardQueuedTaskEvent,
   directoryQueueSnapshot,
   drainPendingQueuedOperatorWakes,
@@ -109,8 +112,12 @@ import {
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { requestTaskAgentLifecycleCancellation } from "@/engine/task-agent-lifecycle"
 import {
+  AgentCoordinationPendingConflictError,
+  cancelPendingAgentCoordinationRequest,
   cancelPendingAgentCoordinationRequestsForTask,
+  createOperatorSteerCoordinationRequest,
   listPendingAgentCoordinationSessionControlRequests,
+  resolveAgentCoordinationSessionOwnership,
 } from "@/engine/agent-coordination"
 import { abortGoalRunExecution } from "@/engine/execution-abort"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
@@ -119,13 +126,15 @@ import { DecisionLogBundle } from "@/decision-log/bundle"
 import { EngineEventLog } from "@/engine/event-log"
 import { Orchestrator } from "@/orchestrator/agent"
 import {
-  DIRECT_REPLY_AGENT_KINDS,
+  AgentDirectReplyDisabledError,
   AgentSessionAttachmentReferenceError,
   AgentSessionPendingCoordinationError,
-  BuildSessionDirectReplyError,
   InvalidReplyTargetKindError,
   ReplyTargetEnvelopeMissingError,
+  SessionRuntimeContractMissingError,
+  canReceiveDirectAgentReply,
 } from "@/orchestrator/direct-reply"
+import { OperatorSteerTargetError, OperatorSteerWakeError } from "@/orchestrator/operator-steer"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { sessionRole, taskIDForSession } from "@/orchestrator/task-event"
 import {
@@ -494,7 +503,7 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
   if (!kind) {
     throw new NotFoundError({ message: `Session ${sessionID} has no task agent kind` })
   }
-  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+  if (!canReceiveDirectAgentReply(kind)) {
     throw new InvalidReplyTargetKindError({
       message: `Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`,
       sessionID,
@@ -601,31 +610,16 @@ async function appendDirectAgentSessionReply(input: {
     })
   }
   const targetPrompt = SessionAgentIdentity.applyToPrompt(target.session.kind, target.prompt)
-  // Both halves of the build check are load-bearing:
-  //
-  //   - session.kind === "build" catches the obvious case where the
-  //     underlying session was created as a build attempt.
-  //   - prompt.agent === "build" catches the hybrid case where the
-  //     session.kind is something else (requirements / architect / …)
-  //     but the envelope has been tagged `agent: "build"`. Message.User.agent
-  //     is NOT just a model-resolution hint — session/loop.ts:1196
-  //     `Agent.get(input.lastUser.agent)` reads it to materialise the
-  //     agent definition for the next turn. If we let this pass through
-  //     a generic reply, the next loop iteration would wake the build
-  //     agent (its system prompt, its tools, its terminal contract)
-  //     under a non-build session — bypassing the build retry lifecycle
-  //     that exists precisely to install a fresh stage runtime contract.
-  //     codex review 2026-05-26: a previous attempt at this fix
-  //     mistakenly dropped this half.
-  if (target.session.kind === "build" || target.prompt.agent === "build") {
-    throw new BuildSessionDirectReplyError({
+  if (!canReceiveDirectAgentReply(target.prompt.agent)) {
+    throw new AgentDirectReplyDisabledError({
       message:
-        target.session.kind === "build"
-          ? `replyAgentSession: build session ${target.session.id} cannot be continued through generic direct reply; dispatch build retry so a fresh stage runtime contract is installed.`
-          : `replyAgentSession: session ${target.session.id} (kind=${target.session.kind}) has its last user envelope tagged agent="build" and would wake the build agent on resume; dispatch build retry so a fresh stage runtime contract is installed.`,
+        `replyAgentSession: session ${target.session.id} (kind=${target.session.kind}) has its latest user envelope ` +
+        `tagged agent="${target.prompt.agent}", which cannot receive generic direct replies. Use the agent ` +
+        `coordination/operator-steer path so the correct runtime contract is installed.`,
       sessionID: target.session.id,
       sessionKind: target.session.kind,
       envelopeAgent: target.prompt.agent,
+      reason: "envelope_agent_not_direct_replyable",
     })
   }
   // Validate the runtime contract BEFORE doing any model resolution.
@@ -779,12 +773,134 @@ async function appendDirectAgentSessionReply(input: {
   }
 }
 
+type OperatorSteerDispatch = typeof dispatchTaskLoop
+
+function isOperatorSteerTargetSessionKind(kind: string): boolean {
+  return AgentRoleContract.isAgentOwnedTaskWorkerID(kind)
+}
+
+function latestPersistedSessionStatus(sessionID: string): SessionStatus.Info | undefined {
+  const row = Database.use((db) =>
+    db
+      .select({ payload: ProtocolEventTable.payload })
+      .from(ProtocolEventTable)
+      .where(and(eq(ProtocolEventTable.session_id, sessionID), eq(ProtocolEventTable.type, "session.status")))
+      .orderBy(desc(ProtocolEventTable.emitted_at), desc(ProtocolEventTable.seq))
+      .get(),
+  )
+  const parsed = SessionStatus.Info.safeParse((row?.payload as { status?: unknown } | undefined)?.status)
+  return parsed.success ? parsed.data : undefined
+}
+
+async function resolveOperatorSteerTarget(input: {
+  task: TaskRow
+  sessionID: string
+}): Promise<{
+  session: Awaited<ReturnType<typeof Session.get>>
+  agent: string
+  goalID?: string
+  goalRunID?: string
+}> {
+  const session = await Session.get(input.sessionID)
+  const owningTask = taskIDForSession(session.id)
+  if (owningTask && owningTask !== input.task.id) {
+    throw new OperatorSteerTargetError({
+      message: `operatorSteerAgentSession: session ${session.id} belongs to task ${owningTask}, not ${input.task.id}.`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      reason: "foreign_task",
+    })
+  }
+  if (input.task.session_id === session.id || session.kind === "root") {
+    throw new OperatorSteerTargetError({
+      message: `operatorSteerAgentSession: session ${session.id} is the task root; use the task message route for task-level operator input.`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      reason: "task_root",
+    })
+  }
+  if (session.kind === "orchestrator") {
+    throw new OperatorSteerTargetError({
+      message: `operatorSteerAgentSession: session ${session.id} is an orchestrator session, not a target sub-agent session.`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      reason: "orchestrator_session",
+    })
+  }
+  if (!isOperatorSteerTargetSessionKind(session.kind)) {
+    throw new OperatorSteerTargetError({
+      message: `operatorSteerAgentSession: session ${session.id} kind=${session.kind} is not an agent-owned worker session.`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      reason: "invalid_kind",
+    })
+  }
+
+  const runtimeContract = SessionPrompt.getSessionRuntimeContract(session.id)
+  const agent = runtimeContract?.identity.agentKind ?? session.kind
+  const goalID = runtimeContract?.identity.goalID ?? session.goalID
+  const goalRunID = runtimeContract?.identity.goalRunID
+  const pendingCoordination = listPendingAgentCoordinationSessionControlRequests({
+    taskID: input.task.id,
+    sessionID: session.id,
+    goalRunID,
+  })
+  if (pendingCoordination.length > 0) {
+    const requestIDs = pendingCoordination.map((request) => request.payload.request_id)
+    throw new AgentSessionPendingCoordinationError({
+      message:
+        `operatorSteerAgentSession: session ${session.id} has pending coordination request(s) ` +
+        `${requestIDs.join(", ")}. Answer the existing request through respond_agent_coordination before adding new operator steer.`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      requestIDs,
+    })
+  }
+
+  const processStatus = SessionStatus.get(session.id)
+  const persistedStatus = latestPersistedSessionStatus(session.id)
+  const terminalStatus =
+    processStatus.type === "terminal"
+      ? processStatus
+      : persistedStatus?.type === "terminal"
+        ? persistedStatus
+        : undefined
+  if (terminalStatus) {
+    throw new SessionRuntimeContractMissingError({
+      message: `operatorSteerAgentSession: session ${session.id} is terminal (${terminalStatus.reason}); redispatch or retry through a visible lifecycle action instead of steering a stale session.`,
+      sessionID: session.id,
+      agentKind: agent,
+      reason: "terminal_satisfied",
+    })
+  }
+
+  try {
+    resolveAgentCoordinationSessionOwnership({
+      taskID: input.task.id,
+      sessionID: session.id,
+      goalID,
+      goalRunID,
+    })
+  } catch (error) {
+    throw new OperatorSteerTargetError({
+      message:
+        error instanceof Error
+          ? `operatorSteerAgentSession: ${error.message}`
+          : `operatorSteerAgentSession: ${String(error)}`,
+      taskID: input.task.id,
+      sessionID: session.id,
+      reason: "unowned_session",
+    })
+  }
+
+  return { session, agent, goalID, goalRunID }
+}
+
 async function continueTaskMessage(
   taskID: string,
   text: string,
   source: string,
   attachments: AttachmentStore.Reference[] = [],
-  target?: TaskMessageTargetInput,
 ) {
   const attachmentSummary =
     attachments.length > 0
@@ -801,7 +917,7 @@ async function continueTaskMessage(
           }),
         ].join("\n")
       : undefined
-  const wake = await appendAndWakeTaskOperatorMessage({ taskID, text, attachments, attachmentSummary, source, target })
+  const wake = await appendAndWakeTaskOperatorMessage({ taskID, text, attachments, attachmentSummary, source })
 
   return {
     mode: "scheduler" as const,
@@ -818,7 +934,6 @@ async function appendAndWakeTaskOperatorMessage(input: {
   attachments?: AttachmentStore.Reference[]
   attachmentSummary?: string
   source: string
-  target?: TaskMessageTargetInput
 }): Promise<{
   task: TaskRow
   userMessage: { info: Message.User; parts: Message.Part[] }
@@ -832,7 +947,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   // orchestrator prompt both read session messages, so this is the single
   // task-level operator-message owner for /message and /inject.
   const source = input.source
-  const userMessage = await appendTaskSessionMessage(task, input.text, source, input.attachments ?? [], input.target)
+  const userMessage = await appendTaskSessionMessage(task, input.text, source, input.attachments ?? [])
   await clearRewindCursor(input.taskID)
   await EngineProtocol.emit(
     Event.TaskMessageRecorded,
@@ -840,7 +955,6 @@ async function appendAndWakeTaskOperatorMessage(input: {
       taskID: input.taskID,
       kind: "note",
       source,
-      target: input.target,
       text: input.text,
       summary: "Operator note recorded",
       messageID: userMessage.info.id,
@@ -861,7 +975,6 @@ async function appendAndWakeTaskOperatorMessage(input: {
         text: input.text,
         attachmentSummary: input.attachmentSummary,
         source,
-        target: input.target,
         messageID: userMessage.info.id,
       },
     },
@@ -924,7 +1037,6 @@ async function appendTaskSessionMessage(
   text: string,
   source: string,
   attachments: AttachmentStore.Reference[] = [],
-  target?: TaskMessageTargetInput,
 ): Promise<{ info: Message.User; parts: Message.Part[] }> {
   // Rule 7: no silent fallback. A task without a session_id or whose
   // session has lost its agent/model context cannot accept a message —
@@ -957,7 +1069,6 @@ async function appendTaskSessionMessage(
     extra: {
       operator_message: {
         source,
-        ...(target ? { target } : {}),
       },
     },
   } satisfies Message.User
@@ -2076,6 +2187,80 @@ export namespace EngineService {
     })
   }
 
+  export async function operatorSteerAgentSession(
+    taskID: string,
+    sessionID: string,
+    raw: z.input<typeof AgentSessionOperatorSteerInput>,
+    dispatch: OperatorSteerDispatch = dispatchTaskLoop,
+  ) {
+    const input = AgentSessionOperatorSteerInput.parse(raw)
+    const task = requireTaskInCurrentProject(taskID)
+    const target = await resolveOperatorSteerTarget({ task, sessionID })
+    let request: Awaited<ReturnType<typeof createOperatorSteerCoordinationRequest>>
+    try {
+      request = await createOperatorSteerCoordinationRequest({
+        taskID: task.id,
+        sessionID: target.session.id,
+        agent: target.agent,
+        operatorMessage: input.message,
+        goalID: target.goalID,
+        goalRunID: target.goalRunID,
+      })
+    } catch (error) {
+      if (error instanceof AgentCoordinationPendingConflictError) {
+        throw new AgentSessionPendingCoordinationError({
+          message:
+            `operatorSteerAgentSession: session ${target.session.id} has pending coordination request(s) ` +
+            `${error.requestIDs.join(", ")}. Answer the existing request through respond_agent_coordination before adding new operator steer.`,
+          taskID: task.id,
+          sessionID: target.session.id,
+          requestIDs: error.requestIDs,
+        })
+      }
+      throw error
+    }
+
+    let dispatchResult: Awaited<ReturnType<OperatorSteerDispatch>>
+    try {
+      dispatchResult = await dispatch({
+        taskID: task.id,
+        event: {
+          coordinationRequest: { requestID: request.payload.request_id },
+        },
+      })
+    } catch (error) {
+      await cancelPendingAgentCoordinationRequest({
+        taskID: task.id,
+        requestID: request.payload.request_id,
+        reason: `operator steer wake failed: ${error instanceof Error ? error.message : String(error)}`,
+      })
+      discardPendingQueuedOperatorWakeForRequest({ taskID: task.id, requestID: request.payload.request_id })
+      throw error
+    }
+    if (dispatchResult === "ignored") {
+      await cancelPendingAgentCoordinationRequest({
+        taskID: task.id,
+        requestID: request.payload.request_id,
+        reason: "operator steer wake ignored",
+      })
+      discardPendingQueuedOperatorWakeForRequest({ taskID: task.id, requestID: request.payload.request_id })
+      throw new OperatorSteerWakeError({
+        message: `operatorSteerAgentSession: request ${request.payload.request_id} was recorded but orchestrator wake was ignored.`,
+        taskID: task.id,
+        sessionID: target.session.id,
+        requestID: request.payload.request_id,
+        reason: "ignored",
+      })
+    }
+
+    return {
+      task_id: task.id,
+      session_id: target.session.id,
+      request_id: request.payload.request_id,
+      wake_status: dispatchResult,
+    }
+  }
+
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
     const row = requireInteractionInCurrentProject(interactionID)
@@ -2510,7 +2695,7 @@ export namespace EngineService {
     // Natural-language user messages are recorded once as visible task-root
     // user messages. Workbench notes are a separate note/constraint surface;
     // duplicating this text there would create a target-less second source.
-    const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs, input.target)
+    const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs)
     const message =
       note.wakeStatus === "started"
         ? "Operator note recorded. Task wake dispatched."
@@ -2553,7 +2738,8 @@ export namespace EngineService {
    * Task-level input has a single owner: the orchestrator wake path. The active
    * run's session_id is the task root session in workflow mode, so resuming an
    * executor from here writes agent output into root and breaks conversation
-   * projection. Scoped agent steering must use /task/:id/session/:sessionID/reply.
+   * projection. Targeted operator steer must use
+   * /task/:id/session/:sessionID/operator-steer.
    */
   export async function injectMessage(taskID: string, message: string) {
     const wake = await appendAndWakeTaskOperatorMessage({ taskID, text: message, source: "api_inject" })

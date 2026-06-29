@@ -15,7 +15,7 @@ import { bubbleAlign } from "../utils/chat-bubble"
 import { normalizeAgentRole, roleLabel } from "../utils/message"
 import { stageAccent } from "../utils/card-color"
 import { fullStampWithRelative, stamp } from "../utils/time"
-import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
+import { cancelAgentSession, sendOperatorSteer } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
 import { currentTraceDirectory } from "../services/trace-directory"
 import { t } from "../utils/i18n"
@@ -34,8 +34,18 @@ function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }
   throw new Error(`ChatBubble: unsupported child kind "${props.child.kind}" for ${props.parentID}`)
 }
 
-function ChatBubbleAgentChildBody(props: { child: CardNode; depth: number }) {
+function ChatBubbleAgentChildBody(props: {
+  child: CardNode
+  depth: number
+  rootTaskSessionID?: string
+  onAgentReply: (sessionID: string, message: string) => Promise<void>
+}) {
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.child))
+  const directAgentSessionID = createMemo(() => {
+    const sessionID = props.child.sessionID || undefined
+    if (!sessionID || sessionID === props.rootTaskSessionID) return undefined
+    return sessionID
+  })
 
   return (
     <>
@@ -51,15 +61,32 @@ function ChatBubbleAgentChildBody(props: { child: CardNode; depth: number }) {
       <Show when={visibleChildIDs().length > 0}>
         <div class="chat-bubble__children">
           <For each={visibleChildIDs()}>
-            {(childID) => <ChatBubbleChild childID={childID} depth={props.depth + 1} parentID={props.child.id} />}
+            {(childID) => (
+              <ChatBubbleChild
+                childID={childID}
+                depth={props.depth + 1}
+                parentID={props.child.id}
+                rootTaskSessionID={props.rootTaskSessionID}
+                onAgentReply={props.onAgentReply}
+              />
+            )}
           </For>
         </div>
+      </Show>
+      <Show when={directAgentSessionID()}>
+        <AgentSessionReplyBox onSend={(message) => props.onAgentReply(directAgentSessionID()!, message)} />
       </Show>
     </>
   )
 }
 
-function ChatBubbleChild(props: { childID: string; depth: number; parentID: string }) {
+function ChatBubbleChild(props: {
+  childID: string
+  depth: number
+  parentID: string
+  rootTaskSessionID?: string
+  onAgentReply: (sessionID: string, message: string) => Promise<void>
+}) {
   const child = () => storeCardNode(props.childID, props.parentID)
 
   return (
@@ -79,7 +106,12 @@ function ChatBubbleChild(props: { childID: string; depth: number; parentID: stri
           <IntegrityBody integrity={child().integrity!} />
         </Match>
         <Match when={child().kind === "agent"}>
-          <ChatBubbleAgentChildBody child={child()} depth={props.depth} />
+          <ChatBubbleAgentChildBody
+            child={child()}
+            depth={props.depth}
+            rootTaskSessionID={props.rootTaskSessionID}
+            onAgentReply={props.onAgentReply}
+          />
         </Match>
       </Switch>
     </div>
@@ -166,10 +198,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if (!sessionID || sessionID === rootTaskSessionID()) return undefined
     return sessionID
   })
-  const directAgentReplyMode = createMemo<"session" | "task">(() =>
-    normalizeAgentRole(props.node.stage || props.node.role || "") === "build" ? "task" : "session",
-  )
-
   const onTraceToggle = () => {
     if (!traceSessionID()) return
     if (!expanded()) setExpanded(true)
@@ -184,28 +212,8 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
 
   const onAgentReply = async (sessionID: string, message: string) => {
     const taskID = activeTaskID()
-    if (!taskID) return
-    if (directAgentReplyMode() === "task") {
-      const context = [
-        "Build session steering from overlay.",
-        `Target build session: ${sessionID}.`,
-        props.node.goalID ? `Target goal: ${props.node.goalID}.` : "",
-        "",
-        message,
-      ]
-        .filter((line) => line.length > 0)
-        .join("\n")
-      await sendTaskOperatorMessage(taskID, context, {
-        source: "overlay_build_steer",
-        target: {
-          kind: "build_session",
-          sessionID,
-          ...(props.node.goalID ? { goalID: props.node.goalID } : {}),
-        },
-      })
-      return
-    }
-    await replyToAgentSession(taskID, sessionID, message)
+    if (!taskID) throw new Error(t("card.agent_reply_missing_task"))
+    await sendOperatorSteer(taskID, sessionID, message)
   }
 
   const onAgentCancel = async (sessionID: string) => {
@@ -313,7 +321,15 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 <Show when={visibleChildIDs().length > 0}>
                   <div class="chat-bubble__children">
                     <For each={visibleChildIDs()}>
-                      {(childID) => <ChatBubbleChild childID={childID} depth={props.depth} parentID={props.node.id} />}
+                      {(childID) => (
+                        <ChatBubbleChild
+                          childID={childID}
+                          depth={props.depth}
+                          parentID={props.node.id}
+                          rootTaskSessionID={rootTaskSessionID()}
+                          onAgentReply={onAgentReply}
+                        />
+                      )}
                     </For>
                   </div>
                 </Show>

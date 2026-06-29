@@ -67,6 +67,8 @@ import type { LanguageModel } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Agent } from "@/agent/agent"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
@@ -277,27 +279,12 @@ function finalTextFromMessage(message: Message.WithParts | undefined): string | 
   return text || undefined
 }
 
-const BUILD_DEFAULT_DISABLED_TOOLS = [
-  "task",
-  "webfetch",
-  "websearch",
-  "external_code_search",
-  "memory",
-  "planner",
-  "goal_report",
-] as const
-
 export function promptToolSwitchesForAgentRun(input: {
   extraToolNames: string[]
-  kind?: SessionKind
+  role: AgentRoleID
 }): Record<string, boolean> {
   const switches: Record<string, boolean> = Object.fromEntries(input.extraToolNames.map((name) => [name, true]))
-  if (input.kind !== "build") return switches
-
-  switches.skill = true
-  for (const toolName of BUILD_DEFAULT_DISABLED_TOOLS) {
-    switches[toolName] = false
-  }
+  Object.assign(switches, AgentToolPool.defaultRuntimeToolSwitches(input.role))
   return switches
 }
 
@@ -306,14 +293,15 @@ function isReferenceModality(mime: string): boolean {
   return normalized.startsWith("image/") || normalized === "application/pdf"
 }
 
-export function shouldFailUnreadableBuildReference(input: {
-  kind: SessionKind
+export function shouldFailUnreadableReferenceForRole(input: {
+  role: AgentRoleID
   userText: string
   droppedFileParts: Array<{ mime: string }>
 }): boolean {
+  const marker = AgentRoleContract.unreadableReferencePromptMarker(input.role)
   return (
-    input.kind === "build" &&
-    input.userText.includes("## Visual Reference Contract (binding for this dispatch)") &&
+    typeof marker === "string" &&
+    input.userText.includes(marker) &&
     input.droppedFileParts.some((part) => isReferenceModality(part.mime))
   )
 }
@@ -341,6 +329,11 @@ export class AgentRunError extends Error {
     this.name = "AgentRunError"
     this.nonRetryable = options?.nonRetryable === true
   }
+}
+
+function roleIDForAgentRun(kind: SessionKind): AgentRoleID {
+  if (AgentRoleContract.isRoleID(kind)) return kind
+  throw new AgentRunError(kind, `runAgentSession kind ${kind} is not declared in AgentRoleContract`)
 }
 
 /**
@@ -609,6 +602,7 @@ function buildContinuationUserPrompt(input: AgentSessionContinuation): string {
 
 export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
+  const role = roleIDForAgentRun(kind)
   const agentName = input.agentName ?? kind
   if (input.continuation && input.existingSessionID && input.continuation.sessionID !== input.existingSessionID) {
     throw new AgentRunError(
@@ -737,7 +731,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     const dropped = before - parts.filter((p) => p.type === "file").length
     if (dropped > 0) {
       const filteredReferences = fileParts.filter((part) => isReferenceModality(part.mime))
-      if (shouldFailUnreadableBuildReference({ kind, userText, droppedFileParts: filteredReferences })) {
+      if (shouldFailUnreadableReferenceForRole({ role, userText, droppedFileParts: filteredReferences })) {
         throw new AgentRunError(
           kind,
           [
@@ -822,7 +816,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   const enableMap = {
     ...promptToolSwitchesForAgentRun({
       extraToolNames: Object.keys(input.toolKit.tools),
-      kind,
+      role,
     }),
     ...(input.toolSwitches ?? {}),
   }

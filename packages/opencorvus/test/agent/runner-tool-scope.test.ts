@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { promptToolSwitchesForAgentRun, shouldFailUnreadableBuildReference } from "../../src/agent/runner"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { promptToolSwitchesForAgentRun, shouldFailUnreadableReferenceForRole } from "../../src/agent/runner"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { renderPreTerminalReflectionPrompt as preTerminalReflectionPrompt } from "../../src/prompt/fragments/pre-terminal-reflection"
 
 describe("agent runner build tool scope", () => {
   test("plain build runs keep terminal tools and skill discovery but hide non-build and reference tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["merge_back", "report_build_result"],
-      kind: "build",
+      role: "build",
     })
 
     expect(switches.merge_back).toBe(true)
@@ -25,7 +28,7 @@ describe("agent runner build tool scope", () => {
   test("build tool scope does not reopen webpage evidence tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
-      kind: "build",
+      role: "build",
     })
 
     expect(switches.report_build_result).toBe(true)
@@ -37,7 +40,7 @@ describe("agent runner build tool scope", () => {
   test("build no longer opens research tools through skill required_tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
-      kind: "build",
+      role: "build",
     })
 
     expect(switches.report_build_result).toBe(true)
@@ -51,16 +54,41 @@ describe("agent runner build tool scope", () => {
   test("non-build agents are not silently scoped by build skill policy", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["submit_acceptance_verdict"],
-      kind: "integrity",
+      role: "integrity",
     })
 
     expect(switches).toEqual({ submit_acceptance_verdict: true })
   })
 
+  test("build runtime tool switches are owned by the canonical tool pool", () => {
+    expect(AgentToolPool.defaultRuntimeToolSwitches("build")).toMatchObject({
+      skill: true,
+      task: false,
+      webfetch: false,
+      websearch: false,
+      external_code_search: false,
+      memory: false,
+      planner: false,
+      goal_report: false,
+    })
+    expect(AgentToolPool.defaultRuntimeToolSwitches("integrity")).toEqual({})
+  })
+
+  test("runner does not own build-specific runtime tool policy", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("../../src/agent/runner.ts", import.meta.url)),
+      "utf8",
+    )
+
+    expect(source).not.toContain("BUILD_DEFAULT_DISABLED_TOOLS")
+    expect(source).not.toContain('input.kind !== "build"')
+    expect(source).not.toContain('input.kind === "build"')
+  })
+
   test("build visual reference contract still fails unreadable reference bytes before guessing", () => {
     expect(
-      shouldFailUnreadableBuildReference({
-        kind: "build",
+      shouldFailUnreadableReferenceForRole({
+        role: "build",
         userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
         droppedFileParts: [{ mime: "image/png" }],
       }),
@@ -69,8 +97,8 @@ describe("agent runner build tool scope", () => {
 
   test("non-build filtered images keep the existing visible marker path", () => {
     expect(
-      shouldFailUnreadableBuildReference({
-        kind: "architect",
+      shouldFailUnreadableReferenceForRole({
+        role: "architect",
         userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
         droppedFileParts: [{ mime: "image/png" }],
       }),

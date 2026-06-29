@@ -36,7 +36,7 @@ export type ProjectDeleteResult = {
 
 export type BadRequestError = {
   data: unknown
-  errors: Array<{
+  error: Array<{
     [key: string]: unknown
   }>
   success: false
@@ -2489,12 +2489,6 @@ export type TaskMessageUserPart = Part & {
   orderKey: string
 }
 
-export type TaskMessageTarget = {
-  kind: "agent_session" | "build_session"
-  sessionID: string
-  goalID?: string
-}
-
 export type SessionRuntimeContractMissingError = {
   name: "SessionRuntimeContractMissingError"
   data: {
@@ -3051,7 +3045,6 @@ export type EventTaskMessage = {
     taskID: string
     kind: "goal" | "plan" | "note"
     source: string
-    target?: TaskMessageTarget
     text: string
     summary: string
     messageID?: string
@@ -15192,7 +15185,6 @@ export type TaskMessageData = {
   body: {
     text: string
     source: string
-    target?: TaskMessageTarget
     user_id?: string
     promptProfile?: string
     attachments?: Array<{
@@ -15357,6 +15349,90 @@ export type TaskInjectResponses = {
 
 export type TaskInjectResponse = TaskInjectResponses[keyof TaskInjectResponses]
 
+export type TaskSessionOperatorSteerData = {
+  body: {
+    message: string
+  }
+  path: {
+    taskID: string
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/session/{sessionID}/operator-steer"
+}
+
+export type TaskSessionOperatorSteerErrors = {
+  /**
+   * Operator steer target or request body rejected
+   */
+  400:
+    | BadRequestError
+    | {
+        name: "OperatorSteerTargetError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Operator steer conflict
+   */
+  409:
+    | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "OperatorSteerWakeError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Session runtime contract no longer present
+   */
+  410: SessionRuntimeContractMissingError
+}
+
+export type TaskSessionOperatorSteerError = TaskSessionOperatorSteerErrors[keyof TaskSessionOperatorSteerErrors]
+
+export type TaskSessionOperatorSteerResponses = {
+  /**
+   * Operator steer request accepted
+   */
+  202: {
+    task_id: string
+    session_id: string
+    request_id: string
+    wake_status: "started" | "queued"
+  }
+}
+
+export type TaskSessionOperatorSteerResponse =
+  TaskSessionOperatorSteerResponses[keyof TaskSessionOperatorSteerResponses]
+
 export type TaskSessionReplyData = {
   body: {
     message: string
@@ -15391,7 +15467,7 @@ export type TaskSessionReplyErrors = {
         }
       }
     | {
-        name: "BuildSessionDirectReplyError"
+        name: "AgentDirectReplyDisabledError"
         data: {
           [key: string]: unknown
         }
@@ -17696,12 +17772,7 @@ export type McpAuthCallbackErrors = {
    * Invalid MCP OAuth callback request
    */
   400:
-    | {
-        name: "BadRequestError"
-        data: {
-          [key: string]: unknown
-        }
-      }
+    | BadRequestError
     | {
         name: "MCPOAuthStateError"
         data: {

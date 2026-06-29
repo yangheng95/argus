@@ -28,6 +28,7 @@ import { Message } from "@/session/message"
 import { SessionControl } from "@/session/control"
 import { Database, NotFoundError, desc, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
+import { AgentRoleContract } from "@/agent/role-contract"
 import { Instance } from "@/project/instance"
 import { EffectiveConfig } from "@/config/effective"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
@@ -60,7 +61,7 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { ExploreAgent } from "@/explore/agent"
-import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
+import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { timelineOrderKey } from "@/timeline/order"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
@@ -85,8 +86,7 @@ import {
   renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
-import { visualQaReportAcceptanceSemantics } from "@/visual-qa/acceptance-semantics"
-import { VisualQaReportSchema } from "@/visual-qa/schema"
+import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -251,14 +251,18 @@ const ProposedTaskCodeModuleReferenceSchema = z.object({
   entity: z
     .string()
     .min(1)
-    .describe("Concrete code module reference entity: file path, component, tool, service, route, schema, table, class, or function."),
+    .describe(
+      "Concrete code module reference entity: file path, component, tool, service, route, schema, table, class, or function.",
+    ),
   problem: z
     .string()
     .min(1)
     .describe("Observed problem tied to that entity. Generic project improvement text is not a valid problem."),
 })
 
-function hasConcreteProposedTaskCodeModuleReference(value: unknown): value is z.infer<typeof ProposedTaskCodeModuleReferenceSchema> {
+function hasConcreteProposedTaskCodeModuleReference(
+  value: unknown,
+): value is z.infer<typeof ProposedTaskCodeModuleReferenceSchema> {
   if (!value || typeof value !== "object") return false
   const candidate = value as { entity?: unknown; problem?: unknown }
   return (
@@ -777,16 +781,9 @@ async function selectGoalBuildRetrySession(input: {
 }
 
 function continuationToolName(stage: StageContinuationStage): string {
-  const explicit: Partial<Record<StageContinuationStage, string>> = {
-    "frontend-design": "frontend_design",
-    "frontend-research": "frontend_research",
-    "deep-research": "deep_research",
-    "visual-qa": "visual_qa",
-    "intent-analysis": "analyze_intent",
-    "fact-check": "fact_check",
-    "goal-workload-analyst": "workload_analysis",
-  }
-  return explicit[stage] ?? stage.replaceAll("-", "_")
+  const toolName = AgentRoleContract.orchestratorWorkflowToolName(stage)
+  if (!toolName) throw new Error(`stage continuation ${stage} has no orchestrator workflow tool binding`)
+  return toolName
 }
 
 function continuationReason(input: {
@@ -2066,47 +2063,21 @@ function requireAgentCoordinationRequestForResponse(input: {
   return request
 }
 
-const AGENT_COORDINATION_REDISPATCH_REPLAY_BINDINGS = {
-  build: { dispatcher: "build_stage", stage: "build", target_kind: "build" },
-  "intent-analysis": {
-    dispatcher: "intent_analysis_stage",
-    stage: "intent-analysis",
-    target_kind: "intent-analysis",
-  },
-  explore: { dispatcher: "explore_stage", stage: "explore", target_kind: "explore" },
-  "goal-workload-analyst": {
-    dispatcher: "workload_analysis_stage",
-    stage: "goal-workload-analyst",
-    target_kind: "goal-workload-analyst",
-  },
-  "fact-check": { dispatcher: "fact_check_stage", stage: "fact-check", target_kind: "fact-check" },
-  architect: { dispatcher: "architect_stage", stage: "architect", target_kind: "architect" },
-  requirements: { dispatcher: "requirements_stage", stage: "requirements", target_kind: "requirements" },
-  "frontend-design": {
-    dispatcher: "frontend_design_stage",
-    stage: "frontend-design",
-    target_kind: "frontend-design",
-  },
-  "frontend-research": {
-    dispatcher: "frontend_research_stage",
-    stage: "frontend-research",
-    target_kind: "frontend-research",
-  },
-  "deep-research": { dispatcher: "deep_research_stage", stage: "deep-research", target_kind: "deep-research" },
-  "visual-qa": { dispatcher: "visual_qa_stage", stage: "visual-qa", target_kind: "visual-qa" },
-  integrity: { dispatcher: "integrity_stage", stage: "integrity", target_kind: "integrity" },
-} satisfies Record<string, AgentCoordinationRedispatchBinding>
+function requireAgentCoordinationRedispatchBinding(agent: string): AgentCoordinationRedispatchBinding {
+  if (!AgentRoleContract.isRoleID(agent)) {
+    throw new Error(`agent coordination redispatch for ${agent} has no role contract`)
+  }
+  const binding = AgentRoleContract.agentCoordinationRedispatchBinding(agent)
+  if (!binding) {
+    throw new Error(`agent coordination redispatch for ${agent} has no concrete dispatcher binding`)
+  }
+  return binding
+}
 
 function redispatchBindingForAgentCoordinationReplay(input: {
   request: AgentCoordinationRequestRow
 }): AgentCoordinationRedispatchBinding {
-  const binding = AGENT_COORDINATION_REDISPATCH_REPLAY_BINDINGS[input.request.payload.agent]
-  if (!binding) {
-    throw new Error(
-      `agent coordination redispatch replay for ${input.request.payload.agent} has no concrete dispatcher binding`,
-    )
-  }
-  return binding
+  return requireAgentCoordinationRedispatchBinding(input.request.payload.agent)
 }
 
 async function validateAgentCoordinationContinueTarget(input: {
@@ -3985,13 +3956,14 @@ async function recoverPendingVisualQaRedispatchAction(input: {
     const detail = error instanceof Error ? error.message : String(error)
     throw new Error(`visual_qa_stage redispatch recovery report ${reportEntry.id} is not JSON: ${detail}`)
   }
-  const parsed = VisualQaReportSchema.safeParse(reportPayload)
+  const parsed = VisualQaDecisionRecordSchema.safeParse(reportPayload)
   if (!parsed.success) {
     throw new Error(
-      `visual_qa_stage redispatch recovery report ${reportEntry.id} is malformed: ${parsed.error.message}`,
+      `visual_qa_stage redispatch recovery report record ${reportEntry.id} is malformed: ${parsed.error.message}`,
     )
   }
-  const semantics = visualQaReportAcceptanceSemantics(parsed.data)
+  const record = parsed.data
+  const { acceptance, report } = record
   await completeAgentCoordinationAction({
     taskID: input.taskID,
     actionID: action.payload.action_id,
@@ -4002,13 +3974,13 @@ async function recoverPendingVisualQaRedispatchAction(input: {
       redispatch_session_id: session.id,
       visual_qa_report_decision_id: reportEntry.id,
       visual_qa_summary_decision_id: summaryEntry.id,
-      accepted: semantics.effectiveAccepted,
-      submitted_accepted: semantics.submittedAccepted,
-      findings_count: parsed.data.findings.length,
-      production_blockers_count: parsed.data.production_blockers.length,
-      evidence_count: parsed.data.evidence.length,
-      repairs_count: parsed.data.repairs.length,
-      changed_files_count: parsed.data.changed_files.length,
+      accepted: acceptance.effectiveAccepted,
+      submitted_accepted: acceptance.submittedAccepted,
+      findings_count: report.findings.length,
+      production_blockers_count: report.production_blockers.length,
+      evidence_count: report.evidence.length,
+      repairs_count: report.repairs.length,
+      changed_files_count: report.changed_files.length,
       target_kind: input.targetKind,
       started: true,
       recovered_redispatch: true,
@@ -4018,13 +3990,13 @@ async function recoverPendingVisualQaRedispatchAction(input: {
   return {
     actionID: action.payload.action_id,
     sessionID: session.id,
-    accepted: semantics.effectiveAccepted,
-    submittedAccepted: semantics.submittedAccepted,
-    findingsCount: parsed.data.findings.length,
-    productionBlockersCount: parsed.data.production_blockers.length,
-    evidenceCount: parsed.data.evidence.length,
-    repairsCount: parsed.data.repairs.length,
-    changedFilesCount: parsed.data.changed_files.length,
+    accepted: acceptance.effectiveAccepted,
+    submittedAccepted: acceptance.submittedAccepted,
+    findingsCount: report.findings.length,
+    productionBlockersCount: report.production_blockers.length,
+    evidenceCount: report.evidence.length,
+    repairsCount: report.repairs.length,
+    changedFilesCount: report.changed_files.length,
   }
 }
 
@@ -4920,7 +4892,6 @@ export function createOrchestratorTools(input: {
     text: string
     attachmentSummary?: string
     source?: string
-    target?: TaskMessageTargetInput
     messageID?: string
   }
 }) {
@@ -7066,12 +7037,12 @@ export function createOrchestratorTools(input: {
           runnerSessionID = id
         },
       })
-      const visualQaSemantics = visualQaReportAcceptanceSemantics(result.report)
+      const visualQaSemantics = result.acceptance
 
       decisionLog.append({
         phase: "visual_qa",
         key: `report_${Date.now()}`,
-        value: JSON.stringify(result.report, null, 2),
+        value: JSON.stringify({ report: result.report, acceptance: visualQaSemantics }, null, 2),
         reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
       })
       decisionLog.append({
@@ -7082,6 +7053,7 @@ export function createOrchestratorTools(input: {
           `submitted_accepted=${visualQaSemantics.submittedAccepted}`,
           `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
           `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
+          `effective_acceptance_issues=${visualQaSemantics.blockingIssues.length}`,
           `summary=${result.report.summary}`,
           `coverage=${result.report.coverage.length}`,
           `findings=${result.report.findings.length}`,
@@ -7115,6 +7087,7 @@ export function createOrchestratorTools(input: {
             ["accepted", String(visualQaSemantics.effectiveAccepted)],
             ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
             ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
+            ["effective_acceptance_issues", String(visualQaSemantics.blockingIssues.length)],
             ["coverage", String(result.report.coverage.length)],
             ["findings", String(result.report.findings.length)],
             ["production_blockers", String(result.report.production_blockers.length)],
@@ -7418,7 +7391,7 @@ export function createOrchestratorTools(input: {
         // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
         // and plain live pages contribute pixel references, not just markup.
         //
-        // URL captures are evidence materialization, not acceptance gates.
+        // URL captures are evidence materialization, not acceptance authorities.
         // Browser/navigation/screenshot failures are recorded; pixel-density
         // heuristics are diagnostics attached to the materialized reference.
         for (const liveUrl of liveUrls) {
@@ -8222,7 +8195,7 @@ export function createOrchestratorTools(input: {
         "It reviews from a picky professional design QA perspective, lists production_blockers when the product cannot generate or ship, and does not use visual scores, one-shot whole-page screenshots, or judge verdicts as the verdict. " +
         "If it returns accepted=false with unresolved_code_module_problems, the scheduler must decide whether to repair in the current task or call propose_task from that evidence. " +
         "It may use skills, bash/edit/write/apply_patch, and task-scoped browser_preview evidence. " +
-        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
+        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance authority; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
       execute: async ({ reason, focus, app_url, preview_command, continuation_artifact_id }) => {
         const task = requireTask(taskID)
@@ -9563,13 +9536,6 @@ export function createOrchestratorTools(input: {
           `Operator message is already recorded on the task root session. Reason: ${reason}.`,
           message.source ? `source=${message.source}` : "",
           message.messageID ? `messageID=${message.messageID}` : "",
-          message.target
-            ? `target=${JSON.stringify({
-                kind: message.target.kind,
-                sessionID: message.target.sessionID,
-                ...(message.target.goalID ? { goalID: message.target.goalID } : {}),
-              })}`
-            : "",
           "",
           latest,
           message.attachmentSummary ? `\n${message.attachmentSummary}` : "",
@@ -9580,7 +9546,7 @@ export function createOrchestratorTools(input: {
 
     respond_agent_coordination: tool({
       description:
-        "Answer one pending worker-to-orchestrator coordination request. This is the only orchestrator path for scheduler guidance that continues/cancels a worker, asks the user through a real interaction, or fails the task through a terminal lifecycle event; it requires request_id and writes visible request/response/action artifacts before executing the bound side effect.",
+        "Answer one pending worker/operator-to-orchestrator coordination request. This is the only orchestrator path for scheduler guidance that continues/cancels a worker, asks the user through a real interaction, or fails the task through a terminal lifecycle event; it requires request_id and writes visible request/response/action artifacts before executing the bound side effect.",
       inputSchema: z
         .object({
           request_id: z.string().min(1).describe("Pending agent_coordination_request artifact id."),
@@ -9846,11 +9812,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "build_stage",
-                stage: "build",
-                target_kind: "build",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("build"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10032,11 +9994,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "intent_analysis_stage",
-                stage: "intent-analysis",
-                target_kind: "intent-analysis",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("intent-analysis"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10168,11 +10126,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "explore_stage",
-                stage: "explore",
-                target_kind: "explore",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("explore"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10326,11 +10280,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "workload_analysis_stage",
-                stage: "goal-workload-analyst",
-                target_kind: "goal-workload-analyst",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("goal-workload-analyst"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10474,11 +10424,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "fact_check_stage",
-                stage: "fact-check",
-                target_kind: "fact-check",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("fact-check"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10634,11 +10580,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "architect_stage",
-                stage: "architect",
-                target_kind: "architect",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("architect"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10792,11 +10734,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "requirements_stage",
-                stage: "requirements",
-                target_kind: "requirements",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("requirements"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -10933,11 +10871,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "frontend_design_stage",
-                stage: "frontend-design",
-                target_kind: "frontend-design",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("frontend-design"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -11040,11 +10974,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "frontend_research_stage",
-                stage: "frontend-research",
-                target_kind: "frontend-research",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("frontend-research"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -11172,11 +11102,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "deep_research_stage",
-                stage: "deep-research",
-                target_kind: "deep-research",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("deep-research"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -11318,11 +11244,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "visual_qa_stage",
-                stage: "visual-qa",
-                target_kind: "visual-qa",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("visual-qa"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -11465,11 +11387,7 @@ export function createOrchestratorTools(input: {
               decision,
               reason,
               ...(guidance ? { message: guidance } : {}),
-              redispatchBinding: {
-                dispatcher: "integrity_stage",
-                stage: "integrity",
-                target_kind: "integrity",
-              },
+              redispatchBinding: requireAgentCoordinationRedispatchBinding("integrity"),
             })
             const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
             if (replayResult) return replayResult
@@ -11805,8 +11723,9 @@ export function createOrchestratorTools(input: {
               (request.payload.goal_run_id
                 ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: request.payload.goal_run_id })
                 : undefined) ?? findLiveBuildOwnershipBySession({ taskID, sessionID: request.payload.session_id })
+            const usesLiveOwnershipControl = AgentRoleContract.usesLiveOrchestratorToolOwnershipControl(kind)
             ensureTaskMessageProtocolBridge()
-            if (kind === "build" && liveOwner) {
+            if (usesLiveOwnershipControl && liveOwner) {
               cancelSummary = await cancelLiveOwnedBuild({
                 taskID,
                 sessionID: request.payload.session_id,
@@ -12206,11 +12125,12 @@ export function createOrchestratorTools(input: {
         const liveOwner =
           (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
           findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
+        const usesLiveOwnershipControl = AgentRoleContract.usesLiveOrchestratorToolOwnershipControl(kind)
         const staleRecovery = mode === "recover_stale"
-        if (staleRecovery && kind !== "build") {
-          return `Error: cancel_subagent mode='recover_stale' only handles build sessions; ${target.sessionID} has kind=${kind}.`
+        if (staleRecovery && !usesLiveOwnershipControl) {
+          return `Error: cancel_subagent mode='recover_stale' only handles sessions with live tool ownership control; ${target.sessionID} has kind=${kind}.`
         }
-        if (staleRecovery && kind === "build" && !liveOwner) {
+        if (staleRecovery && usesLiveOwnershipControl && !liveOwner) {
           const targetGoalRun = target.goalRunID ? findGoalRun(target.goalRunID) : undefined
           if (targetGoalRun && isLiveGoalRunStatus(targetGoalRun.status)) {
             return (
@@ -12228,12 +12148,12 @@ export function createOrchestratorTools(input: {
           }
           return `No live build ownership found for ${target.source}; no goal_run lifecycle fact was available to recover.`
         }
-        if (kind === "build" && liveOwner) {
+        if (usesLiveOwnershipControl && liveOwner) {
           if (staleRecovery) {
             const currentStatus = SessionStatus.get(target.sessionID)
             if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
               return (
-                `Error: cancel_subagent refused stale recovery because build session ${target.sessionID} is ${currentStatus.type}. ` +
+                `Error: cancel_subagent refused stale recovery because session ${target.sessionID} is ${currentStatus.type}. ` +
                 "Leave the live child running and return to this orchestration only after terminal refill or operator evidence, or use mode='cancel' for explicit operator cancellation."
               )
             }

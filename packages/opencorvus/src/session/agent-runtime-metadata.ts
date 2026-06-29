@@ -1,10 +1,8 @@
-import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { AgentRoleContract } from "@/agent/role-contract"
 import { SESSION_KINDS, type SessionKind } from "./session.sql"
 
 function contractForSessionKind(kind: SessionKind) {
-  return Object.hasOwn(AgentRoleContract.all, kind)
-    ? AgentRoleContract.get(kind as Extract<AgentRoleID, SessionKind>)
-    : undefined
+  return AgentRoleContract.isRoleID(kind) ? AgentRoleContract.get(kind) : undefined
 }
 
 function filterSessionKinds(

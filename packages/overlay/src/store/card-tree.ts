@@ -211,9 +211,9 @@ export interface CardNode {
    *  absorbed. Set by `resolvePhaseOrSessionCardID` when the phase card
    *  is materialized — phase cards fold their session into themselves so
    *  no `kind="agent"` card exists, but the AgentSessionReplyBox still
-   *  needs the sessionID for controls. Non-build phases use it for
-   *  `/task/:taskID/session/:sessionID/reply`; build phases use it as
-   *  visible target context for task-level operator guidance. */
+   *  needs the sessionID for controls. Every phase uses the same
+   *  `/task/:taskID/session/:sessionID/operator-steer` route for targeted
+   *  operator guidance. */
   phaseSessionID?: string
   /** Timeline order key of the message/session event that last claimed
    *  `phaseSessionID`. Prevents late events from older attempts/sessions from

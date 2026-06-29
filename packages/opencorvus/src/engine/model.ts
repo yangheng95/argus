@@ -565,32 +565,20 @@ export const TaskAccepted = z.object({
   task_id: Identifier.schema("task"),
 })
 
-export const TaskMessageTarget = z
-  .object({
-    kind: z.enum(["agent_session", "build_session"]),
-    sessionID: z.string().min(1),
-    goalID: z.string().min(1).optional(),
-  })
-  .meta({
-    ref: "TaskMessageTarget",
-  })
-export type TaskMessageTargetInput = z.infer<typeof TaskMessageTarget>
-
 export const TaskMessageInput = z.object({
   text: z.string(),
   source: z.string().min(1),
-  target: TaskMessageTarget.optional(),
   user_id: z.string().optional(),
   promptProfile: z.string().min(1).optional(),
   attachments: TaskAttachmentInput.array().optional(),
   /** Overlay bridge envelope fields. They identify how a rendered message was
    *  displayed, not what the operator asked. The task service accepts them so
    *  replay/resume clients can reuse bridge-stamped message objects, but task
-   *  semantics still come only from `text`, `source`, `target`, `user_id`, and
+   *  semantics still come only from `text`, `source`, `user_id`, and
    *  `attachments`. */
   resolvedRole: z.string().optional(),
   channel: z.string().optional(),
-})
+}).strict()
 
 export const InjectMessageInput = z.object({
   message: z.string().min(1),
@@ -1141,6 +1129,17 @@ export const AgentSessionReplyResult = z.object({
   message_id: Identifier.schema("message"),
 })
 
+export const AgentSessionOperatorSteerInput = z.object({
+  message: z.string().trim().min(1),
+}).strict()
+
+export const AgentSessionOperatorSteerResult = z.object({
+  task_id: Identifier.schema("task"),
+  session_id: Identifier.schema("session"),
+  request_id: Identifier.schema("artifact"),
+  wake_status: z.enum(["started", "queued"]),
+})
+
 export const AgentSessionCancelResult = z.object({
   task_id: Identifier.schema("task"),
   session_id: Identifier.schema("session"),
@@ -1406,7 +1405,6 @@ export const Event = {
       taskID: Identifier.schema("task"),
       kind: TaskMessageResult.shape.kind,
       source: z.string(),
-      target: TaskMessageTarget.optional(),
       text: z.string(),
       summary: z.string(),
       messageID: Identifier.schema("message").optional(),

@@ -340,6 +340,48 @@ describe("task agent session reply fails loudly when direct continuation is unav
     })
   })
 
+  test("direct reply rejects envelopes tagged with non-direct-reply agents", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "root" })
+        const requirements = await Session.create({ kind: "requirements", parentID: root.id, title: "requirements" })
+        await seedTask({ taskID, rootID: root.id, now })
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: requirements.id,
+          role: "user",
+          time: { created: now + 1 },
+          agent: "build",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
+        const response = await postReply({ taskID, sessionID: requirements.id, directory: tmp.path })
+
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as {
+          name?: string
+          data?: { sessionID?: string; sessionKind?: string; envelopeAgent?: string; reason?: string }
+        }
+        expect(body.name).toBe("AgentDirectReplyDisabledError")
+        expect(body.data).toMatchObject({
+          sessionID: requirements.id,
+          sessionKind: "requirements",
+          envelopeAgent: "build",
+          reason: "envelope_agent_not_direct_replyable",
+        })
+        const userMessages = (await Session.messages({ sessionID: requirements.id })).filter(
+          (message) => message.info.role === "user",
+        )
+        expect(userMessages).toHaveLength(1)
+        await expectNoTaskRootWake({ rootID: root.id })
+      },
+    })
+  })
+
   test("sessions without a prior envelope reject without task-root fallback", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({

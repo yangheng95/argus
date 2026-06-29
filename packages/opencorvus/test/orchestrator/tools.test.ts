@@ -821,6 +821,23 @@ function minimalVisualQaReport() {
   }
 }
 
+function minimalVisualQaAcceptance() {
+  const issue = "accepted=true was submitted without screenshot comparison or screen-by-screen screenshot evidence."
+  return {
+    submittedAccepted: true,
+    effectiveAccepted: false,
+    selfReportIssues: [issue],
+    blockingIssues: [issue],
+  }
+}
+
+function minimalVisualQaDecisionRecord() {
+  return {
+    report: minimalVisualQaReport(),
+    acceptance: minimalVisualQaAcceptance(),
+  }
+}
+
 function successfulAbortAdapter(): ExecutorAdapter {
   return {
     capabilities: () => ({
@@ -2209,13 +2226,8 @@ describe("orchestrator tools", () => {
       signal: new AbortController().signal,
       operatorMessage: {
         text: "resume only the failed build",
-        source: "overlay_build_steer",
+        source: "panel",
         messageID: "msg_operator_projection",
-        target: {
-          kind: "build_session",
-          sessionID: "ses_build_projection",
-          goalID: "goal_projection",
-        },
       },
     })
 
@@ -2226,9 +2238,8 @@ describe("orchestrator tools", () => {
 
     expect(injectMessage).not.toHaveBeenCalled()
     expect(toolText(result)).toContain("Operator message is already recorded")
-    expect(toolText(result)).toContain("source=overlay_build_steer")
+    expect(toolText(result)).toContain("source=panel")
     expect(toolText(result)).toContain("messageID=msg_operator_projection")
-    expect(toolText(result)).toContain('"sessionID":"ses_build_projection"')
     expect(toolText(result)).toContain("resume only the failed build")
   })
 
@@ -3024,7 +3035,7 @@ describe("orchestrator tools", () => {
           })
           childSessionID = child.id
           input.onSessionCreated?.(child.id)
-          return { sessionID: child.id, report: minimalVisualQaReport() }
+          return { sessionID: child.id, report: minimalVisualQaReport(), acceptance: minimalVisualQaAcceptance() }
         }
 
         const { tools } = createOrchestratorTools({
@@ -5845,7 +5856,7 @@ describe("orchestrator tools", () => {
           })
           redispatchSessionID = redispatched.id
           input.onSessionCreated?.(redispatched.id)
-          return { sessionID: redispatched.id, report: minimalVisualQaReport() }
+          return { sessionID: redispatched.id, report: minimalVisualQaReport(), acceptance: minimalVisualQaAcceptance() }
         }
 
         const { tools } = createOrchestratorTools({
@@ -5971,7 +5982,7 @@ describe("orchestrator tools", () => {
         decisionLog.append({
           phase: "visual_qa",
           key: `report_old_${stamp}`,
-          value: JSON.stringify(minimalVisualQaReport(), null, 2),
+          value: JSON.stringify(minimalVisualQaDecisionRecord(), null, 2),
           reason: `Dedicated frontend GUI and functional QA report from session ${oldVisualQa.id}`,
         })
         decisionLog.append({
@@ -6038,10 +6049,11 @@ describe("orchestrator tools", () => {
           title: "agent coordination visual qa recovered worker",
         })
         const report = minimalVisualQaReport()
+        const acceptance = minimalVisualQaAcceptance()
         decisionLog.append({
           phase: "visual_qa",
           key: `report_${Date.now()}`,
-          value: JSON.stringify(report, null, 2),
+          value: JSON.stringify({ report, acceptance }, null, 2),
           reason: `Dedicated frontend GUI and functional QA report from session ${redispatched.id}`,
         })
         decisionLog.append({
@@ -10810,7 +10822,7 @@ describe("orchestrator tools", () => {
           ),
         )
 
-        expect(toolText(result)).toContain("refused stale recovery because build session")
+        expect(toolText(result)).toContain("refused stale recovery because session")
         expect(toolText(result)).toContain("streaming")
         expect(findGoalRun(goalRunID)?.status).toBe("running")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)

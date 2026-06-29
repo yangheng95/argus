@@ -388,11 +388,6 @@ describe("task message routes", () => {
             .run(),
         )
 
-        const target = {
-          kind: "build_session" as const,
-          sessionID: "ses_build_route_target",
-          goalID: "goal_route_target",
-        }
         const response = await app.request(`/task/${taskID}/message`, {
           method: "POST",
           headers: {
@@ -402,7 +397,6 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "把当前任务停下来，重新评估策略后继续。",
             source: "panel",
-            target,
           }),
         })
 
@@ -424,7 +418,6 @@ describe("task message routes", () => {
         expect(body.user_message?.info.extra).toEqual({
           operator_message: {
             source: "panel",
-            target,
           },
         })
         expect(body.user_message?.info.orderKey).toMatch(/^v1:/)
@@ -451,7 +444,6 @@ describe("task message routes", () => {
               text: "把当前任务停下来，重新评估策略后继续。",
               attachmentSummary: undefined,
               source: "panel",
-              target,
               messageID: body.user_message?.info.id,
             },
           },
@@ -482,13 +474,69 @@ describe("task message routes", () => {
         expect(latest?.info.extra).toEqual({
           operator_message: {
             source: "panel",
-            target,
           },
         })
         const workbenchNotes = Database.use((db) =>
           db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
         )
         expect(workbenchNotes).toEqual([])
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message rejects target-scoped input before writing a root message", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "reject targeted message" })
+        await seedRootSession(root.id)
+        const beforeMessages = await Session.messages({ sessionID: root.id })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "reject targeted message",
+              request: "reject targeted message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "This must not be accepted as targeted steer.",
+            source: "panel",
+            target: {
+              kind: "build_session",
+              sessionID: "ses_old_target_path",
+              goalID: "goal_old_target_path",
+            },
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(beforeMessages.length)
       },
     })
   })
@@ -1537,11 +1585,6 @@ describe("task message routes", () => {
           await seedLiveBuildOwner({ taskID, rootSessionID: root.id, suffix: "b", now, orderIndex: 1 }),
         ]
 
-        const target = {
-          kind: "build_session" as const,
-          sessionID: owners[0]!.sessionID,
-          goalID: owners[0]!.goalID,
-        }
         const response = await app.request(`/task/${taskID}/message`, {
           method: "POST",
           headers: {
@@ -1551,7 +1594,6 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "补充一条调度器消息，但不能中断正在跑的 goal。",
             source: "panel",
-            target,
           }),
         })
 
@@ -1569,7 +1611,6 @@ describe("task message routes", () => {
         expect(body.user_message?.info.extra).toEqual({
           operator_message: {
             source: "panel",
-            target,
           },
         })
 
@@ -1648,11 +1689,6 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "补充信息，但后台 build 不能被取消。",
             source: "panel",
-            target: {
-              kind: "build_session",
-              sessionID: owner.sessionID,
-              goalID: owner.goalID,
-            },
           }),
         })
 

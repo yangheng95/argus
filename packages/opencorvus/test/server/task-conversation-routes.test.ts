@@ -3891,11 +3891,11 @@ describe("task conversation routes", () => {
             model: "overlay/default",
             agent: {
               // Codex review 2026-05-26: tagging a requirements
-              // envelope with `agent: "build"` is no longer accepted as
-              // a model-resolution hint — Message.User.agent is the
-              // agent definition the next loop turn will resume under,
-              // so envelope.agent === "build" on a non-build session
-              // throws BuildSessionDirectReplyError. The test's
+              // envelope with a non-direct-replyable agent is no longer
+              // accepted as a model-resolution hint. Message.User.agent
+              // is the agent definition the next loop turn will resume
+              // under, so that mismatch throws AgentDirectReplyDisabledError.
+              // The test's
               // original intent (envelope carry-over preserves
               // system/tools/format + resolves model from overlay) is
               // preserved by tagging the envelope with the SAME kind

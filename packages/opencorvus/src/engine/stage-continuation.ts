@@ -1,3 +1,4 @@
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
 import { Database, and, desc, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
@@ -5,18 +6,7 @@ import { processOwner } from "@/engine/lease"
 
 export type StageContinuationFailureName = "TerminalToolMissingError" | "StructuredOutputError"
 export type StageContinuationKind = "protocol-finalizer-miss"
-export type StageContinuationStage =
-  | "build"
-  | "requirements"
-  | "architect"
-  | "frontend-design"
-  | "goal-workload-analyst"
-  | "frontend-research"
-  | "deep-research"
-  | "visual-qa"
-  | "intent-analysis"
-  | "fact-check"
-  | "integrity"
+export type StageContinuationStage = AgentRoleID
 
 export interface StageContinuationRequestPayload extends EngineMetadata {
   continuation_id: string
@@ -78,6 +68,9 @@ export function createStageContinuationRequest(input: {
   reason?: string
   now?: number
 }): StageContinuationRequestRow {
+  if (!AgentRoleContract.isProtocolStageContinuationID(input.stage)) {
+    throw new Error(`stage continuation is not enabled for agent role: ${input.stage}`)
+  }
   const now = input.now ?? Date.now()
   const artifactID = Identifier.ascending("artifact")
   const payload: StageContinuationRequestPayload = {
@@ -336,18 +329,6 @@ function normalizeStageContinuationPayload(payload: unknown): StageContinuationR
   return value as unknown as StageContinuationRequestPayload
 }
 
-function isStageContinuationStage(value: unknown): value is StageContinuationStage {
-  return (
-    value === "build" ||
-    value === "requirements" ||
-    value === "architect" ||
-    value === "frontend-design" ||
-    value === "goal-workload-analyst" ||
-    value === "frontend-research" ||
-    value === "deep-research" ||
-    value === "visual-qa" ||
-    value === "intent-analysis" ||
-    value === "fact-check" ||
-    value === "integrity"
-  )
+export function isStageContinuationStage(value: unknown): value is StageContinuationStage {
+  return typeof value === "string" && AgentRoleContract.isProtocolStageContinuationID(value)
 }
