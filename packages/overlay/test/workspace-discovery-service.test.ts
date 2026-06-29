@@ -116,7 +116,7 @@ describe("workspace discovery service", () => {
     expect(requests[0]!.query?.directory).toBeUndefined()
   })
 
-  test("ensureDefaultDirectory uses backend-created default when no saved directory exists", async () => {
+  test("ensureDefaultDirectory does not use backend-created default when no saved directory exists", async () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransport(requests))
     setSettingsStore({
@@ -124,29 +124,33 @@ describe("workspace discovery service", () => {
       savedDirectory: "",
     })
 
-    await expect(ensureDefaultDirectory()).resolves.toBe(true)
+    await expect(ensureDefaultDirectory()).resolves.toBe(false)
 
-    expect(requests[0]!.path).toBe("global/projects/discover")
-    expect(settingsStore.directory).toBe("D:/workspace/1a2b3c4d")
+    expect(requests).toHaveLength(0)
+    expect(settingsStore.directory).toBe("")
   })
 
-  test("ensureDefaultDirectory keeps the workspace empty when backend default is empty", async () => {
+  test("ensureDefaultDirectory restores saved directory without discovery", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeTransport(requests))
+    setSettingsStore({
+      directory: "",
+      savedDirectory: "D:/workspace/saved",
+    })
+
+    await expect(ensureDefaultDirectory()).resolves.toBe(true)
+
+    expect(requests).toHaveLength(0)
+    expect(settingsStore.directory).toBe("D:/workspace/saved")
+  })
+
+  test("ensureDefaultDirectory keeps the workspace empty without discovery when no saved directory exists", async () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(emptyDefaultTransport(requests))
 
     await expect(ensureDefaultDirectory()).resolves.toBe(false)
 
-    expect(requests[0]!.path).toBe("global/projects/discover")
-    expect(settingsStore.directory).toBe("")
-  })
-
-  test("ensureDefaultDirectory surfaces discovery failures instead of replacing them with an empty workspace", async () => {
-    const requests: TransportRequest[] = []
-    __setHostTransportForTest(failingDiscoveryTransport(requests))
-
-    await expect(ensureDefaultDirectory()).rejects.toThrow("discovery unavailable")
-
-    expect(requests[0]!.path).toBe("global/projects/discover")
+    expect(requests).toHaveLength(0)
     expect(settingsStore.directory).toBe("")
   })
 

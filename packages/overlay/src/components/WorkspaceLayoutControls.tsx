@@ -40,6 +40,7 @@ export function WorkspaceLayoutControls() {
     return terminalIconName(profile.icon)
   })
   const title = () => error() || t("terminal.open")
+  let reloadOwner: symbol | null = null
 
   function terminalIconName(icon: TerminalProfileIcon): IconName {
     const value = TERMINAL_ICONS[icon]
@@ -48,34 +49,38 @@ export function WorkspaceLayoutControls() {
   }
 
   async function reloadProfiles(nextDirectory: string) {
+    close()
     if (!nextDirectory) {
       clearTerminalProfileSelection()
       return
     }
+    clearTerminalProfileSelection()
+    const token = Symbol("terminal-profile-reload")
+    reloadOwner = token
+    const ownsReload = () => reloadOwner === token && directory() === nextDirectory
     setLoading(true)
     setError("")
     try {
       await reloadTerminalProfileSelection({
         directory: nextDirectory,
         defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+        isCurrentDirectory: ownsReload,
       })
     } catch (reason) {
-      clearTerminalProfileSelection()
-      setError(reason instanceof Error ? reason.message : String(reason))
+      if (ownsReload()) {
+        clearTerminalProfileSelection()
+        setError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setLoading(false)
+      if (reloadOwner === token) {
+        reloadOwner = null
+        if (directory() === nextDirectory) setLoading(false)
+      }
     }
   }
 
   function close() {
     setOpen(false)
-  }
-
-  async function reloadSelection(cwd: string) {
-    await reloadTerminalProfileSelection({
-      directory: cwd,
-      defaultProfileMissingMessage: t("terminal.default_profile_missing"),
-    })
   }
 
   async function openCurrentProfile() {
@@ -89,11 +94,17 @@ export function WorkspaceLayoutControls() {
   async function openProfile(input: { explicitProfileID: string }) {
     const cwd = activeDirectory().trim()
     if (!cwd) throw new Error("Workspace directory is required")
+    const ownsProfile = () => activeDirectory().trim() === cwd
     close()
     setLoading(true)
     setError("")
     try {
-      await reloadSelection(cwd)
+      await reloadTerminalProfileSelection({
+        directory: cwd,
+        defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+        isCurrentDirectory: ownsProfile,
+      })
+      if (!ownsProfile()) return
       const profileID = input.explicitProfileID || currentTerminalProfileID()
       if (!profileID) throw new Error("Terminal profile is required")
       if (!terminalProfiles().some((profile) => profile.id === profileID)) {

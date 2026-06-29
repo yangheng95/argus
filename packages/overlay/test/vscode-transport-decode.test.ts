@@ -251,4 +251,36 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
     const verdict = await reqPromise
     expect((verdict as any).rejected).toBe("AbortError")
   })
+
+  test("allows explicit long-running bridge requests without the default timeout", async () => {
+    const fake = installFakeWindow()
+    fakeCleanup = fake.cleanup
+    AbortSignal.timeout = (() => {
+      throw new Error("long-running bridge request should not allocate the default timeout")
+    }) as typeof AbortSignal.timeout
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
+    const transport = createVsCodeTransport()
+
+    const reqPromise = transport.request({
+      path: "project/current/worktrees",
+      method: "DELETE",
+      timeoutMilliseconds: null,
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    const sentRequest = fake.fake.posted.find((m: any) => m?.type === "request") as { id: string }
+    fake.trigger({
+      protocol: PROTOCOL_VERSION,
+      type: "response",
+      id: sentRequest.id,
+      status: 200,
+      ok: true,
+      headers: {},
+      body: { kind: "json", value: { ok: true } },
+    } as ExtensionMessage)
+
+    await expect(reqPromise).resolves.toMatchObject({ ok: true, body: { ok: true } })
+    expect(fake.fake.posted.some((m: any) => m?.type === "request.abort" && m.id === sentRequest.id)).toBe(false)
+  })
 })

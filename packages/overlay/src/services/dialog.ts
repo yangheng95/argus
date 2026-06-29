@@ -4,7 +4,6 @@
 // imports as of Phase 4 cleanup.
 
 import { boardStore, loadBoard, activeTaskID } from "../store/board"
-import { appStore } from "../store/app"
 import { loadSettingsInfo } from "./init"
 import { apiJson } from "./api"
 import { selectedTaskDirectory } from "../store/board"
@@ -14,19 +13,18 @@ import { describeToolPart } from "../utils/tool"
 import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
 import { panelMessage } from "./chat"
 import { formatErrorDetails, notifyError } from "./notify"
-import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version"
 import { clampConfigSidebarWidth, configSidebarResizeBounds } from "../utils/config-sidebar-resizer"
 import { currentUIScale } from "../utils/layout-tokens"
 
 let sessionDialogSeq = 0
-let configSectionFocusFrame = 0
 const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id))
 
 const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
-  skill: { tab: "skill", elementID: "skillList" },
   "skill-market": { tab: "skill-market", elementID: "skillMarketList" },
   mcp: { tab: "mcp", elementID: "mcpList" },
 }
+
+let configSectionFocusFrame = 0
 
 function normalizeConfigTab(tabName: string): ConfigDialogTab {
   return CONFIG_DIALOG_TABS.has(tabName as ConfigDialogTab) ? (tabName as ConfigDialogTab) : "general"
@@ -54,16 +52,14 @@ function errorMessage(error: unknown): string {
 
 function refreshSettingsInfoAfterDialogFrame(): void {
   window.requestAnimationFrame(() => {
-    void loadSettingsInfo()
-      .then(() => renderAboutVersion())
-      .catch((error) => {
-        notifyError({
-          id: "config:load-settings-info",
-          title: t("config.title"),
-          message: errorMessage(error),
-          details: formatErrorDetails(error),
-        })
+    void loadSettingsInfo().catch((error) => {
+      notifyError({
+        id: "config:load-settings-info",
+        title: t("config.title"),
+        message: errorMessage(error),
+        details: formatErrorDetails(error),
       })
+    })
   })
 }
 
@@ -114,22 +110,6 @@ export function focusConfigSection(name: string): void {
   }
   if (target?.elementID) {
     focusConfigElementAfterDialogFrame(target.elementID, (element) => element.scrollIntoView({ block: "start" }))
-  }
-}
-
-/**
- * Populate the About panel runtime grid with server/platform info.
- */
-export function renderAboutVersion(): void {
-  const config = appStore.config
-  const chatVersion = document.getElementById("chatVersion")
-  if (chatVersion) {
-    const connected = config !== null
-    const text = connected
-      ? t("version.overlay", { version: OVERLAY_VERSION })
-      : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`
-    chatVersion.textContent = OPENCORVUS_VERSION_LABEL
-    chatVersion.title = text
   }
 }
 
@@ -230,8 +210,8 @@ export async function saveGoalDialog(): Promise<void> {
     resetGoalDialog()
     await loadBoard({ sync: true })
   } catch (err) {
-    console.error("Failed to save goal", err)
     setDialogStore("goal", "saving", false)
+    throw err
   }
 }
 

@@ -177,7 +177,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
     if (path === "/mission") return send([])
     if (path === "/project/current/worktrees") return send([])
@@ -277,15 +277,64 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       const list = Array.from(
         document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
       ).map((node) => node.querySelector("strong")?.textContent?.trim() || "")
+      const overview = Object.fromEntries(
+        Array.from(document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-overview"] [data-kind]')).map(
+          (node) => [node.dataset.kind || "", node.textContent?.replace(/\s+/g, " ").trim() || ""],
+        ),
+      )
       const readonly = document.querySelector(".prompt-profile-readonly-note")?.textContent?.trim() || ""
       const editors = document.querySelectorAll(".prompt-profile-textarea").length
       const promptCards = document.querySelectorAll("[data-prompt-entry]").length
-      return { list, readonly, editors, promptCards }
+      const metadata = document.querySelectorAll('[data-ui="prompt-profile-metadata"]').length
+      const actions = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-actions"] .oc-button'),
+      ).map((node) => ({
+        ui: node.dataset.ui || "",
+        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
+        disabled: (node as HTMLButtonElement).disabled,
+      }))
+      const targetStates = Array.from(document.querySelectorAll<HTMLElement>(".prompt-profile-target")).map((node) => ({
+        target: node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() || "",
+        editable: node.dataset.editable || "",
+        hasOverlay: node.dataset.hasOverlay || "",
+        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
+      }))
+      return { list, overview, readonly, editors, promptCards, metadata, actions, targetStates }
     })
     assert.deepEqual(builtInState.list, ["General", "Frontend Replica", "Frontend Automation Debug", "Custom Squad"])
+    assert.match(builtInState.overview.scope, /Project config/)
+    assert.match(builtInState.overview["project-active"], /Frontend Replica/)
+    assert.match(builtInState.overview.selected, /Frontend Replica/)
+    assert.match(builtInState.overview.selected, /3 agents/)
+    assert.match(builtInState.overview.selected, /3 prompts/)
     assert.match(builtInState.readonly, /read-only/i)
     assert.equal(builtInState.editors, 0)
     assert.equal(builtInState.promptCards, 0)
+    assert.equal(builtInState.metadata, 0)
+    assert.deepEqual(
+      builtInState.actions.map((action) => action.ui),
+      ["prompt-profile-activate-project"],
+    )
+    assert.equal(builtInState.actions[0]?.disabled, true)
+    assert.deepEqual(
+      builtInState.targetStates.map((target) => ({
+        target: target.target,
+        editable: target.editable,
+        hasOverlay: target.hasOverlay,
+      })),
+      [
+        { target: "requirements", editable: "false", hasOverlay: "true" },
+        { target: "build", editable: "false", hasOverlay: "true" },
+        { target: "orchestrator", editable: "false", hasOverlay: "true" },
+      ],
+    )
+    assert.equal(
+      builtInState.targetStates.every((target) => /Read-only/.test(target.text) && /Configured/.test(target.text)),
+      true,
+    )
+    const promptBody = await page.$("#promptBody")
+    assert.ok(promptBody)
+    writeFileSync(resolve(".scratch/prompt-profile-settings-built-in.png"), await promptBody.screenshot({}))
 
     await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-row:last-child')
     await page.waitForFunction(() => {
@@ -293,6 +342,61 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       return title?.textContent?.trim() === "Custom Squad"
     })
     await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
+    const customLayoutState = await page.evaluate(() => {
+      const overview = Object.fromEntries(
+        Array.from(document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-overview"] [data-kind]')).map(
+          (node) => [node.dataset.kind || "", node.textContent?.replace(/\s+/g, " ").trim() || ""],
+        ),
+      )
+      const actions = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-actions"] .oc-button'),
+      ).map((node) => ({
+        ui: node.dataset.ui || "",
+        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
+        disabled: (node as HTMLButtonElement).disabled,
+      }))
+      const metadata = document.querySelector('[data-ui="prompt-profile-metadata"]')
+      const targetStates = Array.from(document.querySelectorAll<HTMLElement>(".prompt-profile-target")).map((node) => ({
+        target: node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() || "",
+        editable: node.dataset.editable || "",
+        hasOverlay: node.dataset.hasOverlay || "",
+        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
+      }))
+      return {
+        overview,
+        actionIDs: actions.map((action) => action.ui),
+        projectActionDisabled: actions.find((action) => action.ui === "prompt-profile-activate-project")?.disabled,
+        saveDisabled: actions.find((action) => action.ui === "prompt-profile-save")?.disabled,
+        metadataText: metadata?.textContent?.replace(/\s+/g, " ").trim() || "",
+        targetStates,
+      }
+    })
+    assert.match(customLayoutState.overview.selected, /Custom Squad/)
+    assert.match(customLayoutState.overview.selected, /2 agents/)
+    assert.match(customLayoutState.overview.selected, /2 prompts/)
+    assert.deepEqual(customLayoutState.actionIDs, [
+      "prompt-profile-activate-project",
+      "prompt-profile-delete",
+      "prompt-profile-save",
+    ])
+    assert.equal(customLayoutState.projectActionDisabled, false)
+    assert.equal(customLayoutState.saveDisabled, true)
+    assert.match(customLayoutState.metadataText, /Squad Details/)
+    assert.deepEqual(
+      customLayoutState.targetStates.map((target) => ({
+        target: target.target,
+        editable: target.editable,
+        hasOverlay: target.hasOverlay,
+      })),
+      [
+        { target: "requirements", editable: "true", hasOverlay: "true" },
+        { target: "build", editable: "true", hasOverlay: "true" },
+      ],
+    )
+    assert.equal(
+      customLayoutState.targetStates.every((target) => /Editable/.test(target.text) && /Configured/.test(target.text)),
+      true,
+    )
     const selectedProfileListItem = await page.evaluate(() => {
       const rows = Array.from(
         document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
@@ -426,6 +530,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     const screenshot = await page.screenshot({ fullPage: false })
     assert.ok(screenshot.length > 0)
     writeFileSync(resolve(".scratch/prompt-profile-textarea-labels.png"), screenshot)
+    writeFileSync(resolve(".scratch/prompt-profile-settings-custom.png"), await promptBody.screenshot({}))
 
     await page.evaluate(() => {
       const input = document.querySelector(
@@ -446,7 +551,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       area.dispatchEvent(new Event("input", { bubbles: true }))
     })
 
-    await page.click('.prompt-profile-detail-actions .oc-button[data-variant="solid"]:last-child')
+    await page.click('[data-ui="prompt-profile-save"]')
     await page.waitForFunction(() =>
       document.querySelector(".config-status-box")?.textContent?.toLowerCase().includes("saved"),
     )

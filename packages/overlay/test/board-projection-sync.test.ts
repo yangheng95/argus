@@ -3,8 +3,13 @@ import { boardStore, setBoardStore, setBoardData, setSnapshotVersion } from "../
 import { cardTreeStore } from "../src/store/card-tree"
 import { resetWriter } from "../src/services/tree-writer"
 import { boardSnapshot } from "../src/services/sync"
+import { installRealOverlayI18n } from "./fixtures/i18n"
+import { testBoardOrderKey, testTaskOrderKey } from "./fixtures/timeline-order"
 
 const TASK_ID = "tsk_board_projection"
+const TASK_CREATED = 1_776_000_100_000
+const STEP_STARTED = 1_776_000_100_100
+const PHASE_STARTED = 1_776_000_100_200
 // audit-2026-04-29 W2-V25 — test was authored against the per-
 // attempt step card format `step:<goal>:<run>:<stepID>`. That
 // format was reverted on 2026-04-26 (see goalStepCardID in
@@ -16,21 +21,25 @@ const TASK_ID = "tsk_board_projection"
 const STEP_ID = "step:goal_projection:build"
 const PHASE_ID = `${STEP_ID}:phase:plan`
 
+installRealOverlayI18n()
+
 function boardWith(status: "running" | "failed") {
   return {
     snapshotVersion: `board-revision-${status}`,
     task: {
       id: TASK_ID,
+      orderKey: testTaskOrderKey(TASK_ID, TASK_CREATED),
       status: "active",
       request: "sync projected cards",
       sessionID: "ses_root",
-      time: { created: 1_776_000_100_000 },
+      time: { created: TASK_CREATED },
       attachments: [],
     },
     workflow: {
       steps: [
         {
           id: "build",
+          orderKey: testBoardOrderKey(`${TASK_ID}-build`, TASK_CREATED, 61),
           phases: [{ id: "plan", label: "Plan", sessionKind: "planner" }],
         },
       ],
@@ -38,6 +47,7 @@ function boardWith(status: "running" | "failed") {
     goalWorkflows: [
       {
         goalID: "goal_projection",
+        orderKey: testBoardOrderKey("goal_projection", TASK_CREATED, 60),
         goalRunID: "gr_projection",
         goalTitle: "Projection",
         goalStatus: status === "failed" ? "failed" : "running",
@@ -46,14 +56,16 @@ function boardWith(status: "running" | "failed") {
         steps: [
           {
             stepID: "build",
+            orderKey: testBoardOrderKey("goal_projection-build", STEP_STARTED, 61),
             label: "Executor",
             status,
-            startedAt: 1_776_000_100_100,
+            startedAt: STEP_STARTED,
             ...(status === "failed" ? { completedAt: 1_776_000_100_300 } : {}),
             phases: {
               plan: {
+                orderKey: testBoardOrderKey("goal_projection-build-plan", PHASE_STARTED, 62),
                 status: status === "failed" ? "completed" : "running",
-                startedAt: 1_776_000_100_200,
+                startedAt: PHASE_STARTED,
                 ...(status === "failed" ? { completedAt: 1_776_000_100_300 } : {}),
               },
             },
@@ -89,6 +101,13 @@ test("setBoardData reprojects step and phase cards immediately", () => {
   expect(boardStore.board?.snapshotVersion).toBe("board-revision-failed")
   expect(cardTreeStore.cards[STEP_ID]?.status).toBe("error")
   expect(cardTreeStore.cards[PHASE_ID]?.status).toBe("completed")
+})
+
+test("setBoardData rejects task request projection without backend orderKey", () => {
+  const board = boardWith("running")
+  delete (board.task as any).orderKey
+
+  expect(() => setBoardData(board)).toThrow(`task ${TASK_ID} missing orderKey`)
 })
 
 test("setBoardData rejects full board payloads without a non-empty snapshotVersion", () => {

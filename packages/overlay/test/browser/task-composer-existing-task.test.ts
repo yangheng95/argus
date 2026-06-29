@@ -93,7 +93,7 @@ test("selected cancelled task keeps the main composer focusable and editable", a
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-composer-existing-test" })
     if (path === "/global/projects/discover") return send([])
-    if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/global/tasks") return send({ tasks })
     if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })

@@ -9,6 +9,7 @@ describe("overlay context menu policy", () => {
   test("native context menu events are prevented at the policy source", () => {
     let prevented = false
     const event = {
+      target: null,
       preventDefault: () => {
         prevented = true
       },
@@ -17,6 +18,22 @@ describe("overlay context menu policy", () => {
     suppressNativeContextMenu(event)
 
     expect(prevented).toBe(true)
+  })
+
+  test("app-owned Kobalte context menu triggers own their contextmenu event", () => {
+    let prevented = false
+    const event = {
+      target: {
+        closest: (selector: string) => (selector === '[data-app-context-menu-trigger="true"]' ? {} : null),
+      },
+      preventDefault: () => {
+        prevented = true
+      },
+    } as unknown as Event
+
+    suppressNativeContextMenu(event)
+
+    expect(prevented).toBe(false)
   })
 
   test("policy installs a capture-phase contextmenu listener with teardown", () => {

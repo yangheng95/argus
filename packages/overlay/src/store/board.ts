@@ -4,8 +4,9 @@
 
 import { createStore } from "solid-js/store"
 import { batch } from "solid-js"
-import { apiJson, apiRequest } from "../services/api"
+import { ApiError, apiJson, apiRequest } from "../services/api"
 import { directoryScopedPath } from "../services/task-path"
+import { formatErrorDetails } from "../utils/error-details"
 import { t } from "../utils/i18n"
 
 // ── Store ──
@@ -71,7 +72,7 @@ export const [boardStore, setBoardStore] = createStore({
   tasksLoaded: false as boolean,
   tasksHasMore: false as boolean,
   tasksLoadedLimit: 0 as number,
-  tasksCursorUpdated: null as number | null,
+  tasksCursorCreated: null as number | null,
   tasksCursorTaskID: "" as string,
   tasksLoadingMore: false as boolean,
 })
@@ -80,6 +81,8 @@ export const [boardStore, setBoardStore] = createStore({
 
 export interface LoadBoardOptions {
   sync?: boolean
+  /** Require the current board reload to finish successfully and reject on failure. */
+  requireFresh?: boolean
 }
 
 // Module-level runtime state (replaces .state proxy fields).
@@ -87,8 +90,16 @@ let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null
 let _boardLoading: Promise<void> | null = null
 let _boardQueued = false
 let _tasksLoading: Promise<void> | null = null
+let _taskListGeneration = 0
+let _taskListPaginationRequest = 0
 
 export const TASK_LIST_PAGE_SIZE = 10
+
+function invalidateTaskListPagination(): void {
+  _taskListGeneration += 1
+  _taskListPaginationRequest += 1
+  setBoardStore("tasksLoadingMore", false)
+}
 
 // Invariant handler: fires when the current task source no longer refers
 // to any task in the merged (tasks + pendingTasks) list. Registered by
@@ -292,17 +303,32 @@ function observeScheduledBoardLoad(owner: string, promise: Promise<void>): void 
 }
 
 export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
-  const taskID = activeTaskID()
+  let taskID = activeTaskID()
   if (!taskID) {
     setBoardStore("board", null)
     setSnapshotVersion("")
     return
   }
   if (options.sync) setBoardSyncPending(true)
-  if (_boardLoading) {
-    _boardQueued = true
-    if (options.sync) setBoardSyncPending(true)
-    return _boardLoading
+  while (_boardLoading) {
+    const inFlightBeforeCall = _boardLoading
+    if (!options.requireFresh) {
+      _boardQueued = true
+      if (options.sync) setBoardSyncPending(true)
+      return inFlightBeforeCall
+    }
+    try {
+      await inFlightBeforeCall
+    } catch {
+      // The in-flight request started before the required-fresh boundary.
+      // The caller needs its own post-mutation board request below.
+    }
+  }
+  taskID = activeTaskID()
+  if (!taskID) {
+    setBoardStore("board", null)
+    setSnapshotVersion("")
+    return
   }
   const sync = options.sync === true || boardStore.boardSyncPending
   if (sync) setBoardSyncPending(true)
@@ -312,17 +338,15 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       const headers: Record<string, string> = {}
       if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag
       const directory = selectedTaskOwningDirectory(taskID)
-      const res = await apiRequest<any>(
-        directoryScopedPath(
-          `task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`,
-          directory,
-          "loadBoard",
-        ),
-        {
-          headers,
-          signal: AbortSignal.timeout(10000),
-        },
+      const boardPath = directoryScopedPath(
+        `task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`,
+        directory,
+        "loadBoard",
       )
+      const res = await apiRequest<any>(boardPath, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      })
       if (taskID !== activeTaskID()) return
       setBoardSyncPending(false)
       if (res.status === 304) {
@@ -330,7 +354,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         setBoardUpdatedAt(Date.now())
         return
       }
-      if (!res.ok) throw new Error(`API ${res.status}`)
+      if (!res.ok) throw new ApiError(res.status, boardPath, res.body)
       const etag = res.headers["etag"] || res.headers["ETag"]
       if (etag) setBoardEtag(etag)
       const data = res.body
@@ -360,8 +384,20 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       // Agent cards are derived reactively from boardStore — no manual rebuild needed.
     } catch (e) {
       failed = true
-      console.error("loadBoard failed", e)
-      if (taskID === activeTaskID()) retryBoard(sync)
+      if (!options.requireFresh) {
+        const message = e instanceof Error ? e.message : String(e)
+        const { AppLog } = await import("../utils/log")
+        AppLog.error("board", "Selected task board refresh failed", {
+          taskID,
+          error: formatErrorDetails(e),
+          notificationID: `board:refresh-failed:${taskID}`,
+          notificationTitle: t("board.refresh_failed_title"),
+          notificationMessage: t("board.refresh_failed_message", { error: message }),
+          notificationDetails: formatErrorDetails(e),
+        })
+      }
+      if (taskID === activeTaskID() && !options.requireFresh) retryBoard(sync)
+      if (options.requireFresh) throw e
     } finally {
       _boardLoading = null
       setBoardStore("loading", false)
@@ -396,6 +432,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
  * Omit to keep the current `pendingTasks`.
  */
 export function applyTasks(tasks: any[], nextPending?: any[]): void {
+  invalidateTaskListPagination()
   const list = reconcileTaskItems(Array.isArray(tasks) ? tasks : [], boardStore.tasks)
   const pending = Array.isArray(nextPending)
     ? reconcileTaskItems(nextPending, boardStore.pendingTasks)
@@ -453,23 +490,41 @@ function reconcileTaskItems(next: any[], previous: any[]): any[] {
 }
 
 export function clearTasksForMissingDirectory(): void {
+  _tasksLoading = null
   applyTasks([], [])
   setBoardStore("tasksError", "")
   setBoardStore("tasksLoaded", true)
   setBoardStore("tasksHasMore", false)
   setBoardStore("tasksLoadedLimit", 0)
-  setBoardStore("tasksCursorUpdated", null)
+  setBoardStore("tasksCursorCreated", null)
   setBoardStore("tasksCursorTaskID", "")
   setBoardStore("tasksLoadingMore", false)
 }
 
-export async function loadTasks(): Promise<void> {
-  if (_tasksLoading) return _tasksLoading
-  _tasksLoading = loadTasksOnce()
+export interface LoadTasksOptions {
+  /** Require a request that starts after the caller's mutation boundary. */
+  requireFresh?: boolean
+}
+
+export async function loadTasks(options: LoadTasksOptions = {}): Promise<void> {
+  if (_tasksLoading) {
+    const inFlightBeforeCall = _tasksLoading
+    if (!options.requireFresh) return inFlightBeforeCall
+    try {
+      await inFlightBeforeCall
+    } catch {
+      // This request started before the required-fresh boundary. loadTasksOnce()
+      // already recorded its failure in boardStore.tasksError; the caller still
+      // needs a new post-mutation request below.
+    }
+    if (_tasksLoading && _tasksLoading !== inFlightBeforeCall) return _tasksLoading
+  }
+  const loading = loadTasksOnce()
+  _tasksLoading = loading
   try {
-    await _tasksLoading
+    await loading
   } finally {
-    _tasksLoading = null
+    if (_tasksLoading === loading) _tasksLoading = null
   }
 }
 
@@ -477,8 +532,11 @@ async function loadTasksOnce(): Promise<void> {
   // Let-it-crash: any fetch/parse error lands in boardStore.tasksError so the
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.
+  invalidateTaskListPagination()
+  const generation = _taskListGeneration
   try {
     const data = await apiJson(taskListPagePath({ limit: TASK_LIST_PAGE_SIZE + 1 }))
+    if (generation !== _taskListGeneration) return
     const page = taskPageFromResponse(data, TASK_LIST_PAGE_SIZE)
     const tasks = sortedTasks({ tasks: page.tasks })
     const seen = new Set(tasks.map((item: any) => item?.task?.requestID).filter(Boolean))
@@ -488,9 +546,10 @@ async function loadTasksOnce(): Promise<void> {
     setBoardStore("tasksLoaded", true)
     setBoardStore("tasksHasMore", page.hasMore)
     setBoardStore("tasksLoadedLimit", tasks.length)
-    setBoardStore("tasksCursorUpdated", page.cursor?.updated ?? null)
+    setBoardStore("tasksCursorCreated", page.cursor?.created ?? null)
     setBoardStore("tasksCursorTaskID", page.cursor?.taskID ?? "")
   } catch (e) {
+    if (generation !== _taskListGeneration) return
     setBoardStore("tasksError", e instanceof Error ? e.message : String(e))
     throw e
   }
@@ -501,9 +560,12 @@ export async function loadMoreTasks(): Promise<void> {
     await _tasksLoading
   }
   if (!boardStore.tasksHasMore || boardStore.tasksLoadingMore) return
-  const cursorUpdated = boardStore.tasksCursorUpdated
+  const generation = _taskListGeneration
+  const paginationRequest = _taskListPaginationRequest + 1
+  _taskListPaginationRequest = paginationRequest
+  const cursorCreated = boardStore.tasksCursorCreated
   const cursorTaskID = boardStore.tasksCursorTaskID
-  if (!Number.isFinite(cursorUpdated) || !cursorTaskID) {
+  if (!Number.isFinite(cursorCreated) || !cursorTaskID) {
     throw new Error("loadMoreTasks: missing task pagination cursor")
   }
   setBoardStore("tasksLoadingMore", true)
@@ -511,11 +573,12 @@ export async function loadMoreTasks(): Promise<void> {
     const data = await apiJson(
       taskListPagePath({
         limit: TASK_LIST_PAGE_SIZE + 1,
-        cursorUpdated: cursorUpdated as number,
+        cursorCreated: cursorCreated as number,
         cursorTaskID,
       }),
     )
     const page = taskPageFromResponse(data, TASK_LIST_PAGE_SIZE)
+    if (generation !== _taskListGeneration) return
     const currentByID = new Map(boardStore.tasks.map((item: any) => [item?.task?.id, item]))
     for (const item of page.tasks) {
       const id = item?.task?.id
@@ -527,20 +590,23 @@ export async function loadMoreTasks(): Promise<void> {
     setBoardStore("tasksLoaded", true)
     setBoardStore("tasksHasMore", page.hasMore)
     setBoardStore("tasksLoadedLimit", tasks.length)
-    setBoardStore("tasksCursorUpdated", page.cursor?.updated ?? null)
+    setBoardStore("tasksCursorCreated", page.cursor?.created ?? null)
     setBoardStore("tasksCursorTaskID", page.cursor?.taskID ?? "")
   } catch (e) {
+    if (generation !== _taskListGeneration) return
     setBoardStore("tasksError", e instanceof Error ? e.message : String(e))
     throw e
   } finally {
-    setBoardStore("tasksLoadingMore", false)
+    if (paginationRequest === _taskListPaginationRequest) {
+      setBoardStore("tasksLoadingMore", false)
+    }
   }
 }
 
-function taskListPagePath(input: { limit: number; cursorUpdated?: number; cursorTaskID?: string }): string {
+function taskListPagePath(input: { limit: number; cursorCreated?: number; cursorTaskID?: string }): string {
   const params = new URLSearchParams({ limit: String(input.limit) })
-  if (input.cursorUpdated !== undefined && input.cursorTaskID) {
-    params.set("cursor", String(input.cursorUpdated))
+  if (input.cursorCreated !== undefined && input.cursorTaskID) {
+    params.set("cursor", String(input.cursorCreated))
     params.set("cursorTaskID", input.cursorTaskID)
   }
   return `global/tasks?${params.toString()}`
@@ -549,16 +615,16 @@ function taskListPagePath(input: { limit: number; cursorUpdated?: number; cursor
 function taskPageFromResponse(
   data: { tasks?: any[] } | null | undefined,
   visibleLimit: number,
-): { tasks: any[]; hasMore: boolean; cursor: { updated: number; taskID: string } | null } {
+): { tasks: any[]; hasMore: boolean; cursor: { created: number; taskID: string } | null } {
   const raw = Array.isArray(data?.tasks) ? data!.tasks : []
   const tasks = raw.slice(0, visibleLimit)
   const last = tasks.at(-1)
-  const updated = Number(last?.task?.time?.updated)
+  const created = last ? taskCreatedAt(last) : undefined
   const taskID = typeof last?.task?.id === "string" ? last.task.id : ""
   return {
     tasks,
     hasMore: raw.length > visibleLimit,
-    cursor: Number.isFinite(updated) && taskID ? { updated, taskID } : null,
+    cursor: Number.isFinite(created) && taskID ? { created: created as number, taskID } : null,
   }
 }
 

@@ -49,6 +49,22 @@ test("loadExecutors sends the explicit project directory", async () => {
   expect(appStore.executors).toEqual([{ id: "codex", label: "Codex", selectable: true, model: "gpt-5" }])
 })
 
+test("loadExecutors skips stale directory commits while returning the response", async () => {
+  const calls: TransportRequest[] = []
+  configure({ directory: "D:/repo/current" })
+  __setHostTransportForTest(fakeTransport(calls))
+  setAppStore("executors", [{ id: "current", label: "Current", selectable: true }])
+
+  const result = await loadExecutors("D:/repo/stale", {
+    isCurrentDirectory: (directory) => directory === "D:/repo/current",
+  })
+
+  expect(calls).toHaveLength(1)
+  expect(calls[0]!.query?.directory).toBe("D:/repo/stale")
+  expect(result).toEqual([{ id: "codex", label: "Codex", selectable: true, model: "gpt-5" }])
+  expect(appStore.executors).toEqual([{ id: "current", label: "Current", selectable: true }])
+})
+
 test("setExecutorModel patches and reloads with the same explicit project directory", async () => {
   const calls: TransportRequest[] = []
   configure({ directory: "D:/repo/from-settings" })
@@ -60,6 +76,24 @@ test("setExecutorModel patches and reloads with the same explicit project direct
   expect(calls.map((call) => call.query?.directory)).toEqual(["D:/repo/from-row", "D:/repo/from-row"])
   expect(calls[0]!.body?.kind).toBe("json")
   expect((calls[0]!.body as { kind: "json"; value: unknown }).value).toEqual({ model: "gpt-5.1" })
+})
+
+test("setExecutorModel keeps stale reload results out of the active executor list", async () => {
+  const calls: TransportRequest[] = []
+  configure({ directory: "D:/repo/current" })
+  __setHostTransportForTest(fakeTransport(calls))
+  setAppStore("executors", [{ id: "current", label: "Current", selectable: true }])
+
+  await setExecutorModel({
+    executorID: "codex",
+    model: "gpt-5.1",
+    directory: "D:/repo/stale",
+    isCurrentDirectory: (directory) => directory === "D:/repo/current",
+  })
+
+  expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH executor/codex/model", "GET executor"])
+  expect(calls.map((call) => call.query?.directory)).toEqual(["D:/repo/stale", "D:/repo/stale"])
+  expect(appStore.executors).toEqual([{ id: "current", label: "Current", selectable: true }])
 })
 
 test("executor service rejects missing explicit directories before transport", async () => {

@@ -57,7 +57,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/mission") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs")
@@ -136,6 +136,34 @@ test(
       await page.waitForSelector('[data-testid="titlebar-settings-general"]', { visible: true })
       await page.click('[data-testid="titlebar-settings-general"]')
       await page.waitForSelector("#configResizer")
+      const viewport = { width: 960, height: 720 }
+      const fullscreenGeometry = await page.evaluate(() => {
+        const dialog = document.querySelector<HTMLElement>("#configDialog")
+        const form = document.querySelector<HTMLElement>("#configDialog .dialog-form")
+        if (!dialog || !form) throw new Error("Config dialog fullscreen fixture is missing")
+        const dialogRect = dialog.getBoundingClientRect()
+        const formRect = form.getBoundingClientRect()
+        return {
+          dialogClass: dialog.className,
+          dialogLeft: dialogRect.left,
+          dialogTop: dialogRect.top,
+          dialogWidth: dialogRect.width,
+          dialogHeight: dialogRect.height,
+          formLeft: formRect.left,
+          formTop: formRect.top,
+          formWidth: formRect.width,
+          formHeight: formRect.height,
+        }
+      })
+      assert.match(fullscreenGeometry.dialogClass, /dialog-fullscreen/)
+      assert.ok(Math.abs(fullscreenGeometry.dialogLeft) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.dialogTop) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.dialogWidth - viewport.width) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.dialogHeight - viewport.height) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.formLeft) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.formTop) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.formWidth - viewport.width) <= 1)
+      assert.ok(Math.abs(fullscreenGeometry.formHeight - viewport.height) <= 1)
       const semantics = await page.evaluate(() => {
         const resizer = document.querySelector<HTMLElement>("#configResizer")
         return {
@@ -437,6 +465,7 @@ test(
             afterMoves,
             afterPointerUpFlush,
             dragging: form.dataset.dialogDragging || "",
+            draggable: form.dataset.dialogDraggable || "",
             x: form.style.getPropertyValue("--dialog-drag-x"),
             y: form.style.getPropertyValue("--dialog-drag-y"),
           }
@@ -448,33 +477,22 @@ test(
       assert.deepEqual(
         dialogDrag.afterMoves,
         [],
-        `dialog pointermove burst should not read layout synchronously: ${JSON.stringify(dialogDrag)}`,
+        `fullscreen config dialog should not read layout synchronously when dragging is disabled: ${JSON.stringify(dialogDrag)}`,
       )
-      const frameFormReads = dialogDrag.afterFrame.filter((entry) => entry.target === "form")
-      const frameBodyReads = dialogDrag.afterFrame.filter((entry) => entry.target === "body")
-      assert.equal(
-        frameFormReads.length,
-        1,
-        `dialog drag should read form rect once in RAF: ${JSON.stringify(dialogDrag)}`,
+      assert.deepEqual(
+        dialogDrag.afterFrame,
+        [],
+        `fullscreen config dialog should not schedule drag layout reads: ${JSON.stringify(dialogDrag)}`,
       )
-      assert.equal(
-        frameBodyReads.length,
-        1,
-        `dialog drag should read body rect once in RAF: ${JSON.stringify(dialogDrag)}`,
-      )
-      assert.ok(
-        dialogDrag.afterFrame.every((entry) => entry.frameDepth > 0 && entry.inputDepth === 0),
-        `dialog drag layout reads must run inside RAF outside pointermove: ${JSON.stringify(dialogDrag)}`,
-      )
-      assert.ok(
-        dialogDrag.afterPointerUpFlush.some((entry) => entry.inputDepth > 0),
-        `dialog pointerup should flush the final pending clamp: ${JSON.stringify(dialogDrag)}`,
+      assert.deepEqual(
+        dialogDrag.afterPointerUpFlush,
+        [],
+        `fullscreen config dialog should not flush drag state on pointerup: ${JSON.stringify(dialogDrag)}`,
       )
       assert.equal(dialogDrag.dragging, "")
-      assert.ok(
-        dialogDrag.x !== "0px" || dialogDrag.y !== "0px",
-        `dialog drag should apply a visible offset: ${JSON.stringify(dialogDrag)}`,
-      )
+      assert.equal(dialogDrag.draggable, "")
+      assert.equal(dialogDrag.x, "0px")
+      assert.equal(dialogDrag.y, "0px")
       const notifications = await page.evaluate(() =>
         Array.from(document.querySelectorAll<HTMLElement>('.app-notification[role="alert"]')).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim(),

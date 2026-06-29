@@ -1,7 +1,6 @@
-import assert from "node:assert/strict"
-import test from "node:test"
+import { expect, test } from "bun:test"
 
-import { startBrowserFixture } from "./http-fixture.ts"
+import { startBrowserFixture } from "./browser/http-fixture.ts"
 
 test("browser fixture close destroys active streaming HTTP connections", async () => {
   const server = await startBrowserFixture(() => {
@@ -19,10 +18,10 @@ test("browser fixture close destroys active streaming HTTP connections", async (
   const controller = new AbortController()
   try {
     const response = await fetch(`${server.origin}/events`, { signal: controller.signal })
-    assert.equal(response.status, 200)
+    expect(response.status).toBe(200)
     const started = Date.now()
     await server.close()
-    assert.ok(Date.now() - started < 1_000, "fixture close should not wait for the event-stream idle timeout")
+    expect(Date.now() - started).toBeLessThan(1_000)
   } finally {
     controller.abort()
   }

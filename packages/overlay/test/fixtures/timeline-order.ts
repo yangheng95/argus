@@ -3,7 +3,7 @@ export function testTimelineOrderKey(rank: number, time: number, id: string, seq
 }
 
 export function testTaskOrderKey(id: string, time: number): string {
-  return testTimelineOrderKey(10, time, id)
+  return testTimelineOrderKey(10, time, id, 0, "task")
 }
 
 export function testMessageOrderKey(id: string, time: number): string {
@@ -15,15 +15,30 @@ export function testPartOrderKey(id: string, time: number): string {
 }
 
 export function testBoardOrderKey(id: string, time: number, rank: number): string {
-  return testTimelineOrderKey(rank, time, id)
+  return testTimelineOrderKey(rank, time, id, 0, "board")
 }
 
 export function testInteractionOrderKey(id: string, time: number): string {
-  return testTimelineOrderKey(70, time, id)
+  return testTimelineOrderKey(70, time, id, 0, "interaction")
 }
 
 export function testEventOrderKey(type: string, time: number, sequence = 0): string {
-  return testTimelineOrderKey(40, time, `evt_${type}_${time}`, sequence)
+  return testTimelineOrderKey(40, time, `evt_${type}_${time}`, sequence, "event")
+}
+
+export function testSessionOrderKey(id: string, time: number): string {
+  return testTimelineOrderKey(50, time, id, 0, "session")
+}
+
+function requireExplicitOrderKey(value: unknown, label: string, domain?: string): string {
+  if (typeof value !== "string" || value.length === 0) throw new Error(`test fixture ${label} missing orderKey`)
+  if (domain) {
+    const actualDomain = value.split(":", 6)[4] || ""
+    if (actualDomain !== domain) {
+      throw new Error(`test fixture ${label} expected ${domain} orderKey, got ${actualDomain}: ${value}`)
+    }
+  }
+  return value
 }
 
 export function stampTestBoard(board: any): any {
@@ -119,13 +134,23 @@ export function stampTestBoard(board: any): any {
 export function stampTestTranscript(transcript: any[]): any[] {
   return (Array.isArray(transcript) ? transcript : []).map((message) => {
     const info = message?.info || {}
-    const created = Number(info?.time?.created || 0)
+    const messageID = String(info.id || "")
+    const sessionID = String(info.sessionID || "")
     return {
       ...message,
       info: {
         ...info,
-        orderKey: info.orderKey || testMessageOrderKey(String(info.id || ""), created),
+        orderKey: requireExplicitOrderKey(info.orderKey, `message ${messageID || "<unknown>"}`, "message"),
       },
+      parts: Array.isArray(message?.parts)
+        ? message.parts.map((part: any) => {
+            const partID = String(part?.id || "")
+            return {
+              ...part,
+              orderKey: requireExplicitOrderKey(part.orderKey, `part ${partID || "<unknown>"}`, "part"),
+            }
+          })
+        : message?.parts,
     }
   })
 }
@@ -133,71 +158,95 @@ export function stampTestTranscript(transcript: any[]): any[] {
 export function stampTestViewMessages(messages: any[]): any[] {
   return (Array.isArray(messages) ? messages : []).map((message) => ({
     ...message,
-    orderKey: message.orderKey || testMessageOrderKey(String(message.messageID || ""), Number(message.time || 0)),
+    orderKey: requireExplicitOrderKey(
+      message.orderKey,
+      `view message ${String(message.messageID || "<unknown>")}`,
+      "message",
+    ),
   }))
 }
 
 export function stampTestViewSessions(sessions: any[]): any[] {
-  return (Array.isArray(sessions) ? sessions : []).map((session) => {
-    const observedAt = Number(session.firstObservedAt ?? session.firstMessageTime ?? session.lastMessageTime ?? 0)
-    return {
-      ...session,
-      orderKey: session.orderKey || testMessageOrderKey(String(session.sessionID || ""), observedAt),
-    }
-  })
+  return (Array.isArray(sessions) ? sessions : []).map((session) => ({
+    ...session,
+    orderKey: requireExplicitOrderKey(
+      session.orderKey,
+      `view session ${String(session.sessionID || "<unknown>")}`,
+      "session",
+    ),
+  }))
 }
 
 export function stampTestEvent(event: any): any {
-  const emittedAt = Number(event?.emittedAt || event?.timestamp || 0)
-  const base =
-    emittedAt > 0 && !event?.orderKey
-      ? {
-          ...event,
-          orderKey: testEventOrderKey(String(event?.type || "event"), emittedAt, Number(event?.sequence || 0)),
-        }
-      : event
+  const eventType = String(event?.type || "event")
+  const base = {
+    ...event,
+    orderKey: requireExplicitOrderKey(event?.orderKey, `event ${eventType}`),
+  }
   const props = base?.properties && typeof base.properties === "object" ? base.properties : base?.payload
   if (!props || typeof props !== "object") return base
 
   if (props.info && typeof props.info === "object") {
-    const created = Number(props.info?.time?.created || 0)
+    const messageID = String(props.info.id || "")
+    const messageOrderKey = requireExplicitOrderKey(
+      props.info.orderKey,
+      `event message ${messageID || "<unknown>"}`,
+      "message",
+    )
+    if (base.orderKey !== messageOrderKey) {
+      throw new Error(`test fixture event ${eventType} orderKey does not match message ${messageID || "<unknown>"}`)
+    }
     return {
       ...base,
+      orderKey: messageOrderKey,
       properties: {
         ...props,
         info: {
           ...props.info,
-          orderKey: props.info.orderKey || testMessageOrderKey(String(props.info.id || ""), created),
+          orderKey: messageOrderKey,
         },
       },
     }
   }
 
   if (props.part && typeof props.part === "object") {
-    const time = Number(base?.emittedAt || base?.timestamp || props.part?.time?.created || 1)
-    const orderKey = props.orderKey || props.part.orderKey || testPartOrderKey(String(props.part.id || ""), time)
+    const messageID = String(props.part.messageID || "")
+    const partID = String(props.part.id || "")
+    const messageOrderKey = requireExplicitOrderKey(
+      props.orderKey,
+      `event part owner ${messageID || "<unknown>"}`,
+      "message",
+    )
+    const partOrderKey = requireExplicitOrderKey(props.part.orderKey, `event part ${partID || "<unknown>"}`, "part")
+    if (base.orderKey !== messageOrderKey) {
+      throw new Error(`test fixture event ${eventType} orderKey does not match owner message ${messageID || "<unknown>"}`)
+    }
     return {
       ...base,
+      orderKey: messageOrderKey,
       properties: {
         ...props,
-        orderKey,
+        orderKey: messageOrderKey,
         part: {
           ...props.part,
-          orderKey: props.part.orderKey || orderKey,
+          orderKey: partOrderKey,
         },
       },
     }
   }
 
   if (props.task && typeof props.task === "object") {
-    const created = Number(props.task?.time?.created || base?.emittedAt || base?.timestamp || 1)
     return {
       ...base,
       properties: {
         ...props,
         task: {
           ...props.task,
-          orderKey: props.task.orderKey || testTaskOrderKey(String(props.task.id || props.taskID || "task"), created),
+          orderKey: requireExplicitOrderKey(
+            props.task.orderKey,
+            `event task ${String(props.task.id || props.taskID || "<unknown>")}`,
+            "task",
+          ),
         },
       },
     }

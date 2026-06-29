@@ -109,7 +109,7 @@ test("rendered Markdown syntax highlighting stays readable across overlay themes
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/global/projects/discover") return send([])
     if (path === "/mission") return send([])
     if (path === "/session") return send([])

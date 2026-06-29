@@ -12,6 +12,15 @@
 
 import { test, expect } from "bun:test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import {
+  stampTestBoard,
+  stampTestEvent,
+  stampTestTranscript,
+  stampTestViewMessages,
+  testEventOrderKey,
+  testMessageOrderKey,
+  testPartOrderKey,
+} from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 installRealOverlayI18n()
 
@@ -20,10 +29,13 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const { setBoardStore } = await import("../src/store/board")
-const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationView } = await import(
-  "../src/services/tree-writer"
-)
+const { setBoardStore: setBoardStoreRaw } = await import("../src/store/board")
+const {
+  applyEvent: applyEventRaw,
+  flushBufferedPartDeltas,
+  resetWriter,
+  hydrateConversationView: hydrateConversationViewRaw,
+} = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 
 const TASK_ID = "tsk_perf"
@@ -33,6 +45,103 @@ const PART_ID = "part_perf"
 const EXECUTOR_SID = "ses_executor_perf"
 const EXECUTOR_MSG_ID = "msg_executor_perf"
 const EXECUTOR_PART_ID = "part_executor_perf"
+let eventSequence = 0
+
+function setBoardStore(...args: any[]): any {
+  if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampTestBoard(args[1]))
+  return (setBoardStoreRaw as any)(...args)
+}
+
+function applyEvent(event: any): void {
+  const stampedEnvelope =
+    event?.emittedAt || event?.timestamp
+      ? event
+      : { ...event, timestamp: 1_776_000_000_000 + ++eventSequence, sequence: eventSequence }
+  applyEventRaw(stampTestEvent(validateEventForTest(stampedEnvelope)))
+}
+
+function hydrateConversationView(view: any, transcript: any[]): void {
+  const completeTranscript = transcript.map((message) => validateTranscriptMessage(message))
+  hydrateConversationViewRaw(
+    { ...view, messages: stampTestViewMessages(view?.messages || []) },
+    stampTestTranscript(completeTranscript),
+  )
+}
+
+function validateEventForTest(event: any): any {
+  const type = String(event?.type || "event")
+  const props = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  if (props?.info && typeof props.info === "object") {
+    const messageID = String(props.info.id || "")
+    const orderKey = typeof props.info.orderKey === "string" ? props.info.orderKey : ""
+    if (!orderKey) throw new Error(`perf fixture message ${messageID || "<unknown>"} missing orderKey`)
+    if (event.orderKey !== orderKey) throw new Error(`perf fixture message ${messageID} envelope orderKey drift`)
+    return {
+      ...event,
+      orderKey,
+      properties: {
+        ...props,
+        info: props.info,
+      },
+    }
+  }
+  if (props?.part && typeof props.part === "object") {
+    const part = props.part
+    const messageID = String(part.messageID || "")
+    const partID = String(part.id || "")
+    const ownerOrderKey = typeof props.orderKey === "string" ? props.orderKey : ""
+    const partOrderKey = typeof part.orderKey === "string" ? part.orderKey : ""
+    if (!ownerOrderKey) throw new Error(`perf fixture part owner ${messageID || "<unknown>"} missing orderKey`)
+    if (!partOrderKey) throw new Error(`perf fixture part ${partID || "<unknown>"} missing orderKey`)
+    if (event.orderKey !== ownerOrderKey) {
+      throw new Error(`perf fixture part ${partID || "<unknown>"} envelope orderKey drift`)
+    }
+    return {
+      ...event,
+      orderKey: ownerOrderKey,
+      properties: {
+        ...props,
+        orderKey: ownerOrderKey,
+        part,
+      },
+    }
+  }
+  if (!event.orderKey) throw new Error(`perf fixture event ${type || "<unknown>"} missing orderKey`)
+  return {
+    ...event,
+    orderKey: event.orderKey,
+  }
+}
+
+function validateTranscriptMessage(message: any): any {
+  const info = message?.info || {}
+  const messageID = String(info.id || "")
+  if (!info.orderKey) throw new Error(`perf fixture transcript message ${messageID || "<unknown>"} missing orderKey`)
+  return {
+    ...message,
+    info,
+    parts: Array.isArray(message?.parts)
+      ? message.parts.map((part: any) => {
+          const partID = String(part.id || "")
+          if (!part.orderKey) throw new Error(`perf fixture transcript part ${partID || "<unknown>"} missing orderKey`)
+          return {
+            ...part,
+          }
+        })
+      : message?.parts,
+  }
+}
+
+function viewMessagesForTranscript(transcript: any[]): any[] {
+  return transcript.map((message) => ({
+    messageID: String(message.info.id || ""),
+    sessionID: String(message.info.sessionID || ""),
+    stage: String(message.info.channel || ""),
+    time: Number(message.info.time?.created || 0),
+    orderKey: message.info.orderKey,
+    placement: "top_level",
+  }))
+}
 
 const INITIAL_BOARD = {
   task: {
@@ -53,6 +162,7 @@ function bootstrap() {
   resetWriter()
   applyEvent({
     type: "message.updated",
+    orderKey: testMessageOrderKey(MSG_ID, 1_776_000_000_000),
     properties: {
       taskID: TASK_ID,
       info: {
@@ -63,17 +173,21 @@ function bootstrap() {
         agent: "assistant",
         channel: "assistant",
         time: { created: 1_776_000_000_000 },
+        orderKey: testMessageOrderKey(MSG_ID, 1_776_000_000_000),
       },
     },
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: testMessageOrderKey(MSG_ID, 1_776_000_000_000),
     properties: {
       taskID: TASK_ID,
+      orderKey: testMessageOrderKey(MSG_ID, 1_776_000_000_000),
       part: {
         id: PART_ID,
         messageID: MSG_ID,
         sessionID: SID,
+        orderKey: testPartOrderKey(PART_ID, 1_776_000_000_000),
         resolvedRole: "assistant",
         channel: "assistant",
         type: "reasoning",
@@ -90,6 +204,9 @@ function runDeltaBurst(count: number): { totalMs: number; perEventMs: number } {
   for (let i = 0; i < count; i++) {
     applyEvent({
       type: "message.part.delta",
+      sequence: 10_000 + i,
+      timestamp: 1_776_000_010_000 + i,
+      orderKey: testEventOrderKey("message.part.delta", 1_776_000_010_000 + i, 10_000 + i),
       properties: {
         taskID: TASK_ID,
         partID: PART_ID,
@@ -108,6 +225,7 @@ function runDeltaBurst(count: number): { totalMs: number; perEventMs: number } {
 function seedAssistantSession(sessionID: string, messageID: string, time: number): void {
   applyEvent({
     type: "message.updated",
+    orderKey: testMessageOrderKey(messageID, time),
     properties: {
       taskID: TASK_ID,
       info: {
@@ -118,6 +236,7 @@ function seedAssistantSession(sessionID: string, messageID: string, time: number
         agent: "assistant",
         channel: "assistant",
         time: { created: time },
+        orderKey: testMessageOrderKey(messageID, time),
       },
     },
   })
@@ -140,12 +259,14 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
         agent: "assistant",
         channel: "assistant",
         time: { created: baseTime + i },
+        orderKey: testMessageOrderKey(`noise_msg_${i}`, baseTime + i),
       },
       parts: [
         {
           id: `noise_part_${i}`,
           messageID: `noise_msg_${i}`,
           sessionID: `noise_${i}`,
+          orderKey: testPartOrderKey(`noise_part_${i}`, baseTime + i),
           resolvedRole: "assistant",
           channel: "assistant",
           type: "text",
@@ -154,9 +275,11 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
       ],
     })
   }
-  hydrateConversationView({ sessions: [] }, transcript)
+  const completeTranscript = transcript.map((message) => validateTranscriptMessage(message))
+  hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(completeTranscript) }, completeTranscript)
   applyEvent({
     type: "message.updated",
+    orderKey: testMessageOrderKey(EXECUTOR_MSG_ID, baseTime + extraCards + 1),
     properties: {
       taskID: TASK_ID,
       info: {
@@ -167,17 +290,21 @@ function bootstrapExecutorWithManyCards(extraCards: number): void {
         agent: "executor",
         channel: "executor",
         time: { created: baseTime + extraCards + 1 },
+        orderKey: testMessageOrderKey(EXECUTOR_MSG_ID, baseTime + extraCards + 1),
       },
     },
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: testMessageOrderKey(EXECUTOR_MSG_ID, baseTime + extraCards + 1),
     properties: {
       taskID: TASK_ID,
+      orderKey: testMessageOrderKey(EXECUTOR_MSG_ID, baseTime + extraCards + 1),
       part: {
         id: EXECUTOR_PART_ID,
         messageID: EXECUTOR_MSG_ID,
         sessionID: EXECUTOR_SID,
+        orderKey: testPartOrderKey(EXECUTOR_PART_ID, baseTime + extraCards + 1),
         resolvedRole: "executor",
         channel: "executor",
         type: "reasoning",
@@ -196,6 +323,9 @@ function runExecutorDeltaBurstWithManyCards(
   for (let i = 0; i < count; i++) {
     applyEvent({
       type: "message.part.delta",
+      sequence: 20_000 + i,
+      timestamp: 1_776_000_020_000 + i,
+      orderKey: testEventOrderKey("message.part.delta", 1_776_000_020_000 + i, 20_000 + i),
       properties: {
         taskID: TASK_ID,
         partID: EXECUTOR_PART_ID,
@@ -258,6 +388,7 @@ test("new message.updated for new sessions stays cheap under many concurrent ses
     const sid = `sess_${i}`
     applyEvent({
       type: "message.updated",
+      orderKey: testMessageOrderKey(`msg_${i}`, 1_776_000_000_000 + i),
       properties: {
         taskID: TASK_ID,
         info: {
@@ -269,6 +400,7 @@ test("new message.updated for new sessions stays cheap under many concurrent ses
           channel: "executor",
           parentSessionID: SID,
           time: { created: 1_776_000_000_000 + i },
+          orderKey: testMessageOrderKey(`msg_${i}`, 1_776_000_000_000 + i),
         },
       },
     })

@@ -104,7 +104,7 @@ test("left ledger loading skeletons expose live status text without visual regre
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "ledger-loading-status-test" })
-    if (path === "/tasks" || path === "/global/tasks") return tasks.promise
+    if (path === "/global/tasks") return tasks.promise
     if (path === "/mission") return missions.promise
     if (path === "/coding/sessions") return codingSessions.promise
     if (path === "/global/projects/discover") {

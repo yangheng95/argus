@@ -100,7 +100,7 @@ test("URL taskID deep link selects the linked task before persisted restore", as
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-deep-link-browser-test" })
     if (path === "/global/projects/discover") return send([])
-    if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/global/tasks") return send({ tasks })
     if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -110,7 +110,8 @@ test("URL taskID deep link selects the linked task before persisted restore", as
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
-    if (path === "/config") return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
+    if (path === "/config")
+      return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
     if (path === "/config/prompt")
       return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
     if (path === "/config/prompt-profile")
@@ -126,7 +127,11 @@ test("URL taskID deep link selects the linked task before persisted restore", as
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/skill/mounts") return send({ scope: "project", skills: [], agents: [], source: DIRECTORY })
     if (path === "/skill/directories")
-      return send({ global_config: "D:/deep-link/config", managed_skills: "D:/deep-link/skills", remote_cache: "D:/deep-link/cache" })
+      return send({
+        global_config: "D:/deep-link/config",
+        managed_skills: "D:/deep-link/skills",
+        remote_cache: "D:/deep-link/cache",
+      })
     if (path === "/mcp") return send({})
     if (path === "/agent") return send([])
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
@@ -136,7 +141,16 @@ test("URL taskID deep link selects the linked task before persisted restore", as
       return send({ taskID: TASK_ID, sessionID: linked.task.sessionID, agent: "orchestrator", model: null })
     }
     if (/^\/task\/[^/]+\/browser-preview$/.test(path))
-      return send({ taskID: TASK_ID, kind: "missing", status: "missing", projectRoot: DIRECTORY, viewports: [], diagnostics: [], candidates: [], source: "none" })
+      return send({
+        taskID: TASK_ID,
+        kind: "missing",
+        status: "missing",
+        projectRoot: DIRECTORY,
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
     if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
     if (path === `/task/${TASK_ID}/conversation`) {
       conversationRequests.push(url.href)
@@ -172,12 +186,16 @@ test("URL taskID deep link selects the linked task before persisted restore", as
     await page.goto(`${server.origin}/ui/index.html?taskID=${encodeURIComponent(TASK_ID)}`, { waitUntil: "load" })
     try {
       await page.waitForFunction(
-        (taskID: string) => (window as any).boardStore?.selectedSource?.kind === "task" && (window as any).boardStore.selectedSource.id === taskID,
+        (taskID: string) =>
+          (window as any).boardStore?.selectedSource?.kind === "task" &&
+          (window as any).boardStore.selectedSource.id === taskID,
         { timeout: 15_000 },
         TASK_ID,
       )
     } catch (error) {
-      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${await deepLinkDiagnostics(page, badResponses, conversationRequests)}`)
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\n${await deepLinkDiagnostics(page, badResponses, conversationRequests)}`,
+      )
     }
 
     const selected = await page.evaluate(() => ({
@@ -190,8 +208,14 @@ test("URL taskID deep link selects the linked task before persisted restore", as
       activeTaskID: TASK_ID,
       directory: DIRECTORY,
     })
-    assert.equal(conversationRequests.some((request) => request.includes(`/task/${TASK_ID}/conversation`)), true)
-    assert.equal(conversationRequests.some((request) => request.includes(`/task/${SAVED_TASK_ID}/conversation`)), false)
+    assert.equal(
+      conversationRequests.some((request) => request.includes(`/task/${TASK_ID}/conversation`)),
+      true,
+    )
+    assert.equal(
+      conversationRequests.some((request) => request.includes(`/task/${SAVED_TASK_ID}/conversation`)),
+      false,
+    )
     assert.deepEqual(badResponses, [])
 
     const screenshotPath = resolve(".scratch", "task-deep-link-browser.png")
@@ -222,7 +246,7 @@ test("directory-only URL parameters keep task row operations usable", async () =
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-directory-delete-browser-test" })
     if (path === "/global/projects/discover") return send([])
-    if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/global/tasks") return send({ tasks })
     if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -232,7 +256,8 @@ test("directory-only URL parameters keep task row operations usable", async () =
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
-    if (path === "/config") return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
+    if (path === "/config")
+      return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "", directory: DIRECTORY })
     if (path === "/config/prompt")
       return send({ active: "general", project_active: "general", default: "general", targets: [], profiles: [] })
     if (path === "/config/prompt-profile")
@@ -248,7 +273,11 @@ test("directory-only URL parameters keep task row operations usable", async () =
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/skill/mounts") return send({ scope: "project", skills: [], agents: [], source: DIRECTORY })
     if (path === "/skill/directories")
-      return send({ global_config: "D:/deep-link/config", managed_skills: "D:/deep-link/skills", remote_cache: "D:/deep-link/cache" })
+      return send({
+        global_config: "D:/deep-link/config",
+        managed_skills: "D:/deep-link/skills",
+        remote_cache: "D:/deep-link/cache",
+      })
     if (path === "/mcp") return send({})
     if (path === "/agent") return send([])
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
@@ -258,7 +287,16 @@ test("directory-only URL parameters keep task row operations usable", async () =
       return send({ taskID: TASK_ID, sessionID: linked.task.sessionID, agent: "orchestrator", model: null })
     }
     if (/^\/task\/[^/]+\/browser-preview$/.test(path))
-      return send({ taskID: TASK_ID, kind: "missing", status: "missing", projectRoot: DIRECTORY, viewports: [], diagnostics: [], candidates: [], source: "none" })
+      return send({
+        taskID: TASK_ID,
+        kind: "missing",
+        status: "missing",
+        projectRoot: DIRECTORY,
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
     if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
     if (path === `/task/${TASK_ID}/conversation`) {
       conversationRequests.push(url.href)
@@ -298,7 +336,9 @@ test("directory-only URL parameters keep task row operations usable", async () =
     )
     await page.goto(`${server.origin}/ui/index.html?directory=${encodeURIComponent(DIRECTORY)}`, { waitUntil: "load" })
     await page.waitForFunction(
-      (taskID: string) => (window as any).boardStore?.selectedSource?.kind === "task" && (window as any).boardStore.selectedSource.id === taskID,
+      (taskID: string) =>
+        (window as any).boardStore?.selectedSource?.kind === "task" &&
+        (window as any).boardStore.selectedSource.id === taskID,
       { timeout: 15_000 },
       TASK_ID,
     )
@@ -322,7 +362,10 @@ test("directory-only URL parameters keep task row operations usable", async () =
       selectedSource: null,
       taskIDs: [SAVED_TASK_ID],
     })
-    assert.equal(conversationRequests.some((request) => request.includes(`/task/${TASK_ID}/conversation`)), true)
+    assert.equal(
+      conversationRequests.some((request) => request.includes(`/task/${TASK_ID}/conversation`)),
+      true,
+    )
     assert.equal(deleteRequests.length, 1)
     assert.equal(new URL(deleteRequests[0]).searchParams.has("directory"), false)
     assert.deepEqual(badResponses, [])
@@ -331,7 +374,9 @@ test("directory-only URL parameters keep task row operations usable", async () =
     mkdirSync(dirname(screenshotPath), { recursive: true })
     writeFileSync(screenshotPath, await page.screenshot({ fullPage: true }))
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${await deepLinkDiagnostics(page, badResponses, conversationRequests)}`)
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\n${await deepLinkDiagnostics(page, badResponses, conversationRequests)}`,
+    )
   } finally {
     await browser.close()
     await server.close()

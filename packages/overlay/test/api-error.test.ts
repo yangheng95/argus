@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { apiJson, apiJsonWithTimeout, ApiError } from "../src/services/api"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { apiJson, apiJsonWithTimeout, ApiError, configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
@@ -33,7 +33,14 @@ function fakeTransport(responder: (req: TransportRequest) => TransportResponse<u
   } as unknown as HostTransport
 }
 
-afterEach(() => __setHostTransportForTest(undefined))
+const TEST_DIRECTORY = "D:/opencorvus/api-error-test"
+
+beforeEach(() => configure({ directory: TEST_DIRECTORY }))
+
+afterEach(() => {
+  __setHostTransportForTest(undefined)
+  configure({ directory: "" })
+})
 
 describe("apiJson + ApiError", () => {
   test("2xx returns the parsed body unchanged", async () => {

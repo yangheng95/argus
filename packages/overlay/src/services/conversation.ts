@@ -13,7 +13,6 @@ import {
   type BoardSource,
 } from "../store/board"
 import { cardTreeStore, setHydratedRewindCursor } from "../store/card-tree"
-import { mergeLoadedConversationMessages } from "../store/messages"
 import {
   attachConversationAgentViewTargets,
   clearConversationAgentRenderedTargets,
@@ -21,6 +20,8 @@ import {
   resetConversationAgentView,
 } from "../store/conversation-agents"
 import { markSelectedMessageWatermark } from "./selected-stream-cursor"
+import { formatErrorDetails } from "./notify"
+import { AppLog } from "../utils/log"
 
 type EventReplay = {
   cursor: number
@@ -32,6 +33,7 @@ type EventReplay = {
 
 type HistoryState = {
   oldestTimestamp: number | null
+  oldestOrderKey: string | null
   oldestMessageID: string | null
   hasMore: boolean
   limit: number
@@ -53,12 +55,28 @@ let scheduledTailMergeRunning = false
 let scheduledTailMergeAgain = false
 let historyState: HistoryState = {
   oldestTimestamp: null,
+  oldestOrderKey: null,
   oldestMessageID: null,
   hasMore: false,
   limit: CONVERSATION_HISTORY_PAGE_LIMIT,
 }
 let historyLoading = false
 const sourceDirectoryByKey = new Map<string, string>()
+
+function logConversationAsyncError(
+  context: string,
+  error: unknown,
+  extra: { taskID?: string; sessionID?: string; source?: string } = {},
+): void {
+  AppLog.error("conversation", context, {
+    ...extra,
+    error: formatErrorDetails(error),
+    notificationID: `conversation:${context}:${extra.taskID || extra.sessionID || "global"}`,
+    notificationTitle: "Conversation update failed",
+    notificationMessage: context,
+    notificationDetails: formatErrorDetails(error),
+  })
+}
 
 export function cancelConversationReplay(options: { preserveAgentView?: boolean } = {}): void {
   replayEpoch += 1
@@ -77,6 +95,7 @@ export function cancelConversationReplay(options: { preserveAgentView?: boolean 
   historySource = null
   historyState = {
     oldestTimestamp: null,
+    oldestOrderKey: null,
     oldestMessageID: null,
     hasMore: false,
     limit: CONVERSATION_HISTORY_PAGE_LIMIT,
@@ -110,26 +129,30 @@ function parseEventReplay(raw: any): EventReplay {
   return replay
 }
 
-function parseHistoryState(raw: any, fallbackLimit = CONVERSATION_HISTORY_PAGE_LIMIT): HistoryState {
+function parseHistoryState(raw: any): HistoryState {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return {
-      oldestTimestamp: null,
-      oldestMessageID: null,
-      hasMore: false,
-      limit: fallbackLimit,
-    }
+    throw new Error("conversation hydrate missing history")
   }
   const oldestRaw = raw.oldestTimestamp
   const oldestTimestamp = oldestRaw === null || oldestRaw === undefined ? null : Number(oldestRaw)
   if (oldestTimestamp !== null && !Number.isFinite(oldestTimestamp)) {
     throw new Error(`conversation history oldestTimestamp invalid: ${JSON.stringify(raw)}`)
   }
+  const oldestOrderKey =
+    typeof raw.oldestOrderKey === "string" && raw.oldestOrderKey.trim() ? raw.oldestOrderKey.trim() : null
+  if (raw.hasMore === true && !oldestOrderKey) {
+    throw new Error(`conversation history oldestOrderKey required when hasMore=true: ${JSON.stringify(raw)}`)
+  }
   const limit = Number(raw.limit)
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`conversation history limit invalid: ${JSON.stringify(raw)}`)
+  }
   return {
     oldestTimestamp,
+    oldestOrderKey,
     oldestMessageID: typeof raw.oldestMessageID === "string" && raw.oldestMessageID ? raw.oldestMessageID : null,
     hasMore: raw.hasMore === true,
-    limit: Number.isInteger(limit) && limit > 0 ? limit : fallbackLimit,
+    limit,
   }
 }
 
@@ -183,6 +206,7 @@ function prewarmTranscriptMarkdown(transcript: readonly unknown[]): void {
   }
   prewarmMarkdownRenderCache(sources)
 }
+
 function sourceKey(source: BoardSource): string {
   return `${source.kind}:${source.id}`
 }
@@ -385,7 +409,7 @@ export async function hydrateConversation(
         ? registerConversationSourceDirectory(source, hydratedTaskDirectory(board, source.id))
         : registerConversationSourceDirectory(source, requestDirectory)
     const transcript = requireArray(data?.transcript, "transcript")
-    const timeline = requireArray(data?.timeline, "timeline")
+    requireArray(data?.timeline, "timeline")
     const events = requireArray(data?.events, "events")
     const view = requireObject(data?.view, "view")
     const agentView = requireObject(data?.agentView, "agentView")
@@ -393,10 +417,9 @@ export async function hydrateConversation(
       source.kind === "task"
         ? parseEventReplay(data?.eventReplay)
         : { cursor: 0, latestSequence: 0, complete: true, limit: CONVERSATION_HISTORY_PAGE_LIMIT, sinceTimestamp: null }
-    const history = parseHistoryState(data?.history, CONVERSATION_HISTORY_PAGE_LIMIT)
+    const history = parseHistoryState(data?.history)
     const messageWatermark = parseMessageWatermark(data?.messageWatermark)
     const rewindCursor = parseRewindCursor((board as any).rewindCursor)
-    const mergedMessages = mergeLoadedConversationMessages(timeline, transcript)
     const lastSequence = source.kind === "task" ? requireNonnegativeInteger(data?.lastSequence, "lastSequence") : 0
 
     clearConversationAgentRenderedTargets(sourceKey(source))
@@ -412,7 +435,7 @@ export async function hydrateConversation(
       setTaskSequence(0)
     }
     setBoardUpdatedAt(Date.now())
-    hydrateConversationView(view, mergedMessages)
+    hydrateConversationView(view, transcript)
     prewarmTranscriptMarkdown(transcript)
     setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey(source), agentView)
@@ -430,7 +453,10 @@ export async function hydrateConversation(
       void continueConversationReplay(source.id, directory, replay, epoch, signal)
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return
-          console.error("[conversation] background protocol replay failed", error)
+          logConversationAsyncError("background protocol replay failed", error, {
+            taskID: source.id,
+            source: "background-replay",
+          })
         })
         .finally(() => {
           if (replayAbort === controller) replayAbort = null
@@ -473,7 +499,7 @@ export async function mergeLatestConversationTail(
     assertActiveTailMerge(selectedTaskID, epoch, signal)
     const board = requireObject(data?.board, "board")
     const transcript = requireArray(data?.transcript, "transcript")
-    const timeline = requireArray(data?.timeline, "timeline")
+    requireArray(data?.timeline, "timeline")
     const events = requireArray(data?.events, "events")
     const view = requireObject(data?.view, "view")
     const agentView = requireObject(data?.agentView, "agentView")
@@ -483,7 +509,7 @@ export async function mergeLatestConversationTail(
 
     setBoardData(board)
     setBoardUpdatedAt(Date.now())
-    hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    hydrateConversationView(view, transcript)
     prewarmTranscriptMarkdown(transcript)
     setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey({ kind: "task", id: selectedTaskID }), agentView)
@@ -516,7 +542,10 @@ export function scheduleLatestConversationTailMerge(taskID: string): void {
         })
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") continue
-        console.error("[conversation] scheduled tail merge failed", error)
+        logConversationAsyncError("scheduled tail merge failed", error, {
+          taskID: nextTaskID,
+          source: "scheduled-tail-merge",
+        })
       }
       if (!scheduledTailMergeAgain) break
     }
@@ -525,7 +554,10 @@ export function scheduleLatestConversationTailMerge(taskID: string): void {
   }
   void run().catch((error) => {
     scheduledTailMergeRunning = false
-    console.error("[conversation] scheduled tail merge owner failed", error)
+    logConversationAsyncError("scheduled tail merge owner failed", error, {
+      taskID: scheduledTailMergeTaskID,
+      source: "scheduled-tail-merge",
+    })
   })
 }
 
@@ -536,6 +568,7 @@ export function canLoadOlderConversationHistory(source: BoardSource | null = boa
     source.kind === "task" &&
     historyState.hasMore &&
     historyState.oldestTimestamp !== null &&
+    historyState.oldestOrderKey !== null &&
     !historyLoading
   )
 }
@@ -570,8 +603,9 @@ export async function loadOlderConversationHistory(
   if (!canLoadOlderConversationHistory(source)) return false
   const directory = conversationSourceDirectory(source)
   const before = historyState.oldestTimestamp
+  const beforeOrderKey = historyState.oldestOrderKey
   const beforeID = historyState.oldestMessageID
-  if (before === null) return false
+  if (before === null || beforeOrderKey === null) return false
   historyLoading = true
   historyAbort?.abort(new DOMException("Conversation history superseded", "AbortError"))
   const controller = new AbortController()
@@ -580,20 +614,20 @@ export async function loadOlderConversationHistory(
   try {
     assertActiveHistory(source, epoch, controller.signal)
     const page = await apiJson(
-      `task/${encodeURIComponent(selectedTaskID)}/conversation/history?directory=${encodeURIComponent(directory)}&before=${encodeURIComponent(String(before))}${beforeID ? `&before_id=${encodeURIComponent(beforeID)}` : ""}&limit=${encodeURIComponent(String(CONVERSATION_HISTORY_PAGE_LIMIT))}`,
+      `task/${encodeURIComponent(selectedTaskID)}/conversation/history?directory=${encodeURIComponent(directory)}&before=${encodeURIComponent(String(before))}&before_order_key=${encodeURIComponent(beforeOrderKey)}${beforeID ? `&before_id=${encodeURIComponent(beforeID)}` : ""}&limit=${encodeURIComponent(String(CONVERSATION_HISTORY_PAGE_LIMIT))}`,
       { signal: controller.signal },
     )
     assertActiveHistory(source, epoch, controller.signal)
     const transcript = requireArray(page?.transcript, "transcript")
-    const timeline = requireArray(page?.timeline, "timeline")
+    requireArray(page?.timeline, "timeline")
     const events = requireArray(page?.events, "events")
     const view = requireObject(page?.view, "view")
-    const nextHistory = parseHistoryState(page?.history, CONVERSATION_HISTORY_PAGE_LIMIT)
-    if (transcript.length === 0 && timeline.length === 0 && events.length === 0) {
+    const nextHistory = parseHistoryState(page?.history)
+    if (transcript.length === 0 && events.length === 0) {
       historyState = nextHistory
       return false
     }
-    hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    hydrateConversationView(view, transcript)
     prewarmTranscriptMarkdown(transcript)
     attachConversationAgentViewTargets(sourceKey(source), view)
     for (const event of events) {
@@ -602,6 +636,14 @@ export async function loadOlderConversationHistory(
     assertActiveHistory(source, epoch, controller.signal)
     historyState = nextHistory
     return true
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      logConversationAsyncError("older history load failed", error, {
+        taskID: selectedTaskID,
+        source: "older-history",
+      })
+    }
+    throw error
   } finally {
     if (historyAbort === controller) {
       historyAbort = null
@@ -633,11 +675,11 @@ export async function loadConversationSessionHistory(
     )
     assertActiveSessionHistory(selectedTaskID, epoch, signal)
     const transcript = requireArray(page?.transcript, "transcript")
-    const timeline = requireArray(page?.timeline, "timeline")
+    requireArray(page?.timeline, "timeline")
     const events = requireArray(page?.events, "events")
     const view = requireObject(page?.view, "view")
-    if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false
-    hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript))
+    if (transcript.length === 0 && events.length === 0) return false
+    hydrateConversationView(view, transcript)
     prewarmTranscriptMarkdown(transcript)
     attachConversationAgentViewTargets(sourceKey({ kind: "task", id: selectedTaskID }), view)
     for (const event of events) {
@@ -646,6 +688,15 @@ export async function loadConversationSessionHistory(
     }
     assertActiveSessionHistory(selectedTaskID, epoch, signal)
     return true
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      logConversationAsyncError("session history hydrate failed", error, {
+        taskID: selectedTaskID,
+        sessionID: targetSessionID,
+        source: "session-history",
+      })
+    }
+    throw error
   } finally {
     if (historyAbort === controller) {
       historyAbort = null
@@ -672,16 +723,10 @@ export async function loadConversationHistoryUntilCard(
   const targetSessionID = String(options.sessionID || "")
   const selectedSource = boardStore.selectedSource
   if (!loaded() && targetSessionID && selectedSource?.kind !== "session") {
-    await loadConversationSessionHistory(targetSessionID, taskID, { directory: options.directory }).catch((error) => {
-      console.warn("[conversation] session history hydrate failed", error)
-      return false
-    })
+    await loadConversationSessionHistory(targetSessionID, taskID, { directory: options.directory })
   }
   if (!loaded() && targetSessionID && selectedSource?.kind === "session") {
-    await loadOlderConversationHistory(selectedSource).catch((error) => {
-      console.warn("[conversation] session history hydrate failed", error)
-      return false
-    })
+    await loadOlderConversationHistory(selectedSource)
   }
   const taskSource: BoardSource = { kind: "task", id: taskID }
   while (!loaded() && canLoadOlderConversationHistory(taskSource)) {

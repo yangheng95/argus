@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test"
 import { cardTreeStore } from "../src/store/card-tree"
-import { resetWriter } from "../src/services/tree-writer"
-import { ingestPersistedConversationMessage } from "../src/services/chat"
+import { ingestPersistedConversationMessage, resetWriter } from "../src/services/tree-writer"
 
 test("persisted task message is projected into the visible conversation tree", () => {
   resetWriter()
+  const orderKey = "v1:0001714000000000:0000000000000030:0000000000000000:message:msg_user_1"
 
   ingestPersistedConversationMessage({
     info: {
@@ -14,6 +14,7 @@ test("persisted task message is projected into the visible conversation tree", (
       agent: "build",
       resolvedRole: "user",
       channel: "main",
+      orderKey,
       time: { created: 1_714_000_000_000 },
     },
     parts: [

@@ -89,4 +89,26 @@ describe("tauri transport error body", () => {
     expect(res.ok).toBe(true)
     expect(res.body).toEqual({ ok: true })
   })
+
+  test("allows explicit long-running requests without the transport default timeout", async () => {
+    AbortSignal.timeout = (() => {
+      throw new Error("long-running request should not allocate the default timeout")
+    }) as typeof AbortSignal.timeout
+    globalThis.fetch = async (_url, init) => {
+      expect(init?.signal).toBeUndefined()
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const res = await createTauriTransport().request({
+      path: "project/current/worktrees",
+      method: "DELETE",
+      timeoutMilliseconds: null,
+    })
+
+    expect(res.ok).toBe(true)
+    expect(res.body).toEqual({ ok: true })
+  })
 })

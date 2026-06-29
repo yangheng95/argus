@@ -195,7 +195,10 @@ describe("message image preview", () => {
     const messagesCss = read("src/styles/surfaces/messages.css")
     const attachments = block(messagesCss, ".msg-tool-attachments")
     const wrap = block(messagesCss, ".msg-tool-attachments .msg-img-wrap")
-    const trigger = block(messagesCss, '.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger')
+    const trigger = block(
+      messagesCss,
+      '.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger',
+    )
     const image = block(messagesCss, ".msg-tool-attachments .md-img")
 
     expect(attachments).toContain("display: flex;")

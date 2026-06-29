@@ -769,7 +769,7 @@ test(
         if (path === "/global/projects/discover") return json([])
         if (path === "/project/current/worktrees") return json([])
         if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json([])
-        if (path === "/global/tasks" || path === "/tasks") return json({ tasks: [{ task, updated_at: Date.now() }] })
+        if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: Date.now() }] })
         if (path === "/path") return json({ directory: PROJECT_ROOT })
         if (path === "/vcs") {
           return json({

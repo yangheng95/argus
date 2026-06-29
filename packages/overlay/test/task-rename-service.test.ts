@@ -1,7 +1,7 @@
 // Contract test for renameTask:
 // - sends PATCH task/<id>/title with the trimmed title body
 // - rejects empty / overlong titles without making a network call
-// - reports failure on non-2xx so the row can revert its optimistic edit
+// - rejects failure on non-2xx so the row can surface the original API error
 //
 // We stub the HostTransport so the assertions are entirely synchronous and
 // don't need a backend. The renameTask flow refreshes the board after the
@@ -13,6 +13,7 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 interface Captured {
   path: string
+  query: Record<string, string | number | boolean> | undefined
   method: string
   body: unknown
 }
@@ -38,19 +39,36 @@ function fakeTransport(responder: Responder): HostTransport {
 }
 
 const { renameTask } = await import("../src/services/task")
+const { clearBoard, setTasksData } = await import("../src/store/board")
 
 let captured: Captured[]
+const TASK_DIRECTORY = "D:/repo/task-rename"
 
 beforeEach(() => {
   captured = []
+  setTasksData([
+    {
+      task: {
+        id: "tsk_abc123",
+        directory: TASK_DIRECTORY,
+        status: "active",
+        time: { created: 1, updated: 1 },
+      },
+      updated_at: 1,
+    },
+  ])
 })
 
-afterEach(() => __setHostTransportForTest(undefined))
+afterEach(() => {
+  clearBoard()
+  __setHostTransportForTest(undefined)
+})
 
 function recordingTransport(patchStatus = 200): HostTransport {
   return fakeTransport((req) => {
     captured.push({
       path: req.path,
+      query: req.query,
       method: req.method,
       body: req.body && (req.body as any).kind === "json" ? (req.body as any).value : req.body,
     })
@@ -71,6 +89,7 @@ describe("renameTask service contract", () => {
     const patches = captured.filter((c) => c.method === "PATCH")
     expect(patches.length).toBe(1)
     expect(patches[0]!.path).toBe("task/tsk_abc123/title")
+    expect(patches[0]!.query).toEqual({ directory: TASK_DIRECTORY })
     expect(patches[0]!.body).toEqual({ title: "New name" })
   })
 
@@ -95,9 +114,8 @@ describe("renameTask service contract", () => {
     expect(captured.length).toBe(0)
   })
 
-  test("server error surfaces as false (caller can revert UI)", async () => {
+  test("server error rejects with the API error", async () => {
     __setHostTransportForTest(recordingTransport(500))
-    const ok = await renameTask("tsk_abc123", "New name")
-    expect(ok).toBe(false)
+    await expect(renameTask("tsk_abc123", "New name")).rejects.toThrow("API 500")
   })
 })

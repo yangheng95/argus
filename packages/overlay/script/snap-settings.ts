@@ -16,6 +16,10 @@
 
 import { launchBrowser } from "../test/launch"
 import path from "node:path"
+import {
+  gotoWithBrowserInactivity,
+  withBrowserInactivityTimeout,
+} from "../../opencorvus/script/benchmark/browser-inactivity"
 
 const out = process.argv[2]
 if (!out) {
@@ -34,9 +38,7 @@ try {
   page.on("console", (msg) => {
     if (msg.type() === "error") console.error("[console-error]", msg.text())
   })
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
-    console.error(`page.goto warning: ${e.message ?? e}`)
-  })
+  await gotoWithBrowserInactivity(page, "http://localhost:5173/", "networkidle", 15_000)
   await new Promise((r) => setTimeout(r, 800))
 
   // Open the config dialog by reaching into the dev module graph.
@@ -47,11 +49,9 @@ try {
   // module load finishes — independent of `initApp()`, which blocks on
   // the daemon connection). `ensureConfigHost` mounts the dialog host
   // ourselves so the open() call has somewhere to render to.
-  await page
-    .waitForFunction(() => Boolean((window as any).__OC_DEV__?.openConfigDialog), {
-      timeout: 8000,
-    })
-    .catch(() => console.error("__OC_DEV__ never appeared"))
+  await withBrowserInactivityTimeout(page, "config dialog dev hook", 8_000, () =>
+    page.waitForFunction(() => Boolean((window as any).__OC_DEV__?.openConfigDialog), undefined, { timeout: 0 }),
+  )
   const opened = await page.evaluate((wantTab) => {
     try {
       const dev = (window as any).__OC_DEV__
@@ -63,27 +63,23 @@ try {
     }
   }, tab)
   console.log(`open path: ${opened}`)
+  if (typeof opened === "string" && opened.startsWith("fail:")) throw new Error(opened)
 
   // Wait long enough for Solid's createEffect → dialog.showModal() to flush.
-  await page
-    .waitForFunction(
-      () => {
-        const dlg = document.getElementById("configDialog") as HTMLDialogElement | null
-        return dlg?.open === true
-      },
-      { timeout: 4000 },
-    )
-    .catch(async () => {
-      const diag = await page.evaluate(() => {
-        const dlg = document.getElementById("configDialog") as HTMLDialogElement | null
-        return {
-          present: Boolean(dlg),
-          open: dlg?.open ?? null,
-          outerLen: dlg?.outerHTML?.length ?? 0,
-        }
-      })
-      console.error("dialog did not open:", diag)
-    })
+  await withBrowserInactivityTimeout(
+    page,
+    "config dialog open",
+    4_000,
+    () =>
+      page.waitForFunction(
+        () => {
+          const dlg = document.getElementById("configDialog") as HTMLDialogElement | null
+          return dlg?.open === true
+        },
+        undefined,
+        { timeout: 0 },
+      ),
+  )
   await new Promise((r) => setTimeout(r, 600))
 
   const measure = await page.evaluate(() => {

@@ -7,6 +7,10 @@
  */
 import { launchBrowser } from "../test/launch"
 import path from "node:path"
+import {
+  gotoWithBrowserInactivity,
+  withBrowserInactivityTimeout,
+} from "../../opencorvus/script/benchmark/browser-inactivity"
 
 const out = process.argv[2]
 if (!out) {
@@ -23,26 +27,24 @@ try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: w, height: h })
   page.on("pageerror", (e) => console.error("[page-error]", e.message))
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
-    console.error(`page.goto warning: ${e.message ?? e}`)
-  })
+  await gotoWithBrowserInactivity(page, "http://localhost:5173/", "networkidle", 15_000)
   await page.evaluate((wantTheme) => {
     document.documentElement.setAttribute("data-theme", wantTheme)
     document.body.setAttribute("data-theme", wantTheme)
   }, theme)
-  await page
-    .waitForSelector('[data-menu-trigger="workspace"]', { timeout: 8000 })
-    .catch(() => console.error("titlebar never appeared"))
+  await withBrowserInactivityTimeout(page, "titlebar workspace trigger", 8_000, () =>
+    page.waitForSelector('[data-menu-trigger="workspace"]', { timeout: 0 }),
+  )
 
   const triggers = await page.$$eval("[data-menu-trigger]", (nodes) =>
     nodes.map((n) => (n as HTMLElement).dataset.menuTrigger),
   )
   console.log("triggers:", JSON.stringify(triggers))
 
-  await page.click(`[data-menu-trigger="${menu}"]`).catch((e) => console.error("click failed", e.message))
-  await page
-    .waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { timeout: 4000 })
-    .catch(() => console.error("menu panel never opened"))
+  await page.click(`[data-menu-trigger="${menu}"]`)
+  await withBrowserInactivityTimeout(page, `titlebar menu ${menu}`, 4_000, () =>
+    page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { timeout: 0 }),
+  )
   await new Promise((r) => setTimeout(r, 300))
 
   const abs = path.resolve(out)

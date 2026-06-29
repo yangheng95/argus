@@ -75,11 +75,13 @@ body {
   --card-stage-frontend-research: color-mix(in oklch, var(--accent) 64%, var(--warn) 36%);
   --card-stage-visual-qa: color-mix(in oklch, var(--good) 54%, var(--bad) 46%);
   --card-stage-architect: color-mix(in oklch, var(--accent) 88%, var(--good) 12%);
+  --card-stage-goal-workload-analyst: color-mix(in oklch, var(--warn) 62%, var(--accent) 38%);
   --card-stage-planner: color-mix(in oklch, var(--accent) 70%, var(--good) 30%);
   --card-stage-goal: color-mix(in oklch, var(--accent) 92%, var(--bad) 8%);
   --card-stage-executor: color-mix(in oklch, var(--warn) 80%, var(--bad) 20%);
   --card-stage-build: color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
   --card-stage-explore: color-mix(in oklch, var(--accent) 68%, var(--warn) 32%);
+  --card-stage-deep-research: color-mix(in oklch, var(--accent) 58%, var(--good) 42%);
   --card-stage-evaluator: color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
   --card-stage-acceptance: color-mix(in oklch, var(--good) 82%, var(--accent) 18%);
   --card-stage-integrity: color-mix(in oklch, var(--good) 45%, var(--bad) 55%);

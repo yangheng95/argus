@@ -128,7 +128,7 @@ describe("project delete button", () => {
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*display:\s*flex;/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*position:\s*absolute;/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*gap:\s*calc\(1px \* var\(--ui-scale\)\);/)
-    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*opacity:\s*0;/)
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*opacity:\s*var\(--ui-opacity-hidden\);/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*visibility:\s*hidden;/)
     expect(SIDEBAR_CSS).toContain('.project-group[data-project-actions="true"]:hover .project-group-actions')
     expect(SIDEBAR_CSS).toContain('.project-group[data-project-actions="true"]:focus-within .project-group-actions')

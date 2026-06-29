@@ -112,6 +112,71 @@ describe("terminal client", () => {
     expect(currentTerminalProfileID()).toBe("powershell")
   })
 
+  test("stale terminal profile reloads do not overwrite the current directory selection", async () => {
+    const releases = new Map<string, () => void>()
+    const ready = (directory: string) =>
+      new Promise<void>((resolve) => {
+        releases.set(directory, resolve)
+      })
+    const waits = new Map([
+      ["C:/repo/a", ready("C:/repo/a")],
+      ["C:/repo/b", ready("C:/repo/b")],
+    ])
+    let currentDirectory = "C:/repo/a"
+    const transport: HostTransport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req) {
+        const directory = String(req.query?.directory || "")
+        await waits.get(directory)
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            defaultProfileID: directory.endsWith("/a") ? "bash" : "powershell",
+            profiles: [
+              directory.endsWith("/a")
+                ? { id: "bash", label: "Bash", icon: "bash" }
+                : { id: "powershell", label: "PowerShell", icon: "powershell" },
+            ],
+          },
+        }
+      },
+      openStream() {
+        throw new Error("openStream not used in stale terminal profile test")
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    }
+    __setHostTransportForTest(transport)
+
+    const first = reloadTerminalProfileSelection({
+      directory: "C:/repo/a",
+      defaultProfileMissingMessage: "missing default terminal",
+      isCurrentDirectory: () => currentDirectory === "C:/repo/a",
+    })
+    currentDirectory = "C:/repo/b"
+    const second = reloadTerminalProfileSelection({
+      directory: "C:/repo/b",
+      defaultProfileMissingMessage: "missing default terminal",
+      isCurrentDirectory: () => currentDirectory === "C:/repo/b",
+    })
+
+    releases.get("C:/repo/b")?.()
+    await second
+    expect(currentTerminalProfileID()).toBe("powershell")
+
+    releases.get("C:/repo/a")?.()
+    await first
+    expect(terminalProfiles()).toEqual([{ id: "powershell", label: "PowerShell", icon: "powershell" }])
+    expect(currentTerminalProfileID()).toBe("powershell")
+  })
+
   test("server default terminal profile remains implicit across default changes", async () => {
     let requestCount = 0
     const responses = [
@@ -222,7 +287,17 @@ describe("terminal client", () => {
     }
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("reloadTerminalProfileSelection({")
     expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("directory: nextDirectory")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("close()")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("clearTerminalProfileSelection()")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("const ownsProfile = () => activeDirectory().trim() === cwd")
+    expect(WORKSPACE_LAYOUT_CONTROLS_SOURCE).toContain("if (!ownsProfile()) return")
     expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("listCodingCliProfiles(nextDirectory)")
     expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("directory: nextDirectory")
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain('const [profilesDirectory, setProfilesDirectory] = createSignal("")')
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("const profilesCurrentForDirectory = () =>")
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("setProfilesDirectory(nextDirectory)")
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("setProfilesDirectory(\"\")")
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("Coding CLI profiles are stale for the active directory")
+    expect(WORKSPACE_CODING_CLI_LAUNCHERS_SOURCE).toContain("profilesCurrentForDirectory() ? profiles() : []")
   })
 })

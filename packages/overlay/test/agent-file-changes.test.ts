@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { afterEach, expect, test } from "bun:test"
 import { join } from "node:path"
 import { readFileSync } from "node:fs"
 import {
@@ -10,6 +10,13 @@ import {
 import { setCardTreeStore, type CardNode } from "../src/store/card-tree"
 
 const ROOT = join(import.meta.dir, "..")
+
+afterEach(() => {
+  setCardTreeStore("order", [])
+  setCardTreeStore("cards", {})
+  setCardTreeStore("screenshotItems", [])
+  setCardTreeStore("usageAggregate", { tokens: 0, costUSD: 0, estimated: false })
+})
 
 function readText(path: string): string {
   return readFileSync(path, "utf8")
@@ -116,7 +123,7 @@ test("collectAgentFileChanges ignores bare tool input paths and string-only patc
   expect(collectAgentFileChanges(agent, "C:/repo")).toEqual([])
 })
 
-test("collectAgentFileChanges follows renderer child precedence and completed tool semantics", () => {
+test("collectAgentFileChanges follows store childIDs and ignores stale inline child properties", () => {
   const storeChild = card({
     id: "store-child",
     kind: "agent",
@@ -130,19 +137,12 @@ test("collectAgentFileChanges follows renderer child precedence and completed to
   })
   setCardTreeStore("cards", { "store-child": storeChild })
 
-  const agent = card({
+  const agent = {
+    ...card({
     id: "agent-with-inline-child",
     kind: "agent",
     title: "Agent",
     childIDs: ["store-child"],
-    children: [
-      card({
-        id: "inline-child",
-        kind: "agent",
-        title: "Stale inline child",
-        parts: [{ type: "patch", files: ["C:\\repo\\src\\stale.ts"] }],
-      }),
-    ],
     parts: [
       {
         type: "tool",
@@ -163,7 +163,21 @@ test("collectAgentFileChanges follows renderer child precedence and completed to
         },
       },
     ],
-  })
+    }),
+    children: [
+      card({
+        id: "inline-child",
+        kind: "agent",
+        title: "Stale inline child",
+        parts: [
+          {
+            type: "patch",
+            files: [{ file: "C:\\repo\\src\\stale.ts", before: "x", after: "y", additions: 1, deletions: 1 }],
+          },
+        ],
+      }),
+    ],
+  } as CardNode
 
   const changes = collectAgentFileChanges(agent, "C:\\repo")
   expect(changes.map((item) => item.displayPath)).toEqual(["src/created.ts", "src/rendered.ts"])

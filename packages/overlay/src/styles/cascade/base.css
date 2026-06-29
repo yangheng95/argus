@@ -23,7 +23,6 @@
 
 :root {
   --ui-scale: 1;
-  --ui-window-opacity: var(--ui-opacity-full);
 
   --session-scrollbar-size: calc(12px * var(--ui-scale));
 

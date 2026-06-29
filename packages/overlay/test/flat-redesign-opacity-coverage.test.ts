@@ -4,9 +4,7 @@
  * Pins the opacity token contract: every `opacity:` declaration under
  * `packages/overlay/src/styles/**\/*.css` (except the token source
  * `tokens/design-language.css`) must use `var(--ui-opacity-*)`. Literal
- * decimals are forbidden. `var(--ui-window-opacity, ...)` is allowed
- * because that is a Tauri window-level property, not a visual rhythm
- * value.
+ * decimals are forbidden.
  */
 
 import { describe, test } from "bun:test"
@@ -33,11 +31,10 @@ describe("flat-redesign Step 8a — opacity token coverage", () => {
     for (const file of files) {
       const text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
       // Find every `opacity: <value>;`. Reject literal decimals.
-      // Allow: var(--ui-opacity-*) and var(--ui-window-opacity, ...).
+      // Allow: var(--ui-opacity-*).
       for (const m of text.matchAll(/(?<!-)\bopacity\s*:\s*([^;]+);/g)) {
         const value = m[1]!.trim()
         if (value.startsWith("var(--ui-opacity-")) continue
-        if (value.startsWith("var(--ui-window-opacity")) continue
         violations.push(`${file}: opacity: ${value}`)
       }
     }
@@ -90,6 +87,17 @@ describe("flat-redesign Step 8a — opacity token coverage", () => {
     }
     if (violations.length > 0) {
       throw new Error(`legacy --oc-disabled-opacity still in use:\n  ` + violations.join("\n  "))
+    }
+  })
+
+  test("retired window opacity token has no style consumers", () => {
+    const violations: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, "utf8")
+      if (text.includes("--ui-window-opacity")) violations.push(file)
+    }
+    if (violations.length > 0) {
+      throw new Error(`retired --ui-window-opacity still referenced:\n  ` + violations.join("\n  "))
     }
   })
 })

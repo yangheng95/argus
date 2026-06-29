@@ -33,6 +33,11 @@ const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "mission-visual-
 const VITE_PORT = 5173
 const VIEWPORT_WIDE = { width: 1440, height: 900 }
 const VIEWPORT_ILLEGAL_NARROW = { width: 900, height: 720 }
+const MISSION_NOW = Date.now()
+
+function missionOrderKey(domain: "session" | "message" | "part", rank: number, time: number, id: string): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+}
 
 // ── Fixture data the mock server returns ─────────────────────────────
 //
@@ -40,6 +45,10 @@ const VIEWPORT_ILLEGAL_NARROW = { width: 900, height: 720 }
 // state without spelunking through individual route handlers.
 
 const FIXTURE_DIR = "/Users/operator/projects/orion-platform"
+const fixtureSignals = {
+  missionWakeHits: 0,
+  missionConversationHits: 0,
+}
 
 const STATS_OK = {
   generatedAt: Date.now(),
@@ -279,7 +288,21 @@ async function isPortBound(port: number): Promise<boolean> {
   return false
 }
 
-async function applyMocks(page: OverlayPage): Promise<void> {
+function assertNoRuntimeFailures(runtimeFailures: string[], stage: string): void {
+  if (runtimeFailures.length === 0) return
+  throw new Error(`mission visual runtime failures during ${stage}:\n${runtimeFailures.join("\n")}`)
+}
+
+async function waitForSignal(read: () => boolean, label: string, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() <= deadline) {
+    if (read()) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+
+async function applyMocks(page: OverlayPage, runtimeFailures: string[]): Promise<void> {
   await page.route("**/*", async (route: OverlayRoute) => {
     const req = route.request()
     const url = req.url()
@@ -289,9 +312,11 @@ async function applyMocks(page: OverlayPage): Promise<void> {
     // with JSON, which Chrome rejected with "Expected a JS module …"
     // and bricked overlay init. Pin interception to the opencorvus
     // sidecar port so vite source assets always pass through.
-    if (!/:7878\//.test(url)) {
+    const parsedURL = new URL(url)
+    if (parsedURL.port !== "7878") {
       return route.continue()
     }
+    const pathname = parsedURL.pathname.replace(/\/+$/, "") || "/"
     const method = req.method().toUpperCase()
     // Vite serves the overlay at :5173 but the overlay's apiJson hits
     // :7878 directly, so every mocked response must wear the CORS
@@ -330,7 +355,7 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         body: "event: connected\ndata: {}\n\n",
       })
 
-    if (/\/global\/health/.test(url) && method === "GET") {
+    if (pathname === "/global/health" && method === "GET") {
       // Connection probe — overlay's connection.ts:149 expects
       // `{ paths: { database, data, home } }`. Anything else and
       // checkConnection() returns false, which keeps the Workspace-
@@ -344,16 +369,20 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         },
       })
     }
-    if (/\/skill\/installed/.test(url) && method === "GET") return void ok([])
-    if (/\/skill\/market/.test(url) && method === "GET") return void ok([])
-    if (/\/mcp\b/.test(url) && method === "GET") return void ok({})
-    if (/\/task\/events/.test(url) && method === "GET") return void eventStream()
-    if (/\/global\/tasks/.test(url) && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
-    if (/\/gateway\/stats/.test(url) && method === "GET") {
+    if (pathname === "/skill/installed" && method === "GET") return void ok([])
+    if (pathname === "/skill/market" && method === "GET") return void ok([])
+    if (pathname === "/skill/mounts" && method === "GET") return void ok([])
+    if (pathname === "/mcp" && method === "GET") return void ok({})
+    if (pathname === "/provider/auth" && method === "GET") return void ok({})
+    if (pathname === "/provider" && method === "GET") return void ok({ all: [], connected: [], default: {} })
+    if (pathname === "/config/prompt" && method === "GET") return void ok([])
+    if (pathname === "/task/events" && method === "GET") return void eventStream()
+    if (pathname === "/global/tasks" && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
+    if (pathname === "/gateway/stats" && method === "GET") {
       return void ok(STATS_OK)
     }
-    if (/\/gateway\/capabilities/.test(url) && method === "GET") return void ok({ surface: "gateway", actions: [] })
-    if (/\/mission(?:\?|$)/.test(url) && method === "GET") {
+    if (pathname === "/gateway/capabilities" && method === "GET") return void ok({ surface: "gateway", actions: [] })
+    if (pathname === "/mission" && method === "GET") {
       return void ok([
         {
           missionID: "mission_visual_demo",
@@ -405,9 +434,17 @@ async function applyMocks(page: OverlayPage): Promise<void> {
     }
     // The Mission launcher POSTs /mission/wake (was the gateway decompose
     // route). It returns the new/resumed mission + session ids.
-    if (/\/mission\/wake/.test(url) && method === "POST")
+    if (pathname === "/mission/wake" && method === "POST") {
+      fixtureSignals.missionWakeHits += 1
       return void ok({ missionID: "mission_visual_demo", sessionID: "session_mission_visual", created: true })
-    if (/\/session\/session_mission_visual\/conversation/.test(url) && method === "GET") {
+    }
+    if (pathname === "/session/session_mission_visual/conversation" && method === "GET") {
+      fixtureSignals.missionConversationHits += 1
+      const created = MISSION_NOW - 90_000
+      const messageID = "msg_mission_visual_history"
+      const partID = "part_mission_visual_history"
+      const messageOrderKey = missionOrderKey("message", 30, created, messageID)
+      const sessionOrderKey = missionOrderKey("session", 50, created, "session_mission_visual")
       return void ok({
         board: {
           kind: "session",
@@ -419,19 +456,21 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         transcript: [
           {
             info: {
-              id: "msg_mission_visual_history",
+              id: messageID,
               sessionID: "session_mission_visual",
               role: "assistant",
               agent: "mission",
               resolvedRole: "mission",
               channel: "mission",
-              time: { created: Date.now() - 90_000 },
+              orderKey: messageOrderKey,
+              time: { created },
             },
             parts: [
               {
-                id: "part_mission_visual_history",
-                messageID: "msg_mission_visual_history",
+                id: partID,
+                messageID,
                 sessionID: "session_mission_visual",
+                orderKey: missionOrderKey("part", 31, created + 1, partID),
                 type: "text",
                 text: "Mission history loaded from the selected record.",
               },
@@ -442,26 +481,68 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         events: [],
         view: {
           topLevelSessionIDs: ["session_mission_visual"],
-          sessions: [{ sessionID: "session_mission_visual", kind: "mission" }],
+          sessions: [
+            {
+              sessionID: "session_mission_visual",
+              stage: "mission",
+              orderKey: sessionOrderKey,
+              messageIDs: [messageID],
+              lastDisplayMessageID: messageID,
+              firstMessageTime: created,
+              lastMessageTime: created,
+              placement: "top_level",
+            },
+          ],
+          messages: [
+            {
+              messageID,
+              sessionID: "session_mission_visual",
+              stage: "mission",
+              orderKey: messageOrderKey,
+              time: created,
+              placement: "top_level",
+            },
+          ],
         },
         agentView: {
           topLevelSessionIDs: ["session_mission_visual"],
-          sessions: [{ sessionID: "session_mission_visual", kind: "mission" }],
+          sessions: [
+            {
+              sessionID: "session_mission_visual",
+              stage: "mission",
+              orderKey: sessionOrderKey,
+              messageIDs: [messageID],
+              lastDisplayMessageID: messageID,
+              firstMessageTime: created,
+              lastMessageTime: created,
+              placement: "top_level",
+            },
+          ],
+          messages: [
+            {
+              messageID,
+              sessionID: "session_mission_visual",
+              stage: "mission",
+              orderKey: messageOrderKey,
+              time: created,
+              placement: "top_level",
+            },
+          ],
         },
         history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
       })
     }
-    if (/\/session\/session_mission_visual\/events/.test(url) && method === "GET") return void eventStream()
-    if (/\/channel\/runtime$/.test(url) && method === "GET") return void ok(CHANNEL_RUNTIME_OK)
-    if (/\/channel\/runtime\/restart/.test(url) && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
-    if (/\/channel\b/.test(url) && method === "GET") return void ok(CHANNELS_OK)
-    if (/\/task\/[^/]+\/bindings/.test(url) && method === "GET") return void ok(TASK_BINDINGS_FIXTURE)
+    if (pathname === "/session/session_mission_visual/events" && method === "GET") return void eventStream()
+    if (pathname === "/channel/runtime" && method === "GET") return void ok(CHANNEL_RUNTIME_OK)
+    if (pathname === "/channel/runtime/restart" && method === "POST") return void ok(CHANNEL_RUNTIME_OK)
+    if (pathname === "/channel" && method === "GET") return void ok(CHANNELS_OK)
+    if (/^\/task\/[^/]+\/bindings$/.test(pathname) && method === "GET") return void ok(TASK_BINDINGS_FIXTURE)
     // Board detail for the selected task — without this the loadBoard
     // call in store/board.ts:273 hits the default empty 200 and leaves
     // boardStore.board null, which kept the workbench stuck on its
     // empty placeholder even after selectTask fired (round-2 P0-1).
-    if (/\/task\/[^/]+\/board/.test(url) && method === "GET") {
-      const taskID = decodeURIComponent(url.match(/\/task\/([^/]+)\/board/)?.[1] ?? "")
+    if (/^\/task\/[^/]+\/board$/.test(pathname) && method === "GET") {
+      const taskID = decodeURIComponent(pathname.match(/^\/task\/([^/]+)\/board$/)?.[1] ?? "")
       const item = GLOBAL_TASKS.find((row) => row.task.id === taskID)
       const summary =
         item?.task.id === "task_active_payment"
@@ -482,16 +563,23 @@ async function applyMocks(page: OverlayPage): Promise<void> {
         lastSequence: 1,
       })
     }
-    if (/\/config\/locale/.test(url)) return void ok({ locale: "zh-CN" })
-    if (/\/config\/settings/.test(url) && method === "GET") return void ok(SETTINGS_FIXTURE)
-    if (/\/session\/me/.test(url)) return void ok(SESSION_FIXTURE)
-    // Default: empty 200 — keep the overlay from oscillating retries while
-    // visual capture is in progress.
-    return void ok({})
+    if (pathname === "/config/locale") return void ok({ locale: "zh-CN" })
+    if (pathname === "/config" && method === "GET") return void ok({})
+    if (pathname === "/config/settings" && method === "GET") return void ok(SETTINGS_FIXTURE)
+    if (pathname === "/session/me") return void ok(SESSION_FIXTURE)
+    if (pathname === "/executor" && method === "GET") return void ok([])
+    if (pathname === "/extensions" && method === "GET") return void ok({})
+    if (pathname === "/meta" && method === "GET") return void ok({})
+    if (pathname === "/workspace" && method === "GET") return void ok({})
+    if (pathname === "/preferences" && method === "GET") return void ok({})
+    if (pathname === "/log" && method === "POST") return void ok(true)
+    const message = `Unhandled mission visual fixture route: ${method} ${url}`
+    runtimeFailures.push(message)
+    return void fail(500, message)
   })
 }
 
-async function bootstrapOverlay(page: OverlayPage): Promise<void> {
+async function bootstrapOverlay(page: OverlayPage, runtimeFailures: string[]): Promise<void> {
   // Surface anything that lands in the page console while we wait for
   // overlay init — without this, a syntax error or thrown import in
   // main.tsx silently turns into "Mission activity never appears" with no
@@ -499,15 +587,29 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
   page.on("console", (msg) => {
     const type = msg.type()
     if (type === "error" || type === "warning") {
-      console.error(`[overlay/${type}] ${msg.text()}`)
+      const message = `[overlay/${type}] ${msg.text()}`
+      runtimeFailures.push(message)
+      console.error(message)
     }
   })
+  page.on("response", (response) => {
+    const status = response.status()
+    if (status < 400) return
+    const request = response.request()
+    const message = `[overlay/response ${status}] ${request.method()} ${response.url()}`
+    runtimeFailures.push(message)
+    console.error(message)
+  })
   page.on("pageerror", (err) => {
-    console.error(`[overlay/pageerror] ${err.stack || err.message}`)
+    const message = `[overlay/pageerror] ${err.stack || err.message}`
+    runtimeFailures.push(message)
+    console.error(message)
   })
   page.on("requestfailed", (req) => {
     const failure = req.failure()?.errorText ?? "unknown"
-    console.error(`[overlay/requestfailed] ${req.method()} ${req.url()} — ${failure}`)
+    const message = `[overlay/requestfailed] ${req.method()} ${req.url()} — ${failure}`
+    runtimeFailures.push(message)
+    console.error(message)
   })
   await page.goto(`http://localhost:${VITE_PORT}/`, { waitUntil: "domcontentloaded", timeout: 30_000 })
   // Wait until main.tsx finishes enough async init for global directory
@@ -529,6 +631,7 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
     },
     { timeout: 20_000 },
   )
+  assertNoRuntimeFailures(runtimeFailures, "bootstrap before directory apply")
   // Apply the fixture directory, then open Mission through the same left
   // activity toolbar the operator uses.
   await page.evaluate((directory: string) => {
@@ -547,6 +650,7 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
     },
   )
   await new Promise((r) => setTimeout(r, 800))
+  assertNoRuntimeFailures(runtimeFailures, "bootstrap after mission open")
 }
 
 async function snap(page: OverlayPage, state: string, viewport = VIEWPORT_WIDE): Promise<string> {
@@ -561,12 +665,14 @@ async function snap(page: OverlayPage, state: string, viewport = VIEWPORT_WIDE):
 
 type StateResult = { state: string; ok: boolean; path?: string; error?: string }
 
-async function captureStates(page: OverlayPage): Promise<StateResult[]> {
+async function captureStates(page: OverlayPage, runtimeFailures: string[]): Promise<StateResult[]> {
   const results: StateResult[] = []
 
   async function step(state: string, fn: () => Promise<void>): Promise<void> {
     try {
+      assertNoRuntimeFailures(runtimeFailures, `${state} precondition`)
       await fn()
+      assertNoRuntimeFailures(runtimeFailures, state)
       const filePath = await snap(page, state)
       results.push({ state, ok: true, path: filePath })
     } catch (err) {
@@ -633,6 +739,8 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     // launcher (gateway-mission-split-2026-05-28.md §3): a single textarea
     // that POSTs /mission/wake. Capture the filled launcher rather than a
     // proposal preview, which no longer exists.
+    const wakeBefore = fixtureSignals.missionWakeHits
+    const conversationBefore = fixtureSignals.missionConversationHits
     await page.evaluate((requirement: string) => {
       const input = document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')
       if (input) {
@@ -640,6 +748,12 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
         input.dispatchEvent(new Event("input", { bubbles: true }))
       }
     }, DECOMPOSE_FIXTURE.requirement)
+    await page.click('[data-ui="mission-composer-submit"]')
+    await waitForSignal(() => fixtureSignals.missionWakeHits > wakeBefore, "Mission launcher POST /mission/wake")
+    await waitForSignal(
+      () => fixtureSignals.missionConversationHits > conversationBefore,
+      "Mission launcher follow-up conversation hydrate",
+    )
     await new Promise((r) => setTimeout(r, 400))
   })
 
@@ -648,6 +762,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   // 1120px workbench instead of activating a compact breakpoint.
   try {
     await new Promise((r) => setTimeout(r, 300))
+    assertNoRuntimeFailures(runtimeFailures, "06-illegal-narrow-legal-frame")
     const legalFramePath = await snap(page, "06-illegal-narrow-legal-frame", VIEWPORT_ILLEGAL_NARROW)
     results.push({ state: "06-illegal-narrow-legal-frame", ok: true, path: legalFramePath })
   } catch (err) {
@@ -711,10 +826,14 @@ async function run(): Promise<void> {
     console.log(`[mission-visual-loop] launching chrome`)
     browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"], { headless: false })
     const page = await browser.newPage()
+    const runtimeFailures: string[] = []
+    fixtureSignals.missionWakeHits = 0
+    fixtureSignals.missionConversationHits = 0
     await page.setViewportSize(VIEWPORT_WIDE)
-    await applyMocks(page)
-    await bootstrapOverlay(page)
-    const results = await captureStates(page)
+    await applyMocks(page, runtimeFailures)
+    await bootstrapOverlay(page, runtimeFailures)
+    const results = await captureStates(page, runtimeFailures)
+    assertNoRuntimeFailures(runtimeFailures, "final")
     const summary = {
       generatedAt: new Date().toISOString(),
       outDir: OUT_DIR,

@@ -3,6 +3,7 @@ import { createRequire } from "node:module"
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { installBrowserErrorCollector, type BrowserErrorCollector } from "./browser/error-collector.ts"
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
@@ -200,6 +201,7 @@ class OverlayBrowserSidecar {
   private pageHandlers = new Map<string, Map<string, EventHandler[]>>()
   private buffer = ""
   private disconnectedHandlers: Array<() => void> = []
+  private browserErrorCollectors = new Map<string, BrowserErrorCollector>()
   private readonly extraArgs: string[]
   private readonly headless: boolean
   private readonly release: () => void
@@ -239,19 +241,34 @@ class OverlayBrowserSidecar {
     return {
       newPage: async () => {
         const id = await this.callString("newPage")
-        return this.pageProxy(id)
+        const page = this.pageProxy(id)
+        this.browserErrorCollectors.set(id, installBrowserErrorCollector(page))
+        return page
       },
       close: async () => {
+        let collectorError: unknown
         try {
           await Promise.race([this.call("closeBrowser"), new Promise((resolve) => setTimeout(resolve, 5_000))])
         } finally {
           this.child?.kill()
           this.release()
         }
+        try {
+          this.assertNoUnexpectedBrowserErrors()
+        } catch (error) {
+          collectorError = error
+        }
+        if (collectorError) throw collectorError
       },
       once: (event, handler) => {
         if (event === "disconnected") this.disconnectedHandlers.push(handler)
       },
+    }
+  }
+
+  private assertNoUnexpectedBrowserErrors() {
+    for (const collector of this.browserErrorCollectors.values()) {
+      collector.assertNoUnexpectedErrors()
     }
   }
 

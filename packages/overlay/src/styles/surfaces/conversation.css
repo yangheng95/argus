@@ -954,13 +954,14 @@
 .project-worktree-panel {
   position: fixed;
   z-index: var(--ui-z-titlebar);
-  max-width: min(calc(460px * var(--ui-scale)), calc(100cqw - 16px));
+  width: min(calc(540px * var(--ui-scale)), calc(100cqw - 16px));
+  max-width: min(calc(540px * var(--ui-scale)), calc(100cqw - 16px));
 }
 
 .project-worktree-panel-shell {
   display: grid;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(7px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--menu-panel-bg);
@@ -969,10 +970,11 @@
 
 .project-worktree-panel-head {
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(3px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(1px * var(--ui-scale)) calc(2px * var(--ui-scale));
 }
 
 .project-worktree-panel-title {
@@ -987,7 +989,10 @@
 
 .project-worktree-head-count {
   flex-shrink: 0;
-  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  min-height: calc(20px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  padding: 0 calc(6px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-1);
@@ -1021,18 +1026,52 @@
   white-space: nowrap;
 }
 
+.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+  --oc-button-gap: calc(4px * var(--ui-scale));
+  --oc-button-bg: color-mix(in srgb, var(--warn) 8%, var(--menu-panel-bg));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 42%, var(--border));
+  --oc-button-color: var(--warn);
+
+  flex-shrink: 0;
+  max-width: calc(150px * var(--ui-scale));
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"]:hover,
+.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--warn) 14%, var(--menu-panel-bg));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 52%, var(--border));
+  --oc-button-color: var(--warn);
+}
+
+.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"] span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-worktree-panel-head .oc-button[data-ui="project-worktree-cleanup-expired"][data-busy="true"] svg,
+.project-worktree-row .oc-button[data-ui="project-worktree-remove"][data-busy="true"] svg {
+  animation: oc-spin var(--ui-duration-loop-spin) linear infinite;
+}
+
 .project-worktree-list {
   display: grid;
-  gap: calc(3px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   max-height: min(calc(320px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - 120px));
   overflow: auto;
 }
 
 .project-worktree-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(26px * var(--ui-scale));
+  grid-template-columns: minmax(0, 1fr) calc(24px * var(--ui-scale));
   align-items: center;
-  gap: calc(3px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
 }
 
 .project-worktree-item {
@@ -1041,13 +1080,15 @@
   min-height: calc(28px * var(--ui-scale));
   display: grid;
   grid-template-columns:
-    minmax(calc(72px * var(--ui-scale)), 1fr)
-    minmax(calc(74px * var(--ui-scale)), max-content)
-    minmax(0, calc(136px * var(--ui-scale)))
-    minmax(0, calc(128px * var(--ui-scale)));
+    minmax(calc(74px * var(--ui-scale)), 0.65fr)
+    minmax(0, 1.35fr)
+    auto
+    minmax(0, calc(170px * var(--ui-scale)));
+  grid-template-areas: "name path state branch";
   align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  column-gap: calc(6px * var(--ui-scale));
+  row-gap: 0;
+  padding: calc(2px * var(--ui-scale)) calc(7px * var(--ui-scale));
   border: 0;
   border-radius: var(--oc-radius-soft);
   background: transparent;
@@ -1063,6 +1104,10 @@
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
+}
+
+.project-worktree-item[aria-busy="true"] {
+  opacity: var(--ui-opacity-muted);
 }
 
 .project-worktree-item:hover .project-worktree-branch,
@@ -1082,24 +1127,36 @@
 }
 
 .project-worktree-name {
+  grid-area: name;
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-medium);
 }
 
 .project-worktree-path {
+  grid-area: path;
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
 }
 
 .project-worktree-state,
 .project-worktree-branch {
-  padding: calc(2px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
   background: var(--subtle-1);
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
+  line-height: 1.2;
+}
+
+.project-worktree-state {
+  grid-area: state;
+}
+
+.project-worktree-branch {
+  grid-area: branch;
+  justify-self: stretch;
 }
 
 .project-worktree-row[data-status="active"] .project-worktree-state {
@@ -1121,7 +1178,8 @@
 }
 
 .project-worktree-row .oc-button[data-ui="project-worktree-remove"] {
-  --oc-button-height: calc(26px * var(--ui-scale));
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-shadow: none;
 
   width: var(--oc-button-height);
   min-width: var(--oc-button-height);
@@ -1129,11 +1187,20 @@
 
 .project-worktree-row .oc-button[data-ui="project-worktree-remove"]:not(:hover):not(:focus-visible) {
   --oc-button-color: var(--text-muted);
+  opacity: var(--ui-opacity-muted);
 }
 
 .project-worktree-row[data-status="expired"]
   .oc-button[data-ui="project-worktree-remove"]:not(:hover):not(:focus-visible):not(:disabled) {
   --oc-button-color: var(--warn);
+  opacity: var(--ui-opacity-full);
+}
+
+.project-worktree-row .oc-button[data-ui="project-worktree-remove"]:hover,
+.project-worktree-row .oc-button[data-ui="project-worktree-remove"]:focus-visible {
+  --oc-button-bg: var(--bad-dim);
+  --oc-button-color: var(--bad);
+  --oc-button-shadow: none;
 }
 
 .project-worktree-row
@@ -1147,6 +1214,26 @@
   padding: calc(10px * var(--ui-scale));
   color: var(--text-muted);
   font-size: var(--ui-font-control);
+}
+
+.project-worktree-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: calc(7px * var(--ui-scale));
+  margin: 0 calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--bad) 42%, transparent);
+  border-radius: calc(6px * var(--ui-scale));
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  font-size: var(--ui-font-control);
+  line-height: 1.35;
+}
+
+.project-worktree-error span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Cwd control: control-vocab chip carrying the breadcrumb path and a
@@ -1455,6 +1542,10 @@
   display: flex;
   flex-direction: column;
   gap: calc(8px * var(--ui-scale));
+  box-sizing: border-box;
+  max-height: inherit;
+  min-height: 0;
+  overflow: hidden;
   padding: calc(8px * var(--ui-scale));
 }
 
@@ -1554,6 +1645,12 @@
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
+  min-height: 0;
+}
+
+.recent-dir-section[data-kind="discovered"] {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .recent-dir-section-title {
@@ -1571,9 +1668,38 @@
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
+  flex: 0 1 auto;
   max-height: calc(248px * var(--ui-scale));
+  min-height: 0;
   overflow-y: auto;
   padding-right: calc(2px * var(--ui-scale));
+}
+
+.recent-dir-list[data-kind="discovered"] {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
+}
+
+.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar {
+  width: var(--session-scrollbar-size);
+}
+
+.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-track {
+  background: var(--session-scrollbar-track);
+  border-radius: var(--oc-radius-pill);
+}
+
+.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  border-radius: var(--oc-radius-pill);
+  background-clip: padding-box;
+}
+
+.recent-dir-list[data-kind="discovered"]::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
 }
 
 .recent-dir-row {

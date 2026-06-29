@@ -164,8 +164,9 @@ await Instance.provide({
               if (info?.id) {
                 if (!store.has(info.id)) store.set(info.id, { info, parts: new Map() })
                 else store.get(info.id)!.info = info
+                const agentLabel = typeof info.agent === "string" && info.agent ? info.agent : "<missing-agent>"
                 console.log(
-                  `[evt] message.updated id=${info.id.slice(-8)} role=${info.role} agent=${info.agent || "-"}`,
+                  `[evt] message.updated id=${info.id.slice(-8)} role=${info.role} agent=${agentLabel}`,
                 )
               }
             } else if (type === "message.part.updated") {

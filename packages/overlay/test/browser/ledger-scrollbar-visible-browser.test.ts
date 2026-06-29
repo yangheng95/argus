@@ -126,7 +126,7 @@ test("Mission and Coding Assistant ledgers expose the shared visible scrollbar s
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission") return send(missionListPayload())
     if (path === "/coding/sessions") return send(codingSessionsPayload())
     const codingSessionMatch = path.match(/^\/coding\/session\/([^/]+)$/)

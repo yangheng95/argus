@@ -87,7 +87,7 @@ export function AppDialogHost() {
       open={dialogStore.app.open}
       data-dialog-epoch={String(dialogStore.app.epoch)}
       title={<span id="appDialogTitle">{dialogStore.app.title || t("dialog.notice")}</span>}
-      formClass={isTaskCardDecision() ? "app-dialog-form--decision" : undefined}
+      formClass={isTaskCardDecision() ? "app-dialog-form--decision" : "app-dialog-form"}
       onClose={dismissAppDialog}
       footer={
         isTaskCardDecision() ? undefined : (

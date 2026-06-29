@@ -16,7 +16,11 @@ test("window opacity drives the visible overlay shell surfaces", () => {
   for (const file of ["dark.css", "vscode-dark.css", "light.css"]) {
     const css = readTheme(file)
     for (const token of ["body-bg", "rail-surface", "chat-canvas", "inspector-surface", "panel-body-bg", "chrome"]) {
-      expect(tokenDeclaration(css, token)).toContain("var(--ui-window-opacity)")
+      const declaration = tokenDeclaration(css, token)
+      expect(declaration).not.toContain("var(--ui-window-opacity)")
+      expect(declaration).not.toContain("rgba(")
+      expect(declaration).not.toContain("hsla(")
+      expect(declaration).not.toContain("transparent")
     }
   }
 })

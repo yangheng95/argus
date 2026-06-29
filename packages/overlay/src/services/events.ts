@@ -1,7 +1,7 @@
 // ── SSE Event Router & Board/Task Lifecycle ──
 // Central dispatch for all incoming SSE events.
-// Executor events (run.progress/run.output) are converted to standard
-// message events and routed to cardTreeStore — no separate executorStore.
+// Executor protocol events are routed as protocol events only. Visible
+// conversation cards are sourced from backend message.* events.
 
 import { boardStore, scheduleBoard, loadTasks, setTaskSequence, activeTaskID, activeSessionID } from "../store/board"
 import {
@@ -11,11 +11,10 @@ import {
 } from "../store/conversation-agents"
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init"
 import { markSessionConfigStale } from "./config"
-import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-writer"
+import { applyEvent as applyTreeWriterEvent } from "./tree-writer"
 import { routeNotification } from "./notify"
 import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./event-policy"
 import { markSelectedLiveEventConsumed } from "./selected-stream-cursor"
-import { requireTimelineOrderKey } from "../utils/timeline-order"
 
 // Forward SSE events to the tree-writer. The conversation view reads
 // `cardTreeStore`; message events stay out of the transcript mirror on the
@@ -150,393 +149,22 @@ function scheduleRewindClearRecovery(reason: string, taskID = activeTaskID()): v
     })
 }
 
-/** Parse tool input from various executor formats. */
-function parseToolInput(raw: any): Record<string, any> {
-  if (record(raw)) return raw
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return { raw }
-    }
-  }
-  return {}
-}
-
-/** Derive a stable message ID for grouping executor events by goal/session. */
-function executorMessageID(properties: any): string {
-  const payload = record(properties.payload) ? properties.payload : {}
-  const goalRunID = properties.goalRunID || properties.goal_run_id || payload.goalRunID || payload.goal_run_id || ""
-  const execSessionID =
-    properties.executorSessionID ||
-    properties.executor_session_id ||
-    payload.executorSessionID ||
-    payload.executor_session_id ||
-    ""
-  const runID = properties.runID || payload.runID || ""
-  const scope = goalRunID || execSessionID || runID || "default"
-  return `executor:msg:${scope}`
-}
-
-/** Derive a stable part ID from a tool call's ID. */
-function executorPartID(properties: any, eventID: string): string {
-  const callID = properties.sourceID || properties.id || properties.payload?.id || eventID
-  return `executor:part:${callID}`
-}
-
-/** Derive the executor session ID for message info. */
-function executorSessionID(properties: any): string {
-  const payload = record(properties.payload) ? properties.payload : {}
-  return (
-    properties.sessionID ||
-    properties.session_id ||
-    payload.sessionID ||
-    payload.session_id ||
-    properties.goalSessionID ||
-    properties.goal_session_id ||
-    payload.goalSessionID ||
-    payload.goal_session_id ||
-    properties.goalRunSessionID ||
-    properties.goal_run_session_id ||
-    payload.goalRunSessionID ||
-    payload.goal_run_session_id ||
-    properties.executorSessionID ||
-    properties.executor_session_id ||
-    payload.executorSessionID ||
-    payload.executor_session_id ||
-    properties.goalRunID ||
-    properties.goal_run_id ||
-    payload.goalRunID ||
-    payload.goal_run_id ||
-    properties.runID ||
-    payload.runID ||
-    ""
-  )
-}
-
-// ── Executor event → message event conversion ──
-
-function convertExecutorEventToMessages(event: any, properties: any): any[] {
-  const kind = executorEventKind(properties.type)
-  const timestamp = Number(event.timestamp || event.emittedAt || event.emitted_at || 0)
-  if (!(timestamp > 0)) {
-    throw new Error(`executor event ${kind || "<unknown>"} missing timestamp for display message ordering`)
-  }
-  const orderKey = requireTimelineOrderKey(event.orderKey, `executor event ${kind || "<unknown>"}`)
-  const msgID = executorMessageID(properties)
-  const sessionID = executorSessionID(properties)
-  // Propagate the backend-stamped goalID so tree-writer can nest these
-  // synthesized executor messages under their goal card. Without this,
-  // external-executor tool_call/tool_result events produce sessions with
-  // no goalID and the whole round floats to the top level instead of the
-  // goal group.
-  const goalID =
-    typeof properties.goalID === "string" && properties.goalID
-      ? properties.goalID
-      : typeof event?.goalID === "string" && event.goalID
-        ? event.goalID
-        : ""
-
-  // Ensure the message exists with executor agent identity
-  const messageEvent = {
-    type: "message.updated",
-    properties: {
-      info: {
-        id: msgID,
-        sessionID,
-        role: "assistant",
-        resolvedRole: "executor",
-        channel: "executor",
-        agent: "executor",
-        orderKey,
-        time: { created: timestamp },
-        ...(goalID ? { goalID } : {}),
-      },
-    },
-  }
-  const ensureEvents = (partID: string, partEvent: any): any[] =>
-    hasProjectedPart(sessionID, partID) ? [] : [messageEvent, partEvent]
-  const syntheticPart = (part: Record<string, unknown>): Record<string, unknown> => ({ ...part, orderKey })
-
-  if (kind === "tool_call") {
-    const name = properties.name || properties.payload?.name || properties.tool || "tool"
-    const input = parseToolInput(
-      properties.input ?? properties.arguments ?? properties.args ?? properties.payload?.input,
-    )
-    const partID = executorPartID(properties, event.event_id)
-    const partEvent = {
-      type: "message.part.updated",
-      properties: {
-        orderKey,
-        part: syntheticPart({
-          id: partID,
-          messageID: msgID,
-          sessionID,
-          type: "tool",
-          tool: name,
-          resolvedRole: "executor",
-          channel: "executor",
-          callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-          state: {
-            status: "running",
-            input,
-            title: event.summary || name,
-            metadata: {},
-            time: { start: timestamp },
-          },
-        }),
-      },
-    }
-    return [messageEvent, partEvent]
-  }
-
-  if (kind === "tool_delta") {
-    const name = properties.name || properties.payload?.name || properties.tool || "tool"
-    const partID = executorPartID(properties, event.event_id)
-    const delta =
-      typeof properties.delta === "string"
-        ? properties.delta
-        : typeof properties.payload?.delta === "string"
-          ? properties.payload.delta
-          : ""
-    if (!delta) return []
-    const partEvent = {
-      type: "message.part.updated",
-      properties: {
-        orderKey,
-        part: syntheticPart({
-          id: partID,
-          messageID: msgID,
-          sessionID,
-          type: "tool",
-          tool: name,
-          resolvedRole: "executor",
-          channel: "executor",
-          callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-          state: {
-            status: "running",
-            input: {},
-            title: event.summary || name,
-            metadata: {},
-            time: { start: timestamp },
-          },
-        }),
-      },
-    }
-    return [
-      ...ensureEvents(partID, partEvent),
-      {
-        type: "message.part.delta",
-        properties: {
-          partID,
-          messageID: msgID,
-          sessionID,
-          field: "raw",
-          delta,
-        },
-      },
-    ]
-  }
-
-  if (kind === "tool_result") {
-    const name = properties.name || properties.payload?.name || properties.tool || "tool"
-    const input = parseToolInput(properties.input ?? properties.arguments ?? properties.payload?.input ?? {})
-    const output =
-      typeof properties.output === "string"
-        ? properties.output
-        : typeof properties.payload?.output === "string"
-          ? properties.payload.output
-          : event.summary || ""
-    const partID = executorPartID(properties, event.event_id)
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          orderKey,
-          part: syntheticPart({
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            resolvedRole: "executor",
-            channel: "executor",
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
-              status: "completed",
-              input,
-              output,
-              title: event.summary || name,
-              metadata: {},
-              time: { start: timestamp, end: timestamp },
-            },
-          }),
-        },
-      },
-    ]
-  }
-
-  if (kind === "message_delta") {
-    const text = typeof properties.text === "string" ? properties.text : event.summary || ""
-    if (!text) return []
-    const partID = `executor:text:${sessionID}`
-    const partEvent = {
-      type: "message.part.updated",
-      properties: {
-        orderKey,
-        part: syntheticPart({
-          id: partID,
-          messageID: msgID,
-          sessionID,
-          type: "text",
-          resolvedRole: "executor",
-          channel: "executor",
-          text: "",
-        }),
-      },
-    }
-    return [
-      ...ensureEvents(partID, partEvent),
-      {
-        type: "message.part.delta",
-        properties: {
-          partID,
-          messageID: msgID,
-          sessionID,
-          field: "text",
-          delta: text,
-        },
-      },
-    ]
-  }
-
-  if (kind === "reasoning_delta") {
-    const text = typeof properties.text === "string" ? properties.text : event.summary || ""
-    if (!text) return []
-    const partID = `executor:reasoning:${sessionID}`
-    const partEvent = {
-      type: "message.part.updated",
-      properties: {
-        orderKey,
-        part: syntheticPart({
-          id: partID,
-          messageID: msgID,
-          sessionID,
-          type: "reasoning",
-          resolvedRole: "executor",
-          channel: "executor",
-          text: "",
-        }),
-      },
-    }
-    // First event creates the part as "reasoning" type (not "text"), then delta appends.
-    // message.part.updated ensures the part exists with correct type before any delta.
-    return [
-      ...ensureEvents(partID, partEvent),
-      {
-        type: "message.part.delta",
-        properties: {
-          partID,
-          messageID: msgID,
-          sessionID,
-          field: "text",
-          delta: text,
-        },
-      },
-    ]
-  }
-
-  if (kind === "error") {
-    const text = event.summary || properties.message || "Error"
-    const partID = `executor:error:${event.event_id || timestamp}`
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          orderKey,
-          part: syntheticPart({
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "text",
-            text: `Error: ${text}`,
-          }),
-        },
-      },
-    ]
-  }
-
-  // Other event types: create a text part with the summary
-  if (event.summary) {
-    const partID = `executor:status:${event.event_id || timestamp}`
-    return [
-      messageEvent,
-      {
-        type: "message.part.updated",
-        properties: {
-          orderKey,
-          part: syntheticPart({
-            id: partID,
-            messageID: msgID,
-            sessionID,
-            type: "text",
-            text: event.summary,
-          }),
-        },
-      },
-    ]
-  }
-
-  return []
-}
-
-function shouldConvertRunProgress(properties: Record<string, any>): boolean {
+function runProgressSchedulesBoardRefresh(properties: Record<string, any>): boolean {
   const progressType = String(properties.type || "")
-  if (progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress") {
-    return false
-  }
-  if (
-    progressType === "message.part.updated" ||
-    progressType === "message.part.delta" ||
-    progressType === "message.updated"
-  ) {
-    return false
-  }
-  return true
+  return progressType === "protocol.raw" || progressType === "executor.status" || progressType === "executor.progress"
 }
 
 export function replayTaskEventToTree(event: any): void {
   const type: string = event?.type || ""
-  const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {}
 
   writeToTree(event)
 
   if (type === "run.progress") {
-    if (!shouldConvertRunProgress(properties)) return
-    const messages = convertExecutorEventToMessages(event, properties)
-    for (const msg of messages) {
-      writeToTree(msg)
-    }
     return
   }
 
   if (type === "run.output") {
-    const messages = convertExecutorEventToMessages(
-      {
-        ...event,
-        summary: typeof properties.text === "string" ? properties.text : event?.summary || "",
-      },
-      {
-        ...properties,
-        type: "text_delta",
-        text: typeof properties.text === "string" ? properties.text : event?.summary || "",
-      },
-    )
-    for (const msg of messages) {
-      writeToTree(msg)
-    }
+    return
   }
 }
 
@@ -689,19 +317,10 @@ export function routeSSEEvent(event: any): boolean {
 
   const properties = record(event?.properties) ? event.properties : record(event?.payload) ? event.payload : {}
 
-  // ── Executor progress / output events → convert to standard messages ──
+  // ── Executor protocol events ──
   if (type === "run.progress") {
-    if (!shouldConvertRunProgress(properties)) {
+    if (runProgressSchedulesBoardRefresh(properties)) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE)
-      advanceHandledSelectedTaskSequence(event)
-      markHandledSelectedLiveEvent(event)
-      return true
-    }
-
-    // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
-    const messages = convertExecutorEventToMessages(event, properties)
-    for (const msg of messages) {
-      writeSelectedMessageToTree(msg, event)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)
@@ -709,15 +328,6 @@ export function routeSSEEvent(event: any): boolean {
   }
 
   if (type === "run.output") {
-    // Text output from executor — convert to message delta
-    const messages = convertExecutorEventToMessages(event, {
-      ...properties,
-      type: "text_delta",
-      text: typeof properties.text === "string" ? properties.text : event.summary || "",
-    })
-    for (const msg of messages) {
-      writeSelectedMessageToTree(msg, event)
-    }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)
     return true
@@ -745,26 +355,6 @@ export function routeSSEEvent(event: any): boolean {
   if (isBoardInvalidatingEventType(type)) return false
 
   return false
-}
-
-// ── executorEventKind ──
-
-function executorEventKind(progressType: string | undefined): string {
-  const t = String(progressType || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[.\s-]+/g, "_")
-  if (!t) return "event"
-  if (t === "message_delta" || t === "text_delta") return "message_delta"
-  if (t === "reasoning_delta") return t
-  if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t
-  if (t.includes("tool")) return t.includes("result") ? "tool_result" : "tool_call"
-  if (t.includes("reason")) return "reasoning_delta"
-  if (t.includes("error")) return "error"
-  if (t.includes("done") || t.includes("completed")) return "done"
-  if (t.includes("approval") || t === "permission.asked") return "approval_request"
-  if (t.includes("command")) return "command"
-  return "event"
 }
 
 // ── Board / Task Lifecycle Event Handling ──
@@ -881,9 +471,9 @@ export function handleEventStreamEvent(event: any): void {
  * tree-writer is reserved for task-scope events that carry full payload
  * (delivered via `routeSSEEvent` on the per-task stream).
  */
-export function handleTaskListNotification(event: any): void {
+export function handleTaskListNotification(event: any, options: { directory?: string } = {}): void {
   const type = normalizedEventType(event)
-  routeNotification({ ...event, type })
+  routeNotification({ ...event, type, directory: options.directory ?? event?.directory })
   if (type === "task.replay_expired") {
     if (activeTaskID()) {
       scheduleSelectedTaskRecovery("task.replay_expired", activeTaskID())

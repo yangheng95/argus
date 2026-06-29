@@ -247,7 +247,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('render(() => <NotificationCenter surface="panel" />, notificationPanelEl)')
   expect(main).toContain('render(() => <NotificationCenter surface="toast" />, notificationHost)')
   expect(main).toContain("<CodingAssistantSessionList")
-  expect(main).toContain("loadCodingAssistantSessions({ signal: controller.signal })")
+  expect(main).toContain("loadCodingAssistantSessions({ directory: activeDirectory(), signal: controller.signal })")
   expect(main).toMatch(
     /selectCodingAssistantSession\(\{[\s\S]*?sessionID:\s*session\.id[\s\S]*?directory:\s*String\(session\.directory \|\| ""\)/,
   )

@@ -184,7 +184,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/task/events") {
         return new Response("", {
           headers: { "content-type": "text/event-stream; charset=utf-8" },

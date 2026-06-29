@@ -12,6 +12,14 @@
 
 import { test, expect } from "bun:test"
 import type { UsageAggregate } from "../src/utils/format-usage"
+import {
+  stampTestBoard,
+  stampTestEvent,
+  testEventOrderKey,
+  testMessageOrderKey,
+  testPartOrderKey,
+  testTaskOrderKey,
+} from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).requestAnimationFrame = (() => 1) as any
@@ -21,9 +29,12 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 const { installRealOverlayI18n } = await import("./fixtures/i18n")
 installRealOverlayI18n()
 
-const { setBoardStore } = await import("../src/store/board")
-const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore, replaceCardTreeOrder, setCardTreeStore } = await import("../src/store/card-tree")
+const { setBoardStore: setBoardStoreRaw } = await import("../src/store/board")
+setBoardStoreRaw("board", null)
+setCardTreeStore("order", [])
+setCardTreeStore("cards", {})
+const { applyEvent: applyEventRaw, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
 const { flushCardStats, markCardStatsDirty } = await import("../src/store/card-tree-stats")
 const cardTreeUtils = await import("../src/utils/card-tree")
 const screenshotBrowserUtils = await import("../src/utils/screenshot-browser")
@@ -38,6 +49,32 @@ const PART_ID_TEXT = "part_text_stats"
 const PART_ID_BASH = "part_bash_stats"
 const PART_ID_TODO = "part_todo_stats"
 const PART_ID_TASK = "part_task_stats"
+const MSG_A_TIME = 1_777_000_000_000
+const MSG_A_ORDER_KEY = testMessageOrderKey(MSG_ID_A, MSG_A_TIME)
+const MSG_B_TIME = 1_777_000_001_000
+const MSG_B_ORDER_KEY = testMessageOrderKey(MSG_ID_B, MSG_B_TIME)
+const TASK_ORDER_KEY = testTaskOrderKey(TASK_ID, 1_777_000_000_000)
+
+function setBoardStore(...args: any[]): any {
+  if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampTestBoard(args[1]))
+  return (setBoardStoreRaw as any)(...args)
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return testMessageOrderKey(id, time)
+}
+
+function eventOrderKey(type: string, time: number): string {
+  return testEventOrderKey(type, time)
+}
+
+function partOrderKey(id: string, time: number): string {
+  return testPartOrderKey(id, time)
+}
+
+function applyEvent(event: any): void {
+  applyEventRaw(stampTestEvent(event))
+}
 
 const BOARD = {
   task: {
@@ -58,6 +95,7 @@ function bootstrap() {
   resetWriter()
   applyEvent({
     type: "message.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
       info: {
@@ -67,7 +105,8 @@ function bootstrap() {
         resolvedRole: "assistant",
         agent: "assistant",
         channel: "assistant",
-        time: { created: 1_777_000_000_000 },
+        orderKey: MSG_A_ORDER_KEY,
+        time: { created: MSG_A_TIME },
       },
     },
   })
@@ -157,10 +196,6 @@ function walkUsageAggregate(cardID: string): UsageAggregate {
 function forEachStoreBackedCard(callback: (card: any) => void): void {
   for (const card of Object.values(cardTreeStore.cards)) {
     if (!card) continue
-    // Skip transient cards (those with inline children); store-backed cards
-    // always use childIDs. The only way an inline-children card lands in the
-    // store is via test fixture error — we let it bypass for now.
-    if (Array.isArray((card as any).children) && (card as any).children.length > 0) continue
     callback(card)
   }
 }
@@ -224,14 +259,17 @@ test("part deltas accumulating on a leaf bump its own subtreeCounts", () => {
   // Seed a text part on msg A.
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_TEXT,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_TEXT, MSG_A_TIME + 100),
         type: "text",
         text: "hello",
       },
@@ -245,6 +283,7 @@ test("part deltas accumulating on a leaf bump its own subtreeCounts", () => {
   for (let i = 0; i < 5; i++) {
     applyEvent({
       type: "message.part.delta",
+      orderKey: eventOrderKey("message.part.delta", MSG_A_TIME + 200 + i, i),
       properties: {
         taskID: TASK_ID,
         sessionID: SID,
@@ -262,14 +301,17 @@ test("tool / agent / skill parts classify into the right bucket", () => {
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_BASH,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_BASH, MSG_A_TIME + 100),
         type: "tool",
         tool: "bash",
         state: { status: "completed", output: "ok", input: { command: "ls" } },
@@ -278,14 +320,17 @@ test("tool / agent / skill parts classify into the right bucket", () => {
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_TASK,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_TASK, MSG_A_TIME + 200),
         type: "tool",
         tool: "task",
         state: { status: "completed", input: { description: "spawn sub" } },
@@ -307,14 +352,17 @@ test("part removal updates the cache to reflect the new totals", () => {
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_BASH,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_BASH, MSG_A_TIME + 100),
         type: "tool",
         tool: "bash",
         state: { status: "completed", output: "ok" },
@@ -326,6 +374,7 @@ test("part removal updates the cache to reflect the new totals", () => {
 
   applyEvent({
     type: "message.part.removed",
+    orderKey: eventOrderKey("message.part.removed", MSG_A_TIME + 300),
     properties: {
       taskID: TASK_ID,
       sessionID: SID,
@@ -341,14 +390,17 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: "part_screenshot_file",
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_file", MSG_A_TIME + 100),
         type: "file",
         url: "/attachment/project/file.png",
         mime: "image/png",
@@ -358,14 +410,17 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: "part_screenshot_browser",
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_browser", MSG_A_TIME + 200),
         type: "tool",
         tool: "browser_observe",
         state: {
@@ -382,14 +437,17 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: "part_screenshot_attachment",
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_attachment", MSG_A_TIME + 300),
         type: "tool",
         tool: "visual_check",
         state: {
@@ -415,6 +473,7 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
 
   applyEvent({
     type: "message.part.removed",
+    orderKey: eventOrderKey("message.part.removed", MSG_A_TIME + 400),
     properties: {
       taskID: TASK_ID,
       sessionID: SID,
@@ -439,14 +498,17 @@ test("resetWriter clears the top-level screenshot cache", () => {
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: "part_screenshot_reset",
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_reset", MSG_A_TIME + 100),
         type: "file",
         url: "/attachment/project/reset.png",
         mime: "image/png",
@@ -473,12 +535,16 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
   const partFirstSessionID = "ses_part_first_screenshot_stats"
   const observationTime = 1_777_000_010_000
   const serverTime = 1_777_000_000_500
+  const partFirstMessageOrderKey = messageOrderKey(partFirstMessageID, serverTime)
   Date.now = () => observationTime
   try {
     applyEvent({
       type: "message.part.updated",
+      orderKey: partFirstMessageOrderKey,
+      emittedAt: observationTime,
       properties: {
         taskID: TASK_ID,
+        orderKey: partFirstMessageOrderKey,
         resolvedRole: "assistant",
         channel: "assistant",
         part: {
@@ -487,6 +553,7 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
           sessionID: partFirstSessionID,
           resolvedRole: "assistant",
           channel: "assistant",
+          orderKey: partOrderKey("part_first_screenshot", observationTime),
           type: "file",
           url: "/attachment/project/part-first.png",
           mime: "image/png",
@@ -503,6 +570,7 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
 
     applyEvent({
       type: "message.updated",
+      orderKey: partFirstMessageOrderKey,
       properties: {
         taskID: TASK_ID,
         info: {
@@ -512,6 +580,7 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
           resolvedRole: "assistant",
           agent: "assistant",
           channel: "assistant",
+          orderKey: partFirstMessageOrderKey,
           time: { created: serverTime },
         },
       },
@@ -531,6 +600,7 @@ test("usage aggregate cache tracks own card usage and context estimates", () => 
   bootstrap()
   applyEvent({
     type: "message.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
       info: {
@@ -540,7 +610,8 @@ test("usage aggregate cache tracks own card usage and context estimates", () => 
         resolvedRole: "assistant",
         agent: "assistant",
         channel: "assistant",
-        time: { created: 1_777_000_000_000 },
+        orderKey: MSG_A_ORDER_KEY,
+        time: { created: MSG_A_TIME },
         tokens: { input: 1_200, output: 150, reasoning: 0, total: 1_350, cache: { read: 0, write: 0 } },
         cost: 0.031,
       },
@@ -548,25 +619,28 @@ test("usage aggregate cache tracks own card usage and context estimates", () => 
   })
   applyEvent({
     type: "message.updated",
+    orderKey: MSG_B_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
       info: {
         id: MSG_ID_B,
-        sessionID: SID,
+        sessionID: "ses_stats_context_estimate",
         role: "assistant",
         resolvedRole: "assistant",
         agent: "assistant",
         channel: "assistant",
-        time: { created: 1_777_000_001_000 },
+        orderKey: MSG_B_ORDER_KEY,
+        time: { created: MSG_B_TIME },
         tokens: { input: 2_000, output: 400, reasoning: 0, total: 2_400, cache: { read: 0, write: 0 } },
         cost: 0.052,
       },
     },
   })
-  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "usage", undefined)
-  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "contextTokens", 2_000)
-  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "contextTokensEstimated", true)
-  markCardStatsDirty(`assistant:session:${SID}:message:${MSG_ID_B}`)
+  const estimatedCardID = "assistant:session:ses_stats_context_estimate:message:msg_stats_b"
+  setCardTreeStore("cards", estimatedCardID, "usage", undefined)
+  setCardTreeStore("cards", estimatedCardID, "contextTokens", 2_000)
+  setCardTreeStore("cards", estimatedCardID, "contextTokensEstimated", true)
+  markCardStatsDirty(estimatedCardID)
   flushCardStats()
 
   expectCacheMatchesWalk()
@@ -595,6 +669,7 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
             role: "visual-qa",
             stage: "visual-qa",
             title: `Bulk ${index}`,
+            orderKey: messageOrderKey(id, index + 1),
             time: index + 1,
             parts: [],
             childIDs: [],
@@ -662,6 +737,7 @@ test("top-level screenshot cache updates one dirty root without reading unrelate
             stage: "visual-qa",
             messageID: `bulk-message-${index}`,
             title: `Bulk ${index}`,
+            orderKey: messageOrderKey(id, index + 1),
             time: index + 1,
             parts: [],
             childIDs: [],
@@ -743,6 +819,7 @@ test("top-level screenshot cache appends and removes roots without reading stabl
           role: "visual-qa",
           stage: "visual-qa",
           title: id,
+          orderKey: messageOrderKey(id, index + 1),
           time: index + 1,
           parts: [],
           childIDs: [],
@@ -765,6 +842,7 @@ test("top-level screenshot cache appends and removes roots without reading stabl
       role: "visual-qa",
       stage: "visual-qa",
       title: "root-appended",
+      orderKey: messageOrderKey("root-appended", rootCount + 1),
       time: rootCount + 1,
       parts: [],
       childIDs: [],
@@ -816,6 +894,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
         role: "visual-qa",
         stage: "visual-qa",
         title: "duplicate_a",
+        orderKey: messageOrderKey("duplicate_a", 1),
         time: 1,
         parts: [],
         childIDs: [],
@@ -829,6 +908,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
         role: "visual-qa",
         stage: "visual-qa",
         title: "duplicate_b",
+        orderKey: messageOrderKey("duplicate_b", 2),
         time: 2,
         parts: [],
         childIDs: [],
@@ -842,6 +922,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
         role: "visual-qa",
         stage: "visual-qa",
         title: "equal_a",
+        orderKey: messageOrderKey("equal_a", 3),
         time: 3,
         parts: [],
         childIDs: [],
@@ -855,6 +936,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
         role: "visual-qa",
         stage: "visual-qa",
         title: "equal_b",
+        orderKey: messageOrderKey("equal_b", 4),
         time: 4,
         parts: [],
         childIDs: [],
@@ -881,14 +963,17 @@ test("resetWriter clears the incremental top-level screenshot index before the n
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: "part_screenshot_reset_index",
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_reset_index", MSG_A_TIME + 100),
         type: "file",
         url: "/attachment/project/reset-index-old.png",
         mime: "image/png",
@@ -900,31 +985,39 @@ test("resetWriter clears the incremental top-level screenshot index before the n
   expect(cardTreeStore.screenshotItems.map((entry) => entry.src)).toEqual(["/attachment/project/reset-index-old.png"])
 
   resetWriter()
+  const afterResetMessageID = "msg_stats_after_reset"
+  const afterResetTime = 1_777_000_100_000
+  const afterResetOrderKey = messageOrderKey(afterResetMessageID, afterResetTime)
   applyEvent({
     type: "message.updated",
+    orderKey: afterResetOrderKey,
     properties: {
       taskID: TASK_ID,
       info: {
-        id: "msg_stats_after_reset",
+        id: afterResetMessageID,
         sessionID: SID,
         role: "assistant",
         resolvedRole: "assistant",
         agent: "assistant",
         channel: "assistant",
-        time: { created: 1_777_000_100_000 },
+        orderKey: afterResetOrderKey,
+        time: { created: afterResetTime },
       },
     },
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: afterResetOrderKey,
     properties: {
       taskID: TASK_ID,
+      orderKey: afterResetOrderKey,
       part: {
         id: "part_screenshot_reset_index_new",
-        messageID: "msg_stats_after_reset",
+        messageID: afterResetMessageID,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey("part_screenshot_reset_index_new", afterResetTime + 100),
         type: "file",
         url: "/attachment/project/reset-index-new.png",
         mime: "image/png",
@@ -941,14 +1034,17 @@ test("subtree latest-hit cache equals the fresh recursive pick", () => {
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_TEXT,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_TEXT, MSG_A_TIME + 100),
         type: "text",
         text: "first prose",
       },
@@ -956,14 +1052,17 @@ test("subtree latest-hit cache equals the fresh recursive pick", () => {
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_BASH,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_BASH, MSG_A_TIME + 200),
         type: "tool",
         tool: "bash",
         state: { status: "completed", output: "ok", input: { command: "ls -la" } },
@@ -984,14 +1083,17 @@ test("todo-tool snapshot is cached and equals the fresh pick", () => {
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_TODO,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_TODO, MSG_A_TIME + 100),
         type: "tool",
         tool: "todowrite",
         state: {
@@ -1027,14 +1129,17 @@ test("removing a card decrements its former parent's cached counts", () => {
   // remaining cards.
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_BASH,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_BASH, MSG_A_TIME + 100),
         type: "tool",
         tool: "bash",
         state: { status: "completed", output: "ok" },
@@ -1046,6 +1151,7 @@ test("removing a card decrements its former parent's cached counts", () => {
 
   applyEvent({
     type: "message.removed",
+    orderKey: eventOrderKey("message.removed", MSG_A_TIME + 300),
     properties: {
       taskID: TASK_ID,
       sessionID: SID,
@@ -1069,17 +1175,20 @@ test("review.stream.chunk mutations are reflected in the cache (handler dirty-ma
   const REVIEW_SID = "ses_integrity_stats"
   applyEvent({
     type: "review.stream.started",
+    orderKey: eventOrderKey("review.stream.started", 1_777_000_002_000),
+    emittedAt: 1_777_000_002_000,
     properties: {
       taskID: REVIEW_TASK_ID,
       reviewID: `integrity:${REVIEW_SID}`,
       sessionID: REVIEW_SID,
-      startedAt: 1_777_000_002_000,
       attempt: 0,
       phase: "integrity",
     },
   })
   applyEvent({
     type: "review.stream.chunk",
+    orderKey: eventOrderKey("review.stream.chunk", 1_777_000_002_100),
+    emittedAt: 1_777_000_002_100,
     properties: {
       taskID: REVIEW_TASK_ID,
       reviewID: `integrity:${REVIEW_SID}`,
@@ -1114,9 +1223,10 @@ test("board rebuild (rebuildBoardDerivedCards) flushes stats before visible-vers
   bootstrap()
   applyEvent({
     type: "task.updated",
+    orderKey: eventOrderKey("task.updated", MSG_A_TIME + 500),
     properties: {
       taskID: TASK_ID,
-      task: { id: TASK_ID, goalWorkflows: [] },
+      task: { id: TASK_ID, orderKey: TASK_ORDER_KEY, goalWorkflows: [] },
     },
   })
   expectCacheMatchesWalk()
@@ -1166,7 +1276,8 @@ test("rebuilds that detach a child clear parentID on the orphaned card", async (
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   applyEvent({
     type: "task.updated",
-    properties: { taskID: TASK_ID, task: { id: TASK_ID, goalWorkflows: [] } },
+    orderKey: eventOrderKey("task.updated", MSG_A_TIME + 600),
+    properties: { taskID: TASK_ID, task: { id: TASK_ID, orderKey: TASK_ORDER_KEY, goalWorkflows: [] } },
   })
   flushBufferedPartDeltas()
   expectCacheMatchesWalk()
@@ -1190,7 +1301,8 @@ test("rebuilds that detach a child clear parentID on the orphaned card", async (
   })
   applyEvent({
     type: "task.updated",
-    properties: { taskID: TASK_ID, task: { id: TASK_ID, goalWorkflows: [] } },
+    orderKey: eventOrderKey("task.updated", MSG_A_TIME + 700),
+    properties: { taskID: TASK_ID, task: { id: TASK_ID, orderKey: TASK_ORDER_KEY, goalWorkflows: [] } },
   })
   flushBufferedPartDeltas()
   expectCacheMatchesWalk()
@@ -1212,14 +1324,17 @@ test("appending a second message keeps the cache invariant under multi-card load
   bootstrap()
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_A_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_A_ORDER_KEY,
       part: {
         id: PART_ID_TEXT,
         messageID: MSG_ID_A,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(PART_ID_TEXT, MSG_A_TIME + 100),
         type: "text",
         text: "from A",
       },
@@ -1230,6 +1345,7 @@ test("appending a second message keeps the cache invariant under multi-card load
 
   applyEvent({
     type: "message.updated",
+    orderKey: MSG_B_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
       info: {
@@ -1239,20 +1355,24 @@ test("appending a second message keeps the cache invariant under multi-card load
         resolvedRole: "assistant",
         agent: "assistant",
         channel: "assistant",
-        time: { created: 1_777_000_001_000 },
+        orderKey: MSG_B_ORDER_KEY,
+        time: { created: MSG_B_TIME },
       },
     },
   })
   applyEvent({
     type: "message.part.updated",
+    orderKey: MSG_B_ORDER_KEY,
     properties: {
       taskID: TASK_ID,
+      orderKey: MSG_B_ORDER_KEY,
       part: {
         id: `${PART_ID_TEXT}_b`,
         messageID: MSG_ID_B,
         sessionID: SID,
         resolvedRole: "assistant",
         channel: "assistant",
+        orderKey: partOrderKey(`${PART_ID_TEXT}_b`, MSG_B_TIME + 100),
         type: "text",
         text: "from B",
       },

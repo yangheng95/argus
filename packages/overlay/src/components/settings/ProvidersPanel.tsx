@@ -9,6 +9,7 @@ import { appStore, dismissProviderAuth, setAppStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { apiJson, ApiError } from "../../services/api"
 import { loadProviderInfo } from "../../services/init"
+import { activeDirectory } from "../../services/workspace"
 import {
   authenticateSelectedProvider,
   providerAuthMethods,
@@ -88,6 +89,18 @@ export default function ProvidersPanel() {
   const [discoveringModels, setDiscoveringModels] = createSignal(false)
   const [formNotice, setFormNotice] = createSignal<string | null>(null)
 
+  function providerLoadOptions(directory = activeDirectory().trim()) {
+    return {
+      directory,
+      isCurrentDirectory: (candidate: string) => activeDirectory().trim() === candidate,
+    }
+  }
+
+  function providerScopedPath(path: string, directory: string): string {
+    const value = directory.trim()
+    return value ? `${path}?directory=${encodeURIComponent(value)}` : path
+  }
+
   function formatRelative(ms: number): string {
     const diff = Date.now() - ms
     if (diff < 60_000) return t("provider.refresh.just_now")
@@ -99,10 +112,15 @@ export default function ProvidersPanel() {
 
   async function handleRefreshCatalog() {
     if (refreshing()) return
+    const directory = activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     setFormError(null)
     setRefreshing(true)
     try {
-      const result = (await apiJson("provider/refresh", { method: "POST" })) as {
+      const result = (await apiJson(providerScopedPath("provider/refresh", directory), { method: "POST" })) as {
         ok: boolean
         fetchedAt?: number
         error?: string
@@ -112,7 +130,7 @@ export default function ProvidersPanel() {
         return
       }
       setLastRefreshedAt(result.fetchedAt ?? Date.now())
-      await loadProviderInfo()
+      await loadProviderInfo(undefined, providerLoadOptions(directory))
     } catch (e) {
       setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }))
     } finally {
@@ -132,7 +150,8 @@ export default function ProvidersPanel() {
     }
     setTesting((prev) => new Set(prev).add(providerId))
     try {
-      const result = await testProviderConnection(providerId, modelID)
+      const directory = activeDirectory().trim()
+      const result = await testProviderConnection(providerId, modelID, { directory })
       setTestResults((prev) => {
         const next = new Map(prev)
         next.set(providerId, result)
@@ -174,18 +193,23 @@ export default function ProvidersPanel() {
     onAuthCancelled: dismissProviderAuth,
   }
 
-  async function refreshAuthState() {
-    await loadProviderInfo()
+  async function refreshAuthState(directory = activeDirectory().trim()) {
+    await loadProviderInfo(undefined, providerLoadOptions(directory))
   }
 
   async function handleAuth(providerId: string) {
     if (!providerAuthMethods(providerId).length || authing().has(providerId)) return
+    const directory = activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     setFormError(null)
     setAuthing((prev) => new Set(prev).add(providerId))
     try {
-      const ok = await authenticateSelectedProvider(providerId, authCallbacks)
+      const ok = await authenticateSelectedProvider(providerId, authCallbacks, { directory })
       if (ok) {
-        await refreshAuthState()
+        await refreshAuthState(directory)
         await nativeMessage(t("llm.status.connected"), {
           title: t("llm.title"),
           kind: "success",
@@ -209,6 +233,8 @@ export default function ProvidersPanel() {
   const [formEnvKey, setFormEnvKey] = createSignal("")
   const [formApiKey, setFormApiKey] = createSignal("")
   const [formModels, setFormModels] = createSignal("")
+  const [formDirectory, setFormDirectory] = createSignal("")
+  const [formBaseConfig, setFormBaseConfig] = createSignal<Record<string, unknown> | null>(null)
 
   function providerConfigs(): Record<string, any> {
     const cfg = appStore.config
@@ -272,12 +298,15 @@ export default function ProvidersPanel() {
     setFormEnvKey("")
     setFormApiKey("")
     setFormModels("")
+    setFormDirectory("")
+    setFormBaseConfig(null)
     setFormError(null)
     setFormNotice(null)
   }
 
   function startAdd() {
     resetForm()
+    setFormDirectory(activeDirectory().trim())
     setEditing(null)
     setShowAdd(true)
   }
@@ -285,6 +314,8 @@ export default function ProvidersPanel() {
   function startEdit(id: string) {
     const p = configProviders()[id]
     if (!p) return
+    setFormDirectory(activeDirectory().trim())
+    setFormBaseConfig(providerConfigWithoutApiKey(id))
     setFormId(id)
     setFormName(p.name || "")
     setFormApi(p.api || "")
@@ -343,6 +374,11 @@ export default function ProvidersPanel() {
     if (discoveringModels()) return
     setFormError(null)
     setFormNotice(null)
+    const directory = formDirectory() || activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     const api = formApi().trim()
     if (!api) {
       setFormError(t("provider.form.error.api_required"))
@@ -350,7 +386,7 @@ export default function ProvidersPanel() {
     }
     setDiscoveringModels(true)
     try {
-      const result = (await apiJson("provider/discover-models", {
+      const result = (await apiJson(providerScopedPath("provider/discover-models", directory), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -375,6 +411,11 @@ export default function ProvidersPanel() {
   async function handleSave() {
     setFormError(null)
     setFormNotice(null)
+    const directory = formDirectory() || activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     const id = formProviderId()
     if (!id) {
       setFormError(t("provider.form.error.id_required"))
@@ -392,7 +433,7 @@ export default function ProvidersPanel() {
 
     setSaving(true)
     try {
-      const baseConfig = providerConfigWithoutApiKey(id)
+      const baseConfig = formBaseConfig() ?? providerConfigWithoutApiKey(id)
       const provider: CustomProvider = {
         name: formName().trim() || id,
         api: formApi().trim().replace(/\/+$/, ""),
@@ -410,14 +451,14 @@ export default function ProvidersPanel() {
         removeDisabledProvider(cfg, id)
         cfg.provider = cfg.provider || {}
         cfg.provider[id] = provider
-      })
+      }, { directory })
       if (apiKey) {
-        await apiJson(`auth/${id}`, {
+        await apiJson(providerScopedPath(`auth/${id}`, directory), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: "api", key: apiKey }),
         })
-        await refreshAuthState()
+        await refreshAuthState(directory)
       }
 
       setShowAdd(false)
@@ -535,20 +576,27 @@ export default function ProvidersPanel() {
   async function handleSaveApiKey(providerId: string) {
     const value = apiKeyInput(providerId).trim()
     if (!value || savingKey().has(providerId)) return
+    const directory = activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     setFormError(null)
     setSavingKey((prev) => new Set(prev).add(providerId))
     try {
-      await apiJson(`auth/${providerId}`, {
+      await apiJson(providerScopedPath(`auth/${providerId}`, directory), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "api", key: value }),
       })
       await updateConfig((cfg) => {
         removeProjectApiKeyOverride(cfg, providerId)
-      })
+      }, { directory })
       if (providerId === "hexin") {
         try {
-          const refresh = (await apiJson("provider/hexin/refresh", { method: "POST" })) as {
+          const refresh = (await apiJson(providerScopedPath("provider/hexin/refresh", directory), {
+            method: "POST",
+          })) as {
             ok: boolean
             error?: string
           }
@@ -559,7 +607,7 @@ export default function ProvidersPanel() {
           setFormError(t("provider.refresh.failed", { reason: describeFailure(error) }))
         }
       }
-      await refreshAuthState()
+      await refreshAuthState(directory)
       clearApiKeyInput(providerId)
     } catch (e) {
       setFormError(t("provider.api_key.save_failed", { reason: describeFailure(e) }))
@@ -608,6 +656,11 @@ export default function ProvidersPanel() {
   }
 
   async function handleDelete(id: string) {
+    const directory = activeDirectory().trim()
+    if (!directory) {
+      setFormError(t("workspace.no_directory"))
+      return
+    }
     setFormError(null)
     setSaving(true)
     try {
@@ -618,9 +671,9 @@ export default function ProvidersPanel() {
         }
         addDisabledProvider(cfg, id)
         removeProviderModelReferences(cfg, id)
-      })
-      await apiJson(`auth/${id}`, { method: "DELETE" })
-      await refreshAuthState()
+      }, { directory })
+      await apiJson(providerScopedPath(`auth/${id}`, directory), { method: "DELETE" })
+      await refreshAuthState(directory)
       clearApiKeyInput(id)
       setTestResults((prev) => {
         const next = new Map(prev)

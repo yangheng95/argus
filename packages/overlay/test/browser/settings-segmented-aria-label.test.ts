@@ -62,7 +62,7 @@ test("settings segmented controls expose per-row accessible names", async () => 
     if (path === "/global/projects/discover") {
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     }
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/task/events") return eventStream()
     if (path === "/mission") return send([])
     if (path === "/session") return send([])

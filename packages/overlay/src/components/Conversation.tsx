@@ -350,7 +350,7 @@ export function Conversation(props: { container: HTMLElement }) {
         })
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return
-          console.error("[conversation] older history load failed", error)
+          // loadOlderConversationHistory owns visible AppLog diagnostics.
         })
         .finally(() => {
           historyLoadInFlight = false

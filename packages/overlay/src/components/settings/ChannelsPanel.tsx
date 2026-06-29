@@ -7,7 +7,7 @@
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js"
 import { t } from "../../utils/i18n"
 import { appStore } from "../../store/app"
-import { updateConfig } from "../../services/config"
+import { currentProjectConfigRequestOptions, updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
 import { nativeOpen } from "../../utils/native"
 import { Dialog } from "../primitives/Dialog"
@@ -134,7 +134,7 @@ export default function ChannelsPanel() {
             }
           }
           config.channel[entry.id] = next
-        })
+        }, currentProjectConfigRequestOptions())
         showNotice(t("common.saved"), "active")
         closeEdit()
       })
@@ -151,7 +151,7 @@ export default function ChannelsPanel() {
           current.server.publicUrl = localPublicUrl().trim() || undefined
           if (current.server.publicUrl === undefined) delete current.server.publicUrl
           if (Object.keys(current.server).length === 0) delete current.server
-        })
+        }, currentProjectConfigRequestOptions())
         showNotice(t("common.saved"), "active")
       })
     } catch (e) {

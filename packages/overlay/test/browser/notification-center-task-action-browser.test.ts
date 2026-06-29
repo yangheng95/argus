@@ -336,7 +336,7 @@ test("notification task action is an explicit button on toast and panel surfaces
       return send({ root: "D:/overlay", defaultDirectory: PROJECT_DIR, projects: [] })
     }
     if (path === "/project/current/worktrees") return send([])
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/task/events" || path === `/task/${TASK_ID}/events`) return eventStream(clients, path)
     if (path === `/task/${TASK_ID}/operator-model-context`) return send({ selected: null, candidates: [] })
     if (path === `/task/${TASK_ID}/browser-preview`) return send({ status: "missing", diagnostics: [] })

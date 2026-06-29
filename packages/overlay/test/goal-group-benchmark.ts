@@ -29,6 +29,12 @@ const types: Record<string, string> = {
 
 const TASK_ID = "task-benchmark-001"
 const ROOT_SESSION = "root-session-001"
+const BENCHMARK_NOW = Date.now()
+const TASK_CREATED = BENCHMARK_NOW - 120_000
+
+function benchmarkOrderKey(domain: "task" | "session" | "message" | "part", rank: number, time: number, id: string): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+}
 
 const boardData = {
   task: {
@@ -36,7 +42,9 @@ const boardData = {
     request: "Implement user authentication and add API endpoints for the new dashboard",
     status: "active",
     sessionID: ROOT_SESSION,
-    time: { created: Date.now() - 120_000 },
+    directory: "C:/projects/demo",
+    orderKey: benchmarkOrderKey("task", 10, TASK_CREATED, TASK_ID),
+    time: { created: TASK_CREATED, updated: BENCHMARK_NOW - 30_000 },
   },
   spec: {
     content:
@@ -139,13 +147,15 @@ const boardData = {
 }
 
 // Transcript messages: mix of spec, planner, goal, and parallel executor messages
-const transcriptMessages = [
+const rawTranscriptMessages: any[] = [
   // Spec agent messages
   {
     info: {
       id: "spec-msg-1",
       role: "assistant",
       agent: "spec",
+      channel: "spec",
+      resolvedRole: "spec",
       sessionID: "spec-session-1",
       time: { created: Date.now() - 110_000 },
     },
@@ -175,6 +185,8 @@ const transcriptMessages = [
       id: "spec-msg-2",
       role: "assistant",
       agent: "spec",
+      channel: "spec",
+      resolvedRole: "spec",
       sessionID: "spec-session-1",
       time: { created: Date.now() - 108_000 },
     },
@@ -192,6 +204,8 @@ const transcriptMessages = [
       id: "planner-msg-1",
       role: "assistant",
       agent: "planner",
+      channel: "planner",
+      resolvedRole: "planner",
       sessionID: "planner-session-1",
       time: { created: Date.now() - 100_000 },
     },
@@ -218,6 +232,8 @@ const transcriptMessages = [
       id: "goal-msg-1",
       role: "assistant",
       agent: "goal",
+      channel: "goal",
+      resolvedRole: "goal",
       sessionID: "goal-session-1",
       time: { created: Date.now() - 95_000 },
     },
@@ -228,7 +244,9 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-1",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 80_000 },
     },
@@ -257,7 +275,9 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-2",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 75_000 },
     },
@@ -282,7 +302,9 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-3",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 70_000 },
     },
@@ -307,7 +329,9 @@ const transcriptMessages = [
     info: {
       id: "exec-auth-4",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-auth",
       time: { created: Date.now() - 65_000 },
     },
@@ -332,7 +356,9 @@ const transcriptMessages = [
     info: {
       id: "exec-api-1",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 78_000 },
     },
@@ -357,7 +383,9 @@ const transcriptMessages = [
     info: {
       id: "exec-api-2",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 72_000 },
     },
@@ -382,7 +410,9 @@ const transcriptMessages = [
     info: {
       id: "exec-api-3",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-api",
       time: { created: Date.now() - 67_000 },
     },
@@ -408,7 +438,9 @@ const transcriptMessages = [
     info: {
       id: "exec-rbac-1",
       role: "assistant",
-      agent: "opencorvus",
+      agent: "build",
+      channel: "build",
+      resolvedRole: "build",
       sessionID: "exec-session-rbac",
       time: { created: Date.now() - 40_000 },
     },
@@ -430,6 +462,77 @@ const transcriptMessages = [
   },
 ]
 
+const transcriptMessages = rawTranscriptMessages.map((message, messageIndex) => {
+  const messageID = String(message.info.id)
+  const sessionID = String(message.info.sessionID)
+  const created = Number(message.info.time?.created ?? BENCHMARK_NOW + messageIndex)
+  return {
+    ...message,
+    info: {
+      ...message.info,
+      orderKey: benchmarkOrderKey("message", 30, created, messageID),
+    },
+    parts: (message.parts ?? []).map((part: any, partIndex: number) => ({
+      ...part,
+      messageID,
+      sessionID,
+      orderKey: benchmarkOrderKey("part", 31, created + partIndex + 1, String(part.id ?? `${messageID}-${partIndex}`)),
+    })),
+  }
+})
+
+function transcriptStage(info: any): string {
+  const resolvedRole = info?.resolvedRole
+  if (typeof resolvedRole !== "string" || !resolvedRole) {
+    throw new Error(`benchmark transcript message ${String(info?.id || "<missing>")} missing resolvedRole`)
+  }
+  return resolvedRole
+}
+
+const transcriptViewSessions = Array.from(
+  transcriptMessages
+    .reduce((map, message) => {
+      const info = message.info
+      const sessionID = String(info.sessionID)
+      const created = Number(info.time?.created)
+      const existing = map.get(sessionID)
+      const messageID = String(info.id)
+      if (existing) {
+        existing.messageIDs.push(messageID)
+        existing.lastDisplayMessageID = messageID
+        existing.lastMessageTime = created
+        return map
+      }
+      map.set(sessionID, {
+        sessionID,
+        stage: transcriptStage(info),
+        parentSessionID: info.parentSessionID,
+        goalID: info.goalID,
+        orderKey: benchmarkOrderKey("session", 50, created, sessionID),
+        messageIDs: [messageID],
+        lastDisplayMessageID: messageID,
+        firstMessageTime: created,
+        lastMessageTime: created,
+        placement: "top_level",
+      })
+      return map
+    }, new Map<string, any>())
+    .values(),
+)
+
+const transcriptViewMessages = transcriptMessages.map((message) => ({
+  messageID: String(message.info.id),
+  sessionID: String(message.info.sessionID),
+  stage: transcriptStage(message.info),
+  parentSessionID: message.info.parentSessionID,
+  goalID: message.info.goalID,
+  orderKey: String(message.info.orderKey),
+  time: Number(message.info.time?.created),
+  placement: "top_level",
+}))
+
+const transcriptTopLevelSessionIDs = transcriptViewSessions.map((session) => session.sessionID)
+
 // ── Mock server ──
 
 function send(value: unknown) {
@@ -437,6 +540,8 @@ function send(value: unknown) {
     headers: { "content-type": "application/json; charset=utf-8" },
   })
 }
+
+let conversationHydrateHit = false
 
 const server = Bun.serve({
   port: 0,
@@ -446,8 +551,15 @@ const server = Bun.serve({
     const path = url.pathname.replace(/\/+$/, "") || "/"
 
     // API endpoints
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
     if (path === "/global/health") return send({ version: "benchmark" })
-    if (path === "/tasks" || path === "/global/tasks") {
+    if (path === "/tasks") {
+      return new Response(JSON.stringify({ error: "/tasks is not a task-list route" }), {
+        status: 404,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      })
+    }
+    if (path === "/global/tasks") {
       return send({
         tasks: [
           {
@@ -455,9 +567,13 @@ const server = Bun.serve({
               id: TASK_ID,
               requestID: "req-1",
               request: boardData.task.request,
+              directory: boardData.task.directory,
               status: boardData.task.status,
-              time_created: boardData.task.time.created,
-              time_updated: Date.now(),
+              orderKey: boardData.task.orderKey,
+              time: {
+                created: boardData.task.time.created,
+                updated: boardData.task.time.updated,
+              },
             },
           },
         ],
@@ -466,8 +582,34 @@ const server = Bun.serve({
     if (path === `/task/${TASK_ID}/board`) {
       return send(boardData)
     }
+    if (path === `/task/${TASK_ID}/conversation`) {
+      conversationHydrateHit = true
+      return send({
+        board: boardData,
+        transcript: transcriptMessages,
+        timeline: [],
+        events: [],
+        view: {
+          topLevelSessionIDs: transcriptTopLevelSessionIDs,
+          sessions: transcriptViewSessions,
+          messages: transcriptViewMessages,
+        },
+        agentView: {
+          topLevelSessionIDs: transcriptTopLevelSessionIDs,
+          sessions: transcriptViewSessions,
+          messages: transcriptViewMessages,
+        },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        history: { hasMore: false, oldestTimestamp: null, oldestMessageID: null, limit: 160 },
+        messageWatermark: 0,
+        lastSequence: boardData.lastSequence,
+      })
+    }
     if (path === `/task/${TASK_ID}/transcript`) {
-      return send(transcriptMessages)
+      return new Response(JSON.stringify({ error: "retired transcript route" }), {
+        status: 404,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      })
     }
     if (path.startsWith("/control/timeline")) {
       return send([])
@@ -560,6 +702,23 @@ const browser = await launchBrowser(["--no-sandbox", "--no-first-run", "--no-def
 })
 const page = await browser.newPage()
 await page.setViewportSize({ width: 900, height: 1200 })
+const runtimeFailures: string[] = []
+page.on("console", (msg) => {
+  const type = msg.type()
+  if (type === "error" || type === "warning") runtimeFailures.push(`[console/${type}] ${msg.text()}`)
+})
+page.on("pageerror", (error) => {
+  runtimeFailures.push(`[pageerror] ${error.stack || error.message}`)
+})
+page.on("response", (response) => {
+  const status = response.status()
+  if (status >= 400) {
+    runtimeFailures.push(`[response/${status}] ${response.request().method()} ${response.url()}`)
+  }
+})
+page.on("requestfailed", (request) => {
+  runtimeFailures.push(`[requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`)
+})
 
 // Inject Tauri mock
 await page.evaluateOnNewDocument((url: string) => {
@@ -598,13 +757,9 @@ await page.goto(serverUrl, { waitUntil: "load" })
 console.log("  Browser opened. Waiting for overlay to connect...")
 
 // Wait for connection
-await page
-  .waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online", {
-    timeout: 15_000,
-  })
-  .catch(() => {
-    console.log("  (connection badge not found, continuing anyway)")
-  })
+await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online", {
+  timeout: 15_000,
+})
 
 // Auto-select the task
 await page.evaluate((taskID: string) => {
@@ -617,6 +772,12 @@ await page.evaluate((taskID: string) => {
 
 // Give the overlay a moment to render the selected task's transcript.
 await new Promise((r) => setTimeout(r, 1500))
+if (!conversationHydrateHit) {
+  throw new Error(`goal-group benchmark did not hit /task/${TASK_ID}/conversation`)
+}
+if (runtimeFailures.length > 0) {
+  throw new Error(`goal-group benchmark runtime failures:\n${runtimeFailures.join("\n")}`)
+}
 
 if (SHOT_MODE) {
   const path = await import("node:path")

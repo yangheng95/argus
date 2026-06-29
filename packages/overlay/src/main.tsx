@@ -46,7 +46,6 @@ import { formatUsageStrip } from "./utils/format-usage"
 import {
   applyTheme,
   applyZoom,
-  applyOpacity,
   handleZoomHotkey,
   installSystemThemeListener,
   stepZoom,
@@ -77,7 +76,7 @@ import { hydrateIconPlaceholders, installIconHtmlRenderer } from "./utils/icon-h
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import { applyDirectory, activeDirectory, openPathInSelectedEditor } from "./services/workspace"
-import { openConfigDialog, openGoalDialog, renderAboutVersion } from "./services/dialog"
+import { openConfigDialog, openGoalDialog } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
 import { loadConversation } from "./services/conversation"
@@ -381,7 +380,7 @@ function activateCodingAssistantSessionList(): void {
   setSelectedLeftPanelActivity("assistant")
   runMainAsync("coding-assistant.sessions", async () => {
     try {
-      await loadCodingAssistantSessions({ signal: controller.signal })
+      await loadCodingAssistantSessions({ directory: activeDirectory(), signal: controller.signal })
       if (controller.signal.aborted) throw controller.signal.reason
       const selectedID = codingAssistantStore.selectedSessionID
       const session =
@@ -1122,8 +1121,7 @@ if (sidebarTitleEl) {
   sidebarTitleEl.addEventListener("dblclick", async (ev) => {
     ev.preventDefault()
     const databasePath = appStore.enginePaths?.database?.trim()
-    const projectDir = activeDirectory().trim()
-    if (!databasePath || !projectDir) {
+    if (!databasePath) {
       notifyError({
         id: "system:reset-db",
         title: t("sidebar.reset_db_failed_title"),
@@ -1131,9 +1129,9 @@ if (sidebarTitleEl) {
       })
       return
     }
-    if (!window.confirm(t("sidebar.reset_db_confirm", { database: databasePath, projectDir }))) return
+    if (!window.confirm(t("sidebar.reset_db_confirm", { database: databasePath }))) return
     try {
-      await resetDatabase(projectDir)
+      await resetDatabase(databasePath)
       window.location.reload()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -1201,10 +1199,16 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={selectTaskFromTaskList}
-        onDeleteTask={(taskID) => runMainAsync("task.delete-from-list", () => deleteTask(taskID).then(() => undefined))}
+        onDeleteTask={(taskID) =>
+          runMainAsync("task.delete-from-list", async () => {
+            const ok = await deleteTask(taskID)
+            if (!ok) throw new Error(t("task.delete_failed"))
+          })
+        }
         onCancelTask={(taskID) => runMainAsync("task.cancel-from-list", () => cancelTask(taskID))}
         onRenameTask={async (taskID, title) => {
-          await renameTask(taskID, title)
+          const ok = await renameTask(taskID, title)
+          if (!ok) throw new Error(t("task.rename_failed"))
         }}
       />
     ),
@@ -1228,7 +1232,14 @@ if (codingAssistantListEl) {
         actionBusyID={codingAssistantStore.actionBusyID}
         onSearchChange={(query) => {
           setCodingAssistantSearchQuery(query)
-          void loadCodingAssistantSessions().catch((error) => {
+          const directory = activeDirectory()
+          const searchQuery = query.trim()
+          void loadCodingAssistantSessions({
+            directory,
+            searchQuery,
+            isCurrentSource: () =>
+              activeDirectory().trim() === directory.trim() && codingAssistantStore.searchQuery.trim() === searchQuery,
+          }).catch((error) => {
             reportOverlayRuntimeError("coding-assistant.search", error)
           })
         }}
@@ -1273,14 +1284,39 @@ if (codingAssistantListEl) {
             })
         }
         onRetry={() =>
-          void loadCodingAssistantSessions().catch((error) => {
-            reportOverlayRuntimeError("coding-assistant.retry", error)
-          })
+          void (() => {
+            const directory = activeDirectory()
+            const searchQuery = codingAssistantStore.searchQuery.trim()
+            return loadCodingAssistantSessions({
+              directory,
+              searchQuery,
+              isCurrentSource: () =>
+                activeDirectory().trim() === directory.trim() &&
+                codingAssistantStore.searchQuery.trim() === searchQuery,
+            }).catch((error) => {
+              reportOverlayRuntimeError("coding-assistant.retry", error)
+            })
+          })()
         }
         onLoadMore={() =>
-          void loadCodingAssistantSessions({ append: true }).catch((error) => {
-            reportOverlayRuntimeError("coding-assistant.more", error)
-          })
+          void (() => {
+            const directory = activeDirectory()
+            const searchQuery = codingAssistantStore.searchQuery.trim()
+            const cursor = codingAssistantStore.nextCursor
+            return loadCodingAssistantSessions({
+              directory,
+              append: true,
+              searchQuery,
+              cursor,
+              isCurrentSource: () =>
+                activeDirectory().trim() === directory.trim() &&
+                codingAssistantStore.searchQuery.trim() === searchQuery &&
+                codingAssistantStore.nextCursor?.updated === cursor?.updated &&
+                codingAssistantStore.nextCursor?.sessionID === cursor?.sessionID,
+            }).catch((error) => {
+              reportOverlayRuntimeError("coding-assistant.more", error)
+            })
+          })()
         }
       />
     ),
@@ -1327,15 +1363,11 @@ function editGoal(goalId: string, title: string, detail: string): void {
 function deleteGoal(goalId: string): void {
   if (!goalId || !activeTaskID()) return
   runMainAsync("goal.delete", async () => {
-    try {
-      await panelMessage(`Delete goal ${goalId}.`, {
-        goalID: goalId,
-        taskID: activeTaskID() || undefined,
-      })
-      await loadBoard({ sync: true })
-    } catch (e) {
-      console.error("Failed to delete goal", e)
-    }
+    await panelMessage(`Delete goal ${goalId}.`, {
+      goalID: goalId,
+      taskID: activeTaskID() || undefined,
+    })
+    await loadBoard({ sync: true })
   })
 }
 
@@ -1726,7 +1758,6 @@ disposers.push(
       if (!settingsHydrated()) return
       applyTheme(settingsStore.theme)
       applyZoom(settingsStore.zoom)
-      applyOpacity(settingsStore.opacity)
     })
 
     createEffect(() => {
@@ -1781,7 +1812,7 @@ disposers.push(
           const blob =
             selectedSource?.kind === "session"
               ? buildChatDebugBlob(boardStore.board, selectedSource, cardTreeStore)
-              : buildTaskDebugBlob(boardStore.board)
+              : buildTaskDebugBlob(boardStore.board, appStore.enginePaths)
           if (!blob) {
             flash(selectedSource?.kind === "session" ? "无会话" : "无任务")
             return
@@ -1846,9 +1877,7 @@ disposers.push(
           body.dataset.open = String(open)
           body.dataset.active = String(open)
           body.dataset.selected = String(open && panel === selectedPanel)
-          body.dataset.initialWidthCapped = String(
-            open && initialWidthCappedPanels.has(panel as CenterWorkbenchPanel),
-          )
+          body.dataset.initialWidthCapped = String(open && initialWidthCappedPanels.has(panel as CenterWorkbenchPanel))
         }
       }
       renderCenterWorkbenchPanelLayoutOnFrame.schedule()
@@ -2168,7 +2197,6 @@ runMainAsync("initApp", async () => {
       },
       onConnected: focusInitialRestoredTaskWorkspace,
     })
-    renderAboutVersion()
   } catch (error) {
     reportOverlayRuntimeError("initApp", error)
   } finally {

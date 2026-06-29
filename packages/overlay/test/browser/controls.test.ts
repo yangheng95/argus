@@ -628,12 +628,6 @@ test(
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/global/projects/discover")
         return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
-      if (path === "/tasks") {
-        return send({
-          ...data.tasks,
-          tasks: data.tasks.tasks.filter((item) => sameDir(item?.task?.directory, url)),
-        })
-      }
       if (path === "/global/tasks") return send(data.tasks)
       if (path === "/mission") return send([])
       if (path === "/executor") return send(data.executors)
@@ -940,7 +934,7 @@ test(
         )
         return send({ ok: true })
       }
-      if (path === "/log/tail") return send({ lines: data.logs })
+      if (path === "/log/tail") return send({ path: "D:/overlay/logs/server.log", lines: data.logs })
       return text(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
     const seen: string[] = []

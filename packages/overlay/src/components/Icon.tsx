@@ -108,11 +108,13 @@ export type IconName =
   | "avatar-frontend-research"
   | "avatar-visual-qa"
   | "avatar-architect"
+  | "avatar-goal-workload-analyst"
   | "avatar-planner"
   | "avatar-goal"
   | "avatar-executor"
   | "avatar-build"
   | "avatar-explore"
+  | "avatar-deep-research"
   | "avatar-evaluator"
   | "avatar-integrity"
   | "avatar-fact-check"
@@ -614,6 +616,15 @@ const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
       </>
     ),
   },
+  "avatar-goal-workload-analyst": {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="4.4" />
+        <path d="M5.7 8h4.6M8 5.7v4.6" />
+        <path d="M5.2 11.6h5.6" />
+      </>
+    ),
+  },
   "avatar-planner": {
     body: () => (
       <>
@@ -651,6 +662,15 @@ const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
       <>
         <circle cx="7" cy="7" r="3.2" />
         <path d="M9.4 9.4 12.6 12.6" />
+      </>
+    ),
+  },
+  "avatar-deep-research": {
+    body: () => (
+      <>
+        <circle cx="6.4" cy="6.4" r="2.8" />
+        <path d="M8.5 8.5 12.3 12.3" />
+        <path d="M5.2 5.5h2.4M5.2 7.2h1.6" />
       </>
     ),
   },

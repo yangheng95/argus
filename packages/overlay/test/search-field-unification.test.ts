@@ -17,7 +17,7 @@ const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settin
 test("task, file, file changes, memory, and provider search inputs use the shared search-field primitive", () => {
   expect(TASK_LIST_SOURCE).toContain('class="task-list-search search-field"')
   expect(TASK_LIST_SOURCE).toContain('class="task-list-search-input search-field-input"')
-  expect(FILE_EXPLORER_SOURCE).toContain('class="file-explorer-toolbar file-explorer-search search-field"')
+  expect(FILE_EXPLORER_SOURCE).toContain('class="file-explorer-search search-field"')
   expect(FILE_EXPLORER_SOURCE).toContain('class="file-explorer-search-input search-field-input"')
   expect(FILE_EXPLORER_SOURCE).not.toContain("search-field-input field-input")
   expect(FILE_CHANGES_SOURCE).toContain('class="changes-filter-field search-field"')

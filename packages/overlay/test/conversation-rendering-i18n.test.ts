@@ -20,6 +20,9 @@ describe("conversation rendering i18n", () => {
 
     expect(cardParts).toContain('t("card.subtask")')
     expect(cardParts).not.toContain('<span class="tool-name">Subtask</span>')
+    expect(cardParts).toContain("CardParts unsupported part type")
+    expect(cardParts).toContain("fallback={unsupportedPartFallback(part)}")
+    expect(cardParts).not.toContain("fallback={null}")
 
     expect(inlineToolPart).toContain('t("tool.loaded_instructions")')
     expect(inlineToolPart).toContain('t("tool.browser_observation_alt_with_label"')
@@ -55,7 +58,23 @@ describe("conversation rendering i18n", () => {
   test("promoted todo and plan tool cards expose translatable title keys", async () => {
     const { toolToCardNode } = await import("../src/utils/tool-card-node")
 
-    expect(toolToCardNode({ id: "todo", type: "tool", tool: "todowrite", state: {} }).title).toBe("tool.card.todos")
-    expect(toolToCardNode({ id: "plan", type: "tool", tool: "updateplan", state: {} }).title).toBe("tool.card.plan")
+    expect(
+      toolToCardNode({
+        id: "todo",
+        type: "tool",
+        tool: "todowrite",
+        orderKey: "v1:0001776000000001:0000000000000031:0000000000000000:part:todo",
+        state: { time: { start: 1_776_000_000_001 } },
+      }).title,
+    ).toBe("tool.card.todos")
+    expect(
+      toolToCardNode({
+        id: "plan",
+        type: "tool",
+        tool: "updateplan",
+        orderKey: "v1:0001776000000002:0000000000000031:0000000000000000:part:plan",
+        state: { time: { start: 1_776_000_000_002 } },
+      }).title,
+    ).toBe("tool.card.plan")
   })
 })

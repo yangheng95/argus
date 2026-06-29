@@ -107,18 +107,42 @@ export function buildCheckConfigFromSpecs(task: any, selection: Record<string, b
 
 // ── Config Update ──
 
+export interface ConfigRequestOptions {
+  directory?: string
+  isCurrentDirectory?: (directory: string) => boolean
+}
+
+export function currentProjectConfigRequestOptions(): ConfigRequestOptions {
+  const directory = activeDirectory().trim()
+  if (!directory) throw new Error("Project config update requires an active directory")
+  return {
+    directory,
+    isCurrentDirectory: (candidate) => activeDirectory().trim() === candidate,
+  }
+}
+
+function configRequestPath(options: ConfigRequestOptions = {}): string {
+  const directory = options.directory?.trim()
+  return directory ? `config?directory=${encodeURIComponent(directory)}` : "config"
+}
+
+function configResponseStillOwned(options: ConfigRequestOptions): boolean {
+  const directory = options.directory?.trim()
+  return !directory || !options.isCurrentDirectory || options.isCurrentDirectory(directory)
+}
+
 /**
  * Send a partial config diff to the server (JSON Merge Patch).
  * Updates appStore.config with the server response.
  */
-export async function patchConfig(diff: Record<string, any>): Promise<any> {
+export async function patchConfig(diff: Record<string, any>, options: ConfigRequestOptions = {}): Promise<any> {
   if (!appStore.connected) throw new Error("Cannot patch config while disconnected")
-  const saved = await apiJson("config", {
+  const saved = await apiJson(configRequestPath(options), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(diff),
   })
-  setAppStore("config", saved)
+  if (configResponseStillOwned(options)) setAppStore("config", saved)
   return saved
 }
 
@@ -190,6 +214,7 @@ export interface DatabaseResetTarget {
 
 export interface DatabaseResetResponse {
   ok: boolean
+  restarting: boolean
   targets: DatabaseResetTarget[]
 }
 
@@ -334,18 +359,16 @@ export async function testNetworkProxy(proxy: NetworkProxyDraft): Promise<Networ
   })
 }
 
-export async function resetDatabase(projectDir: string): Promise<DatabaseResetResponse> {
-  const directory = projectDir.trim()
+export async function resetDatabase(database: string): Promise<DatabaseResetResponse> {
   if (!appStore.connected) {
     throw new Error("Cannot reset database while disconnected")
   }
-  if (!directory) {
-    throw new Error("Cannot reset database without an active project directory")
-  }
+  const currentDatabase = database.trim()
+  if (!currentDatabase) throw new Error("resetDatabase: database is required")
   return await apiJson("global/db/reset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectDir: directory }),
+    body: JSON.stringify({ database: currentDatabase }),
   })
 }
 
@@ -516,10 +539,11 @@ export function importPromptProfileConfig(
 export async function importPromptProfiles(
   preview: PromptProfileImportPreview,
   catalog: PromptProfileCatalog,
+  directory: string,
 ): Promise<any> {
   const saved = await updateConfig((current) => {
     importPromptProfileConfig(current, preview, catalog)
-  })
+  }, { directory })
   markPromptProfileCatalogStale()
   return saved
 }
@@ -577,23 +601,28 @@ export function deletePromptProfileConfig(
   }
 }
 
-export async function savePromptProfile(profile: PromptProfileDraft, defaultActive: string): Promise<any> {
+export async function savePromptProfile(profile: PromptProfileDraft, defaultActive: string, directory: string): Promise<any> {
   const saved = await updateConfig((current) => {
     upsertPromptProfileConfig(current, profile, defaultActive)
-  })
+  }, { directory })
   markPromptProfileCatalogStale()
   return saved
 }
 
-export async function deletePromptProfile(profileID: string, nextActive: string, defaultActive: string): Promise<any> {
+export async function deletePromptProfile(
+  profileID: string,
+  nextActive: string,
+  defaultActive: string,
+  directory: string,
+): Promise<any> {
   const saved = await updateConfig((current) => {
     deletePromptProfileConfig(current, profileID, nextActive, defaultActive)
-  })
+  }, { directory })
   markPromptProfileCatalogStale()
   return saved
 }
 
-export async function setProjectPromptProfileActive(profileID: string): Promise<any> {
+export async function setProjectPromptProfileActive(profileID: string, directory: string): Promise<any> {
   const saved = await updateConfig((current) => {
     const promptProfile =
       current.prompt_profile && typeof current.prompt_profile === "object" && !Array.isArray(current.prompt_profile)
@@ -603,7 +632,7 @@ export async function setProjectPromptProfileActive(profileID: string): Promise<
       ...promptProfile,
       active: profileID,
     }
-  })
+  }, { directory })
   markPromptProfileCatalogStale()
   return saved
 }
@@ -618,8 +647,11 @@ export async function setSessionPromptProfileActive(
   return saved
 }
 
-export async function syncAgentPromptLocale(locale: string): Promise<void> {
-  await patchConfig({ locale: sanitizeLocale(locale) })
+export async function syncAgentPromptLocale(
+  locale: string,
+  options: ConfigRequestOptions = currentProjectConfigRequestOptions(),
+): Promise<void> {
+  await patchConfig({ locale: sanitizeLocale(locale) }, options)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -663,21 +695,25 @@ function mergePatchDiff(before: unknown, after: unknown): unknown {
  * Use patchConfig() for simple field updates; use this for complex mutations
  * that need the current state (e.g., conditional delete of nested keys).
  */
-export async function updateConfig(mutator: (config: Record<string, any>) => void): Promise<any> {
-  const current = await apiJson("config")
+export async function updateConfig(
+  mutator: (config: Record<string, any>) => void,
+  options: ConfigRequestOptions = {},
+): Promise<any> {
+  const configPath = configRequestPath(options)
+  const current = await apiJson(configPath)
   const next = structuredClone(current || {})
   mutator(next)
   const diff = mergePatchDiff(current || {}, next)
   if (diff === undefined) {
-    setAppStore("config", current)
+    if (configResponseStillOwned(options)) setAppStore("config", current)
     return current
   }
-  const saved = await apiJson("config", {
+  const saved = await apiJson(configPath, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(diff),
   })
-  setAppStore("config", saved)
+  if (configResponseStillOwned(options)) setAppStore("config", saved)
   return saved
 }
 
@@ -743,10 +779,15 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
   // data including tasks and executors so the UI fully reflects the new directory.
   await Promise.all([
     loadConfigInfo(undefined, { includeSettingsData: false }),
-    loadExtensions(),
+    loadExtensions({
+      directory,
+      isCurrentDirectory: (candidate) => activeDirectory().trim() === candidate,
+    }),
     loadMeta(),
     loadTasks(),
-    loadExecutors(directory),
+    loadExecutors(directory, {
+      isCurrentDirectory: (candidate) => activeDirectory().trim() === candidate,
+    }),
   ])
   if (options.restoreWorkspace) {
     try {
@@ -760,6 +801,17 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
 // ── Prompt Catalog ──
 // (lines 2677, 2683, 2694).
 
+function requirePromptCatalogDirectory(directory: string): string {
+  const owningDirectory = directory.trim()
+  if (!owningDirectory) throw new Error("Prompt catalog config mutation requires a project directory")
+  return owningDirectory
+}
+
+function promptCatalogPath(directory: string): string {
+  const owningDirectory = requirePromptCatalogDirectory(directory)
+  return `config/prompt?directory=${encodeURIComponent(owningDirectory)}`
+}
+
 /**
  * Apply a raw prompt-entry list into the app store.
  * DOM side-effect (renderPromptCatalog) remains.
@@ -772,8 +824,8 @@ export function applyPromptEntries(items: any[]): void {
 /**
  * Load prompt entries from the server and push them into the store.
  */
-export async function loadPromptCatalog(): Promise<void> {
-  const items = await apiJson("config/prompt")
+export async function loadPromptCatalog(directory: string): Promise<void> {
+  const items = await apiJson(promptCatalogPath(directory))
   applyPromptEntries(items)
 }
 
@@ -783,8 +835,9 @@ export async function loadPromptCatalog(): Promise<void> {
  * @param entry The prompt entry to save
  * @param value The new prompt text (empty string to clear the override)
  */
-export async function savePromptEntry(entry: any, value: string): Promise<void> {
+export async function savePromptEntry(entry: any, value: string, directory: string): Promise<void> {
   if (!entry) return
+  const owningDirectory = requirePromptCatalogDirectory(directory)
   try {
     await updateConfig((current: any) => {
       if (entry.scope === "system") {
@@ -806,8 +859,8 @@ export async function savePromptEntry(entry: any, value: string): Promise<void> 
       if (Object.keys(item).length === 0) delete current.agent[entry.key]
       else current.agent[entry.key] = item
       if (Object.keys(current.agent).length === 0) delete current.agent
-    })
-    await loadPromptCatalog()
+    }, { directory: owningDirectory })
+    await loadPromptCatalog(owningDirectory)
   } catch (e) {
     AppLog.error("ui", "Failed to save prompt override", { error: String(e) })
     throw e
@@ -822,9 +875,10 @@ export function promptConfigValueForSave(entry: any, value: string): string {
  * Reset a prompt entry override back to its default value.
  * Removes the override from the server config, then reloads the catalog.
  */
-export async function resetPromptEntry(entry: any): Promise<void> {
+export async function resetPromptEntry(entry: any, directory: string): Promise<void> {
   if (!entry) return
   if (entry.configured_prompt === null) return
+  const owningDirectory = requirePromptCatalogDirectory(directory)
   const entryID = `${entry.scope}:${entry.key}`
   try {
     await updateConfig((current: any) => {
@@ -846,8 +900,8 @@ export async function resetPromptEntry(entry: any): Promise<void> {
         else current.agent[entry.key] = item
         if (Object.keys(current.agent).length === 0) delete current.agent
       }
-    })
-    await loadPromptCatalog()
+    }, { directory: owningDirectory })
+    await loadPromptCatalog(owningDirectory)
   } catch (e) {
     AppLog.error("ui", "Failed to reset prompt override", { error: String(e) })
     throw e

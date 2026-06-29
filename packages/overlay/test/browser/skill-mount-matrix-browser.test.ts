@@ -257,7 +257,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     if (staticResponse) return staticResponse
 
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/global/projects/discover") return send([])
     if (path === "/session") return send([])
     if (path === "/mission") return send([])
@@ -365,7 +365,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
       localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
+      localStorage.setItem("oc_theme", "dark")
       localStorage.setItem("oc_server_url", serverUrl)
       localStorage.setItem("oc_auto_server", "false")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
@@ -378,7 +378,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
                 serverUrl,
                 autoServer: false,
                 locale: "en-US",
-                theme: "light",
+                theme: "dark",
                 directory: "D:/overlay/workspace/app",
                 workspaceDirectory: "D:/overlay/workspace/app",
               }
@@ -483,6 +483,15 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       const corner = node.querySelector(".agent-skill-grid-corner") as HTMLElement | null
       const rowHeader = node.querySelector(".agent-skill-grid-skill") as HTMLElement | null
       const topHeader = node.querySelector(".agent-skill-grid-agent") as HTMLElement | null
+      const compactRows = Array.from(node.querySelectorAll(".agent-skill-grid-skill")).map((item) =>
+        (item as HTMLElement).getBoundingClientRect(),
+      )
+      const compactCells = Array.from(node.querySelectorAll(".agent-skill-grid-cell")).map((item) =>
+        (item as HTMLElement).getBoundingClientRect(),
+      )
+      const compactHeaders = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) =>
+        (item as HTMLElement).getBoundingClientRect(),
+      )
       return {
         matrix: { left: matrix.left, right: matrix.right, width: matrix.width },
         overflowX: (grid?.scrollWidth ?? 0) - (grid?.clientWidth ?? 0),
@@ -505,6 +514,10 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         cornerPosition: corner ? getComputedStyle(corner).position : "",
         rowHeaderPosition: rowHeader ? getComputedStyle(rowHeader).position : "",
         topHeaderPosition: topHeader ? getComputedStyle(topHeader).position : "",
+        compactCellWidth: compactCells[0]?.width ?? 0,
+        compactCellHeight: compactCells[0]?.height ?? 0,
+        compactRowHeight: compactRows[0]?.height ?? 0,
+        compactHeaderHeight: compactHeaders[0]?.height ?? 0,
         measured,
       }
     })
@@ -544,6 +557,10 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.notEqual(layout.cornerBackground, "rgba(0, 0, 0, 0)")
     assert.notEqual(layout.rowHeaderBackground, "rgba(0, 0, 0, 0)")
     assert.notEqual(layout.topHeaderBackground, "rgba(0, 0, 0, 0)")
+    assert.ok(layout.compactCellWidth <= 96, `compact mount cells should stay narrow: ${layout.compactCellWidth}`)
+    assert.ok(layout.compactCellHeight <= 38, `compact mount cells should use dense rows: ${layout.compactCellHeight}`)
+    assert.ok(layout.compactRowHeight <= 40, `compact skill rows should use dense rows: ${layout.compactRowHeight}`)
+    assert.ok(layout.compactHeaderHeight <= 28, `compact agent headers should be short: ${layout.compactHeaderHeight}`)
     assert.ok(layout.measured.length >= 40, "grid rows and cells should render")
     for (const item of layout.measured) {
       assert.ok(item.width > 12 && item.height > 10, `${item.text} should have visible dimensions`)
@@ -589,6 +606,11 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     await page.waitForSelector('[data-testid="titlebar-menu-settings"]')
     await page.click('[data-testid="titlebar-settings-skill"]')
     await page.waitForSelector('#configDialog [data-config-panel="skill"] .agent-skill-matrix-grid')
+    const settingsDialogScreenshot = await saveElementScreenshot(
+      page,
+      "#configDialog .dialog-form",
+      "skill-settings-dialog.png",
+    )
     const settingsScreenshot = await saveElementScreenshot(
       page,
       '#configDialog [data-config-panel="skill"] .agent-skill-matrix',
@@ -606,12 +628,24 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         )
         const headerMetrics = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) => {
           const header = item as HTMLElement
+          const rect = header.getBoundingClientRect()
           return {
             text: (header.textContent || "").trim(),
-            width: header.getBoundingClientRect().width,
+            width: rect.width,
+            height: rect.height,
             scrollWidth: header.scrollWidth,
             clientWidth: header.clientWidth,
+            scrollHeight: header.scrollHeight,
+            clientHeight: header.clientHeight,
           }
+        })
+        const rowMetrics = Array.from(node.querySelectorAll(".agent-skill-grid-skill")).map((item) => {
+          const rect = (item as HTMLElement).getBoundingClientRect()
+          return { width: rect.width, height: rect.height }
+        })
+        const cellMetrics = Array.from(node.querySelectorAll(".agent-skill-grid-cell")).map((item) => {
+          const rect = (item as HTMLElement).getBoundingClientRect()
+          return { width: rect.width, height: rect.height }
         })
         const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
           (item.textContent || "").trim(),
@@ -628,17 +662,28 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           }
         })
         const firstCell = node.querySelector(".agent-skill-grid-cell") as HTMLElement
+        const dialogForm = document.querySelector("#configDialog .dialog-form") as HTMLElement
+        const configContent = document.querySelector("#configContent") as HTMLElement
         const gridStyle = getComputedStyle(grid)
         const gridRect = grid.getBoundingClientRect()
+        const visibleHeaderCount = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).filter((item) => {
+          const rect = (item as HTMLElement).getBoundingClientRect()
+          return rect.left >= gridRect.left && rect.right <= gridRect.right + 1
+        }).length
         return {
           display: gridStyle.display,
           columns: gridStyle.gridTemplateColumns,
           height: gridRect.height,
           scrollWidth: grid.scrollWidth,
           clientWidth: grid.clientWidth,
+          visibleHeaderCount,
+          dialogScrollTop: dialogForm.scrollTop,
+          configContentScrollTop: configContent.scrollTop,
           compact: node.dataset.compact,
           headers,
           headerMetrics,
+          rowMetrics,
+          cellMetrics,
           rowNames,
           sourceBadges,
           unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
@@ -654,14 +699,33 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         }
       },
     )
+    assert.equal(settingsDialogScreenshot.endsWith("skill-settings-dialog.png"), true)
     assert.equal(settingsScreenshot.endsWith("skill-mount-matrix-settings-panel.png"), true)
     assert.equal(settingsLayout.compact, "false")
     assert.equal(settingsLayout.display, "grid")
-    assert.ok(settingsLayout.height >= 240, "settings matrix must be visibly rendered above the skill registry")
+    assert.ok(settingsLayout.height >= 200, "settings matrix must be visibly rendered above the skill registry")
     assert.ok(settingsLayout.columns.includes("px"), "settings matrix should receive explicit grid columns")
     assert.ok(
       settingsLayout.scrollWidth >= settingsLayout.clientWidth,
       "settings matrix should not underflow its viewport",
+    )
+    assert.ok(
+      settingsLayout.scrollWidth / settingsLayout.clientWidth <= 1.8,
+      `settings matrix should keep enough columns in the first viewport: ${JSON.stringify({
+        scrollWidth: settingsLayout.scrollWidth,
+        clientWidth: settingsLayout.clientWidth,
+      })}`,
+    )
+    assert.ok(
+      settingsLayout.visibleHeaderCount >= 4,
+      `settings matrix should expose several agent columns before scrolling: ${settingsLayout.visibleHeaderCount}`,
+    )
+    assert.ok(
+      settingsLayout.dialogScrollTop <= 1 && settingsLayout.configContentScrollTop <= 1,
+      `settings skill tab should open at the top: ${JSON.stringify({
+        dialogScrollTop: settingsLayout.dialogScrollTop,
+        configContentScrollTop: settingsLayout.configContentScrollTop,
+      })}`,
     )
     assert.ok(settingsLayout.headers.includes("frontend-research"), "settings matrix should show full agent names")
     assert.equal(settingsLayout.headers.includes("mission"), false)
@@ -688,19 +752,80 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.notEqual(settingsLayout.topHeaderBackground, "rgba(0, 0, 0, 0)")
     assert.ok(settingsLayout.firstCellWidth >= 70, "settings matrix cells must not collapse into icon strips")
     assert.ok(
-      settingsLayout.topHeaderWidth >= 120,
-      `agent headers must reserve full-name width: ${JSON.stringify({
+      settingsLayout.topHeaderWidth >= 76 && settingsLayout.topHeaderWidth <= 118,
+      `agent headers should use dense readable tracks: ${JSON.stringify({
         width: settingsLayout.topHeaderWidth,
         columns: settingsLayout.columns,
         headers: settingsLayout.headers,
       })}`,
     )
+    for (const row of settingsLayout.rowMetrics) {
+      assert.ok(row.height <= 44, `settings skill rows should be dense: ${JSON.stringify(row)}`)
+    }
+    for (const cell of settingsLayout.cellMetrics) {
+      assert.ok(cell.height <= 44, `settings mount cells should be dense: ${JSON.stringify(cell)}`)
+      assert.ok(
+        cell.width >= 76 && cell.width <= 118,
+        `settings mount cells should stay readable: ${JSON.stringify(cell)}`,
+      )
+    }
     for (const header of settingsLayout.headerMetrics) {
       assert.ok(
         header.scrollWidth <= header.clientWidth + 1,
         `agent header should not clip full name: ${JSON.stringify(header)}`,
       )
+      assert.ok(
+        header.scrollHeight <= header.clientHeight + 1,
+        `agent header should fit wrapped full name: ${JSON.stringify(header)}`,
+      )
+      assert.ok(header.height <= 38, `agent header should stay compact: ${JSON.stringify(header)}`)
     }
+
+    const hoverCellSelector =
+      '#configDialog [data-config-panel="skill"] [aria-label="codex-review -> build: permission_denied"]'
+    await page.hover(hoverCellSelector)
+    await page.waitForFunction(() => {
+      const matrix = document.querySelector('#configDialog [data-config-panel="skill"] .agent-skill-matrix')
+      return (
+        matrix?.querySelectorAll('.agent-skill-grid-agent[data-active-combo="true"]').length === 1 &&
+        matrix?.querySelectorAll('.agent-skill-grid-skill[data-active-combo="true"]').length === 1 &&
+        matrix?.querySelectorAll('.agent-skill-grid-cell[data-active-combo="true"]').length === 1
+      )
+    })
+    const hoverScreenshot = await saveElementScreenshot(
+      page,
+      "#configDialog .dialog-form",
+      "skill-settings-dialog-hover.png",
+    )
+    const hoverState = await page.$eval(
+      '#configDialog [data-config-panel="skill"] .agent-skill-matrix',
+      (node: HTMLElement) => {
+        const activeAgent = node.querySelector('.agent-skill-grid-agent[data-active-combo="true"]') as HTMLElement
+        const activeSkill = node.querySelector('.agent-skill-grid-skill[data-active-combo="true"]') as HTMLElement
+        const activeCell = node.querySelector('.agent-skill-grid-cell[data-active-combo="true"]') as HTMLElement
+        return {
+          activeAgents: Array.from(node.querySelectorAll('.agent-skill-grid-agent[data-active-combo="true"]')).map(
+            (item) => (item.textContent || "").trim(),
+          ),
+          activeSkills: Array.from(
+            node.querySelectorAll('.agent-skill-grid-skill[data-active-combo="true"] .agent-skill-grid-skill__name'),
+          ).map((item) => (item.textContent || "").trim()),
+          activeCells: Array.from(node.querySelectorAll('.agent-skill-grid-cell[data-active-combo="true"]')).map(
+            (item) => (item.getAttribute("aria-label") || "").trim(),
+          ),
+          agentBackground: getComputedStyle(activeAgent).backgroundColor,
+          skillBackground: getComputedStyle(activeSkill).backgroundColor,
+          cellBoxShadow: getComputedStyle(activeCell).boxShadow,
+        }
+      },
+    )
+    assert.equal(hoverScreenshot.endsWith("skill-settings-dialog-hover.png"), true)
+    assert.deepEqual(hoverState.activeAgents, ["build"])
+    assert.deepEqual(hoverState.activeSkills, ["codex-review"])
+    assert.deepEqual(hoverState.activeCells, ["codex-review -> build: permission_denied"])
+    assert.notEqual(hoverState.agentBackground, settingsLayout.topHeaderBackground)
+    assert.notEqual(hoverState.skillBackground, settingsLayout.rowHeaderBackground)
+    assert.notEqual(hoverState.cellBoxShadow, "none")
 
     const requestsBeforeManualRefresh = requests.length
     await page.click('#configDialog [data-config-panel="skill"] [data-ui="tool-panel-action"][aria-label="Reload"]')

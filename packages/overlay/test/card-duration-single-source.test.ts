@@ -69,30 +69,44 @@ test("integrity.attempt_label key exists in both locales", () => {
   expect(en["integrity.attempt_label"]).not.toContain("elapsed")
 })
 
-test("TaskStatusHeader uses the shared clock tick", () => {
+test("TaskStatusHeader uses selected-task SSE activity for active elapsed time", () => {
   const src = read("src/components/TaskStatusHeader.tsx")
-  expect(src).toContain('from "../services/clock"')
-  expect(src).toContain("useNowTick")
+  expect(src).toContain('from "../services/task-runtime-activity"')
+  expect(src).toContain("selectedTaskSseActiveElapsedMs")
+  expect(src).toContain("ACTIVE_STATUS")
+  expect(src).toContain("missing completion time")
+  expect(src).toContain("invalid completion time")
+  expect(src).not.toContain("useNowTick")
+  expect(src).not.toContain("createVisibilityInterval")
+  expect(src).not.toContain('new Set(["active", "queued"])')
+  expect(src).not.toContain("now() - start")
   // The old private setInterval is gone.
   expect(src).not.toContain("setInterval(() => setNow")
 })
 
+test("selected-task SSE stream records active elapsed only from real SSE updates", () => {
+  const src = read("src/services/sse.ts")
+  expect(src).toContain("recordSelectedTaskSseUpdate(event, taskID)")
+  expect(src).toContain("recordSelectedTaskSseActivity")
+  expect(src).toContain("pauseSelectedTaskSseStreamActivity")
+  expect(src).toContain('event.type === "task.heartbeat"')
+  expect(src).not.toContain("document.hidden")
+})
+
 test("promoted tool cards use tool state time instead of mount time", async () => {
   const { toolToCardNode } = await import("../src/utils/tool-card-node")
-  const card = toolToCardNode(
-    {
-      id: "prt_read",
-      type: "tool",
-      tool: "read_file",
-      state: {
-        status: "completed",
-        input: { file_path: "D:/workspace/app/src/main.ts" },
-        output: "ok",
-        time: { start: 1_776_000_001_000, end: 1_776_000_002_500 },
-      },
+  const card = toolToCardNode({
+    id: "prt_read",
+    type: "tool",
+    tool: "read_file",
+    orderKey: "v1:0001776000001000:0000000000000031:0000000000000000:part:prt_read",
+    state: {
+      status: "completed",
+      input: { file_path: "D:/workspace/app/src/main.ts" },
+      output: "ok",
+      time: { start: 1_776_000_001_000, end: 1_776_000_002_500 },
     },
-    1_776_999_999_999,
-  )
+  })
 
   expect(card.time).toBe(1_776_000_001_000)
   expect(card.timeCompleted).toBe(1_776_000_002_500)
@@ -104,6 +118,7 @@ test("running promoted tool cards keep their original tool start across remounts
     id: "prt_bash",
     type: "tool",
     tool: "bash",
+    orderKey: "v1:0001776000003000:0000000000000031:0000000000000000:part:prt_bash",
     state: {
       status: "running",
       input: { command: "bun test packages/overlay/test/card-duration-single-source.test.ts" },
@@ -111,10 +126,60 @@ test("running promoted tool cards keep their original tool start across remounts
     },
   }
 
-  const firstMount = toolToCardNode(part, 1_776_000_010_000)
-  const secondMount = toolToCardNode(part, 1_776_000_030_000)
+  const firstMount = toolToCardNode(part)
+  const secondMount = toolToCardNode(part)
 
   expect(firstMount.time).toBe(1_776_000_003_000)
   expect(secondMount.time).toBe(1_776_000_003_000)
   expect(secondMount.timeCompleted).toBeUndefined()
+})
+
+test("pending promoted tool cards use backend tool start time", async () => {
+  const { toolToCardNode } = await import("../src/utils/tool-card-node")
+  const card = toolToCardNode({
+    id: "prt_pending",
+    type: "tool",
+    tool: "update_research_evidence",
+    orderKey: "v1:0001776000003500:0000000000000031:0000000000000000:part:prt_pending",
+    state: {
+      status: "pending",
+      input: {},
+      raw: "",
+      time: { start: 1_776_000_003_500 },
+    },
+  })
+
+  expect(card.status).toBe("pending")
+  expect(card.time).toBe(1_776_000_003_500)
+  expect(card.timeCompleted).toBeUndefined()
+})
+
+test("promoted tool cards reject missing persisted identity and time", async () => {
+  const { toolToCardNode } = await import("../src/utils/tool-card-node")
+  const basePart = {
+    id: "prt_strict",
+    type: "tool",
+    tool: "bash",
+    orderKey: "v1:0001776000004000:0000000000000031:0000000000000000:part:prt_strict",
+    state: {
+      status: "running",
+      input: { command: "bun test packages/overlay/test/card-duration-single-source.test.ts" },
+      time: { start: 1_776_000_004_000 },
+    },
+  }
+
+  expect(() => toolToCardNode({ ...basePart, id: "" })).toThrow("tool part id missing")
+  expect(() => toolToCardNode({ ...basePart, tool: "" })).toThrow("tool part prt_strict tool missing")
+  expect(() =>
+    toolToCardNode({
+      ...basePart,
+      state: { ...basePart.state, time: {} },
+    }),
+  ).toThrow("tool part prt_strict start time missing positive timestamp")
+  expect(() =>
+    toolToCardNode({
+      ...basePart,
+      state: { ...basePart.state, time: { start: 1_776_000_004_000, end: 1_776_000_003_999 } },
+    }),
+  ).toThrow("tool part prt_strict end time must be later than start time")
 })

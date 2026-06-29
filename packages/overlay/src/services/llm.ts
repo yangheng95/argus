@@ -20,6 +20,15 @@ function record(value: any): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
+type ProviderRequestOptions = {
+  directory?: string
+}
+
+function providerPath(path: string, options: ProviderRequestOptions = {}): string {
+  const directory = options.directory?.trim()
+  return directory ? `${path}?directory=${encodeURIComponent(directory)}` : path
+}
+
 // ── Types ──
 
 export interface ProviderEntry {
@@ -331,8 +340,12 @@ export function defaultModelForProvider(providerID: string, config?: any): strin
 // ── Provider connection test ──
 
 /** Test connectivity for a (providerID, modelID) pair via the server API. */
-export async function testProviderConnection(providerID: string, modelID: string): Promise<ProviderTestResult> {
-  return apiJson(`provider/${providerID}/test`, {
+export async function testProviderConnection(
+  providerID: string,
+  modelID: string,
+  options: ProviderRequestOptions = {},
+): Promise<ProviderTestResult> {
+  return apiJson(providerPath(`provider/${providerID}/test`, options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ modelID }),
@@ -419,12 +432,13 @@ export async function providerAuthInputs(
   providerID: string,
   methodIndex: number,
   callbacks: Pick<AuthDialogCallbacks, "nativePrompt" | "nativeSelect">,
+  options: ProviderRequestOptions = {},
 ): Promise<Record<string, string> | null> {
   const inputs: Record<string, string> = {}
   const label = providerLabel(providerID)
 
   while (true) {
-    const prompts = await apiJson(`provider/${providerID}/auth/prompts`, {
+    const prompts = await apiJson(providerPath(`provider/${providerID}/auth/prompts`, options), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ method: methodIndex, inputs }),
@@ -473,8 +487,9 @@ export async function executeProviderAuth(
   providerID: string,
   methodIndex: number,
   inputs: Record<string, string>,
+  options: ProviderRequestOptions = {},
 ): Promise<true> {
-  await apiJson(`provider/${providerID}/auth/execute`, {
+  await apiJson(providerPath(`provider/${providerID}/auth/execute`, options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ method: methodIndex, inputs }),
@@ -493,6 +508,7 @@ export async function authorizeProvider(
   providerID: string,
   methodIndex: number | undefined,
   callbacks: AuthDialogCallbacks,
+  options: ProviderRequestOptions = {},
 ): Promise<boolean> {
   const methods = providerAuthMethods(providerID)
   const explicitChoice = typeof methodIndex === "number"
@@ -516,13 +532,13 @@ export async function authorizeProvider(
     }
   }
 
-  const collected = await providerAuthInputs(providerID, match.index, callbacks)
+  const collected = await providerAuthInputs(providerID, match.index, callbacks, options)
   if (collected == null) {
     callbacks.onAuthCancelled(providerID)
     return false
   }
 
-  const authorization = await apiJson(`provider/${providerID}/oauth/authorize`, {
+  const authorization = await apiJson(providerPath(`provider/${providerID}/oauth/authorize`, options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ method: match.index, inputs: collected }),
@@ -550,7 +566,7 @@ export async function authorizeProvider(
       callbacks.onAuthCancelled(providerID)
       return false
     }
-    await apiJson(`provider/${providerID}/oauth/callback`, {
+    await apiJson(providerPath(`provider/${providerID}/oauth/callback`, options), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ method: match.index, code }),
@@ -561,7 +577,7 @@ export async function authorizeProvider(
 
   // Implicit / device-code flow: show instructions and wait for server callback
   callbacks.showLlmNotice(authorization.instructions || authorization.url, "warn", 0)
-  await apiJson(`provider/${providerID}/oauth/callback`, {
+  await apiJson(providerPath(`provider/${providerID}/oauth/callback`, options), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ method: match.index }),
@@ -581,11 +597,12 @@ export async function runProviderAuthMethod(
   providerID: string,
   method: AuthMethodItem,
   callbacks: AuthDialogCallbacks,
+  options: ProviderRequestOptions = {},
 ): Promise<boolean | "input"> {
   if (method.type === "oauth") {
-    return authorizeProvider(providerID, method.index, callbacks)
+    return authorizeProvider(providerID, method.index, callbacks, options)
   }
-  const inputs = await providerAuthInputs(providerID, method.index, callbacks)
+  const inputs = await providerAuthInputs(providerID, method.index, callbacks, options)
   if (inputs == null) {
     callbacks.onAuthCancelled(providerID)
     return false
@@ -594,7 +611,7 @@ export async function runProviderAuthMethod(
     // No server-side prompts — the caller should focus the API key field.
     return "input"
   }
-  await executeProviderAuth(providerID, method.index, inputs)
+  await executeProviderAuth(providerID, method.index, inputs, options)
   return true
 }
 
@@ -608,6 +625,7 @@ export async function runProviderAuthMethod(
 export async function authenticateSelectedProvider(
   providerID: string,
   callbacks: AuthDialogCallbacks,
+  options: ProviderRequestOptions = {},
 ): Promise<boolean> {
   const methods = providerAuthMethods(providerID)
   if (!providerID || methods.length === 0) return false
@@ -615,7 +633,7 @@ export async function authenticateSelectedProvider(
   if (methods.length === 1) {
     const method = methods.at(0)
     if (!method) return false
-    const result = await runProviderAuthMethod(providerID, method, callbacks)
+    const result = await runProviderAuthMethod(providerID, method, callbacks, options)
     return result === true
   }
 
@@ -634,6 +652,6 @@ export async function authenticateSelectedProvider(
   const method = methods.find((m) => String(m.index) === value)
   if (!method) return false
 
-  const result = await runProviderAuthMethod(providerID, method, callbacks)
+  const result = await runProviderAuthMethod(providerID, method, callbacks, options)
   return result === true
 }

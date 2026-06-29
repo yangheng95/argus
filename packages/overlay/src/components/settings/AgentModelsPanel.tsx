@@ -20,6 +20,7 @@ import { createSignal, createMemo, createResource, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import {
   getSessionConfig,
+  currentProjectConfigRequestOptions,
   patchConfig,
   patchSessionConfig,
   sessionConfigRefreshToken,
@@ -131,7 +132,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
       mutateSessionConfig(saved)
       return saved.config
     }
-    return await patchConfig(diff)
+    return await patchConfig(diff, currentProjectConfigRequestOptions())
   }
 
   async function onSelectProjectDefault(value: string) {

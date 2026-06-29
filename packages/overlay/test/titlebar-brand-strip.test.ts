@@ -55,10 +55,10 @@ describe("titlebar brand wordmark is gone", () => {
 })
 
 describe("sidebar version label", () => {
-  test("left footer shows OpenCorvus version instead of workspace copy", () => {
+  test("left footer reserves a Solid mount for the version label", () => {
     expect(HTML).not.toContain("OpenCorvus Workspace")
-    expect(HTML).toContain("OpenCorvus v%OPENCORVUS_OVERLAY_VERSION%")
-    expect(HTML).toContain('id="chatVersion"')
+    expect(HTML).toContain('id="solidChatVersion"')
+    expect(HTML).not.toContain('id="chatVersion"')
   })
 })
 

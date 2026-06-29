@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal } from "solid-js"
 import { appStore } from "../../store/app"
 import {
+  currentProjectConfigRequestOptions,
   patchConfig,
   testNetworkProxy,
   type NetworkProxyDraft,
@@ -144,7 +145,7 @@ export default function NetworkPanel() {
     setSaving(true)
     try {
       const nextProxy = input.proxyUrl ? proxyDraft(input) : null
-      const savedConfig = await patchConfig({ network: { proxy: nextProxy } })
+      const savedConfig = await patchConfig({ network: { proxy: nextProxy } }, currentProjectConfigRequestOptions())
       if (!savedConfig) {
         setError(t("network.proxy.save_failed"))
         return
@@ -164,7 +165,7 @@ export default function NetworkPanel() {
 
     setDeleting(true)
     try {
-      const savedConfig = await patchConfig({ network: { proxy: null } })
+      const savedConfig = await patchConfig({ network: { proxy: null } }, currentProjectConfigRequestOptions())
       if (!savedConfig) {
         setError(t("network.proxy.delete_failed", { reason: t("network.proxy.save_failed") }))
         return

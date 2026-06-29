@@ -2,8 +2,10 @@ import { afterEach, expect, test } from "bun:test"
 import {
   createCodingAssistantSession,
   deleteCodingAssistantSession,
+  loadCodingAssistantSessions,
   renameCodingAssistantSession,
   selectCodingAssistantSession,
+  setCodingAssistantSearchQuery,
   stopCodingAssistantSession,
 } from "../src/services/coding-assistant"
 import { configure } from "../src/services/api"
@@ -16,7 +18,7 @@ import type {
   TransportResponse,
 } from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
-import { setCodingAssistantStore } from "../src/store/coding-assistant"
+import { codingAssistantStore, setCodingAssistantStore } from "../src/store/coding-assistant"
 import { resetWriter } from "../src/services/tree-writer"
 import { stopSSE } from "../src/services/sse"
 
@@ -58,6 +60,9 @@ function fakeTransport(requests: TransportRequest[], streams: StreamOpenRequest[
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       requests.push(req)
+      if (req.path === "coding/sessions") {
+        return { status: 200, ok: true, headers: {}, body: { sessions: [sessionBody().session] } as T }
+      }
       if (req.path === "coding/session") {
         return { status: 200, ok: true, headers: {}, body: sessionBody() as T }
       }
@@ -128,6 +133,84 @@ test("selectCodingAssistantSession claims, hydrates, and streams with the row di
   expect(streams).toEqual([{ path: "session/ses_assistant/events", query: { directory: ROW_DIRECTORY } }])
 })
 
+test("loadCodingAssistantSessions sends the caller directory explicitly", async () => {
+  const requests: TransportRequest[] = []
+  configure({ directory: SETTINGS_DIRECTORY })
+  __setHostTransportForTest(fakeTransport(requests))
+
+  await loadCodingAssistantSessions({ directory: ROW_DIRECTORY })
+
+  expect(requests.map((request) => request.path)).toEqual(["coding/sessions"])
+  expect(requests[0]?.query?.directory).toBe(ROW_DIRECTORY)
+  expect(requests[0]?.query?.limit).toBe("30")
+})
+
+test("stale coding assistant session searches do not overwrite the current ledger", async () => {
+  const releases = new Map<string, (value: TransportResponse<any>) => void>()
+  const requests: TransportRequest[] = []
+  let currentSearch = "a"
+  __setHostTransportForTest({
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push(req)
+      const search = String(req.query?.search || "")
+      return await new Promise<TransportResponse<T>>((resolve) => {
+        releases.set(search, resolve as (value: TransportResponse<any>) => void)
+      })
+    },
+    openStream() {
+      throw new Error("openStream not used in stale coding assistant search test")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  })
+
+  setCodingAssistantSearchQuery("a")
+  const first = loadCodingAssistantSessions({
+    directory: ROW_DIRECTORY,
+    searchQuery: "a",
+    isCurrentSource: () => currentSearch === "a",
+  })
+  currentSearch = "ab"
+  setCodingAssistantSearchQuery("ab")
+  const second = loadCodingAssistantSessions({
+    directory: ROW_DIRECTORY,
+    searchQuery: "ab",
+    isCurrentSource: () => currentSearch === "ab",
+  })
+
+  releases.get("ab")?.({
+    status: 200,
+    ok: true,
+    headers: {},
+    body: {
+      sessions: [{ ...sessionBody("Latest assistant").session, id: "ses_latest", title: "Latest assistant" }],
+      nextCursor: null,
+    },
+  })
+  await second
+  expect(codingAssistantStore.sessions.map((session) => session.id)).toEqual(["ses_latest"])
+
+  releases.get("a")?.({
+    status: 200,
+    ok: true,
+    headers: {},
+    body: {
+      sessions: [{ ...sessionBody("Stale assistant").session, id: "ses_stale", title: "Stale assistant" }],
+      nextCursor: null,
+    },
+  })
+  await first
+
+  expect(requests.map((request) => request.query?.search)).toEqual(["a", "ab"])
+  expect(codingAssistantStore.sessions.map((session) => session.id)).toEqual(["ses_latest"])
+  expect(codingAssistantStore.loading).toBe(false)
+})
+
 test("coding assistant row actions send the row directory explicitly", async () => {
   const requests: TransportRequest[] = []
   configure({ directory: SETTINGS_DIRECTORY })
@@ -152,6 +235,7 @@ test("coding assistant row actions reject missing directories before transport",
   await expect(selectCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow(
     "session directory is required",
   )
+  await expect(loadCodingAssistantSessions({ directory: "" })).rejects.toThrow("directory is required")
   await expect(renameCodingAssistantSession({ sessionID: "ses_assistant", directory: "" }, "Renamed")).rejects.toThrow(
     "directory",
   )

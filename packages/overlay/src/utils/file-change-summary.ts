@@ -132,14 +132,10 @@ function collectFromNode(node: CardNode, base: string, out: Map<string, AgentFil
     }
     for (const change of patchPartFileChanges(part, base, nodeGoalID)) mergeFileChange(out, change)
   }
-  if (Array.isArray(node.childIDs)) {
-    for (const childID of node.childIDs) {
-      const child = cardTreeStore.cards[childID]
-      if (!child) throw new Error(`file-change-summary: card ${node.id} references missing child ${childID}`)
-      collectFromNode(child, base, out, seen)
-    }
-  } else {
-    for (const child of node.children ?? []) collectFromNode(child, base, out, seen)
+  for (const childID of node.childIDs ?? []) {
+    const child = cardTreeStore.cards[childID]
+    if (!child) throw new Error(`file-change-summary: card ${node.id} references missing child ${childID}`)
+    collectFromNode(child, base, out, seen)
   }
 }
 

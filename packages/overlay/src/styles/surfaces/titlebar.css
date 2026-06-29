@@ -630,7 +630,7 @@
   height: calc(7px * var(--ui-scale));
   border-right: var(--oc-border-width) solid currentColor;
   border-bottom: var(--oc-border-width) solid currentColor;
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   transform: translateY(calc(-1px * var(--ui-scale))) rotate(45deg);
 }
 
@@ -640,7 +640,7 @@
 }
 
 .titlebar-menubar-checkbox[data-checked] .titlebar-menubar-checkbox-indicator::after {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .titlebar-menubar-range-copy {

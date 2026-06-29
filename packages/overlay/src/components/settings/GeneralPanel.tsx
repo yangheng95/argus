@@ -3,10 +3,9 @@ import { t } from "../../utils/i18n"
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
 import { configure as configureApi } from "../../services/api"
 import { checkConnection } from "../../services/connection"
-import { reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"
+import { currentProjectConfigRequestOptions, reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"
 import type { DatabaseResetTarget } from "../../services/config"
 import { ensureDesktopNotificationPermission } from "../../services/notify"
-import { activeProjectDirectory } from "../../services/project-directory"
 import { appStore } from "../../store/app"
 import { Button } from "../ui/Button"
 import { SettingsGroup, SettingsPanel, SettingsRow } from "./primitives"
@@ -92,7 +91,7 @@ export default function GeneralPanel() {
     try {
       await patchConfig({
         assistant: { debug: { fail_on_information_missing: enabled } },
-      })
+      }, currentProjectConfigRequestOptions())
     } catch (error) {
       input.checked = previous
       setError(t("settings.config_save_failed", { error: describeError(error) }))
@@ -102,19 +101,19 @@ export default function GeneralPanel() {
   }
 
   async function handleDatabaseReset() {
-    const directory = activeProjectDirectory().trim()
-    if (!directory) {
+    const database = appStore.enginePaths?.database?.trim()
+    if (!database) {
       setDbResetNoticeStatus("error")
-      setDbResetNotice(t("settings.db_reset_missing_directory"))
+      setDbResetNotice(t("settings.db_reset_missing_database"))
       return
     }
-    if (!window.confirm(t("settings.db_reset_confirm", { directory }))) return
+    if (!window.confirm(t("settings.db_reset_confirm", { database }))) return
 
     setDbResetting(true)
     setDbResetNotice("")
     setError("")
     try {
-      const result = await resetDatabase(directory)
+      const result = await resetDatabase(database)
       const summary = summarizeResetTargets(result.targets)
       setDbResetNoticeStatus(result.ok ? "active" : "warn")
       setDbResetNotice(
@@ -122,15 +121,6 @@ export default function GeneralPanel() {
           count: result.targets.length,
         })}${summary ? ` ${summary}` : ""}`,
       )
-      try {
-        await checkConnection()
-        await reloadProjectScope()
-      } catch (reloadError) {
-        setDbResetNoticeStatus("warn")
-        setDbResetNotice(
-          (current) => `${current} ${t("settings.db_reset_reload_failed", { error: describeError(reloadError) })}`,
-        )
-      }
     } catch (resetError) {
       setDbResetNoticeStatus("error")
       setDbResetNotice(t("settings.db_reset_failed", { error: describeError(resetError) }))

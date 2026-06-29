@@ -41,6 +41,7 @@ await ensureOverlayDist()
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(TEST_DIR, "..", "..", "..", "..")
+const EMPTY_SKILL_MOUNT_MATRIX = { scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 }
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -122,7 +123,6 @@ async function withOverlay(
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks") return send({ tasks: [] })
     if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
     if (path === "/path") return send(data.path)
@@ -170,6 +170,7 @@ async function withOverlay(
     if (path === "/channel") return send(data.channels)
     if (path === "/mission") return send([])
     if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+    if (path === "/skill/mounts") return send(EMPTY_SKILL_MOUNT_MATRIX)
     if (path === "/mcp") return send(data.mcp)
     if (path === "/executor") return send(data.executors)
     if (path === "/panel/knowledge/memory") return send(data.memory)

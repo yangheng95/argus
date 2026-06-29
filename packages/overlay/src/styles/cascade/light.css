@@ -18,30 +18,18 @@ body[data-theme="light"] {
   --text-on-accent: #ffffff;
   --text-on-strong: #ffffff;
   --text-on-danger: #101527;
-  --bg: rgba(238, 243, 255, 0.72);
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-hover: rgba(243, 247, 255, 0.96);
-  --surface-inset: rgba(247, 249, 255, 0.72);
-  --surface-strong: rgba(255, 255, 255, 0.94);
-  --rail-surface: color-mix(in srgb, rgba(250, 252, 255, 0.9) calc(var(--ui-window-opacity) * 100%), transparent);
-  --chat-canvas: color-mix(in srgb, rgba(255, 255, 255, 0.78) calc(var(--ui-window-opacity) * 100%), transparent);
-  --inspector-surface: color-mix(in srgb, rgba(250, 252, 255, 0.9) calc(var(--ui-window-opacity) * 100%), transparent);
-
-  /* Body background alpha tracks --ui-window-opacity (single source for
-   * window translucency, rule 8). Slider at 100 → calc(100%) → fully opaque;
-   * lower values mix toward `transparent`, exposing the Tauri transparent
-   * window. Color stops keep the original gradient hue shift; the per-stop
-   * alpha differences from the previous design are folded into the single
-   * opacity knob. */
-  --body-bg: linear-gradient(
-    135deg,
-    color-mix(in srgb, rgb(251, 253, 255) calc(var(--ui-window-opacity) * 100%), transparent) 0%,
-    color-mix(in srgb, rgb(244, 247, 255) calc(var(--ui-window-opacity) * 100%), transparent) 42%,
-    color-mix(in srgb, rgb(238, 241, 255) calc(var(--ui-window-opacity) * 100%), transparent) 100%
-  );
-  --panel-body-bg: color-mix(in srgb, rgba(255, 255, 255, 0.44) calc(var(--ui-window-opacity) * 100%), transparent);
+  --bg: rgb(238, 243, 255);
+  --surface: rgb(255, 255, 255);
+  --surface-hover: rgb(243, 247, 255);
+  --surface-inset: rgb(247, 249, 255);
+  --surface-strong: rgb(255, 255, 255);
+  --rail-surface: rgb(250, 252, 255);
+  --chat-canvas: rgb(255, 255, 255);
+  --inspector-surface: rgb(250, 252, 255);
+  --body-bg: linear-gradient(135deg, rgb(251, 253, 255) 0%, rgb(244, 247, 255) 42%, rgb(238, 241, 255) 100%);
+  --panel-body-bg: rgb(255, 255, 255);
   --panel-body-blur: blur(20px);
-  --chrome: color-mix(in srgb, rgba(255, 255, 255, 0.78) calc(var(--ui-window-opacity) * 100%), transparent);
+  --chrome: rgb(255, 255, 255);
   --border: rgba(92, 112, 163, 0.16);
   --border-hover: rgba(85, 101, 238, 0.34);
   --border-strong: rgba(84, 103, 165, 0.22);

@@ -54,6 +54,14 @@ export interface TransportRequest {
    * fallbacks and rare byte-aware paths.
    */
   responseKind?: ResponseKind
+  /**
+   * Transport request timeout. `undefined` uses the transport default;
+   * `null` means the caller owns lifetime through `signal` or through
+   * the server response. This is reserved for long-running operations
+   * whose correct completion is a single response, such as deleting a
+   * large Windows worktree.
+   */
+  timeoutMilliseconds?: number | null
   /** Optional abort signal. */
   signal?: AbortSignal
 }
@@ -97,6 +105,14 @@ export interface StreamHandlers {
 
 export interface StreamHandle {
   close(): void
+}
+
+export function transportRequestSignal(
+  input: Pick<TransportRequest, "signal" | "timeoutMilliseconds">,
+): AbortSignal | undefined {
+  if (input.signal) return input.signal
+  if (input.timeoutMilliseconds === null) return undefined
+  return AbortSignal.timeout(input.timeoutMilliseconds ?? DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
 }
 
 // ── Native (host-specific) commands ──

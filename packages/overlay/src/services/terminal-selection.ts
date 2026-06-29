@@ -29,6 +29,7 @@ export function selectTerminalProfileID(profileID: string): void {
 export async function reloadTerminalProfileSelection(input: {
   directory: string
   defaultProfileMissingMessage: string
+  isCurrentDirectory?: () => boolean
 }): Promise<void> {
   const directory = input.directory.trim()
   if (pendingTerminalProfileReload?.directory === directory) {
@@ -39,6 +40,7 @@ export async function reloadTerminalProfileSelection(input: {
     if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
       throw new Error(input.defaultProfileMissingMessage)
     }
+    if (input.isCurrentDirectory && !input.isCurrentDirectory()) return
     const current = selectedTerminalProfileID()
     const selected = response.profiles.some((profile) => profile.id === current) ? current : ""
     setTerminalProfiles(response.profiles)

@@ -211,6 +211,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
     return image.url
   })
+  const liveFrame = createMemo(() => {
+    const url = liveImageUrl()
+    if (!url) return undefined
+    const viewport = selectedViewport()
+    if (!viewport) throw new Error("Browser preview live frame style requires a selected backend viewport.")
+    return { url, viewport }
+  })
+  function liveFrameStyle(viewport: { width: number; height: number }): JSX.CSSProperties {
+    return {
+      "--browser-preview-live-aspect-ratio": `${viewport.width} / ${viewport.height}`,
+    } as JSX.CSSProperties
+  }
   const [captureImage] = createResource(
     () => {
       const evidence = renderedEvidence()
@@ -385,10 +397,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     measureLiveImageRectOnFrame.schedule()
   }
 
+  const invalidateLiveImageRectAndScheduleMeasure = () => {
+    clearLiveImageRect()
+    scheduleLiveImageRectMeasure()
+  }
+
   const disconnectLiveImageElement = () => {
     liveImageResizeObserver?.disconnect()
     liveImageResizeObserver = null
-    liveImageScrollElement?.removeEventListener("scroll", scheduleLiveImageRectMeasure)
+    liveImageScrollElement?.removeEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure)
     liveImageScrollElement = null
     liveImageElement = null
     clearLiveImageRect()
@@ -400,7 +417,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       return
     }
     liveImageResizeObserver?.disconnect()
-    liveImageScrollElement?.removeEventListener("scroll", scheduleLiveImageRectMeasure)
+    liveImageScrollElement?.removeEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure)
     const scrollElement = props.scrollElement()
     if (!scrollElement) {
       throw new Error("Browser preview live image must mount inside the center workbench scroll body.")
@@ -408,9 +425,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     liveImageElement = element
     liveImageScrollElement = scrollElement
     clearLiveImageRect()
-    liveImageScrollElement.addEventListener("scroll", scheduleLiveImageRectMeasure, { passive: true })
+    liveImageScrollElement.addEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure, { passive: true })
     if (typeof ResizeObserver !== "undefined") {
-      liveImageResizeObserver = new ResizeObserver(scheduleLiveImageRectMeasure)
+      liveImageResizeObserver = new ResizeObserver(invalidateLiveImageRectAndScheduleMeasure)
       liveImageResizeObserver.observe(element)
     } else {
       liveImageResizeObserver = null
@@ -954,8 +971,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               </section>
             )}
           </Match>
-          <Match when={liveImageUrl()}>
-            {(url) => (
+          <Match when={liveFrame()}>
+            {(frame) => (
               <section
                 class="browser-preview-live"
                 data-ui="browser-preview-live"
@@ -963,6 +980,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               >
                 <figure
                   class="browser-preview-live-frame"
+                  style={liveFrameStyle(frame().viewport)}
                   role="application"
                   tabIndex={0}
                   onPointerDown={handleLivePointerDown}
@@ -972,13 +990,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 >
                   <img
                     ref={bindLiveImageElement}
-                    src={url()}
+                    src={frame().url}
                     alt={targetUrl() ?? t("browser_preview.title")}
                     data-ui="browser-preview-live-screenshot"
                     decoding="async"
                     draggable={false}
                     onLoad={scheduleLiveImageRectMeasure}
-                    onError={() => handleLiveImageDecodeError(url())}
+                    onError={() => handleLiveImageDecodeError(frame().url)}
                   />
                 </figure>
                 <Show when={liveError()}>{(error) => <code>{error()}</code>}</Show>

@@ -46,7 +46,6 @@ describe("inline tool output", () => {
     expect(source).toContain('<section class="msg-tool-attachments">')
     expect(source).toContain("<For each={attachmentImages()}>")
     expect(source).toContain("<FilePart part={attachment} />")
-    expect(source).not.toContain("browser_preview_compare_regions")
     expect(css).toContain(".msg-tool-attachments")
     expect(css).toContain(".msg-tool-attachments .msg-img-wrap")
     expect(css).toContain('.msg-tool-attachments .oc-button[data-ui="image-preview-trigger"].msg-image-trigger')

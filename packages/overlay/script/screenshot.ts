@@ -11,6 +11,7 @@
 
 import { launchBrowser } from "../test/launch"
 import path from "node:path"
+import { gotoWithBrowserInactivity } from "../../opencorvus/script/benchmark/browser-inactivity"
 
 const out = process.argv[2]
 if (!out) {
@@ -25,9 +26,7 @@ const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable
 try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: w, height: h })
-  await page.goto(url, { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
-    console.error(`page.goto warning: ${e.message ?? e}`)
-  })
+  await gotoWithBrowserInactivity(page, url, "networkidle", 15_000)
   // Give SolidJS another moment to render after networkidle.
   await new Promise((r) => setTimeout(r, 500))
   const abs = path.resolve(out)

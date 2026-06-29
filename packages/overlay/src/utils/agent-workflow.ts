@@ -20,6 +20,7 @@ export interface AgentWorkflowRecord {
   agentName: string
   stage: string
   status: AgentWorkflowStatus
+  orderKey?: string
   startedAt: number
   lastObservedAt: number
   completedAt?: number

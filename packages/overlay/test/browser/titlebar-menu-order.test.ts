@@ -57,7 +57,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/mission") return send([])
       if (path === "/project/current/worktrees") return send([])
@@ -89,7 +89,7 @@ test(
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/log" && req.method === "POST") return send({ ok: true })
-      if (path === "/log/tail") return send({ lines: [] })
+      if (path === "/log/tail") return send({ path: "D:/overlay/logs/server.log", lines: [] })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 

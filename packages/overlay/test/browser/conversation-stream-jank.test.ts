@@ -333,7 +333,7 @@ test(
       if (path === "/mcp") return json({})
       if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return json([])
       if (path === "/log") return json({})
-      if (path === "/log/tail") return json({ lines: [] })
+      if (path === "/log/tail") return json({ path: "D:/overlay/logs/server.log", lines: [] })
       if (path === `/task/${TASK_ID}/board`) return json(board())
       if (path === `/task/${TASK_ID}/conversation`) return json(conversationPayload(transcript))
       if (path === `/task/${TASK_ID}/conversation/events`)

@@ -103,11 +103,16 @@ async function loadInitialData(): Promise<boolean> {
   await Promise.all([
     loadTasks(),
     loadMeta(),
-    loadExtensions(),
+    loadExtensions({
+      directory,
+      isCurrentDirectory: (candidate) => settingsStore.directory.trim() === candidate,
+    }),
     loadConfigInfo(CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS, {
       includeSettingsData: false,
     }),
-    loadExecutors(directory),
+    loadExecutors(directory, {
+      isCurrentDirectory: (candidate) => settingsStore.directory.trim() === candidate,
+    }),
   ])
   return true
 }
@@ -199,6 +204,11 @@ export interface LoadConfigInfoOptions {
   includeSettingsData?: boolean
 }
 
+export interface DirectoryOwnedLoadOptions {
+  directory?: string
+  isCurrentDirectory?: (directory: string) => boolean
+}
+
 function loadErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
   return String(error)
@@ -217,10 +227,22 @@ function coreConfigLoadError(errors: Record<string, string>): Error | undefined 
   return undefined
 }
 
-function providerInfoRequests(timeoutMilliseconds: number) {
+function directoryOwnedPath(path: string, options: DirectoryOwnedLoadOptions): string {
+  const directory = String(options.directory || "").trim()
+  if (!directory) return path
+  const query = new URLSearchParams({ directory })
+  return `${path}?${query.toString()}`
+}
+
+function ownsDirectoryLoad(options: DirectoryOwnedLoadOptions): boolean {
+  const directory = String(options.directory || "").trim()
+  return !directory || !options.isCurrentDirectory || options.isCurrentDirectory(directory)
+}
+
+function providerInfoRequests(timeoutMilliseconds: number, options: DirectoryOwnedLoadOptions = {}) {
   return [
-    apiJsonWithTimeout("provider", timeoutMilliseconds),
-    apiJsonWithTimeout("provider/auth", timeoutMilliseconds),
+    apiJsonWithTimeout(directoryOwnedPath("provider", options), timeoutMilliseconds),
+    apiJsonWithTimeout(directoryOwnedPath("provider/auth", options), timeoutMilliseconds),
   ] as const
 }
 
@@ -245,6 +267,8 @@ export async function loadConfigInfo(
   options: LoadConfigInfoOptions = {},
 ): Promise<void> {
   const loadSequence = ++configInfoLoadSequence
+  const directoryEpoch = settingsStore.directoryEpoch
+  const directory = settingsStore.directory.trim()
   const includeSettingsData = options.includeSettingsData === true
   const configRequest = apiJsonWithTimeout("config", timeoutMilliseconds)
   const channelsRequest = apiJsonWithTimeout("channel", timeoutMilliseconds)
@@ -277,7 +301,13 @@ export async function loadConfigInfo(
     console.warn("[init] loadConfigInfo partial failure", errors)
   }
 
-  if (loadSequence !== configInfoLoadSequence) return
+  if (
+    loadSequence !== configInfoLoadSequence ||
+    settingsStore.directoryEpoch !== directoryEpoch ||
+    settingsStore.directory.trim() !== directory
+  ) {
+    return
+  }
 
   const coreError = coreConfigLoadError(errors)
   if (coreError) {
@@ -314,13 +344,17 @@ export async function loadConfigInfo(
   }
 }
 
-export async function loadProviderInfo(timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS): Promise<void> {
-  const [catalogResult, authResult] = await Promise.allSettled(providerInfoRequests(timeoutMilliseconds))
+export async function loadProviderInfo(
+  timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+  options: DirectoryOwnedLoadOptions = {},
+): Promise<void> {
+  const [catalogResult, authResult] = await Promise.allSettled(providerInfoRequests(timeoutMilliseconds, options))
   const errors: Record<string, string> = {}
   const providerInfo = settledProviderInfo(catalogResult, authResult, errors)
   if (Object.keys(errors).length > 0) {
     console.warn("[init] loadProviderInfo partial failure", errors)
   }
+  if (!ownsDirectoryLoad(options)) return
   setAppStore({
     providerCatalog: providerInfo.catalog ?? null,
     providerAuth: providerInfo.auth ?? null,

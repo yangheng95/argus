@@ -147,8 +147,9 @@ function processEvent(event: any) {
     stats.messageUpdated++
     const info = payload.info
     if (info) {
+      const agentLabel = typeof info.agent === "string" && info.agent ? info.agent : "<missing-agent>"
       console.log(
-        `  [msg.updated] id=${info.id?.slice(-8)} role=${info.role} agent=${info.agent || "-"} session=${info.sessionID?.slice(-8)}`,
+        `  [msg.updated] id=${info.id?.slice(-8)} role=${info.role} agent=${agentLabel} session=${info.sessionID?.slice(-8)}`,
       )
     }
   }

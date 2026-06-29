@@ -26,6 +26,8 @@ type CodingAssistantSessionsResponse = {
 let activation: Promise<string> | null = null
 let activationSignal: AbortSignal | undefined
 let activationSessionID = ""
+let sessionListLoadOwner: symbol | null = null
+let sessionListLoadMoreOwner: symbol | null = null
 
 export type SelectCodingAssistantSessionOptions = {
   sessionID: string
@@ -87,14 +89,28 @@ function removeSessionRow(sessionID: string): void {
   setCodingAssistantStore("sessions", (current) => current.filter((session) => session.id !== sessionID))
 }
 
-function codingAssistantSessionsPath(input: { limit: number; append?: boolean }): string {
+function sameCursor(a: CodingAssistantSessionCursor | null | undefined, b: CodingAssistantSessionCursor | null | undefined) {
+  if (!a && !b) return true
+  if (!a || !b) return false
+  return a.updated === b.updated && a.sessionID === b.sessionID
+}
+
+function codingAssistantSessionsPath(input: {
+  directory: string
+  limit: number
+  searchQuery: string
+  cursor?: CodingAssistantSessionCursor | null
+}): string {
+  const directory = input.directory.trim()
+  if (!directory) throw new Error("codingAssistantSessionsPath: directory is required")
   const params = new URLSearchParams()
+  params.set("directory", directory)
   params.set("limit", String(input.limit))
-  const search = codingAssistantStore.searchQuery.trim()
+  const search = input.searchQuery.trim()
   if (search) params.set("search", search)
-  if (input.append && codingAssistantStore.nextCursor) {
-    params.set("cursorUpdated", String(codingAssistantStore.nextCursor.updated))
-    params.set("cursorSessionID", codingAssistantStore.nextCursor.sessionID)
+  if (input.cursor) {
+    params.set("cursorUpdated", String(input.cursor.updated))
+    params.set("cursorSessionID", input.cursor.sessionID)
   }
   return `coding/sessions?${params.toString()}`
 }
@@ -107,28 +123,53 @@ function codingAssistantSessionPath(target: CodingAssistantSessionActionTarget, 
   return `coding/session/${encodeURIComponent(sessionID)}${suffix}?${params.toString()}`
 }
 
-export async function loadCodingAssistantSessions(
-  options: { signal?: AbortSignal; append?: boolean } = {},
-): Promise<void> {
+export async function loadCodingAssistantSessions(options: {
+  directory: string
+  signal?: AbortSignal
+  append?: boolean
+  searchQuery?: string
+  cursor?: CodingAssistantSessionCursor | null
+  isCurrentSource?: () => boolean
+}): Promise<void> {
   assertNotAborted(options.signal)
+  const directory = String(options.directory || "").trim()
+  if (!directory) throw new Error("loadCodingAssistantSessions: directory is required")
   const append = options.append === true
+  const searchQuery = String(options.searchQuery ?? codingAssistantStore.searchQuery).trim()
+  const cursor = append ? (options.cursor ?? codingAssistantStore.nextCursor) : null
+  const token = Symbol("coding-assistant-session-list")
+  if (append) sessionListLoadMoreOwner = token
+  else sessionListLoadOwner = token
+  const ownsOwner = () => (append ? sessionListLoadMoreOwner === token : sessionListLoadOwner === token)
+  const ownsRequest = () => {
+    if (!ownsOwner()) return false
+    if (codingAssistantStore.searchQuery.trim() !== searchQuery) return false
+    if (append && !sameCursor(codingAssistantStore.nextCursor, cursor)) return false
+    return options.isCurrentSource?.() ?? true
+  }
   setCodingAssistantStore(append ? "loadingMore" : "loading", true)
   setCodingAssistantStore("error", "")
   try {
-    const listed = (await apiJson(codingAssistantSessionsPath({ limit: 30, append }), {
+    const listed = (await apiJson(codingAssistantSessionsPath({ directory, limit: 30, searchQuery, cursor }), {
       signal: options.signal,
     })) as CodingAssistantSessionsResponse
     assertNotAborted(options.signal)
+    if (!ownsRequest()) return
     setCodingAssistantStore("sessions", (current) =>
       append ? mergeSessions(current, listed.sessions || []) : (listed.sessions || []).map(normalizeSession),
     )
     setCodingAssistantStore("nextCursor", listed.nextCursor ?? null)
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error
+    if (!ownsRequest()) return
     setCodingAssistantStore("error", error instanceof Error ? error.message : String(error))
     throw error
   } finally {
-    setCodingAssistantStore(append ? "loadingMore" : "loading", false)
+    if (ownsOwner()) {
+      setCodingAssistantStore(append ? "loadingMore" : "loading", false)
+      if (append) sessionListLoadMoreOwner = null
+      else sessionListLoadOwner = null
+    }
   }
 }
 

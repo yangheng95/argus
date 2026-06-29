@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-import { deleteProjectWorktree, loadProjectWorktrees } from "../src/services/worktree"
+import {
+  deleteProjectWorktree,
+  deleteProjectWorktrees,
+  loadProjectWorktrees,
+  ProjectWorktreeBulkDeleteError,
+} from "../src/services/worktree"
 
 const SAVED_DIRECTORY = "D:/workspace/app"
 const WORKTREE_DIRECTORY = "D:/workspace/app/.opencorvus/r/w/goal-a/worktree"
@@ -92,12 +97,112 @@ test("deleteProjectWorktree sends the target directory in the DELETE JSON body",
   expect(captured?.path).toBe("project/current/worktrees")
   expect(captured?.method).toBe("DELETE")
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+  expect(captured?.timeoutMilliseconds).toBeNull()
   expect(captured?.body).toEqual({
     kind: "json",
     value: {
       directory: OLD_WORKTREE_DIRECTORY,
     },
   })
+})
+
+test("deleteProjectWorktrees deletes each target through the same project route", async () => {
+  const captured: TransportRequest[] = []
+  __setHostTransportForTest(
+    transport({ ok: true }, (req) => {
+      captured.push(req)
+    }),
+  )
+
+  const count = await deleteProjectWorktrees(SAVED_DIRECTORY, [OLD_WORKTREE_DIRECTORY, "", WORKTREE_DIRECTORY])
+
+  expect(count).toBe(2)
+  expect(captured).toHaveLength(2)
+  expect(captured.map((req) => req.path)).toEqual(["project/current/worktrees", "project/current/worktrees"])
+  expect(captured.map((req) => req.method)).toEqual(["DELETE", "DELETE"])
+  expect(captured.map((req) => req.query?.directory)).toEqual([SAVED_DIRECTORY, SAVED_DIRECTORY])
+  expect(captured.map((req) => req.timeoutMilliseconds)).toEqual([null, null])
+  expect(captured.map((req) => req.body)).toEqual([
+    {
+      kind: "json",
+      value: {
+        directory: OLD_WORKTREE_DIRECTORY,
+      },
+    },
+    {
+      kind: "json",
+      value: {
+        directory: WORKTREE_DIRECTORY,
+      },
+    },
+  ])
+})
+
+test("deleteProjectWorktrees continues after a target fails and reports aggregate failure", async () => {
+  const captured: TransportRequest[] = []
+  __setHostTransportForTest({
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      captured.push(req)
+      const directory = (req.body?.kind === "json" ? (req.body.value as { directory?: string }).directory : "") ?? ""
+      if (directory === OLD_WORKTREE_DIRECTORY) {
+        return {
+          status: 409,
+          ok: false,
+          headers: {},
+          body: { message: "worktree is locked" } as T,
+        }
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: { ok: true } as T,
+      }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  })
+
+  let thrown: unknown
+  try {
+    await deleteProjectWorktrees(SAVED_DIRECTORY, [OLD_WORKTREE_DIRECTORY, WORKTREE_DIRECTORY])
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeInstanceOf(ProjectWorktreeBulkDeleteError)
+  const bulk = thrown as ProjectWorktreeBulkDeleteError
+  expect(bulk.deleted).toBe(1)
+  expect(bulk.message).toContain("Failed to delete 1 project worktree(s) after deleting 1.")
+  expect(bulk.message).toContain("worktree is locked")
+  expect(bulk.failures).toEqual([
+    {
+      directory: OLD_WORKTREE_DIRECTORY,
+      error: "API 409 project/current/worktrees?directory=D%3A%2Fworkspace%2Fapp: worktree is locked",
+    },
+  ])
+  expect(captured).toHaveLength(2)
+  expect(captured.map((req) => req.body)).toEqual([
+    {
+      kind: "json",
+      value: {
+        directory: OLD_WORKTREE_DIRECTORY,
+      },
+    },
+    {
+      kind: "json",
+      value: {
+        directory: WORKTREE_DIRECTORY,
+      },
+    },
+  ])
 })
 
 test("loadProjectWorktrees rejects malformed project worktree payloads", async () => {

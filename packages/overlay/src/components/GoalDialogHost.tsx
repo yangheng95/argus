@@ -1,6 +1,7 @@
 import { createEffect } from "solid-js"
 import { dialogStore, setDialogStore } from "../store/dialog"
 import { closeGoalDialog, saveGoalDialog } from "../services/dialog"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
@@ -55,7 +56,14 @@ export function GoalDialogHost() {
         id="goalForm"
         onSubmit={(event) => {
           event.preventDefault()
-          void saveGoalDialog()
+          void saveGoalDialog().catch((error) => {
+            notifyError({
+              id: `goal:save:${dialogStore.goal.goalID || "new"}`,
+              title: t("common.error"),
+              message: error instanceof Error ? error.message : String(error),
+              details: formatErrorDetails(error),
+            })
+          })
         }}
       >
         <input type="hidden" name="goalId" id="goalId" value={dialogStore.goal.goalID} />

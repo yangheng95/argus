@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -74,7 +75,7 @@ async function withTaskDecisionFixture(
     if (path === "/global/health") return send({ version: "app-dialog-task-decision" })
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission" || path === "/session") return send([])
     if (path === "/path") return send({ directory: projectRoot, exists: true, git: true })
     if (path === "/vcs")
@@ -100,16 +101,76 @@ async function withTaskDecisionFixture(
     if (path === "/agent" || path === "/channel") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], unmounted_count: 0 })
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+    if (path === "/project/current/worktrees") return send([])
     if (path === "/task/events") return eventStream()
     if (path === "/task" && req.method === "POST") {
       taskBodies.push(await req.json())
       return send({ task_id: taskID })
     }
+    if (path === `/task/${taskID}/operator-model-context`)
+      return send({
+        taskID,
+        sessionID: "",
+        agent: "",
+        model: { providerID: "opencorvus", modelID: "gpt-5-nano" },
+      })
+    if (path === `/task/${taskID}/conversation`)
+      return send({
+        board: {
+          snapshotVersion: `${taskID}:conversation`,
+          task: {
+            id: taskID,
+            title: `Task decision ${mode}`,
+            directory: projectRoot,
+            status: "queued",
+            time: { created: 1, updated: 1 },
+          },
+          cards: [],
+          goals: [],
+          goalWorkflows: [],
+          interactions: [],
+          changes: [],
+        },
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { messages: [] },
+        agentView: { sessions: [], messages: [] },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+        history: {
+          oldestTimestamp: null,
+          oldestOrderKey: null,
+          oldestMessageID: null,
+          hasMore: false,
+          limit: 50,
+        },
+        messageWatermark: null,
+        lastSequence: 0,
+      })
     if (path === `/task/${taskID}/board`)
-      return send({ cards: [], status: "queued" }, { headers: { etag: `"${taskID}"` } })
+      return send(
+        {
+          snapshotVersion: `${taskID}:board`,
+          task: {
+            id: taskID,
+            title: `Task decision ${mode}`,
+            directory: projectRoot,
+            status: "queued",
+            time: { created: 1, updated: 1 },
+          },
+          cards: [],
+          goals: [],
+          goalWorkflows: [],
+          interactions: [],
+          changes: [],
+        },
+        { headers: { etag: `"${taskID}"` } },
+      )
     if (path === `/task/${taskID}/conversation/events`)
       return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
@@ -117,20 +178,13 @@ async function withTaskDecisionFixture(
     if (path === `/task/${taskID}/followup`) return send({ followup: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
     if (path === "/log" && req.method === "POST") return send({ ok: true })
-    return send({})
+    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
   })
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    const consoleErrors: string[] = []
-    const pageErrors: string[] = []
-    page.on("console", (item) => {
-      if (item.type() === "error") consoleErrors.push(item.text())
-    })
-    page.on("pageerror", (error) => {
-      pageErrors.push(`${error.message}\n${error.stack ?? ""}`)
-    })
+    const errors = installBrowserErrorCollector(page)
     await page.setViewport({ width: 720, height: 560 })
     await page.evaluateOnNewDocument(
       ({ serverUrl, directory }) => {
@@ -200,7 +254,7 @@ async function withTaskDecisionFixture(
       })
       assert.fail(
         `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
-          { snapshot, requestLog, consoleErrors, pageErrors },
+          { snapshot, requestLog, unexpectedErrors: errors.unexpectedErrors },
           null,
           2,
         )}`,
@@ -215,8 +269,7 @@ async function withTaskDecisionFixture(
 
     await run({ page, taskBodies, requestLog })
 
-    assert.deepEqual(consoleErrors, [], JSON.stringify({ consoleErrors, pageErrors, requestLog }, null, 2))
-    assert.deepEqual(pageErrors, [], JSON.stringify({ consoleErrors, pageErrors, requestLog }, null, 2))
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()

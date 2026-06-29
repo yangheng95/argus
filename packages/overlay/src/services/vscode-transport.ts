@@ -36,7 +36,12 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
-import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, HOST_CAPABILITIES, nativeUnsupported } from "./host-transport"
+import {
+  DEFAULT_REQUEST_TIMEOUT_MILLISECONDS,
+  HOST_CAPABILITIES,
+  nativeUnsupported,
+  transportRequestSignal,
+} from "./host-transport"
 import { publishHostTheme } from "./host-theme"
 import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
@@ -406,7 +411,7 @@ export function createVsCodeTransport(): HostTransport {
       const id = newId()
       const method: RequestMethod = (input.method ?? "GET") as RequestMethod
       const responseKind = input.responseKind ?? "json"
-      const signal = input.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
+      const signal = transportRequestSignal(input)
 
       return new Promise<TransportResponse<T>>((resolve, reject) => {
         let abortListener: (() => void) | undefined

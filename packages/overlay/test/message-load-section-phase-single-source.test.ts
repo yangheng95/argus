@@ -60,6 +60,8 @@ describe("loadConversation section phase ownership", () => {
           id: "msg_phase_owner",
           role: "assistant",
           sessionID: "ses_phase_owner",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 1, "msg_phase_owner"),
           time: { created: 1 },
         },

@@ -3,6 +3,8 @@ import type { MissionRecord } from "../services/mission"
 import type { BoardSource } from "../store/board"
 import type { CardTreeStore } from "../store/card-tree"
 
+type RuntimeDebugPaths = { database?: string | null } | null | undefined
+
 /** Format a millisecond timestamp for copyable debug blobs. */
 export function formatDebugTime(ms: unknown): string {
   const n = typeof ms === "number" ? ms : Number(ms)
@@ -56,7 +58,7 @@ function debugGoalBoardFiles(gw: any): string {
   )
 }
 
-export function buildTaskDebugBlob(board: any): string {
+export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths): string {
   const task = board?.task
   const id = typeof task?.id === "string" ? task.id : ""
   if (!id) return ""
@@ -76,6 +78,7 @@ export function buildTaskDebugBlob(board: any): string {
     `task.terminal:  ${String(task?.terminalReason ?? "-")}`,
     `task.directory: ${taskDirectory}`,
     `server.url:     ${serverUrl}`,
+    `runtime.db:     ${runtimePaths?.database?.trim() || "-"}`,
     `task.session:   ${String(task?.sessionID ?? "-")}`,
     `task.run.id:    ${String(task?.activeRunID ?? "-")}`,
     `task.time.created: ${formatDebugTime(task?.time?.created)}`,
