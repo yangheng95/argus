@@ -1,8 +1,8 @@
 # opencorvus GitHub Action
 
-A GitHub Action that integrates [opencorvus](https://opencorvus.ai) directly into your GitHub workflow.
+A GitHub Action that integrates [opencorvus](https://opencorvus.ai) directly into comments, issue or PR lifecycle events, scheduled workflows, and manual workflow dispatch events.
 
-Mention `/opencorvus` in your comment, and opencorvus will execute tasks within your GitHub Actions runner.
+Comment triggers read `/opencorvus` or `/oc`, and repository events use the configured workflow prompt. OpenCorvus executes tasks within your GitHub Actions runner.
 
 ## Features
 

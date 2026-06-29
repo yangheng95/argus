@@ -59,8 +59,8 @@ Forbidden storage after this change:
 
 - `specs/new-arch/**`
 - `packages/*/specs/**`
-- Root-level spec records under `specs/*.md` except `specs/README.md`
-- Any spec markdown file with a date before `2026-06-01`
+- Root-level spec records under `specs/*.md` or `specs/*.txt` except `specs/README.md`
+- Any spec markdown or text file with a date before `2026-06-01`
 
 ## Migration Plan
 
@@ -81,7 +81,7 @@ Forbidden storage after this change:
 Use whole-repository search for these names and update every live reference:
 
 - `specs/new-arch`
-- `packages/opencorvus/specs`
+- `packages/*/specs`
 - root June spec filenames moved to `specs/records/2026-06`
 - pre-June spec filenames that are deleted
 
@@ -240,7 +240,7 @@ Later independent review rounds found and fixed these remaining drift classes:
     global test hook to tear down. The test now cleans each project through
     `MCP.removeAuth("oauth")`, so the regression coverage exercises the same
     pending-flow cancellation contract as production code.
-25. A later independent docs review found the public GitHub Action page
+25. A later independent docs review found the public GitHub Action page/README
     description still narrowed the trigger surface to PR/Issue comments. The
     English and Chinese frontmatter/lead text now describe all supported
     GitHub event classes, and document health rejects the old comment-only
@@ -256,6 +256,14 @@ Later independent review rounds found and fixed these remaining drift classes:
     path without Bearer-token examples, API reference generation includes
     OpenAPI body fields and named errors in route summaries, and remote
     transport construction only accepts explicit `sse` or `streamable-http`.
+28. The final independent review found `github/README.md` still had a
+    comment-only lead, the repository workflow still used the private
+    `.github/actions/setup-bun` helper before invoking the composite Action,
+    and the overlay MCP add helper still silently filled remote transport as
+    `streamable-http`. The README now describes comment, issue or PR, schedule,
+    and manual workflow triggers; the workflow relies on the composite Action's
+    own Bun setup; and overlay remote MCP add input must carry an explicit
+    transport.
 Validation after these addenda includes:
 
 - `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/overlay/test/mcp-service.test.ts`

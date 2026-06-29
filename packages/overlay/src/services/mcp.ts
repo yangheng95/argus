@@ -7,16 +7,32 @@ import { apiJson } from "./api"
 import { updateConfig } from "./config"
 import type { ConfigRequestOptions } from "./config"
 
-export interface AddMcpInput {
+type RemoteMcpTransport = "streamable-http" | "sse"
+
+export type AddMcpInput = {
   name: string
-  type: "remote" | "local"
-  url?: string
-  command?: string
-  args?: string
+} & (
+  | {
+      type: "remote"
+      transport: RemoteMcpTransport
+      url?: string
+    }
+  | {
+      type: "local"
+      command?: string
+      args?: string
+    }
+)
+
+const remoteMcpTransports = new Set<RemoteMcpTransport>(["streamable-http", "sse"])
+
+function requireRemoteMcpTransport(transport: unknown): RemoteMcpTransport {
+  if (remoteMcpTransports.has(transport as RemoteMcpTransport)) return transport as RemoteMcpTransport
+  throw new Error("MCP remote transport is required")
 }
 
 type McpAddRequest =
-  | { name: string; config: { type: "remote"; transport: "streamable-http"; url: string } }
+  | { name: string; config: { type: "remote"; transport: RemoteMcpTransport; url: string } }
   | { name: string; config: { type: "local"; command: string[] } }
 
 type McpRequestOptions = ConfigRequestOptions
@@ -66,7 +82,8 @@ export function buildMcpAddRequest(input: AddMcpInput): McpAddRequest {
   if (input.type === "remote") {
     const url = (input.url ?? "").trim()
     if (!url) throw new Error("MCP remote URL is required")
-    return { name, config: { type: "remote", transport: "streamable-http", url } }
+    const transport = requireRemoteMcpTransport(input.transport)
+    return { name, config: { type: "remote", transport, url } }
   }
 
   const command = (input.command ?? "").trim()
