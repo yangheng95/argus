@@ -27,9 +27,9 @@ changes look like they also needed to preserve a removed plugin shell.
 
 | Search                                                                                               | Result                                                                                  | Decision                                              |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `rg -n -F "chat-plugin" packages/overlay/src packages/overlay/test specs/new-arch`                   | Only stylesheet selectors and tests asserting old `chatPlugin*` DOM is absent remained. | Delete stylesheet selectors; keep absence assertions. |
-| `rg -n -F "chat-browser-preview-activity" packages/overlay/src packages/overlay/test specs/new-arch` | Live DOM owner is `src/index.html`; tests require the class and mount.                  | Keep `.chat-browser-preview-activity` layout rules.   |
-| `rg -n -F "solidBrowserPreviewMount" packages/overlay/src packages/overlay/test specs/new-arch`      | `main.tsx` mounts `BrowserPreviewPanel` into the current center workbench root.         | Do not add a compatibility mount or alias.            |
+| `rg -n -F "chat-plugin" packages/overlay/src packages/overlay/test specs`                   | Only stylesheet selectors and tests asserting old `chatPlugin*` DOM is absent remained. | Delete stylesheet selectors; keep absence assertions. |
+| `rg -n -F "chat-browser-preview-activity" packages/overlay/src packages/overlay/test specs` | Live DOM owner is `src/index.html`; tests require the class and mount.                  | Keep `.chat-browser-preview-activity` layout rules.   |
+| `rg -n -F "solidBrowserPreviewMount" packages/overlay/src packages/overlay/test specs`      | `main.tsx` mounts `BrowserPreviewPanel` into the current center workbench root.         | Do not add a compatibility mount or alias.            |
 
 ## Fix
 

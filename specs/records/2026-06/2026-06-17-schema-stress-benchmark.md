@@ -25,7 +25,7 @@ Reviewed before implementation:
 
 Commands run before design:
 
-- `rg -n "z\\.object|z\\.discriminatedUnion|z\\.union|\\.describe\\(|schema\\s*=|inputSchema|parameters|tool\\(" packages/opencorvus/src packages/opencorvus/test specs/new-arch specs -g "*.ts" -g "*.md"`
+- `rg -n "z\\.object|z\\.discriminatedUnion|z\\.union|\\.describe\\(|schema\\s*=|inputSchema|parameters|tool\\(" packages/opencorvus/src packages/opencorvus/test specs -g "*.ts" -g "*.md"`
 - `rg -n "ProviderTransform|normalizeToolSchemaForProvider|prepareProviderTool|createStructuredOutputTool|asSchema|zod-to-json-schema|toJSONSchema|inputSchema" packages/opencorvus/src/session packages/opencorvus/src/provider packages/opencorvus/test/provider packages/opencorvus/test/session -g "*.ts"`
 - `rg -n "Tool\\.define|parameters:|tool\\(\\{|inputSchema:" packages/opencorvus/src/tool -g "*.ts"`
 - `rg -n "inputSchema:\\s*z\\.object\\(\\{\\s*\\}\\)|z\\.object\\(\\{\\s*\\}\\)" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`

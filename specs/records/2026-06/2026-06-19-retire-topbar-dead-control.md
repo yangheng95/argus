@@ -19,7 +19,7 @@ That makes the HostTransport capability test a second source for a UI surface th
 | `rg -n -F "<TopBar" packages/overlay/src packages/overlay/test` | No matches.                                                                         |
 | `rg -n -F "TopBar" packages/overlay/src packages/overlay/test`  | Only `TopBar.tsx` definition and `host-transport-capabilities.test.ts` source read. |
 | `rg -n -F "top-bar" packages/overlay/src packages/overlay/test` | Only classes inside `TopBar.tsx`; no CSS owner or mount.                            |
-| `rg -n "visible native-command controls                         | HostTransport capability test" specs/new-arch packages/overlay/test -S`             | Existing consensus requires real visible controls, not retired test doubles. |
+| `rg -n "visible native-command controls                         | HostTransport capability test" specs packages/overlay/test -S`             | Existing consensus requires real visible controls, not retired test doubles. |
 
 ## Fix Plan
 

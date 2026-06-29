@@ -1,7 +1,7 @@
 /**
  * Provider-side LLM helpers reused by `session/llm.ts`.
  *
- * As of Phase E of specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+ * As of Phase E of deleted pre-June record 2026-04-28-structured-output-systemic-fix
  * this module no longer exposes its own `streamText` entry point. The earlier
  * `ProviderLLM.stream()` was a parallel agent-level stream wrapper that
  * carried its own `toolChoice` typedef (limited to the string forms

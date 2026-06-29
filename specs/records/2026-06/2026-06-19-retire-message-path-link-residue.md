@@ -21,9 +21,9 @@ second CSS source for the same visible file-link surface.
 
 | Command                                                                          | Result                                                                                                                   | Decision                                    |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| `rg -n -F 'path-box' packages/overlay/src packages/overlay/test specs/new-arch`  | Only `messages.css` comment/rule hits.                                                                                   | Retire `.path-box`.                         |
-| `rg -n -F 'path-link' packages/overlay/src packages/overlay/test specs/new-arch` | Only `messages.css` comment/rules hit.                                                                                   | Retire `.path-link` and its states.         |
-| `rg -n -F 'file-link' packages/overlay/src packages/overlay/test specs/new-arch` | `markdown.ts` emits `class="file-link"`; `workspace.css` owns `code .file-link`; guards already pin workspace ownership. | Keep `file-link` as the single live source. |
+| `rg -n -F 'path-box' packages/overlay/src packages/overlay/test specs`  | Only `messages.css` comment/rule hits.                                                                                   | Retire `.path-box`.                         |
+| `rg -n -F 'path-link' packages/overlay/src packages/overlay/test specs` | Only `messages.css` comment/rules hit.                                                                                   | Retire `.path-link` and its states.         |
+| `rg -n -F 'file-link' packages/overlay/src packages/overlay/test specs` | `markdown.ts` emits `class="file-link"`; `workspace.css` owns `code .file-link`; guards already pin workspace ownership. | Keep `file-link` as the single live source. |
 
 ## Fix
 

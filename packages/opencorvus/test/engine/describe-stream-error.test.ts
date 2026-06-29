@@ -14,7 +14,7 @@ import { tmpdir } from "../fixture/fixture"
 
 /**
  * Regression for the engine-wedge-2026-04-30 fix
- * (specs/engine-stream-error-wedge-2026-04-30.md). Pre-fix,
+ * (deleted pre-June record engine-stream-error-wedge-2026-04-30). Pre-fix,
  * `recordOrchestratorStreamError` wrote `orchestrator-stream-error`
  * artifacts but `describe.ts` never read them, so the orchestrator had no
  * evidence on its next wake after a transient HTTP 401

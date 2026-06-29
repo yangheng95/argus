@@ -14,7 +14,7 @@ Live board evidence at `2026-06-03`:
 
 Command:
 
-`rg -n 'SessionCompaction\.create|SessionCompaction\.process|SessionCompaction\.isOverflow|disablesAutomaticCompaction|workflowAutoCompactionDisabledSessionKinds|compaction_request|ContextBudget\.predictiveLimit|predictiveCompactionDecision|result === "compact"|decision\.kind === "compact"' packages/opencorvus/src packages/opencorvus/test specs/new-arch -g '!**/*.json'`
+`rg -n 'SessionCompaction\.create|SessionCompaction\.process|SessionCompaction\.isOverflow|disablesAutomaticCompaction|workflowAutoCompactionDisabledSessionKinds|compaction_request|ContextBudget\.predictiveLimit|predictiveCompactionDecision|result === "compact"|decision\.kind === "compact"' packages/opencorvus/src packages/opencorvus/test specs -g '!**/*.json'`
 
 Relevant decisions:
 

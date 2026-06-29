@@ -927,7 +927,7 @@ function buildWorkflowFields(
       // chain), not from engine_goal columns and not from a step-status
       // priority sort. Surface here is the single source the overlay's
       // GoalWorkflowGroup binds to; step payload no longer mirrors it
-      // (rule 8). See specs/new-arch/2026-05-11-goal-worktree-display.md.
+      // (rule 8). See deleted pre-June record 2026-05-11-goal-worktree-display.
       workspaceDir: latestWorkspace.directory ?? undefined,
       workspaceBranch: latestWorkspace.branch ?? undefined,
       // Phase E (2026-05-05): retry_count derived from artifact, not from a

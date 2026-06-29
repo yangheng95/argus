@@ -13,7 +13,7 @@ plain-text clarification into the `question` tool schema.
 Whole-repo grep before implementation:
 
 ```text
-rg -n "analyze_intent|IntentAnalysisAgent|IntentClarification|ask_clarification|Question\\.Info|Question\\.askAndFormat|renderUserRequestSection|intent_blocker_clarifications|task\\.request" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S
+rg -n "analyze_intent|IntentAnalysisAgent|IntentClarification|ask_clarification|Question\\.Info|Question\\.askAndFormat|renderUserRequestSection|intent_blocker_clarifications|task\\.request" packages/opencorvus/src packages/opencorvus/test specs -S
 ```
 
 Relevant call points:

@@ -18,7 +18,7 @@ ellipsized within the row without creating a second row.
 
 | Sweep | Result | Decision |
 | --- | --- | --- |
-| `rg -n "project-worktree-item|project-worktree-row|project-worktree-panel|project-worktree-path|project-worktree-branch|project-worktree-state" packages/overlay/src packages/overlay/test specs/new-arch` | Production render owner is `TaskDirBar.tsx`; CSS owner is `conversation.css`; static coverage is `task-cwd-row-layout.test.ts`; browser coverage is `task-dirbar-keyboard.test.ts`; contrast fixture is `popup-contrast-matrix.test.ts`. | Change only the row layout CSS plus tests that assert the row contract. |
+| `rg -n "project-worktree-item|project-worktree-row|project-worktree-panel|project-worktree-path|project-worktree-branch|project-worktree-state" packages/overlay/src packages/overlay/test specs` | Production render owner is `TaskDirBar.tsx`; CSS owner is `conversation.css`; static coverage is `task-cwd-row-layout.test.ts`; browser coverage is `task-dirbar-keyboard.test.ts`; contrast fixture is `popup-contrast-matrix.test.ts`. | Change only the row layout CSS plus tests that assert the row contract. |
 | `git diff -- packages/overlay/src/components/TaskDirBar.tsx packages/overlay/src/styles/surfaces/conversation.css packages/overlay/test/task-cwd-row-layout.test.ts packages/overlay/test/browser/task-dirbar-keyboard.test.ts` | These files already contain unrelated in-progress worktree cleanup and cwd popup changes. | Preserve current working-tree logic and edit only the one-line worktree row contract. |
 
 ## Fix Plan

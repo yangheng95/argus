@@ -24,7 +24,7 @@ the selected target.
 Command:
 
 ```powershell
-rg -n "resolveBrowserPreviewTarget\(|assessBrowserPreviewTargets|reachableTargets\[0\]|findRecentBrowserPreviewTargets|does not replace the selected preview target|/task/:taskID/browser-preview" packages/opencorvus/src/browser-preview packages/opencorvus/src/server packages/opencorvus/test/browser-preview packages/opencorvus/test/server specs/new-arch -g "*.ts" -g "*.md"
+rg -n "resolveBrowserPreviewTarget\(|assessBrowserPreviewTargets|reachableTargets\[0\]|findRecentBrowserPreviewTargets|does not replace the selected preview target|/task/:taskID/browser-preview" packages/opencorvus/src/browser-preview packages/opencorvus/src/server packages/opencorvus/test/browser-preview packages/opencorvus/test/server specs -g "*.ts" -g "*.md"
 ```
 
 Findings:

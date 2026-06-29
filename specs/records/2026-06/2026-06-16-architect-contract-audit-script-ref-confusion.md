@@ -12,7 +12,7 @@ submitting the same payload. This is the remaining loop after
 
 Searches performed:
 
-- `rg -n "contract_audit|script_ref|contract-audit|ScorerSchema" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S`
+- `rg -n "contract_audit|script_ref|contract-audit|ScorerSchema" packages/opencorvus/src packages/opencorvus/test specs -S`
 - `rg -n "missing script_ref|Use spec.kind=\"shell\"|collector unchanged" packages/opencorvus/src packages/opencorvus/test -S`
 - `.opencorvus` directory listing confirmed no `.opencorvus/scripts/contract-audit`
   exists.

@@ -147,7 +147,7 @@ describe("overlay window and pane size contract", () => {
   })
 
   test("superseded center workbench spec no longer claims an active legal-shell compact branch", () => {
-    const spec = readRepo("specs/new-arch/2026-06-22-center-workbench-panel-min-size-contract.md")
+    const spec = readRepo("specs/records/2026-06/2026-06-22-center-workbench-panel-min-size-contract.md")
 
     expect(spec).toContain("Status: Superseded 2026-06-23")
     expect(spec).toContain("removed production")
@@ -156,9 +156,9 @@ describe("overlay window and pane size contract", () => {
   })
 
   test("historical legal-size specs do not advertise removed size sources as active", () => {
-    const compactSpec = readRepo("specs/new-arch/2026-06-23-overlay-compact-legal-frame-query.md")
-    const viewportSpec = readRepo("specs/new-arch/2026-06-22-overlay-viewport-size-contract.md")
-    const panelSpec = readRepo("specs/new-arch/2026-06-23-overlay-panel-legal-size-contract.md")
+    const compactSpec = readRepo("specs/records/2026-06/2026-06-23-overlay-compact-legal-frame-query.md")
+    const viewportSpec = readRepo("specs/records/2026-06/2026-06-22-overlay-viewport-size-contract.md")
+    const panelSpec = readRepo("specs/records/2026-06/2026-06-23-overlay-panel-legal-size-contract.md")
 
     expect(compactSpec).toContain("Status: Superseded 2026-06-23")
     expect(compactSpec).toContain("unreachable")

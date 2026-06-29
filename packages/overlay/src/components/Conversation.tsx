@@ -238,7 +238,7 @@ function VirtualizedConversationCards(props: {
 // `cardTreeStore.order` resolves to a CardNode via `cardTreeStore.cards[id]`;
 // `<Card>` then walks the card's `childIDs` via the same proxy dereference,
 // so targeted writes to any descendant update only that branch of the DOM.
-// See specs/new-arch/07-panel-reactivity.md for the design rationale.
+// See specs/current/architecture/07-panel-reactivity.md for the design rationale.
 
 export function Conversation(props: { container: HTMLElement }) {
   const el = props.container

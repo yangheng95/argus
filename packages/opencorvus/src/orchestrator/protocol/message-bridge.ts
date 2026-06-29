@@ -559,7 +559,7 @@ function bridgeDiagnosticPropertiesForType(
  * default `running` and re-spinning forever.
  *
  * Single source of truth for session lifecycle, per
- * `specs/new-arch/07-panel-reactivity.md`. The persisted row also feeds
+ * `specs/current/architecture/07-panel-reactivity.md`. The persisted row also feeds
  * `engine/store.ts listActiveSessionsForTask`'s NOT EXISTS terminal exclusion.
  */
 function bridgeSessionLifecycle(type: string, properties: Record<string, unknown>) {

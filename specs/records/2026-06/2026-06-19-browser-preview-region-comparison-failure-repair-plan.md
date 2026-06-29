@@ -31,7 +31,7 @@ actual root causes.
 
 ```powershell
 git status --short --branch
-rg -n "browser_preview_(bind_local_module|compare_regions)|resolveSourceReferencePath|implementation_covers_source|routeUrl|BrowserPreviewRegionBinding|sourceReferenceArtifactID" packages/opencorvus/src packages/opencorvus/test specs/new-arch
+rg -n "browser_preview_(bind_local_module|compare_regions)|resolveSourceReferencePath|implementation_covers_source|routeUrl|BrowserPreviewRegionBinding|sourceReferenceArtifactID" packages/opencorvus/src packages/opencorvus/test specs
 rg -n "Instance\.directory|taskProject|worktree|ProjectRuntimePaths\.browserPreviewJobRoot|browserPreviewJobRoot\(" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 ```
 

@@ -2,7 +2,7 @@
  * Execution ownership registry — OS-level markers for worktree directories
  * and child processes spawned during task execution.
  *
- * Motivation (see specs/new-arch/16-unified-teardown.md §6):
+ * Motivation (see specs/current/architecture/16-unified-teardown.md §6):
  *   Phase 1 starts the tear-down of `recovery.ts`. Today, restart recovery
  *   walks DB status columns (`engine_run.status`, `engine_goal_run.status`,
  *   `engine_executor_session.status`) and `abortRuns()` them. After the

@@ -1,7 +1,7 @@
 // ── Goal-phase SSE event stream fixture ──
 //
 // Representative stream covering every event type the overlay must handle
-// correctly. Used by the reactivity refactor (specs/new-arch/07-panel-reactivity.md)
+// correctly. Used by the reactivity refactor (specs/current/architecture/07-panel-reactivity.md)
 // as the P0 baseline: both the old pipeline and the new cardTreeStore/tree-writer
 // pipeline must produce the SAME normalized tree after applying these events.
 //

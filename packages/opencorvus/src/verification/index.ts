@@ -1,6 +1,6 @@
 /**
  * Verification evidence module — thin read/write layer over `engine_artifact`
- * rows with kind="verification-evidence" (phase-6-b, specs/new-arch/16-unified-teardown.md §7-5).
+ * rows with kind="verification-evidence" (phase-6-b, specs/current/architecture/16-unified-teardown.md §7-5).
  *
  * Signature-based convergence detection lives in src/metrics/arbiter.ts. This
  * module owns only the evidence artifact row. The legacy `engine_evaluation`

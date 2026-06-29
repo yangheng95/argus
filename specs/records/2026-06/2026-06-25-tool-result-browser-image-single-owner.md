@@ -89,7 +89,7 @@ Commands:
 
 ```powershell
 rg -n "msg-tool-attachments|msg-img-wrap|msg-image-trigger|md-img" packages/overlay/src/styles packages/overlay/src/components packages/overlay/test -S
-rg -n "region comparison tool|toolImageAttachments|FilePart|PreviewableImage" packages/overlay/src packages/overlay/test specs/new-arch -S -g "*.tsx" -g "*.ts" -g "*.css" -g "*.md"
+rg -n "region comparison tool|toolImageAttachments|FilePart|PreviewableImage" packages/overlay/src packages/overlay/test specs -S -g "*.tsx" -g "*.ts" -g "*.css" -g "*.md"
 ```
 
 | Surface                                                    | Finding                                                                                                                 | Decision                                                                                                               |

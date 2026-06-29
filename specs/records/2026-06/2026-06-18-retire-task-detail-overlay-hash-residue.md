@@ -31,8 +31,8 @@ current `selectTask` / `selectMissionTask` path.
 
 | Sweep                     | Result                                                                              |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rg -n "TaskDetailOverlay | task_overlay                                                                        | task-overlay                                                                                     | location\\.hash | hashchange" packages/overlay/src packages/overlay/test specs/new-arch specs` | Runtime hits were limited to the component itself, locale strings, workspace CSS, hotkey test/comment residue, and a Conversation comment. No JSX mount or import existed. |
-| `rg -n "selectTask        | selectMissionTask" packages/overlay/src packages/overlay/test specs/new-arch specs` | `selectTask` and `selectMissionTask` are live canonical paths and are not part of this deletion. |
+| `rg -n "TaskDetailOverlay | task_overlay                                                                        | task-overlay                                                                                     | location\\.hash | hashchange" packages/overlay/src packages/overlay/test specs` | Runtime hits were limited to the component itself, locale strings, workspace CSS, hotkey test/comment residue, and a Conversation comment. No JSX mount or import existed. |
+| `rg -n "selectTask        | selectMissionTask" packages/overlay/src packages/overlay/test specs` | `selectTask` and `selectMissionTask` are live canonical paths and are not part of this deletion. |
 
 ## Fix
 

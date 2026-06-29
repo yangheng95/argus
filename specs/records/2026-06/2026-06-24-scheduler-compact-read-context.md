@@ -58,7 +58,7 @@ true })`.
 Command basis:
 
 ```powershell
-rg -n "read_context|SessionCompaction.create|SessionCompaction.process|automaticCompactionDecision|scope: \"all\"|default(\"all\")|TaskQueueMetadata|RawTaskMetadata|/summarize" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S
+rg -n "read_context|SessionCompaction.create|SessionCompaction.process|automaticCompactionDecision|scope: \"all\"|default(\"all\")|TaskQueueMetadata|RawTaskMetadata|/summarize" packages/opencorvus/src packages/opencorvus/test specs -S
 ```
 
 | Surface                                                         | Decision                                                                                                                                |

@@ -26,7 +26,7 @@ Read before implementation:
 
 ## Call-Point Audit
 
-`rg -n "CompactionHandoff|SessionCompaction|compaction|assistant.summary|structured handoff|handoff schema" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S`
+`rg -n "CompactionHandoff|SessionCompaction|compaction|assistant.summary|structured handoff|handoff schema" packages/opencorvus/src packages/opencorvus/test specs -S`
 
 Relevant implementation surfaces:
 

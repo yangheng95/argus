@@ -1252,7 +1252,7 @@ function namedErrorReason(err: Error): string {
 
 /**
  * Pure classification of a just-finished attempt's outcome — see
- * specs/new-arch/2026-04-28-structured-output-systemic-fix.md §F.
+ * deleted pre-June record 2026-04-28-structured-output-systemic-fix §F.
  *
  * Rules:
  *

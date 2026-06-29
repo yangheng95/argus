@@ -1,7 +1,7 @@
 /**
  * Zod-validated tool calls for Intent Analysis Agent incremental recording.
  *
- * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): the
+ * Phase 3-b migration (specs/current/architecture/16-unified-teardown.md §7-3): the
  * terminal `finalize_intent` tool is gone — final intent_class, complexity,
  * confidence, and summary now arrive through SessionLoop's StructuredOutput
  * tool driven by the agent's `format: { type: "json_schema", schema }` input.

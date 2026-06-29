@@ -1,5 +1,5 @@
 // Backend acceptance tests for the task tree display feature.
-// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md §Acceptance criteria.
+// Spec: deleted pre-June record 2026-05-27-task-tree-display §Acceptance criteria.
 //
 // Single source of truth: metadata.parent_task_id (snake_case JSON key
 // written only by the scheduler-owned createSchedulerChildTask path).

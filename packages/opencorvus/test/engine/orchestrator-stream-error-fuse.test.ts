@@ -15,7 +15,7 @@ import { tmpdir } from "../fixture/fixture"
 
 /**
  * Stream-error retry circuit breaker. See
- * specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md.
+ * deleted pre-June record 2026-05-08-stream-early-death-and-retry-fuse.
  *
  * Three orchestrator-stream-error artifacts within
  * ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS for the same task records a

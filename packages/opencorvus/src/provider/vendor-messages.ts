@@ -1,7 +1,7 @@
 /**
  * Vendor-specific message normalization registry.
  *
- * Design (per specs/new-arch/06-provider.md Path 3): vendor-specific behavior
+ * Design (per specs/current/architecture/06-provider.md Path 3): vendor-specific behavior
  * belongs in vendor modules, not in the shared transform layer. Each entry
  * is a pure function keyed by a model-matcher predicate. Adding a new
  * vendor's quirk means appending one entry here — `ProviderTransform.message()`
