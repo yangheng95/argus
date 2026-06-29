@@ -1,5 +1,5 @@
 /**
- * One-shot migration for flat-redesign Step 1 (specs/overlay-flat-redesign/plan.md).
+ * One-shot migration for flat-redesign Step 1 (flat redesign migration contract).
  * Rewrites every `border-radius:` callsite under packages/overlay/src/styles/**\/*.css
  * to use the new 4-token radius scale: --oc-radius-{none,soft,large,pill}.
  *

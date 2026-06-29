@@ -1,5 +1,5 @@
 /**
- * One-shot migration for flat-redesign Step 5 (specs/overlay-flat-redesign/plan.md).
+ * One-shot migration for flat-redesign Step 5 (flat redesign migration contract).
  * Rewrites every literal `font-weight:` callsite under
  * `packages/overlay/src/styles/**\/*.css` to use the 3-token weight scale:
  *   --ui-font-weight-body (400)

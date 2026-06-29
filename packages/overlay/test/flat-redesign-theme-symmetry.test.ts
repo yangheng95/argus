@@ -1,5 +1,5 @@
 /**
- * Coverage guard for theme-architecture Step 0 (specs/overlay-flat-redesign/plan.md §八 v3+).
+ * Coverage guard for theme-architecture Step 0 (flat redesign migration contract §八 v3+).
  *
  * Pins the structural fixes that retire the cross-theme leak:
  *
