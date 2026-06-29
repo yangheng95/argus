@@ -179,7 +179,20 @@ Later independent review rounds found and fixed these remaining drift classes:
 13. `.scratch` still had CSS and text snapshots with retired overlay/root spec
     paths. The stale ignored files were deleted, `.css` is scanned, and scratch
     text now reuses the retired spec path pattern checks.
-14. `specs/records/README.md` still existed as a second records index outside
+14. Public GitHub Action docs still published the PAT local debug path and only
+    listed comment triggers. The public docs now describe the OIDC App-token
+    runtime, list all supported GitHub event names, and document repository
+    tests instead of personal-token local runs.
+15. MCP OAuth finish/remove/debug still had lifecycle drift. Token exchange now
+    creates the finish transport with a timeout AbortSignal from the same MCP
+    timeout source, remove-auth always clears ephemeral pending flow/callback
+    state in `finally`, debug's basic HTTP probe uses the same timeout signal,
+    and MCP SDK `connect(...)` relies on SDK request options instead of an
+    outer fixed elapsed wrapper.
+16. `.scratch` scanning still missed text-like snapshot extensions such as
+    `.mjs`, `.html`, `.lock`, `.ps1`, `.snap`, `.astro`, shell, TOML, NDJSON,
+    XML, and SVG artifacts. The guard now scans those text extensions too.
+17. `specs/records/README.md` still existed as a second records index outside
     the selected storage model. It was deleted; `historical-docs-links.test.ts`
     now rejects that file, asserts every `specs/**` file belongs under
     `specs/README.md`, `specs/current/**`, `specs/records/2026-06/**`, or

@@ -12,7 +12,6 @@ import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
-import { withTimeout } from "../../util/timeout"
 import path from "path"
 import { Global } from "../../global"
 import { modify, applyEdits } from "jsonc-parser"
@@ -736,11 +735,13 @@ export const McpDebugCommand = cmd({
 
         const spinner = prompts.spinner()
         spinner.start("Testing connection...")
+        const debugTimeout = MCP.effectiveTimeout(serverConfig, config.experimental?.mcp_timeout)
 
         // Test basic HTTP connectivity first
         try {
           const response = await fetch(serverConfig.url, {
             method: "POST",
+            ...MCP.mcpFetchRequestInit(debugTimeout),
             headers: {
               "Content-Type": "application/json",
               Accept: "application/json, text/event-stream",
@@ -785,11 +786,11 @@ export const McpDebugCommand = cmd({
             )
 
             prompts.log.info("Testing OAuth flow (without completing authorization)...")
-            const debugTimeout = MCP.effectiveTimeout(serverConfig, config.experimental?.mcp_timeout)
 
             // Try creating transport with auth provider to trigger discovery
             const transport = new StreamableHTTPClientTransport(new URL(serverConfig.url), {
               authProvider,
+              requestInit: MCP.mcpFetchRequestInit(debugTimeout),
             })
 
             let client: Client | undefined
@@ -798,7 +799,7 @@ export const McpDebugCommand = cmd({
                 name: "opencorvus-debug",
                 version: Installation.VERSION,
               })
-              await withTimeout(client.connect(transport, MCP.mcpRequestOptions(debugTimeout)), debugTimeout)
+              await client.connect(transport, MCP.mcpRequestOptions(debugTimeout))
               prompts.log.success("Connection successful (already authenticated)")
             } catch (error) {
               if (error instanceof UnauthorizedError) {

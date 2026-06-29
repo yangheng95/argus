@@ -16,7 +16,6 @@ import z from "zod/v4"
 import { NotFoundError } from "../storage/db"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Installation } from "../installation"
-import { withTimeout } from "@/util/timeout"
 import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
@@ -230,6 +229,10 @@ export namespace MCP {
     }
   }
 
+  export function mcpFetchRequestInit(timeout: number): RequestInit {
+    return { signal: AbortSignal.timeout(timeout) }
+  }
+
   async function timeoutForClient(clientName: string): Promise<number> {
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
@@ -237,10 +240,17 @@ export namespace MCP {
     return effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, cfg.experimental?.mcp_timeout)
   }
 
-  function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider) {
+  function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider, requestInit?: RequestInit) {
+    const headers = new Headers(requestInit?.headers)
+    let hasHeaders = requestInit?.headers !== undefined
+    for (const [name, value] of Object.entries(mcp.headers ?? {})) {
+      headers.set(name, value)
+      hasHeaders = true
+    }
+    const mergedRequestInit = requestInit || hasHeaders ? { ...requestInit, ...(hasHeaders ? { headers } : {}) } : undefined
     const options = {
       authProvider,
-      requestInit: mcp.headers ? { headers: mcp.headers } : undefined,
+      requestInit: mergedRequestInit,
     }
     if (mcp.transport === "sse") {
       return {
@@ -547,7 +557,7 @@ export namespace MCP {
           name: "opencorvus",
           version: Installation.VERSION,
         })
-        await withTimeout(client.connect(transport, mcpRequestOptions(requestTimeout)), requestTimeout)
+        await client.connect(transport, mcpRequestOptions(requestTimeout))
         registerNotificationHandlers(client, key)
         mcpClient = client
         mcpTransport = transport
@@ -643,7 +653,7 @@ export namespace MCP {
           name: "opencorvus",
           version: Installation.VERSION,
         })
-        await withTimeout(client.connect(transport, mcpRequestOptions(requestTimeout)), requestTimeout)
+        await client.connect(transport, mcpRequestOptions(requestTimeout))
         registerNotificationHandlers(client, key)
         mcpClient = client
         mcpTransport = transport
@@ -1018,7 +1028,7 @@ export namespace MCP {
         name: "opencorvus",
         version: Installation.VERSION,
       })
-      await withTimeout(client.connect(transport, mcpRequestOptions(authTimeout)), authTimeout)
+      await client.connect(transport, mcpRequestOptions(authTimeout))
       // If we get here, we're already authenticated
       return { authorizationUrl: "" }
     } catch (error) {
@@ -1142,7 +1152,12 @@ export namespace MCP {
         onRedirect: async () => {},
       },
     )
-    const { name: transportName, transport } = createRemoteTransport(mcpConfig, authProvider)
+    const authTimeout = effectiveTimeout(mcpConfig, cfg.experimental?.mcp_timeout)
+    const { name: transportName, transport } = createRemoteTransport(
+      mcpConfig,
+      authProvider,
+      mcpFetchRequestInit(authTimeout),
+    )
 
     try {
       // Call finishAuth on the transport
@@ -1179,11 +1194,14 @@ export namespace MCP {
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
     requireMcpEntry(config, mcpName)
     const authKey = mcpAuthKey(mcpName)
-    await McpAuth.remove(authKey)
-    McpOAuthCallback.cancelPending(authKey)
-    pendingOAuthFlows.delete(authKey)
-    await McpAuth.clearOAuthState(authKey)
-    log.info("removed oauth credentials", { mcpName })
+    try {
+      await McpAuth.remove(authKey)
+      await McpAuth.clearOAuthState(authKey)
+      log.info("removed oauth credentials", { mcpName })
+    } finally {
+      McpOAuthCallback.cancelPending(authKey)
+      pendingOAuthFlows.delete(authKey)
+    }
   }
 
   /**
