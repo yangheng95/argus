@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 
 let connectError: Error | undefined
 let oauthConnectRequiresAuth = false
@@ -15,6 +15,8 @@ let listPromptOptions: unknown[] = []
 let listResourceOptions: unknown[] = []
 let getPromptOptions: unknown[] = []
 let readResourceOptions: unknown[] = []
+let transportRequestInits: unknown[] = []
+let finishAuthRequestInits: unknown[] = []
 let finishAuthCalls = 0
 let listToolsCalls = 0
 let listPromptsCalls = 0
@@ -89,8 +91,14 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
     authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
-    constructor(_url: URL, options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> } }) {
+    requestInit: unknown
+    constructor(
+      _url: URL,
+      options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> }; requestInit?: unknown },
+    ) {
       this.authProvider = options?.authProvider
+      this.requestInit = options?.requestInit
+      transportRequestInits.push(options?.requestInit)
     }
     async start() {
       if (oauthConnectRequiresAuth) {
@@ -100,6 +108,10 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
     }
     async finishAuth() {
       finishAuthCalls += 1
+      finishAuthRequestInits.push(this.requestInit)
+      if (!(this.requestInit && typeof this.requestInit === "object" && "signal" in this.requestInit)) {
+        throw new Error("finishAuth missing request signal")
+      }
     }
     async close() {
       transportCloseCalls += 1
@@ -110,8 +122,14 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSEClientTransport {
     authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
-    constructor(_url: URL, options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> } }) {
+    requestInit: unknown
+    constructor(
+      _url: URL,
+      options?: { authProvider?: { redirectToAuthorization?: (url: URL) => Promise<void> }; requestInit?: unknown },
+    ) {
       this.authProvider = options?.authProvider
+      this.requestInit = options?.requestInit
+      transportRequestInits.push(options?.requestInit)
     }
     async start() {
       if (oauthConnectRequiresAuth) {
@@ -121,6 +139,10 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
     }
     async finishAuth() {
       finishAuthCalls += 1
+      finishAuthRequestInits.push(this.requestInit)
+      if (!(this.requestInit && typeof this.requestInit === "object" && "signal" in this.requestInit)) {
+        throw new Error("finishAuth missing request signal")
+      }
     }
     async close() {
       transportCloseCalls += 1
@@ -129,6 +151,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 }))
 
 const { MCP } = await import("../../src/mcp")
+const { McpAuth } = await import("../../src/mcp/auth")
 const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
 const { Database } = await import("../../src/storage/db")
@@ -150,6 +173,8 @@ beforeEach(async () => {
   listResourceOptions = []
   getPromptOptions = []
   readResourceOptions = []
+  transportRequestInits = []
+  finishAuthRequestInits = []
   finishAuthCalls = 0
   resourceList = []
   toolList = []
@@ -479,7 +504,44 @@ describe("MCP prompt and resource listing", () => {
         const transportCloseCallsBeforeFinish = transportCloseCalls
         await expect(MCP.finishAuth("remote", "code")).resolves.toEqual({ status: "connected" })
         expect(finishAuthCalls).toBe(1)
+        const finishRequestInit = finishAuthRequestInits.at(-1) as { signal?: AbortSignal } | undefined
+        expect(finishRequestInit?.signal).toBeInstanceOf(AbortSignal)
         expect(transportCloseCalls - transportCloseCallsBeforeFinish).toBeGreaterThanOrEqual(1)
+      },
+    })
+  })
+
+  test("removeAuth clears pending OAuth flow and callback even when credential storage removal fails", async () => {
+    oauthConnectRequiresAuth = true
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(MCP.startAuth("remote")).resolves.toEqual({ authorizationUrl: "https://auth.example.test/authorize" })
+        const authKey = McpAuth.scopedKey({ projectID: Instance.project.id, mcpName: "remote" })
+        const pendingCallback = McpOAuthCallback.waitForCallback("remove-auth-state", authKey)
+        const pendingCallbackRejection = pendingCallback.catch((error) => error)
+        const removeSpy = spyOn(McpAuth, "remove").mockRejectedValueOnce(new Error("auth storage remove exploded"))
+        await expect(MCP.removeAuth("remote")).rejects.toThrow("auth storage remove exploded")
+        removeSpy.mockRestore()
+        await expect(pendingCallbackRejection).resolves.toMatchObject({ message: "Authorization cancelled" })
+        await expect(MCP.finishAuth("remote", "code")).rejects.toThrow("No pending OAuth flow")
       },
     })
   })
