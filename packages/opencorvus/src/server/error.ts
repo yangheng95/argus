@@ -23,17 +23,24 @@ function namedErrorUnionSchema(first: string, ...rest: string[]) {
   return resolver(z.union([branch(first), ...rest.map(branch)]))
 }
 
+const BAD_REQUEST_SCHEMA = z.object({
+  data: z.any(),
+  error: z.array(z.record(z.string(), z.any())),
+  success: z.literal(false),
+}).meta({
+  ref: "BadRequestError",
+})
+
 /** Reply route 400 — direct-reply NamedError subclasses can land here. The
- *  generic ERRORS[400] (BadRequestError) only describes the hono
- *  validator shape, which never reaches the reply route's 400s; using
- *  it would be a lie in OpenAPI. codex review 2026-05-26 — minor. */
+ *  generic ERRORS[400] (BadRequestError) describes validator and manual
+ *  bad-request bodies, not reply-specific NamedError subclasses. */
 const REPLY_400_RESPONSE = {
   description: "Reply rejected before persistence",
   content: {
     "application/json": {
       schema: namedErrorUnionSchema(
         "InvalidReplyTargetKindError",
-        "BuildSessionDirectReplyError",
+        "AgentDirectReplyDisabledError",
         "MissingModelConfigError",
         "AgentSessionAttachmentReferenceError",
       ),
@@ -46,17 +53,7 @@ export const ERRORS = {
     description: "Bad request",
     content: {
       "application/json": {
-        schema: resolver(
-          z
-            .object({
-              data: z.any(),
-              errors: z.array(z.record(z.string(), z.any())),
-              success: z.literal(false),
-            })
-            .meta({
-              ref: "BadRequestError",
-            }),
-        ),
+        schema: resolver(BAD_REQUEST_SCHEMA),
       },
     },
   },
@@ -105,7 +102,7 @@ export function errors(...codes: number[]) {
 export function badRequestBody(message: string) {
   return {
     data: { message },
-    errors: [{ message }],
+    error: [{ message }],
     success: false as const,
   }
 }
@@ -121,6 +118,33 @@ export function namedErrorResponse(description: string, first: string, ...rest: 
   }
 }
 
+export function badRequestOrNamedErrorResponse(description: string, first: string, ...rest: string[]) {
+  const branch = (name: string) =>
+    z.object({
+      name: z.literal(name),
+      data: z.record(z.string(), z.any()),
+    })
+  return {
+    description,
+    content: {
+      "application/json": {
+        schema: resolver(z.union([BAD_REQUEST_SCHEMA, branch(first), ...rest.map(branch)])),
+      },
+    },
+  }
+}
+
+const OPERATOR_STEER_400_RESPONSE = badRequestOrNamedErrorResponse(
+  "Operator steer target or request body rejected",
+  "OperatorSteerTargetError",
+)
+
+const OPERATOR_STEER_409_RESPONSE = namedErrorResponse(
+  "Operator steer conflict",
+  "AgentSessionPendingCoordinationError",
+  "OperatorSteerWakeError",
+)
+
 export const ActiveExecutorSessionsResponse = namedErrorResponse(
   "Active executor sessions prevent this operation",
   "ActiveExecutorSessionsError",
@@ -132,5 +156,18 @@ export const ActiveExecutorSessionsResponse = namedErrorResponse(
 export function replyRouteErrors(...codes: number[]) {
   return Object.fromEntries(
     codes.map((code) => [code, code === 400 ? REPLY_400_RESPONSE : ERRORS[code as keyof typeof ERRORS]]),
+  )
+}
+
+export function operatorSteerRouteErrors(...codes: number[]) {
+  return Object.fromEntries(
+    codes.map((code) => [
+      code,
+      code === 400
+        ? OPERATOR_STEER_400_RESPONSE
+        : code === 409
+          ? OPERATOR_STEER_409_RESPONSE
+          : ERRORS[code as keyof typeof ERRORS],
+    ]),
   )
 }

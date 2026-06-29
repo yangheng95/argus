@@ -1,3 +1,5 @@
+import type { AgentCoordinationRedispatchBinding } from "@/agent/role-contract"
+export type { AgentCoordinationRedispatchBinding } from "@/agent/role-contract"
 import { Event } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
@@ -11,6 +13,7 @@ import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 export type AgentCoordinationSeverity = "info" | "blocked" | "failure"
 export type AgentCoordinationRequestStatus = "pending" | "responded" | "cancelled"
+export type AgentCoordinationRequestOrigin = "worker_request" | "operator_steer"
 export type AgentCoordinationDecision = "continue" | "cancel_worker" | "redispatch" | "fail_task" | "ask_user"
 export type AgentCoordinationActionKind =
   | "continue_worker"
@@ -32,8 +35,11 @@ export interface AgentCoordinationRequestPayload extends EngineMetadata {
   task_id: string
   session_id: string
   agent: string
-  message_id: string
+  origin?: AgentCoordinationRequestOrigin
+  message_id?: string
   tool_call_id?: string
+  operator_steer_id?: string
+  operator_message?: string
   goal_id?: string
   goal_run_id?: string
   owner: string
@@ -98,68 +104,6 @@ export interface AgentCoordinationActionPayload extends EngineMetadata {
   result?: Record<string, unknown>
 }
 
-export type AgentCoordinationRedispatchBinding =
-  | {
-      dispatcher: "frontend_research_stage"
-      stage: "frontend-research"
-      target_kind: "frontend-research"
-    }
-  | {
-      dispatcher: "frontend_design_stage"
-      stage: "frontend-design"
-      target_kind: "frontend-design"
-    }
-  | {
-      dispatcher: "build_stage"
-      stage: "build"
-      target_kind: "build"
-    }
-  | {
-      dispatcher: "intent_analysis_stage"
-      stage: "intent-analysis"
-      target_kind: "intent-analysis"
-    }
-  | {
-      dispatcher: "explore_stage"
-      stage: "explore"
-      target_kind: "explore"
-    }
-  | {
-      dispatcher: "workload_analysis_stage"
-      stage: "goal-workload-analyst"
-      target_kind: "goal-workload-analyst"
-    }
-  | {
-      dispatcher: "fact_check_stage"
-      stage: "fact-check"
-      target_kind: "fact-check"
-    }
-  | {
-      dispatcher: "deep_research_stage"
-      stage: "deep-research"
-      target_kind: "deep-research"
-    }
-  | {
-      dispatcher: "requirements_stage"
-      stage: "requirements"
-      target_kind: "requirements"
-    }
-  | {
-      dispatcher: "architect_stage"
-      stage: "architect"
-      target_kind: "architect"
-    }
-  | {
-      dispatcher: "visual_qa_stage"
-      stage: "visual-qa"
-      target_kind: "visual-qa"
-    }
-  | {
-      dispatcher: "integrity_stage"
-      stage: "integrity"
-      target_kind: "integrity"
-    }
-
 export interface AgentCoordinationRequestRow {
   artifactID: string
   taskID: string
@@ -176,6 +120,22 @@ export interface AgentCoordinationResponseRow {
   timeCreated: number
   timeUpdated: number
   createdNow?: boolean
+}
+
+export class AgentCoordinationPendingConflictError extends Error {
+  readonly taskID: string
+  readonly sessionID: string
+  readonly requestIDs: string[]
+
+  constructor(input: { taskID: string; sessionID: string; requestIDs: string[] }) {
+    super(
+      `Agent coordination session ${input.sessionID} already has pending request(s): ${input.requestIDs.join(", ")}`,
+    )
+    this.name = "AgentCoordinationPendingConflictError"
+    this.taskID = input.taskID
+    this.sessionID = input.sessionID
+    this.requestIDs = input.requestIDs
+  }
 }
 
 export interface AgentCoordinationActionRow {
@@ -224,6 +184,60 @@ function requestForInvocationInTransaction(
   }
   const row = rows[0]
   return row ? requestRowFromArtifact(row) : undefined
+}
+
+function operatorSteerRequestInTransaction(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    operatorSteerID: string
+  },
+): AgentCoordinationRequestRow | undefined {
+  const rows = db
+    .select()
+    .from(EngineArtifactTable)
+    .where(
+      and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.kind, "agent_coordination_request"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.operator_steer_id') = ${input.operatorSteerID}`,
+      ),
+    )
+    .all()
+  if (rows.length > 1) {
+    throw new Error(
+      `Operator steer request ${input.operatorSteerID} for task ${input.taskID} has ${rows.length} persisted requests`,
+    )
+  }
+  const row = rows[0]
+  return row ? requestRowFromArtifact(row) : undefined
+}
+
+function pendingSessionControlRequestsInTransaction(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    sessionID: string
+    goalRunID?: string
+  },
+): AgentCoordinationRequestRow[] {
+  const scopePredicate = input.goalRunID
+    ? sql`(json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${input.sessionID} or json_extract(${EngineArtifactTable.payload}, '$.goal_run_id') = ${input.goalRunID})`
+    : sql`json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${input.sessionID}`
+  return db
+    .select()
+    .from(EngineArtifactTable)
+    .where(
+      and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.kind, "agent_coordination_request"),
+        eq(EngineArtifactTable.label, "pending"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
+        scopePredicate,
+      ),
+    )
+    .all()
+    .map(requestRowFromArtifact)
 }
 
 function requestRowFromArtifact(row: AgentCoordinationArtifactRow): AgentCoordinationRequestRow {
@@ -384,6 +398,30 @@ function assertReplayMatchesExistingRequest(input: {
   if (mismatches.length === 0) return
   throw new Error(
     `Agent coordination request replay for message ${payload.message_id} conflicts with existing request ${payload.request_id}: ${mismatches.join(", ")}`,
+  )
+}
+
+function assertReplayMatchesExistingOperatorSteerRequest(input: {
+  existing: AgentCoordinationRequestRow
+  agent: string
+  operatorMessage: string
+  summary: string
+  details: string
+  goalID?: string
+  goalRunID?: string
+}): void {
+  const payload = input.existing.payload
+  const mismatches: string[] = []
+  if (payload.origin !== "operator_steer") mismatches.push("origin")
+  if (payload.agent !== input.agent) mismatches.push("agent")
+  if ((payload.operator_message ?? "") !== input.operatorMessage) mismatches.push("operator_message")
+  if (payload.summary !== input.summary) mismatches.push("summary")
+  if (payload.details !== input.details) mismatches.push("details")
+  if ((payload.goal_id ?? undefined) !== (input.goalID ?? undefined)) mismatches.push("goal_id")
+  if ((payload.goal_run_id ?? undefined) !== (input.goalRunID ?? undefined)) mismatches.push("goal_run_id")
+  if (mismatches.length === 0) return
+  throw new Error(
+    `Operator steer request replay for ${payload.operator_steer_id ?? payload.request_id} conflicts with existing request ${payload.request_id}: ${mismatches.join(", ")}`,
   )
 }
 
@@ -554,6 +592,119 @@ export async function createAgentCoordinationRequest(input: {
 
   if (replay) return replay
   if (!payload) throw new Error(`Agent coordination request ${requestID} was not created`)
+  return { artifactID: requestID, taskID: input.taskID, payload, timeCreated: now, timeUpdated: now, createdNow: true }
+}
+
+export async function createOperatorSteerCoordinationRequest(input: {
+  taskID: string
+  sessionID: string
+  agent: string
+  operatorMessage: string
+  goalID?: string
+  goalRunID?: string
+  operatorSteerID?: string
+  now?: number
+}): Promise<AgentCoordinationRequestRow> {
+  requireTask(input.taskID)
+  const now = input.now ?? Date.now()
+  const requestID = input.operatorSteerID ?? Identifier.ascending("artifact")
+  const summary = `Operator steer for ${input.agent} session ${input.sessionID}`
+  const details = input.operatorMessage
+
+  let replay: AgentCoordinationRequestRow | undefined
+  let payload: AgentCoordinationRequestPayload | undefined
+  Database.transaction((db) => {
+    replay = operatorSteerRequestInTransaction(db, {
+      taskID: input.taskID,
+      operatorSteerID: requestID,
+    })
+    if (replay) {
+      assertReplayMatchesExistingOperatorSteerRequest({
+        existing: replay,
+        agent: input.agent,
+        operatorMessage: input.operatorMessage,
+        summary,
+        details,
+        goalID: input.goalID,
+        goalRunID: input.goalRunID,
+      })
+      return
+    }
+    const pending = pendingSessionControlRequestsInTransaction(db, {
+      taskID: input.taskID,
+      sessionID: input.sessionID,
+      goalRunID: input.goalRunID,
+    })
+    if (pending.length > 0) {
+      throw new AgentCoordinationPendingConflictError({
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        requestIDs: pending.map((request) => request.payload.request_id),
+      })
+    }
+
+    const ownership = resolveAgentCoordinationSessionOwnership(input)
+    payload = {
+      request_id: requestID,
+      task_id: input.taskID,
+      session_id: input.sessionID,
+      agent: input.agent,
+      origin: "operator_steer",
+      operator_steer_id: requestID,
+      operator_message: input.operatorMessage,
+      ...(input.goalID ? { goal_id: input.goalID } : {}),
+      ...(input.goalRunID ? { goal_run_id: input.goalRunID } : {}),
+      owner: processOwner(),
+      summary,
+      details,
+      blocking: true,
+      requested_decision: "operator_steer",
+      severity: "blocked",
+      status: "pending",
+      created_at: now,
+      session_ownership_source: ownership.source,
+      ...(ownership.toolOwnershipID ? { tool_ownership_id: ownership.toolOwnershipID } : {}),
+      ...(ownership.toolOwnershipArtifactID ? { tool_ownership_artifact_id: ownership.toolOwnershipArtifactID } : {}),
+    }
+
+    db.insert(EngineArtifactTable)
+      .values({
+        id: requestID,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: input.goalRunID ?? null,
+        acceptance_id: null,
+        kind: "agent_coordination_request" as EngineArtifactKind,
+        label: "pending",
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    EngineProtocol.emitInTransaction(
+      Event.AgentCoordinationRequested,
+      {
+        taskID: input.taskID,
+        requestID,
+        sessionID: input.sessionID,
+        agent: input.agent,
+        blocking: true,
+        severity: "blocked",
+        summary,
+      },
+      {
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        goalRunID: input.goalRunID,
+        source: "operator",
+        target: "orchestrator",
+        correlationID: requestID,
+      },
+    )
+  })
+
+  if (replay) return replay
+  if (!payload) throw new Error(`Operator steer request ${requestID} was not created`)
   return { artifactID: requestID, taskID: input.taskID, payload, timeCreated: now, timeUpdated: now, createdNow: true }
 }
 
@@ -1291,8 +1442,35 @@ function normalizeAgentCoordinationRequestPayload(payload: unknown): AgentCoordi
   if (typeof value.task_id !== "string" || value.task_id.length === 0) return undefined
   if (typeof value.session_id !== "string" || value.session_id.length === 0) return undefined
   if (typeof value.agent !== "string" || value.agent.length === 0) return undefined
-  if (typeof value.message_id !== "string" || value.message_id.length === 0) return undefined
+  if (
+    value.origin !== undefined &&
+    value.origin !== "worker_request" &&
+    value.origin !== "operator_steer"
+  ) {
+    return undefined
+  }
+  if (value.origin === "operator_steer") {
+    if (typeof value.operator_steer_id !== "string" || value.operator_steer_id.length === 0) return undefined
+    if (typeof value.operator_message !== "string" || value.operator_message.length === 0) return undefined
+    if (value.message_id !== undefined && (typeof value.message_id !== "string" || value.message_id.length === 0)) {
+      return undefined
+    }
+  } else if (typeof value.message_id !== "string" || value.message_id.length === 0) {
+    return undefined
+  }
   if (value.tool_call_id !== undefined && (typeof value.tool_call_id !== "string" || value.tool_call_id.length === 0)) {
+    return undefined
+  }
+  if (
+    value.operator_steer_id !== undefined &&
+    (typeof value.operator_steer_id !== "string" || value.operator_steer_id.length === 0)
+  ) {
+    return undefined
+  }
+  if (
+    value.operator_message !== undefined &&
+    (typeof value.operator_message !== "string" || value.operator_message.length === 0)
+  ) {
     return undefined
   }
   if (typeof value.owner !== "string" || value.owner.length === 0) return undefined

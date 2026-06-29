@@ -146,6 +146,8 @@ describe("core prompt hygiene", () => {
     expect(shouldAppendNonExecutorSourceBoundary("build")).toBe(false)
     expect(shouldAppendNonExecutorSourceBoundary("integrity")).toBe(false)
     expect(shouldAppendNonExecutorSourceBoundary("visual-qa")).toBe(false)
+    expect(shouldAppendNonExecutorSourceBoundary("integrity-team")).toBe(true)
+    expect(shouldAppendNonExecutorSourceBoundary("visual_qa")).toBe(true)
 
     expect(appendNonExecutorSourceBoundary({ agentID: "frontend-design", prompt: "CORE" })).toContain(
       "## Non-Executor Source Boundary",
@@ -343,9 +345,9 @@ describe("core prompt hygiene", () => {
     expect(workflow).not.toContain("evaluator as plan/build/evaluate phases")
     expect(workflow).not.toContain("per-goal[build + architecture_review]")
     expect(workflow).not.toContain("goal build ???????? architecture_review")
-    expect(workflow).toContain("integrity 做 session-bound final gate")
+    expect(workflow).toContain("integrity 做 session-bound final review boundary")
     expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
-    expect(workflow).toContain("最终 gate")
+    expect(workflow).toContain("最终 review")
     expect(workflow).toContain("materialization/source handoff")
     expect(workflow).not.toContain("独占网页证据工具")
   })
@@ -699,7 +701,7 @@ describe("core prompt hygiene", () => {
     expect(design).not.toContain("register_layout_spec")
     const integrity = await readPrompt("integrity")
     expect(integrity).toContain("`visual_consistency_contract`")
-    expect(integrity).toContain("The final consensus is the only integrity gate output")
+    expect(integrity).toContain("The final consensus is the only integrity review output")
   })
 
   test("frontend-design is scoped as frontend design and replica contract owner", async () => {
@@ -1064,9 +1066,11 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
-    expect(normalized).toContain("Keep `integrity` as the final system-completeness acceptance gate")
+    expect(normalized).toContain("Keep `integrity` as the final system-completeness acceptance review boundary")
     expect(normalized).toContain("If it reports unresolved_code_module_problems")
-    expect(normalized).toContain("the scheduler must decide whether same-task repair, question, fail_task, or `propose_task`")
+    expect(normalized).toContain(
+      "the scheduler must decide whether same-task repair, question, fail_task, or `propose_task`",
+    )
     expect(normalized).not.toContain("run `integrity` first")
     expect(normalized).not.toContain("call `visual_qa` after integrity")
     expect(normalized).not.toContain(["inspect", "only"].join("_"))
@@ -1366,7 +1370,7 @@ describe("core prompt hygiene", () => {
       "Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict",
     )
     expect(architect).toContain(
-      "final workflow gate to audit the original user request, requirements extraction, and built system",
+      "final workflow review boundary to audit the original user request, requirements extraction, and built system",
     )
     expect(architect).not.toContain("integrity reviewer before build")
   })

@@ -38,10 +38,12 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "WorktreeNotGitError") return 412
   if (err.name.startsWith("Worktree")) return 400
   if (err.name === "InvalidReplyTargetKindError") return 400
-  if (err.name === "BuildSessionDirectReplyError") return 400
+  if (err.name === "AgentDirectReplyDisabledError") return 400
   if (err.name === "AgentSessionAttachmentReferenceError") return 400
+  if (err.name === "OperatorSteerTargetError") return 400
   if (err.name === "ReplyTargetEnvelopeMissingError") return 409
   if (err.name === "AgentSessionPendingCoordinationError") return 409
+  if (err.name === "OperatorSteerWakeError") return 409
   if (err.name === "SessionRuntimeContractMissingError") return 410
   if (err.name === "TaskEmptyMessageError") return 400
   if (err.name === "ExternalChildTaskLineageError") return 400

@@ -35042,9 +35042,6 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "target": {
-                    "$ref": "#/components/schemas/TaskMessageTarget"
-                  },
                   "user_id": {
                     "type": "string"
                   },
@@ -35083,7 +35080,8 @@
                 "required": [
                   "text",
                   "source"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           },
@@ -35312,6 +35310,253 @@
         ]
       }
     },
+    "/task/{taskID}/session/{sessionID}/operator-steer": {
+      "post": {
+        "operationId": "task.session.operatorSteer",
+        "summary": "Steer a task agent session through operator coordination",
+        "description": "Accept a human-authored steer message for one target sub-agent session. The route records a durable operator-originated agent_coordination_request and wakes the orchestrator. It never appends a task-root operator message and never writes a direct child-session reply.",
+        "responses": {
+          "202": {
+            "description": "Operator steer request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task_id": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "pattern": "^ses.*"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "pattern": "^art.*"
+                    },
+                    "wake_status": {
+                      "type": "string",
+                      "enum": [
+                        "started",
+                        "queued"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "task_id",
+                    "session_id",
+                    "request_id",
+                    "wake_status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Operator steer target or request body rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BadRequestError"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "OperatorSteerTargetError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "NotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "LogFileNotFoundError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Operator steer conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "AgentSessionPendingCoordinationError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "const": "OperatorSteerWakeError"
+                        },
+                        "data": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "data"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Session runtime contract no longer present",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRuntimeContractMissingError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.session.operatorSteer({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/session/{sessionID}/reply": {
       "post": {
         "operationId": "task.session.reply",
@@ -35378,7 +35623,7 @@
                       "properties": {
                         "name": {
                           "type": "string",
-                          "const": "BuildSessionDirectReplyError"
+                          "const": "AgentDirectReplyDisabledError"
                         },
                         "data": {
                           "type": "object",
@@ -41506,24 +41751,7 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "const": "BadRequestError"
-                        },
-                        "data": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "data"
-                      ]
+                      "$ref": "#/components/schemas/BadRequestError"
                     },
                     {
                       "type": "object",
@@ -44445,7 +44673,7 @@
         "type": "object",
         "properties": {
           "data": {},
-          "errors": {
+          "error": {
             "type": "array",
             "items": {
               "type": "object",
@@ -44462,7 +44690,7 @@
         },
         "required": [
           "data",
-          "errors",
+          "error",
           "success"
         ]
       },
@@ -50801,30 +51029,6 @@
           }
         ]
       },
-      "TaskMessageTarget": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "agent_session",
-              "build_session"
-            ]
-          },
-          "sessionID": {
-            "type": "string",
-            "minLength": 1
-          },
-          "goalID": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "kind",
-          "sessionID"
-        ]
-      },
       "SessionRuntimeContractMissingError": {
         "type": "object",
         "properties": {
@@ -52930,9 +53134,6 @@
               },
               "source": {
                 "type": "string"
-              },
-              "target": {
-                "$ref": "#/components/schemas/TaskMessageTarget"
               },
               "text": {
                 "type": "string"

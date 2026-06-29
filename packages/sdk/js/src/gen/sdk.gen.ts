@@ -377,7 +377,6 @@ import type {
   TaskListResponses,
   TaskMessageErrors,
   TaskMessageResponses,
-  TaskMessageTarget,
   TaskOperatorModelContextErrors,
   TaskOperatorModelContextResponses,
   TaskProgressErrors,
@@ -398,6 +397,8 @@ import type {
   TaskRunsResponses,
   TaskSessionCancelErrors,
   TaskSessionCancelResponses,
+  TaskSessionOperatorSteerErrors,
+  TaskSessionOperatorSteerResponses,
   TaskSessionReplyErrors,
   TaskSessionReplyResponses,
   TaskStatusErrors,
@@ -6605,6 +6606,49 @@ export class Conversation extends HeyApiClient {
 
 export class Session3 extends HeyApiClient {
   /**
+   * Steer a task agent session through operator coordination
+   *
+   * Accept a human-authored steer message for one target sub-agent session. The route records a durable operator-originated agent_coordination_request and wakes the orchestrator. It never appends a task-root operator message and never writes a direct child-session reply.
+   */
+  public operatorSteer<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      sessionID: string
+      directory?: string
+      message: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "message" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      TaskSessionOperatorSteerResponses,
+      TaskSessionOperatorSteerErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/session/{sessionID}/operator-steer",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Reply directly to a task agent session
    *
    * Accept a human-authored message aimed at a task agent session. When the target session can be continued in-process, the message is appended there. Structural direct-reply failures are returned as precise NamedError responses; this route never rewrites the message into task-root operator input.
@@ -7511,7 +7555,6 @@ export class Task extends HeyApiClient {
       directory?: string
       text: string
       source: string
-      target?: TaskMessageTarget
       user_id?: string
       promptProfile?: string
       attachments?: Array<{
@@ -7533,7 +7576,6 @@ export class Task extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "text" },
             { in: "body", key: "source" },
-            { in: "body", key: "target" },
             { in: "body", key: "user_id" },
             { in: "body", key: "promptProfile" },
             { in: "body", key: "attachments" },

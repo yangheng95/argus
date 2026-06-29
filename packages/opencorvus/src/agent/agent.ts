@@ -519,10 +519,9 @@ export namespace Agent {
       },
     }
 
-    const fixedReadonlyAgents = new Set(["fact-check", "deep-research", "frontend-research"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       const role = AgentRoleContract.all[key as AgentRoleID]
-      if (fixedReadonlyAgents.has(key) && value.disable) {
+      if (role && !role.disableConfigurable && value.disable) {
         throw new Error(
           `config.agent.${key}.disable is not supported: ${key} is a fixed read-only evidence agent used by runtime contracts.`,
         )

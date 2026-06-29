@@ -62,20 +62,24 @@ function eventStream(): Response {
   })
 }
 
-function orderKey(rank: number, time: number, id: string, sequence = 0): string {
-  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:browser:${id}`
+function orderKey(domain: string, rank: number, time: number, id: string, sequence = 0): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
 }
 
 function taskOrderKey(id: string, time: number): string {
-  return orderKey(10, time, id)
+  return orderKey("task", 10, time, id)
 }
 
 function messageOrderKey(id: string, time: number): string {
-  return orderKey(30, time, id)
+  return orderKey("message", 30, time, id)
+}
+
+function partOrderKey(id: string, time: number): string {
+  return orderKey("part", 31, time, id)
 }
 
 function sessionOrderKey(id: string, time: number): string {
-  return orderKey(50, time, id)
+  return orderKey("session", 50, time, id)
 }
 
 function assistantMessage() {
@@ -97,6 +101,7 @@ function assistantMessage() {
         id: "part_agent_reply_child",
         messageID: "msg_agent_reply_child",
         sessionID: SESSION_ID,
+        orderKey: partOrderKey("part_agent_reply_child", T0 + 100),
         type: "text",
         text: "Architect session is waiting for scoped operator guidance.",
       },
@@ -105,13 +110,13 @@ function assistantMessage() {
 }
 
 test(
-  "agent reply box component keeps draft and shows structured attachment errors",
+  "agent reply box component keeps draft and shows structured operator steer errors",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
-    const attachmentReferenceError =
-      "One of the attached files is no longer a stored project attachment. Reattach the file before steering this session."
+    const operatorTargetError =
+      "This target cannot receive operator steer. Use task-level input or a visible redispatch action instead."
     const task = {
       id: TASK_ID,
       orderKey: taskOrderKey(TASK_ID, T0),
@@ -173,7 +178,8 @@ test(
       view: { sessions, messages, topLevelSessionIDs: [SESSION_ID] },
       agentView: { sessions, messages, topLevelSessionIDs: [SESSION_ID] },
     }
-    const postedReplies: unknown[] = []
+    const postedSteers: unknown[] = []
+    const unhandledRequests: string[] = []
 
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -256,18 +262,19 @@ test(
         })
       if (path === `/task/${TASK_ID}/transcript`) return json(transcript)
       if (path === `/task/${TASK_ID}/trace`) return json({ events: [], traceDir: `${PROJECT_ROOT}/.opencorvus/trace` })
-      if (path === `/task/${TASK_ID}/session/${SESSION_ID}/reply` && req.method === "POST") {
-        postedReplies.push(await req.json())
+      if (path === `/task/${TASK_ID}/session/${SESSION_ID}/operator-steer` && req.method === "POST") {
+        postedSteers.push(await req.json())
         return json(
           {
-            name: "AgentSessionAttachmentReferenceError",
-            data: { reason: "metadata_mismatch", url: "opencorvus-attachment://dangling" },
+            name: "OperatorSteerTargetError",
+            data: { reason: "unowned_session", taskID: TASK_ID, sessionID: SESSION_ID },
           },
           { status: 400 },
         )
       }
       if (path === "/task/events" || path === `/task/${TASK_ID}/events`) return eventStream()
       if (path === "/log" && req.method === "POST") return json({ ok: true })
+      unhandledRequests.push(`${req.method} ${url.pathname}${url.search}`)
       return text(`unhandled ${req.method} ${url.pathname}${url.search}`, { status: 404 })
     })
 
@@ -276,12 +283,22 @@ test(
       const page = await browser.newPage()
       const errors = installBrowserErrorCollector(page, {
         allowResponse(response) {
-          return response.status === 400 && response.path === `/task/${TASK_ID}/session/${SESSION_ID}/reply`
+          return response.status === 400 && response.path === `/task/${TASK_ID}/session/${SESSION_ID}/operator-steer`
         },
       })
       await page.setViewport({ width: 900, height: 720 })
       await page.evaluateOnNewDocument(
         (seed: { serverUrl: string; taskID: string }) => {
+          let settings: Record<string, unknown> = {
+            serverUrl: seed.serverUrl,
+            autoServer: false,
+            locale: "en-US",
+            theme: "light",
+            directory: "D:/overlay/workspace/agent-reply-box",
+            workspaceTaskID: seed.taskID,
+            workspaceTaskId: seed.taskID,
+            workspaceDirectory: "D:/overlay/workspace/agent-reply-box",
+          }
           localStorage.setItem("oc_locale", "en-US")
           localStorage.setItem("oc_theme", "light")
           localStorage.setItem("oc_server_url", seed.serverUrl)
@@ -289,12 +306,54 @@ test(
           localStorage.setItem("oc_directory", "D:/overlay/workspace/agent-reply-box")
           localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/agent-reply-box")
           localStorage.setItem("oc_workspace_task", seed.taskID)
+          ;(window as any).__TAURI__ = {
+            core: {
+              invoke: async (command: string, args: Record<string, unknown> = {}) => {
+                if (command === "overlay_settings_load") return settings
+                if (command === "overlay_settings_save") {
+                  settings = { ...((args.settings as Record<string, unknown>) || {}) }
+                  return true
+                }
+                if (command === "overlay_open_url" || command === "overlay_open_path") return true
+                return null
+              },
+            },
+            window: {
+              getCurrentWindow() {
+                return {
+                  close: async () => true,
+                  hide: async () => true,
+                  minimize: async () => true,
+                  startDragging: async () => true,
+                  isMaximized: async () => false,
+                  onResized: async () => ({ unlisten: async () => undefined }),
+                }
+              },
+            },
+          }
         },
         { serverUrl: server.origin, taskID: TASK_ID },
       )
 
       await page.goto(`${server.origin}/ui/index.html?taskID=${encodeURIComponent(TASK_ID)}`, { waitUntil: "load" })
-      await page.waitForSelector(".card__agent-reply-input", { visible: true })
+      try {
+        await page.waitForSelector(".card__agent-reply-input", { visible: true })
+      } catch (error) {
+        const screenshot = await saveScreenshot(page, "agent-reply-box-missing-input-debug.png")
+        const htmlPath = join(SCRATCH_ROOT, "agent-reply-box-missing-input-debug.html")
+        await writeFile(htmlPath, await page.content())
+        const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1200))
+        throw new Error(
+          [
+            "agent reply box textarea did not render",
+            `screenshot=${screenshot}`,
+            `html=${htmlPath}`,
+            `body=${JSON.stringify(bodyText)}`,
+            `unhandled=${JSON.stringify(unhandledRequests)}`,
+            `cause=${error instanceof Error ? error.message : String(error)}`,
+          ].join("\n"),
+        )
+      }
       await page.evaluate(() => {
         const input = document.querySelector<HTMLTextAreaElement>(".card__agent-reply-input")
         if (!input) throw new Error("missing AgentSessionReplyBox textarea")
@@ -348,7 +407,7 @@ test(
 
       const expectedDraft =
         "Please retry the layout pass.\nKeep the follow-up instruction visible.\nConfirm the screenshot evidence.\nReport the exact terminal state."
-      assert.deepEqual(postedReplies, [{ message: expectedDraft }])
+      assert.deepEqual(postedSteers, [{ message: expectedDraft }])
       assert.equal(metrics.draftValue, expectedDraft)
       assert.equal(metrics.sendDisabled, false)
       assert.equal(metrics.inputOverflowY, "auto")
@@ -362,15 +421,15 @@ test(
       assert.notEqual(metrics.sendBg, "rgba(0, 0, 0, 0)")
       assert.equal(metrics.errorInsideStage, true)
       assert.equal(metrics.dismissInsideError, true)
-      assert.equal(metrics.errorText, attachmentReferenceError)
+      assert.equal(metrics.errorText, operatorTargetError)
       assert.match(metrics.dismissClass, /\boc-button\b/)
       assert.equal(metrics.dismissSize, "icon")
       assert.notEqual(metrics.dismissColor, "rgba(0, 0, 0, 0)")
 
       const form = await page.$(".card__agent-reply")
       assert.ok(form)
-      const screenshot = await saveScreenshot(form, "agent-reply-box-attachment-reference-error.png")
-      assert.ok(screenshot.endsWith("agent-reply-box-attachment-reference-error.png"))
+      const screenshot = await saveScreenshot(form, "agent-reply-box-operator-target-error.png")
+      assert.ok(screenshot.endsWith("agent-reply-box-operator-target-error.png"))
       await page.click('[data-ui="agent-reply-error-dismiss"]')
       await page.waitForFunction(() => !document.querySelector(".card__agent-reply-error"))
       errors.assertNoUnexpectedErrors()

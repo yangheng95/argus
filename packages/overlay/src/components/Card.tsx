@@ -10,7 +10,7 @@ import {
 } from "../utils/card-tree"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import { rootTaskSessionID, activeTaskID } from "../store/board"
-import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
+import { cancelAgentSession, sendOperatorSteer } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
 import { currentTraceDirectory } from "../services/trace-directory"
 import { normalizeAgentRole } from "../utils/message"
@@ -121,17 +121,6 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (sessionID === rootTaskSessionID()) return undefined
     return sessionID
   })
-  const directAgentSessionKind = createMemo(() => {
-    if (props.node.kind === "phase") return props.node.phaseSessionKind || props.node.phaseID || props.node.stage
-    if (props.node.kind === "step") {
-      const phase = promotedBuildPhase()
-      return phase?.phaseSessionKind || phase?.phaseID || phase?.stage
-    }
-    return props.node.stage
-  })
-  const directAgentReplyMode = createMemo<"session" | "task">(() =>
-    normalizeAgentRole(directAgentSessionKind() || "") === "build" ? "task" : "session",
-  )
   const [traceOpen, setTraceOpen] = createSignal(false)
   const onTraceToggle = () => {
     if (!traceSessionID()) return
@@ -154,28 +143,8 @@ export function Card(props: { node: CardNode; depth: number }) {
 
   const onAgentReply = async (sessionID: string, message: string) => {
     const taskID = activeTaskID()
-    if (!taskID) return
-    if (directAgentReplyMode() === "task") {
-      const context = [
-        "Build session steering from overlay.",
-        `Target build session: ${sessionID}.`,
-        props.node.goalID ? `Target goal: ${props.node.goalID}.` : "",
-        "",
-        message,
-      ]
-        .filter((line) => line.length > 0)
-        .join("\n")
-      await sendTaskOperatorMessage(taskID, context, {
-        source: "overlay_build_steer",
-        target: {
-          kind: "build_session",
-          sessionID,
-          ...(props.node.goalID ? { goalID: props.node.goalID } : {}),
-        },
-      })
-      return
-    }
-    await replyToAgentSession(taskID, sessionID, message)
+    if (!taskID) throw new Error(t("card.agent_reply_missing_task"))
+    await sendOperatorSteer(taskID, sessionID, message)
   }
 
   const onAgentCancel = async (sessionID: string) => {
@@ -341,11 +310,8 @@ export function Card(props: { node: CardNode; depth: number }) {
           </Show>
 
           {/* Inline steer box at the END of every targetable agent session
-              card. Build sessions route through task guidance; other
-              sessions use direct reply. Always visible (no toggle) — replaces the
-              previous CardHeader collapsible reply form so the input
-              sits where the user expects: directly after the agent's
-              latest output. */}
+              card. All sessions use the operator-steer route so guidance is
+              recorded as a coordination request for the orchestrator. */}
           <Show when={directAgentSessionID()}>
             <AgentSessionReplyBox onSend={(message) => onAgentReply(directAgentSessionID()!, message)} />
           </Show>

@@ -1,32 +1,26 @@
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
+import { AgentRoleContract } from "@/agent/role-contract"
+import type { SessionKind } from "@/session/session.sql"
 
-const DIRECT_REPLY_AGENT_KIND_VALUES = [
+const DIRECT_REPLY_NON_ROLE_SESSION_KIND_VALUES = [
   "assistant",
-  "intent-analysis",
-  "requirements",
-  "frontend-design",
   "goal",
-  "architect",
-  "integrity",
   "acceptance",
   "evaluator",
+] as const satisfies readonly SessionKind[]
+
+const DIRECT_REPLY_AGENT_KIND_VALUES = [
+  ...DIRECT_REPLY_NON_ROLE_SESSION_KIND_VALUES,
+  ...AgentRoleContract.directSessionReplyIDs(),
 ]
 
-export const DIRECT_REPLY_AGENT_KINDS = new Set(DIRECT_REPLY_AGENT_KIND_VALUES)
+const DIRECT_REPLY_AGENT_KINDS = new Set<string>(DIRECT_REPLY_AGENT_KIND_VALUES)
 
 // A2A means Agent-to-Agent coordination between a task worker and orchestrator.
-const A2A_WORKER_CONTROL_AGENT_KIND_VALUES = [
-  "build",
-  "fact-check",
-  "deep-research",
-  "explore",
-  "frontend-research",
-  "visual-qa",
-  "goal-workload-analyst",
-]
+const A2A_WORKER_CONTROL_AGENT_KIND_VALUES = AgentRoleContract.agentOwnedTaskWorkerIDs()
 
-export const DIRECT_AGENT_SESSION_CONTROL_KINDS = new Set([
+const DIRECT_AGENT_SESSION_CONTROL_KINDS = new Set<string>([
   ...DIRECT_REPLY_AGENT_KIND_VALUES,
   ...A2A_WORKER_CONTROL_AGENT_KIND_VALUES,
 ])
@@ -75,21 +69,17 @@ export const AgentSessionPendingCoordinationError = NamedError.create(
   }),
 )
 
-export const BuildSessionDirectReplyError = NamedError.create(
-  "BuildSessionDirectReplyError",
+export const AgentDirectReplyDisabledError = NamedError.create(
+  "AgentDirectReplyDisabledError",
   z.object({
     message: z.string(),
     sessionID: z.string(),
-    /** The session's underlying kind. When sessionKind === "build" the
-     *  reply was rejected because the session itself is a build attempt.
-     *  When sessionKind !== "build" but envelopeAgent === "build", the
-     *  reply was rejected because the last user envelope is tagged to
-     *  resume under the build agent (which would wake build tools on a
-     *  non-build session, bypassing the build retry lifecycle). The
-     *  overlay reads these to render hybrid-specific UX rather than the
-     *  generic "kind not allowed" copy. */
+    /** The session's persisted kind and the latest user envelope agent.
+     *  A direct-replyable session may still be rejected when the envelope
+     *  would resume a different agent that is not direct-replyable. */
     sessionKind: z.string(),
     envelopeAgent: z.string(),
+    reason: z.literal("envelope_agent_not_direct_replyable"),
   }),
 )
 

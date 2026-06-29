@@ -132,7 +132,7 @@ function inactivityTimeoutError(timeoutMs: number): DOMException {
   return new DOMException(`Panel stream inactive for ${timeoutMs}ms`, "TimeoutError")
 }
 
-function currentOpenCorvusModel(): string | undefined {
+export function currentOpenCorvusModel(): string | undefined {
   const model = appStore.config?.model
   return typeof model === "string" && model.includes("/") && model.trim() === model ? model : undefined
 }
@@ -741,45 +741,40 @@ export async function replanTask(taskID: string): Promise<void> {
   await loadBoard()
 }
 
-// ── Public: replyToAgentSession ──
+// ── Public: sendOperatorSteer ──
+
+export interface OperatorSteerResult {
+  task_id: string
+  session_id: string
+  request_id: string
+  wake_status: "started" | "queued"
+}
+
+export class OperatorSteerInputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "OperatorSteerInputError"
+  }
+}
 
 /**
- * Append scoped human input directly to a task child-agent session. This does
- * not route through the task-level panel message endpoint.
+ * Record targeted operator steer as a durable coordination request. This is
+ * the only route the inline agent steer box may call.
  */
-export async function replyToAgentSession(taskID: string, sessionID: string, message: string): Promise<void> {
+export async function sendOperatorSteer(
+  taskID: string,
+  sessionID: string,
+  message: string,
+): Promise<OperatorSteerResult> {
   const text = message.trim()
-  if (!taskID || !sessionID || !text) return
-  await apiJson(taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/reply`), {
+  if (!taskID) throw new OperatorSteerInputError("No active task is selected for operator steer.")
+  if (!sessionID) throw new OperatorSteerInputError("No target agent session is available for operator steer.")
+  if (!text) throw new OperatorSteerInputError("Operator steer message is empty.")
+  return (await apiJson(taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/operator-steer`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: text }),
-  })
-}
-
-// ── Public: sendTaskOperatorMessage ──
-
-/**
- * Record visible operator guidance on the task root and wake the orchestrator.
- * Build cards use this instead of direct session reply because build sessions
- * require goal_run/runtime ownership handling before another build attempt.
- */
-export async function sendTaskOperatorMessage(
-  taskID: string,
-  message: string,
-  options: { source: string; target?: { kind: "build_session"; sessionID: string; goalID?: string } },
-): Promise<void> {
-  const text = message.trim()
-  if (!taskID || !text) return
-  await apiJson(taskPath(taskID, "/message"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      source: options.source,
-      ...(options.target ? { target: options.target } : {}),
-    }),
-  })
+  })) as OperatorSteerResult
 }
 
 // ── Public: cancelAgentSession ──

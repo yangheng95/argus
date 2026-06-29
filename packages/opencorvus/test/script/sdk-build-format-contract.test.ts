@@ -241,9 +241,13 @@ describe("SDK build format contract", () => {
       openapi.paths["/mcp/{name}/auth/callback"].post.requestBody.content["application/json"].schema
     expect(mcpAuthCallbackRequestSchema.required.sort()).toEqual(["code", "state"])
     expect(Object.keys(mcpAuthCallbackRequestSchema.properties).sort()).toEqual(["code", "state"])
-    expect(JSON.stringify(openapi.paths["/mcp/{name}/auth/callback"].post.responses["400"])).toContain(
-      "MCPOAuthStateError",
-    )
+    const mcpAuthCallback400 = JSON.stringify(openapi.paths["/mcp/{name}/auth/callback"].post.responses["400"])
+    expect(mcpAuthCallback400).toContain('"$ref":"#/components/schemas/BadRequestError"')
+    expect(mcpAuthCallback400).toContain("MCPOAuthStateError")
+    expect(mcpAuthCallback400).not.toContain('"const":"BadRequestError"')
+    const badRequestSchema = JSON.stringify(openapi.components.schemas.BadRequestError)
+    expect(badRequestSchema).toContain('"error"')
+    expect(badRequestSchema).not.toContain('"errors"')
     expect(Object.keys(openapi.paths["/mcp/{name}/auth/authenticate"].post.responses).sort()).toEqual([
       "200",
       "400",
@@ -269,10 +273,14 @@ describe("SDK build format contract", () => {
     const mcpAuthStartErrorsBlock = generatedTypeBlock(types, "McpAuthStartErrors")
     expect(mcpAuthStartErrorsBlock).toContain("BadRequestError")
     expect(mcpAuthStartErrorsBlock).toContain('name: "UnknownError"')
+    const badRequestErrorBlock = generatedTypeBlock(types, "BadRequestError")
+    expect(badRequestErrorBlock).toContain("error: Array")
+    expect(badRequestErrorBlock).not.toContain("errors: Array")
     const mcpAuthCallbackErrorsBlock = generatedTypeBlock(types, "McpAuthCallbackErrors")
     expect(mcpAuthCallbackErrorsBlock).toContain("BadRequestError")
     expect(mcpAuthCallbackErrorsBlock).toContain("MCPOAuthStateError")
     expect(mcpAuthCallbackErrorsBlock).toContain('name: "UnknownError"')
+    expect(mcpAuthCallbackErrorsBlock).not.toContain('name: "BadRequestError"')
     const mcpAuthCallbackDataBlock = generatedTypeBlock(types, "McpAuthCallbackData")
     expect(mcpAuthCallbackDataBlock).toContain("code: string")
     expect(mcpAuthCallbackDataBlock).toContain("state: string")
