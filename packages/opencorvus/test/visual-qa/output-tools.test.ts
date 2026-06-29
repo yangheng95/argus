@@ -109,6 +109,7 @@ async function seedReferenceComparisonEvidence(input: {
     viewportID: input.viewportID ?? "desktop",
     operationKind: input.operationKind ?? "reference-comparison",
     regionID: input.regionID ?? "region_header",
+    cropIntent: "full-region",
     status: input.status ?? "passed",
     summary: input.status === "failed" ? "Header comparison failed." : "Header comparison passed.",
     artifactPaths: {
@@ -225,7 +226,293 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
   })
 
-  test("records host-derived incomplete reference coverage as advisory diagnostics", async () => {
+  test("records accepted reference parity with non-formal comparison refs as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const cases: Array<{
+      label: string
+      operationKind?: "source-binding" | "layout-geometry" | "reference-comparison"
+      status?: "failed"
+      seed: boolean
+    }> = [
+      { label: "source-binding", operationKind: "source-binding", seed: true },
+      { label: "layout-geometry", operationKind: "layout-geometry", seed: true },
+      { label: "failed-reference-comparison", operationKind: "reference-comparison", status: "failed", seed: true },
+      { label: "missing-reference-comparison", seed: false },
+    ]
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const item of cases) {
+          const taskID = `tsk_visualqa_invalid_ref_${item.label}_${Date.now()}`
+          const evidenceID = item.seed
+            ? await seedReferenceComparisonEvidence({
+                projectDirectory: tmp.path,
+                taskID,
+                regionID: "region_header",
+                viewportID: "desktop",
+                operationKind: item.operationKind,
+                status: item.status,
+              })
+            : "browser_preview_evidence:art_missing_reference_comparison"
+          const kit = createVisualQaOutputTools({
+            taskID,
+            projectRoot: tmp.path,
+            referenceParityRequired: true,
+            requiredReferenceRegions: ["region_header@desktop"],
+          })
+          const result = await callTool(
+            kit.tools,
+            "submit_visual_qa_report",
+            validReport({
+              evidence: [
+                {
+                  type: "reference_comparison",
+                  ref: evidenceID,
+                  viewport: { width: 1440, height: 900 },
+                  state: "default",
+                  note: `Submitted ${item.label} as reference comparison evidence.`,
+                },
+              ],
+              coverage: [
+                {
+                  region: "region_header",
+                  viewports: [{ width: 1440, height: 900 }],
+                  states: ["default"],
+                  source_refs: ["reference.png"],
+                  evidence_refs: [evidenceID],
+                  notes: `Checked ${item.label}.`,
+                },
+              ],
+              reference_parity: {
+                required: true,
+                required_regions: ["region_header@desktop"],
+                reference_comparison_evidence_refs: [evidenceID],
+                missing_regions: [],
+                blocker_ids: [],
+              },
+            }),
+          )
+
+          expect(result, item.label).toContain("RECORDED")
+          expect(result, item.label).toContain("effective_accepted=false")
+          expect(result, item.label).toContain("BLOCKERS")
+          expect(result, item.label).toContain(
+            "no submitted reference comparison refs resolved to readable passed browser_preview_evidence",
+          )
+          expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(false)
+        }
+      },
+    })
+  }, 30_000)
+
+  test("does not accept supporting evidence as formal reference comparison refs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_supporting_refs_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+          requiredReferenceRegions: ["region_header@desktop"],
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Supporting report evidence cannot replace the dedicated parity refs field.",
+              },
+            ],
+            coverage: [
+              {
+                region: "region_header",
+                viewports: [{ width: 1440, height: 900 }],
+                states: ["default"],
+                source_refs: ["reference.png"],
+                evidence_refs: [evidenceID],
+                notes: "Coverage references supporting evidence only.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("without reference_comparison evidence refs")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("records host-required parity report with required=false as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_host_required_false_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+          requiredReferenceRegions: ["region_header@desktop"],
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Fresh task-scoped reference comparison evidence.",
+              },
+            ],
+            reference_parity: {
+              required: false,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [evidenceID],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("report.reference_parity.required=false")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("records host-required parity without authoritative regions as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_no_authoritative_regions_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Fresh task-scoped reference comparison evidence.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [evidenceID],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("no authoritative requiredReferenceRegions")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("records unreadable reference-comparison evidence as effective failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_unreadable_ref_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "visual-qa-reference")
+        await fs.unlink(path.join(artifactDir, "side-by-side.png"))
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+          requiredReferenceRegions: ["region_header@desktop"],
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Corrupt task-scoped reference comparison evidence.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [evidenceID],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+
+        expect(result).toContain("RECORDED")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("unreadable")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+      },
+    })
+  }, 20_000)
+
+  test("records host-derived incomplete reference coverage as effective failure", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_context_regions_${Date.now()}`
     await Instance.provide({
@@ -267,10 +554,11 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=true")
-        expect(result).toContain("ADVISORIES")
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("BLOCKERS")
         expect(result).toContain("region_table@desktop")
         expect(kit.getCollector().final?.accepted).toBe(true)
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
       },
     })
   }, 20_000)
@@ -329,6 +617,7 @@ describe("visual-qa output tools", () => {
         expect(result).toContain("RECORDED")
         expect(result).toContain("effective_accepted=true")
         expect(result).not.toContain("ADVISORIES")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
         expect(kit.getCollector().final?.accepted).toBe(true)
       },
     })
