@@ -3,7 +3,7 @@ import "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
 
 /**
- * Phase D of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
+ * Phase D of structured-output systemic fix record:
  * after a turn ends, the loop must enter the StructuredOutput recovery
  * channel (stamp `StructuredOutputError`) ONLY when
  *

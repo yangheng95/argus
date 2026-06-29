@@ -314,8 +314,7 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
  * side merge_back-before-passed guard: the orchestrator LLM now reads the
  * merge_back facts (RunOutput.mergeBackStatus / lastMergeBackOutcome /
  * publishedCommitRef) returned in the build tool result and decides what
- * to do, rather than the host throwing on its behalf. Spec
- * architecture-rework-loosening-plan-2026-05-06.md (B8).
+ * to do, rather than the host throwing on its behalf.
  */
 export class BuildAgentContractError extends Error {
   readonly code: "missing_terminal_report"

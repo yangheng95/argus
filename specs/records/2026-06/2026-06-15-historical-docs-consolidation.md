@@ -33,10 +33,10 @@ Full-repo checks before this plan:
 1. Remove `docs/product/**` entirely.
 2. Replace references to deleted product docs with the canonical `packages/web/src/content/docs/**` paths.
 3. Fix four broken historical references found by the link scan:
-   - docs/superpowers/plans/2026-05-05-inspector-panel-redesign.md
-   - specs/deliver-accepted-completes-task-2026-05-16.md
+   - deleted inspector panel redesign plan
+   - deleted deliver-accepted completion note
    - specs/records/2026-06/2026-06-04-remove-iwc-aime-provider.md
-   - specs/notification-reliability-2026-05-18.md
+   - deleted notification reliability note
 4. Update `specs/current/architecture/README.md` with the current cleanup status so new design notes do not restart the old dual-source pattern.
 
 ## Verification

@@ -17,7 +17,7 @@ Cascading Style Sheets. DOM means Document Object Model.
   `2026-06-19-project-ledger-group-toggle-button-primitive.md` establish the
   current rule for visible overlay controls: render through `Button` and route
   per-surface geometry through `.oc-button[data-ui="..."]` selectors.
-- `2026-05-11-goal-worktree-display.md` keeps the per-goal worktree row on
+- The pre-June goal worktree display record keeps the per-goal worktree row on
   `GoalWorkflowGroup`; this pass keeps that source, only changing the visible
   button primitive.
 

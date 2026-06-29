@@ -9,7 +9,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 /**
- * Regression for specs/scheduler-fix-plan-2026-04-30.md P4 (commit
+ * Regression for scheduler fix regression contract P4 (commit
  * e87333dbb) + audit §11.3 / L3 + L7. Bench tsk_dde13a67c001sbz6y2Qe0at8Fc:
  *   line 1082  intent-analysis session aborted (reason=aborted)
  *   line 1729  frontend_design no visual input materialized — aborting

@@ -7,7 +7,7 @@ import "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
 
 /**
- * Phase A of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
+ * Phase A of structured-output systemic fix record:
  * the predictive-compaction trigger must size tools by the JSON Schema that
  * actually goes on the wire, not by `JSON.stringify(zodWrapper)` which walks
  * the Zod object's `_def` graph and produces wildly inflated counts.

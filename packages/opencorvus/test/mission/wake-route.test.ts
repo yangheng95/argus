@@ -1,7 +1,7 @@
 /**
  * POST /mission/wake — Mission agent wake entry tests.
  *
- * Spec: gateway-mission-split-2026-05-28.md.
+ * Mission split contract.
  *
  * The route MUST:
  *   - generate a missionID when none is supplied (regex-conformant)

@@ -21,7 +21,7 @@ source of truth for whether an agent ran.
 | Source                                              | Constraint carried forward                                                                                                                                    |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                                         | No fallback, no double source, inspect disk plans before editing, test every change, visual-check UI changes, do not restart the user's live overlay process. |
-| `2026-05-13-conversation-agent-workflow-rail.md`    | Rail is the Conversation-owned execution/navigation strip. It must not synthesize hidden message cards.                                                       |
+| Pre-June conversation agent workflow rail record    | Rail is the Conversation-owned execution/navigation strip. It must not synthesize hidden message cards.                                                       |
 | `2026-06-10-agent-rail-identity-empty-card-fix.md`  | Lifecycle-only sessions must not become blank message cards. This does not mean they cannot be rail execution records.                                        |
 | `2026-06-24-agent-rail-live-message-stream.md`      | Direct message updates can refine rail records in real time, but they must not be the existence source.                                                       |
 | `2026-06-25-agent-rail-converted-message-stream.md` | Previous fix closed missing live message projection edges, but kept the wrong model by treating message/part output as rail existence evidence.               |

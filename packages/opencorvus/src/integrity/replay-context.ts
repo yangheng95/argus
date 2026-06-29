@@ -1,6 +1,6 @@
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement } from "@/requirements/types"
-import type { GoalRunRow } from "@/engine/store"
+import type { BuildAttemptOutcomeRow, GoalRunRow } from "@/engine/store"
 import { listIntegrityAttemptArtifacts, listSpecSnapshots } from "@/engine/store"
 import { listFactCheckAttempts } from "@/fact-check/persist"
 import { canonicalIntegritySymptom, defaultIntegrityVerify, integrityFindingFingerprint } from "./finding-manifest"
@@ -81,6 +81,12 @@ export type IntegrityBuildEvidenceSinceLastReview = {
     goalID: string
     goalRunID: string
     status: string
+    outcomeKind?: string
+    outcomeSummary?: string
+    outcomeError?: string
+    noDiffReason?: string
+    changedFiles?: string[]
+    commitRef?: string
     timeCreated: number
     timeCompleted?: number | null
   }>
@@ -121,7 +127,7 @@ export type IntegrityReplayContext = {
   lineage: SpecSnapshotLineage
   priorAttempts: IntegrityPriorAttemptSummary[]
   /** Fact-check evidence accumulated on this task before the current
-   *  integrity review.  Per specs/fact-check-agent-2026-05-25.md §6.1.2
+   *  integrity review.  Per fact-check agent contract §6.1.2
    *  step 7: integrity reviewers should be able to see "claim X was
    *  already corrected by fact-check, don't re-flag it" without re-
    *  dispatching fact_check.  Newest first; an empty array is the
@@ -139,6 +145,7 @@ export type BuildIntegrityReplayContextInput = {
   requirements?: ParsedRequirement[]
   buildRecords: BuildRecordRow[]
   goalRuns: GoalRunRow[]
+  buildOutcomes?: BuildAttemptOutcomeRow[]
 }
 
 export function buildSpecSnapshotLineage(input: { taskID: string; activeSpecSnapshotID: string }): SpecSnapshotLineage {
@@ -204,6 +211,7 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
     sinceTimeCreated === undefined
       ? input.goalRuns
       : input.goalRuns.filter((run) => (run.time_completed ?? run.time_created) > sinceTimeCreated)
+  const buildOutcomesByGoalRun = new Map((input.buildOutcomes ?? []).map((outcome) => [outcome.goal_run_id, outcome]))
   const changedFilesTotal = changedFilesFromBuildRecords(input.buildRecords)
   const changedFilesSinceLastReview = changedFilesFromBuildRecords(buildRecordsSince)
 
@@ -239,6 +247,9 @@ export function buildIntegrityReplayContext(input: BuildIntegrityReplayContextIn
         goalID: run.goal_id,
         goalRunID: run.id,
         status: run.status,
+        ...(buildOutcomesByGoalRun.has(run.id)
+          ? goalRunOutcomeSummary(buildOutcomesByGoalRun.get(run.id)!)
+          : {}),
         timeCreated: run.time_created,
         timeCompleted: run.time_completed,
       })),
@@ -295,8 +306,14 @@ export function renderIntegrityReplayContextPrompt(context: IntegrityReplayConte
   if (evidence.goalRuns.length > 0) {
     evidenceLines.push("- Goal runs after latest review:")
     for (const run of evidence.goalRuns) {
+      const outcome = run.outcomeKind ? `, outcome=${run.outcomeKind}` : ""
+      const noDiff = run.noDiffReason ? `, no_diff=${run.noDiffReason}` : ""
+      const changedFiles = run.changedFiles ? `, changed_files=${run.changedFiles.length}` : ""
+      const commitRef = run.commitRef ? `, commit=${run.commitRef}` : ""
+      const outcomeSummary = run.outcomeSummary ? `, summary=${clipReplayText(run.outcomeSummary, 120)}` : ""
+      const outcomeError = run.outcomeError ? `, error=${clipReplayText(run.outcomeError, 120)}` : ""
       evidenceLines.push(
-        `  - ${run.goalID}/${run.goalRunID}: ${run.status}, created=${new Date(run.timeCreated).toISOString()}${run.timeCompleted ? `, completed=${new Date(run.timeCompleted).toISOString()}` : ""}`,
+        `  - ${run.goalID}/${run.goalRunID}: ${run.status}${outcome}${noDiff}${changedFiles}${commitRef}${outcomeSummary}${outcomeError}, created=${new Date(run.timeCreated).toISOString()}${run.timeCompleted ? `, completed=${new Date(run.timeCompleted).toISOString()}` : ""}`,
       )
     }
   }
@@ -369,6 +386,24 @@ function clipReplayText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text
   const marker = "\n[truncated_by_integrity_replay_prompt_cap]"
   return `${text.slice(0, Math.max(0, maxChars - marker.length)).trimEnd()}${marker}`
+}
+
+function goalRunOutcomeSummary(outcome: BuildAttemptOutcomeRow): {
+  outcomeKind: string
+  outcomeSummary?: string
+  outcomeError?: string
+  noDiffReason?: string
+  changedFiles: string[]
+  commitRef?: string
+} {
+  return {
+    outcomeKind: outcome.outcome_kind,
+    outcomeSummary: outcome.summary,
+    outcomeError: outcome.error ?? undefined,
+    noDiffReason: outcome.no_diff_reason ?? undefined,
+    changedFiles: outcome.changed_files,
+    commitRef: outcome.commit_ref ?? undefined,
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

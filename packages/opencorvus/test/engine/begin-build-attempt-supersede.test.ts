@@ -9,8 +9,8 @@ import { findGoal, findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from 
 import { resetDatabase } from "../fixture/db"
 
 /**
- * Regression for deleted pre-June record scheduler-collab-audit-2026-04-30 §11.6 + L8 +
- * scheduler-fix-plan-2026-04-30.md P0. The bug: retry attempts created via
+ * Regression for the retired scheduler collaboration audit and scheduler fix plan.
+ * The bug: retry attempts created via
  * `beginBuildAttempt` left supersede_of=null on the new running goal_run row.
  * findLatestTipGoalRun then projected the patched-old terminal row as the
  * live tip while the build was actually running. Two retry shapes both reach

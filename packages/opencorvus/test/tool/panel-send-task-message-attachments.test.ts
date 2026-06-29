@@ -12,7 +12,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix #3 (codex review).
+ * Overlay image ingestion fidelity contract.
  *
  * `panel.send_task_message` previously called `EngineService.handleTaskMessage`
  * with only `{text, source, user_id}`, dropping any attachments the

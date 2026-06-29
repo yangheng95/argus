@@ -75,7 +75,7 @@ describe("core prompt hygiene", () => {
       // blockers must be routed to repair owners instead of passive waits.
       // Raised 420 -> 495 on 2026-05-26 to add the §Fact-Check Dispatch
       // section (orchestrator instructions for the new fact_check tool;
-      // specs/fact-check-agent-2026-05-25.md §4.4).
+      // fact-check agent contract §4.4).
       // Raised 495 -> 505 after same-task repair / workload-analysis workflow
       // guidance made the prompt's live topology explicit.
       // Raised 505 -> 525 on 2026-05-31 for research evidence boundaries
@@ -106,7 +106,7 @@ describe("core prompt hygiene", () => {
   test("visual verification prompts use task-scoped backend browser evidence instead of MCP Playwright shell paths", async () => {
     const build = await readPrompt("build")
     const visualQa = await readPrompt("visualQa")
-    const taskClonePrompt = await Bun.file(path.join(repoRoot, "specs/tc_clone_prompt.md")).text()
+    const taskClonePrompt = await Bun.file(path.join(repoRoot, "specs/artifacts/tc_clone_prompt.md")).text()
     const combined = [build, visualQa, taskClonePrompt].join("\n")
 
     expect(combined).not.toContain("MCP和Playwright")
@@ -181,7 +181,7 @@ describe("core prompt hygiene", () => {
   })
 
   test("fact-check core anti-recursion: no <fact-check> tag literal; fact_check_items only in NOT/forbid context", async () => {
-    // Anti-recursion enforcement per specs/fact-check-agent-2026-05-25.md
+    // Anti-recursion enforcement per fact-check agent contract
     // §7.1 / codex impl review §6.  The fact-check agent must never be
     // told to produce fact_check_items (its report schema has no such
     // field) or to use inline <fact-check> tags (the registration channel
@@ -402,7 +402,7 @@ describe("core prompt hygiene", () => {
   })
 
   test("orchestrator prompt owns git conflict resolution and toolchain readiness", async () => {
-    // Spec — 2026-05-21 orchestrator-git-toolchain-duty.
+    // orchestrator git toolchain duty contract.
     // This is prompt policy, not a new host state machine: the bash schema
     // remains git-only while the orchestrator must treat required tools as
     // readiness blockers instead of dispatching blindly.
@@ -587,8 +587,8 @@ describe("core prompt hygiene", () => {
   })
 
   test("build visual reference preamble bans inline base64 and routes assets through references/", async () => {
-    // Spec: acceptance-attachment-store-single-source-2026-05-11.md companion
-    // (Session.updatePart `InlineBase64InPartError` host gate). The host gate
+    // Attachment-store single-source companion to the
+    // Session.updatePart `InlineBase64InPartError` host gate. The host gate
     // is rule-6.1 second branch (data integrity); this prompt clause is
     // rule-6.1 first branch — teach the LLM to never reach for inline
     // base64 when generating SVG/HTML/scripts, and to reference the staged

@@ -1,6 +1,6 @@
 /**
  * Asserts that every worker agent listed in
- * specs/fact-check-agent-2026-05-25.md §1.1 actually wraps its core
+ * fact-check agent contract §1.1 actually wraps its core
  * prompt with withFactCheckRegistration() at its runAgentSession({
  * core: ... }) call site — and that agents OUTSIDE the coverage list
  * (fact-check itself, compaction, title, summary, orchestrator,

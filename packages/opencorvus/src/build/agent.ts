@@ -208,8 +208,8 @@ export namespace BuildAgent {
     integrityFeedback?: string
     /** First-class retry guidance from the orchestrator LLM for this
      *  specific attempt (passed via the `request` field on the `build`
-     *  tool, which used to overwrite `target.objective` until the spec
-     *  build-missing-terminal-signal-restore-2026-05-07.md §5.2 split).
+     *  tool, which used to overwrite `target.objective` before retry
+     *  guidance and current-turn guidance were split).
      *  Distinct from retryFeedback: this is the current turn's direct
      *  instruction; retryFeedback is the auto-aggregated historical
      *  summary from decision_log phase=retry entries. When both exist,
@@ -752,8 +752,7 @@ export namespace BuildAgent {
             // RunOutput (mergeBackStatus / actualChangedFiles) and rendered
             // in the orchestrator-facing build tool result. CLAUDE.md
             // rule 13 — orchestrator LLM, not host code, decides whether
-            // to trust this self-report. Spec
-            // architecture-rework-loosening-plan-2026-05-06.md (B3 + B4 + B19).
+            // to trust this self-report.
             //
             // commit_ref policy: in managed worktree mode, only the merged
             // primary HEAD is a valid published commit. If merge_back hasn't
@@ -862,8 +861,7 @@ export namespace BuildAgent {
             // after merge_back succeeds the LLM might want to revise tests
             // or commit additional fixes; forcing a terminal-only scope is
             // host-side flow control (CLAUDE.md rule 13). The LLM decides
-            // when it's done by calling report_build_result of its own
-            // accord. Spec architecture-rework-loosening-plan-2026-05-06.md (B5).
+            // when it's done by calling report_build_result of its own accord.
             shouldExposeOnlyTerminalTool: () => false,
           },
         })
@@ -931,8 +929,7 @@ export namespace BuildAgent {
         // No host-side coverage audit. The orchestrator-facing tool result
         // surfaces both the LLM's self-reported files_changed and the host's
         // actual_changed_files (from `diffs`); the orchestrator LLM
-        // cross-checks them and decides if the report is honest. CLAUDE.md
-        // rule 13. Spec architecture-rework-loosening-plan-2026-05-06.md (B6).
+        // cross-checks them and decides if the report is honest. CLAUDE.md rule 13.
       } catch (err) {
         // B8 compliance: when the opencorvus build session ends without
         // calling report_build_result, runAgentSession throws an
@@ -946,8 +943,7 @@ export namespace BuildAgent {
         // template (root cause of tsk_e0033e523001flSn0onlHh4Urh's 5x
         // identical-prompt failure loop). Other AgentRunError shapes
         // (provider 4xx/5xx, abort, schema rejection) re-throw unchanged
-        // — they have their own orchestrator-side handling. Spec
-        // build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+        // — they have their own orchestrator-side handling.
         const contractErr = convertMissingTerminalToolError(err, {
           sessionID: out?.session?.id,
           lastMergeBackOutcome: lastMergeBackOutcome ?? null,
@@ -960,8 +956,7 @@ export namespace BuildAgent {
         // not unilaterally delete). The earlier preserveWorktreeForRetry
         // boolean gated by mergedHead/mergeBackBlockedReport was a
         // host-side state machine; deleted in favour of "always preserve
-        // when the worktree is goal-managed". Spec
-        // architecture-rework-loosening-plan-2026-05-06.md (B9).
+        // when the worktree is goal-managed".
         if (ownsWorktree && worktreeDir) {
           log.info("build agent: preserving worktree — orchestrator owns cleanup", {
             taskID: input.task.id,
@@ -982,7 +977,6 @@ export namespace BuildAgent {
         // was unreachable: runAgentSession throws AgentRunError before
         // parsed is computed, so control never reached this block. The
         // opencorvus signal now flows through the catch block above.
-        // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
         throw new Error(
           `build agent: ${executor === "opencorvus" ? "opencorvus report_build_result" : "external executor structured output"} did not match BuildResultSchema: ${
             parsed?.error ? formatBuildResultSchemaError(parsed.error) : "(no parsed output)"
@@ -1362,8 +1356,7 @@ function singleLineText(value: string, limit = 220): string {
  * `modify_goal`-style "contract changed, re-read acceptance_specs" template
  * that orchestrator LLMs were defaulting to before this fix — that template
  * is correct for contract-change retries but misleads the next build agent
- * when the actual failure was missing the terminal tool call. Spec
- * build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+ * when the actual failure was missing the terminal tool call.
  */
 export function convertMissingTerminalToolError(
   err: unknown,
@@ -1556,7 +1549,7 @@ export function externalEventPartText(event: CodingEventInfo, executor: string):
  * External BuildResult factory — single source for the
  * `runWithExternalProviderImpl` return literals.
  *
- * Per specs/fact-check-agent-2026-05-25.md §6.1.3 (codex round 3/4):
+ * Per the retired pre-June fact-check agent record §6.1.3 (codex round 3/4):
  * external executors (codex / claude-code) do not participate in the
  * fact-check registration protocol — their structured output never carries
  * `fact_check_items`. We always emit `[]` here so the BuildResult contract
@@ -2107,7 +2100,6 @@ async function runWithExternalProviderImpl(args: {
     // files_changed=[] is now legal (B1); the orchestrator-facing build
     // tool result surfaces the host's actual_changed_files separately,
     // so a synthesized placeholder file entry is redundant misinformation.
-    // Spec architecture-rework-loosening-plan-2026-05-06.md (B18).
     return {
       sessionID: session.id,
       structured: makeExternalPassedBuildResult({

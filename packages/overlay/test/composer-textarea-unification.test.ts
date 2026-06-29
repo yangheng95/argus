@@ -1,4 +1,4 @@
-// Composer textarea unification (spec: composer-textarea-unification-2026-05-28).
+// Composer textarea unification (spec: composer textarea unification contract).
 //
 // Operator report: the goal dialog's acceptance textarea clipped long content
 // with no visible scrollbar, and the goal / mission / chat inputs were three

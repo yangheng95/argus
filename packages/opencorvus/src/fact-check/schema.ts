@@ -1,7 +1,7 @@
 /**
  * Fact-Check Protocol Schemas — single source of truth.
  *
- * Per specs/fact-check-agent-2026-05-25.md §6.1.1 and codex round 4 §C-2,
+ * Per fact-check agent contract §6.1.1 and codex round 4 §C-2,
  * this file MUST stay pure zod with zero runtime imports (no Session,
  * orchestrator, build, persist, tools dependencies). Otherwise it would
  * make a fact-check agent runtime into a project-wide low-level

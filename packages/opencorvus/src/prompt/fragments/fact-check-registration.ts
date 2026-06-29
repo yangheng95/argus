@@ -1,7 +1,7 @@
 /**
  * Shared fact-check registration prompt fragment.
  *
- * Per specs/fact-check-agent-2026-05-25.md §5.1, this is the single source
+ * Per fact-check agent contract §5.1, this is the single source
  * for the registration-protocol text that every covered worker prompt
  * appends. Six worker agent.ts files import `withFactCheckRegistration`
  * and call it at their `runAgentSession({ core: ... })` site:

@@ -4432,8 +4432,7 @@ async function cancelLiveOwnedBuild(input: {
  * Compared via JSON serialization: arrays / strings / primitive unions
  * round-trip identically as long as both sides are already deserialized
  * to the same shape (the goal row from listGoals is, and Zod-validated
- * `updates` is). Spec build-missing-terminal-signal-restore-2026-05-07.md
- * §5.3.
+ * `updates` is).
  */
 export function computeContractFieldChanges(
   updates: Record<string, unknown>,
@@ -5924,8 +5923,7 @@ export function createOrchestratorTools(input: {
   // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
   // now reads the full review markdown returned in the build tool result
   // and chooses modify_goal / build({goalID}) / architect / fail_task /
-  // integrity itself. spec architecture-rework-loosening-plan-2026-05-06.md
-  // (B12 / B13 / B14).
+  // integrity itself.
 
   // Agents that need to ask the user a question do so directly via
   // `Question.ask`. Workflow steps never pause for input here.
@@ -8276,7 +8274,7 @@ export function createOrchestratorTools(input: {
 
     // -----------------------------------------------------------------------
     // Fact-check — verifies factual claims registered by a worker agent's
-    // terminal report.  Specs: deleted pre-June record fact-check-agent-2026-05-25 §4.3.
+    // terminal report.  Specs: fact-check agent contract §4.3.
     //
     // Trigger rule (rule 13 — you, the orchestrator LLM, decide):
     //   You MAY call fact_check after integrity verdict = pass when
@@ -9035,9 +9033,7 @@ export function createOrchestratorTools(input: {
         // tool call) — passing the SAME acceptance_specs back in still
         // wrote a "Goal contract changed... re-read acceptance_specs"
         // entry into the decision log, polluting the next build agent's
-        // prior-attempt context. Spec
-        // build-missing-terminal-signal-restore-2026-05-07.md §5.3 +
-        // tsk_e0033e523001flSn0onlHh4Urh's 4-attempt loop.
+        // prior-attempt context.
         const setValues = computeContractFieldChanges(
           updates as Record<string, unknown>,
           goal as unknown as Record<string, unknown>,
@@ -9281,7 +9277,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "fact_checks") {
-          // Fact-check attempts (one-line per row) — deleted pre-June record fact-check-agent-2026-05-25
+          // Fact-check attempts (one-line per row) — fact-check agent contract
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
           // via listFactCheckAttempts; surfacing summaries in read_context
           // gives the orchestrator LLM a quick "what was already verified"
@@ -12883,8 +12879,7 @@ export function createOrchestratorTools(input: {
               // which is why the LLM never filled it (rule preservation
               // beat retry signal). requestText now flows into
               // context.retryGuidance instead, leaving the architect
-              // contract intact. Spec
-              // build-missing-terminal-signal-restore-2026-05-07.md §5.2.
+              // contract intact.
               objective: goal.objective,
               requirement_ids: stringArrayColumn(goal.requirement_ids, `engine_goal(${goal.id}).requirement_ids`),
               acceptance_specs: acceptanceSpecsToPromptLines(goal.acceptance_specs),
@@ -12974,7 +12969,6 @@ export function createOrchestratorTools(input: {
             // now flows into context.retryGuidance instead of replacing
             // target.objective. Empty string means no current-turn
             // guidance; the renderer drops the section.
-            // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.2.
             context = {
               requirements: requirements.length > 0 ? requirements : undefined,
               contractGraph,
@@ -13233,7 +13227,7 @@ export function createOrchestratorTools(input: {
           // a thrown error skipped finalizeBuildAttempt entirely, leaving
           // the goal_run in attempt-running forever (see incident report
           // tsk_ddc529dfd0011ajJTgBqdlroyk G4 in
-          // deleted pre-June record 2026-04-30-llm-activity-redesign). Step 4
+          // LLM activity redesign contract). Step 4
           // closes that gap by ALWAYS finalising the goal_run when one
           // was opened, with status derived from the BuildAgent outcome
           // or, on throw, from the underlying error class.
@@ -13272,8 +13266,7 @@ export function createOrchestratorTools(input: {
                 // Without these facts the build tool result's "Worktree facts"
                 // block renders all-undefined, leaving the LLM blind to whether
                 // the missing-terminal failure happened with substantial work
-                // already on disk vs an empty worktree. Spec
-                // build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
+                // already on disk vs an empty worktree.
                 let collectedDiffs: import("@/snapshot/types").FileDiff[] | undefined
                 let collectedHead: string | undefined
                 let collectedActualChangedFiles:
@@ -13327,7 +13320,7 @@ export function createOrchestratorTools(input: {
                   // Host-synthesised BuildResult on contract violation: the LLM
                   // never reached its terminal tool, so it has no chance to
                   // populate fact_check_items. Empty array is the honest
-                  // construction-site default (deleted pre-June record fact-check-agent-2026-05-25
+                  // construction-site default (fact-check agent contract
                   // §6.1.3 — same rationale as external executor factory).
                   fact_check_items: [],
                 }
@@ -13361,7 +13354,6 @@ export function createOrchestratorTools(input: {
                 // message directly (single source per rule 8 — the hint text
                 // is owned by build/agent.ts:convertMissingTerminalToolError).
                 // reason carries the audit metadata.
-                // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
                 if (attachedGoalID) {
                   const { createDecisionLog } = await import("@/decision-log")
                   createDecisionLog(taskID).append({
@@ -13558,7 +13550,7 @@ export function createOrchestratorTools(input: {
             // Host-truth merge / diff facts (B20). Surfaced inline in the
             // tool result so the orchestrator LLM can cross-check the LLM's
             // self-reported `files_changed[]` and `commit_ref` against what
-            // actually happened. Spec architecture-rework-loosening-plan-2026-05-06.md.
+            // actually happened.
             // Defaults preserve sane rendering for older test fixtures whose
             // mocked BuildAgent.RunOutput predates these fields.
             const mergeBackStatus = buildOutcome.result.mergeBackStatus ?? "not_invoked"

@@ -147,7 +147,7 @@ function handoffFixture(sourceUserMessageID = "user"): CompactionHandoff.Info {
 }
 
 /**
- * Phase C of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
+ * Phase C of structured-output systemic fix record:
  * predictive compaction must NOT fire when compaction cannot rescue the
  * turn — either the tool schemas alone overrun budget (no shrink target),
  * the residue after a perfect compaction would still be over budget, or

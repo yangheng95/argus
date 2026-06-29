@@ -8,7 +8,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 /**
- * Regression for deleted pre-June record scheduler-fix-plan-2026-04-30 P5 (commit
+ * Regression for scheduler fix regression contract P5 (commit
  * e87333dbb) + audit §11.4. Pre-fix, the bootstrap-first dispatch
  * constraint lived only inside the build tool's gate at
  * orchestrator/tools.ts:3826-3862 and only fired on dispatch (LATE

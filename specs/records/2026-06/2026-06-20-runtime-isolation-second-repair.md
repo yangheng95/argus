@@ -64,7 +64,7 @@ admission and lookup paths.
 
 ## Recall
 
-- `2026-05-23-task-session-runtime-isolation.md`: task runtime files are scoped
+- The pre-June task session runtime isolation record: task runtime files are scoped
   by task/session IDs under the project runtime root.
 - `2026-06-15-opencorvus-short-runtime-layout.md`: current runtime layout is
   `.opencorvus/r/t/<task-key>/...`; legacy paths must not become read

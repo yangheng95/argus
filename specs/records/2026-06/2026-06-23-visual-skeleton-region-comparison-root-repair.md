@@ -16,7 +16,7 @@ Economy clone task `tsk_eef6e866c001v3gMMrwSzAcmfb`:
 
 ## Recalled Constraints
 
-- `2026-05-30-source-skeleton-webpage-generation.md` makes DOM order, visible
+- The pre-June source skeleton webpage generation record makes DOM order, visible
   text, and reference pixels authoritative for webpage clone handoff.
 - `2026-06-15-region-comparison-evidence-runner.md` separates source bbox
   authority from local implementation locators and rejects missing bindings as

@@ -6,8 +6,7 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  /* iter51: message-card redesign per docs/overlay-message-card-
-     redesign-2026-05-03.md spec direction A (ChatGPT-style flat).
+  /* iter51: message-card redesign per the flat message-card direction.
      Card corner-rounding is now driven by the global radius scale
      (`--oc-radius-soft`); the local `--card-radius` alias was retired
      2026-05-04 (flat-redesign Step 1). The 14-color --card-stage-*

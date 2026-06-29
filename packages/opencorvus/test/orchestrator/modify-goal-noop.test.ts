@@ -3,7 +3,7 @@ import { GoalContractUpdateSchema } from "../../src/pipeline/goal-contract.schem
 import { computeContractFieldChanges } from "../../src/orchestrator/tools"
 
 /**
- * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.3.
+ * Missing-terminal contract.
  *
  * `modify_goal` previously counted ANY field present in the `updates`
  * payload as changed (`contractChanged = contractFields.some(f => f in

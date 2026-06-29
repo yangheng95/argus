@@ -1,7 +1,7 @@
 /**
  * Fact-Check Attempt persistence + idempotency lookup.
  *
- * Per specs/fact-check-agent-2026-05-25.md §3.3, fact-check results live as
+ * Per fact-check agent contract §3.3, fact-check results live as
  * append-only `engine_artifact` rows with kind="fact_check_attempt".
  *
  * Idempotency key:

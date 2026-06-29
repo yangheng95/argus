@@ -2,7 +2,7 @@
  * Fact-Check Agent — verifies factual claims registered by upstream
  * worker agents in their terminal report `fact_check_items[]`.
  *
- * Per specs/fact-check-agent-2026-05-25.md §4 / §5:
+ * Per fact-check agent contract §4 / §5:
  *   - Read-only retrieval surface (web / code / memory; NO edit / bash /
  *     memory_write / git).
  *   - Terminal tool `report_fact_check_result`.

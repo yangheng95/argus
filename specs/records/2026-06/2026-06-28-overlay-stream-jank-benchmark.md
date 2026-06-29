@@ -11,11 +11,11 @@ question.
 
 ## Recall
 
-- `2026-05-14-overlay-refresh-single-source-plan.md` requires visible message
+- The pre-June overlay refresh single-source plan requires visible message
   deltas to update through `cardTreeStore` without broad board refresh.
-- `2026-05-15-overlay-streaming-text-main-thread-plan.md` requires streaming
+- The pre-June overlay streaming text main-thread plan requires streaming
   text and reasoning to avoid full markdown parsing on every delta.
-- `2026-05-15-overlay-scroll-single-source-plan.md` requires scroll follow to
+- The pre-June overlay scroll single-source plan requires scroll follow to
   be driven by visible data version, not rendered DOM mutation observation.
 - `2026-06-19-system-performance-high-confidence-pass.md` requires benchmark
   evidence and no restart of running overlay processes.

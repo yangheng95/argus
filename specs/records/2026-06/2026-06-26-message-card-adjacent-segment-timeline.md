@@ -41,7 +41,7 @@ at a non-rendered card.
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `AGENTS.md`                                                   | No fallback, no double source, no blind patching, inspect disk plans before edits, and visually verify UI changes.                               |
 | `12-overlay-card-system.md`                                   | Store-backed cards must go through the writer/reconciler; renderer components must not invent placement, sorting, or aggregation.                |
-| `2026-05-16-overlay-message-turn-agent-cards.md`              | The first correct model was contiguous segment cards, not whole-session cards; late deltas must target the exact owner card.                     |
+| Pre-June overlay message turn card record                     | The first correct model was contiguous segment cards, not whole-session cards; late deltas must target the exact owner card.                     |
 | `2026-06-13-conversation-contiguous-timeline-live-message.md` | The visible timeline is sorted by real message creation time; grouping is only contiguous visible timeline grouping.                             |
 | `2026-06-19-tree-writer-contiguous-segment-regroup.md`        | Consecutive same-stage messages can share one card, but the implemented `currentSegmentBySession` still allowed bad reuse across interruptions.  |
 | `2026-06-20-message-card-chronological-turns.md`              | Per-message cards fixed the regrouping bug and added `ConversationView.messages[]`; this design must not reintroduce the old global aggregation. |

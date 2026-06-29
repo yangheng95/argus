@@ -16,7 +16,7 @@ for every active scheduler wake.
 
 ## Recall
 
-- `2026-05-29-compaction-continuation-rewrite.md` rejected blind workflow
+- The pre-June compaction continuation rewrite record rejected blind workflow
   auto-compaction because compaction could resume with the wrong tool surface.
 - `2026-06-17-all-agent-auto-compaction-coverage.md` kept `orchestrator`
   disabled because it was not a `runAgentSession` worker with a

@@ -1,6 +1,6 @@
 /**
  * End-to-end coverage for the orchestrator `fact_check` tool —
- * specs/fact-check-agent-2026-05-25.md §7.2 e2e cases A–G.
+ * fact-check agent contract §7.2 e2e cases A–G.
  *
  * The FactCheckAgent.run runtime is mocked at the module level so the
  * tests stay deterministic and don't need an LLM provider.  What's NOT

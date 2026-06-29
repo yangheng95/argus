@@ -98,3 +98,14 @@ current implementation source/test, cite a current spec, or describe the histori
    - `bun test packages/opencorvus/test/script/product-docs-single-source.test.ts`
 4. Run `git diff --check` on changed docs/tests.
 5. Run independent read-only agent review after migration. If reviewers find new issues, fix and rerun review.
+
+## 2026-06-29 Final Review Addendum
+
+Independent review after the initial document calibration found one remaining
+class of spec drift: active source/test comments and June records still cited
+deleted pre-June spec filenames without paths. Those references were rewritten
+to current behavior descriptions or current source/test ownership, not to a
+compatibility ledger.
+
+The guard was extended so bare deleted pre-June spec filenames are rejected
+outside this migration evidence record and the historical document-health guard.

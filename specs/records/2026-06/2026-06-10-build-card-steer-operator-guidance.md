@@ -27,8 +27,7 @@ guide while work is happening.
 
 ## Historical Constraint
 
-`2026-05-21-build-orchestrator-interruption-stabilization.md` and
-`2026-05-24-steer-subagent-probe-snapshot.md` explicitly reject out-of-band
+The pre-June build interruption stabilization and steer-subagent probe records explicitly reject out-of-band
 build direct replies. The old incident class was caused by generic steering
 colliding with goal_run ownership and `SessionRuntimeContract` identity.
 

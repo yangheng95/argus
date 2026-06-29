@@ -1,7 +1,7 @@
 /**
  * Multimodal tool-result builder returns AttachmentStore refs, not data URLs.
  *
- * Specs: specs/acceptance-attachment-store-single-source-2026-05-11.md
+ * Attachment-store single-source contract
  *
  * Pre-2026-05-11 visual tool results packed every screenshot byte
  * into `attachments[].url` as `data:image/png;base64,...`. The same image

@@ -41,8 +41,8 @@ paths, or hiding broken functionality behind throttles.
 | Source | Constraint |
 | --- | --- |
 | `2026-06-28-overlay-stream-jank-benchmark.md` | Streamed text belongs to the conversation, not duplicated workflow body rendering. |
-| `2026-05-15-overlay-streaming-text-main-thread-plan.md` | Streaming text must avoid full markdown parsing and workflow text projection on every delta. |
-| `2026-05-15-overlay-scroll-single-source-plan.md` | Scroll follow is driven by visible data version, not DOM mutation observation. |
+| Pre-June overlay streaming text main-thread plan | Streaming text must avoid full markdown parsing and workflow text projection on every delta. |
+| Pre-June overlay scroll single-source plan | Scroll follow is driven by visible data version, not DOM mutation observation. |
 | `2026-06-19-system-performance-high-confidence-pass.md` | Performance repairs require focused evidence and no user-running overlay restart. |
 | `2026-06-22-browser-preview-live-input-batch-owner.md` | Browser Preview live input uses strict `inputs[]`, one in-flight owner, and no hidden evidence capture. |
 | `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser opening must be virtualized, bounded, and frame-scheduled. |

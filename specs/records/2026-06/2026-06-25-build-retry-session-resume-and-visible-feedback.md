@@ -42,7 +42,7 @@ transcript is not.
 
 | Source                                                     | Constraint                                                                                                                                                           |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `2026-05-21-build-retry-session-reuse-runtime-contract.md` | Build retry must reuse the prior build session, open a new logical `goal_run_id`, install a fresh runtime contract, and append one incremental visible user message. |
+| Pre-June build retry session reuse runtime contract | Build retry must reuse the prior build session, open a new logical `goal_run_id`, install a fresh runtime contract, and append one incremental visible user message. |
 | `2026-06-22-build-terminal-finalizer-continuation.md`      | Build protocol recovery is same-session and visible; do not synthesize success from prose.                                                                           |
 | `2026-06-24-a2a-agent-lifecycle-coordination.md`           | Fresh retry is exceptional only when concrete facts prove the old worker cannot continue; ordinary worker repair resumes the existing session.                       |
 | `2026-06-24-build-toolchain-blocker-persistence.md`        | Local worktree/toolchain blockers remain build-owned; retry should repair the preserved worktree state instead of escaping it.                                       |

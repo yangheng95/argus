@@ -271,8 +271,7 @@ async function finalizeLiveRunForTerminalTask(
   // write-BEFORE-consume (the consuming agent needs the file); at this
   // post-consume terminal seam the file is an audit refresh, so failing
   // loud (log.error, never swallowed) is correct and throwing is not.
-  // Flagged for codex re-consensus in
-  // artifacts/2026-05-18-decision-log-disk-materialization.md §11.
+  // Flagged during the decision-log disk materialization review.
   try {
     await DecisionLogBundle.write(taskPrimaryProjectRoot(task.id), task.id)
   } catch (err) {

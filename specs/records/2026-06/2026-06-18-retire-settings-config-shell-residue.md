@@ -25,7 +25,7 @@ settings work.
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `2026-06-17-settings-select-primitive-single-source.md` | Settings controls must compose shared primitives; Kobalte Select is owned by `SettingsSelect`.                           |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md`   | Mature primitives should own shared UI semantics; per-panel hand-rolled controls should retire.                          |
-| `retired-reference-ledger.md`                           | The old `overlay-settings-primitives-2026-05-26.md` path is historical; current source is settings primitive code/tests. |
+| `packages/overlay/src/components/settings/primitives.tsx` and overlay settings tests | Current settings primitive code/tests are the source of truth; the pre-June settings primitive note was retired.          |
 
 ## Evidence Sweep
 

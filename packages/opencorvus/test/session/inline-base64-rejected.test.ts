@@ -1,7 +1,7 @@
 /**
  * Session.updatePart write-boundary guard.
  *
- * Specs: specs/acceptance-attachment-store-single-source-2026-05-11.md
+ * Attachment-store single-source contract
  *
  * Every inline-base64 producer (MCP image content, screenshot tools, future
  * visual tools) routes through Session.updatePart on the

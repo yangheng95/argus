@@ -1,7 +1,7 @@
 /**
  * Single-source guard for the shared engineering-craft fragment.
  *
- * spec: specs/coding-agent-craft-prompt-2026-05-18.md
+ * Coding agent craft prompt contract
  *
  * The craft fragment lives in exactly ONE file
  * (prompt/core/engineering-craft.txt) and is composed only into agents that

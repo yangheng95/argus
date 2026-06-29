@@ -2,7 +2,7 @@ import { test, expect } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-// 2026-05-11 single-source repair: see specs/card-duration-single-source-2026-05-11.md
+// 2026-05-11 single-source repair: see card duration single-source contract
 // The card duration string is now exclusively rendered by
 // CardHeaderChrome's `.card__duration` chip for BOTH running and completed
 // cards. tree-writer must not compose any elapsed-time strings.
@@ -87,10 +87,18 @@ test("TaskStatusHeader uses selected-task SSE activity for active elapsed time",
 test("selected-task SSE stream records active elapsed only from real SSE updates", () => {
   const src = read("src/services/sse.ts")
   expect(src).toContain("recordSelectedTaskSseUpdate(event, taskID)")
-  expect(src).toContain("recordSelectedTaskSseActivity")
+  expect(src).toContain("recordSelectedTaskSseEventActivity")
   expect(src).toContain("pauseSelectedTaskSseStreamActivity")
   expect(src).toContain('event.type === "task.heartbeat"')
   expect(src).not.toContain("document.hidden")
+  expect(src).not.toContain("performance.now")
+})
+
+test("conversation hydrate restores selected-task SSE activity from persisted watermarks", () => {
+  const src = read("src/services/conversation.ts")
+  expect(src).toContain("recordHydratedSelectedTaskActivity")
+  expect(src).toContain("messageWatermark")
+  expect(src).toContain("recordReplayedSelectedTaskEventActivity")
 })
 
 test("promoted tool cards use tool state time instead of mount time", async () => {

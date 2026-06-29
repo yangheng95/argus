@@ -8,7 +8,7 @@
  * Visual contract: flat (no card border by default), hierarchy via
  * font weight + color tokens, hover via the dialog's
  * settings-surface-hover wash. See
- * specs/overlay-settings-primitives-2026-05-26.md.
+ * settings primitive contract.
  */
 import { Show, mergeProps, splitProps } from "solid-js"
 import { Dynamic } from "solid-js/web"

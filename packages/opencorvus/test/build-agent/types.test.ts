@@ -154,7 +154,7 @@ describe("BuildResultSchema", () => {
     // attempt's worktree without further edits; the orchestrator LLM
     // cross-checks against the host's actual_changed_files ground truth
     // (RunOutput.actualChangedFiles) and decides if the empty self-report
-    // is honest. Spec architecture-rework-loosening-plan-2026-05-06.md (B1).
+    // is honest.
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "Reused prior attempt's worktree without further edits",

@@ -1536,7 +1536,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
 })
 
 /**
- * Spec: gateway-mission-split-2026-05-28.md.
+ * Mission split contract.
  *
  * `mission` is a hidden primary agent — a full coordinator that reads and
  * analyses the project, plans, and dispatches squad/team work, but is NOT a

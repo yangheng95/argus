@@ -4,7 +4,7 @@ import { Database } from "../../src/storage/db"
 import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { findLatestIntegrityAttemptArtifact, listIntegrityAttemptArtifacts } from "../../src/engine/store"
-import type { GoalRunRow } from "../../src/engine/store"
+import type { BuildAttemptOutcomeRow, GoalRunRow } from "../../src/engine/store"
 import {
   buildIntegrityReplayContext,
   buildSpecSnapshotLineage,
@@ -142,6 +142,43 @@ function goalRun(input: { id: string; taskID: string; goalID: string; now: numbe
     time_completed: input.completed ?? input.now,
     time_created: input.now,
     time_updated: input.completed ?? input.now,
+  }
+}
+
+function buildOutcome(input: {
+  id: string
+  taskID: string
+  goalID: string
+  goalRunID: string
+  now: number
+  outcomeKind: BuildAttemptOutcomeRow["outcome_kind"]
+  terminalStatus?: BuildAttemptOutcomeRow["terminal_status"]
+  summary?: string
+  error?: string | null
+  noDiffReason?: string | null
+  changedFiles?: string[]
+}): BuildAttemptOutcomeRow {
+  return {
+    id: input.id,
+    task_id: input.taskID,
+    run_id: `${input.id}_run`,
+    goal_id: input.goalID,
+    goal_run_id: input.goalRunID,
+    session_id: `${input.goalRunID}_session`,
+    terminal_status: input.terminalStatus ?? "completed",
+    outcome_kind: input.outcomeKind,
+    summary: input.summary ?? `Outcome ${input.id}`,
+    error: input.error ?? null,
+    no_diff_reason: input.noDiffReason ?? null,
+    commit_ref: null,
+    published_commit_ref: null,
+    diff_base_ref: null,
+    diff_head_ref: null,
+    changed_files: input.changedFiles ?? [],
+    host_facts: {},
+    workspace: { dir: null, branch: null, base_ref: null },
+    time_created: input.now,
+    time_updated: input.now,
   }
 }
 
@@ -481,6 +518,46 @@ describe("integrity replay context artifact source", () => {
     expect(prompt).toContain("- goals=1")
     expect(prompt.toLowerCase()).not.toContain("fixed dimension")
     expect(prompt.toLowerCase()).not.toContain("checklist")
+  })
+
+  test("renders terminal build outcomes even when no acceptance records exist", () => {
+    const now = Date.now()
+    const taskID = `tsk_replay_outcome_${now.toString(16)}`
+    const goalRunID = "goal_run_no_diff"
+    const ctx = buildIntegrityReplayContext({
+      taskID,
+      lineage: lineage(taskID, "spec_replay_outcome"),
+      phase: "post_build",
+      goals: [goal("dashboard", 1)],
+      requirements: [],
+      buildRecords: [],
+      goalRuns: [goalRun({ id: goalRunID, taskID, goalID: "dashboard", now, completed: now + 5 })],
+      buildOutcomes: [
+        buildOutcome({
+          id: "outcome_no_diff",
+          taskID,
+          goalID: "dashboard",
+          goalRunID,
+          now: now + 5,
+          outcomeKind: "no_project_diff",
+          summary: "Build completed but produced no project diff.",
+          noDiffReason: "actual_changed_files_empty",
+        }),
+      ],
+    })
+
+    expect(ctx.buildEvidenceSinceLastReview.goalRuns[0]).toMatchObject({
+      goalID: "dashboard",
+      goalRunID,
+      status: "completed",
+      outcomeKind: "no_project_diff",
+      noDiffReason: "actual_changed_files_empty",
+      changedFiles: [],
+    })
+    const prompt = renderIntegrityReplayContextPrompt(ctx)
+    expect(prompt).toContain("outcome=no_project_diff")
+    expect(prompt).toContain("no_diff=actual_changed_files_empty")
+    expect(prompt).toContain("changed_files=0")
   })
 
   test("renders re-review prompt with prior blockers, repairs, reviewer focuses, changed files, and scale signals", () => {

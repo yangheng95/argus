@@ -13,7 +13,7 @@ primitive into a text-link-sized target, weakening click and focus affordance.
 
 | Source                                                | Relevant decision                                                                                                                                                              |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `2026-05-14-gateway-task-management-prd.md`           | Task management includes cancel, retry, replan, and message actions.                                                                                                           |
+| Pre-June gateway task management PRD                  | Task management includes cancel, retry, replan, and message actions.                                                                                                           |
 | `2026-06-18-notification-live-region-task-action.md`  | Task activation/action controls should be explicit Button-owned controls, not hidden container behavior.                                                                       |
 | `2026-06-19-task-mission-agent-cancellation-scope.md` | Overlay task cancel remains the same route name while backend cancellation semantics continue moving to the canonical scope. This UI fix must not invent a second cancel path. |
 

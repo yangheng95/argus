@@ -11,7 +11,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix B.
+ * Overlay image ingestion fidelity contract.
  *
  * Pre-fix `handleTaskMessage` decoded base64 image attachments, persisted
  * the bytes to AttachmentStore, attached them to the session message — and

@@ -6,7 +6,7 @@ import { SessionStatus } from "../../src/session/status"
 import { Bus } from "../../src/bus"
 
 /**
- * Regression for specs/scheduler-collab-audit-2026-04-30.md §11.3 + bench
+ * Regression for scheduler collaboration audit §11.3 + bench
  * lines 19182-19183 (`session.terminal session=ses_221e2a0d... reason=aborted`
  * followed by `reason=completed` for the SAME session). Codex 3rd-pass
  * narrowed the cause: build sessions run their actor in the worktree

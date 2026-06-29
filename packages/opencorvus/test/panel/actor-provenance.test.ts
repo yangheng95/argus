@@ -12,7 +12,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-mission-split-2026-05-28.md §4 (Mission → Squad provenance).
+ * Mission split contract: Mission -> Squad provenance.
  *
  * `panel.create_task` records server-derived provenance: `actor` (the LLM
  * agent or external client that drove the call) and, when the actor is the

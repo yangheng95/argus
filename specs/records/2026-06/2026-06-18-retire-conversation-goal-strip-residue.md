@@ -22,8 +22,8 @@ beside the live TaskProgressBar and current task directory shell.
 
 | Source                                                 | Existing decision                                                                                         |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `mission-panel-parity-2026-05-29.md`                   | `#chatGoalsStrip` is a dead stub; goal progress is `TaskProgressBar` inside `Conversation`.               |
-| `2026-05-13-conversation-agent-workflow-rail.md`       | `chatScroll` remains the only message scroll container; auxiliary rails mount outside the message stream. |
+| Pre-June mission panel parity record                   | `#chatGoalsStrip` is a dead stub; goal progress is `TaskProgressBar` inside `Conversation`.               |
+| Pre-June conversation agent workflow rail record       | `chatScroll` remains the only message scroll container; auxiliary rails mount outside the message stream. |
 | `2026-06-04-agent-rail-card-scroll-materialization.md` | `TaskProgressBar` uses the same card-scroll request path as the agent rail.                               |
 
 ## Impact Sweep

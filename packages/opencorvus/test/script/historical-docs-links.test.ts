@@ -6,7 +6,23 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const docsScanRoots = ["specs/current/architecture", "docs", "packages/web/src/content/docs"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
 const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".md", ".mdx", ".txt"])
-const scratchTextExtensions = new Set([".md", ".mdx", ".txt", ".patch", ".current", ".json", ".ts"])
+const scratchTextExtensions = new Set([
+  ".md",
+  ".mdx",
+  ".txt",
+  ".patch",
+  ".current",
+  ".json",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".tmp",
+  ".tsv",
+  ".diff",
+  ".yaml",
+  ".yml",
+])
 const skippedRepositoryDirs = new Set([
   ".git",
   ".opencorvus",
@@ -28,6 +44,8 @@ const skippedRepositoryPrefixes = [
   path.join("packages", "vscode-extension", "media", "ui", "assets"),
 ]
 const retiredReferenceLedgerFileName = `${["retired", "reference", "ledger"].join("-")}.md`
+const deletedPreJuneSpecNamePattern =
+  /\b[A-Za-z0-9_@%+.-]*2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.(?:md|txt)\b|\bretired-reference-ledger\.md\b/g
 const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
   { label: "legacy architecture tree", pattern: /specs[/\\]new-arch(?:[/\\]|$)/ },
   { label: "legacy singular architecture tree", pattern: /spec[/\\]new-arch(?:[/\\]|$)/ },
@@ -103,6 +121,20 @@ function docsFiles(): string[] {
 function repositoryFiles(): string[] {
   repositoryFilesCache ??= walkRepository(repoRoot)
   return repositoryFilesCache
+}
+
+function deletedPreJuneSpecNameOffenders(): string[] {
+  const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
+  const allowedHistoricalMigrationRecord = "specs/records/2026-06/2026-06-29-spec-consolidation.md"
+  const allowedHistoricalGuardFile = "packages/opencorvus/test/script/document-health.test.ts"
+  return repositoryFiles()
+    .map((file) => [file, path.relative(repoRoot, file).replace(/\\/g, "/")] as const)
+    .filter(([, rel]) => rel !== thisFile && rel !== allowedHistoricalMigrationRecord && rel !== allowedHistoricalGuardFile)
+    .flatMap(([file, rel]) => {
+      const text = fs.readFileSync(file, "utf8")
+      return Array.from(text.matchAll(deletedPreJuneSpecNamePattern)).map((match) => `${rel}: ${match[0]}`)
+    })
+    .sort()
 }
 
 function scratchSpecSnapshotOffenders(): string[] {
@@ -304,6 +336,10 @@ describe("historical docs repository links", () => {
 
     expect(offenders).toEqual([])
   })
+
+  test("deleted pre-June spec filenames are not referenced outside migration evidence", () => {
+    expect(deletedPreJuneSpecNameOffenders()).toEqual([])
+  }, 30000)
 
   test("June task records do not publish deleted spec trees as live command targets", () => {
     const offenders = juneTaskRecordFiles().flatMap((file) => {

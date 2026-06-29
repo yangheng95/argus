@@ -739,7 +739,7 @@ export namespace SessionLoop {
    * StructuredOutput recovery channel (stamp `StructuredOutputError` on the
    * current assistant message and stop).
    *
-   * Rules — see deleted pre-June record 2026-04-28-structured-output-systemic-fix §D:
+   * Rules — see structured-output systemic fix record §D:
    *
    *   1. Only the json_schema output contract requires a terminal
    *      StructuredOutput call; for `text` output we never stamp.
@@ -866,7 +866,7 @@ export namespace SessionLoop {
    * Pure decision: given the budget metrics for the next turn, should we
    * predictively compact, fail fast, or just send the request?
    *
-   * Per deleted pre-June record 2026-04-28-structured-output-systemic-fix §C the
+   * Per structured-output systemic fix record §C the
    * old behaviour ("totalTokens > limit → always compact") spun forever on
    * context-cold sessions whose overflow came entirely from the
    * non-compressible prompt face (system + tool schemas). The new logic:
@@ -1001,7 +1001,7 @@ export namespace SessionLoop {
    * backed tools, walks the Zod object's internal `_def` graph and produces
    * char counts that bear no relation to the actual outgoing payload — that
    * inflated count was triggering predictive compaction on context-cold
-   * sessions (see deleted pre-June record 2026-04-28-structured-output-systemic-fix
+   * sessions (see structured-output systemic fix record
    * §A). Counting `name + description + jsonSchema` keeps the estimate tied
    * to what the provider really receives. ProviderSchema is the single
    * schema-normalisation entry point; the estimator never re-runs the
@@ -2929,8 +2929,8 @@ export namespace SessionLoop {
 
           // MCP tool image / resource content used to inline as
           // `data:<mime>;base64,...` directly into `attachment.url`,
-          // which (a) blew up `part.data` (see DB forensics in specs/
-          // acceptance-attachment-store-single-source-2026-05-11.md) and
+          // which (a) blew up `part.data` (see attachment-store DB
+          // forensics) and
           // (b) now trips Session.updatePart's inline-base64 guard.
           // Funnel both branches through AttachmentStore so the
           // persisted url is the canonical `/attachment/<id>/<sha>.<ext>`

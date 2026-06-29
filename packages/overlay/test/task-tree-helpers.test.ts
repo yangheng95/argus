@@ -3,7 +3,7 @@
 // based on filtered set), #9 (cycle guard), #10 (cross-directory nesting),
 // and #11 (original-group dedup).
 //
-// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md.
+// Task tree display contract.
 
 import { afterAll, beforeAll, describe, expect, mock, spyOn, test } from "bun:test"
 import { buildTaskTree, flattenGroup } from "../src/components/taskTree"

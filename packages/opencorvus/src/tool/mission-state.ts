@@ -9,7 +9,7 @@ import { Session } from "@/session"
 
 /**
  * Mission state tool — the Mission agent's durable, write-confined memory.
- * See specs/gateway-mission-split-2026-05-28.md.
+ * See mission split contract.
  *
  * Why this tool instead of giving Mission generic write/edit: Mission may
  * READ and analyse the project (read/glob/search_code/list/lsp), but its

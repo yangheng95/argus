@@ -10,7 +10,7 @@ import { Session } from "../../src/session"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-mission-split-2026-05-28.md.
+ * Mission split contract.
  *
  * `panel.query_task` is a structured batch reconciliation surface for
  * agents (mission, control). It MUST:

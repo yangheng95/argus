@@ -4,7 +4,7 @@
 // flatten can be exercised by unit tests instead of only source-string
 // contract assertions.
 //
-// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md.
+// Task tree display contract.
 
 /** One pre-flattened row in a directory group. depth drives indent;
  *  `crossDirectory` flags rows whose own `task.directory` differs from
