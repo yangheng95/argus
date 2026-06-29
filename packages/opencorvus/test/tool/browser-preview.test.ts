@@ -5,10 +5,6 @@ import path from "node:path"
 import { PassThrough } from "node:stream"
 import sharp from "sharp"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import {
-  BrowserPreviewBindLocalModuleTool,
-  BrowserPreviewBindLocalModuleToolParameters,
-} from "../../src/tool/browser-preview-bind-local-module"
 import { Agent } from "../../src/agent/agent"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
@@ -38,9 +34,6 @@ const baseCtx = {
   ask: async () => {},
 }
 const BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS = 30_000
-const BINDING_TOOL_TEST_VIEWPORTS = [
-  { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 360, height: 220 },
-] satisfies typeof TEST_BROWSER_PREVIEW_VIEWPORTS
 
 function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PREVIEW_VIEWPORTS }>(
   input: T,
@@ -129,14 +122,17 @@ describe("tool.browser_preview", () => {
         fn: async () => {
           const globalIDs = await ToolRegistry.ids()
           expect(globalIDs).toContain("browser_preview")
-          expect(globalIDs).not.toContain("browser_preview_bind_local_module")
           expect(globalIDs).not.toContain("browser_preview_compare_scroll_slices")
 
           const visualQa = await Agent.get("visual-qa")
           const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
           const visualQaIDs = visualQaTools.map((tool) => tool.id)
-          expect(visualQaIDs).toContain("browser_preview_bind_local_module")
           expect(visualQaIDs).toContain("browser_preview_compare_scroll_slices")
+
+          const build = await Agent.get("build")
+          const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
+          const buildIDs = buildTools.map((tool) => tool.id)
+          expect(buildIDs).toContain("browser_preview_compare_scroll_slices")
         },
       })
     },
@@ -860,80 +856,6 @@ describe("tool.browser_preview", () => {
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
 
-  test("bind local module tool parameters reject non-canonical source reference IDs", () => {
-    const parsed = BrowserPreviewBindLocalModuleToolParameters.safeParse({
-      targetID: "art_previewtarget",
-      viewportID: "desktop",
-      regionID: "tool-local-module",
-      route: "/",
-      implementationLocator: { kind: "data-oc-region", value: "tool-local-module" },
-      componentFiles: ["src/ToolLocalModule.tsx"],
-      sourceReferenceArtifactID: ".opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png",
-    })
-
-    expect(parsed.success).toBe(false)
-    if (parsed.success) throw new Error("non-canonical source reference unexpectedly parsed")
-    expect(parsed.error.issues.map((issue) => issue.path.join(".")).join("\n")).toContain("sourceReferenceArtifactID")
-  })
-
-  test(
-    "bind local module tool persists source-binding evidence",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
-      await writeBindingToolReference(paths.sourcePackageAbsolute)
-      const server = await startBindingToolPreviewServer()
-      try {
-        const target = await Instance.provide({
-          directory: tmp.path,
-          fn: () =>
-            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
-        })
-        await Instance.provide({
-          directory: tmp.path,
-          fn: async () => {
-            const tool = await BrowserPreviewBindLocalModuleTool.init()
-            const result = await tool.execute(
-              {
-                targetID: target.id,
-                viewportID: "desktop",
-                regionID: "tool-local-module",
-                route: "/",
-                implementationLocator: { kind: "data-oc-region", value: "tool-local-module" },
-                componentFiles: ["src/ToolLocalModule.tsx"],
-                sourceReferenceArtifactID: "reference.png",
-                textAnchors: ["Tool Local Module", "Binding Anchor"],
-                sourcePadding: 0,
-                localPadding: 0,
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-
-            expect(result.title).toBe("Local module source binding completed")
-            expect(result.attachments).toHaveLength(1)
-            expect(result.metadata.status).toBe("passed")
-            expect(result.metadata.binding.region_id).toBe("tool-local-module")
-            expect(result.metadata.binding.source.bbox).toEqual({ x: 24, y: 30, width: 180, height: 92 })
-            expect(result.metadata.binding.implementation.locator).toEqual({
-              kind: "data-oc-region",
-              value: "tool-local-module",
-            })
-            const bindingEvidence = await findReadableBrowserPreviewEvidenceByID({
-              projectRoot: tmp.path,
-              taskID,
-              evidenceID: result.metadata.evidenceID,
-            })
-            expect(bindingEvidence?.operationKind).toBe("source-binding")
-          },
-        })
-      } finally {
-        await server.close()
-      }
-    },
-    { timeout: 60_000 },
-  )
-
 })
 
 async function expectPngDimensions(input: string, expected: { width: number; height: number }): Promise<void> {
@@ -945,89 +867,4 @@ async function expectPngDimensions(input: string, expected: { width: number; hei
 async function expectPngHasColorDiversity(input: string): Promise<void> {
   const stats = await sharp(input).stats()
   expect(stats.channels.some((channel) => channel.min !== channel.max)).toBe(true)
-}
-
-async function writeBindingToolReference(sourcePackageAbsolute: string): Promise<void> {
-  await fs.mkdir(sourcePackageAbsolute, { recursive: true })
-  await sharp({
-    create: {
-      width: 360,
-      height: 220,
-      channels: 4,
-      background: "#ffffff",
-    },
-  })
-    .composite([
-      {
-        input: Buffer.from(
-          `<svg width="180" height="92" xmlns="http://www.w3.org/2000/svg">
-            <rect width="180" height="92" fill="#fef3c7"/>
-            <text x="16" y="38" font-family="Arial" font-size="20" font-weight="700" fill="#78350f">Tool Local Module</text>
-            <text x="16" y="66" font-family="Arial" font-size="16" fill="#92400e">Binding Anchor</text>
-          </svg>`,
-        ),
-        left: 24,
-        top: 30,
-      },
-    ])
-    .png()
-    .toFile(path.join(sourcePackageAbsolute, "reference.png"))
-  await fs.writeFile(
-    path.join(sourcePackageAbsolute, "visual-surface-candidates.json"),
-    JSON.stringify(
-      {
-        candidates: [
-          {
-            id: "ToolLocalModuleSurface",
-            name: "Tool Local Module",
-            bounds: { x: 24, y: 30, w: 180, h: 92 },
-            textPreview: ["Tool Local Module", "Binding Anchor"],
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  )
-}
-
-async function startBindingToolPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
-  let server: Server | undefined
-  server = createServer((_req, res) => {
-    const body = `<!doctype html>
-      <html>
-        <head>
-          <title>Binding tool preview</title>
-          <style>
-            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
-            main { padding: 48px; }
-            [data-oc-region="tool-local-module"] {
-              width: 180px;
-              height: 92px;
-              box-sizing: border-box;
-              padding: 16px;
-              background: #fef3c7;
-              color: #78350f;
-            }
-            h2 { margin: 0 0 10px; font-size: 20px; line-height: 1; }
-            p { margin: 0; font-size: 16px; color: #92400e; }
-          </style>
-        </head>
-        <body><main><section data-oc-region="tool-local-module"><h2>Tool Local Module</h2><p>Binding Anchor</p></section></main></body>
-      </html>`
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-    res.end(body)
-  })
-  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
-  const address = server.address()
-  if (!address || typeof address === "string") throw new Error("binding tool test server did not bind a TCP address")
-  return {
-    url: `http://127.0.0.1:${address.port}/`,
-    close: () =>
-      new Promise<void>((resolve) => {
-        server?.close(() => resolve())
-        server = undefined
-      }),
-  }
 }

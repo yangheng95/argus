@@ -12,12 +12,11 @@ export interface ToolPoolAssignment {
 
 export namespace AgentToolPool {
   const CODING_PRIVATE_TOOL_IDS = [
-    "browser_preview_bind_local_module",
     "web_clone_prepare_context",
     "web_clone_generate_source_project",
   ] as const
 
-  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_bind_local_module"] as const
+  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_compare_scroll_slices"] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
     "read",
@@ -268,8 +267,6 @@ export namespace AgentToolPool {
   type PrivateRegistryToolLoader = () => Promise<Tool.Info>
 
   const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
-    browser_preview_bind_local_module: async () =>
-      (await import("@/tool/browser-preview-bind-local-module")).BrowserPreviewBindLocalModuleTool,
     browser_preview_compare_scroll_slices: async () =>
       (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
     web_clone_prepare_context: async () =>

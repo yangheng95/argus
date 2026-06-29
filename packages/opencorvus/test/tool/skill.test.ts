@@ -419,7 +419,7 @@ Use this skill.
 name: visual-acceptance
 description: Visual QA acceptance workflow. QA means Quality Assurance.
 required_tools:
-  - browser_preview_bind_local_module
+  - browser_preview_compare_scroll_slices
 agents:
   - visual-qa
 mounted_agents:
@@ -510,7 +510,7 @@ Collect source webpage evidence.
 name: integrity-acceptance
 description: Integrity preview acceptance workflow.
 required_tools:
-  - browser_preview_bind_local_module
+  - browser_preview_compare_scroll_slices
 agents:
   - integrity
 mounted_agents:

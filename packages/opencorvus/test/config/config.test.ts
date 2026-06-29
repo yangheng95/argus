@@ -507,7 +507,7 @@ test("rejects agent-private tool fields for custom agents", async () => {
         agent: {
           test_agent: {
             description: "test agent",
-            tools: { private: ["browser_preview_bind_local_module"] },
+            tools: { private: ["browser_preview_compare_scroll_slices"] },
           },
         },
       })

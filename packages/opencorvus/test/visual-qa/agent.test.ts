@@ -4,7 +4,6 @@ import { tmpdir } from "../fixture/fixture"
 import { VisualQaTestHooks } from "../../src/visual-qa"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
 import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
 
 describe("visual-qa agent", () => {
@@ -26,7 +25,6 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools).sort()).toEqual([...VISUAL_QA_SESSION_TOOL_IDS].sort())
         expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).toContain("browser_preview")
-        expect(Object.keys(tools)).toContain("browser_preview_bind_local_module")
         expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
@@ -35,7 +33,6 @@ describe("visual-qa agent", () => {
 
         for (const info of [
           BrowserPreviewTool,
-          BrowserPreviewBindLocalModuleTool,
           BrowserPreviewCompareScrollSlicesTool,
         ]) {
           const initialized = await info.init()
@@ -77,7 +74,6 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("structured report's own accepted/blocker fields")
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("prioritize screenshot comparison")
-    expect(prompt).toContain("browser_preview_bind_local_module")
     expect(prompt).toContain("browser_preview_compare_scroll_slices")
     expect(prompt).toContain("inspect the page screen by screen")
     expect(prompt).toContain("Do not judge the whole webpage from one full-page screenshot")
