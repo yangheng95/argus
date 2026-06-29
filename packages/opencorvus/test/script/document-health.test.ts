@@ -371,6 +371,14 @@ describe("document health audit regressions", () => {
       "packages/web/src/content/docs/operations/github-action.mdx",
       "packages/web/src/content/docs/zh-cn/operations/github-action.mdx",
     ]
+    const supportedGitHubEvents = [
+      "issue_comment",
+      "pull_request_review_comment",
+      "issues",
+      "pull_request",
+      "schedule",
+      "workflow_dispatch",
+    ]
 
     for (const file of githubActionDocs) {
       const text = read(file)
@@ -398,14 +406,7 @@ describe("document health audit regressions", () => {
       expect(text).not.toContain("issues: write")
       expect(text).not.toContain("OPENCORVUS_CONFIG_CONTENT")
       expect(text).not.toContain("https://coding.dashscope.aliyuncs.com/v1")
-      for (const eventName of [
-        "issue_comment",
-        "pull_request_review_comment",
-        "issues",
-        "pull_request",
-        "schedule",
-        "workflow_dispatch",
-      ]) {
+      for (const eventName of supportedGitHubEvents) {
         expect(text).toContain(`\`${eventName}\``)
       }
       const workflowExample = markdownCodeBlocks(text, "yaml").find((block) =>
@@ -443,6 +444,9 @@ describe("document health audit regressions", () => {
     expect(actionReadme).not.toContain("--token")
     expect(actionReadme).not.toContain("github_pat")
     expect(actionReadme).not.toContain("personal access token")
+    for (const eventName of supportedGitHubEvents) {
+      expect(actionReadme).toContain(`\`${eventName}\``)
+    }
     const workflowExamples = markdownCodeBlocks(actionReadme, "yml")
     const workflowExample = workflowExamples.find((block) => block.includes("yangheng95/opencorvus/github@latest"))
     expect(workflowExample).toBeDefined()
