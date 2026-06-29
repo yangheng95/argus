@@ -8,6 +8,7 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 | --- | --- |
 | Current architecture | `specs/current/architecture/README.md` |
 | June 2026 task records | `specs/records/2026-06/` |
+| 2026-06-29 database I/O incident | `specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md` |
 | Prompt and product-reference artifacts | `specs/artifacts/` |
 | Public product docs | `packages/web/src/content/docs/**` |
 | API reference docs | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx` |

@@ -381,7 +381,12 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
   // queue-advance hook never fired on real task termination and sibling
   // queued tasks in the same cwd stayed stuck forever.
   return runTaskLoop({ taskID, event }).catch((err) => {
-    log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+    const error = Database.normalizeError(err, "engine.queue.launchTaskLoop")
+    log.error("task loop failed", {
+      taskID,
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+    })
   })
 }
 
@@ -408,18 +413,22 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
           if (await drainQueuedTaskEventIfUnowned(taskID)) return
           await advanceQueue(cwd)
         })().catch((err) => {
+          const error = Database.normalizeError(err, "engine.queue.advanceQueue.afterLoop")
           log.error("advanceQueue failed after loop exit", {
             cwd,
-            error: err instanceof Error ? err.message : String(err),
+            error: error instanceof Error ? error.message : String(error),
+            errorName: error instanceof Error ? error.name : undefined,
           })
         })
       })
     })
     .catch((err) => {
+      const error = Database.normalizeError(err, "engine.queue.loopCompletion")
       log.error("task loop completion hook observed failure", {
         taskID,
         cwd,
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
+        errorName: error instanceof Error ? error.name : undefined,
       })
     })
 }
@@ -766,11 +775,25 @@ export type DispatchTaskLoopAcceptedWake = {
   result: Exclude<DispatchTaskLoopResult, "ignored">
 }
 
-export async function dispatchTaskLoop(input: {
+export type DispatchTaskLoopInput = {
   taskID: string
   event?: OrchestratorEvent
   beforeAcceptedWake?: (wake: DispatchTaskLoopAcceptedWake) => void | Promise<void>
-}): Promise<DispatchTaskLoopResult> {
+}
+
+export function dispatchTaskLoopInBackground(input: DispatchTaskLoopInput, operation: string): void {
+  void dispatchTaskLoop(input).catch((err) => {
+    const error = Database.normalizeError(err, operation)
+    log.error("background task wake failed", {
+      taskID: input.taskID,
+      operation,
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+    })
+  })
+}
+
+export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<DispatchTaskLoopResult> {
   let task = findTask(input.taskID)
   if (!task) return "ignored"
   if (isTaskTerminal(task)) {
