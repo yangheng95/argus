@@ -62,3 +62,9 @@ export async function resetDatabase() {
   await removeDatabaseFile(`${dbPath}-shm`)
   await removeDatabaseFile(dbPath)
 }
+
+export function rebuildTestDatabase() {
+  const dbPath = Database.Path()
+  assertTestDatabasePath(dbPath)
+  Database.rebuildSqlite(() => {})
+}

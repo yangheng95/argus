@@ -32,6 +32,7 @@ export namespace FileWatcher {
   type Subscription = {
     unsubscribe: () => Promise<void>
   }
+  type Subscribe = (dir: string, ignore: string[]) => Promise<Subscription>
 
   const parcel = lazy((): typeof import("@parcel/watcher") => {
     return requireRuntimePackage<typeof import("@parcel/watcher")>("@parcel/watcher")
@@ -41,6 +42,16 @@ export namespace FileWatcher {
     if (evt.type === "create" || evt.type === "add") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
     if (evt.type === "update" || evt.type === "change") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
     if (evt.type === "delete" || evt.type === "unlink") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
+  }
+
+  function isMissingWatchPathError(error: unknown) {
+    if (!error || typeof error !== "object") return false
+    const code = (error as { code?: unknown }).code
+    return code === "ENOENT" || code === "ENOTDIR"
+  }
+
+  function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error)
   }
 
   async function subscribeWithParcel(
@@ -66,6 +77,59 @@ export namespace FileWatcher {
     }
   }
 
+  async function subscribeWatchDirectory(
+    subscribe: Subscribe,
+    dir: string,
+    ignore: string[],
+    label: string,
+  ): Promise<Subscription | undefined> {
+    try {
+      return await subscribe(dir, ignore)
+    } catch (error) {
+      if (isMissingWatchPathError(error)) {
+        log.warn("file watcher directory disappeared before subscription completed", {
+          label,
+          dir,
+          error: errorMessage(error),
+        })
+        return undefined
+      }
+      throw error
+    }
+  }
+
+  async function readWatchDirectory(dir: string, label: string): Promise<string[] | undefined> {
+    try {
+      return await readdir(dir)
+    } catch (error) {
+      if (isMissingWatchPathError(error)) {
+        log.warn("file watcher directory disappeared before initialization completed", {
+          label,
+          dir,
+          error: errorMessage(error),
+        })
+        return undefined
+      }
+      throw error
+    }
+  }
+
+  async function resolveGitDirectoryForWatch(): Promise<string | undefined> {
+    try {
+      const output = await $`git rev-parse --git-dir`.quiet().nothrow().cwd(Instance.worktree).text()
+      return path.resolve(Instance.worktree, output.trim())
+    } catch (error) {
+      if (isMissingWatchPathError(error)) {
+        log.warn("project directory disappeared before file watcher resolved git directory", {
+          dir: Instance.worktree,
+          error: errorMessage(error),
+        })
+        return undefined
+      }
+      throw error
+    }
+  }
+
   const state = lazyInstanceState(
     async () => {
       log.info("init")
@@ -85,20 +149,24 @@ export namespace FileWatcher {
       const subscribe = (dir: string, ignore: string[]) => subscribeWithParcel(parcelWatcher, dir, ignore, backend)
 
       if (Flag.OPENCORVUS_EXPERIMENTAL_FILEWATCHER) {
-        subs.push(await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores]))
+        const sourceSub = await subscribeWatchDirectory(
+          subscribe,
+          Instance.directory,
+          [...FileIgnore.PATTERNS, ...cfgIgnores],
+          "source",
+        )
+        if (sourceSub) subs.push(sourceSub)
       }
 
       if (Project.isGitRepo(Instance.directory)) {
-        const vcsDir = await $`git rev-parse --git-dir`
-          .quiet()
-          .nothrow()
-          .cwd(Instance.worktree)
-          .text()
-          .then((x) => path.resolve(Instance.worktree, x.trim()))
+        const vcsDir = await resolveGitDirectoryForWatch()
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
-          const gitDirContents = await readdir(vcsDir)
-          const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
-          subs.push(await subscribe(vcsDir, ignoreList))
+          const gitDirContents = await readWatchDirectory(vcsDir, "git")
+          if (gitDirContents) {
+            const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
+            const gitSub = await subscribeWatchDirectory(subscribe, vcsDir, ignoreList, "git")
+            if (gitSub) subs.push(gitSub)
+          }
         }
       }
 
