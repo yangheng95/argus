@@ -22,7 +22,7 @@ The PRD is grounded in:
 - `packages/overlay/src/components/*` for component responsibilities;
 - `packages/overlay/src/services/*` and `packages/overlay/src/store/*` for data sources and state ownership;
 - `packages/opencorvus/src/server/routes/*` for project-scoped and control-plane route contracts;
-- existing specs under `specs/new-arch`, especially file explorer/editor, Mission list, UI primitives, diagnostics, and conversation-agent rail specs.
+- current architecture chapters under `specs/current/architecture/**` and June records under `specs/records/2026-06/**`, especially file explorer/editor, Mission list, UI primitives, diagnostics, and conversation-agent rail records.
 
 ## Deliverable
 

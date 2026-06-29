@@ -104,7 +104,7 @@ Active goal objective:
 
 Iteration rules:
 
-- Concept loop: every architecture claim must trace to `specs/new-arch/**` or current `packages/**` source.
+- Concept loop: every architecture claim must trace to `specs/current/architecture/**`, `specs/records/2026-06/**`, or current `packages/**` source.
 - Drawing loop: every displayed layer must have a real click state, inspector state, or evidence drawer state.
 - Review loop: remove or rewrite any claim that describes retired planner/deliver/evaluation/acceptance-review structures as current runtime.
 - Visual loop: inspect the actual rendered page screenshot before finalizing.

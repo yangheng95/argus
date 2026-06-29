@@ -44,8 +44,8 @@ Observed:
     `docs/etfs/final-delivery-report.md`;
   - `specs/artifacts/tv2ainvest.md` is a live prompt/reference artifact but is missing
     from `specs/README.md`;
-  - many existing `specs/new-arch/*.md` files are valid notes but are missing
-    from `specs/records/2026-06/2026-06-29-spec-consolidation.md`.
+  - many existing June architecture/history notes are valid records but were
+    missing from `specs/records/2026-06/2026-06-29-spec-consolidation.md`.
 - `document-health.test.ts` fails because
   `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` hard-codes the
   developer-specific path prefix `C:/Users/chuan/...`. That test still provides
@@ -64,8 +64,8 @@ Observed:
   still-valid note.
 - Do not delete `packages/overlay/test/browser/task-dirbar-keyboard.test.ts`;
   replace the personal-path fixture with a generic workspace path.
-- Reindex all existing `specs/new-arch/*.md` historical notes so the historical
-  doc contract matches the actual repo contents.
+- Reindex all existing June historical notes so the historical doc contract
+  matches the actual repo contents under `specs/records/2026-06/**`.
 
 ## Verification
 
