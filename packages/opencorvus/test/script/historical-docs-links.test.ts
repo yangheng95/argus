@@ -419,8 +419,12 @@ describe("historical docs repository links", () => {
   }, 30000)
 
   test("repository historical doc references resolve", () => {
+    const thisFile = path.relative(repoRoot, import.meta.path).replace(/\\/g, "/")
     const activeFiles = repositoryFiles().filter(
-      (file) => !path.relative(repoRoot, file).replace(/\\/g, "/").startsWith("specs/records/2026-06/"),
+      (file) => {
+        const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
+        return rel !== thisFile && !rel.startsWith("specs/records/2026-06/")
+      },
     )
 
     expect(missingReferences(activeFiles)).toEqual([])

@@ -24,6 +24,7 @@ The 2026-06-29 consolidation moved June records here from scattered spec locatio
 - [2026-06-29-screenshot-browser-agent-goal-owner.md](2026-06-29-screenshot-browser-agent-goal-owner.md) records screenshot browser agent goal ownership calibration.
 - [2026-06-29-side-by-side-agent-tool-surface.md](2026-06-29-side-by-side-agent-tool-surface.md) records side-by-side agent tool surface work.
 - [2026-06-29-spec-consolidation.md](2026-06-29-spec-consolidation.md) records the June spec consolidation and document calibration work.
+- [2026-06-29-stop-before-delete-governance.md](2026-06-29-stop-before-delete-governance.md) records the stop-before-delete governance rule for Mission, Coding Assistant chat, and task records.
 - [2026-06-29-subagent-infrastructure-homogeneity.md](2026-06-29-subagent-infrastructure-homogeneity.md) records the sub-agent infrastructure homogeneity goal and implementation plan.
 - [2026-06-29-task-active-sse-elapsed.md](2026-06-29-task-active-sse-elapsed.md) records task active SSE elapsed handling.
 - [2026-06-29-task-active-sse-runtime-elapsed.md](2026-06-29-task-active-sse-runtime-elapsed.md) records task active SSE runtime elapsed handling.
