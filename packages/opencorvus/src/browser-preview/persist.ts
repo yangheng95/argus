@@ -11,6 +11,7 @@ import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
+import { BrowserPreviewCropIntent, type BrowserPreviewCropIntent as BrowserPreviewCropIntentValue } from "./region-schema"
 import { BrowserPreviewViewport, normalizeBrowserPreviewViewports } from "./viewport"
 import { NamedError } from "@opencorvus-ai/util/error"
 
@@ -57,6 +58,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   operationKind: BrowserPreviewEvidenceOperationKind,
   regionID: z.string().optional(),
   stateID: z.string().optional(),
+  cropIntent: BrowserPreviewCropIntent.optional(),
   manifestPath: z.string().optional(),
   artifactPaths: z.record(z.string(), z.string()).optional(),
   status: BrowserPreviewEvidenceStatus,
@@ -81,6 +83,7 @@ const PersistedBrowserPreviewEvidencePayload = z
     operation_kind: BrowserPreviewEvidenceOperationKind,
     region_id: z.string().optional(),
     state_id: z.string().optional(),
+    crop_intent: BrowserPreviewCropIntent.optional(),
     manifest_path: z.string().optional(),
     artifact_paths: z.record(z.string(), z.string()).optional(),
     status: BrowserPreviewEvidenceStatus,
@@ -361,6 +364,11 @@ function findBrowserPreviewEvidenceByID(input: {
     })
   }
   const payload = parsed.data
+  if (payload.operation_kind === "reference-comparison" && payload.status === "passed" && !payload.crop_intent) {
+    throw browserPreviewEvidenceCorruption(input, {
+      reason: "passed reference-comparison missing crop_intent",
+    })
+  }
   return {
     id: row.id,
     taskID: row.task_id,
@@ -369,6 +377,7 @@ function findBrowserPreviewEvidenceByID(input: {
     operationKind: payload.operation_kind,
     regionID: payload.region_id,
     stateID: payload.state_id,
+    cropIntent: payload.crop_intent,
     manifestPath: payload.manifest_path,
     artifactPaths: payload.artifact_paths,
     status: payload.status,
@@ -428,6 +437,7 @@ export function persistBrowserPreviewEvidence(input: {
   operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
   regionID?: string
   stateID?: string
+  cropIntent?: BrowserPreviewCropIntentValue
   manifestPath?: string
   artifactPaths?: Record<string, string | undefined>
   status: "passed" | "failed"
@@ -449,6 +459,9 @@ export function persistBrowserPreviewEvidence(input: {
       )
     : undefined
   if (operationKind === "reference-comparison" && status === "passed") {
+    if (!input.cropIntent) {
+      throw new Error("passed reference-comparison evidence requires cropIntent")
+    }
     const missing = REQUIRED_REFERENCE_COMPARISON_ARTIFACTS.filter((key) => !artifactPaths?.[key])
     if (missing.length > 0) {
       throw new Error(`passed reference-comparison evidence requires artifact path(s): ${missing.join(", ")}`)
@@ -471,6 +484,7 @@ export function persistBrowserPreviewEvidence(input: {
           operation_kind: operationKind,
           ...(input.regionID ? { region_id: input.regionID } : {}),
           ...(input.stateID ? { state_id: input.stateID } : {}),
+          ...(input.cropIntent ? { crop_intent: input.cropIntent } : {}),
           ...(input.manifestPath
             ? { manifest_path: toBrowserPreviewRuntimeRelativePath(projectRoot, input.taskID, input.manifestPath) }
             : {}),

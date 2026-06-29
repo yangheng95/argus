@@ -126,6 +126,33 @@ export type EvaluationRow = {
   time_created: number
   time_updated: number
 }
+export type BuildAttemptOutcomeKind = "delivered" | "failed" | "aborted" | "no_project_diff"
+export type BuildAttemptOutcomeRow = {
+  id: string
+  task_id: string
+  run_id: string | null
+  goal_id: string
+  goal_run_id: string
+  session_id: string | null
+  terminal_status: "completed" | "failed" | "aborted"
+  outcome_kind: BuildAttemptOutcomeKind
+  summary: string
+  error: string | null
+  no_diff_reason: string | null
+  commit_ref: string | null
+  published_commit_ref: string | null
+  diff_base_ref: string | null
+  diff_head_ref: string | null
+  changed_files: string[]
+  host_facts: Record<string, unknown>
+  workspace: {
+    dir: string | null
+    branch: string | null
+    base_ref: string | null
+  }
+  time_created: number
+  time_updated: number
+}
 export type ProgressRow = typeof EngineProgressSnapshotTable.$inferSelect
 export type RequirementRow = typeof EngineRequirementTable.$inferSelect
 /** Phase-6-d artifact-backed goal_run shape. Was `typeof EngineGoalRunTable.$inferSelect`
@@ -560,6 +587,38 @@ export function findAcceptanceByGoalRun(goalRunID: string): AcceptanceRow | unde
   )
   const latest = latestPerAcceptance(rows)[0]
   return latest ? artifactRowToAcceptanceRow(latest) : undefined
+}
+
+export function findBuildOutcomeByGoalRun(goalRunID: string): BuildAttemptOutcomeRow | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "build_attempt_outcome")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .get(),
+  )
+  return row ? artifactRowToBuildAttemptOutcomeRow(row) : undefined
+}
+
+export function findBuildOutcomesForTask(taskID: string): BuildAttemptOutcomeRow[] {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_attempt_outcome")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+  const seen = new Set<string>()
+  const latest: Array<typeof EngineArtifactTable.$inferSelect> = []
+  for (const row of rows) {
+    const key = row.goal_run_id ?? row.id
+    if (seen.has(key)) continue
+    seen.add(key)
+    latest.push(row)
+  }
+  return latest.map(artifactRowToBuildAttemptOutcomeRow)
 }
 
 /** Phase-6-c helper: collapse the append-only acceptance artifact stream into
@@ -2097,6 +2156,57 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     owner: payload.owner ?? null,
     time_started: payload.time_started ?? null,
     time_completed: payload.time_completed ?? null,
+    time_created: row.time_created,
+    time_updated: row.time_updated,
+  }
+}
+
+function artifactRowToBuildAttemptOutcomeRow(row: typeof EngineArtifactTable.$inferSelect): BuildAttemptOutcomeRow {
+  const payload = (row.payload ?? {}) as {
+    task_id?: string
+    goal_id?: string
+    goal_run_id?: string
+    run_id?: string | null
+    session_id?: string | null
+    terminal_status?: "completed" | "failed" | "aborted"
+    outcome_kind?: BuildAttemptOutcomeKind
+    summary?: string
+    error?: string | null
+    no_diff_reason?: string | null
+    host_facts?: Record<string, unknown>
+    workspace?: {
+      dir?: string | null
+      branch?: string | null
+      base_ref?: string | null
+    }
+  }
+  const hostFacts = payload.host_facts && typeof payload.host_facts === "object" ? payload.host_facts : {}
+  const changedFiles = Array.isArray(hostFacts.actual_changed_files)
+    ? hostFacts.actual_changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+  return {
+    id: row.id,
+    task_id: payload.task_id ?? row.task_id,
+    run_id: payload.run_id ?? row.run_id ?? null,
+    goal_id: payload.goal_id ?? "",
+    goal_run_id: payload.goal_run_id ?? row.goal_run_id ?? "",
+    session_id: payload.session_id ?? null,
+    terminal_status: payload.terminal_status ?? "failed",
+    outcome_kind: payload.outcome_kind ?? "failed",
+    summary: payload.summary ?? "",
+    error: payload.error ?? null,
+    no_diff_reason: payload.no_diff_reason ?? null,
+    commit_ref: typeof hostFacts.contribution_commit_ref === "string" ? hostFacts.contribution_commit_ref : null,
+    published_commit_ref: typeof hostFacts.published_commit_ref === "string" ? hostFacts.published_commit_ref : null,
+    diff_base_ref: typeof hostFacts.diff_base_ref === "string" ? hostFacts.diff_base_ref : null,
+    diff_head_ref: typeof hostFacts.diff_head_ref === "string" ? hostFacts.diff_head_ref : null,
+    changed_files: changedFiles,
+    host_facts: hostFacts,
+    workspace: {
+      dir: payload.workspace?.dir ?? null,
+      branch: payload.workspace?.branch ?? null,
+      base_ref: payload.workspace?.base_ref ?? null,
+    },
     time_created: row.time_created,
     time_updated: row.time_updated,
   }

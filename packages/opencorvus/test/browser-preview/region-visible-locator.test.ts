@@ -79,6 +79,7 @@ function locatorBinding(regionID: "hidden-region" | "zero-size-region"): Browser
     viewport_id: "desktop",
     state_id: "default",
     region_scope: "page-section",
+    crop_intent: "full-region",
     source: {
       reference_artifact_id: "reference.png",
       bbox: { x: 20, y: 20, width: 120, height: 80 },

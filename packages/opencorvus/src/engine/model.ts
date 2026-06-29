@@ -816,6 +816,23 @@ export const TaskBoardGoalStepPayload = z.object({
       deletions: z.number().optional(),
     })
     .optional(),
+  buildOutcome: z
+    .object({
+      id: z.string(),
+      goalRunID: z.string(),
+      terminalStatus: z.enum(["completed", "failed", "aborted"]),
+      outcomeKind: z.enum(["delivered", "failed", "aborted", "no_project_diff"]),
+      acceptancePresent: z.boolean(),
+      summary: z.string().optional(),
+      error: z.string().optional(),
+      noDiffReason: z.string().optional(),
+      changedFiles: z.array(z.string()),
+      commitRef: z.string().optional(),
+      publishedCommitRef: z.string().optional(),
+      diffBaseRef: z.string().optional(),
+      diffHeadRef: z.string().optional(),
+    })
+    .optional(),
   checks: z
     .array(
       z.object({

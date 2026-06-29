@@ -107,6 +107,7 @@ export type EngineArtifactKind =
   | "acceptance_specialist_review"
   | "acceptance_review_threw"
   | "acceptance"
+  | "build_attempt_outcome"
   | "goal_run_attempt"
   | "integrity_attempt"
   | "fact_check_attempt"

@@ -31,7 +31,7 @@ import { Button } from "./ui/Button"
 interface GoalStep {
   stepID: string
   label: string
-  status: "pending" | "running" | "completed" | "skipped" | "failed"
+  status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
   startedAt?: number
   completedAt?: number
   /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */

@@ -98,6 +98,21 @@ export interface StepPayload {
     status?: "added" | "deleted" | "modified"
   }>
   diffStats?: { files?: number; additions?: number; deletions?: number }
+  buildOutcome?: {
+    id: string
+    goalRunID: string
+    terminalStatus: "completed" | "failed" | "aborted"
+    outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
+    acceptancePresent: boolean
+    summary?: string
+    error?: string
+    noDiffReason?: string
+    changedFiles: string[]
+    commitRef?: string
+    publishedCommitRef?: string
+    diffBaseRef?: string
+    diffHeadRef?: string
+  }
   checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>
   evalSummary?: string
   verdict?: string

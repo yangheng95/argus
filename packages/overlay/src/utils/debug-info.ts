@@ -22,6 +22,8 @@ function debugGoalBoardFiles(gw: any): string {
   const commitRefs = new Set<string>()
   const publishedCommitRefs = new Set<string>()
   const diffRefs = new Set<string>()
+  const outcomes = new Set<string>()
+  const noAcceptanceReasons = new Set<string>()
   let statFiles: number | undefined
   let additions: number | undefined
   let deletions: number | undefined
@@ -30,6 +32,21 @@ function debugGoalBoardFiles(gw: any): string {
     if (!payload || typeof payload !== "object") continue
     if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
     if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
+    const buildOutcome = payload.buildOutcome
+    if (buildOutcome && typeof buildOutcome === "object") {
+      const goalRunID = typeof buildOutcome.goalRunID === "string" ? buildOutcome.goalRunID : "unknown"
+      const outcomeKind = typeof buildOutcome.outcomeKind === "string" ? buildOutcome.outcomeKind : "unknown"
+      const terminalStatus =
+        typeof buildOutcome.terminalStatus === "string" ? buildOutcome.terminalStatus : "unknown"
+      outcomes.add(`${goalRunID}:${terminalStatus}/${outcomeKind}`)
+      if (buildOutcome.acceptancePresent !== true) {
+        const reason =
+          typeof buildOutcome.noDiffReason === "string" && buildOutcome.noDiffReason.trim()
+            ? buildOutcome.noDiffReason.trim()
+            : outcomeKind
+        noAcceptanceReasons.add(`${goalRunID}:${reason}`)
+      }
+    }
     if (typeof payload.commitRef === "string" && payload.commitRef.trim()) commitRefs.add(payload.commitRef.trim())
     if (typeof payload.publishedCommitRef === "string" && payload.publishedCommitRef.trim()) {
       publishedCommitRefs.add(payload.publishedCommitRef.trim())
@@ -54,7 +71,9 @@ function debugGoalBoardFiles(gw: any): string {
     `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; ` +
     `contributionCommits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; ` +
     `publishedCommits=${publishedCommitRefs.size ? Array.from(publishedCommitRefs).join(",") : "none"}; ` +
-    `diffRefs=${diffRefs.size ? Array.from(diffRefs).join(",") : "-"}; diffStats=${statText}`
+    `diffRefs=${diffRefs.size ? Array.from(diffRefs).join(",") : "-"}; diffStats=${statText}; ` +
+    `outcomes=${outcomes.size ? Array.from(outcomes).join(",") : "-"}; ` +
+    `noAcceptance=${noAcceptanceReasons.size ? Array.from(noAcceptanceReasons).join(",") : "-"}`
   )
 }
 

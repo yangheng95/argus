@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { buildTaskDebugBlob } from "../src/utils/debug-info"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 
@@ -32,7 +33,53 @@ test("task debug info includes only the compact Files panel board projection sum
   expect(debugInfo).toContain("contributionCommits=${commitRefs.size")
   expect(debugInfo).toContain("publishedCommits=${publishedCommitRefs.size")
   expect(debugInfo).toContain("diffRefs=${diffRefs.size")
+  expect(debugInfo).toContain("outcomes=${outcomes.size")
+  expect(debugInfo).toContain("noAcceptance=${noAcceptanceReasons.size")
   expect(debugInfo).not.toContain("commits=${commitRefs.size")
+})
+
+test("task debug info explains zero changed files with terminal build outcome", () => {
+  const blob = buildTaskDebugBlob(
+    {
+      task: {
+        id: "tsk_debug_outcome",
+        title: "Debug build outcome",
+        status: "failed",
+        terminalReason: "failed",
+        directory: "C:/repo",
+        sessionID: "ses_debug_outcome",
+        time: { created: Date.now(), updated: Date.now() },
+      },
+      goalWorkflows: [
+        {
+          goalID: "gol_debug_outcome",
+          orderIndex: 0,
+          goalStatus: "failed",
+          goalTitle: "Visual parity",
+          retryCount: 1,
+          steps: [
+            {
+              payload: {
+                buildOutcome: {
+                  id: "artifact_debug_outcome",
+                  goalRunID: "grun_debug_outcome",
+                  terminalStatus: "aborted",
+                  outcomeKind: "aborted",
+                  acceptancePresent: false,
+                  changedFiles: [],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    },
+    { database: "C:/runtime/opencorvus.db" },
+  )
+
+  expect(blob).toContain("changedFiles=0")
+  expect(blob).toContain("outcomes=grun_debug_outcome:aborted/aborted")
+  expect(blob).toContain("noAcceptance=grun_debug_outcome:aborted")
 })
 
 test("task debug info omits the old redundant notes, HTTP probes, and SQL templates", () => {

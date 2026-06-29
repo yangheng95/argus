@@ -824,6 +824,47 @@ describe("tool.browser_preview", () => {
   )
 
   test(
+    "browser preview evidence writer rejects passed reference comparisons without crop intent",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "missing-crop-intent")
+          await fs.mkdir(artifactDir, { recursive: true })
+          const sourcePath = path.join(artifactDir, "source.png")
+          const implementationPath = path.join(artifactDir, "implementation.png")
+          const sideBySidePath = path.join(artifactDir, "side-by-side.png")
+          await fs.writeFile(sourcePath, "source")
+          await fs.writeFile(implementationPath, "implementation")
+          await fs.writeFile(sideBySidePath, "side-by-side")
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+          expect(() =>
+            persistBrowserPreviewEvidence({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              viewportID: "desktop",
+              operationKind: "reference-comparison",
+              regionID: "region_header",
+              status: "passed",
+              summary: "Missing crop intent should throw.",
+              artifactPaths: {
+                source_crop: sourcePath,
+                implementation_crop: implementationPath,
+                side_by_side: sideBySidePath,
+              },
+              diagnostics: [],
+            }),
+          ).toThrow("cropIntent")
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "browser preview evidence writer rejects passed reference comparisons without required artifacts",
     async () => {
       await using tmp = await tmpdir({ git: true })
@@ -844,6 +885,7 @@ describe("tool.browser_preview", () => {
               viewportID: "desktop",
               operationKind: "reference-comparison",
               regionID: "region_header",
+              cropIntent: "full-region",
               status: "passed",
               summary: "Incomplete comparison should throw.",
               artifactPaths: { side_by_side: sideBySidePath },

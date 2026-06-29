@@ -19563,6 +19563,13 @@
                     "stateID": {
                       "type": "string"
                     },
+                    "cropIntent": {
+                      "type": "string",
+                      "enum": [
+                        "full-region",
+                        "content-well"
+                      ]
+                    },
                     "manifestPath": {
                       "type": "string"
                     },
@@ -20743,6 +20750,13 @@
                           "state_id": {
                             "type": "string"
                           },
+                          "crop_intent": {
+                            "type": "string",
+                            "enum": [
+                              "full-region",
+                              "content-well"
+                            ]
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -21239,6 +21253,13 @@
                             "navigation"
                           ]
                         },
+                        "crop_intent": {
+                          "type": "string",
+                          "enum": [
+                            "full-region",
+                            "content-well"
+                          ]
+                        },
                         "source": {
                           "type": "object",
                           "properties": {
@@ -21426,6 +21447,7 @@
                         "region_id",
                         "viewport_id",
                         "region_scope",
+                        "crop_intent",
                         "source",
                         "implementation"
                       ],
@@ -29652,6 +29674,72 @@
                                             }
                                           }
                                         },
+                                        "buildOutcome": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "goalRunID": {
+                                              "type": "string"
+                                            },
+                                            "terminalStatus": {
+                                              "type": "string",
+                                              "enum": [
+                                                "completed",
+                                                "failed",
+                                                "aborted"
+                                              ]
+                                            },
+                                            "outcomeKind": {
+                                              "type": "string",
+                                              "enum": [
+                                                "delivered",
+                                                "failed",
+                                                "aborted",
+                                                "no_project_diff"
+                                              ]
+                                            },
+                                            "acceptancePresent": {
+                                              "type": "boolean"
+                                            },
+                                            "summary": {
+                                              "type": "string"
+                                            },
+                                            "error": {
+                                              "type": "string"
+                                            },
+                                            "noDiffReason": {
+                                              "type": "string"
+                                            },
+                                            "changedFiles": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "commitRef": {
+                                              "type": "string"
+                                            },
+                                            "publishedCommitRef": {
+                                              "type": "string"
+                                            },
+                                            "diffBaseRef": {
+                                              "type": "string"
+                                            },
+                                            "diffHeadRef": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "goalRunID",
+                                            "terminalStatus",
+                                            "outcomeKind",
+                                            "acceptancePresent",
+                                            "changedFiles"
+                                          ]
+                                        },
                                         "checks": {
                                           "type": "array",
                                           "items": {
@@ -33731,6 +33819,72 @@
                                           "type": "number"
                                         }
                                       }
+                                    },
+                                    "buildOutcome": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "goalRunID": {
+                                          "type": "string"
+                                        },
+                                        "terminalStatus": {
+                                          "type": "string",
+                                          "enum": [
+                                            "completed",
+                                            "failed",
+                                            "aborted"
+                                          ]
+                                        },
+                                        "outcomeKind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "delivered",
+                                            "failed",
+                                            "aborted",
+                                            "no_project_diff"
+                                          ]
+                                        },
+                                        "acceptancePresent": {
+                                          "type": "boolean"
+                                        },
+                                        "summary": {
+                                          "type": "string"
+                                        },
+                                        "error": {
+                                          "type": "string"
+                                        },
+                                        "noDiffReason": {
+                                          "type": "string"
+                                        },
+                                        "changedFiles": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "commitRef": {
+                                          "type": "string"
+                                        },
+                                        "publishedCommitRef": {
+                                          "type": "string"
+                                        },
+                                        "diffBaseRef": {
+                                          "type": "string"
+                                        },
+                                        "diffHeadRef": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "goalRunID",
+                                        "terminalStatus",
+                                        "outcomeKind",
+                                        "acceptancePresent",
+                                        "changedFiles"
+                                      ]
                                     },
                                     "checks": {
                                       "type": "array",

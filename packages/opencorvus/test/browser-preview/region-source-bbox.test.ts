@@ -97,6 +97,7 @@ function sourceBboxBinding(regionID: "bad-source-bbox" | "valid-source-bbox"): B
     viewport_id: "desktop",
     state_id: "default",
     region_scope: "page-section",
+    crop_intent: "full-region",
     source: {
       reference_artifact_id: "reference.png",
       bbox: bad ? { x: 250, y: 210, width: 30, height: 30 } : { x: 40, y: 40, width: 180, height: 120 },

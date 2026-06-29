@@ -725,3 +725,138 @@ test("compileBoard projects contribution and published commit refs separately", 
     },
   })
 })
+
+test("compileBoard projects terminal build outcome when goal has no acceptance", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_build_outcome_${stamp}`
+  const taskID = `tsk_board_build_outcome_${stamp}`
+  const runID = `run_board_build_outcome_${stamp}`
+  const goalID = `gol_board_build_outcome_${stamp}`
+  const goalRunID = `glr_board_build_outcome_${stamp}`
+  const outcomeID = `artifact_board_build_outcome_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board build outcome projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Build outcome projection",
+        request: "show aborted build facts",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+      } as any)
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: taskID,
+        title: "Visual parity",
+        slug: "visual-parity",
+        objective: "Verify visual parity.",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values([
+        {
+          id: goalRunID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "attempt-aborted",
+          payload: {
+            goal_id: goalID,
+            session_id: "ses_board_build_outcome",
+            status: "aborted",
+            retry_count: 1,
+            error: "lost process ownership",
+            time_started: now - 5_000,
+            time_completed: now - 1_000,
+          },
+          time_created: now - 1_000,
+          time_updated: now - 1_000,
+        },
+        {
+          id: outcomeID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "build_attempt_outcome",
+          label: "aborted",
+          payload: {
+            task_id: taskID,
+            goal_id: goalID,
+            goal_run_id: goalRunID,
+            run_id: runID,
+            session_id: "ses_board_build_outcome",
+            terminal_status: "aborted",
+            outcome_kind: "aborted",
+            summary: "Build attempt aborted: lost process ownership",
+            error: "lost process ownership",
+            no_diff_reason: null,
+            host_facts: {
+              contribution_commit_ref: null,
+              published_commit_ref: null,
+              diff_base_ref: null,
+              diff_head_ref: null,
+              actual_changed_files: [],
+            },
+            workspace: {
+              dir: "C:/tmp/visual-parity",
+              branch: "opencorvus/w/visual",
+              base_ref: "base123",
+            },
+          },
+          time_created: now,
+          time_updated: now,
+        },
+      ] as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const payloads = board.goalWorkflows?.[0]?.steps?.map((step: any) => step.payload).filter(Boolean) ?? []
+      const payload = payloads.find((item: any) => item.buildOutcome)
+      expect(board.goalWorkflows?.[0]?.goalStatus).toBe("failed")
+      expect(board.goalWorkflows?.[0]?.steps?.some((step: any) => step.status === "aborted")).toBe(true)
+      expect(payload?.buildOutcome).toEqual({
+        id: outcomeID,
+        goalRunID,
+        terminalStatus: "aborted",
+        outcomeKind: "aborted",
+        acceptancePresent: false,
+        summary: "Build attempt aborted: lost process ownership",
+        error: "lost process ownership",
+        noDiffReason: undefined,
+        changedFiles: [],
+        commitRef: undefined,
+        publishedCommitRef: undefined,
+        diffBaseRef: undefined,
+        diffHeadRef: undefined,
+      })
+    },
+  })
+})

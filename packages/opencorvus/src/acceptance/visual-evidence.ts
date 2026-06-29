@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import z from "zod"
 import { BrowserPreviewEvidenceCorruptionError, findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
+import { BrowserPreviewCropIntent } from "@/browser-preview/region-schema"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export const VisualRegionEvidenceSchema = z
@@ -12,6 +13,7 @@ export const VisualRegionEvidenceSchema = z
     acceptanceSpecIDs: z.array(z.string().min(1)),
     sourceRefs: z.array(z.string().min(1)),
     viewport: z.string().min(1),
+    cropIntent: BrowserPreviewCropIntent,
     bounds: z
       .object({
         x: z.number(),
@@ -176,6 +178,12 @@ export async function validateVisualEvidenceBundleReferenceComparisons(input: {
       }
       if (evidence.viewportID !== region.viewport) {
         issues.push(`${region.id}: evidence ${evidenceID} viewport is ${evidence.viewportID}, not ${region.viewport}`)
+        continue
+      }
+      if (evidence.cropIntent !== region.cropIntent) {
+        issues.push(
+          `${region.id}: evidence ${evidenceID} crop intent is ${evidence.cropIntent ?? "(none)"}, not ${region.cropIntent}`,
+        )
         continue
       }
       matched = true
