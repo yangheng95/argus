@@ -8,7 +8,8 @@ The repository carries three documentation layers:
 
 - `packages/web/src/content/docs/**`: the Starlight documentation site source.
 - `docs/product/**`: a legacy Markdown product-doc tree that is not loaded by the web app.
-- `specs/**` and `packages/opencorvus/specs/**`: historical design notes and implementation records.
+- `specs/**`: historical design notes and implementation records. Package-local spec trees were later retired by
+  the 2026-06-29 spec consolidation.
 
 The duplicate product tree violates the docs single-source decision from
 `specs/records/2026-06/2026-06-04-docs-sdk-single-source.md`: updating `docs/product/**` does not update the

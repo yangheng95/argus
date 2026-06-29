@@ -44,7 +44,7 @@ Scope:
 ```text
 packages/overlay/src
 packages/overlay/test
-specs/new-arch
+specs
 ```
 
 Findings:
