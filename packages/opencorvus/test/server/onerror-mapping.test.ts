@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
@@ -7,7 +7,7 @@ import { Worktree } from "../../src/worktree/index"
 import { Server } from "../../src/server/server"
 import { Provider } from "../../src/provider/provider"
 import { Pty } from "../../src/pty"
-import { NotFoundError } from "../../src/storage/db"
+import { Database, DatabaseUnavailableError, NotFoundError } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
 import { Session } from "../../src/session"
@@ -15,6 +15,10 @@ import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-e
 import { serverErrorResponse } from "../../src/server/error-handler"
 
 await Log.init({ print: false })
+
+afterEach(() => {
+  Database.close()
+})
 
 /**
  * 2026-04-30 darwin cascade audit (W2-V31). The server.ts onError
@@ -168,6 +172,42 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       404,
       "NotFoundError",
+    )
+  })
+
+  test("DatabaseUnavailableError maps to 503", async () => {
+    await expectMapping(
+      () => {
+        throw new DatabaseUnavailableError({
+          message: "OpenCorvus database is unavailable",
+          path: "C:\\opencorvus\\data\\opencorvus.db",
+          operation: "Database.use",
+          code: "SQLITE_IOERR_READ",
+          errno: 266,
+          byteOffset: -1,
+        })
+      },
+      503,
+      "DatabaseUnavailableError",
+    )
+  })
+
+  test("raw SQLite storage I/O errors normalize to 503 DatabaseUnavailableError", async () => {
+    await expectMapping(
+      () => {
+        const err = new Error("disk I/O error") as Error & {
+          code: string
+          errno: number
+          byteOffset: number
+        }
+        err.name = "SQLiteError"
+        err.code = "SQLITE_IOERR_READ"
+        err.errno = 266
+        err.byteOffset = -1
+        throw err
+      },
+      503,
+      "DatabaseUnavailableError",
     )
   })
 

@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception"
 import type { Context } from "hono"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { Log } from "../util/log"
-import { NotFoundError } from "../storage/db"
+import { Database, NotFoundError } from "../storage/db"
 import { badRequestBody } from "./error"
 
 const log = Log.create({ service: "server" })
@@ -26,6 +26,7 @@ export function requestID(c: { req: { header(name: string): string | undefined }
 
 export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "NotFoundError") return 404
+  if (err.name === "DatabaseUnavailableError") return 503
   if (err.name === "LogFileNotFoundError") return 404
   if (err.name === "ProviderModelNotFoundError") return 400
   if (err.name === "DirectoryRequiredError") return 400
@@ -63,29 +64,30 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
 export function serverErrorResponse(err: Error | unknown, c: Context): Response | Promise<Response> {
   const id = requestID(c)
   c.header("x-opencorvus-request-id", id)
-  const namedError = isNamedErrorLike(err)
-  const status = namedError ? namedErrorStatus(err) : err instanceof HTTPException ? err.status : 500
+  const normalized = Database.normalizeError(err, `HTTP ${c.req.method} ${c.req.path}`)
+  const namedError = isNamedErrorLike(normalized)
+  const status = namedError ? namedErrorStatus(normalized) : normalized instanceof HTTPException ? normalized.status : 500
   log.error("request failed", {
     requestID: id,
     method: c.req.method,
     path: c.req.path,
     statusCode: status,
-    error: err,
+    error: normalized,
   })
   if (namedError) {
-    return c.json(err.toObject(), { status })
+    return c.json(normalized.toObject(), { status })
   }
-  if (err instanceof HTTPException) {
-    const message = err.message
-    if (err.status === 400) {
+  if (normalized instanceof HTTPException) {
+    const message = normalized.message
+    if (normalized.status === 400) {
       return c.json(badRequestBody(message), { status: 400 })
     }
-    if (err.status === 404) {
+    if (normalized.status === 404) {
       return c.json(new NotFoundError({ message }).toObject(), { status: 404 })
     }
     return c.json(new NamedError.Unknown({ message }).toObject(), { status })
   }
-  const message = err instanceof Error ? err.message : String(err)
+  const message = normalized instanceof Error ? normalized.message : String(normalized)
   return c.json(new NamedError.Unknown({ message }).toObject(), {
     status: 500,
   })

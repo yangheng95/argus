@@ -68,6 +68,7 @@ import {
   directoryQueueSnapshot,
   drainPendingQueuedOperatorWakes,
   dispatchTaskLoop,
+  dispatchTaskLoopInBackground,
   type DispatchTaskLoopResult,
   listOrphanedActiveInProject,
   reorderQueuedTasksForCwd,
@@ -2374,7 +2375,10 @@ export namespace EngineService {
       await reopenActiveRunForOperatorWake(openedTask, `${label} reopened blocked run`)
     }
     const note = intent === "retry" ? OrchestratorEventNote.retry(task) : OrchestratorEventNote.replan(task)
-    void dispatchTaskLoop({ taskID, event: { note, operatorIntent: { kind: intent } } })
+    dispatchTaskLoopInBackground(
+      { taskID, event: { note, operatorIntent: { kind: intent } } },
+      "task-api.wakeTaskForOperatorIntent",
+    )
     return viewTask(requireTaskInCurrentProject(taskID))
   }
 
@@ -2409,7 +2413,10 @@ export namespace EngineService {
     )
     const wakeTask = await openTaskForOperatorWake(task, "Operator note reopened task")
     await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
-    void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
+    dispatchTaskLoopInBackground(
+      { taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } },
+      "task-api.recordOperatorNote",
+    )
     return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
 

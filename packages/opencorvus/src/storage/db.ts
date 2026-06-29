@@ -31,9 +31,91 @@ export const DatabaseSchemaResetRequiredError = NamedError.create(
   }),
 )
 
+export type DatabaseUnavailableErrorData = {
+  message: string
+  path: string
+  operation: string
+  code: string
+  errno?: number
+  byteOffset?: number
+}
+
+export const DatabaseUnavailableError = NamedError.create(
+  "DatabaseUnavailableError",
+  z.object({
+    message: z.string(),
+    path: z.string(),
+    operation: z.string(),
+    code: z.string(),
+    errno: z.number().optional(),
+    byteOffset: z.number().optional(),
+  }),
+)
+
 const log = Log.create({ service: "db" })
 
 type SchemaShape = Map<string, string[]>
+
+const SQLITE_UNAVAILABLE_CODE_PREFIXES = ["SQLITE_IOERR", "SQLITE_CANTOPEN", "SQLITE_CORRUPT", "SQLITE_READONLY"]
+const SQLITE_UNAVAILABLE_CODES = new Set(["SQLITE_NOTADB", "SQLITE_FULL"])
+
+function objectField(input: unknown, key: string): unknown {
+  if (!input || typeof input !== "object") return undefined
+  return (input as Record<string, unknown>)[key]
+}
+
+function stringField(input: unknown, key: string): string | undefined {
+  const value = objectField(input, key)
+  return typeof value === "string" ? value : undefined
+}
+
+function numberField(input: unknown, key: string): number | undefined {
+  const value = objectField(input, key)
+  return typeof value === "number" ? value : undefined
+}
+
+function firstField<T>(input: unknown, key: string, read: (candidate: unknown, key: string) => T | undefined) {
+  let current = input
+  for (let depth = 0; depth < 8; depth++) {
+    const value = read(current, key)
+    if (value !== undefined) return value
+    const cause = objectField(current, "cause")
+    if (!cause || cause === current) return undefined
+    current = cause
+  }
+}
+
+function isSqliteUnavailableCode(code: string): boolean {
+  if (SQLITE_UNAVAILABLE_CODES.has(code)) return true
+  return SQLITE_UNAVAILABLE_CODE_PREFIXES.some((prefix) => code === prefix || code.startsWith(`${prefix}_`))
+}
+
+function sqliteUnavailableCode(error: unknown): string | undefined {
+  const code = firstField(error, "code", stringField)
+  if (!code || !isSqliteUnavailableCode(code)) return undefined
+  return code
+}
+
+function unavailableDataFromSqlite(
+  error: unknown,
+  operation: string,
+  dbPath: string,
+): DatabaseUnavailableErrorData | undefined {
+  const code = sqliteUnavailableCode(error)
+  if (!code) return undefined
+  const sourceMessage = error instanceof Error ? error.message : String(error)
+  const data: DatabaseUnavailableErrorData = {
+    path: dbPath,
+    operation,
+    code,
+    message: `OpenCorvus database is unavailable at ${dbPath} during ${operation}: ${sourceMessage}`,
+  }
+  const errno = firstField(error, "errno", numberField)
+  if (errno !== undefined) data.errno = errno
+  const byteOffset = firstField(error, "byteOffset", numberField)
+  if (byteOffset !== undefined) data.byteOffset = byteOffset
+  return data
+}
 
 function quoteIdentifier(name: string) {
   return `"${name.replaceAll('"', '""')}"`
@@ -188,9 +270,55 @@ export namespace Database {
 
   const state = {
     sqlite: undefined as BunDatabase | undefined,
+    unavailable: undefined as DatabaseUnavailableErrorData | undefined,
+  }
+
+  function unavailableError() {
+    return state.unavailable ? new DatabaseUnavailableError(state.unavailable) : undefined
+  }
+
+  function closeSqliteAfterUnavailable() {
+    const sqlite = state.sqlite
+    state.sqlite = undefined
+    Client.reset()
+    if (!sqlite) return
+    try {
+      sqlite.close()
+    } catch (error) {
+      log.warn("database close failed after unavailable error", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  export function normalizeError(error: unknown, operation: string): unknown {
+    if (DatabaseUnavailableError.isInstance(error)) return error
+    const data = unavailableDataFromSqlite(error, operation, Path())
+    if (!data) return error
+    state.unavailable = data
+    closeSqliteAfterUnavailable()
+    return new DatabaseUnavailableError(data, error instanceof Error ? { cause: error } : undefined)
+  }
+
+  export function isUnavailableError(error: unknown): boolean {
+    return DatabaseUnavailableError.isInstance(error) || sqliteUnavailableCode(error) !== undefined
+  }
+
+  export function unavailable() {
+    return state.unavailable ? { ...state.unavailable } : undefined
+  }
+
+  function throwIfUnavailable(): void {
+    const error = unavailableError()
+    if (error) throw error
+  }
+
+  function throwNormalized(error: unknown, operation: string): never {
+    throw normalizeError(error, operation)
   }
 
   export const Client = lazy(() => {
+    throwIfUnavailable()
     const dbPath = Path()
     log.info("opening database", { path: dbPath })
     // Ensure data dir exists — benchmarks create OPENCORVUS_HOME at runtime,
@@ -198,28 +326,42 @@ export namespace Database {
     // module-load ensureDirectory calls.
     mkdirSync(path.dirname(dbPath), { recursive: true })
 
-    const sqlite = ensureCurrentSchema(openSqlite(dbPath), dbPath)
-    state.sqlite = sqlite
-    log.info("schema applied")
+    try {
+      const sqlite = ensureCurrentSchema(openSqlite(dbPath), dbPath)
+      state.sqlite = sqlite
+      log.info("schema applied")
 
-    const db = drizzle({ client: sqlite, schema })
+      const db = drizzle({ client: sqlite, schema })
 
-    return db
+      return db
+    } catch (error) {
+      throwNormalized(error, "Database.Client")
+    }
   })
 
   export function close() {
     const sqlite = state.sqlite
+    const wasUnavailable = state.unavailable !== undefined
+    state.sqlite = undefined
+    state.unavailable = undefined
+    Client.reset()
     if (!sqlite) return
+    if (!wasUnavailable) {
+      try {
+        sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+      } catch (error) {
+        log.warn("database WAL checkpoint failed during close", {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
     try {
-      sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+      sqlite.close()
     } catch (error) {
-      log.warn("database WAL checkpoint failed during close", {
+      log.warn("database close failed", {
         error: error instanceof Error ? error.message : String(error),
       })
     }
-    sqlite.close()
-    state.sqlite = undefined
-    Client.reset()
   }
 
   export function hasOpenConnection() {
@@ -293,7 +435,12 @@ export namespace Database {
     close()
     const dbPath = Path()
     mkdirSync(path.dirname(dbPath), { recursive: true })
-    const sqlite = openSqlite(dbPath)
+    let sqlite: BunDatabase
+    try {
+      sqlite = openSqlite(dbPath)
+    } catch (error) {
+      throwNormalized(error, "Database.rebuildSqlite")
+    }
     try {
       sqlite.run("PRAGMA foreign_keys = OFF")
       sqlite.run("BEGIN")
@@ -306,7 +453,7 @@ export namespace Database {
       try {
         sqlite.run("ROLLBACK")
       } catch {}
-      throw err
+      throwNormalized(err, "Database.rebuildSqlite")
     } finally {
       if (state.sqlite === sqlite) state.sqlite = undefined
       try {
@@ -325,10 +472,14 @@ export namespace Database {
   export function checkpointTruncate() {
     // Forcing Client() ensures the sqlite handle is initialised; we cannot use
     // `use()` here because checkpoint must not run inside a transaction ctx.
-    Client()
-    const sqlite = state.sqlite
-    if (!sqlite) return
-    sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+    try {
+      Client()
+      const sqlite = state.sqlite
+      if (!sqlite) return
+      sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+    } catch (error) {
+      throwNormalized(error, "Database.checkpointTruncate")
+    }
   }
 
   /**
@@ -337,10 +488,14 @@ export namespace Database {
    * outside a transaction.
    */
   export function vacuum() {
-    Client()
-    const sqlite = state.sqlite
-    if (!sqlite) return
-    sqlite.run("VACUUM")
+    try {
+      Client()
+      const sqlite = state.sqlite
+      if (!sqlite) return
+      sqlite.run("VACUUM")
+    } catch (error) {
+      throwNormalized(error, "Database.vacuum")
+    }
   }
 
   /**
@@ -350,10 +505,14 @@ export namespace Database {
    * transaction.
    */
   export function incrementalVacuum(pages = 1000) {
-    Client()
-    const sqlite = state.sqlite
-    if (!sqlite) return
-    sqlite.run(`PRAGMA incremental_vacuum(${pages})`)
+    try {
+      Client()
+      const sqlite = state.sqlite
+      if (!sqlite) return
+      sqlite.run(`PRAGMA incremental_vacuum(${pages})`)
+    } catch (error) {
+      throwNormalized(error, "Database.incrementalVacuum")
+    }
   }
 
   export type TxOrDb = Transaction | Client
@@ -386,14 +545,21 @@ export namespace Database {
   }
 
   export function use<T>(callback: (trx: TxOrDb) => T): T {
+    throwIfUnavailable()
     try {
       return callback(ctx.use().tx)
     } catch (err) {
       if (err instanceof Context.NotFound) {
-        const effects: (() => void | Promise<void>)[] = []
-        const result = ctx.provide({ effects, tx: Client() }, () => callback(Client()))
-        drainEffects(effects)
-        return result
+        try {
+          throwIfUnavailable()
+          const effects: (() => void | Promise<void>)[] = []
+          const db = Client()
+          const result = ctx.provide({ effects, tx: db }, () => callback(db))
+          drainEffects(effects)
+          return result
+        } catch (inner) {
+          throwNormalized(inner, "Database.use")
+        }
       }
       throw err
     }
@@ -426,16 +592,22 @@ export namespace Database {
   }
 
   export function transaction<T>(callback: (tx: TxOrDb) => T): T {
+    throwIfUnavailable()
     try {
       return callback(ctx.use().tx)
     } catch (err) {
       if (err instanceof Context.NotFound) {
-        const effects: (() => void | Promise<void>)[] = []
-        const result = Client().transaction((tx) => {
-          return ctx.provide({ tx, effects }, () => callback(tx))
-        })
-        drainEffects(effects)
-        return result
+        try {
+          throwIfUnavailable()
+          const effects: (() => void | Promise<void>)[] = []
+          const result = Client().transaction((tx) => {
+            return ctx.provide({ tx, effects }, () => callback(tx))
+          })
+          drainEffects(effects)
+          return result
+        } catch (inner) {
+          throwNormalized(inner, "Database.transaction")
+        }
       }
       throw err
     }

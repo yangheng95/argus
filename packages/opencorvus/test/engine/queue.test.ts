@@ -3,6 +3,7 @@ import {
   advanceQueue,
   directoryQueueSnapshot,
   dispatchTaskLoop,
+  dispatchTaskLoopInBackground,
   drainQueuedTaskEventIfUnowned,
   queuedTaskEventStats,
   reorderQueuedTasksForCwd,
@@ -78,6 +79,7 @@ import { Database, eq } from "../../src/storage/db"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -95,6 +97,26 @@ describe("engine queue", () => {
     expect(attach).toContain(".finally(() => {")
     expect(attach).toContain(".catch((err) => {")
     expect(attach.indexOf(".finally(() => {")).toBeLessThan(attach.indexOf(".catch((err) => {"))
+  })
+
+  test("background dispatch contains database unavailable rejection", async () => {
+    try {
+      const sqliteError = new Error("disk I/O error") as Error & { code: string }
+      sqliteError.name = "SQLiteError"
+      sqliteError.code = "SQLITE_IOERR_READ"
+      Database.normalizeError(sqliteError, "test.seed")
+
+      await expectNoProcessErrors(async () => {
+        dispatchTaskLoopInBackground({ taskID: "task_db_unavailable" }, "test.background-dispatch")
+      })
+
+      expect(Database.unavailable()).toMatchObject({
+        code: "SQLITE_IOERR_READ",
+        operation: "test.seed",
+      })
+    } finally {
+      Database.close()
+    }
   })
 
   test("dispatchTaskLoop preserves the caller's event through the queue claim", async () => {

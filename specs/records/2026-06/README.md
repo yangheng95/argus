@@ -4,6 +4,10 @@ This directory contains June 2026 implementation records, investigations, benchm
 
 The 2026-06-29 consolidation moved June records here from scattered spec locations and deleted pre-June spec files. The migration source of truth for this task is [2026-06-29-spec-consolidation.md](2026-06-29-spec-consolidation.md).
 
+Current incident records:
+
+- [2026-06-29-database-ioerr-runtime-boundary.md](2026-06-29-database-ioerr-runtime-boundary.md) records the SQLite `SQLITE_IOERR_READ` backend crash root cause and runtime-boundary fix plan.
+
 ## Rules
 
 1. Every record file in this directory must contain `2026-06` in its filename.

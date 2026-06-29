@@ -4,7 +4,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { Global } from "../../src/global"
-import { Database, DatabaseSchemaResetRequiredError } from "../../src/storage/db"
+import { Database, DatabaseSchemaResetRequiredError, DatabaseUnavailableError } from "../../src/storage/db"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 const originalCwd = process.cwd()
@@ -195,6 +195,71 @@ test("Database.Client requires explicit reset for stale on-disk schema and prese
   } finally {
     current.close()
   }
+})
+
+test("Database.use converts SQLite storage I/O errors into a fail-closed unavailable state", () => {
+  const tempHome = mktemp("opencorvus-db-ioerr-home-")
+  process.env.OPENCORVUS_HOME = tempHome
+
+  const sqliteError = new Error("disk I/O error") as Error & {
+    code: string
+    errno: number
+    byteOffset: number
+  }
+  sqliteError.name = "SQLiteError"
+  sqliteError.code = "SQLITE_IOERR_READ"
+  sqliteError.errno = 266
+  sqliteError.byteOffset = -1
+
+  try {
+    Database.use(() => {
+      throw sqliteError
+    })
+    throw new Error("Database.use should throw DatabaseUnavailableError")
+  } catch (error) {
+    expect(DatabaseUnavailableError.isInstance(error)).toBe(true)
+    expect((error as { data: { code: string; errno: number; byteOffset: number; path: string } }).data).toMatchObject({
+      code: "SQLITE_IOERR_READ",
+      errno: 266,
+      byteOffset: -1,
+      path: Database.Path(),
+    })
+  }
+
+  expect(Database.hasOpenConnection()).toBe(false)
+  expect(Database.unavailable()).toMatchObject({
+    code: "SQLITE_IOERR_READ",
+    operation: "Database.use",
+    path: Database.Path(),
+  })
+  expect(() => Database.use(() => 1)).toThrow(/DatabaseUnavailableError/)
+
+  Database.close()
+  expect(Database.unavailable()).toBeUndefined()
+})
+
+test("Database.transaction converts SQLite storage I/O errors after transaction cleanup", () => {
+  const tempHome = mktemp("opencorvus-db-ioerr-tx-home-")
+  process.env.OPENCORVUS_HOME = tempHome
+
+  const sqliteError = new Error("disk I/O error") as Error & { code: string }
+  sqliteError.name = "SQLiteError"
+  sqliteError.code = "SQLITE_IOERR_READ"
+
+  try {
+    Database.transaction(() => {
+      throw sqliteError
+    })
+    throw new Error("Database.transaction should throw DatabaseUnavailableError")
+  } catch (error) {
+    expect(DatabaseUnavailableError.isInstance(error)).toBe(true)
+    expect((error as { data: { code: string; operation: string } }).data).toMatchObject({
+      code: "SQLITE_IOERR_READ",
+      operation: "Database.transaction",
+    })
+  }
+
+  expect(Database.hasOpenConnection()).toBe(false)
 })
 
 test("Database.reset rejects relative project directories before deleting files", async () => {
