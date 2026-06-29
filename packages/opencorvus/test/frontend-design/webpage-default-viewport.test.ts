@@ -8,9 +8,9 @@ import {
 } from "../../src/browser/webpage/default-viewport"
 
 describe("frontend-design webpage evidence default viewport", () => {
-  test("uses the requested 1440px-wide desktop viewport", () => {
-    expect(DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT).toEqual({ width: 1440, height: 1440 })
-    expect(describeDefaultWebpageEvidenceViewport()).toBe("1440x1440")
+  test("uses the requested 1440x900 desktop viewport", () => {
+    expect(DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT).toEqual({ width: 1440, height: 900 })
+    expect(describeDefaultWebpageEvidenceViewport()).toBe("1440x900")
   })
 
   test("critical capture callpoints consume the shared default instead of local viewport literals", async () => {
