@@ -74,7 +74,7 @@ async function seedTaskWithReferenceComparison(input: {
   projectDirectory: string
   regionID?: string
   viewportID?: string
-  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+  operationKind?: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
   status?: "passed" | "failed"
   artifactNames?: Array<"source.png" | "implementation.png" | "side-by-side.png">
 }): Promise<string> {

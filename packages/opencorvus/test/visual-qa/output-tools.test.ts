@@ -74,7 +74,7 @@ async function seedReferenceComparisonEvidence(input: {
   taskID: string
   regionID?: string
   viewportID?: string
-  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+  operationKind?: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
   status?: "passed" | "failed"
 }): Promise<string> {
   Database.use((db) =>

@@ -16,7 +16,10 @@ export namespace AgentToolPool {
     "web_clone_generate_source_project",
   ] as const
 
-  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_compare_scroll_slices"] as const
+  const BUILD_PRIVATE_TOOL_IDS = [
+    "browser_preview_compare_scroll_slices",
+    "browser_preview_layout_geometry",
+  ] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
     "read",
@@ -269,6 +272,8 @@ export namespace AgentToolPool {
   const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
     browser_preview_compare_scroll_slices: async () =>
       (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
+    browser_preview_layout_geometry: async () =>
+      (await import("@/tool/browser-preview-layout-geometry")).BrowserPreviewLayoutGeometryTool,
     web_clone_prepare_context: async () =>
       (await import("@/tool/web-clone-prepare-context")).WebClonePrepareContextTool,
     web_clone_generate_source_project: async () =>
