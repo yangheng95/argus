@@ -2,6 +2,14 @@
 
 Date: 2026-06-29
 
+## Supersession Note
+
+This record remains current only for removing the old separate region diff
+agent wrapper. It is superseded for the current agent-facing replacement by
+`2026-06-29-browser-preview-reference-regions-tool.md`, which exposes one
+combined `browser_preview_reference_regions` tool for source-binding plus
+reference-region comparison instead of restoring the old split tools.
+
 ## Task
 
 Remove only the agent-callable browser preview region diff wrapper that produced

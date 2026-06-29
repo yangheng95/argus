@@ -4,6 +4,7 @@ import { tmpdir } from "../fixture/fixture"
 import { VisualQaTestHooks } from "../../src/visual-qa"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
+import { BrowserPreviewReferenceRegionsTool } from "../../src/tool/browser-preview-reference-regions"
 import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
 import { BrowserPreviewLayoutGeometryTool } from "../../src/tool/browser-preview-layout-geometry"
 
@@ -26,6 +27,7 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools).sort()).toEqual([...VISUAL_QA_SESSION_TOOL_IDS].sort())
         expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).toContain("browser_preview")
+        expect(Object.keys(tools)).toContain("browser_preview_reference_regions")
         expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
         expect(Object.keys(tools)).toContain("browser_preview_layout_geometry")
         expect(Object.keys(tools)).not.toContain("webpage_render")
@@ -35,6 +37,7 @@ describe("visual-qa agent", () => {
 
         for (const info of [
           BrowserPreviewTool,
+          BrowserPreviewReferenceRegionsTool,
           BrowserPreviewCompareScrollSlicesTool,
           BrowserPreviewLayoutGeometryTool,
         ]) {
@@ -77,6 +80,8 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("structured report's own accepted/blocker fields")
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("prioritize screenshot comparison")
+    expect(prompt).toContain("browser_preview_reference_regions")
+    expect(prompt).toContain("formal bound-region proof")
     expect(prompt).toContain("browser_preview_compare_scroll_slices")
     expect(prompt).toContain("browser_preview_layout_geometry")
     expect(prompt).toContain("supporting geometry evidence")

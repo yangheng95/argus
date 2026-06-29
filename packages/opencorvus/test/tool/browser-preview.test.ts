@@ -5,6 +5,7 @@ import path from "node:path"
 import { PassThrough } from "node:stream"
 import sharp from "sharp"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
+import { BrowserPreviewReferenceRegionsTool } from "../../src/tool/browser-preview-reference-regions"
 import { Agent } from "../../src/agent/agent"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
@@ -18,6 +19,7 @@ import {
   findLatestBrowserPreviewTarget,
   findReadableBrowserPreviewEvidenceByID,
   persistBrowserPreviewEvidence,
+  resolveRuntimeRelativePath,
 } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -34,6 +36,9 @@ const baseCtx = {
   ask: async () => {},
 }
 const BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS = 30_000
+const BINDING_TOOL_TEST_VIEWPORTS = [
+  { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 360, height: 220 },
+] satisfies typeof TEST_BROWSER_PREVIEW_VIEWPORTS
 
 function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PREVIEW_VIEWPORTS }>(
   input: T,
@@ -122,16 +127,25 @@ describe("tool.browser_preview", () => {
         fn: async () => {
           const globalIDs = await ToolRegistry.ids()
           expect(globalIDs).toContain("browser_preview")
+          expect(globalIDs).not.toContain("browser_preview_bind_local_module")
+          expect(globalIDs).not.toContain("browser_preview_compare_regions")
+          expect(globalIDs).not.toContain("browser_preview_reference_regions")
           expect(globalIDs).not.toContain("browser_preview_compare_scroll_slices")
 
           const visualQa = await Agent.get("visual-qa")
           const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
           const visualQaIDs = visualQaTools.map((tool) => tool.id)
+          expect(visualQaIDs).not.toContain("browser_preview_bind_local_module")
+          expect(visualQaIDs).not.toContain("browser_preview_compare_regions")
+          expect(visualQaIDs).toContain("browser_preview_reference_regions")
           expect(visualQaIDs).toContain("browser_preview_compare_scroll_slices")
 
           const build = await Agent.get("build")
           const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
           const buildIDs = buildTools.map((tool) => tool.id)
+          expect(buildIDs).not.toContain("browser_preview_bind_local_module")
+          expect(buildIDs).not.toContain("browser_preview_compare_regions")
+          expect(buildIDs).toContain("browser_preview_reference_regions")
           expect(buildIDs).toContain("browser_preview_compare_scroll_slices")
         },
       })
@@ -898,7 +912,121 @@ describe("tool.browser_preview", () => {
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test(
+    "reference regions tool binds a local module and persists reference comparison evidence",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeBindingToolReference(paths.sourcePackageAbsolute)
+      const server = await startBindingToolPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
+        })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const tool = await BrowserPreviewReferenceRegionsTool.init()
+            const result = await tool.execute(
+              {
+                operation: "bind_and_compare_local_module",
+                targetID: target.id,
+                viewportID: "desktop",
+                regionID: "tool-local-module",
+                route: "/",
+                implementationLocator: { kind: "data-oc-region", value: "tool-local-module" },
+                componentFiles: ["src/ToolLocalModule.tsx"],
+                sourceReferenceArtifactID: "reference.png",
+                textAnchors: ["Tool Local Module", "Binding Anchor"],
+                sourcePadding: 0,
+                localPadding: 0,
+                includeDiff: true,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(result.output)
+            const bindingEvidenceID = result.metadata.bindingEvidenceID
+            const comparisonEvidenceID = result.metadata.comparisonEvidenceIDs["desktop:default:tool-local-module"]
+            const bindingEvidence = await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: bindingEvidenceID,
+            })
+            const comparisonEvidence = await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: comparisonEvidenceID,
+            })
+
+            expect(result.title).toBe("Reference regions comparison completed")
+            expect(result.attachments).toHaveLength(3)
+            expect(result.metadata.status).toBe("passed")
+            expect(result.metadata.operation).toBe("bind_and_compare_local_module")
+            expect(result.metadata.referenceComparisonProof).toBe(true)
+            expect(bindingEvidence?.operationKind).toBe("source-binding")
+            expect(comparisonEvidence?.operationKind).toBe("reference-comparison")
+            expect(comparisonEvidence?.status).toBe("passed")
+            expect(payload.sourceBinding.binding.region_id).toBe("tool-local-module")
+            expect(payload.sourceBinding.binding.source.bbox).toEqual({ x: 24, y: 30, width: 180, height: 92 })
+            expect(payload.referenceComparison.operation).toBe("reference-comparison")
+            const comparedRegion = payload.referenceComparison.regions[0]
+            expect(comparedRegion.status).toBe("completed")
+            expect(comparedRegion.reason).toBeUndefined()
+            const artifacts = comparedRegion.artifacts
+            expect(comparisonEvidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
+            expect(comparisonEvidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
+            expect(comparisonEvidence?.artifactPaths?.side_by_side).toBe(artifacts.side_by_side)
+            expect(comparisonEvidence?.artifactPaths?.diff).toBe(artifacts.diff)
+
+            const sourceCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.source_crop)
+            const implementationCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.implementation_crop)
+            const sideBySidePath = resolveRuntimeRelativePath(tmp.path, artifacts.side_by_side)
+            const diffPath = resolveRuntimeRelativePath(tmp.path, artifacts.diff)
+            expect(await fileExists(sourceCropPath)).toBe(true)
+            expect(await fileExists(implementationCropPath)).toBe(true)
+            expect(await fileExists(sideBySidePath)).toBe(true)
+            expect(await fileExists(diffPath)).toBe(true)
+            const sourceDimensions = {
+              width: Math.ceil(comparedRegion.source_bbox.width),
+              height: Math.ceil(comparedRegion.source_bbox.height),
+            }
+            const implementationDimensions = {
+              width: Math.ceil(comparedRegion.implementation_bbox.width),
+              height: Math.ceil(comparedRegion.implementation_bbox.height),
+            }
+            await expectPngDimensions(sourceCropPath, sourceDimensions)
+            await expectPngDimensions(implementationCropPath, implementationDimensions)
+            await expectPngDimensions(diffPath, sourceDimensions)
+            await expectPngDimensions(sideBySidePath, {
+              width: sourceDimensions.width + implementationDimensions.width + 16,
+              height: 62 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
+            })
+            await expectPngHasColorDiversity(sourceCropPath)
+            await expectPngHasColorDiversity(implementationCropPath)
+            await expectPngHasColorDiversity(sideBySidePath)
+            await expectPngHasColorDiversity(diffPath)
+          },
+        })
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: 60_000 },
+  )
+
 })
+
+async function fileExists(input: string): Promise<boolean> {
+  try {
+    await fs.access(input)
+    return true
+  } catch {
+    return false
+  }
+}
 
 async function expectPngDimensions(input: string, expected: { width: number; height: number }): Promise<void> {
   const metadata = await sharp(input).metadata()
@@ -909,4 +1037,89 @@ async function expectPngDimensions(input: string, expected: { width: number; hei
 async function expectPngHasColorDiversity(input: string): Promise<void> {
   const stats = await sharp(input).stats()
   expect(stats.channels.some((channel) => channel.min !== channel.max)).toBe(true)
+}
+
+async function writeBindingToolReference(sourcePackageAbsolute: string): Promise<void> {
+  await fs.mkdir(sourcePackageAbsolute, { recursive: true })
+  await sharp({
+    create: {
+      width: 360,
+      height: 220,
+      channels: 4,
+      background: "#ffffff",
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg width="180" height="92" xmlns="http://www.w3.org/2000/svg">
+            <rect width="180" height="92" fill="#fef3c7"/>
+            <text x="16" y="38" font-family="Arial" font-size="20" font-weight="700" fill="#78350f">Tool Local Module</text>
+            <text x="16" y="66" font-family="Arial" font-size="16" fill="#92400e">Binding Anchor</text>
+          </svg>`,
+        ),
+        left: 24,
+        top: 30,
+      },
+    ])
+    .png()
+    .toFile(path.join(sourcePackageAbsolute, "reference.png"))
+  await fs.writeFile(
+    path.join(sourcePackageAbsolute, "visual-surface-candidates.json"),
+    JSON.stringify(
+      {
+        candidates: [
+          {
+            id: "ToolLocalModuleSurface",
+            name: "Tool Local Module",
+            bounds: { x: 24, y: 30, w: 180, h: 92 },
+            textPreview: ["Tool Local Module", "Binding Anchor"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  )
+}
+
+async function startBindingToolPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((_req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Binding tool preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 48px; }
+            [data-oc-region="tool-local-module"] {
+              width: 180px;
+              height: 92px;
+              box-sizing: border-box;
+              padding: 16px;
+              background: #fef3c7;
+              color: #78350f;
+            }
+            h2 { margin: 0 0 10px; font-size: 20px; line-height: 1; }
+            p { margin: 0; font-size: 16px; color: #92400e; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="tool-local-module"><h2>Tool Local Module</h2><p>Binding Anchor</p></section></main></body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("binding tool test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
 }

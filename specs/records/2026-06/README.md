@@ -4,13 +4,27 @@ This directory contains June 2026 implementation records, investigations, benchm
 
 The 2026-06-29 consolidation moved June records here from scattered spec locations and deleted pre-June spec files. The migration source of truth for this task is [2026-06-29-spec-consolidation.md](2026-06-29-spec-consolidation.md).
 
-Current incident records:
+2026-06-29 records:
 
+- [2026-06-29-a2a-stale-cancel-terminal-status.md](2026-06-29-a2a-stale-cancel-terminal-status.md) records the A2A stale cancel terminal status investigation.
+- [2026-06-29-browser-preview-layout-geometry-diagnostic.md](2026-06-29-browser-preview-layout-geometry-diagnostic.md) records the browser preview layout geometry diagnostic.
+- [2026-06-29-browser-preview-reference-regions-tool.md](2026-06-29-browser-preview-reference-regions-tool.md) records the combined browser preview source-binding and reference-region comparison tool surface.
+- [2026-06-29-build-outcome-and-visual-evidence-repair.md](2026-06-29-build-outcome-and-visual-evidence-repair.md) records build outcome and visual evidence repair work.
+- [2026-06-29-codex-app-server-mcp-env-toml.md](2026-06-29-codex-app-server-mcp-env-toml.md) records Codex app server MCP environment TOML calibration.
 - [2026-06-29-database-ioerr-runtime-boundary.md](2026-06-29-database-ioerr-runtime-boundary.md) records the SQLite `SQLITE_IOERR_READ` backend crash root cause and runtime-boundary fix plan.
+- [2026-06-29-document-calibration-agent-audit.md](2026-06-29-document-calibration-agent-audit.md) records the document calibration agent audit.
 - [2026-06-29-model-image-input-auto-resize.md](2026-06-29-model-image-input-auto-resize.md) records the model-bound image auto-resize plan for oversized screenshot and attachment inputs.
 - [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md) records the single-source operator steer plan that replaces overlay direct-reply/build-message/A2A split routing.
 - [2026-06-29-orchestrator-goal-complete-delete-tools.md](2026-06-29-orchestrator-goal-complete-delete-tools.md) records the orchestrator goal completion and deletion tool plan.
 - [2026-06-29-project-delete-unhandled-rejection.md](2026-06-29-project-delete-unhandled-rejection.md) records the project deletion async-lifecycle root cause and no-unhandled-rejection fix plan.
+- [2026-06-29-remove-region-diff-agent-tool.md](2026-06-29-remove-region-diff-agent-tool.md) records the region diff agent tool removal plan.
+- [2026-06-29-scheduler-owned-child-task-lineage.md](2026-06-29-scheduler-owned-child-task-lineage.md) records scheduler-owned child task lineage work.
+- [2026-06-29-screenshot-browser-agent-goal-owner.md](2026-06-29-screenshot-browser-agent-goal-owner.md) records screenshot browser agent goal ownership calibration.
+- [2026-06-29-side-by-side-agent-tool-surface.md](2026-06-29-side-by-side-agent-tool-surface.md) records side-by-side agent tool surface work.
+- [2026-06-29-spec-consolidation.md](2026-06-29-spec-consolidation.md) records the June spec consolidation and document calibration work.
+- [2026-06-29-subagent-infrastructure-homogeneity.md](2026-06-29-subagent-infrastructure-homogeneity.md) records the sub-agent infrastructure homogeneity goal and implementation plan.
+- [2026-06-29-task-active-sse-elapsed.md](2026-06-29-task-active-sse-elapsed.md) records task active SSE elapsed handling.
+- [2026-06-29-task-active-sse-runtime-elapsed.md](2026-06-29-task-active-sse-runtime-elapsed.md) records task active SSE runtime elapsed handling.
 
 ## Rules
 

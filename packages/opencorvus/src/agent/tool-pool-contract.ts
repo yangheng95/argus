@@ -8,6 +8,7 @@ import type { AgentRoleID } from "./role-contract"
 export interface ToolPoolAssignment {
   global: string[]
   private: string[]
+  defaultRuntimeToolSwitches?: Record<string, boolean>
 }
 
 export namespace AgentToolPool {
@@ -16,7 +17,20 @@ export namespace AgentToolPool {
     "web_clone_generate_source_project",
   ] as const
 
-  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_compare_scroll_slices"] as const
+  const BUILD_PRIVATE_TOOL_IDS = [
+    "browser_preview_reference_regions",
+    "browser_preview_compare_scroll_slices",
+  ] as const
+
+  const BUILD_DEFAULT_DISABLED_RUNTIME_TOOL_IDS = [
+    "task",
+    "webfetch",
+    "websearch",
+    "external_code_search",
+    "memory",
+    "planner",
+    "goal_report",
+  ] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
     "read",
@@ -63,10 +77,17 @@ export namespace AgentToolPool {
     return [...new Set(input)]
   }
 
-  function pool(input: { global?: readonly string[]; private?: readonly string[] }): ToolPoolAssignment {
+  function pool(input: {
+    global?: readonly string[]
+    private?: readonly string[]
+    defaultRuntimeToolSwitches?: Readonly<Record<string, boolean>>
+  }): ToolPoolAssignment {
     return {
       global: unique(input.global ?? []),
       private: unique(input.private ?? []),
+      ...(input.defaultRuntimeToolSwitches
+        ? { defaultRuntimeToolSwitches: { ...input.defaultRuntimeToolSwitches } }
+        : {}),
     }
   }
 
@@ -123,6 +144,10 @@ export namespace AgentToolPool {
     build: pool({
       global: taskCodingGlobal,
       private: BUILD_PRIVATE_TOOL_IDS,
+      defaultRuntimeToolSwitches: {
+        skill: true,
+        ...Object.fromEntries(BUILD_DEFAULT_DISABLED_RUNTIME_TOOL_IDS.map((toolID) => [toolID, false])),
+      },
     }),
     "visual-qa": fromVisibleToolIDs(VISUAL_QA_STATIC_TOOL_IDS),
     general: pool({
@@ -249,6 +274,10 @@ export namespace AgentToolPool {
     return pool(input)
   }
 
+  export function defaultRuntimeToolSwitches(role: AgentRoleID): Record<string, boolean> {
+    return { ...(roleAssignments[role].defaultRuntimeToolSwitches ?? {}) }
+  }
+
   export function visibleToolIDs(input: Partial<ToolPoolAssignment> | undefined): Set<string> {
     const normalized = normalize(input)
     return new Set([...normalized.global, ...normalized.private])
@@ -269,6 +298,8 @@ export namespace AgentToolPool {
   type PrivateRegistryToolLoader = () => Promise<Tool.Info>
 
   const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
+    browser_preview_reference_regions: async () =>
+      (await import("@/tool/browser-preview-reference-regions")).BrowserPreviewReferenceRegionsTool,
     browser_preview_compare_scroll_slices: async () =>
       (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
     browser_preview_layout_geometry: async () =>
