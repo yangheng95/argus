@@ -86,8 +86,9 @@ export namespace MCPServe {
   ) {
     const execPath = runtime.execPath ?? process.execPath
     const moduleDir = runtime.moduleDir ?? import.meta.dir
+    const packageRoot = path.resolve(moduleDir, "../..")
     const args = isBunRuntime(execPath)
-      ? [path.resolve(moduleDir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"]
+      ? ["--cwd", packageRoot, path.resolve(moduleDir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"]
       : ["mcp", "serve", "--cwd", cwd, "--toolset", "executor"]
 
     return {

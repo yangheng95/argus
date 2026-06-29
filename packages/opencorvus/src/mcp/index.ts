@@ -417,6 +417,7 @@ export namespace MCP {
 
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(state: McpState, clientName: string, client: Client) {
+    if (!client.getServerCapabilities()?.prompts) return {}
     let prompts: Awaited<ReturnType<Client["listPrompts"]>>
     try {
       prompts = await client.listPrompts()
@@ -437,6 +438,7 @@ export namespace MCP {
   }
 
   async function fetchResourcesForClient(state: McpState, clientName: string, client: Client) {
+    if (!client.getServerCapabilities()?.resources) return {}
     let resources: Awaited<ReturnType<Client["listResources"]>>
     try {
       resources = await client.listResources()

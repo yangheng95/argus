@@ -171,6 +171,44 @@ describe("codex app server executor", () => {
     })
   })
 
+  test("surfaces Codex MCP server startup status notifications", async () => {
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "notification",
+          method: "mcpServer/startupStatus/updated",
+          params: {
+            threadId: "thr_1",
+            name: "opencorvus",
+            status: "ready",
+            error: null,
+          },
+        },
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: { id: "turn_1", items: [], status: "completed", error: null },
+          },
+        },
+      ]),
+    )
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    expect(result).toContainEqual(
+      expect.objectContaining({
+        type: "progress",
+        phase: "mcp_startup",
+        summary: "mcp.opencorvus.ready",
+        meta: expect.objectContaining({
+          name: "opencorvus",
+          status: "ready",
+        }),
+      }),
+    )
+  })
+
   test("maps server requests to approval and input events", async () => {
     const provider = CodexAppServerExecutor.create(
       client([
