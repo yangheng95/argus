@@ -42,6 +42,17 @@ function clipText(value: string, limit = 80): string {
   return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`
 }
 
+function errorText(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return String(error)
+}
+
+function reloadFailureDetails(primary: unknown, reloadError?: unknown): string {
+  return [formatErrorDetails(primary), reloadError ? formatErrorDetails(reloadError) : ""]
+    .filter(Boolean)
+    .join("\n\npost-action reload error:\n")
+}
+
 function joinBullet(values: (string | undefined | null | false)[]): string {
   return values.filter(Boolean).join(" / ")
 }
@@ -85,6 +96,40 @@ function queueRevision(items: any[]): string | undefined {
 
 function sortTaskItemsByCreated(items: any[]): any[] {
   return [...items].sort((a, b) => taskCreatedAt(b) - taskCreatedAt(a))
+}
+
+function taskIDOf(item: any): string {
+  const id = String(item?.task?.id || "").trim()
+  if (!id) throw new Error("queued task is missing id")
+  return id
+}
+
+function taskPriorityRank(item: any): number {
+  const priority = String(item?.task?.priority || "").trim()
+  if (priority === "critical") return 0
+  if (priority === "high" || priority === "normal" || priority === "low") return 1
+  throw new Error(`queued task ${taskIDOf(item)} has unsupported priority: ${priority}`)
+}
+
+function taskQueueOrder(item: any): number {
+  const order = Number(item?.task?.queue?.order)
+  if (!Number.isInteger(order) || order < 0) {
+    throw new Error(`queued task ${taskIDOf(item)} is missing backend queue.order`)
+  }
+  return order
+}
+
+function compareQueuedTaskItems(a: any, b: any): number {
+  return (
+    taskPriorityRank(a) - taskPriorityRank(b) ||
+    taskQueueOrder(a) - taskQueueOrder(b) ||
+    taskCreatedAt(a) - taskCreatedAt(b) ||
+    taskIDOf(a).localeCompare(taskIDOf(b))
+  )
+}
+
+function sortQueuedTaskItems(items: any[]): any[] {
+  return [...items].sort(compareQueuedTaskItems)
 }
 
 function moveBefore(ids: string[], sourceID: string, targetID: string): string[] {
@@ -734,10 +779,12 @@ export function TaskList(props: TaskListProps) {
     })
   }
 
-  // Queue badges follow the same creation-time row order as the sidebar list.
+  // Queue badges follow the backend queue comparator. Search only filters
+  // which rows are rendered; it must not renumber the loaded queue source.
   const queuePositions = createMemo<Map<string, number>>(() => {
-    const queued = sortTaskItemsByCreated(
-      sortedItems().filter((item) => item?.task?.status === "queued" && !item?._pending),
+    if (props.items || boardStore.tasksHasMore || searchQuery().trim()) return new Map()
+    const queued = sortQueuedTaskItems(
+      allItems().filter((item) => item?.task?.status === "queued" && !item?._pending),
     )
     const map = new Map<string, number>()
     queued.forEach((item, idx) => {
@@ -812,7 +859,14 @@ export function TaskList(props: TaskListProps) {
   function queuedItems(directory: string): any[] {
     const group = grouped().find((item) => item.directory === directory)
     if (!group) return []
-    return group.items.filter((item) => item?.task?.status === "queued" && !item?._pending)
+    return sortQueuedTaskItems(group.items.filter((item) => item?.task?.status === "queued" && !item?._pending))
+  }
+
+  function canReorderGroup(group: Group): boolean {
+    if (props.items) return false
+    if (searchQuery().trim()) return false
+    if (boardStore.tasksHasMore) return false
+    return group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
   }
 
   async function handleDrop(directory: string, targetID: string, event: DragEvent) {
@@ -832,10 +886,32 @@ export function TaskList(props: TaskListProps) {
         orderedTaskIDs,
         revision: queueRevision(items),
       })
-      await loadTasks()
     } catch (error) {
-      console.error("[TaskList] reorder queue failed", error)
-      await loadTasks().catch(() => undefined)
+      let reloadError: unknown
+      try {
+        await loadTasks({ requireFresh: true })
+      } catch (err) {
+        reloadError = err
+      }
+      notifyError({
+        id: `task:queue-reorder:${projectDirectoryKey(directory)}`,
+        title: t("task.reorder_failed_title"),
+        message: reloadError
+          ? t("task.reorder_failed_reload", { error: errorText(error), reloadError: errorText(reloadError) })
+          : t("task.reorder_failed", { error: errorText(error) }),
+        details: reloadFailureDetails(error, reloadError),
+      })
+      return
+    }
+    try {
+      await loadTasks({ requireFresh: true })
+    } catch (error) {
+      notifyError({
+        id: `task:queue-reorder:${projectDirectoryKey(directory)}`,
+        title: t("task.reorder_reload_failed_title"),
+        message: t("task.reorder_reload_failed", { error: errorText(error) }),
+        details: formatErrorDetails(error),
+      })
     }
   }
 
@@ -871,6 +947,20 @@ export function TaskList(props: TaskListProps) {
     const noticeID = `task:start-now:${taskID}`
     try {
       const result = await startQueuedTaskNow({ taskID, directory })
+      try {
+        await loadTasks({ requireFresh: true })
+      } catch (reloadError) {
+        notifyError({
+          id: noticeID,
+          title: t("task.action_reload_failed_title"),
+          message: t("task.action_reload_failed", {
+            action: result.started ? t("task.start_now_started_title") : t("task.start_now_not_started_title"),
+            error: errorText(reloadError),
+          }),
+          details: formatErrorDetails(reloadError),
+        })
+        return
+      }
       if (result.started) {
         notifySuccess({
           id: noticeID,
@@ -884,7 +974,6 @@ export function TaskList(props: TaskListProps) {
           message: t("task.start_now_not_started"),
         })
       }
-      await loadTasks()
     } catch (err) {
       notifyError({
         id: noticeID,
@@ -892,7 +981,16 @@ export function TaskList(props: TaskListProps) {
         message: t("task.start_now_failed", { error: err instanceof Error ? err.message : String(err) }),
         details: formatErrorDetails(err),
       })
-      await loadTasks().catch(() => undefined)
+      try {
+        await loadTasks({ requireFresh: true })
+      } catch (reloadError) {
+        notifyError({
+          id: `${noticeID}:reload`,
+          title: t("task.load_failed"),
+          message: errorText(reloadError),
+          details: reloadFailureDetails(err, reloadError),
+        })
+      }
     } finally {
       setStartNowBusyID("")
     }
@@ -935,12 +1033,27 @@ export function TaskList(props: TaskListProps) {
     const noticeID = `project:delete:${projectDirectoryKey(target)}`
     try {
       const result = await deleteProject(target)
+      if (!result.deletedActive) {
+        try {
+          await loadTasks({ requireFresh: true })
+        } catch (reloadError) {
+          notifyError({
+            id: noticeID,
+            title: t("project.reload_after_delete_failed_title"),
+            message: t("project.reload_after_delete_failed", {
+              directory: result.directory,
+              error: errorText(reloadError),
+            }),
+            details: formatErrorDetails(reloadError),
+          })
+          return
+        }
+      }
       notifySuccess({
         id: noticeID,
         title: t("project.delete_success_title"),
         message: t("project.delete_success", { directory: result.directory }),
       })
-      if (!result.deletedActive) await loadTasks()
     } catch (err) {
       notifyError({
         id: noticeID,
@@ -990,12 +1103,22 @@ export function TaskList(props: TaskListProps) {
       const nextName = String(dialog.value || "").trim()
       if (!nextName || nextName === currentName.trim()) return
       const result = await renameProject(target, nextName)
+      try {
+        await loadTasks({ requireFresh: true })
+      } catch (reloadError) {
+        notifyError({
+          id: noticeID,
+          title: t("project.reload_after_rename_failed_title"),
+          message: t("project.reload_after_rename_failed", { name: result.name, error: errorText(reloadError) }),
+          details: formatErrorDetails(reloadError),
+        })
+        return
+      }
       notifySuccess({
         id: noticeID,
         title: t("project.rename_success_title"),
         message: t("project.rename_success", { name: result.name }),
       })
-      await loadTasks()
     } catch (err) {
       notifyError({
         id: noticeID,
@@ -1112,9 +1235,7 @@ export function TaskList(props: TaskListProps) {
                   onDownloadProject={handleDownloadProject}
                   startNowBusyID={startNowBusyID()}
                   downloadBusyID={downloadBusyID()}
-                  canReorder={
-                    group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
-                  }
+                  canReorder={canReorderGroup(group)}
                   draggingID={draggingID()}
                   dragOverID={dragOverID()}
                   onDragStart={setDraggingID}
@@ -1147,21 +1268,21 @@ export function TaskList(props: TaskListProps) {
             )
           }}
         </For>
-        <Show when={boardStore.tasksHasMore}>
-          <div class="project-group-show-more task-list-load-more">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              data-ui="task-list-load-more"
-              disabled={boardStore.tasksLoadingMore}
-              onClick={handleLoadMoreTasks}
-            >
-              {boardStore.tasksLoadingMore ? t("common.loading") : t("acceptance.show_more")}
-            </Button>
-          </div>
-        </Show>
+      </Show>
+      <Show when={!props.items && boardStore.tasksHasMore}>
+        <div class="project-group-show-more task-list-load-more">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            data-ui="task-list-load-more"
+            disabled={boardStore.tasksLoadingMore}
+            onClick={handleLoadMoreTasks}
+          >
+            {boardStore.tasksLoadingMore ? t("common.loading") : t("acceptance.show_more")}
+          </Button>
+        </div>
       </Show>
     </div>
   )

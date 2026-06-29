@@ -440,6 +440,7 @@ describe("workspace active directory", () => {
     } satisfies HostTransport)
 
     setSettingsStore({
+      autoServer: false,
       directory: "D:/repo/current",
       savedDirectory: "D:/repo/current",
       workspaceTaskID: "tsk_current",
@@ -473,6 +474,63 @@ describe("workspace active directory", () => {
     expect(requests).toContain("GET path D:/repo/next")
     expect(requests).toContain("GET executor D:/repo/next")
     expect(requests).toContain("GET global/tasks ")
+  })
+
+  test("manual applyDirectory rejects failed health checks before mutating directory state", async () => {
+    const requests: string[] = []
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        requests.push(`${req.method ?? "GET"} ${req.path} ${String(req.query?.directory ?? "")}`)
+        if (req.path === "global/health") {
+          return { status: 503, ok: false, headers: {}, body: { error: "backend unavailable" } }
+        }
+        return { status: 500, ok: false, headers: {}, body: { error: `unexpected ${req.path}` } }
+      },
+      openStream() {
+        return { close: () => undefined }
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe: () => undefined }
+      },
+    } satisfies HostTransport)
+
+    setSettingsStore({
+      directory: "D:/repo/current",
+      savedDirectory: "D:/repo/current",
+      workspaceTaskID: "tsk_current",
+      workspaceDirectory: "D:/repo/current",
+      directoryEpoch: 0,
+    })
+    configure({ directory: "D:/repo/current" })
+    setBoardStore({
+      selectedSource: { kind: "task", id: "tsk_current", directory: "D:/repo/current" },
+      board: {
+        snapshotVersion: "board:current",
+        task: {
+          id: "tsk_current",
+          directory: "D:/repo/current",
+          time: { created: 1, updated: 1 },
+        },
+      },
+      tasks: [{ task: { id: "tsk_current", directory: "D:/repo/current", time: { created: 1, updated: 1 } } }],
+      taskSwitching: true,
+    })
+
+    await expect(
+      applyDirectory("D:/repo/offline", { persist: false, save: true, restoreWorkspace: false }),
+    ).rejects.toThrow("Failed to set directory")
+
+    expect(activeDirectory()).toBe("D:/repo/current")
+    expect(settingsStore.savedDirectory).toBe("D:/repo/current")
+    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_current", directory: "D:/repo/current" })
+    expect(boardStore.taskSwitching).toBe(true)
+    expect(new URL(apiUrl("config")).searchParams.get("directory")).toBe("D:/repo/current")
+    expect(requests).toEqual(["GET global/health "])
   })
 
   test("native pickers preserve cancel but reject malformed host payloads", async () => {

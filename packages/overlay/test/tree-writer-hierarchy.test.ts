@@ -3446,6 +3446,126 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
   ])
 })
 
+test("phase card ignores stale lifecycle from older replaced session owner", () => {
+  seedTurnBoard("phase stale lifecycle owner")
+
+  const goalID = "goal_phase_stale_owner"
+  const staleSessionID = "ses_phase_stale_owner_old"
+  const currentSessionID = "ses_phase_stale_owner_current"
+  const phaseStepCardID = `step:${goalID}:build`
+  const phaseCardID = `${phaseStepCardID}:phase:build`
+
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "phase stale lifecycle owner",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          label: "Executor",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID,
+        goalTitle: "Phase stale owner",
+        goalStatus: "running",
+        orderIndex: 10,
+        steps: [
+          {
+            stepID: "build",
+            label: "Executor",
+            status: "running",
+            startedAt: 1_776_000_000_100,
+            phases: {
+              build: {
+                status: "running",
+                startedAt: 1_776_000_000_100,
+                orderKey: boardOrderKey("phase_stale_owner_build", 1_776_000_000_100, 22),
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  })
+  applyEvent({ type: "task.updated", properties: { taskID: TASK_ID } })
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_current", 1_776_000_000_300),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_phase_current",
+        orderKey: messageOrderKey("msg_phase_current", 1_776_000_000_300),
+        sessionID: currentSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_300 },
+      }),
+    },
+  })
+  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
+
+  applyEvent({
+    type: "message.updated",
+    orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("build", {
+        id: "msg_phase_stale",
+        orderKey: messageOrderKey("msg_phase_stale", 1_776_000_000_200),
+        sessionID: staleSessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        agent: "build",
+        parentSessionID: ROOT_SID,
+        goalID,
+        time: { created: 1_776_000_000_200 },
+      }),
+    },
+  })
+  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
+
+  applyEvent({
+    type: "session.status",
+    orderKey: sessionOrderKey(staleSessionID, 1_776_000_000_400),
+    emittedAt: 1_776_000_000_400,
+    properties: {
+      sessionID: staleSessionID,
+      status: { type: "terminal", reason: "aborted", error: "stale worker cancel" },
+    },
+  })
+  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe(currentSessionID)
+  expect(cardTreeStore.cards[phaseCardID]?.status).toBe("running")
+  expect(cardTreeStore.cards[phaseCardID]?.terminalReason).toBeUndefined()
+
+  applyEvent({
+    type: "session.status",
+    orderKey: sessionOrderKey(currentSessionID, 1_776_000_000_500),
+    emittedAt: 1_776_000_000_500,
+    properties: {
+      sessionID: currentSessionID,
+      status: { type: "terminal", reason: "completed" },
+    },
+  })
+  expect(cardTreeStore.cards[phaseCardID]?.status).toBe("completed")
+  expect(cardTreeStore.cards[phaseCardID]?.terminalReason).toBe("completed")
+})
+
 test("hydrate skips empty build transcript messages before boundary projection", () => {
   seedTurnBoard("hydrate empty build envelope")
 

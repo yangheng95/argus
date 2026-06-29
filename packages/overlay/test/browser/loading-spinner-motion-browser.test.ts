@@ -89,7 +89,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     if (path === "/global/health") return send({ version: "spinner-motion" })
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])

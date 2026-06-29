@@ -1,5 +1,14 @@
 import { test, expect } from "bun:test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import {
+  stampTestBoard,
+  stampTestEvent,
+  stampTestTranscript,
+  stampTestViewMessages,
+  testEventOrderKey,
+  testMessageOrderKey,
+  testPartOrderKey,
+} from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 installRealOverlayI18n()
@@ -9,8 +18,12 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const { setBoardStore } = await import("../src/store/board")
-const { applyEvent, hydrateConversationView, resetWriter } = await import("../src/services/tree-writer")
+const { setBoardStore: setBoardStoreRaw } = await import("../src/store/board")
+const {
+  applyEvent: applyEventRaw,
+  hydrateConversationView: hydrateConversationViewRaw,
+  resetWriter,
+} = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 const { aggregateUsageAcrossSessions, formatUsageStrip } = await import("../src/utils/format-usage")
 
@@ -18,11 +31,33 @@ const TASK_ID = "tsk_message_tokens"
 const SID = "ses_message_tokens"
 const T0 = 1_780_000_000_000
 
+function setBoardStore(...args: any[]): any {
+  if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampTestBoard(args[1]))
+  return (setBoardStoreRaw as any)(...args)
+}
+
+function applyEvent(event: any): void {
+  applyEventRaw(stampTestEvent(validateEventForTest(event)))
+}
+
+function validateEventForTest(event: any): any {
+  if (!event.orderKey) throw new Error(`message token fixture event ${String(event?.type || "<unknown>")} missing orderKey`)
+  return event
+}
+
+function hydrateConversationView(view: any, transcript: any[]): void {
+  hydrateConversationViewRaw({ ...view, messages: stampTestViewMessages(view?.messages || []) }, stampTestTranscript(transcript))
+}
+
 function messageUpdated(info: Record<string, any>) {
+  const id = String(info.id || "")
+  const time = Number(info.time?.created || T0)
+  const orderKey = testMessageOrderKey(id, time)
   return {
     type: "message.updated",
     sequence: 1,
     timestamp: T0,
+    orderKey,
     taskID: TASK_ID,
     properties: {
       taskID: TASK_ID,
@@ -31,19 +66,34 @@ function messageUpdated(info: Record<string, any>) {
         agent: info.agent ?? info.role,
         channel: info.role,
         ...info,
+        orderKey,
       },
     },
   }
 }
 
-function partUpdated(input: { messageID: string; sessionID: string; partID: string; text: string; role: string }) {
+function partUpdated(input: {
+  messageID: string
+  sessionID: string
+  partID: string
+  text: string
+  role: string
+  messageTime?: number
+  partTime?: number
+}) {
+  const messageTime = Number(input.messageTime || T0)
+  const partTime = Number(input.partTime || messageTime)
+  const ownerOrderKey = testMessageOrderKey(input.messageID, messageTime)
+  const partOrderKey = testPartOrderKey(input.partID, partTime)
   return {
     type: "message.part.updated",
     sequence: 1,
     timestamp: T0,
+    orderKey: ownerOrderKey,
     taskID: TASK_ID,
     properties: {
       taskID: TASK_ID,
+      orderKey: ownerOrderKey,
       part: {
         id: input.partID,
         messageID: input.messageID,
@@ -52,8 +102,33 @@ function partUpdated(input: { messageID: string; sessionID: string; partID: stri
         text: input.text,
         resolvedRole: input.role,
         channel: input.role,
+        orderKey: partOrderKey,
       },
     },
+  }
+}
+
+function transcriptMessageHasDisplay(message: any): boolean {
+  return Array.isArray(message?.parts) && message.parts.some((part: any) => String(part?.text || "").trim())
+}
+
+function viewForTranscript(sessions: any[], transcript: any[]): any {
+  return {
+    sessions,
+    messages: transcript.filter(transcriptMessageHasDisplay).map((message) => {
+      const info = message.info
+      const channel = String(info.channel || "")
+      return {
+        messageID: String(info.id || ""),
+        sessionID: String(info.sessionID || ""),
+        stage: channel === "main" ? "user" : channel,
+        parentSessionID: info.parentSessionID || undefined,
+        goalID: info.goalID || undefined,
+        time: Number(info.time?.created || 0),
+        orderKey: info.orderKey,
+        placement: info.goalID ? "goal_phase" : "top_level",
+      }
+    }),
   }
 }
 
@@ -136,6 +211,8 @@ test("live message regroup keeps user and assistant turns on the real timeline",
         partID: `part_${item.id}`,
         text: item.text,
         role: item.role,
+        messageTime: item.time,
+        partTime: item.time,
       }),
     )
   }
@@ -158,7 +235,7 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
   setBoardStore("selectedSource", { kind: "session", id: SID })
   resetWriter()
 
-  hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
+  const transcript = [
     {
       info: {
         id: "msg_hydrate_user_1",
@@ -168,8 +245,18 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
         agent: "user",
         channel: "user",
         time: { created: T0 + 100 },
+        orderKey: testMessageOrderKey("msg_hydrate_user_1", T0 + 100),
       },
-      parts: [{ id: "part_hydrate_user_1", type: "text", text: "hello" }],
+      parts: [
+        {
+          id: "part_hydrate_user_1",
+          messageID: "msg_hydrate_user_1",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrate_user_1", T0 + 100),
+          type: "text",
+          text: "hello",
+        },
+      ],
     },
     {
       info: {
@@ -180,8 +267,18 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
         agent: "assistant",
         channel: "assistant",
         time: { created: T0 + 200 },
+        orderKey: testMessageOrderKey("msg_hydrate_assistant_1", T0 + 200),
       },
-      parts: [{ id: "part_hydrate_assistant_1", type: "text", text: "Hello!" }],
+      parts: [
+        {
+          id: "part_hydrate_assistant_1",
+          messageID: "msg_hydrate_assistant_1",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrate_assistant_1", T0 + 200),
+          type: "text",
+          text: "Hello!",
+        },
+      ],
     },
     {
       info: {
@@ -192,8 +289,18 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
         agent: "user",
         channel: "user",
         time: { created: T0 + 300 },
+        orderKey: testMessageOrderKey("msg_hydrate_user_2", T0 + 300),
       },
-      parts: [{ id: "part_hydrate_user_2", type: "text", text: "你是什么模型" }],
+      parts: [
+        {
+          id: "part_hydrate_user_2",
+          messageID: "msg_hydrate_user_2",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrate_user_2", T0 + 300),
+          type: "text",
+          text: "你是什么模型",
+        },
+      ],
     },
     {
       info: {
@@ -204,10 +311,22 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
         agent: "assistant",
         channel: "assistant",
         time: { created: T0 + 400 },
+        orderKey: testMessageOrderKey("msg_hydrate_assistant_2", T0 + 400),
       },
-      parts: [{ id: "part_hydrate_assistant_2", type: "text", text: "OpenCorvus." }],
+      parts: [
+        {
+          id: "part_hydrate_assistant_2",
+          messageID: "msg_hydrate_assistant_2",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrate_assistant_2", T0 + 400),
+          type: "text",
+          text: "OpenCorvus.",
+        },
+      ],
     },
-  ])
+  ]
+
+  hydrateConversationView(viewForTranscript([{ sessionID: SID, stage: "assistant" }], transcript), transcript)
 
   expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
     `user:session:${SID}:message:msg_hydrate_user_1`,
@@ -217,7 +336,7 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
   ])
 })
 
-test("message regroup keeps every displayable non-phase message on its own card", async () => {
+test("message regroup merges only adjacent compatible non-phase messages", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -254,20 +373,21 @@ test("message regroup keeps every displayable non-phase message on its own card"
 
   expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
     `assistant:session:${SID}:message:msg_group_assistant_1`,
-    `assistant:session:${SID}:message:msg_group_assistant_2`,
     `user:session:${SID}:message:msg_group_user_1`,
     `assistant:session:${SID}:message:msg_group_assistant_3`,
   ])
+  const firstAssistantCard = cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_1`]
+  expect(firstAssistantCard?.parts.map((part: any) => [part.type, part.messageID])).toEqual([
+    ["text", "msg_group_assistant_1"],
+    ["boundary", "msg_group_assistant_2"],
+    ["text", "msg_group_assistant_2"],
+  ])
+  expect(cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_2`]).toBeUndefined()
   expect(
-    cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_1`]?.parts.map(
+    cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_3`]?.parts.map(
       (part: any) => part.messageID,
     ),
-  ).toEqual(["msg_group_assistant_1"])
-  expect(
-    cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_2`]?.parts.map(
-      (part: any) => part.messageID,
-    ),
-  ).toEqual(["msg_group_assistant_2"])
+  ).toEqual(["msg_group_assistant_3"])
 })
 
 test("handleMessageUpdated projects the actual assistant model from message info", async () => {
@@ -299,7 +419,7 @@ test("handleMessageUpdated projects the actual assistant model from message info
   })
 })
 
-test("separate assistant cards display their own real model", async () => {
+test("multi-message assistant segment clears card model when model-bearing messages differ", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -332,19 +452,11 @@ test("separate assistant cards display their own real model", async () => {
 
   const firstCardID = `assistant:session:${SID}:message:msg_model_group_a`
   const secondCardID = `assistant:session:${SID}:message:msg_model_group_b`
-  expect(cardTreeStore.cards[firstCardID]?.model).toEqual({
-    providerID: "hexin",
-    modelID: "old-model",
-    display: "hexin/old-model",
-  })
-  expect(cardTreeStore.cards[secondCardID]?.model).toEqual({
-    providerID: "openai-compatible",
-    modelID: "new-model",
-    display: "openai-compatible/new-model",
-  })
+  expect(cardTreeStore.cards[firstCardID]?.model).toBeUndefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
 })
 
-test("separate assistant card with no model fields does not clear the previous card model", async () => {
+test("multi-message assistant segment keeps card model when only one message has model fields", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -380,7 +492,7 @@ test("separate assistant card with no model fields does not clear the previous c
     modelID: "old-model",
     display: "hexin/old-model",
   })
-  expect(cardTreeStore.cards[secondCardID]?.model).toBeUndefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
 })
 
 test("handleMessageUpdated leaves card.usage unset for assistant messages with zero usage", async () => {
@@ -425,7 +537,7 @@ test("hydrateConversationView restores usage and context tokens from transcript 
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
-  hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
+  const transcript = [
     {
       info: {
         id: "msg_hydrated_usage",
@@ -435,14 +547,24 @@ test("hydrateConversationView restores usage and context tokens from transcript 
         resolvedRole: "assistant",
         channel: "assistant",
         time: { created: T0 + 150 },
+        orderKey: testMessageOrderKey("msg_hydrated_usage", T0 + 150),
         tokens: { input: 700, output: 80, reasoning: 0, total: 780, cache: { read: 50, write: 25 } },
         cost: 0.012,
       },
       parts: [
-        { id: "part_hydrated_usage", type: "text", text: "done", messageID: "msg_hydrated_usage", sessionID: SID },
+        {
+          id: "part_hydrated_usage",
+          messageID: "msg_hydrated_usage",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrated_usage", T0 + 150),
+          type: "text",
+          text: "done",
+        },
       ],
     },
-  ])
+  ]
+
+  hydrateConversationView(viewForTranscript([{ sessionID: SID, stage: "assistant" }], transcript), transcript)
 
   const cardID = `assistant:session:${SID}:message:msg_hydrated_usage`
   const card = cardTreeStore.cards[cardID]
@@ -467,7 +589,7 @@ test("hydrateConversationView restores actual model from transcript message info
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
 
-  hydrateConversationView({ sessions: [{ sessionID: SID, stage: "assistant" }] }, [
+  const transcript = [
     {
       info: {
         id: "msg_hydrated_model",
@@ -479,10 +601,22 @@ test("hydrateConversationView restores actual model from transcript message info
         providerID: "hexin",
         modelID: "gpt-oss-120b",
         time: { created: T0 + 150 },
+        orderKey: testMessageOrderKey("msg_hydrated_model", T0 + 150),
       },
-      parts: [{ id: "part_hydrated_model", type: "text", text: "done" }],
+      parts: [
+        {
+          id: "part_hydrated_model",
+          messageID: "msg_hydrated_model",
+          sessionID: SID,
+          orderKey: testPartOrderKey("part_hydrated_model", T0 + 150),
+          type: "text",
+          text: "done",
+        },
+      ],
     },
-  ])
+  ]
+
+  hydrateConversationView(viewForTranscript([{ sessionID: SID, stage: "assistant" }], transcript), transcript)
 
   const cardID = `assistant:session:${SID}:message:msg_hydrated_model`
   expect(cardTreeStore.cards[cardID]?.model).toEqual({
@@ -492,7 +626,7 @@ test("hydrateConversationView restores actual model from transcript message info
   })
 })
 
-test("context token hint stays scoped to each message card", async () => {
+test("context token hint and usage aggregate across an adjacent assistant segment", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -526,21 +660,14 @@ test("context token hint stays scoped to each message card", async () => {
   const firstCard = cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_a`]
   const secondCard = cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_b`]
   expect(firstCard).toBeDefined()
-  expect(secondCard).toBeDefined()
+  expect(secondCard).toBeUndefined()
   expect(firstCard!.usage).toEqual({
-    inputTokens: 500,
-    outputTokens: 100,
-    totalTokens: 600,
-    costUSD: 0.01,
+    inputTokens: 1_300,
+    outputTokens: 350,
+    totalTokens: 1_650,
+    costUSD: 0.035,
   })
-  expect(firstCard!.contextTokens).toBe(500)
-  expect(secondCard!.usage).toEqual({
-    inputTokens: 800,
-    outputTokens: 250,
-    totalTokens: 1_050,
-    costUSD: 0.025,
-  })
-  expect(secondCard!.contextTokens).toBe(800)
+  expect(firstCard!.contextTokens).toBe(800)
 })
 
 test("external executor cumulative usage does not masquerade as current context", async () => {
@@ -720,6 +847,9 @@ test("message.removed subtracts deleted card usage from the store aggregate", as
 
   applyEvent({
     type: "message.removed",
+    sequence: 9,
+    timestamp: T0 + 300,
+    orderKey: testEventOrderKey("message.removed", T0 + 300, 9),
     properties: {
       taskID: TASK_ID,
       sessionID: SID,

@@ -41,6 +41,7 @@ export interface FixtureEvent {
   type: string
   sequence?: number
   timestamp?: number
+  orderKey?: string
   taskID?: string
   /** Either `properties` or `payload` — router treats both. Fixture uses `properties`
    *  to match the protocol routes; `payload` variant is covered in specific tests. */
@@ -50,18 +51,58 @@ export interface FixtureEvent {
 }
 
 let seq = 0
-const e = (type: string, properties: Record<string, any> = {}, dt = 0): FixtureEvent => ({
-  type,
-  sequence: ++seq,
-  timestamp: T0 + dt,
-  taskID: TASK_ID,
-  properties: { taskID: TASK_ID, ...properties },
-})
+function orderKey(rank: number, time: number, id: string, sequence = 0, domain: string): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return orderKey(30, time, id, 0, "message")
+}
+
+function partOrderKey(id: string, time: number): string {
+  return orderKey(31, time, id, 0, "part")
+}
+
+function protocolOrderKey(id: string, time: number, sequence: number): string {
+  return orderKey(40, time, id, sequence, "protocol")
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return orderKey(10, time, id, 0, "task")
+}
+
+function boardOrderKey(id: string, time: number, rank: number): string {
+  return orderKey(rank, time, id, 0, "board")
+}
+
+function interactionOrderKey(id: string, time: number): string {
+  return orderKey(70, time, id, 0, "interaction")
+}
+
+const e = (type: string, properties: Record<string, any> = {}, dt = 0): FixtureEvent => {
+  const payload = { taskID: TASK_ID, ...properties }
+  const eventOrderKey =
+    type === "message.updated" && payload.info?.orderKey
+      ? payload.info.orderKey
+      : type === "message.part.updated" && payload.orderKey
+        ? payload.orderKey
+        : protocolOrderKey(`evt_${seq + 1}`, T0 + dt, seq + 1)
+  return {
+    type,
+    sequence: ++seq,
+    timestamp: T0 + dt,
+    orderKey: eventOrderKey,
+    taskID: TASK_ID,
+    properties: payload,
+  }
+}
 
 function messageInfo(channel: string, info: Record<string, any>) {
+  const created = Number(info?.time?.created || 0)
   return {
     info: {
       ...info,
+      orderKey: info.orderKey ?? messageOrderKey(String(info.id || ""), created),
       resolvedRole: info.resolvedRole ?? channel,
       agent: info.agent ?? channel,
       channel,
@@ -71,8 +112,18 @@ function messageInfo(channel: string, info: Record<string, any>) {
 
 function messagePart(channel: string, part: Record<string, any>) {
   const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
+  const time = Number(part.time?.created || 0) || T0 + 1000
+  const messageID = String(part.messageID || "")
+  const partID = String(part.id || "")
+  if (!messageID || !partID) throw new Error("goal phase fixture message part missing id/messageID")
+  const messageKey = messageOrderKey(messageID, time)
+  const partKey = partOrderKey(partID, time)
   return {
-    part: cleanPart,
+    orderKey: messageKey,
+    part: {
+      ...cleanPart,
+      orderKey: partKey,
+    },
     resolvedRole: resolvedRole ?? channel,
     channel,
     ...(parentSessionID ? { parentSessionID } : {}),
@@ -87,6 +138,7 @@ export const EVENTS: FixtureEvent[] = [
     {
       task: {
         id: TASK_ID,
+        orderKey: taskOrderKey(TASK_ID, T0),
         status: "active",
         request: "复刻网页，包含完整前后端和组件交互",
         sessionID: ROOT_SID,
@@ -228,10 +280,12 @@ export const EVENTS: FixtureEvent[] = [
     {
       task: {
         id: TASK_ID,
+        orderKey: taskOrderKey(TASK_ID, T0),
         status: "active",
         goalWorkflows: [
           {
             goalID: GOAL_ID,
+            orderKey: boardOrderKey(GOAL_ID, T0 + 2000, 60),
             goalRunID: GOAL_RUN_ID,
             goalTitle: "Scaffold project",
             goalStatus: "running",
@@ -239,12 +293,22 @@ export const EVENTS: FixtureEvent[] = [
             steps: [
               {
                 stepID: "build",
+                orderKey: boardOrderKey(`${GOAL_ID}-build`, T0 + 2500, 61),
                 label: "Executor",
                 status: "running",
                 startedAt: T0 + 2500,
                 phases: {
-                  plan: { status: "completed", startedAt: T0 + 2500, completedAt: T0 + 2800 },
-                  build: { status: "running", startedAt: T0 + 2800 },
+                  plan: {
+                    orderKey: boardOrderKey(`${GOAL_ID}-build-plan`, T0 + 2500, 62),
+                    status: "completed",
+                    startedAt: T0 + 2500,
+                    completedAt: T0 + 2800,
+                  },
+                  build: {
+                    orderKey: boardOrderKey(`${GOAL_ID}-build-build`, T0 + 2800, 62),
+                    status: "running",
+                    startedAt: T0 + 2800,
+                  },
                 },
               },
             ],
@@ -371,6 +435,7 @@ export const EVENTS: FixtureEvent[] = [
     {
       interaction: {
         id: "int_1",
+        orderKey: interactionOrderKey("int_1", T0 + 4500),
         type: "permission",
         sessionID: BUILD_SID,
         status: "pending",
@@ -386,6 +451,7 @@ export const EVENTS: FixtureEvent[] = [
     {
       interaction: {
         id: "int_1",
+        orderKey: interactionOrderKey("int_1", T0 + 4500),
         type: "permission",
         sessionID: BUILD_SID,
         status: "resolved",
@@ -487,10 +553,12 @@ export const EVENTS: FixtureEvent[] = [
     {
       task: {
         id: TASK_ID,
+        orderKey: taskOrderKey(TASK_ID, T0),
         status: "active",
         goalWorkflows: [
           {
             goalID: GOAL_ID,
+            orderKey: boardOrderKey(GOAL_ID, T0 + 2000, 60),
             goalRunID: GOAL_RUN_ID,
             goalTitle: "Scaffold project",
             goalStatus: "passed",
@@ -498,13 +566,24 @@ export const EVENTS: FixtureEvent[] = [
             steps: [
               {
                 stepID: "build",
+                orderKey: boardOrderKey(`${GOAL_ID}-build`, T0 + 2500, 61),
                 label: "Executor",
                 status: "completed",
                 startedAt: T0 + 2500,
                 completedAt: T0 + 7000,
                 phases: {
-                  plan: { status: "completed", startedAt: T0 + 2500, completedAt: T0 + 2800 },
-                  build: { status: "completed", startedAt: T0 + 2800, completedAt: T0 + 7000 },
+                  plan: {
+                    orderKey: boardOrderKey(`${GOAL_ID}-build-plan`, T0 + 2500, 62),
+                    status: "completed",
+                    startedAt: T0 + 2500,
+                    completedAt: T0 + 2800,
+                  },
+                  build: {
+                    orderKey: boardOrderKey(`${GOAL_ID}-build-build`, T0 + 2800, 62),
+                    status: "completed",
+                    startedAt: T0 + 2800,
+                    completedAt: T0 + 7000,
+                  },
                 },
               },
             ],
@@ -528,7 +607,7 @@ export const EVENTS: FixtureEvent[] = [
   e(
     "task.completed",
     {
-      task: { id: TASK_ID, status: "completed" },
+      task: { id: TASK_ID, orderKey: taskOrderKey(TASK_ID, T0), status: "completed" },
     },
     7500,
   ),
@@ -540,6 +619,7 @@ export const EVENTS: FixtureEvent[] = [
 export const INITIAL_BOARD = {
   task: {
     id: TASK_ID,
+    orderKey: taskOrderKey(TASK_ID, T0),
     status: "active",
     request: "复刻网页，包含完整前后端和组件交互",
     sessionID: ROOT_SID,
@@ -553,6 +633,7 @@ export const INITIAL_BOARD = {
     steps: [
       {
         id: "frontend_design",
+        orderKey: boardOrderKey(`${TASK_ID}-frontend_design`, T0, 61),
         label: "Design",
         tool: "frontend_design",
         scope: "task",
@@ -561,15 +642,25 @@ export const INITIAL_BOARD = {
       },
       {
         id: "requirements",
+        orderKey: boardOrderKey(`${TASK_ID}-requirements`, T0, 61),
         label: "Requirements",
         tool: "requirements",
         scope: "task",
         skippable: false,
         status: "pending",
       },
-      { id: "architect", label: "Architect", tool: "architect", scope: "task", skippable: true, status: "pending" },
+      {
+        id: "architect",
+        orderKey: boardOrderKey(`${TASK_ID}-architect`, T0, 61),
+        label: "Architect",
+        tool: "architect",
+        scope: "task",
+        skippable: true,
+        status: "pending",
+      },
       {
         id: "build",
+        orderKey: boardOrderKey(`${TASK_ID}-build`, T0, 61),
         label: "Executor",
         tool: "execute_goal",
         scope: "goal",
@@ -580,7 +671,15 @@ export const INITIAL_BOARD = {
           { id: "build", label: "Build", sessionKind: "build" },
         ],
       },
-      { id: "deliver", label: "Deliver", tool: "deliver", scope: "task", skippable: false, status: "pending" },
+      {
+        id: "deliver",
+        orderKey: boardOrderKey(`${TASK_ID}-deliver`, T0, 61),
+        label: "Deliver",
+        tool: "deliver",
+        scope: "task",
+        skippable: false,
+        status: "pending",
+      },
     ],
   },
   goalWorkflows: [],

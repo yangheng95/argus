@@ -32,6 +32,11 @@ import {
 } from "./conversation"
 import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-stream-cursor"
 import { AppLog } from "../utils/log"
+import {
+  pauseSelectedTaskSseActivity,
+  recordSelectedTaskSseActivity,
+  taskRuntimeActivityKey,
+} from "./task-runtime-activity"
 
 let sseHandle: StreamHandle | null = null
 let sseRetryTimer: any = null
@@ -53,7 +58,8 @@ export interface SseReconnectDeps {
   scheduleRetry: (fn: () => void, ms: number) => void
   retryDelayMs: number
   replayLive?: boolean
-  afterRestart?: (taskID: string, sequence: number) => void
+  beforeRestart?: (taskID: string, sequence: number) => void | Promise<void>
+  afterRestart?: (taskID: string, sequence: number) => void | Promise<void>
 }
 
 export interface SseStartOptions {
@@ -101,6 +107,52 @@ function eventProperties(event: any): Record<string, any> {
   const payload = event?.payload
   if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload
   return {}
+}
+
+function selectedTaskRuntimeKey(taskID: string): string {
+  const boardTask = boardStore.board?.task
+  if (!taskID || boardTask?.id !== taskID) return ""
+  return taskRuntimeActivityKey({ taskID, createdAt: Number(boardTask?.time?.created) })
+}
+
+function sseActivityNow(): number {
+  if (typeof performance === "undefined" || typeof performance.now !== "function") {
+    throw new Error("Selected-task SSE activity requires performance.now")
+  }
+  return performance.now()
+}
+
+function eventLifecycleStatus(event: any): string {
+  const properties = eventProperties(event)
+  const status = properties.status
+  if (typeof status === "string" && status) return status
+  const type = String(event?.type || "")
+  if (type === "task.completed") return "completed"
+  if (type === "task.failed") return "failed"
+  if (type === "task.cancelled") return "cancelled"
+  return ""
+}
+
+function recordSelectedTaskSseUpdate(event: any, taskID: string): void {
+  const key = selectedTaskRuntimeKey(taskID)
+  if (!key) return
+  const lifecycleStatus = eventLifecycleStatus(event)
+  const activeBeforeEvent = boardStore.board?.task?.status === "active"
+  const eventAt = sseActivityNow()
+  recordSelectedTaskSseActivity({
+    key,
+    active: activeBeforeEvent || lifecycleStatus === "active",
+    eventAt,
+  })
+  if (lifecycleStatus && lifecycleStatus !== "active") {
+    pauseSelectedTaskSseActivity(key)
+  }
+}
+
+function pauseSelectedTaskSseStreamActivity(taskID: string): void {
+  const key = selectedTaskRuntimeKey(taskID)
+  if (!key) return
+  pauseSelectedTaskSseActivity(key)
 }
 
 function dispatchEventDiagnostic(event: any): Record<string, unknown> {
@@ -180,12 +232,16 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
   try {
     const directory = deps.directory.trim()
     if (!directory) throw new Error("SSE reconnect requires a project directory")
+    await deps.beforeRestart?.(deps.taskID, nextSequence)
+    if (deps.currentTaskID() !== deps.taskID) {
+      throw new DOMException("task changed before restart", "AbortError")
+    }
     deps.restart(
       { kind: "task", id: deps.taskID },
       nextSequence,
       deps.replayLive === false ? { replayLive: false, directory } : { directory },
     )
-    deps.afterRestart?.(deps.taskID, nextSequence)
+    await deps.afterRestart?.(deps.taskID, nextSequence)
   } catch (err) {
     recordConversationRecoveryFailed({
       channel: "sse-reconnect",
@@ -285,6 +341,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
     // clears cardTreeStore and produces the visible scroll jump.
     if (handle !== sseHandle) return
     clearSelectedStreamWatchdog()
+    pauseSelectedTaskSseStreamActivity(taskID)
     setSseConnected(false)
     sseHandle = null
     sseTaskID = ""
@@ -303,13 +360,8 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
           resumeAfter: () => boardStore.taskSequence,
           restart: startSSE,
           replayLive: liveReplayExpiredClose ? false : replayLive,
-          afterRestart: liveReplayExpiredClose
-            ? (restartedTaskID) => {
-                void mergeLatestConversationTail(restartedTaskID, { directory }).catch((error) => {
-                  if (error instanceof DOMException && error.name === "AbortError") return
-                  console.error("[sse] live replay gap tail merge failed", error)
-                })
-              }
+          beforeRestart: liveReplayExpiredClose
+            ? (restartedTaskID) => mergeLatestConversationTail(restartedTaskID, { directory })
             : undefined,
           scheduleRetry: (fn, ms) => {
             sseRetryTimer = setTimeout(() => {
@@ -353,6 +405,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
         }
         if (event.type === "task.heartbeat" || event.type === "task.connected") return
         if (event.type === "session.heartbeat" || event.type === "session.connected") return
+        recordSelectedTaskSseUpdate(event, taskID)
         if (event.type === "task.live_replay_expired") {
           liveReplayExpiredClose = true
           resetSelectedLiveCursor()
@@ -403,6 +456,8 @@ export function stopSSE() {
   }
   clearSelectedStreamWatchdog()
   const handle = sseHandle
+  const taskID = sseTaskID
+  pauseSelectedTaskSseStreamActivity(taskID)
   sseHandle = null
   sseTaskID = ""
   sseSource = null
@@ -473,7 +528,7 @@ export function startTaskListSSE() {
           // the full task-scope event shape. Route to the notification
           // handler, NOT handleEventStreamEvent (which feeds tree-writer
           // and would throw on every missing payload).
-          handleTaskListNotification(event)
+          handleTaskListNotification(event, { directory })
         } catch (err) {
           const diagnostic = dispatchEventDiagnostic(event)
           const errorDetails = boundedErrorDetails(err)

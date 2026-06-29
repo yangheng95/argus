@@ -13,6 +13,10 @@
 
 import { launchBrowser } from "../test/launch"
 import path from "node:path"
+import {
+  gotoWithBrowserInactivity,
+  withBrowserInactivityTimeout,
+} from "../../opencorvus/script/benchmark/browser-inactivity"
 
 const out = process.argv[2]
 if (!out) {
@@ -36,20 +40,16 @@ try {
   page.on("console", (msg) => {
     if (msg.type() === "error") console.error("[console-error]", msg.text())
   })
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
-    console.error(`page.goto warning: ${e.message ?? e}`)
-  })
+  await gotoWithBrowserInactivity(page, "http://localhost:5173/", "networkidle", 15_000)
   await page.evaluate((wantTheme) => {
     document.documentElement.setAttribute("data-theme", wantTheme)
     document.body.setAttribute("data-theme", wantTheme)
   }, theme)
   await new Promise((r) => setTimeout(r, 800))
 
-  await page
-    .waitForFunction(() => Boolean((window as any).__OC_DEV__?.openGoalDialog), {
-      timeout: 8000,
-    })
-    .catch(() => console.error("__OC_DEV__ never appeared"))
+  await withBrowserInactivityTimeout(page, "goal dialog dev hook", 8_000, () =>
+    page.waitForFunction(() => Boolean((window as any).__OC_DEV__?.openGoalDialog), undefined, { timeout: 0 }),
+  )
 
   const opened = await page.evaluate(
     (args) => {
@@ -65,22 +65,22 @@ try {
     { title: LONG_TITLE, acceptance: LONG_ACCEPTANCE },
   )
   console.log(`open path: ${opened}`)
+  if (typeof opened === "string" && opened.startsWith("fail:")) throw new Error(opened)
 
-  await page
-    .waitForFunction(
-      () => {
-        const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
-        return dlg?.open === true
-      },
-      { timeout: 4000 },
-    )
-    .catch(async () => {
-      const diag = await page.evaluate(() => {
-        const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
-        return { present: Boolean(dlg), open: dlg?.open ?? null }
-      })
-      console.error("dialog did not open:", diag)
-    })
+  await withBrowserInactivityTimeout(
+    page,
+    "goal dialog open",
+    4_000,
+    () =>
+      page.waitForFunction(
+        () => {
+          const dlg = document.getElementById("goalDialog") as HTMLDialogElement | null
+          return dlg?.open === true
+        },
+        undefined,
+        { timeout: 0 },
+      ),
+  )
   await new Promise((r) => setTimeout(r, 500))
 
   const measure = await page.evaluate(() => {

@@ -27,6 +27,11 @@ export interface ExecutorModelUpdate {
   executorID: string
   model: string
   directory: string
+  isCurrentDirectory?: (directory: string) => boolean
+}
+
+export interface ExecutorLoadOptions {
+  isCurrentDirectory?: (directory: string) => boolean
 }
 
 // ── Label helpers ──
@@ -157,7 +162,14 @@ function executorPath(directory: string, suffix = ""): string {
   return `executor${suffix}?${params.toString()}`
 }
 
-export async function loadExecutors(directory: string): Promise<void> {
+function ownsExecutorDirectory(directory: string, options: ExecutorLoadOptions): boolean {
+  return !options.isCurrentDirectory || options.isCurrentDirectory(directory.trim())
+}
+
+export async function loadExecutors(
+  directory: string,
+  options: ExecutorLoadOptions = {},
+): Promise<ExecutorDescriptor[]> {
   const data = await apiJson(executorPath(directory))
   if (!Array.isArray(data)) {
     AppLog.debug("executor", "loadExecutors received non-array payload", {
@@ -165,7 +177,8 @@ export async function loadExecutors(directory: string): Promise<void> {
     })
     throw new Error("executor returned a non-array payload")
   }
-  setExecutors(data)
+  if (ownsExecutorDirectory(directory, options)) setExecutors(data)
+  return data
 }
 
 // ── Model setter ──
@@ -183,7 +196,7 @@ export async function setExecutorModel(input: ExecutorModelUpdate): Promise<void
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: input.model }),
     })
-    await loadExecutors(input.directory)
+    await loadExecutors(input.directory, { isCurrentDirectory: input.isCurrentDirectory })
   } catch (e) {
     AppLog.error("ui", "Failed to set executor model", {
       error: String(e),

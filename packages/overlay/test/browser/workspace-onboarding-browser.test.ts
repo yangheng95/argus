@@ -42,7 +42,7 @@ async function onboardingFixtureResponse(req: Request, options: OnboardingFixtur
     return send(options.discovery.body, { status: options.discovery.status ?? 200 })
   if (path === "/global/health") return send({ version: "1.2.3" })
   if (path === "/mission") return send([])
-  if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+  if (path === "/global/tasks") return send({ tasks: [] })
   if (path === "/session") return send([])
   if (path === "/path") return send({ directory: directory ?? options.projectPath })
   if (path === "/vcs")

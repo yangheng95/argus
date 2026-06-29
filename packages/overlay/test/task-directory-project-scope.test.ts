@@ -144,6 +144,13 @@ describe("task directory project-scope reload", () => {
     expect(appStore.mcp.docs).toEqual({ status: "connected" })
   })
 
+  test("reloadProjectScope passes directory ownership to extension and executor loaders", async () => {
+    const source = await Bun.file(new URL("../src/services/config.ts", import.meta.url)).text()
+    expect(source).toContain("loadExtensions({")
+    expect(source).toContain("loadExecutors(directory, {")
+    expect(source).toContain("isCurrentDirectory: (candidate) => activeDirectory().trim() === candidate")
+  })
+
   test("reloadProjectScope rejects extension reload failures instead of preserving stale projections silently", async () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransportFailing(requests, "skill/mounts", "skill mount matrix unavailable"))

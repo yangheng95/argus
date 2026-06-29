@@ -108,7 +108,6 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks") return send({ tasks: [] })
       if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/path") return send(data.path)

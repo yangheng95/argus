@@ -96,7 +96,12 @@ function taskConversationPayload() {
   }
 }
 
+function timelineOrderKey(rank: number, time: number, id: string, sequence = 0, domain = "message"): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
 function persistedUserMessage(sessionID: string, messageID: string, text: string, created: number) {
+  const partID = `${messageID}:text`
   return {
     info: {
       id: messageID,
@@ -105,11 +110,12 @@ function persistedUserMessage(sessionID: string, messageID: string, text: string
       resolvedRole: "user",
       agent: "user",
       channel: "main",
+      orderKey: timelineOrderKey(30, created, messageID, 0, "message"),
       time: { created },
     },
     parts: [
       {
-        id: `${messageID}:text`,
+        id: partID,
         messageID,
         sessionID,
         type: "text",
@@ -118,6 +124,7 @@ function persistedUserMessage(sessionID: string, messageID: string, text: string
         resolvedRole: "user",
         agent: "user",
         channel: "main",
+        orderKey: timelineOrderKey(31, created + 1, partID, 0, "part"),
       },
     ],
   }
@@ -234,7 +241,7 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
+      if (path === "/global/tasks") return send(taskListPayload())
       if (path === "/mission") return send(missionListPayload(missionInterruptible))
       if (path === "/mission/mis_side_activity/abort") {
         missionInterruptible = false
@@ -1251,6 +1258,23 @@ test(
         requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/tsk_side_activity/message"),
         false,
       )
+      const appDialogBeforeMissionNew = await page.evaluate(() => {
+        const dialog = document.querySelector<HTMLElement>("#appDialog")
+        return {
+          present: !!dialog,
+          pointerEvents: dialog?.style.pointerEvents || "",
+          title: document.querySelector<HTMLElement>("#appDialogTitle")?.textContent?.trim() || "",
+          body: document.querySelector<HTMLElement>("#appDialogBody")?.textContent?.trim() || "",
+          kind: document.querySelector<HTMLElement>("#appDialogBody")?.dataset.kind || "",
+        }
+      })
+      assert.deepEqual(appDialogBeforeMissionNew, {
+        present: false,
+        pointerEvents: "",
+        title: "",
+        body: "",
+        kind: "",
+      })
 
       await clickButton('[data-ui="mission-new"]')
       await waitForState(
@@ -1606,7 +1630,11 @@ test(
         (state) => {
           const widths = state.openPanelWidths as number[]
           const caps = state.openPanelInitialWidthCapped as string[]
-          return state.openPanels instanceof Array && widths[0]! - widths[1]! > 80 && caps.every((value) => value === "false")
+          return (
+            state.openPanels instanceof Array &&
+            widths[0]! - widths[1]! > 80 &&
+            caps.every((value) => value === "false")
+          )
         },
       )
       assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
@@ -2031,4 +2059,320 @@ test(
     }
   },
   { timeout: 180_000 },
+)
+
+test(
+  "mission delete failure keeps the selected mission conversation open",
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    let deleteRequests = 0
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/mission") return send(missionListPayload(true))
+      if (path === "/mission/mis_side_activity" && req.method === "DELETE") {
+        deleteRequests += 1
+        return send({ error: "delete failed durably" }, { status: 500 })
+      }
+      if (path === "/session/ses_mission_side_activity/conversation") {
+        return send({
+          board: {
+            kind: "session",
+            sessionID: "ses_mission_side_activity",
+            status: "active",
+            title: "Mission side activity",
+            directory: "D:/overlay/workspace/app",
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { rootID: "root", cards: {}, order: [] },
+          agentView: { rootID: "root", cards: {}, order: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          messageWatermark: 0,
+        })
+      }
+      if (path === "/session/ses_mission_side_activity/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs") {
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+      if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
+      if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
+      if (path === "/coding/cli/profiles") return send({ profiles: [] })
+      if (path === "/terminal/profiles") return send({ defaultProfileID: "", profiles: [] })
+      if (path === "/task/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+    })
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1280, height: 760 })
+      await page.evaluateOnNewDocument(
+        (input: { serverUrl: string }) => {
+          ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+          localStorage.setItem("oc_locale", "en-US")
+          localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+          localStorage.setItem("oc_server_url", input.serverUrl)
+          localStorage.setItem("oc_auto_server", "false")
+        },
+        { serverUrl: server.origin },
+      )
+
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      const missionRowSelector = '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]'
+      const missionDeleteSelector = `${missionRowSelector} [data-ui="task-row-delete"]`
+      await page.waitForSelector(missionRowSelector, { visible: true })
+      await page.click(`${missionRowSelector} .mission-row-main`)
+      await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.id === "ses_mission_side_activity", {
+        timeout: 5_000,
+      })
+      await page.hover(missionRowSelector)
+      await page.click(missionDeleteSelector)
+      await page.waitForSelector(`${missionDeleteSelector}[data-confirm="true"]`, { visible: true })
+      await page.click(`${missionDeleteSelector}[data-confirm="true"]`)
+      await page.waitForFunction(() => document.body.textContent?.includes("delete failed durably"), {
+        timeout: 5_000,
+      })
+
+      const state = await page.evaluate(() => {
+        const row = document.querySelector<HTMLElement>(
+          '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]',
+        )
+        return {
+          selectedSourceKind: (window as any).boardStore?.selectedSource?.kind ?? "",
+          selectedSourceID: (window as any).boardStore?.selectedSource?.id ?? "",
+          chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
+          rowActive: row?.dataset.active ?? "",
+          rowCount: document.querySelectorAll('[data-ui="mission-row"]').length,
+        }
+      })
+      assert.equal(deleteRequests, 1)
+      assert.deepEqual(state, {
+        selectedSourceKind: "session",
+        selectedSourceID: "ses_mission_side_activity",
+        chatTitle: "Mission",
+        rowActive: "true",
+        rowCount: 1,
+      })
+
+      const missionLedger = await page.$('[data-ui="mission-ledger"]')
+      assert.ok(missionLedger)
+      const screenshotPath = resolve(".scratch/mission-delete-failure-keeps-session-open.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await missionLedger.screenshot({}))
+    } finally {
+      await browser.close()
+      await server.close()
+    }
+  },
+  { timeout: 60_000 },
+)
+
+test(
+  "mission mutation reload failures are not reported as durable mutation failures",
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    let missionTitle = "Mission side activity"
+    let failMissionReload = false
+    let renameRequests = 0
+    let deleteRequests = 0
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/mission") {
+        if (failMissionReload) return send({ error: "mission reload unavailable" }, { status: 500 })
+        return send(missionListPayload(true).map((mission) => ({ ...mission, title: missionTitle })))
+      }
+      if (path === "/mission/mis_side_activity/title" && req.method === "PATCH") {
+        renameRequests += 1
+        const body = (await req.json().catch(() => ({}))) as { title?: string }
+        missionTitle = body.title || "Renamed mission"
+        failMissionReload = true
+        return send({
+          ...missionListPayload(true)[0],
+          title: missionTitle,
+          updated: 1_735_689_690_000,
+        })
+      }
+      if (path === "/mission/mis_side_activity" && req.method === "DELETE") {
+        deleteRequests += 1
+        failMissionReload = true
+        return send(true)
+      }
+      if (path === "/session/ses_mission_side_activity/conversation") {
+        return send({
+          board: {
+            kind: "session",
+            sessionID: "ses_mission_side_activity",
+            status: "active",
+            title: "Mission side activity",
+            directory: "D:/overlay/workspace/app",
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { rootID: "root", cards: {}, order: [] },
+          agentView: { rootID: "root", cards: {}, order: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          messageWatermark: 0,
+        })
+      }
+      if (path === "/session/ses_mission_side_activity/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs") {
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") return send({ active: "general", targets: [], profiles: [] })
+      if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
+      if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
+      if (path === "/coding/cli/profiles") return send({ profiles: [] })
+      if (path === "/terminal/profiles") return send({ defaultProfileID: "", profiles: [] })
+      if (path === "/task/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+    })
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1280, height: 760 })
+      await page.evaluateOnNewDocument(
+        (input: { serverUrl: string }) => {
+          ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+          localStorage.setItem("oc_locale", "en-US")
+          localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+          localStorage.setItem("oc_server_url", input.serverUrl)
+          localStorage.setItem("oc_auto_server", "false")
+        },
+        { serverUrl: server.origin },
+      )
+
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      const missionRowSelector = '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]'
+      const missionRenameSelector = `${missionRowSelector} [data-ui="task-row-rename"]`
+      const missionDeleteSelector = `${missionRowSelector} [data-ui="task-row-delete"]`
+      await page.waitForSelector(missionRowSelector, { visible: true })
+      await page.hover(missionRowSelector)
+      await page.click(missionRenameSelector)
+      await page.waitForSelector('[data-ui="mission-row-rename-input"]', { visible: true })
+      await page.click('[data-ui="mission-row-rename-input"]', { clickCount: 3 })
+      await page.type('[data-ui="mission-row-rename-input"]', "Renamed mission")
+      await page.keyboard.press("Enter")
+      await page.waitForFunction(() => document.body.textContent?.includes("Renamed mission"))
+      await page.waitForFunction(() => document.body.textContent?.includes("Mission list could not be reloaded"))
+      const renameError = await page.$eval('[data-ui="mission-global-action-error"]', (node) => node.textContent ?? "")
+      assert.equal(renameRequests, 1)
+      assert.match(renameError, /Reload missions failed/)
+      assert.match(renameError, /Renamed to "Renamed mission"/)
+      assert.doesNotMatch(renameError, /Rename mission failed/)
+
+      const afterRenameState = await page.evaluate(() => ({
+        rows: Array.from(document.querySelectorAll<HTMLElement>('[data-ui="mission-row"]')).map((row) => ({
+          missionID: row.dataset.missionId || "",
+          sessionID: row.dataset.sessionId || "",
+          text: row.textContent || "",
+        })),
+        error: document.querySelector<HTMLElement>('[data-ui="mission-global-action-error"]')?.textContent || "",
+        body: document.body.textContent || "",
+      }))
+      assert.ok(
+        afterRenameState.rows.some((row) => row.sessionID === "ses_mission_side_activity"),
+        JSON.stringify(afterRenameState),
+      )
+
+      await page.hover(missionRowSelector)
+      await page.click(missionDeleteSelector)
+      await page.waitForSelector(`${missionDeleteSelector}[data-confirm="true"]`, { visible: true })
+      await page.click(`${missionDeleteSelector}[data-confirm="true"]`)
+      await page.waitForFunction(() => !document.querySelector('[data-ui="mission-row"]'))
+      await page.waitForFunction(() => document.body.textContent?.includes('Deleted "Renamed mission"'))
+      const deleteError = await page.$eval('[data-ui="mission-global-action-error"]', (node) => node.textContent ?? "")
+      assert.equal(deleteRequests, 1)
+      assert.match(deleteError, /Reload missions failed/)
+      assert.match(deleteError, /Deleted "Renamed mission"/)
+      assert.doesNotMatch(deleteError, /Delete mission failed/)
+
+      const missionPanel = await page.$('[data-ui="mission-left-panel"]')
+      assert.ok(missionPanel)
+      const screenshotPath = resolve(".scratch/mission-mutation-reload-failure-copy.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await missionPanel.screenshot({}))
+    } finally {
+      await browser.close()
+      await server.close()
+    }
+  },
+  { timeout: 60_000 },
 )

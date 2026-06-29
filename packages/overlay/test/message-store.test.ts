@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test"
 import {
   clearEventQueue,
   enqueueEvent,
+  ingestPersistedMessage,
   mergeLoadedConversationMessages,
   messageStore,
   setMessages,
@@ -24,79 +25,50 @@ function orderKey(domain: "message" | "part", time: number, id: string): string 
   return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
 }
 
-test("message updates keep the earliest created time and stable ordering", async () => {
-  enqueueEvent({
-    type: "message.updated",
-    payload: {
-      info: {
-        id: "msg-1",
-        sessionID: "session-1",
-        role: "assistant",
-        time: { created: 10, updated: 10 },
+test("legacy messageStore live event ingestion is retired", () => {
+  expect(() =>
+    enqueueEvent({
+      type: "message.updated",
+      payload: {
+        info: {
+          id: "msg-1",
+          sessionID: "session-1",
+          role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
+          time: { created: 10, updated: 10 },
+        },
       },
-    },
-  })
-  enqueueEvent({
-    type: "message.part.updated",
-    payload: {
-      part: {
-        id: "part-1",
-        messageID: "msg-1",
-        sessionID: "session-1",
-        type: "text",
-        text: "first",
-      },
-    },
-  })
-  enqueueEvent({
-    type: "message.updated",
-    payload: {
-      info: {
-        id: "msg-2",
-        sessionID: "session-1",
-        role: "assistant",
-        time: { created: 20, updated: 20 },
-      },
-    },
-  })
-  enqueueEvent({
-    type: "message.part.updated",
-    payload: {
-      part: {
-        id: "part-2",
-        messageID: "msg-2",
-        sessionID: "session-1",
-        type: "text",
-        text: "second",
-      },
-    },
-  })
-  enqueueEvent({
-    type: "message.updated",
-    payload: {
-      info: {
-        id: "msg-1",
-        sessionID: "session-1",
-        role: "assistant",
-        time: { created: 30, updated: 30 },
-      },
-    },
-  })
-
-  await Bun.sleep(80)
-
-  expect(messageStore.messages.map((item) => item.info.id)).toEqual(["msg-1", "msg-2"])
-  expect(messageStore.messages).toContainEqual(
-    expect.objectContaining({
-      info: expect.objectContaining({
-        id: "msg-1",
-        time: expect.objectContaining({
-          created: 10,
-          updated: 30,
-        }),
-      }),
     }),
-  )
+  ).toThrow("messageStore live ingestion is retired for message.updated")
+  expect(messageStore.messages).toEqual([])
+})
+
+test("legacy persisted messageStore ingestion is retired", () => {
+  expect(() =>
+    ingestPersistedMessage({
+      info: {
+        id: "msg-1",
+        sessionID: "session-1",
+        role: "assistant",
+        channel: "assistant",
+        resolvedRole: "assistant",
+        orderKey: orderKey("message", 10, "msg-1"),
+        time: { created: 10 },
+      },
+      parts: [
+        {
+          id: "part-1",
+          messageID: "msg-1",
+          sessionID: "session-1",
+          type: "text",
+          text: "first",
+          orderKey: orderKey("part", 11, "part-1"),
+        },
+      ],
+    }),
+  ).toThrow("messageStore live ingestion is retired for persisted.message")
+  expect(messageStore.messages).toEqual([])
 })
 
 test("loaded messages with explicit ids do not compute content signatures", () => {
@@ -120,6 +92,8 @@ test("loaded messages with explicit ids do not compute content signatures", () =
           id: "msg-explicit",
           sessionID: "session-explicit",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-explicit"),
         },
         parts: [
@@ -148,6 +122,8 @@ test("loaded messages without explicit ids fail instead of generating loaded-msg
         info: {
           sessionID: "session-generated",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-generated"),
           time: { created: 10, updated: 10 },
         },
@@ -164,12 +140,48 @@ test("loaded messages without role fail instead of defaulting to assistant", () 
         info: {
           id: "msg-missing-role",
           sessionID: "session-missing-role",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-missing-role"),
         },
         parts: [],
       },
     ]),
   ).toThrow("loaded conversation message msg-missing-role role missing")
+})
+
+test("loaded messages without channel fail instead of deriving from role", () => {
+  expect(() =>
+    mergeLoadedConversationMessages([], [
+      {
+        info: {
+          id: "msg-missing-channel",
+          sessionID: "session-missing-channel",
+          role: "assistant",
+          resolvedRole: "assistant",
+          orderKey: orderKey("message", 10, "msg-missing-channel"),
+        },
+        parts: [],
+      },
+    ]),
+  ).toThrow("loaded conversation message msg-missing-channel channel missing")
+})
+
+test("loaded messages without resolvedRole fail instead of deriving from role", () => {
+  expect(() =>
+    mergeLoadedConversationMessages([], [
+      {
+        info: {
+          id: "msg-missing-resolved-role",
+          sessionID: "session-missing-resolved-role",
+          role: "assistant",
+          channel: "assistant",
+          orderKey: orderKey("message", 10, "msg-missing-resolved-role"),
+        },
+        parts: [],
+      },
+    ]),
+  ).toThrow("loaded conversation message msg-missing-resolved-role resolvedRole missing")
 })
 
 test("loaded messages without orderKey fail instead of sorting by local fields", () => {
@@ -180,11 +192,83 @@ test("loaded messages without orderKey fail instead of sorting by local fields",
           id: "msg-missing-order",
           sessionID: "session-missing-order",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
         },
         parts: [],
       },
     ]),
   ).toThrow("loaded conversation message msg-missing-order missing orderKey")
+})
+
+test("setMessages rejects incomplete visible messages instead of accepting legacy shapes", () => {
+  expect(() =>
+    setMessages([
+      {
+        info: {
+          id: "msg-legacy-shape",
+          sessionID: "session-legacy-shape",
+          role: "assistant",
+          time: { created: 10 },
+        },
+        parts: [],
+      },
+    ]),
+  ).toThrow("loaded conversation message msg-legacy-shape channel missing")
+  expect(messageStore.messages).toEqual([])
+})
+
+test("setMessages sorts by message orderKey instead of local timestamps", () => {
+  setMessages([
+    {
+      info: {
+        id: "msg-second",
+        sessionID: "session-order",
+        role: "assistant",
+        channel: "assistant",
+        resolvedRole: "assistant",
+        orderKey: orderKey("message", 20, "msg-second"),
+        time: { created: 1 },
+      },
+      parts: [
+        {
+          id: "part-second",
+          messageID: "msg-second",
+          sessionID: "session-order",
+          type: "text",
+          text: "second",
+          orderKey: orderKey("part", 21, "part-second"),
+        },
+      ],
+    },
+    {
+      info: {
+        id: "msg-first",
+        sessionID: "session-order",
+        role: "assistant",
+        channel: "assistant",
+        resolvedRole: "assistant",
+        orderKey: orderKey("message", 10, "msg-first"),
+        time: { created: 99 },
+      },
+      parts: [
+        {
+          id: "part-first",
+          messageID: "msg-first",
+          sessionID: "session-order",
+          type: "text",
+          text: "first",
+          orderKey: orderKey("part", 11, "part-first"),
+        },
+      ],
+    },
+  ])
+
+  expect(messageStore.messages.map((message) => message.info.id)).toEqual(["msg-first", "msg-second"])
+  expect(messageStore.messagesBySession["session-order"].map((message) => message.info.id)).toEqual([
+    "msg-first",
+    "msg-second",
+  ])
 })
 
 test("loaded parts without explicit ids fail instead of generating loaded-part ids", () => {
@@ -195,6 +279,8 @@ test("loaded parts without explicit ids fail instead of generating loaded-part i
           id: "msg-part-missing-id",
           sessionID: "session-part-missing-id",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-part-missing-id"),
         },
         parts: [
@@ -219,6 +305,8 @@ test("loaded parts without type fail instead of hydrating invalid Part records",
           id: "msg-part-missing-type",
           sessionID: "session-part-missing-type",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-part-missing-type"),
         },
         parts: [
@@ -243,6 +331,8 @@ test("loaded parts without orderKey fail before hydrate projection", () => {
           id: "msg-part-missing-order",
           sessionID: "session-part-missing-order",
           role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
           orderKey: orderKey("message", 10, "msg-part-missing-order"),
         },
         parts: [

@@ -13,6 +13,15 @@ const overlayPackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, "packa
 }
 const overlayVersion = overlayPackage.version
 const overlaySizeContract = readOverlaySizeContract(path.resolve(__dirname, "src-tauri", "tauri.conf.json"))
+const codeMirrorDedupePackages = [
+  "@codemirror/autocomplete",
+  "@codemirror/commands",
+  "@codemirror/language",
+  "@codemirror/lint",
+  "@codemirror/search",
+  "@codemirror/state",
+  "@codemirror/view",
+]
 
 function copyStaticAssets(entries: string[]): Plugin {
   function copyRecursive(src: string, dest: string) {
@@ -83,5 +92,6 @@ export default defineConfig({
   },
   resolve: {
     alias: [{ find: "@", replacement: path.resolve(__dirname, "src") }],
+    dedupe: codeMirrorDedupePackages,
   },
 })

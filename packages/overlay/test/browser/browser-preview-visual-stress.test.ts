@@ -682,7 +682,7 @@ test(
         if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
         if (path === `/task/${taskID}/operator-model-context` || path === `/task/${otherTaskID}/operator-model-context`)
           return json({ selected: null, candidates: [] })
-        if (path === "/global/tasks" || path === "/tasks")
+        if (path === "/global/tasks")
           return json({
             tasks: [
               { task, updated_at: now - 1_000 },

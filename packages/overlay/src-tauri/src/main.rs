@@ -488,7 +488,6 @@ struct OverlaySettings {
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
     workspace_panel_height: Option<u32>,
-    opacity: Option<f64>,
     zoom: Option<f64>,
     theme: Option<String>,
     locale: Option<String>,

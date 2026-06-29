@@ -10,7 +10,6 @@ export interface DomRefs {
   titlebar: HTMLElement | null
   connBadge: HTMLElement | null
   brandLogo: HTMLElement | null
-  chatVersion: HTMLElement | null
 
   // Titlebar controls
   solidTitlebarMenu: HTMLElement | null
@@ -111,6 +110,7 @@ export interface DomRefs {
   logViewerBody: HTMLElement | null
   btnLog: HTMLButtonElement | null
   btnLogRefresh: HTMLButtonElement | null
+  btnLogOpenFile: HTMLButtonElement | null
   btnLogCopy: HTMLButtonElement | null
   btnLogClear: HTMLButtonElement | null
   btnCloseLog: HTMLButtonElement | null
@@ -135,7 +135,6 @@ export function getDomRefs(): DomRefs {
     titlebar: $<HTMLElement>("#titlebar"),
     connBadge: $<HTMLElement>("#connBadge"),
     brandLogo: $<HTMLElement>(".brand-logo"),
-    chatVersion: $<HTMLElement>("#chatVersion"),
 
     // Titlebar controls
     solidTitlebarMenu: $<HTMLElement>("#solidTitlebarMenu"),
@@ -237,6 +236,7 @@ export function getDomRefs(): DomRefs {
     logViewerBody: $<HTMLElement>("#logViewerBody"),
     btnLog: $<HTMLButtonElement>("#btnLog"),
     btnLogRefresh: $<HTMLButtonElement>("#btnLogRefresh"),
+    btnLogOpenFile: $<HTMLButtonElement>("#btnLogOpenFile"),
     btnLogCopy: $<HTMLButtonElement>("#btnLogCopy"),
     btnLogClear: $<HTMLButtonElement>("#btnLogClear"),
     btnCloseLog: $<HTMLButtonElement>("#btnCloseLog"),

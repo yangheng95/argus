@@ -5,6 +5,11 @@ const startedStreams: Array<{ kind: string; id: string; sequence: number }> = []
 let stoppedStreams = 0
 const DEFAULT_TEST_DIRECTORY = "D:/repo/current"
 
+function orderKey(domain: "message" | "part", time: number, id: string): string {
+  const rank = domain === "message" ? 30 : 31
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+}
+
 mock.module("../src/services/conversation", () => ({
   cancelConversationReplay: () => undefined,
   conversationSourceDirectory: () => "",
@@ -129,7 +134,12 @@ describe("task selection initial hydrate", () => {
         if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
         if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
         if (req.path === "skill/mounts")
-          return { status: 200, ok: true, headers: {}, body: { scope: "project", skills: [], agents: [], source: nextDirectory } }
+          return {
+            status: 200,
+            ok: true,
+            headers: {},
+            body: { scope: "project", skills: [], agents: [], source: nextDirectory },
+          }
         if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: nextDirectory } }
         if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
@@ -188,8 +198,25 @@ describe("task selection initial hydrate", () => {
   test("deselect clears stale message panel projections even when no source is selected", async () => {
     setMessages([
       {
-        info: { id: "msg_stale", sessionID: "ses_stale", role: "assistant", time: { created: 1 } },
-        parts: [{ id: "part_stale", type: "text", text: "old response" }],
+        info: {
+          id: "msg_stale",
+          sessionID: "ses_stale",
+          role: "assistant",
+          channel: "assistant",
+          resolvedRole: "assistant",
+          orderKey: orderKey("message", 1, "msg_stale"),
+          time: { created: 1 },
+        },
+        parts: [
+          {
+            id: "part_stale",
+            messageID: "msg_stale",
+            sessionID: "ses_stale",
+            type: "text",
+            text: "old response",
+            orderKey: orderKey("part", 2, "part_stale"),
+          },
+        ],
       },
     ])
     setCardTreeStore("order", ["card_stale"])
@@ -310,5 +337,29 @@ describe("task selection initial hydrate", () => {
 
     expect(requests).toEqual(["DELETE task/tsk_refresh_fail", "GET global/tasks"])
     expect(activeTaskID()).toBe("")
+  })
+
+  test("deleteTask rejects backend failures for visible caller error handling", async () => {
+    __setHostTransportForTest({
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req: any) {
+        if (req.method === "DELETE" && req.path === "task/tsk_delete_500") {
+          return { status: 500, ok: false, headers: {}, body: { error: "delete unavailable" } }
+        }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        throw new Error("openStream not used")
+      },
+      async native(input: unknown) {
+        throw new Error(`unexpected native call: ${JSON.stringify(input)}`)
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    } as any)
+
+    await expect(deleteTask("tsk_delete_500")).rejects.toThrow("API 500")
   })
 })

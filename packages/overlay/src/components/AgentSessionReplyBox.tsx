@@ -13,9 +13,8 @@
 // POST /task/:taskID/session/:sessionID/reply via replyToAgentSession().
 // Build cards use POST /task/:taskID/message via sendTaskOperatorMessage().
 //
-// Error handling: errors are visible diagnostics only. They must not turn the
-// reply box into a terminal UI state; the backend routes non-directable session
-// replies through the task-root operator message path.
+// Error handling: structural backend errors are visible diagnostics only. The
+// reply route must not rewrite a failed direct reply into task-root input.
 
 import { createSignal, Show } from "solid-js"
 import { t } from "../utils/i18n"
@@ -32,6 +31,8 @@ type ReplyErrorName =
   | "InvalidReplyTargetKindError"
   | "BuildSessionDirectReplyError"
   | "ReplyTargetEnvelopeMissingError"
+  | "AgentSessionPendingCoordinationError"
+  | "AgentSessionAttachmentReferenceError"
   | "SessionRuntimeContractMissingError"
 
 interface ReplyErrorInfo {
@@ -63,6 +64,8 @@ function pickErrorInfo(err: unknown): ReplyErrorInfo {
     case "InvalidReplyTargetKindError":
     case "BuildSessionDirectReplyError":
     case "ReplyTargetEnvelopeMissingError":
+    case "AgentSessionPendingCoordinationError":
+    case "AgentSessionAttachmentReferenceError":
     case "SessionRuntimeContractMissingError":
       name = candidate
       break
@@ -94,6 +97,10 @@ function messageForError(info: ReplyErrorInfo, fallback: string): string {
     }
     case "ReplyTargetEnvelopeMissingError":
       return t("card.agent_reply_envelope_missing")
+    case "AgentSessionPendingCoordinationError":
+      return t("card.agent_reply_pending_coordination")
+    case "AgentSessionAttachmentReferenceError":
+      return t("card.agent_reply_attachment_reference")
     default:
       return fallback || t("card.agent_reply_failed")
   }

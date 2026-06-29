@@ -41,11 +41,18 @@ test("agent coordination events are visible pass-through board invalidations", (
     "agent.coordination.requested",
     "agent.coordination.responded",
     "agent.coordination.cancelled",
+    "agent.coordination.action",
   ]) {
     expect(isTreeWriterKnownEventType(type)).toBe(true)
     expect(isTreeWriterPassThroughEventType(type)).toBe(true)
     expect(isBoardInvalidatingEventType(type)).toBe(true)
   }
+})
+
+test("task lifecycle fact events are visible pass-through board invalidations", () => {
+  expect(isTreeWriterKnownEventType("task.lifecycle")).toBe(true)
+  expect(isTreeWriterPassThroughEventType("task.lifecycle")).toBe(true)
+  expect(isBoardInvalidatingEventType("task.lifecycle")).toBe(true)
 })
 
 test("declared non-card control events are explicit tree-writer no-ops", () => {
@@ -61,6 +68,7 @@ test("declared non-card control events are explicit tree-writer no-ops", () => {
     "task_plan.updated",
     "todo.updated",
     "session.compacted",
+    "session.bridge.persist_failed",
     "worktree.ready",
     "workspace.failed",
   ]) {

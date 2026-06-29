@@ -16,18 +16,22 @@ import { interactionRequestText, interactionResponseText, hashText } from "./tra
 export interface InteractionCardSeed {
   info: {
     id: string
+    orderKey: string
     role: string
     time: { created: number }
   }
   parts: any[]
 }
 
-function textSeed(role: string, time: number, text: string): InteractionCardSeed | null {
+function textSeed(role: string, orderKey: string, time: number, text: string): InteractionCardSeed | null {
   if (typeof text !== "string" || !text.trim()) return null
-  const created = Number.isFinite(time) ? time : Date.now()
+  const created = Number(time)
+  if (!(created > 0)) throw new Error(`interaction text seed missing created time`)
+  if (!orderKey) throw new Error("interaction text seed missing orderKey")
   return {
     info: {
       id: `interaction-text:${role}:${created}:${hashText(text)}`,
+      orderKey,
       role,
       time: { created },
     },
@@ -47,6 +51,8 @@ function textSeed(role: string, time: number, text: string): InteractionCardSeed
 export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] {
   const role = "system"
   const requestTime = Number(interaction?.time?.created)
+  const orderKey = typeof interaction?.orderKey === "string" && interaction.orderKey ? interaction.orderKey : ""
+  if (!orderKey) throw new Error(`interaction ${interaction?.id || "<unknown>"} missing orderKey`)
 
   if (interaction?.status === "pending") {
     const partType =
@@ -60,6 +66,7 @@ export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] 
         {
           info: {
             id: `ctx:interaction:${interaction.id}`,
+            orderKey,
             role,
             time: { created: requestTime },
           },
@@ -70,11 +77,11 @@ export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] 
   }
 
   const seeds: InteractionCardSeed[] = []
-  const request = textSeed(role, requestTime, interactionRequestText(interaction))
+  const request = textSeed(role, orderKey, requestTime, interactionRequestText(interaction))
   if (request) seeds.push(request)
   if (interaction?.status === "answered" || interaction?.status === "rejected") {
     const resolvedTime = Number(interaction.time?.resolved)
-    const response = textSeed(role, resolvedTime, interactionResponseText(interaction))
+    const response = textSeed(role, orderKey, resolvedTime, interactionResponseText(interaction))
     if (response) seeds.push(response)
   }
   return seeds

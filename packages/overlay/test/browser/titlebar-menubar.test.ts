@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -43,6 +44,28 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+    },
+  })
+}
+
+function titlebarCommonProjectResponse(path: string, req: Request): Response | null {
+  if (path === "/global/projects/discover") {
+    return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
+  }
+  if (path === "/project/current/worktrees") return send([])
+  if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+  if (path === "/task/events") return eventStream()
+  if (path === "/mission") return send([])
+  if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+  if (path === "/log" && req.method === "POST") return send({ ok: true })
+  return null
+}
+
 test(
   "titlebar menubar fits documented responsive widths and locales",
   async () => {
@@ -60,8 +83,10 @@ test(
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
+      const commonResponse = titlebarCommonProjectResponse(path, req)
+      if (commonResponse) return commonResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/mission") return send([])
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
@@ -87,11 +112,16 @@ test(
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/log" && req.method === "POST") return send({ ok: true })
-      if (path === "/log/tail") return send({ lines: ['{"level":30,"time":"2026-06-15T00:00:00.000Z","msg":"ready"}'] })
+      if (path === "/log/tail")
+        return send({
+          path: "D:/overlay/logs/server.log",
+          lines: ['{"level":30,"time":"2026-06-15T00:00:00.000Z","msg":"ready"}'],
+        })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
@@ -100,10 +130,12 @@ test(
       for (const locale of locales) {
         for (const width of viewports) {
           const page = await browser.newPage()
+          const errors = installBrowserErrorCollector(page)
           await page.setViewport({ width, height: 720 })
           await page.evaluateOnNewDocument((value) => {
             localStorage.setItem("oc_locale", value)
             ;(window as any).__helpOpenUrls = []
+            ;(window as any).__helpOpenPaths = []
             ;(window as any).__devtoolsToggleCount = 0
             window.__TAURI__ = {
               core: {
@@ -121,6 +153,10 @@ test(
                   }
                   if (command === "overlay_open_url") {
                     ;(window as any).__helpOpenUrls.push(String(args.url || ""))
+                    return true
+                  }
+                  if (command === "overlay_open_path") {
+                    ;(window as any).__helpOpenPaths.push(String(args.path || ""))
                     return true
                   }
                   if (command === "overlay_toggle_devtools") {
@@ -456,6 +492,14 @@ test(
           await page.waitForSelector('[data-testid="titlebar-help-logs"]', { visible: true })
           await page.click('[data-testid="titlebar-help-logs"]')
           await page.waitForSelector("#logDialog", { visible: true })
+          await page.waitForFunction(() => {
+            const button = document.querySelector("#btnLogOpenFile")
+            return button instanceof HTMLButtonElement && !button.disabled
+          })
+          await page.click("#btnLogOpenFile")
+          await page.waitForFunction(() => {
+            return ((window as any).__helpOpenPaths as string[]).includes("D:/overlay/logs/server.log")
+          })
           await page.click("#btnCloseLog")
           await page.waitForFunction(() => document.querySelector("#logDialog") === null)
           await page.click('[data-menu-trigger="help"]')
@@ -476,11 +520,14 @@ test(
           await page.click("#btnCloseConfigDialog")
           await page.waitForFunction(() => document.querySelector("#configDialog") === null)
           const openedUrls = await page.evaluate(() => (window as any).__helpOpenUrls as string[])
+          const openedPaths = await page.evaluate(() => (window as any).__helpOpenPaths as string[])
           const localePrefix = locale === "zh-CN" ? "/docs/zh-cn/" : "/docs/"
           assert.deepEqual(openedUrls, [
             `https://opencorvus.ai${localePrefix}start/quickstart/`,
             `https://opencorvus.ai${localePrefix}reference/sdk/`,
           ])
+          assert.deepEqual(openedPaths, ["D:/overlay/logs/server.log"])
+          errors.assertNoUnexpectedErrors()
           await page.close()
         }
       }
@@ -488,6 +535,7 @@ test(
       config = {}
       for (const width of [320, 480, 600, 760]) {
         const page = await browser.newPage()
+        const errors = installBrowserErrorCollector(page)
         await page.setViewport({ width, height: 720 })
         await page.evaluateOnNewDocument(() => {
           localStorage.setItem("oc_locale", "en-US")
@@ -547,6 +595,7 @@ test(
         assert.ok(workspaceBounds.left >= 0)
         assert.ok(workspaceBounds.right <= width)
         assert.ok(workspaceBounds.width > 16)
+        errors.assertNoUnexpectedErrors()
         await page.close()
       }
     } finally {
@@ -570,8 +619,10 @@ test(
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
+      const commonResponse = titlebarCommonProjectResponse(path, req)
+      if (commonResponse) return commonResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs")
@@ -595,6 +646,7 @@ test(
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
@@ -605,6 +657,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument(() => {
         localStorage.setItem("oc_theme", "vscode-dark")
@@ -890,8 +943,8 @@ test(
           checked: true,
         },
       )
-      await page.focus('[data-testid="titlebar-opacity-range"]')
-      const rangeFocusState = await page.$eval('[data-testid="titlebar-opacity-range"]', (node: HTMLInputElement) => {
+      await page.focus('[data-testid="titlebar-zoom-range"]')
+      const rangeFocusState = await page.$eval('[data-testid="titlebar-zoom-range"]', (node: HTMLInputElement) => {
         const row = node.closest<HTMLElement>(".titlebar-menubar-range")
         if (!row) throw new Error("missing titlebar range row")
         return {
@@ -901,11 +954,11 @@ test(
           color: getComputedStyle(row).color,
         }
       })
-      assert.equal(rangeFocusState.activeTestid, "titlebar-opacity-range")
+      assert.equal(rangeFocusState.activeTestid, "titlebar-zoom-range")
       assert.equal(rangeFocusState.focusWithin, true)
       assert.notEqual(rangeFocusState.background, "rgba(0, 0, 0, 0)")
       assert.notEqual(rangeFocusState.color, "")
-      const rangeScreenshotPath = resolve(".scratch/titlebar-view-range-focus.png")
+      const rangeScreenshotPath = resolve(".scratch/titlebar-view-zoom-range-focus.png")
       mkdirSync(dirname(rangeScreenshotPath), { recursive: true })
       writeFileSync(rangeScreenshotPath, await viewMenuElement.screenshot({}))
 
@@ -919,6 +972,7 @@ test(
         true,
       )
 
+      errors.assertNoUnexpectedErrors()
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
@@ -942,6 +996,8 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: "", projects: [] })
+      if (path === "/mission") return send([])
       if (path === "/log" && req.method === "POST") return send({ ok: true })
       return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
@@ -949,6 +1005,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -1030,6 +1087,7 @@ test(
         { activity: "screenshots", active: "false" },
         { activity: "notifications", active: "false" },
       ])
+      errors.assertNoUnexpectedErrors()
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
@@ -1052,8 +1110,10 @@ test(
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
+      const commonResponse = titlebarCommonProjectResponse(path, req)
+      if (commonResponse) return commonResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs")
@@ -1077,6 +1137,7 @@ test(
       if (path === "/channel") return send([])
       if (path === "/executor") return send([{ id: "codex", selectable: true }])
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
@@ -1087,6 +1148,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -1162,6 +1224,7 @@ test(
       assert.equal(state.config, null)
       assert.ok(state.recent.includes("D:/overlay/workspace/app"))
       assert.equal(state.persistedDirectory, null)
+      errors.assertNoUnexpectedErrors()
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
@@ -1184,8 +1247,10 @@ test(
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
+      const commonResponse = titlebarCommonProjectResponse(path, req)
+      if (commonResponse) return commonResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs")
@@ -1209,6 +1274,7 @@ test(
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
@@ -1219,6 +1285,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1600, height: 900 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
@@ -1490,14 +1557,24 @@ test(
         const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
         const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
+        const initialMaxWidthProbe = document.createElement("span")
+        initialMaxWidthProbe.style.position = "fixed"
+        initialMaxWidthProbe.style.visibility = "hidden"
+        initialMaxWidthProbe.style.width = "var(--ui-right-toolbar-panel-initial-max-width)"
+        document.body.append(initialMaxWidthProbe)
+        const rightToolbarPanelInitialMaxWidth = initialMaxWidthProbe.getBoundingClientRect().width
+        initialMaxWidthProbe.remove()
         return {
           sidebar: sidebar.width,
           chat: chat.width,
           sections: sections.width,
+          rightToolbarPanelInitialMaxWidth,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
           workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
           centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+          centerInspectorInitialWidthCapped:
+            document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.initialWidthCapped || "",
           inspectorButtonActive:
             document.querySelector<HTMLElement>(
               '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
@@ -1507,13 +1584,19 @@ test(
         }
       })
 
-      assert.ok(afterInspectorOpen.sections > 300)
-      assert.ok(Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat) <= 2)
-      assert.ok(afterInspectorOpen.leftDivider <= 2)
-      assert.ok(afterInspectorOpen.rightDivider <= 2)
-      assert.ok(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider) <= 1)
+      const afterInspectorOpenMessage = JSON.stringify(afterInspectorOpen)
+      assert.ok(afterInspectorOpen.sections > 300, afterInspectorOpenMessage)
+      assert.ok(
+        afterInspectorOpen.sections <= afterInspectorOpen.rightToolbarPanelInitialMaxWidth + 2,
+        afterInspectorOpenMessage,
+      )
+      assert.ok(afterInspectorOpen.chat > afterInspectorOpen.sections, afterInspectorOpenMessage)
+      assert.ok(afterInspectorOpen.leftDivider <= 2, afterInspectorOpenMessage)
+      assert.ok(afterInspectorOpen.rightDivider <= 2, afterInspectorOpenMessage)
+      assert.ok(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider) <= 1, afterInspectorOpenMessage)
       assert.equal(afterInspectorOpen.workbenchStartsAtWorkspace, true)
       assert.equal(afterInspectorOpen.centerInspectorActive, "true")
+      assert.equal(afterInspectorOpen.centerInspectorInitialWidthCapped, "true")
       assert.equal(afterInspectorOpen.inspectorButtonActive, "true")
       assert.ok(afterInspectorOpen.leftHandleWidth <= 2)
       assert.equal(afterInspectorOpen.rightPaneResizerExists, false)
@@ -1573,6 +1656,7 @@ test(
       assert.ok(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider) <= 1)
       assert.ok(afterLeftDrag.leftHandleWidth <= 2)
       assert.equal(afterLeftDrag.rightPaneResizerExists, false)
+      errors.assertNoUnexpectedErrors()
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)

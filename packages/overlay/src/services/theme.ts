@@ -1,29 +1,22 @@
 // ── Theme Service ──
 // Exported surface:
 // sanitizeTheme(value) — supported theme id or DEFAULT_THEME
-// sanitizeOpacity(value) — number clamped to [0.5, 1.0]
 // sanitizeZoom(value) — number clamped to [0.8, 1.6]
 // resolvedTheme() — effective "light" | "dark" after system detection
 // applyTheme(theme) — writes documentElement/body data-theme
 // applyZoom(zoom) — writes --ui-scale CSS custom property via renderScale
-// applyOpacity(opacity) — writes --ui-window-opacity CSS variable
 
-import { MIN_WINDOW_OPACITY, sanitizeOpacity, settingsStore } from "../store/settings"
+import { settingsStore } from "../store/settings"
 import { currentUIScale } from "../utils/layout-tokens"
 import { overlayLayoutFrameSize } from "../utils/overlay-layout-frame"
 import { getHostTransport } from "./host-transport"
 import { readInitialVsCodeHostTheme } from "./host-theme"
 import { sanitizeThemeForHost, type OverlayThemeID } from "./theme-registry"
 
-export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings"
-
 // ── Constants ──
 
 const MIN_UI_ZOOM = 0.8
 const MAX_UI_ZOOM = 1.6
-
-// DEFAULT_OVERLAY_SETTINGS.opacity
-const DEFAULT_OPACITY = 0.8
 
 // ── System theme media query ──
 // Shared singleton,
@@ -83,18 +76,6 @@ export function applyTheme(theme: string): void {
   const effective = resolveThemeValue(sanitized)
   document.documentElement.dataset.theme = effective
   document.body.dataset.theme = effective
-}
-
-// Tauri's native setOpacity is unreliable on transparent windows (returns ok
-// but the compositor ignores it on Windows DWM). Single source of truth: the
-// --ui-window-opacity CSS variable, which the theme files fold into the
-// `--body-bg` alpha via color-mix(). At slider=100 the body bg becomes fully
-// opaque; lower values mix toward `transparent` so the desktop bleeds
-// through. We don't set `body { opacity }` — that would double-apply with
-// the bg alpha (rule 8) and would dim text/UI unnecessarily.
-export function applyOpacity(opacity: number): void {
-  if (typeof document === "undefined") return
-  document.documentElement.style.setProperty("--ui-window-opacity", String(sanitizeOpacity(opacity)))
 }
 
 // ── applyZoom ──

@@ -76,7 +76,7 @@ test("agent model selects patch independent per-agent overrides", async () => {
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
     if (path === "/vcs") {
@@ -262,7 +262,7 @@ test("agent models loading spinner animates through shared motion tokens and sto
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "agent-model-spinner" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
     if (path === "/vcs") {

@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -84,7 +85,6 @@ const mcpStatus = {
 test("command palette uses the shared Dialog primitive while preserving hotkey focus flow", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
-  const errors: string[] = []
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -97,7 +97,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     if (path === "/global/projects/discover") {
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     }
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission") return send([])
     if (path === "/task/events") return eventStream()
     if (path === "/session") return send([])
@@ -135,6 +135,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         managed_skills: "D:/skills/config/skills-market",
         remote_cache: "D:/skills/cache",
       })
+    if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
     if (path === "/skill/market") return send(skillMarket)
     if (path === "/mcp") return send(mcpStatus)
     if (path === "/panel/knowledge/memory") return send([])
@@ -146,6 +147,11 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
   const browser = await launchBrowser()
   try {
     const page = await browser.newPage()
+    const errors = installBrowserErrorCollector(page, {
+      allowRequestFailure(input) {
+        return input.path === "/task/events"
+      },
+    })
     async function openCommandPaletteFromKeyboard() {
       await page.keyboard.down("Control")
       await page.keyboard.press("k")
@@ -249,19 +255,6 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       await page.click("#btnCloseConfigDialog")
       await page.waitForFunction(() => document.querySelector("#configDialog") === null)
     }
-    page.on("pageerror", (error) => {
-      errors.push(`pageerror: ${error.message}`)
-    })
-    page.on("requestfailed", (request) => {
-      if (/\/task\/events(?:\?.*)?$/.test(request.url())) return
-      errors.push(`requestfailed: ${request.url()}`)
-    })
-    page.on("response", (response) => {
-      if (response.status() === 404) errors.push(`response404: ${response.url()}`)
-    })
-    page.on("console", (msg) => {
-      if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
-    })
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
@@ -414,7 +407,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       "market-install",
       resolve(".scratch/command-palette-skill-market-command.png"),
     )
-    assert.deepEqual(errors, [])
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()

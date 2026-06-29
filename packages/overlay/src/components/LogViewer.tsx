@@ -12,11 +12,11 @@ import { appStore, setAppStore, filteredLogEntries } from "../store/app"
 import type { LogEntry, LogLevel, LogSource } from "../store/app"
 import { t } from "../utils/i18n"
 import { apiJson } from "../services/api"
+import { nativeOpen } from "../utils/native"
 import { useAsyncAction } from "../solid/async-action"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { SelectControl } from "./ui/SelectControl"
-import { Icon } from "./Icon"
 import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } from "../utils/log"
 
 // ── Re-export types so callers can use them without importing store/app ──
@@ -34,15 +34,36 @@ const LOG_LEVEL_SELECT_OPTIONS: LogLevelSelectOption[] = LOG_LEVEL_OPTIONS.map((
 // across component remounts but are not reactive (refresh is triggered
 // explicitly by the user or on open).
 
-let _serverLogLines: string[] = []
+interface ServerLogState {
+  path: string
+  lines: string[]
+}
+
+const EMPTY_SERVER_LOG_STATE: ServerLogState = { path: "", lines: [] }
+
+let _serverLogState: ServerLogState = EMPTY_SERVER_LOG_STATE
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function parseServerLogTailResponse(data: unknown): ServerLogState {
+  const body = data as { path?: unknown; lines?: unknown }
+  if (!body || typeof body.path !== "string" || !body.path.trim()) {
+    throw new Error("log/tail response is missing the current log file path")
+  }
+  if (!Array.isArray(body.lines) || body.lines.some((line) => typeof line !== "string")) {
+    throw new Error("log/tail response lines must be a string array")
+  }
+  return {
+    path: body.path,
+    lines: body.lines,
+  }
+}
 
 async function loadServerLogs(): Promise<void> {
-  try {
-    const data = await apiJson("log/tail?n=500")
-    _serverLogLines = Array.isArray(data?.lines) ? data.lines : []
-  } catch {
-    _serverLogLines = []
-  }
+  const data = await apiJson("log/tail?n=500")
+  _serverLogState = parseServerLogTailResponse(data)
 }
 
 function clipText(value: string, limit = 80): string {
@@ -76,7 +97,7 @@ function buildLogEntries(overlayEntries: LogEntry[], ndjsonEvents: any[], filter
   const threshold = levelOrder[filterLevel] ?? 0
 
   // Server log lines (parsed from raw strings)
-  const serverLines: LogEntry[] = _serverLogLines
+  const serverLines: LogEntry[] = _serverLogState.lines
     .map((line): LogEntry => {
       const entry = parseServerLogLine(line)
       return {
@@ -237,6 +258,7 @@ export interface LogViewerProps {
 
 export function LogViewer(props: LogViewerProps) {
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0)
+  const [serverLogError, setServerLogError] = createSignal("")
   let logList: VListHandle | undefined
 
   // Merged & filtered log entries
@@ -246,9 +268,41 @@ export function LogViewer(props: LogViewerProps) {
   })
 
   const refreshAction = useAsyncAction(async () => {
-    await loadServerLogs()
-    setServerLogsSeq((value) => value + 1)
+    setServerLogError("")
+    try {
+      await loadServerLogs()
+    } catch (error) {
+      _serverLogState = EMPTY_SERVER_LOG_STATE
+      setServerLogError(errorMessage(error))
+    } finally {
+      setServerLogsSeq((value) => value + 1)
+    }
   })
+
+  const currentServerLogPath = createMemo(() => {
+    serverLogsSeq()
+    return _serverLogState.path.trim()
+  })
+
+  const listLogError = createMemo(() => {
+    const message = serverLogError()
+    if (!message || entries().length === 0) return ""
+    return message
+  })
+
+  const openFileAction = useAsyncAction(async () => {
+    setServerLogError("")
+    const path = currentServerLogPath()
+    if (!path) throw new Error("Log file path is not loaded")
+    const opened = await nativeOpen(path)
+    if (!opened) throw new Error("Host did not open the current log file")
+  })
+
+  const handleOpenLogFile = () => {
+    void openFileAction.run().catch((error) => {
+      setServerLogError(errorMessage(error))
+    })
+  }
 
   const handleCopy = async () => {
     const text = formatLogText(entries())
@@ -259,7 +313,7 @@ export function LogViewer(props: LogViewerProps) {
   const handleClear = () => {
     // Clear overlay client log entries via the store
     setAppStore("logEntries", [])
-    _serverLogLines = []
+    _serverLogState = EMPTY_SERVER_LOG_STATE
     setServerLogsSeq((value) => value + 1)
   }
 
@@ -290,6 +344,7 @@ export function LogViewer(props: LogViewerProps) {
       id="logDialog"
       open={props.open === true}
       wide={true}
+      formClass="log-viewer-dialog-form"
       title={t("log.title")}
       onClose={() => props.onClose?.()}
       headerActions={
@@ -326,6 +381,19 @@ export function LogViewer(props: LogViewerProps) {
           </Button>
           <Button
             type="button"
+            id="btnLogOpenFile"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            title={t("log.open_file_hint")}
+            aria-label={t("log.open_file_hint")}
+            onClick={handleOpenLogFile}
+            disabled={refreshAction.pending() || openFileAction.pending() || !currentServerLogPath()}
+          >
+            {t("log.open_file")}
+          </Button>
+          <Button
+            type="button"
             id="btnLogCopy"
             variant="ghost"
             size="sm"
@@ -351,11 +419,24 @@ export function LogViewer(props: LogViewerProps) {
         </>
       }
     >
+      <Show when={listLogError()}>
+        {(message) => (
+          <div class="log-error-banner" role="alert">
+            {message()}
+          </div>
+        )}
+      </Show>
       <Show
         when={entries().length > 0}
         fallback={
           <div id="logViewerBody" class="log-viewer">
-            <div class="empty-hint">{t("log.empty")}</div>
+            <Show when={serverLogError()} fallback={<div class="empty-hint">{t("log.empty")}</div>}>
+              {(message) => (
+                <div class="empty-hint" role="alert">
+                  {message()}
+                </div>
+              )}
+            </Show>
           </div>
         }
       >

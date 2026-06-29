@@ -19,7 +19,7 @@
 import { createMemo } from "solid-js"
 import { boardStore } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
-import { syncAgentPromptLocale } from "../services/config"
+import { currentProjectConfigRequestOptions, syncAgentPromptLocale } from "../services/config"
 import { applyTheme } from "../services/theme"
 import { themeOptionsForCurrentHost } from "../services/theme-registry"
 import { selectTask } from "../services/task"
@@ -130,7 +130,7 @@ export function CommandPalette() {
         run: async () => {
           setSettingsStore("locale", loc.id)
           await setLocale(loc.id)
-          await syncAgentPromptLocale(loc.id)
+          await syncAgentPromptLocale(loc.id, currentProjectConfigRequestOptions())
           await saveSettings()
         },
       })

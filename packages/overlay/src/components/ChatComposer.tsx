@@ -230,8 +230,8 @@ export function ChatComposer(props: ChatComposerProps) {
   // composer sits idle (empty + unfocused). One signal write per rotation;
   // no per-character typewriter. The previous 28–60ms typewriter loop wrote
   // 20–70 signal-driven DOM mutations per second the entire time the
-  // composer was visible — Tauri's transparent WebView2 then alpha-blended
-  // the desktop on every frame, dominating idle power draw on laptops.
+  // composer was visible, which dominated idle WebView composition cost on
+  // laptops for a purely decorative affordance.
   let rotateTimer: ReturnType<typeof setInterval> | undefined
   let hintOrder: number[] = []
   let hintCursor = 0

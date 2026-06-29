@@ -1,11 +1,24 @@
 import { test, expect } from "bun:test"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import { stampTestEvent, testEventOrderKey, testMessageOrderKey } from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 installRealOverlayI18n()
 
-const { applyEvent, resetWriter } = await import("../src/services/tree-writer")
+const { applyEvent: applyEventRaw, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
+
+function applyEvent(event: any): void {
+  applyEventRaw(stampIntegrityEventForTest(event))
+}
+
+function stampIntegrityEventForTest(event: any): any {
+  const props = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  if (props?.info && typeof props.info === "object") {
+    return stampTestEvent(event)
+  }
+  return stampTestEvent(event)
+}
 
 function stampedInfo(channel: string, info: Record<string, any>) {
   return {
@@ -24,10 +37,12 @@ function applyIntegrityMessage(input: {
 }) {
   applyEvent({
     type: "message.updated",
+    orderKey: testMessageOrderKey(input.messageID, input.created),
     properties: {
       taskID: "tsk_team",
       info: stampedInfo("integrity", {
         id: input.messageID,
+        orderKey: testMessageOrderKey(input.messageID, input.created),
         sessionID: input.sessionID,
         parentSessionID: input.parentSessionID,
         role: "assistant",
@@ -44,6 +59,7 @@ test("retired legacy gate event is not accepted by the tree writer", () => {
     applyEvent({
       type: "acceptance.gate.rejected",
       emittedAt: 1700000000000,
+      orderKey: testEventOrderKey("acceptance.gate.rejected", 1700000000000),
       properties: {
         taskID: "tsk_abc",
         iteration: 0,
@@ -60,6 +76,7 @@ test("legacy acceptance evidence remains pass-through and does not materialize a
   applyEvent({
     type: "acceptance.evidence.updated",
     emittedAt: 1700000000000,
+    orderKey: testEventOrderKey("acceptance.evidence.updated", 1700000000000),
     properties: {
       taskID: "tsk_manifest",
       runID: "run_manifest",
@@ -95,6 +112,7 @@ test("retired acceptance review completion event is not accepted by the tree wri
     applyEvent({
       type: "acceptance.review.completed",
       emittedAt: 1700000000200,
+      orderKey: testEventOrderKey("acceptance.review.completed", 1700000000200),
       properties: {
         taskID: "tsk_review",
         reviewID: "acceptance:tsk_review:2",
@@ -117,6 +135,7 @@ test("integrity review stream builds the integrity session card", () => {
   applyEvent({
     type: "review.stream.started",
     emittedAt: 1700000000000,
+    orderKey: testEventOrderKey("review.stream.started", 1700000000000),
     properties: {
       taskID: "tsk_integrity",
       reviewID: "integrity:ses_integrity",
@@ -127,6 +146,7 @@ test("integrity review stream builds the integrity session card", () => {
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000100,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000100),
     properties: {
       taskID: "tsk_integrity",
       reviewID: "integrity:ses_integrity",
@@ -152,6 +172,7 @@ test("integrity review chunk reconstructs running card when started is outside t
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000100,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000100),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_late_chunk",
@@ -180,6 +201,7 @@ test("integrity review progress reconstructs running card when started is outsid
   applyEvent({
     type: "review.stream.progress",
     emittedAt: 1700000020000,
+    orderKey: testEventOrderKey("review.stream.progress", 1700000020000),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_late_progress",
@@ -216,6 +238,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.started",
     emittedAt: 1700000000000,
+    orderKey: testEventOrderKey("review.stream.started", 1700000000000),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_super",
@@ -227,6 +250,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.started",
     emittedAt: 1700000000010,
+    orderKey: testEventOrderKey("review.stream.started", 1700000000010),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_rev_a",
@@ -237,6 +261,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.started",
     emittedAt: 1700000000020,
+    orderKey: testEventOrderKey("review.stream.started", 1700000000020),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_rev_b",
@@ -266,6 +291,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000100,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000100),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_super",
@@ -278,6 +304,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000110,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000110),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_rev_a",
@@ -290,6 +317,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000120,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000120),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_rev_b",
@@ -302,6 +330,7 @@ test("multiple reviewers with independent reviewIDs do not cross-contaminate a s
   applyEvent({
     type: "review.stream.chunk",
     emittedAt: 1700000000130,
+    orderKey: testEventOrderKey("review.stream.chunk", 1700000000130),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_rev_a",
@@ -347,6 +376,7 @@ test("malformed reviewer chunk without a reconstructable integrity session still
   applyEvent({
     type: "review.stream.started",
     emittedAt: 1700000000000,
+    orderKey: testEventOrderKey("review.stream.started", 1700000000000),
     properties: {
       taskID: "tsk_team",
       reviewID: "integrity:ses_super",
@@ -359,6 +389,7 @@ test("malformed reviewer chunk without a reconstructable integrity session still
     applyEvent({
       type: "review.stream.chunk",
       emittedAt: 1700000000100,
+      orderKey: testEventOrderKey("review.stream.chunk", 1700000000100),
       properties: {
         taskID: "tsk_team",
         reviewID: "integrity:not_a_session",
@@ -378,6 +409,7 @@ test("review stream rejects retired acceptance phase", () => {
     applyEvent({
       type: "review.stream.started",
       emittedAt: 1700000000000,
+      orderKey: testEventOrderKey("review.stream.started", 1700000000000),
       properties: {
         taskID: "tsk_review",
         reviewID: "acceptance:tsk_review:0",
@@ -385,4 +417,40 @@ test("review stream rejects retired acceptance phase", () => {
       },
     }),
   ).toThrow(/review\.stream phase unsupported: acceptance/)
+})
+
+test("review stream started without event time is rejected instead of using the local clock", () => {
+  resetWriter()
+
+  expect(() =>
+    applyEvent({
+      type: "review.stream.started",
+      orderKey: testEventOrderKey("review.stream.started", 1700000000000),
+      properties: {
+        taskID: "tsk_review",
+        reviewID: "integrity:ses_missing_started_time",
+        phase: "integrity",
+        sessionID: "ses_missing_started_time",
+      },
+    }),
+  ).toThrow(/review\.stream\.started integrity:ses_missing_started_time missing emittedAt\/timestamp/)
+})
+
+test("review stream progress reconstruction without event time is rejected instead of backfilling from elapsedMs", () => {
+  resetWriter()
+
+  expect(() =>
+    applyEvent({
+      type: "review.stream.progress",
+      orderKey: testEventOrderKey("review.stream.progress", 1700000000000),
+      properties: {
+        taskID: "tsk_review",
+        reviewID: "integrity:ses_missing_progress_time",
+        phase: "integrity",
+        currentStep: "agent",
+        attempt: 2,
+        elapsedMs: 20_000,
+      },
+    }),
+  ).toThrow(/review\.stream\.integrity integrity:ses_missing_progress_time missing emittedAt\/timestamp/)
 })

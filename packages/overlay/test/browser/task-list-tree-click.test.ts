@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -122,7 +123,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "task-tree-click-test" })
     if (path === "/global/projects/discover") return send([])
-    if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
+    if (path === "/global/tasks") return send({ tasks })
     if (path === "/mission") return send([])
     if (path === "/executor") return send([])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -152,6 +153,9 @@ test("task tree parent selection does not leave later task-row clicks trapped in
       })
     }
     if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/mounts") {
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: { agents: {} }, unmounted_count: 0 })
+    }
     if (path === "/skill/directories")
       return send({
         global_config: "D:/tree-click/config",
@@ -216,10 +220,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
 
   const browser = await launchBrowser()
   const page = await browser.newPage()
-  const badResponses: string[] = []
-  page.on("response", (response: any) => {
-    if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
-  })
+  const errors = installBrowserErrorCollector(page)
 
   try {
     await page.evaluateOnNewDocument((origin) => {
@@ -445,8 +446,18 @@ test("task tree parent selection does not leave later task-row clicks trapped in
       requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/task-sibling/cancel"),
       true,
     )
+    assert.equal(
+      requestLog.some((entry) => entry.path === "/global/tasks"),
+      true,
+      JSON.stringify(requestLog, null, 2),
+    )
+    assert.equal(
+      requestLog.some((entry) => entry.path === "/tasks"),
+      false,
+      JSON.stringify(requestLog, null, 2),
+    )
 
-    assert.deepEqual(badResponses, [])
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()

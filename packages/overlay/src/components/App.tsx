@@ -11,6 +11,7 @@ import { GoalDialogHost } from "./GoalDialogHost"
 import { ImagePreviewHost } from "./ImagePreview"
 import { InteractionDialogHost } from "./InteractionDialogHost"
 import { NotificationCenter } from "./NotificationCenter"
+import { SidebarVersionLabel } from "./SidebarVersionLabel"
 import { SessionDialogHost } from "./SessionDialogHost"
 import { ProjectDirectoryBar } from "./TaskDirBar"
 import { TaskStatusHeader } from "./TaskStatusHeader"
@@ -47,6 +48,9 @@ export function App() {
       </StaticMountPortal>
       <StaticMountPortal id="solidConnBadge">
         <ConnectionBadge />
+      </StaticMountPortal>
+      <StaticMountPortal id="solidChatVersion">
+        <SidebarVersionLabel />
       </StaticMountPortal>
       <StaticMountPortal id="solidProjectDirectoryBarMount">
         <ProjectDirectoryBar />

@@ -38,6 +38,14 @@ function actionVerbLabel(actionKey: string): string {
 
 const MISSION_LIST_PAGE_SIZE = 10
 
+type MissionRecordSource = {
+  search: string
+  refresh: number
+  sharedRefresh: number
+  activation: number
+  mutation: number
+}
+
 export interface MissionProps {
   active: boolean
   activationToken?: number
@@ -56,21 +64,24 @@ export function Mission(props: MissionProps) {
 function MissionContent(props: MissionProps) {
   const [searchQuery, setSearchQuery] = createSignal("")
   const [missionRefreshToken, setMissionRefreshToken] = createSignal(0)
+  const [missionMutationRevision, setMissionMutationRevision] = createSignal(0)
   const [actionBusy, setActionBusy] = createSignal<string>("")
   const [actionError, setActionError] = createSignal<{ action: string; error: string } | null>(null)
-  const [missionsLoadingMore, setMissionsLoadingMore] = createSignal(false)
+  const [missionsLoadingMoreSource, setMissionsLoadingMoreSource] = createSignal<MissionRecordSource | null>(null)
 
+  const missionListRequestSource = () => ({
+    search: searchQuery().trim(),
+    refresh: missionRefreshToken(),
+    sharedRefresh: props.refreshToken ?? 0,
+    activation: props.activationToken ?? 0,
+  })
+  const missionListSource = () => {
+    if (!props.active) return null
+    if (!appStore.connected) return null
+    return missionListRequestSource()
+  }
   const [missionRecords, missionRecordsCtl] = createResource(
-    () => {
-      if (!props.active) return null
-      if (!appStore.connected) return null
-      return {
-        search: searchQuery().trim(),
-        refresh: missionRefreshToken(),
-        sharedRefresh: props.refreshToken ?? 0,
-        activation: props.activationToken ?? 0,
-      }
-    },
+    () => missionListSource(),
     async (input) => {
       try {
         const records = await loadMissions({
@@ -84,6 +95,28 @@ function MissionContent(props: MissionProps) {
     },
     { initialValue: { records: [], hasMore: false, cursor: null } },
   )
+  const missionRecordSource = (): MissionRecordSource => ({
+    ...missionListRequestSource(),
+    mutation: missionMutationRevision(),
+  })
+  const sameMissionSource = (
+    current: MissionRecordSource,
+    source: MissionRecordSource,
+  ) => {
+    return (
+      current.search === source.search &&
+      current.refresh === source.refresh &&
+      current.sharedRefresh === source.sharedRefresh &&
+      current.activation === source.activation &&
+      current.mutation === source.mutation
+    )
+  }
+  const missionSourceMatches = (source: MissionRecordSource) =>
+    sameMissionSource(missionRecordSource(), source)
+  const missionsLoadingMore = () => {
+    const source = missionsLoadingMoreSource()
+    return !!source && missionSourceMatches(source)
+  }
 
   const selectedMissionSessionID = () =>
     boardStore.selectedSource?.kind === "session" ? boardStore.selectedSource.id : ""
@@ -98,6 +131,31 @@ function MissionContent(props: MissionProps) {
 
   function reportActionError(action: string, err: unknown): void {
     setActionError({ action, error: humanizeApiError(err) })
+  }
+
+  async function refetchMissionRecordsAfterMutation(
+    action: "delete" | "rename",
+    context: { title: string },
+  ): Promise<void> {
+    const source = missionRecordSource()
+    try {
+      const records = await loadMissions({
+        search: source.search || undefined,
+        limit: MISSION_LIST_PAGE_SIZE + 1,
+      })
+      if (!missionSourceMatches(source)) return
+      missionRecordsCtl.mutate(missionPage(records, MISSION_LIST_PAGE_SIZE))
+    } catch (err) {
+      reportActionError(
+        "reload",
+        new Error(
+          t(action === "delete" ? "mission.reload_after_delete_failed" : "mission.reload_after_rename_failed", {
+            title: context.title,
+            error: humanizeApiError(err),
+          }),
+        ),
+      )
+    }
   }
 
   async function withBusy<T>(actionKey: string, fn: () => Promise<T>): Promise<T | undefined> {
@@ -150,6 +208,7 @@ function MissionContent(props: MissionProps) {
       await abortMission(mission)
       const current = missionRecords()
       if (current) {
+        setMissionMutationRevision((value) => value + 1)
         missionRecordsCtl.mutate({
           ...current,
           records: current.records.map((record) =>
@@ -163,16 +222,32 @@ function MissionContent(props: MissionProps) {
 
   async function handleMissionDelete(mission: MissionRecord): Promise<void> {
     await withBusy(`delete:${mission.missionID}`, async () => {
-      if (selectedMissionSessionID() === mission.sessionID) handleCloseMission()
       await deleteMission(mission)
-      await missionRecordsCtl.refetch()
+      if (selectedMissionSessionID() === mission.sessionID) handleCloseMission()
+      setMissionMutationRevision((value) => value + 1)
+      const current = missionRecords()
+      if (current) {
+        missionRecordsCtl.mutate({
+          ...current,
+          records: current.records.filter((record) => record.missionID !== mission.missionID),
+        })
+      }
+      await refetchMissionRecordsAfterMutation("delete", { title: mission.title })
     })
   }
 
   async function handleMissionRename(mission: MissionRecord, title: string): Promise<void> {
     await withBusy(`rename:${mission.missionID}`, async () => {
-      await renameMission(mission, title)
-      await missionRecordsCtl.refetch()
+      const updated = await renameMission(mission, title)
+      setMissionMutationRevision((value) => value + 1)
+      const current = missionRecords()
+      if (current) {
+        missionRecordsCtl.mutate({
+          ...current,
+          records: current.records.map((record) => (record.missionID === mission.missionID ? updated : record)),
+        })
+      }
+      await refetchMissionRecordsAfterMutation("rename", { title: updated.title || title })
     })
   }
 
@@ -187,17 +262,20 @@ function MissionContent(props: MissionProps) {
     const current = missionRecords()
     const cursor = current?.cursor
     if (!current?.hasMore || !cursor) return
-    const search = searchQuery().trim()
-    setMissionsLoadingMore(true)
+    const source = missionRecordSource()
+    setMissionsLoadingMoreSource(source)
     try {
       const records = await loadMissions({
-        search: search || undefined,
+        search: source.search || undefined,
         limit: MISSION_LIST_PAGE_SIZE + 1,
         cursorUpdated: cursor.updated,
         cursorSessionID: cursor.sessionID,
       })
+      if (!missionSourceMatches(source)) return
       const nextPage = missionPage(records, MISSION_LIST_PAGE_SIZE)
-      const bySession = new Map(current.records.map((mission) => [mission.sessionID, mission]))
+      const latest = missionRecords()
+      if (!latest || !missionSourceMatches(source)) return
+      const bySession = new Map(latest.records.map((mission) => [mission.sessionID, mission]))
       for (const mission of nextPage.records) bySession.set(mission.sessionID, mission)
       missionRecordsCtl.mutate({
         records: [...bySession.values()].sort(
@@ -207,9 +285,9 @@ function MissionContent(props: MissionProps) {
         cursor: nextPage.cursor,
       })
     } catch (err) {
-      reportActionError("load_more", err)
+      if (missionSourceMatches(source)) reportActionError("load_more", err)
     } finally {
-      setMissionsLoadingMore(false)
+      setMissionsLoadingMoreSource((current) => (current && sameMissionSource(current, source) ? null : current))
     }
   }
 

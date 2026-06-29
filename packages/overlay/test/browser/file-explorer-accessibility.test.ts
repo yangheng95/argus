@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -56,7 +57,120 @@ test("file explorer current file and directory expansion are exposed on the row 
 
   const requestLog: string[] = []
   const uploadBodies: Array<{ targetDir: string; files: Array<{ name: string; contentBase64: string }> }> = []
-  const uploadedSrcFiles: Array<{ name: string; path: string; absolute: string; type: "file"; ignored: boolean }> = []
+  const moveBodies: Array<{ path: string; newPath: string }> = []
+  type FixtureFileNode = {
+    name: string
+    path: string
+    absolute: string
+    type: "file" | "directory"
+    ignored: boolean
+  }
+  const normalizeFixturePath = (value: string) =>
+    String(value || "")
+      .replaceAll("\\", "/")
+      .split("/")
+      .filter(Boolean)
+      .join("/")
+  const fixtureParentPath = (value: string) => {
+    const parts = normalizeFixturePath(value).split("/").filter(Boolean)
+    parts.pop()
+    return parts.join("/")
+  }
+  const fixtureName = (value: string) => normalizeFixturePath(value).split("/").filter(Boolean).at(-1) || value
+  const fixtureAbsolute = (value: string) => `D:/overlay/workspace/app/${normalizeFixturePath(value)}`
+  const fixtureFile = (value: string): FixtureFileNode => ({
+    name: fixtureName(value),
+    path: normalizeFixturePath(value),
+    absolute: fixtureAbsolute(value),
+    type: "file",
+    ignored: false,
+  })
+  const fixtureDirectory = (value: string): FixtureFileNode => ({
+    name: fixtureName(value),
+    path: normalizeFixturePath(value),
+    absolute: fixtureAbsolute(value),
+    type: "directory",
+    ignored: false,
+  })
+  const fixtureFiles = new Map<string, FixtureFileNode>([
+    ["README.md", fixtureFile("README.md")],
+    ["src/main.tsx", fixtureFile("src/main.tsx")],
+  ])
+  const fixtureDirectories = new Map<string, FixtureFileNode>([["src", fixtureDirectory("src")]])
+  const fixtureContents = new Map<string, string>([
+    ["README.md", "# README\n"],
+    ["src/main.tsx", "export const file = true;\n"],
+  ])
+  const listFixtureDirectory = (requestedPath: string): FixtureFileNode[] => {
+    const directory = normalizeFixturePath(requestedPath)
+    const nodes = [...fixtureDirectories.values(), ...fixtureFiles.values()].filter(
+      (node) => fixtureParentPath(node.path) === directory,
+    )
+    return nodes.sort((left, right) => {
+      if (left.type !== right.type) return left.type === "directory" ? -1 : 1
+      return left.name.localeCompare(right.name)
+    })
+  }
+  const addFixtureFile = (value: string, content: string): FixtureFileNode => {
+    const path = normalizeFixturePath(value)
+    const node = fixtureFile(path)
+    fixtureFiles.set(path, node)
+    fixtureContents.set(path, content)
+    return node
+  }
+  const addFixtureDirectory = (value: string): FixtureFileNode => {
+    const path = normalizeFixturePath(value)
+    const node = fixtureDirectory(path)
+    fixtureDirectories.set(path, node)
+    return node
+  }
+  const moveFixtureNode = (from: string, to: string): FixtureFileNode => {
+    const sourcePath = normalizeFixturePath(from)
+    const targetPath = normalizeFixturePath(to)
+    const file = fixtureFiles.get(sourcePath)
+    if (file) {
+      fixtureFiles.delete(sourcePath)
+      const next = fixtureFile(targetPath)
+      fixtureFiles.set(targetPath, next)
+      const content = fixtureContents.get(sourcePath) ?? ""
+      fixtureContents.delete(sourcePath)
+      fixtureContents.set(targetPath, content)
+      return next
+    }
+    const directory = fixtureDirectories.get(sourcePath)
+    if (!directory) throw new Error(`Missing fixture entry: ${sourcePath}`)
+    fixtureDirectories.delete(sourcePath)
+    const movedDirectory = fixtureDirectory(targetPath)
+    fixtureDirectories.set(targetPath, movedDirectory)
+    for (const [path, node] of [...fixtureFiles.entries()]) {
+      if (path === sourcePath || path.startsWith(`${sourcePath}/`)) {
+        const nextPath = `${targetPath}/${path.slice(sourcePath.length).replace(/^\/+/, "")}`
+        fixtureFiles.delete(path)
+        fixtureFiles.set(nextPath, {
+          ...node,
+          name: fixtureName(nextPath),
+          path: nextPath,
+          absolute: fixtureAbsolute(nextPath),
+        })
+      }
+    }
+    return movedDirectory
+  }
+  const deleteFixtureNode = (value: string): void => {
+    const targetPath = normalizeFixturePath(value)
+    fixtureFiles.delete(targetPath)
+    fixtureContents.delete(targetPath)
+    fixtureDirectories.delete(targetPath)
+    for (const path of [...fixtureFiles.keys()]) {
+      if (path.startsWith(`${targetPath}/`)) {
+        fixtureFiles.delete(path)
+        fixtureContents.delete(path)
+      }
+    }
+    for (const path of [...fixtureDirectories.keys()]) {
+      if (path.startsWith(`${targetPath}/`)) fixtureDirectories.delete(path)
+    }
+  }
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -65,9 +179,11 @@ test("file explorer current file and directory expansion are exposed on the row 
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/projects/discover") return send([])
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission") return send([])
     if (path === "/session") return send([])
+    if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
     if (path === "/vcs")
       return send({
@@ -98,82 +214,62 @@ test("file explorer current file and directory expansion are exposed on the row 
     if (path === "/channel") return send([])
     if (path === "/executor") return send([])
     if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory") return send([])
     if (path === "/panel/knowledge/preference") return send([])
     if (path === "/file") {
       const requestedPath = url.searchParams.get("path") ?? ""
-      if (requestedPath === "") {
-        return send([
-          {
-            name: "src",
-            path: "src",
-            absolute: "D:/overlay/workspace/app/src",
-            type: "directory",
-            ignored: false,
-          },
-          {
-            name: "README.md",
-            path: "README.md",
-            absolute: "D:/overlay/workspace/app/README.md",
-            type: "file",
-            ignored: false,
-          },
-        ])
-      }
-      if (requestedPath === "src") {
-        return send([
-          {
-            name: "main.tsx",
-            path: "src/main.tsx",
-            absolute: "D:/overlay/workspace/app/src/main.tsx",
-            type: "file",
-            ignored: false,
-          },
-          ...uploadedSrcFiles,
-        ])
-      }
-      return send([])
+      return send(listFixtureDirectory(requestedPath))
     }
     if (path === "/file/upload" && req.method === "POST") {
       const body = (await req.json()) as { targetDir: string; files: Array<{ name: string; contentBase64: string }> }
       uploadBodies.push(body)
       for (const file of body.files) {
-        uploadedSrcFiles.push({
-          name: file.name,
-          path: `${body.targetDir}/${file.name}`,
-          absolute: `D:/overlay/workspace/app/${body.targetDir}/${file.name}`,
-          type: "file",
-          ignored: false,
-        })
+        addFixtureFile(`${body.targetDir}/${file.name}`, Buffer.from(file.contentBase64, "base64").toString("utf-8"))
       }
       return send(
         body.files.map((file) => ({
           name: file.name,
-          path: `${body.targetDir}/${file.name}`,
+          path: normalizeFixturePath(`${body.targetDir}/${file.name}`),
           bytes: Buffer.from(file.contentBase64, "base64").byteLength,
         })),
       )
     }
+    if (path === "/file/item" && req.method === "POST") {
+      const body = (await req.json()) as { path: string; type: "file" | "directory"; content?: string }
+      const created =
+        body.type === "directory" ? addFixtureDirectory(body.path) : addFixtureFile(body.path, body.content ?? "")
+      return send(created)
+    }
+    if (path === "/file/item" && req.method === "PATCH") {
+      const body = (await req.json()) as { path: string; newPath: string }
+      moveBodies.push(body)
+      const moved = moveFixtureNode(body.path, body.newPath)
+      return send({ previousPath: normalizeFixturePath(body.path), path: moved.path, node: moved })
+    }
+    if (path === "/file/item" && req.method === "DELETE") {
+      const deletedPath = normalizeFixturePath(url.searchParams.get("path") ?? "")
+      deleteFixtureNode(deletedPath)
+      return send({ path: deletedPath })
+    }
     if (path === "/find/file") {
       return send(Array.from({ length: 130 }, (_, index) => `virtual-${String(index).padStart(3, "0")}.ts`))
     }
-    if (path === "/file/content") return send({ type: "text", content: "export const file = true;\n" })
+    if (path === "/file/content") {
+      const requestedPath = normalizeFixturePath(url.searchParams.get("path") ?? "")
+      return send({ type: "text", content: fixtureContents.get(requestedPath) ?? "export const file = true;\n" })
+    }
     if (path === "/task/events") return eventStream()
-    return send({})
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
   })
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    const consoleErrors: string[] = []
-    const pageErrors: string[] = []
-    page.on("console", (item) => {
-      if (item.type() === "error") consoleErrors.push(item.text())
-    })
-    page.on("pageerror", (error) => {
-      pageErrors.push(`${error.message}\n${error.stack ?? ""}`)
-    })
+    const errors = installBrowserErrorCollector(page)
     await page.setViewport({ width: 1440, height: 900 })
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
@@ -181,7 +277,6 @@ test("file explorer current file and directory expansion are exposed on the row 
       localStorage.setItem("oc_theme", "dark")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", serverUrl)
-      document.documentElement.style.setProperty("--ui-scale", "1.25")
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -442,7 +537,7 @@ test("file explorer current file and directory expansion are exposed on the row 
         filePanelOpen: "true",
         errorNotifications: [],
       },
-      JSON.stringify({ selectedState, pageErrors, consoleErrors, requestLog }, null, 2),
+      JSON.stringify({ selectedState, browserErrors: errors.unexpectedErrors, requestLog }, null, 2),
     )
     assert.ok((selectedState.explorerBox?.width ?? 0) > 240)
     assert.ok((selectedState.explorerBox?.height ?? 0) > 240)
@@ -505,6 +600,12 @@ test("file explorer current file and directory expansion are exposed on the row 
         lineText: "export const file = true;",
       },
     )
+    const syntaxHighlightState = await page.evaluate(() => ({
+      tokenCount: document.querySelectorAll(".file-editor-code .cm-line span[class]").length,
+      lineText: document.querySelector<HTMLElement>(".file-editor-code .cm-line")?.textContent ?? "",
+    }))
+    assert.ok(syntaxHighlightState.tokenCount > 0, JSON.stringify(syntaxHighlightState))
+    assert.equal(syntaxHighlightState.lineText, "export const file = true;")
     assert.ok((editorButtonState.paneBox?.height ?? 0) > 300)
     assert.ok((editorButtonState.codeBox?.height ?? 0) > 250)
     assert.ok((editorButtonState.editorBox?.height ?? 0) > 250)
@@ -540,27 +641,35 @@ test("file explorer current file and directory expansion are exposed on the row 
     assert.ok(fileEditorScreenshot.length > 0)
     writeFileSync(fileEditorScreenshotPath, fileEditorScreenshot)
 
-    await page.evaluate(() => {
-      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
-      if (!target) throw new Error("src row missing")
-      const transfer = new DataTransfer()
-      transfer.items.add(new File(["from browser"], "uploaded-from-browser.txt", { type: "text/plain" }))
-      target.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: transfer }))
-      target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }))
-    })
-    await page.waitForSelector('.file-explorer-row[title="src"][data-upload-target="true"]')
-    const uploadScreenshotPath = resolve(".scratch/file-explorer-upload-dropzone.png")
-    mkdirSync(dirname(uploadScreenshotPath), { recursive: true })
-    const explorerElementForUpload = await page.$("#centerWorkbenchExplorer")
-    assert.ok(explorerElementForUpload)
-    writeFileSync(uploadScreenshotPath, await explorerElementForUpload.screenshot({}))
+    const openContextMenuOnRow = async (selector: string) => {
+      const point = await page.$eval(selector, (node) => {
+        const rect = (node as HTMLElement).getBoundingClientRect()
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      })
+      await page.mouse.click(point.x, point.y, { button: "right" })
+    }
+    const openRootContextMenu = async () => {
+      const point = await page.$eval(".file-explorer-list", (node) => {
+        const rect = (node as HTMLElement).getBoundingClientRect()
+        return { x: rect.left + Math.min(80, rect.width / 2), y: rect.bottom - 24 }
+      })
+      await page.mouse.click(point.x, point.y, { button: "right" })
+    }
+    const clickContextMenuItem = async (dataUi: string) => {
+      const selector = `.file-explorer-context-menu [data-ui="${dataUi}"]:not([disabled]):not([data-disabled])`
+      await page.waitForSelector(selector, { visible: true })
+      await page.click(selector)
+    }
 
+    await openContextMenuOnRow('.file-explorer-row[title="src"]')
+    await clickContextMenuItem("file-explorer-context-upload")
     await page.evaluate(() => {
-      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
-      if (!target) throw new Error("src row missing")
+      const input = document.querySelector<HTMLInputElement>('[data-ui="file-explorer-upload-input"]')
+      if (!input) throw new Error("upload input missing")
       const transfer = new DataTransfer()
       transfer.items.add(new File(["from browser"], "uploaded-from-browser.txt", { type: "text/plain" }))
-      target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      Object.defineProperty(input, "files", { value: transfer.files, configurable: true })
+      input.dispatchEvent(new Event("change", { bubbles: true }))
     })
     await page.waitForSelector('.file-explorer-row[title="src/uploaded-from-browser.txt"]', { visible: true })
     assert.equal(uploadBodies.length, 1)
@@ -574,6 +683,239 @@ test("file explorer current file and directory expansion are exposed on the row 
       requestLog.some((entry) => entry.startsWith("POST /file/upload?directory=D%3A%2Foverlay%2Fworkspace%2Fapp")),
     )
 
+    await page.evaluate(() => {
+      const list = document.querySelector<HTMLElement>(".file-explorer-list")
+      if (!list) throw new Error("explorer list missing")
+      const transfer = new DataTransfer()
+      transfer.items.add(new File(["root drop"], "root-dropped.txt", { type: "text/plain" }))
+      list.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      list.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    })
+    await page.waitForSelector('.file-explorer-list[data-drop-target="upload"]')
+    const rootDropScreenshotPath = resolve(".scratch/file-explorer-root-upload-drop-target.png")
+    mkdirSync(dirname(rootDropScreenshotPath), { recursive: true })
+    const explorerElementForRootDrop = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForRootDrop)
+    writeFileSync(rootDropScreenshotPath, await explorerElementForRootDrop.screenshot({}))
+    await page.evaluate(() => {
+      const list = document.querySelector<HTMLElement>(".file-explorer-list")
+      if (!list) throw new Error("explorer list missing")
+      const transfer = new DataTransfer()
+      transfer.items.add(new File(["root drop"], "root-dropped.txt", { type: "text/plain" }))
+      list.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="root-dropped.txt"]', { visible: true })
+    assert.equal(uploadBodies.length, 2)
+    assert.equal(uploadBodies[1]?.targetDir, "")
+    assert.equal(uploadBodies[1]?.files[0]?.name, "root-dropped.txt")
+    assert.equal(Buffer.from(uploadBodies[1]?.files[0]?.contentBase64 ?? "", "base64").toString("utf-8"), "root drop")
+
+    await openRootContextMenu()
+    await page.waitForSelector('.file-explorer-context-menu[data-scope="root"] [data-ui="file-explorer-context-refresh"]', {
+      visible: true,
+    })
+    const rootContextMenuState = await page.evaluate(() => {
+      const menu = document.querySelector<HTMLElement>('.file-explorer-context-menu[data-scope="root"]')
+      return {
+        menuItems: menu?.querySelectorAll(".file-explorer-menu-item").length ?? 0,
+        hasUpload: Boolean(menu?.querySelector('[data-ui="file-explorer-context-upload"]')),
+        hasNewFile: Boolean(menu?.querySelector('[data-ui="file-explorer-context-new-file"]')),
+        hasNewFolder: Boolean(menu?.querySelector('[data-ui="file-explorer-context-new-folder"]')),
+        hasRefresh: Boolean(menu?.querySelector('[data-ui="file-explorer-context-refresh"]')),
+        toolbarButtons: document.querySelectorAll(
+          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
+        ).length,
+      }
+    })
+    assert.deepEqual(rootContextMenuState, {
+      menuItems: 4,
+      hasUpload: true,
+      hasNewFile: true,
+      hasNewFolder: true,
+      hasRefresh: true,
+      toolbarButtons: 0,
+    })
+    await page.mouse.click(4, 4)
+    await page.waitForFunction(() => !document.querySelector(".file-explorer-context-menu:not([hidden])"))
+
+    await openContextMenuOnRow('.file-explorer-row[title="src"]')
+    await page.waitForSelector('.file-explorer-context-menu [data-ui="file-explorer-context-new-file"]', {
+      visible: true,
+      timeout: 5000,
+    })
+    const contextMenuState = await page.evaluate(() => {
+      const menu = document.querySelector<HTMLElement>(".file-explorer-context-menu")
+      return {
+        menuItems: menu?.querySelectorAll(".file-explorer-menu-item").length ?? 0,
+        separatorCount: menu?.querySelectorAll(".file-explorer-menu-separator").length ?? 0,
+        deleteTone: menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-delete"]')?.dataset.tone ?? "",
+        srcSelected:
+          document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')?.dataset.selected ?? "",
+        readmeSelected:
+          document.querySelector<HTMLElement>('.file-explorer-row[title="README.md"]')?.dataset.selected ?? "",
+        localToolbarRoles: document.querySelectorAll('#centerWorkbenchExplorer [role="toolbar"]').length,
+        toolbarButtons: document.querySelectorAll(
+          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
+        ).length,
+      }
+    })
+    assert.deepEqual(contextMenuState, {
+      menuItems: 7,
+      separatorCount: 1,
+      deleteTone: "danger",
+      srcSelected: "true",
+      readmeSelected: "false",
+      localToolbarRoles: 0,
+      toolbarButtons: 0,
+    })
+    const contextMenuScreenshotPath = resolve(".scratch/file-explorer-context-menu.png")
+    mkdirSync(dirname(contextMenuScreenshotPath), { recursive: true })
+    writeFileSync(contextMenuScreenshotPath, await page.screenshot({ fullPage: false }))
+    await clickContextMenuItem("file-explorer-context-new-file")
+    await page.waitForSelector("#appDialogInput", { visible: true })
+    const commandDialogScreenshotPath = resolve(".scratch/file-explorer-command-dialog.png")
+    mkdirSync(dirname(commandDialogScreenshotPath), { recursive: true })
+    const commandDialogElement = await page.$("#appDialog")
+    assert.ok(commandDialogElement)
+    writeFileSync(commandDialogScreenshotPath, await commandDialogElement.screenshot({}))
+    await page.$eval("#appDialogInput", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "browser-created.txt"
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }))
+    })
+    await page.click("#btnAppDialogOk")
+    await page.waitForSelector('.file-explorer-row[title="src/browser-created.txt"]', { visible: true })
+    assert.ok(
+      requestLog.some((entry) => entry.startsWith("POST /file/item?directory=D%3A%2Foverlay%2Fworkspace%2Fapp")),
+    )
+
+    await openContextMenuOnRow('.file-explorer-row[title="src/browser-created.txt"]')
+    await clickContextMenuItem("file-explorer-context-rename")
+    await page.waitForSelector("#appDialogInput", { visible: true })
+    await page.$eval("#appDialogInput", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "browser-renamed.txt"
+      input.dispatchEvent(
+        new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: input.value }),
+      )
+    })
+    await page.click("#btnAppDialogOk")
+    await page.waitForSelector('.file-explorer-row[title="src/browser-renamed.txt"]', { visible: true })
+    assert.equal(await page.$('.file-explorer-row[title="src/browser-created.txt"]'), null)
+
+    await openContextMenuOnRow('.file-explorer-row[title="src/browser-renamed.txt"]')
+    await clickContextMenuItem("file-explorer-context-move")
+    await page.waitForSelector("#appDialogInput", { visible: true })
+    await page.$eval("#appDialogInput", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "moved-from-src.txt"
+      input.dispatchEvent(
+        new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: input.value }),
+      )
+    })
+    await page.click("#btnAppDialogOk")
+    await page.waitForSelector('.file-explorer-row[title="moved-from-src.txt"]', { visible: true })
+    assert.equal(await page.$('.file-explorer-row[title="src/browser-renamed.txt"]'), null)
+
+    await page.click('.file-explorer-row[title="README.md"]', { modifiers: ["Control"] })
+    await page.evaluate(() => {
+      const source = document.querySelector<HTMLElement>('.file-explorer-row[title="moved-from-src.txt"]')
+      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
+      if (!source || !target) throw new Error("drag move rows missing")
+      const transfer = new DataTransfer()
+      source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      target.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+      target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="src"][data-drop-target="move"]')
+    const dragMoveScreenshotPath = resolve(".scratch/file-explorer-multiselect-drag-move-target.png")
+    mkdirSync(dirname(dragMoveScreenshotPath), { recursive: true })
+    const explorerElementForDragMove = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForDragMove)
+    writeFileSync(dragMoveScreenshotPath, await explorerElementForDragMove.screenshot({}))
+    await page.evaluate(() => {
+      const target = document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')
+      if (!target) throw new Error("src row missing")
+      target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="src/moved-from-src.txt"]', { visible: true })
+    await page.waitForSelector('.file-explorer-row[title="src/README.md"]', { visible: true })
+    assert.equal(await page.$('.file-explorer-row[title="moved-from-src.txt"]'), null)
+    assert.equal(await page.$('.file-explorer-row[title="README.md"]'), null)
+    assert.ok(moveBodies.some((body) => body.path === "moved-from-src.txt" && body.newPath === "src/moved-from-src.txt"))
+    assert.ok(moveBodies.some((body) => body.path === "README.md" && body.newPath === "src/README.md"))
+
+    await openContextMenuOnRow('.file-explorer-row[title="src/moved-from-src.txt"]')
+    await page.waitForSelector('.file-explorer-context-menu [data-ui="file-explorer-context-delete"]', { visible: true })
+    const multiContextState = await page.evaluate(() => {
+      const menu = document.querySelector<HTMLElement>(".file-explorer-context-menu")
+      return {
+        selectedRows: Array.from(document.querySelectorAll<HTMLElement>('.file-explorer-row[data-selected="true"]')).map(
+          (row) => row.title,
+        ),
+        moveDetail:
+          menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-move"] .file-explorer-menu-item-detail')
+            ?.textContent ?? "",
+        renameDisabled:
+          menu?.querySelector<HTMLButtonElement>('[data-ui="file-explorer-context-rename"]')?.disabled ||
+          menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-rename"]')?.hasAttribute("data-disabled") ||
+          false,
+      }
+    })
+    assert.deepEqual(multiContextState.selectedRows.sort(), ["src/README.md", "src/moved-from-src.txt"])
+    assert.equal(multiContextState.moveDetail, "2 selected")
+    assert.equal(multiContextState.renameDisabled, true)
+    const multiContextMenuScreenshotPath = resolve(".scratch/file-explorer-context-menu-multiselect.png")
+    mkdirSync(dirname(multiContextMenuScreenshotPath), { recursive: true })
+    writeFileSync(multiContextMenuScreenshotPath, await page.screenshot({ fullPage: false }))
+    await clickContextMenuItem("file-explorer-context-delete")
+    await page.waitForSelector("#appDialog", { visible: true })
+    await page.click("#btnAppDialogOk")
+    await page.waitForFunction(() => !document.querySelector('.file-explorer-row[title="src/moved-from-src.txt"]'))
+    await page.waitForFunction(() => !document.querySelector('.file-explorer-row[title="src/README.md"]'))
+    assert.ok(
+      requestLog.some(
+        (entry) =>
+          entry.startsWith("DELETE /file/item?") &&
+          entry.includes("path=src%2Fmoved-from-src.txt") &&
+          entry.includes("directory=D%3A%2Foverlay%2Fworkspace%2Fapp"),
+      ),
+    )
+    assert.ok(
+      requestLog.some(
+        (entry) =>
+          entry.startsWith("DELETE /file/item?") &&
+          entry.includes("path=src%2FREADME.md") &&
+          entry.includes("directory=D%3A%2Foverlay%2Fworkspace%2Fapp"),
+      ),
+    )
+
+    const nestedDeleteStart = requestLog.filter((entry) => entry.startsWith("DELETE /file/item?")).length
+    await page.click('.file-explorer-row[title="src"]', { modifiers: ["Control"] })
+    await page.click('.file-explorer-row[title="src/main.tsx"]', { modifiers: ["Control"] })
+    await openContextMenuOnRow('.file-explorer-row[title="src"]')
+    await page.waitForSelector('.file-explorer-context-menu [data-ui="file-explorer-context-delete"]', { visible: true })
+    const nestedSelectionState = await page.evaluate(() => ({
+      selectedRows: Array.from(document.querySelectorAll<HTMLElement>('.file-explorer-row[data-selected="true"]')).map(
+        (row) => row.title,
+      ),
+      deleteDetail:
+        document.querySelector<HTMLElement>(
+          '.file-explorer-context-menu [data-ui="file-explorer-context-delete"] .file-explorer-menu-item-detail',
+        )?.textContent ?? "",
+    }))
+    assert.deepEqual(nestedSelectionState.selectedRows.sort(), ["src", "src/main.tsx"])
+    assert.equal(nestedSelectionState.deleteDetail, "2 selected")
+    await clickContextMenuItem("file-explorer-context-delete")
+    await page.waitForSelector("#appDialog", { visible: true })
+    await page.click("#btnAppDialogOk")
+    await page.waitForFunction(() => !document.querySelector('.file-explorer-row[title="src"]'))
+    const nestedDeletePaths = requestLog
+      .filter((entry) => entry.startsWith("DELETE /file/item?"))
+      .slice(nestedDeleteStart)
+      .map((entry) => new URL(entry.replace(/^DELETE /, ""), "http://fixture.local").searchParams.get("path"))
+    assert.deepEqual(nestedDeletePaths, ["src"])
+
     const screenshotPath = resolve(".scratch/file-explorer-accessibility.png")
     mkdirSync(dirname(screenshotPath), { recursive: true })
     const explorerElement = await page.$("#centerWorkbenchExplorer")
@@ -581,6 +923,7 @@ test("file explorer current file and directory expansion are exposed on the row 
     const screenshot = await explorerElement.screenshot({})
     assert.ok(screenshot.length > 0)
     writeFileSync(screenshotPath, screenshot)
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()
@@ -598,8 +941,10 @@ test("file explorer load-failed retry uses the shared button primitive", async (
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/projects/discover") return send([])
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission" || path === "/session") return send([])
+    if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
     if (path === "/vcs") {
       return send({
@@ -624,16 +969,29 @@ test("file explorer load-failed retry uses the shared button primitive", async (
     if (path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/agent" || path === "/channel" || path === "/executor") return send([])
     if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/file") return send({ error: "root directory unavailable" }, { status: 500 })
     if (path === "/task/events") return eventStream()
-    return send({})
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
   })
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
+    const errors = installBrowserErrorCollector(page, {
+      allowConsoleError(message) {
+        return (
+          message.text.includes("[file-explorer] list failed") && message.text.includes("root directory unavailable")
+        )
+      },
+      allowResponse(response) {
+        return response.path === "/file" && response.status === 500
+      },
+    })
     await page.setViewport({ width: 1280, height: 760 })
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
@@ -720,6 +1078,7 @@ test("file explorer load-failed retry uses the shared button primitive", async (
     const screenshot = await explorerElement.screenshot({})
     assert.ok(screenshot.length > 0)
     writeFileSync(screenshotPath, screenshot)
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()

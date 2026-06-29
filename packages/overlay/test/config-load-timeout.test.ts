@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { loadConfigInfo, loadSettingsInfo } from "../src/services/init"
+import { loadConfigInfo, loadProviderInfo, loadSettingsInfo } from "../src/services/init"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import { appStore, setAppStore } from "../src/store/app"
+import { setSettingsStore } from "../src/store/settings"
 import { configure } from "../src/services/api"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
@@ -40,6 +41,8 @@ afterEach(() => {
     channels: [],
     promptEntries: [],
   })
+  setSettingsStore("directory", "")
+  setSettingsStore("directoryEpoch", 0)
 })
 
 describe("loadConfigInfo", () => {
@@ -102,6 +105,39 @@ describe("loadConfigInfo", () => {
     expect(appStore.providerCatalog).toBeNull()
     expect(appStore.providerAuth).toEqual({})
     expect(appStore.configLoadErrors.provider).toContain("provider request aborted")
+  })
+
+  test("loadProviderInfo skips stale directory commits while returning provider requests", async () => {
+    const requests: TransportRequest[] = []
+    setAppStore({
+      providerCatalog: { all: [{ id: "current" }] },
+      providerAuth: { current: [{ type: "api_key" }] },
+      providerAuthRefreshRevision: 4,
+      configLoadErrors: {},
+    })
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        requests.push(req)
+        if (req.path === "provider") {
+          return { status: 200, ok: true, headers: {}, body: { all: [{ id: "stale" }] } }
+        }
+        if (req.path === "provider/auth") {
+          return { status: 200, ok: true, headers: {}, body: { stale: [{ type: "oauth" }] } }
+        }
+        throw new Error(`unexpected route ${req.path}`)
+      }),
+    )
+
+    await loadProviderInfo(5, {
+      directory: "D:/repo/stale",
+      isCurrentDirectory: (directory) => directory === "D:/repo/current",
+    })
+
+    expect(requests.map((item) => item.path)).toEqual(["provider", "provider/auth"])
+    expect(requests.map((item) => item.query?.directory)).toEqual(["D:/repo/stale", "D:/repo/stale"])
+    expect(appStore.providerCatalog).toEqual({ all: [{ id: "current" }] })
+    expect(appStore.providerAuth).toEqual({ current: [{ type: "api_key" }] })
+    expect(appStore.providerAuthRefreshRevision).toBe(4)
   })
 
   test("clears stale settings-only projections when their bootstrap routes fail", async () => {
@@ -204,5 +240,50 @@ describe("loadConfigInfo", () => {
     await first
 
     expect(appStore.config).toEqual({ model: "openai/new" })
+  })
+
+  test("project close invalidates in-flight config refresh before it can repopulate stores", async () => {
+    let releaseConfig: (() => void) | undefined
+    const requested: string[] = []
+    setSettingsStore("directory", "D:/repo/closing")
+    setSettingsStore("directoryEpoch", 12)
+    setAppStore({
+      config: null,
+      channels: [],
+      configLoadErrors: {},
+    })
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        requested.push(req.path)
+        if (req.path === "config") {
+          return new Promise((resolve) => {
+            releaseConfig = () =>
+              resolve({
+                status: 200,
+                ok: true,
+                headers: {},
+                body: { model: "openai/stale-after-close" },
+              })
+          })
+        }
+        if (req.path === "channel") {
+          return { status: 200, ok: true, headers: {}, body: [{ id: "stale-channel" }] }
+        }
+        throw new Error(`unexpected route ${req.path}`)
+      }),
+    )
+
+    const pending = loadConfigInfo(1_000, { includeSettingsData: false })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    setSettingsStore("directoryEpoch", (value) => value + 1)
+    setSettingsStore("directory", "")
+
+    releaseConfig?.()
+    await pending
+
+    expect(requested).toEqual(["config", "channel"])
+    expect(appStore.config).toBeNull()
+    expect(appStore.channels).toEqual([])
+    expect(appStore.configLoadErrors).toEqual({})
   })
 })

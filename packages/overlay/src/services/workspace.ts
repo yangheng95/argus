@@ -11,7 +11,7 @@
 // delegates timers / loading to callers via callbacks.
 
 import { saveSettings, settingsStore, setSettingsStore } from "../store/settings"
-import { applyTasks, boardStore, setBoardStore, activeTaskID } from "../store/board"
+import { boardStore, setBoardStore, activeTaskID, clearTasksForMissingDirectory } from "../store/board"
 import { clearMessages, setSelectedTaskID } from "../store/messages"
 import { setAppStore } from "../store/app"
 import { AppLog } from "../utils/log"
@@ -289,7 +289,7 @@ export function clearWorkspaceRuntime(options: ClearWorkspaceRuntimeOptions = {}
  * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
-  applyTasks([], [])
+  clearTasksForMissingDirectory()
   setBoardStore({
     path: null,
     vcs: null,
@@ -314,6 +314,7 @@ export function clearProjectScopeData(): void {
     providerTest: null,
     channels: [],
     skills: [],
+    skillMounts: null,
     skillMarket: [],
     mcp: {},
     memoryFiles: [],
@@ -662,6 +663,13 @@ export async function applyDirectory(next: string, options: ApplyDirectoryOption
     return
   }
 
+  console.log("[applyDir] checking connection")
+  const ok = await checkConnection()
+  if (!ok) {
+    console.warn("[applyDir] connection failed, rejecting switch")
+    throw new Error("Failed to set directory")
+  }
+
   console.log("[applyDir] switching", { from: curDir, to: next, save })
 
   stopSSE()
@@ -704,14 +712,6 @@ export async function applyDirectory(next: string, options: ApplyDirectoryOption
   // Capture epoch before entering async phase — if another applyDirectory
   // call supersedes us while we await, our epoch will be stale.
   const epoch = settingsStore.directoryEpoch
-
-  // Connection check + reload via .
-  console.log("[applyDir] checking connection")
-  const ok = await checkConnection()
-  if (!ok) {
-    console.warn("[applyDir] connection failed, aborting")
-    return
-  }
 
   if (epoch !== settingsStore.directoryEpoch) {
     console.log("[applyDir] superseded after connection check, aborting")
@@ -871,11 +871,6 @@ export async function setDirectory(value: string, options: ApplyDirectoryOptions
 export async function ensureDefaultDirectory(): Promise<boolean> {
   if (settingsStore.savedDirectory) {
     setSettingsStore("directory", settingsStore.savedDirectory)
-    return true
-  }
-  const discovery = await loadDiscoveredProjects()
-  if (discovery.defaultDirectory) {
-    setSettingsStore("directory", discovery.defaultDirectory)
     return true
   }
   return false

@@ -8,6 +8,7 @@ import test from "node:test"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 
 await ensureOverlayDist()
 
@@ -89,7 +90,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     if (staticResponse) return staticResponse
 
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/global/projects/discover") return send([])
     if (path === "/session") return send([])
     if (path === "/mission") return send([])
@@ -165,6 +166,11 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
+    const errors = installBrowserErrorCollector(page, {
+      allowResponse(response) {
+        return response.status === 503 && /^\/mcp\/(browser|filesystem|auth)\/auth$/.test(response.path)
+      },
+    })
     await page.setViewport({ width: 1280, height: 860 })
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
@@ -213,6 +219,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     const initiallyHiddenMcpProjection = await page.$eval("#leftPanelMcp", (node: HTMLElement) => ({
       active: node.dataset.active || "",
       lists: node.querySelectorAll("#mcpList").length,
@@ -224,7 +231,6 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       { active: "false", lists: 0, rows: 0, text: "" },
       "hidden compact MCP panel must not materialize MCP list DOM before it is opened",
     )
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.waitForSelector("#leftPanelSkills[data-active='true']")
     const openSkillDirButton =
@@ -350,6 +356,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     assert.ok(statusScreenshot.endsWith("skill-mcp-status-pills.png"))
     assert.ok(confirmScreenshot.endsWith("skill-mcp-delete-confirm.png"))
     assert.ok(failureScreenshot.endsWith("skill-mcp-delete-failure.png"))
+    errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()
     await server.close()

@@ -81,7 +81,6 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     sidebarCollapsed: read("oc_sidebar_collapsed") === "true",
     sidebarWidth: read("oc_sidebar_width") || undefined,
     centerWorkbenchPanelWeights: readJSON("oc_center_workbench_panel_weights"),
-    opacity: read("oc_opacity") || undefined,
     zoom: read("oc_zoom") || undefined,
     theme: read("oc_theme") || undefined,
     locale: read("oc_locale") || undefined,
@@ -103,7 +102,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_sidebar_collapsed", input.sidebarCollapsed === true)
   writeOptional("oc_sidebar_width", input.sidebarWidth)
   writeOptionalJSON("oc_center_workbench_panel_weights", input.centerWorkbenchPanelWeights)
-  write("oc_opacity", input.opacity ?? 0.99)
+  remove("oc_opacity")
   write("oc_zoom", input.zoom ?? 1)
   write("oc_theme", input.theme ?? "light")
   writeOptional("oc_locale", input.locale)

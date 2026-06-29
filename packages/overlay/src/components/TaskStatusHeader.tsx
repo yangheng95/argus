@@ -5,15 +5,18 @@
 // The whole block is now driven by Solid signals: a single reactive subtree
 // that updates only the affected text/attribute when boardStore changes.
 
-import { createMemo, Show } from "solid-js"
+import { createEffect, createMemo, Show } from "solid-js"
 import { boardStore, activeTaskID } from "../store/board"
 import { statusIconName } from "../utils/status-mapping"
 import { taskLifecycleStatusOrIdleLabel } from "../utils/status-labels"
 import { Icon } from "./Icon"
 import { formatDuration } from "../utils/time"
-import { useNowTick } from "../services/clock"
+import { AppLog } from "../utils/log"
+import { selectedTaskSseActiveElapsedMs, taskRuntimeActivityKey } from "../services/task-runtime-activity"
 
-const LIVE_STATUSES = new Set(["active", "queued"])
+const ACTIVE_STATUS = "active"
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
+const loggedTerminalTimeErrors = new Set<string>()
 
 export function TaskStatusHeader() {
   const task = createMemo(() => (boardStore.board as any)?.task)
@@ -21,19 +24,64 @@ export function TaskStatusHeader() {
   const iconStatus = createMemo<string>(() => status() || "idle")
   const startTime = createMemo<number>(() => task()?.time?.created || 0)
   const completedTime = createMemo<number>(() => task()?.time?.completed || 0)
-  const isLive = createMemo(() => LIVE_STATUSES.has(status()))
+  const isActive = createMemo(() => status() === ACTIVE_STATUS)
   const visible = createMemo(() => Boolean(activeTaskID()))
-
-  // Shared 1Hz tick from services/clock.ts. The clock module owns the
-  // visibility-gated setInterval and reference-counts subscribers so
-  // every running CardHeader chip and this header share one timer.
-  const now = useNowTick()
+  const elapsedKey = createMemo(() => {
+    const taskID = String(task()?.id || activeTaskID() || "")
+    if (!taskID || !startTime()) return ""
+    return taskRuntimeActivityKey({ taskID, createdAt: startTime() })
+  })
+  const missingCompletionTime = createMemo(() => {
+    const taskID = String(task()?.id || activeTaskID() || "")
+    return Boolean(visible() && taskID && startTime() > 0 && TERMINAL_STATUSES.has(status()) && !(completedTime() > 0))
+  })
+  const invalidCompletionTime = createMemo(() => {
+    const taskID = String(task()?.id || activeTaskID() || "")
+    return Boolean(
+      visible() &&
+        taskID &&
+        startTime() > 0 &&
+        TERMINAL_STATUSES.has(status()) &&
+        completedTime() > 0 &&
+        completedTime() <= startTime(),
+    )
+  })
+  const terminalTimeError = createMemo(() => {
+    if (missingCompletionTime()) return "missing completion time"
+    if (invalidCompletionTime()) return "invalid completion time"
+    return ""
+  })
 
   const elapsedText = createMemo(() => {
     const start = startTime()
     if (!visible() || !start) return ""
-    if (!isLive()) return formatDuration((completedTime() || Date.now()) - start)
-    return formatDuration(now() - start)
+    const timeError = terminalTimeError()
+    if (timeError) return timeError
+    if (isActive()) return formatDuration(selectedTaskSseActiveElapsedMs(elapsedKey()))
+    if (TERMINAL_STATUSES.has(status())) return formatDuration(completedTime() - start)
+    return ""
+  })
+
+  createEffect(() => {
+    const timeError = terminalTimeError()
+    if (!timeError) return
+    const taskID = String(task()?.id || activeTaskID() || "")
+    const key = `${taskID}:${status()}:${startTime()}:${completedTime()}:${timeError}`
+    if (loggedTerminalTimeErrors.has(key)) return
+    loggedTerminalTimeErrors.add(key)
+    AppLog.error("ui", `Task status ${timeError}`, {
+      taskID,
+      status: status(),
+      startedAt: startTime(),
+      completedAt: completedTime() || undefined,
+      notificationID: `task-status:${timeError.replace(/\s+/g, "-")}:${taskID}`,
+      notificationTitle: "Task status timestamp invalid",
+      notificationMessage: `Task ${taskID} has an invalid terminal timestamp.`,
+      notificationDetails:
+        timeError === "missing completion time"
+          ? `task.time.completed is required for terminal task status ${status()}.`
+          : `task.time.completed must be greater than task.time.created for terminal task status ${status()}.`,
+    })
   })
 
   const labelText = createMemo(() => (visible() ? taskLifecycleStatusOrIdleLabel(status()) : ""))

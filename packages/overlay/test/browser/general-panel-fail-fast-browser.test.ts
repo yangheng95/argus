@@ -40,11 +40,14 @@ async function readGeneralHeaderState(page: any) {
   return page.$$eval(".general-panel .s-group-head-title", (nodes: HTMLElement[]) =>
     nodes.map((node) => {
       const style = getComputedStyle(node)
+      const rootStyle = getComputedStyle(document.documentElement)
       return {
         text: node.textContent?.trim() || "",
         textTransform: style.textTransform,
         letterSpacing: style.letterSpacing,
+        fontSize: style.fontSize,
         fontWeight: style.fontWeight,
+        looseTracking: rootStyle.getPropertyValue("--ui-letter-spacing-loose").trim(),
       }
     }),
   )
@@ -56,15 +59,27 @@ test("General Settings write failures stay visible and do not report saved state
 
   const configPatches: unknown[] = []
   const dbResetRequests: unknown[] = []
+  const requestLog: string[] = []
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
+    requestLog.push(`${req.method} ${path}`)
     if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-    if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [] })
+    if (path === "/global/health") {
+      return send({
+        healthy: true,
+        version: "1.2.3",
+        paths: {
+          database: "D:/overlay/current/opencorvus.db",
+          data: "D:/overlay/current/data",
+          home: "D:/overlay/current",
+        },
+      })
+    }
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
     if (path === "/mission") return send([])
     if (path === "/project/current/worktrees") return send([])
@@ -110,7 +125,8 @@ test("General Settings write failures stay visible and do not report saved state
       dbResetRequests.push(await req.json())
       return send({
         ok: true,
-        targets: [{ label: "db", path: "D:/overlay/global/opencorvus.db", ok: true }],
+        restarting: true,
+        targets: [{ label: "db", path: "D:/overlay/current/opencorvus.db", ok: true }],
       })
     }
     if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
@@ -196,24 +212,53 @@ test("General Settings write failures stay visible and do not report saved state
     await page.$eval(".general-panel", (node: HTMLElement) => {
       node.scrollTop = 0
     })
-    assert.deepEqual(await readGeneralHeaderState(page), [
-      { text: "Connection", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
-      { text: "Database", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
-      { text: "Behaviour", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
-    ])
+    const headerState = await readGeneralHeaderState(page)
+    assert.deepEqual(
+      headerState.map(({ text, textTransform, fontWeight }) => ({ text, textTransform, fontWeight })),
+      [
+        { text: "Connection", textTransform: "uppercase", fontWeight: "600" },
+        { text: "Database", textTransform: "uppercase", fontWeight: "600" },
+        { text: "Behaviour", textTransform: "uppercase", fontWeight: "600" },
+      ],
+    )
+    for (const item of headerState) {
+      const fontSize = Number.parseFloat(item.fontSize)
+      const letterSpacing = Number.parseFloat(item.letterSpacing)
+      const looseTracking = Number.parseFloat(item.looseTracking)
+      assert.match(item.looseTracking, /^\.?\d+(?:\.\d+)?em$/, `${item.text} should use an em tracking token`)
+      assert.ok(Number.isFinite(fontSize), `${item.text} should expose a computed font size`)
+      assert.ok(Number.isFinite(letterSpacing), `${item.text} should expose a computed letter spacing`)
+      assert.ok(Number.isFinite(looseTracking), `${item.text} should expose the loose tracking token value`)
+      assert.ok(
+        Math.abs(letterSpacing - fontSize * looseTracking) < 0.01,
+        `${item.text} should use the loose tracking token`,
+      )
+    }
     const headerScreenshot = await savePanelScreenshot(page, "general-settings-surface-headers.png")
     assert.ok(headerScreenshot.endsWith("general-settings-surface-headers.png"))
 
     const dbResetButton = '[data-ui="settings-db-reset"]'
     await page.waitForSelector(dbResetButton, { visible: true })
+    const requestCountBeforeReset = requestLog.length
     await page.click(dbResetButton)
     await page.waitForFunction(() =>
       document.querySelector(".general-panel .config-status-box")?.textContent?.includes("Database reset completed"),
     )
-    assert.deepEqual(dbResetRequests, [{ projectDir: "D:/overlay/workspace/app" }])
+    assert.deepEqual(dbResetRequests, [{ database: "D:/overlay/current/opencorvus.db" }])
+    assert.equal(
+      requestLog.slice(requestCountBeforeReset).some((item) => item === "GET /skill/mounts"),
+      false,
+      "database reset must not reload project-scoped skill mounts",
+    )
+    assert.equal(
+      await page.$eval(".general-panel .config-status-box", (node: HTMLElement) =>
+        node.textContent?.includes("project reload failed"),
+      ),
+      false,
+    )
     assert.match(
       await page.evaluate(() => (window as any).__dbResetConfirmMessage),
-      /Reset the OpenCorvus database for D:\/overlay\/workspace\/app/,
+      /Database: D:\/overlay\/current\/opencorvus\.db/,
     )
 
     const saveButton = '#configDialog .general-panel [data-ui="settings-server-save"]'

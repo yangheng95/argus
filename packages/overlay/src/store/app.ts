@@ -1,8 +1,8 @@
 // ── App Store ──
-// Application-level state: connection status, theme, locale, zoom, opacity,
-// and log entries. Complements the settings store with runtime/volatile state.
+// Application-level state: connection status, theme, locale, zoom, and log
+// entries. Complements the settings store with runtime/volatile state.
 
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
 
 // ── Types ──
 
@@ -44,8 +44,6 @@ export interface AppState {
   locale: string
   /** User-configured zoom multiplier (0.8–1.6) */
   zoom: number
-  /** Window opacity (0.1–1.0) */
-  opacity: number
   /** All log entries accumulated for the current session */
   logEntries: LogEntry[]
   /** Current filter level for log display */
@@ -121,7 +119,6 @@ const DEFAULT_APP_STATE: AppState = {
   theme: "dark",
   locale: "en-US",
   zoom: 1,
-  opacity: 0.99,
   logEntries: [],
   logFilterLevel: "debug",
   i18n: {},
@@ -272,7 +269,10 @@ export function setSkills(list: any[]): void {
 }
 
 export function setSkillMounts(value: any): void {
-  setAppStore("skillMounts", value && typeof value === "object" && !Array.isArray(value) ? value : null)
+  setAppStore(
+    "skillMounts",
+    reconcile(value && typeof value === "object" && !Array.isArray(value) ? value : null, { merge: false }),
+  )
 }
 
 export function setSkillMarket(list: any[]): void {
@@ -280,5 +280,5 @@ export function setSkillMarket(list: any[]): void {
 }
 
 export function setMcp(map: Record<string, any>): void {
-  setAppStore("mcp", map && typeof map === "object" && !Array.isArray(map) ? map : {})
+  setAppStore("mcp", reconcile(map && typeof map === "object" && !Array.isArray(map) ? map : {}, { merge: false }))
 }

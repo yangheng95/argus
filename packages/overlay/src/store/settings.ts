@@ -33,7 +33,6 @@ export interface OverlaySettings {
   sidebarCollapsed: boolean
   sidebarWidth: number | null
   centerWorkbenchPanelWeights: Record<string, number> | null
-  opacity: number
   zoom: number
   theme: string
   locale: string
@@ -76,14 +75,6 @@ function settingsTheme(input: Partial<OverlaySettings>): string {
     return requireInitialVsCodeHostTheme()
   }
   return DEFAULT_SETTINGS.theme
-}
-
-export const MIN_WINDOW_OPACITY = 0.5
-
-export function sanitizeOpacity(value: any): number {
-  const n = parseFloat(String(value ?? ""))
-  if (!Number.isFinite(n)) return 0.99
-  return Math.max(MIN_WINDOW_OPACITY, Math.min(1, Math.round(n * 100) / 100))
 }
 
 function sanitizeZoom(value: any): number {
@@ -148,7 +139,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sidebarCollapsed: false,
   sidebarWidth: null,
   centerWorkbenchPanelWeights: null,
-  opacity: 0.99,
   zoom: 1,
   theme: DEFAULT_THEME,
   locale: DEFAULT_LOCALE,
@@ -202,7 +192,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       typeof input?.sidebarCollapsed === "boolean" ? input.sidebarCollapsed : DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights),
-    opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: settingsTheme(input ?? {}),
     locale: sanitizeLocale((typeof input?.locale === "string" ? input.locale : "") || DEFAULT_SETTINGS.locale),
@@ -292,7 +281,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined,
-    opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,
     locale: input.locale ?? DEFAULT_SETTINGS.locale,

@@ -353,7 +353,8 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
 /**
  * Delete a task by ID.
  * Does NOT show a confirmation dialog — callers must confirm before calling.
- * Returns true on success, false on failure.
+ * Returns true on durable success. Invalid client-side input returns false;
+ * backend and refresh failures reject so callers can surface the original error.
  */
 export async function deleteTask(taskID: string): Promise<boolean> {
   if (!taskID) return false
@@ -365,15 +366,14 @@ export async function deleteTask(taskID: string): Promise<boolean> {
     await apiJson(taskRecordPath(taskID), {
       method: "DELETE",
     })
-    await loadTasks()
+    await loadTasks({ requireFresh: true })
     return true
   } catch (e) {
-    console.error("[deleteTask] failed", { error: String(e), taskID })
     if (wasActive && e instanceof ApiError && e.status === 404) {
-      await loadTasks()
+      await loadTasks({ requireFresh: true })
       return true
     }
-    return false
+    throw e
   }
 }
 
@@ -381,28 +381,23 @@ export async function deleteTask(taskID: string): Promise<boolean> {
 
 /**
  * Rename a task in place. Trimming and length enforcement match the server-side
- * Zod schema (1–200 chars after trim). Returns true on success, false on any
- * failure so the caller can revert the optimistic UI edit and surface a notice.
+ * Zod schema (1–200 chars after trim). Invalid client-side input returns false;
+ * backend and refresh failures reject so the row can surface the original error.
  */
 export async function renameTask(taskID: string, title: string): Promise<boolean> {
   if (!taskID) return false
   const trimmed = title.trim()
   if (!trimmed || trimmed.length > 200) return false
-  try {
-    await apiJson(taskPath(taskID, "/title"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: trimmed }),
-    })
-    await loadTasks()
-    if (activeTaskID() === taskID) {
-      await loadBoard()
-    }
-    return true
-  } catch (e) {
-    console.error("[renameTask] failed", { error: String(e), taskID })
-    return false
+  await apiJson(taskPath(taskID, "/title"), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: trimmed }),
+  })
+  await loadTasks({ requireFresh: true })
+  if (activeTaskID() === taskID) {
+    await loadBoard()
   }
+  return true
 }
 
 // ── Public: downloadTaskProjectArchive ──
@@ -546,8 +541,20 @@ export async function submitMessage(
           let ev: any
           try {
             ev = JSON.parse(data)
-          } catch {
-            return // malformed SSE event — skip
+          } catch (error) {
+            const parseError = new Error(`Malformed panel message stream event for request ${requestID}`)
+            AppLog.error("task", "malformed panel message stream event", {
+              requestID,
+              taskID: activeTaskID(),
+              error: formatErrorDetails(error),
+              payloadSample: String(data || "").slice(0, 500),
+              notificationID: `task:panel-message-stream-parse-error:${requestID}`,
+              notificationTitle: "Malformed message stream event",
+              notificationMessage: "OpenCorvus received a malformed message stream event.",
+              notificationDetails: `${formatErrorDetails(error)}\n\npayload sample:\n${String(data || "").slice(0, 500)}`,
+            })
+            rejectStream(parseError)
+            return
           }
           markActivity()
           observeStreamHook(() => options.onEvent?.(ev))

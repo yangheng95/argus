@@ -38,10 +38,9 @@
 //     was moved to a new parent) are corrected by the new parent's link call
 //     overwriting the field.
 //
-// Transient cards (built inline by the renderer with `children: CardNode[]`
-// instead of store-backed `childIDs: string[]`) never flow through tree-writer,
-// so their cache is never populated. The public collectors in
-// `utils/card-tree.ts` keep a separate recursive path for that case.
+// Transient tool cards never flow through tree-writer, so their cache is never
+// populated. The public collectors in `utils/card-tree.ts` keep a direct
+// recursive path for cards without cached aggregates.
 
 import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool"
 import { extractTodos } from "../utils/todos"

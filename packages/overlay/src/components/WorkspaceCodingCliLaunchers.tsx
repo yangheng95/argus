@@ -16,27 +16,35 @@ const CLI_ICONS: Record<CodingCliIcon, IconName> = {
 
 export function WorkspaceCodingCliLaunchers() {
   const [profiles, setProfiles] = createSignal<CodingCliProfile[]>([])
+  const [profilesDirectory, setProfilesDirectory] = createSignal("")
   const [selectedCliID, setSelectedCliID] = createSignal("")
   const [open, setOpen] = createSignal(false)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
   const directory = createMemo(() => activeDirectory().trim())
 
-  const disabled = () => !directory() || loading() || profiles().length === 0 || !currentTerminalProfileID()
+  const profilesCurrentForDirectory = () => !!directory() && profilesDirectory() === directory()
+  const disabled = () =>
+    !directory() || loading() || profiles().length === 0 || !profilesCurrentForDirectory() || !currentTerminalProfileID()
   const title = () => error() || t("coding_cli.open")
-  const selectedProfile = createMemo(
-    () => profiles().find((profile) => profile.id === selectedCliID()) ?? profiles()[0] ?? null,
+  const selectedProfile = createMemo(() =>
+    profilesCurrentForDirectory() ? profiles().find((profile) => profile.id === selectedCliID()) ?? profiles()[0] ?? null : null,
   )
   const triggerIcon = createMemo(() => {
     const profile = selectedProfile()
     return profile ? CLI_ICONS[profile.icon] : "coding-cli"
   })
+  let reloadOwner: symbol | null = null
 
   async function reloadProfiles(nextDirectory: string) {
     if (!nextDirectory) {
       setProfiles([])
+      setProfilesDirectory("")
       return
     }
+    const token = Symbol("coding-cli-profile-reload")
+    reloadOwner = token
+    const ownsReload = () => reloadOwner === token && directory() === nextDirectory
     setLoading(true)
     setError("")
     try {
@@ -45,20 +53,29 @@ export function WorkspaceCodingCliLaunchers() {
         reloadTerminalProfileSelection({
           directory: nextDirectory,
           defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+          isCurrentDirectory: ownsReload,
         }),
       ])
+      if (!ownsReload()) return
       if (!Array.isArray(response.profiles)) {
         throw new Error("Coding CLI profiles response is missing profiles")
       }
       setProfiles(response.profiles)
+      setProfilesDirectory(nextDirectory)
       if (response.profiles.length > 0 && !response.profiles.some((profile) => profile.id === selectedCliID())) {
         setSelectedCliID(response.profiles[0].id)
       }
     } catch (reason) {
-      setProfiles([])
-      setError(reason instanceof Error ? reason.message : String(reason))
+      if (ownsReload()) {
+        setProfiles([])
+        setProfilesDirectory("")
+        setError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setLoading(false)
+      if (reloadOwner === token) {
+        reloadOwner = null
+        if (directory() === nextDirectory) setLoading(false)
+      }
     }
   }
 
@@ -69,6 +86,9 @@ export function WorkspaceCodingCliLaunchers() {
   async function launch(profile: CodingCliProfile) {
     const directory = activeDirectory().trim()
     if (!directory) throw new Error("Workspace directory is required")
+    if (profilesDirectory() !== directory || !profiles().some((item) => item.id === profile.id)) {
+      throw new Error("Coding CLI profiles are stale for the active directory")
+    }
     close()
     setSelectedCliID(profile.id)
     setLoading(true)
@@ -77,6 +97,7 @@ export function WorkspaceCodingCliLaunchers() {
       await reloadTerminalProfileSelection({
         directory,
         defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+        isCurrentDirectory: () => activeDirectory().trim() === directory,
       })
       const terminalProfileID = currentTerminalProfileID()
       if (!terminalProfileID) throw new Error("Terminal profile is required")
@@ -95,6 +116,10 @@ export function WorkspaceCodingCliLaunchers() {
   createEffect<string>((previous) => {
     const next = directory()
     if (next === previous) return previous
+    close()
+    setProfiles([])
+    setProfilesDirectory("")
+    setSelectedCliID("")
     void reloadProfiles(next)
     return next
   }, "")
@@ -131,7 +156,7 @@ export function WorkspaceCodingCliLaunchers() {
         </span>
       }
     >
-      <For each={profiles()}>
+      <For each={profilesCurrentForDirectory() ? profiles() : []}>
         {(profile) => (
           <WorkspaceSplitLauncherItem
             class="workspace-coding-cli-option"

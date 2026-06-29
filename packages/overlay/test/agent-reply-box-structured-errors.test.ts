@@ -1,8 +1,8 @@
 // AgentSessionReplyBox structured-error UX test.
 //
 // Direct reply errors are visible diagnostics only. They must not permanently
-// disable the reply box; the backend routes non-directable replies through the
-// task-root operator message path.
+// disable the reply box, and the backend must not rewrite failed direct replies
+// into task-root operator messages.
 //
 // Source-pattern checks mirror the rest of the overlay test suite's
 // idiom (see dialog-service-single-source.test.ts) — running solid-js
@@ -46,6 +46,7 @@ describe("AgentSessionReplyBox structured errors", () => {
       "InvalidReplyTargetKindError",
       "BuildSessionDirectReplyError",
       "ReplyTargetEnvelopeMissingError",
+      "AgentSessionPendingCoordinationError",
       "SessionRuntimeContractMissingError",
     ]) {
       expect(replyBox).toContain(name)
@@ -75,6 +76,8 @@ describe("AgentSessionReplyBox structured errors", () => {
       expect(locale).toContain("card.agent_reply_contract_gone")
       expect(locale).toContain("card.agent_reply_kind_not_allowed")
       expect(locale).toContain("card.agent_reply_envelope_missing")
+      expect(locale).toContain("card.agent_reply_pending_coordination")
+      expect(locale).toContain("card.agent_reply_attachment_reference")
       // Hybrid case BuildSessionDirectReplyError gets its own copy when
       // the backend's data.sessionKind !== "build" and data.envelopeAgent
       // === "build" (codex round 2 minor).
@@ -91,6 +94,8 @@ describe("AgentSessionReplyBox structured errors", () => {
     expect(replyBox).toContain("info.data?.sessionKind")
     expect(replyBox).toContain("info.data?.envelopeAgent")
     expect(replyBox).toContain("card.agent_reply_build_envelope")
+    expect(replyBox).toContain("AgentSessionAttachmentReferenceError")
+    expect(replyBox).toContain("card.agent_reply_attachment_reference")
   })
 
   test("overlay does not keep a direct-reply kind mirror", () => {

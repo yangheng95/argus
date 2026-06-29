@@ -5,12 +5,19 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { testMessageOrderKey, testPartOrderKey, testSessionOrderKey, testTaskOrderKey } from "../fixtures/timeline-order.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
 const TASK_ID = "tsk_conversation_agent_rail_scroll"
 const ASSISTANT_SESSION_ID = "ses_conversation_agent_rail_assistant"
+const ABSORBED_SESSION_ID = "ses_agent_rail_absorbed"
+const ABSORBED_FIRST_MESSAGE_ID = "msg_agent_rail_absorbed_first"
+const ABSORBED_LAST_MESSAGE_ID = "msg_agent_rail_absorbed_last"
+const ABSORBED_FIRST_CARD_ID = `build:session:${ABSORBED_SESSION_ID}:message:${ABSORBED_FIRST_MESSAGE_ID}`
+const ABSORBED_LAST_CARD_ID = `build:session:${ABSORBED_SESSION_ID}:message:${ABSORBED_LAST_MESSAGE_ID}`
 const PROJECT_ROOT = "D:/overlay/workspace/conversation-agent-rail-scroll"
 const T0 = 1_776_100_000_000
 const SCREENSHOT_PATH = resolve(".scratch", "conversation-agent-rail-scroll-browser", "rail-after-drag.png")
@@ -23,6 +30,11 @@ const CHAT_PANE_SCREENSHOT_PATH = resolve(
   ".scratch",
   "conversation-agent-rail-scroll-browser",
   "chat-pane-after-locate.png",
+)
+const ABSORBED_CARD_SCREENSHOT_PATH = resolve(
+  ".scratch",
+  "conversation-agent-rail-scroll-browser",
+  "absorbed-card-after-locate.png",
 )
 
 function route(url: URL) {
@@ -57,26 +69,58 @@ function eventStream() {
   })
 }
 
-function message(index: number) {
-  const stage = ["requirements", "architect", "frontend-design", "build", "visual-qa", "integrity"][index % 6]!
-  const sessionID = `ses_agent_rail_${index.toString().padStart(2, "0")}`
-  const messageID = `msg_agent_rail_${index.toString().padStart(2, "0")}`
+function absorbedMessage(messageID: string, partID: string, created: number, textValue: string) {
   return {
     info: {
       id: messageID,
-      sessionID,
-      channel: stage,
+      sessionID: ABSORBED_SESSION_ID,
+      orderKey: testMessageOrderKey(messageID, created),
+      channel: "build",
       role: "assistant",
-      resolvedRole: stage,
-      agent: stage,
+      resolvedRole: "build",
+      agent: "build",
       parentSessionID: "ses_root",
-      time: { created: T0 + index * 100 },
+      time: { created },
       providerID: "openai",
       modelID: "gpt-5-mini",
     },
     parts: [
       {
-        id: `part_${messageID}`,
+        id: partID,
+        orderKey: testPartOrderKey(partID, created + 1),
+        messageID,
+        sessionID: ABSORBED_SESSION_ID,
+        type: "text",
+        text: textValue,
+      },
+    ],
+  }
+}
+
+function message(index: number) {
+  const stage = ["requirements", "architect", "frontend-design", "build", "visual-qa", "integrity"][index % 6]!
+  const sessionID = `ses_agent_rail_${index.toString().padStart(2, "0")}`
+  const messageID = `msg_agent_rail_${index.toString().padStart(2, "0")}`
+  const partID = `part_${messageID}`
+  const created = T0 + index * 100
+  return {
+    info: {
+      id: messageID,
+      sessionID,
+      orderKey: testMessageOrderKey(messageID, created),
+      channel: stage,
+      role: "assistant",
+      resolvedRole: stage,
+      agent: stage,
+      parentSessionID: "ses_root",
+      time: { created },
+      providerID: "openai",
+      modelID: "gpt-5-mini",
+    },
+    parts: [
+      {
+        id: partID,
+        orderKey: testPartOrderKey(partID, created + 1),
         messageID,
         sessionID,
         type: "text",
@@ -98,6 +142,7 @@ const assistantMessage = {
   info: {
     id: "msg_agent_rail_assistant",
     sessionID: ASSISTANT_SESSION_ID,
+    orderKey: testMessageOrderKey("msg_agent_rail_assistant", T0 + 9_250),
     channel: "assistant",
     role: "assistant",
     resolvedRole: "assistant",
@@ -109,6 +154,7 @@ const assistantMessage = {
   parts: [
     {
       id: "part_msg_agent_rail_assistant",
+      orderKey: testPartOrderKey("part_msg_agent_rail_assistant", T0 + 9_251),
       messageID: "msg_agent_rail_assistant",
       sessionID: ASSISTANT_SESSION_ID,
       type: "text",
@@ -127,6 +173,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     directory: PROJECT_ROOT,
     status: "active",
     sessionID: "ses_root",
+    orderKey: testTaskOrderKey(TASK_ID, T0 - 1_000),
     time: { created: T0 - 1_000, started: T0 - 500, updated: T0 + 3_000 },
   }
   const board = {
@@ -144,25 +191,57 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     interactions: [],
     goalWorkflows: [],
   }
-  const transcript = Array.from({ length: 56 }, (_, index) => message(index + 1))
-  const sessions = transcript.map((item) => ({
-    sessionID: item.info.sessionID,
-    stage: item.info.resolvedRole,
-    parentSessionID: item.info.parentSessionID,
-    messageIDs: [item.info.id],
-    lastDisplayMessageID: item.info.id,
-    firstMessageTime: item.info.time.created,
-    lastMessageTime: item.info.time.created,
+  const absorbedTranscript = [
+    absorbedMessage(
+      ABSORBED_FIRST_MESSAGE_ID,
+      "part_msg_agent_rail_absorbed_first",
+      T0 + 25,
+      "Absorbed rail first build message.",
+    ),
+    absorbedMessage(
+      ABSORBED_LAST_MESSAGE_ID,
+      "part_msg_agent_rail_absorbed_last",
+      T0 + 50,
+      "Absorbed rail continuation selected by lastDisplayMessageID.",
+    ),
+  ]
+  const scrollTranscript = Array.from({ length: 56 }, (_, index) => message(index + 1))
+  const transcript = [...absorbedTranscript, ...scrollTranscript]
+  const absorbedSession = {
+    sessionID: ABSORBED_SESSION_ID,
+    stage: "build",
+    parentSessionID: "ses_root",
+    orderKey: testSessionOrderKey(ABSORBED_SESSION_ID, T0 + 25),
+    messageIDs: [ABSORBED_FIRST_MESSAGE_ID, ABSORBED_LAST_MESSAGE_ID],
+    lastDisplayMessageID: ABSORBED_LAST_MESSAGE_ID,
+    firstMessageTime: T0 + 25,
+    lastMessageTime: T0 + 50,
     placement: "top_level",
-  }))
+  }
+  const sessions = [
+    absorbedSession,
+    ...scrollTranscript.map((item) => ({
+      sessionID: item.info.sessionID,
+      stage: item.info.resolvedRole,
+      parentSessionID: item.info.parentSessionID,
+      orderKey: testSessionOrderKey(item.info.sessionID, item.info.time.created),
+      messageIDs: [item.info.id],
+      lastDisplayMessageID: item.info.id,
+      firstMessageTime: item.info.time.created,
+      lastMessageTime: item.info.time.created,
+      placement: "top_level",
+    })),
+  ]
   const messages = transcript.map((item) => ({
     messageID: item.info.id,
     sessionID: item.info.sessionID,
     stage: item.info.resolvedRole,
     parentSessionID: item.info.parentSessionID,
+    orderKey: item.info.orderKey,
     time: item.info.time.created,
     placement: "top_level",
   }))
+  const agentMessages = messages.filter((item) => item.sessionID !== ABSORBED_SESSION_ID)
   const conversation = {
     lastSequence: 0,
     messageWatermark: T0 + 3_200,
@@ -173,13 +252,14 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions, messages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
-    agentView: { sessions, messages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
+    agentView: { sessions, messages: agentMessages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
   }
   const assistantView = {
     sessions: [
       {
         sessionID: ASSISTANT_SESSION_ID,
         stage: "assistant",
+        orderKey: testSessionOrderKey(ASSISTANT_SESSION_ID, T0 + 9_250),
         messageIDs: ["msg_agent_rail_assistant"],
         lastDisplayMessageID: "msg_agent_rail_assistant",
         firstMessageTime: T0 + 9_250,
@@ -192,6 +272,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
         messageID: "msg_agent_rail_assistant",
         sessionID: ASSISTANT_SESSION_ID,
         stage: "assistant",
+        orderKey: testMessageOrderKey("msg_agent_rail_assistant", T0 + 9_250),
         time: T0 + 9_250,
         placement: "top_level",
       },
@@ -215,7 +296,6 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     history: { oldestTimestamp: T0 + 9_250, oldestMessageID: "msg_agent_rail_assistant", hasMore: false, limit: 1 },
   }
 
-  const errors: string[] = []
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -232,7 +312,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     if (path === "/coding/sessions") return json({ sessions: [assistantSession], nextCursor: null })
     if (path === `/coding/session/${ASSISTANT_SESSION_ID}` && req.method === "GET")
       return json({ session: assistantSession })
-    if (path === "/global/tasks" || path === "/tasks") return json({ tasks: [{ task, updated_at: T0 + 3_000 }] })
+    if (path === "/global/tasks") return json({ tasks: [{ task, updated_at: T0 + 3_000 }] })
     if (path === "/path") return json({ directory: PROJECT_ROOT })
     if (path === "/vcs")
       return json({
@@ -311,13 +391,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    page.on("pageerror", (error: any) => errors.push(`pageerror: ${error.message || String(error)}`))
-    page.on("console", (message: any) => {
-      if (message.type() === "error") errors.push(`console: ${message.text()}`)
-    })
-    page.on("response", (response: any) => {
-      if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
-    })
+    const errors = installBrowserErrorCollector(page)
     await page.setViewport({ width: 520, height: 760 })
     await page.evaluateOnNewDocument(
       (seed: { serverUrl: string; taskID: string }) => {
@@ -332,19 +406,19 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
       { serverUrl: server.origin, taskID: TASK_ID },
     )
 
-    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
-      visible: true,
-      timeout: 15_000,
-    })
-    await page.click('.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
-    await page.waitForSelector(`.task-row-main[data-task-id="${TASK_ID}"]`, { visible: true, timeout: 15_000 })
-    await page.click(`.task-row-main[data-task-id="${TASK_ID}"]`)
+    await page.goto(`${server.origin}/ui/index.html?taskID=${encodeURIComponent(TASK_ID)}`, { waitUntil: "load" })
+    await page.waitForFunction(
+      (taskID: string) =>
+        (window as any).boardStore?.selectedSource?.kind === "task" &&
+        (window as any).boardStore.selectedSource.id === taskID,
+      { timeout: 15_000 },
+      TASK_ID,
+    )
     await page.waitForSelector('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]', {
       visible: true,
       timeout: 15_000,
     })
-    assert.deepEqual(errors, [])
+    errors.assertNoUnexpectedErrors()
 
     const geometry = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
       const rect = el.getBoundingClientRect()
@@ -430,22 +504,83 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
 
     await page.evaluate(() => {
       ;(window as any).__agentRailClickCount = 0
-      const button = document.querySelector<HTMLElement>(
-        '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]',
-      )
+    })
+    const absorbedLocateSelector = `.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"][data-session-id="${ABSORBED_SESSION_ID}"]`
+    await page.waitForSelector(absorbedLocateSelector, { visible: true, timeout: 15_000 })
+    await page.evaluate((selector: string) => {
+      const button = document.querySelector<HTMLElement>(selector)
       button?.addEventListener("click", () => {
         ;(window as any).__agentRailClickCount += 1
       })
-    })
-    await page.click('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]')
+    }, absorbedLocateSelector)
+    await page.click(absorbedLocateSelector)
     const clickCount = await page.evaluate(() => (window as any).__agentRailClickCount || 0)
-    assert.equal(clickCount, 1, "plain click must still reach the locate button")
-    const locatedCardID = "architect:session:ses_agent_rail_01:message:msg_agent_rail_01"
+    assert.equal(clickCount, 1, "plain click must still reach the absorbed session locate button")
+    const absorbedProjection = await page.evaluate(
+      (target: {
+        firstCardID: string
+        lastCardID: string
+        lastMessageID: string
+      }) => {
+        const tree = (window as any).cardTree
+        const first = tree?.cards?.[target.firstCardID]
+        const last = tree?.cards?.[target.lastCardID]
+        const parts = Array.isArray(first?.parts) ? first.parts : []
+        return {
+          firstCardExists: Boolean(first),
+          lastCardExists: Boolean(last),
+          firstCardMessageID: String(first?.messageID || ""),
+          partMessageIDs: parts.map((part: any) => String(part?.messageID || "")),
+        }
+      },
+      {
+        firstCardID: ABSORBED_FIRST_CARD_ID,
+        lastCardID: ABSORBED_LAST_CARD_ID,
+        lastMessageID: ABSORBED_LAST_MESSAGE_ID,
+      },
+    )
+    assert.equal(absorbedProjection.firstCardExists, true, "absorbed segment should render the first message card")
+    assert.equal(absorbedProjection.lastCardExists, false, "absorbed message must not render its own card")
+    assert.equal(absorbedProjection.firstCardMessageID, ABSORBED_FIRST_MESSAGE_ID)
+    assert.ok(
+      absorbedProjection.partMessageIDs.includes(ABSORBED_LAST_MESSAGE_ID),
+      `first card should own the absorbed message part: ${JSON.stringify(absorbedProjection)}`,
+    )
+    const locatedCardID = ABSORBED_FIRST_CARD_ID
     await page.waitForSelector(`[data-card-id="${locatedCardID}"]`, { visible: true, timeout: 15_000 })
     await page.waitForSelector(`[data-card-id="${locatedCardID}"].conversation-agent-target--pulse`, {
       visible: true,
       timeout: 15_000,
     })
+    await page.waitForFunction(
+      (cardID: string) => {
+        const card = document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(cardID)}"]`)
+        const scroll = document.getElementById("chatScroll")
+        if (!card || !scroll) return false
+        const cardRect = card.getBoundingClientRect()
+        const scrollRect = scroll.getBoundingClientRect()
+        return cardRect.top >= scrollRect.top - 4 && cardRect.top <= scrollRect.top + 80
+      },
+      { timeout: 15_000 },
+      locatedCardID,
+    )
+    const firstCardText = await page.$eval(
+      `[data-card-id="${locatedCardID}"]`,
+      (element: HTMLElement) => element.textContent || "",
+    )
+    assert.ok(
+      firstCardText.includes("Absorbed rail first build message."),
+      `first card should show first message text: ${JSON.stringify({ ...absorbedProjection, firstCardText })}`,
+    )
+    assert.ok(
+      firstCardText.includes("Absorbed rail continuation selected by lastDisplayMessageID."),
+      `first card should show absorbed message text: ${JSON.stringify({ ...absorbedProjection, firstCardText })}`,
+    )
+    assert.equal(await page.$(`[data-card-id="${ABSORBED_LAST_CARD_ID}"]`), null)
+    const absorbedCard = await page.$(`[data-card-id="${locatedCardID}"]`)
+    assert.ok(absorbedCard, "absorbed build card should exist for direct screenshot review")
+    mkdirSync(dirname(ABSORBED_CARD_SCREENSHOT_PATH), { recursive: true })
+    writeFileSync(ABSORBED_CARD_SCREENSHOT_PATH, await absorbedCard.screenshot({}))
     const chatPane = await page.$("#chatMessagePane")
     assert.ok(chatPane, "chat pane should exist for full rail/card screenshot review")
     mkdirSync(dirname(CHAT_PANE_SCREENSHOT_PATH), { recursive: true })
@@ -609,7 +744,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
       assistantRailState.width > 0 && assistantRailState.height > 0,
       `coding assistant rail should be visible: ${JSON.stringify(assistantRailState)}`,
     )
-    assert.deepEqual(errors, [])
+    errors.assertNoUnexpectedErrors()
     const assistantRail = await page.$(".conversation-agent-rail")
     assert.ok(assistantRail, "coding assistant agent rail should exist for screenshot review")
     writeFileSync(ASSISTANT_SCREENSHOT_PATH, await assistantRail.screenshot({}))

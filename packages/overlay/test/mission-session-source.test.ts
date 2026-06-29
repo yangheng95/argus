@@ -16,7 +16,9 @@ const CODING_ASSISTANT_SERVICE = readFileSync(join(import.meta.dir, "../src/serv
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
-  expect(CONVERSATION_SERVICE).toContain("const requestDirectory = conversationRequestDirectory(source, options.directory)")
+  expect(CONVERSATION_SERVICE).toContain(
+    "const requestDirectory = conversationRequestDirectory(source, options.directory)",
+  )
   expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, requestDirectory)")
   expect(TASK_SERVICE).toContain('selectedSource?.kind === "session"')
   expect(TASK_SERVICE).toContain("`session/${encodeURIComponent(selectedSource.id)}/prompt_async`")
@@ -24,7 +26,9 @@ test("session source hydrates from session conversation and submits to prompt_as
 
 test("Mission session hydrate uses the selected row directory", () => {
   expect(MISSION_TSX).toContain("openMissionSession(mission.sessionID, mission.directory)")
-  expect(CONVERSATION_SERVICE).toContain('if (source.kind === "session") return requireDirectory(trimmed, "hydrateConversation")')
+  expect(CONVERSATION_SERVICE).toContain(
+    'if (source.kind === "session") return requireDirectory(trimmed, "hydrateConversation")',
+  )
   expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, requestDirectory)")
   expect(CONVERSATION_SERVICE).toContain('if (trimmed) params.set("directory", trimmed)')
 })
@@ -121,6 +125,13 @@ test("Mission ledger groups records by project directory", () => {
   expect(MISSION_LIST_TSX).not.toContain('class="project-group-heading"')
   expect(MISSION_LIST_TSX).not.toContain('class="project-group mission-project-group"')
   expect(MISSION_LIST_TSX).toContain("<For each={group.items}>")
+})
+
+test("Mission load-more busy state is scoped to the request source", () => {
+  expect(MISSION_TSX).toContain("missionsLoadingMoreSource")
+  expect(MISSION_TSX).toContain("sameMissionSource")
+  expect(MISSION_TSX).toContain("setMissionsLoadingMoreSource(source)")
+  expect(MISSION_TSX).toContain("loadingMore={missionsLoadingMore()}")
 })
 
 test("Mission launcher submits through wakeMission rather than task composition", () => {

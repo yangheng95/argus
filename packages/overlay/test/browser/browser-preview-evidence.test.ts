@@ -200,7 +200,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/mission") return send([])
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+      if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs") {
         return send({
@@ -776,7 +776,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/mission") return send([])
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+      if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/path") return send({ directory: projectRoot })
       if (path === "/vcs")
         return send({

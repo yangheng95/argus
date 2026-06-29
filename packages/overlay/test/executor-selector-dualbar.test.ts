@@ -121,7 +121,9 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(
       /modelIDFormat === "qualified" \? modelIDs\.map\(\(modelID\) => `\$\{id\}\/\$\{modelID\}`\) : modelIDs/,
     )
-    expect(SRC).toMatch(/await setExecutorModel\(\{ executorID, model, directory: activeDirectory\(\)\.trim\(\) \}\)/)
+    expect(SRC).toMatch(
+      /await setExecutorModel\(\{[\s\S]*?executorID,[\s\S]*?model,[\s\S]*?directory: activeDirectory\(\)\.trim\(\),[\s\S]*?isCurrentDirectory: \(directory\) => activeDirectory\(\)\.trim\(\) === directory/,
+    )
   })
 
   test("model picker delegates selection semantics to Kobalte listbox", () => {
@@ -155,7 +157,7 @@ describe("ExecutorSelector dual chip bar", () => {
       /await patchSessionConfig\(\{[\s\S]*?sessionID: ctx\.sessionID,[\s\S]*?directory,[\s\S]*?diff: \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
     )
     expect(SRC).toMatch(/mutateTaskOperatorContext\(/)
-    expect(SRC).toMatch(/await patchConfig\(\{ model: value \? value : null \}\)/)
+    expect(SRC).toMatch(/await patchConfig\(\{ model: value \? value : null \}, currentProjectConfigRequestOptions\(\)\)/)
     expect(SRC.indexOf("patchSessionConfig({")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
   })
 
@@ -174,7 +176,9 @@ describe("ExecutorSelector dual chip bar", () => {
 
   test("external selection switches settingsStore.executor and calls setExecutorModel", () => {
     expect(SRC).toMatch(/setSettingsStore\("executor", sanitizeExecutor\(executorID\)\)/)
-    expect(SRC).toMatch(/await setExecutorModel\(\{ executorID, model, directory: activeDirectory\(\)\.trim\(\) \}\)/)
+    expect(SRC).toMatch(
+      /await setExecutorModel\(\{[\s\S]*?executorID,[\s\S]*?model,[\s\S]*?directory: activeDirectory\(\)\.trim\(\),[\s\S]*?isCurrentDirectory: \(directory\) => activeDirectory\(\)\.trim\(\) === directory/,
+    )
   })
 
   test("none-tab in external popover disables external by switching back to opencorvus", () => {

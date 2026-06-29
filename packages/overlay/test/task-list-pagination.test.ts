@@ -5,7 +5,8 @@ const { __setHostTransportForTest } = await import("../src/services/host-transpo
 const { boardStore, loadMoreTasks, loadTasks, setBoardStore, TASK_LIST_PAGE_SIZE } = await import("../src/store/board")
 
 function taskItem(index: number): any {
-  const updated = 10_000 - index
+  const created = 20_000 - index
+  const updated = 10_000 + index
   return {
     task: {
       id: `tsk_${String(index).padStart(2, "0")}`,
@@ -14,7 +15,7 @@ function taskItem(index: number): any {
       request: `Task ${index}`,
       status: "queued",
       time: {
-        created: updated,
+        created,
         updated,
       },
     },
@@ -28,7 +29,7 @@ afterEach(() => {
     pendingTasks: [],
     tasksHasMore: false,
     tasksLoadedLimit: 0,
-    tasksCursorUpdated: null,
+    tasksCursorCreated: null,
     tasksCursorTaskID: "",
     tasksLoadingMore: false,
     tasksError: "",
@@ -94,7 +95,7 @@ test("loadMoreTasks fetches the next page from the database using the last visib
   expect(requests).toHaveLength(2)
   expect(requests[1].path).toBe("global/tasks")
   expect(String(requests[1].query?.limit)).toBe(String(TASK_LIST_PAGE_SIZE + 1))
-  expect(String(requests[1].query?.cursor)).toBe(String(firstPage[9].task.time.updated))
+  expect(String(requests[1].query?.cursor)).toBe(String(firstPage[9].task.time.created))
   expect(requests[1].query?.cursorTaskID).toBe(firstPage[9].task.id)
   expect(boardStore.tasks.map((item: any) => item.task.id)).toEqual([
     ...firstPage.slice(0, TASK_LIST_PAGE_SIZE).map((item) => item.task.id),

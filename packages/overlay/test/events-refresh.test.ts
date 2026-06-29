@@ -1,6 +1,11 @@
 import { afterEach, expect, mock, test } from "bun:test"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import { installRealOverlayI18n } from "./fixtures/i18n"
+import {
+  stampTestEvent,
+  testEventOrderKey,
+  testSessionOrderKey,
+} from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 mock.module("../src/utils/icon-html", () => ({
@@ -10,9 +15,12 @@ mock.module("../src/utils/icon-html", () => ({
   },
 }))
 
-const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification, __resetEventTimersForTest } = await import(
-  "../src/services/events"
-)
+const {
+  routeSSEEvent: routeSSEEventRaw,
+  handleEventStreamEvent,
+  handleTaskListNotification,
+  __resetEventTimersForTest,
+} = await import("../src/services/events")
 const { boardStore, clearBoard, clearTasksForMissingDirectory, loadMoreTasks, loadTasks, setBoardStore } = await import(
   "../src/store/board"
 )
@@ -33,6 +41,51 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 const CONFIG_REFRESH_DIRECTORY = "D:/overlay/config-refresh"
 
 installRealOverlayI18n()
+
+function routeSSEEvent(event: any): boolean {
+  return routeSSEEventRaw(stampRouteSSEEventForTest(event))
+}
+
+function stampRouteSSEEventForTest(event: any): any {
+  const type = String(event?.type || "event")
+  const props = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  if (typeof event.orderKey !== "string" || event.orderKey.length === 0) {
+    throw new Error(`test fixture event ${type} missing orderKey`)
+  }
+  const baseOrderKey = event.orderKey
+  if (type === "message.updated" || type === "message.part.updated") {
+    return stampTestEvent(event)
+  }
+  if (type === "session.status" || type === "session.error" || type === "session.idle") {
+    const sessionID = String(props?.sessionID || event.sessionID || "")
+    const orderKey = props?.orderKey
+    if (typeof event.orderKey !== "string" || event.orderKey.length === 0) {
+      throw new Error(`test fixture ${type} ${sessionID || "<unknown>"} envelope missing orderKey`)
+    }
+    if (typeof orderKey !== "string" || orderKey.length === 0) {
+      throw new Error(`test fixture ${type} ${sessionID || "<unknown>"} properties missing orderKey`)
+    }
+    if (event.orderKey !== orderKey) {
+      throw new Error(`test fixture ${type} ${sessionID || "<unknown>"} orderKey mismatch`)
+    }
+    return event
+  }
+  if (props?.task && typeof props.task === "object") {
+    const taskID = String(props.task.id || props.taskID || event.taskID || "<unknown>")
+    if (typeof props.task.orderKey !== "string" || props.task.orderKey.length === 0) {
+      throw new Error(`test fixture task ${taskID} missing orderKey`)
+    }
+    return {
+      ...event,
+      orderKey: baseOrderKey,
+      properties: {
+        ...props,
+        task: props.task,
+      },
+    }
+  }
+  return { ...event, orderKey: baseOrderKey }
+}
 
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
@@ -141,11 +194,11 @@ function assistantMessageInfo(id: string, index: number) {
   }
 }
 
-function assistantPartMeta(id: string, index: number) {
+function assistantPartMeta(messageID: string, index: number) {
   return {
     channel: "assistant",
     resolvedRole: "assistant",
-    orderKey: testOrderKey(id, index, "part"),
+    orderKey: testOrderKey(messageID, index, "message"),
   }
 }
 
@@ -199,6 +252,7 @@ test("selected-task message events update card tree without board refresh", () =
 
   const handled = routeSSEEvent({
     type: "message.updated",
+    orderKey: testOrderKey("msg_refresh", 200_000, "message"),
     properties: {
       taskID: "tsk_refresh",
       info: assistantMessageInfo("msg_refresh", 200_000),
@@ -231,6 +285,7 @@ test("selected-task message events advance the visible cursor without recovery",
       type: "message.updated",
       taskID: "tsk_refresh",
       sequence: 6,
+      orderKey: testOrderKey("msg_refresh_seq", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_refresh_seq", 200_000),
       },
@@ -244,8 +299,9 @@ test("selected-task message events advance the visible cursor without recovery",
       taskID: "tsk_refresh",
       sequence: 7,
       timestamp: 1_776_000_200_001,
+      orderKey: testOrderKey("msg_refresh_seq", 200_000, "message"),
       properties: {
-        ...assistantPartMeta("part_refresh_seq", 200_001),
+        ...assistantPartMeta("msg_refresh_seq", 200_000),
         part: {
           id: "part_refresh_seq",
           orderKey: testOrderKey("part_refresh_seq", 200_001, "part"),
@@ -288,6 +344,7 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
       type: "message.updated",
       task_id: "tsk_refresh",
       sequence: 6,
+      orderKey: testOrderKey("msg_snake_seq", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_snake_seq", 200_000),
       },
@@ -301,8 +358,9 @@ test("selected-task protocol task_id envelope advances the visible cursor", asyn
       task_id: "tsk_refresh",
       sequence: 7,
       timestamp: 1_776_000_200_001,
+      orderKey: testOrderKey("msg_snake_seq", 200_000, "message"),
       properties: {
-        ...assistantPartMeta("part_snake_seq", 200_001),
+        ...assistantPartMeta("msg_snake_seq", 200_000),
         part: {
           id: "part_snake_seq",
           orderKey: testOrderKey("part_snake_seq", 200_001, "part"),
@@ -343,6 +401,7 @@ test("selected-task part removal updates the card tree in real time", () => {
       type: "message.updated",
       task_id: "tsk_refresh",
       sequence: 8,
+      orderKey: testOrderKey("msg_remove_part", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_remove_part", 200_000),
       },
@@ -354,8 +413,9 @@ test("selected-task part removal updates the card tree in real time", () => {
       task_id: "tsk_refresh",
       sequence: 9,
       timestamp: 1_776_000_200_001,
+      orderKey: testOrderKey("msg_remove_part", 200_000, "message"),
       properties: {
-        ...assistantPartMeta("part_remove_me", 200_001),
+        ...assistantPartMeta("msg_remove_part", 200_000),
         part: {
           id: "part_remove_me",
           orderKey: testOrderKey("part_remove_me", 200_001, "part"),
@@ -378,6 +438,7 @@ test("selected-task part removal updates the card tree in real time", () => {
       type: "message.part.removed",
       task_id: "tsk_refresh",
       sequence: 10,
+      orderKey: testEventOrderKey("message.part.removed", 1, 10),
       properties: {
         sessionID: "ses_refresh",
         messageID: "msg_remove_part",
@@ -411,6 +472,7 @@ test("selected-task message removal removes its visible card in real time", () =
       type: "message.updated",
       task_id: "tsk_refresh",
       sequence: 4,
+      orderKey: testOrderKey("msg_remove_all", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_remove_all", 200_000),
       },
@@ -422,8 +484,9 @@ test("selected-task message removal removes its visible card in real time", () =
       task_id: "tsk_refresh",
       sequence: 5,
       timestamp: 1_776_000_200_001,
+      orderKey: testOrderKey("msg_remove_all", 200_000, "message"),
       properties: {
-        ...assistantPartMeta("part_remove_all", 200_001),
+        ...assistantPartMeta("msg_remove_all", 200_000),
         part: {
           id: "part_remove_all",
           orderKey: testOrderKey("part_remove_all", 200_001, "part"),
@@ -446,6 +509,7 @@ test("selected-task message removal removes its visible card in real time", () =
       type: "message.removed",
       task_id: "tsk_refresh",
       sequence: 6,
+      orderKey: testEventOrderKey("message.removed", 1, 6),
       properties: {
         sessionID: "ses_refresh",
         messageID: "msg_remove_all",
@@ -478,6 +542,7 @@ test("selected-task message payload is still applied when board cursor is ahead"
       type: "message.updated",
       task_id: "tsk_refresh",
       sequence: 7,
+      orderKey: testOrderKey("msg_late_payload", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_late_payload", 200_000),
       },
@@ -511,6 +576,7 @@ test("board-owned run progress advances selected-task cursor", async () => {
       type: "run.progress",
       task_id: "tsk_refresh",
       sequence: 6,
+      orderKey: testEventOrderKey("run.progress", 1, 6),
       properties: { type: "executor.status", status: "running" },
     }),
   ).toBe(true)
@@ -521,6 +587,7 @@ test("board-owned run progress advances selected-task cursor", async () => {
       type: "message.updated",
       task_id: "tsk_refresh",
       sequence: 7,
+      orderKey: testOrderKey("msg_after_run_progress", 200_000, "message"),
       properties: {
         info: assistantMessageInfo("msg_after_run_progress", 200_000),
       },
@@ -554,6 +621,7 @@ test("message delta with missing tree prerequisites triggers selected-task recov
   expect(
     routeSSEEvent({
       type: "message.part.delta",
+      orderKey: testEventOrderKey("message.part.delta", 1),
       properties: {
         sessionID: "ses_missing",
         messageID: "msg_missing",
@@ -578,6 +646,7 @@ test("board-owned run progress still schedules board refresh", () => {
   expect(
     routeSSEEvent({
       type: "run.progress",
+      orderKey: testEventOrderKey("run.progress", 1),
       properties: { type: "executor.status", status: "running" },
     }),
   ).toBe(true)
@@ -605,9 +674,11 @@ test("selected-task session status updates cards without board refresh", () => {
     type: "session.status",
     taskID: "tsk_refresh",
     sequence: 6,
+    orderKey: testSessionOrderKey("ses_refresh", 1),
     properties: {
       taskID: "tsk_refresh",
       sessionID: "ses_refresh",
+      orderKey: testSessionOrderKey("ses_refresh", 1),
       channel: "main",
       status: { type: "streaming" },
     },
@@ -647,6 +718,7 @@ test("consumed sequenced run progress advances selected cursor and avoids false 
       type: "run.progress",
       taskID: "tsk_refresh",
       sequence: 6,
+      orderKey: testEventOrderKey("run.progress", 1, 6),
       properties: {
         type: "executor.status",
         taskID: "tsk_refresh",
@@ -656,11 +728,13 @@ test("consumed sequenced run progress advances selected cursor and avoids false 
   ).toBe(true)
 
   expect(boardStore.taskSequence).toBe(6)
+  expect(cardTreeStore.cards["executor:session:ses_refresh:message:executor:msg:run_refresh"]).toBeUndefined()
 
   const event = {
     type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
+    orderKey: testEventOrderKey("goal.progress", 1, 7),
   }
   const handled = routeSSEEvent(event)
   if (!handled) handleEventStreamEvent(event)
@@ -702,6 +776,7 @@ test("consumed sequenced run output advances selected cursor and avoids false re
     type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
+    orderKey: testEventOrderKey("goal.progress", 1, 7),
   }
   const handled = routeSSEEvent(event)
   if (!handled) handleEventStreamEvent(event)
@@ -724,6 +799,7 @@ test("consumed sequenced task rewound advances selected cursor and avoids false 
       type: "task.rewound",
       taskID: "tsk_refresh",
       sequence: 6,
+      orderKey: testEventOrderKey("task.rewound", 1, 6),
       properties: {
         taskID: "tsk_refresh",
         cursorTime: 1_776_000_100_000,
@@ -738,6 +814,7 @@ test("consumed sequenced task rewound advances selected cursor and avoids false 
     type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
+    orderKey: testEventOrderKey("goal.progress", 1, 7),
   }
   const handled = routeSSEEvent(event)
   if (!handled) handleEventStreamEvent(event)
@@ -813,6 +890,7 @@ test("reset-worktree task rewound schedules authoritative board sync without fak
       type: "task.rewound",
       taskID: "tsk_refresh",
       sequence: 6,
+      orderKey: testEventOrderKey("task.rewound", 1, 6),
       properties: {
         taskID: "tsk_refresh",
         cursorTime: 1_776_000_100_000,
@@ -868,6 +946,7 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
     type: "review.stream.chunk",
     taskID: "tsk_refresh",
     sequence: 7,
+    orderKey: testEventOrderKey("review.stream.chunk", 1, 7),
     properties: {
       taskID: "tsk_refresh",
       reviewID: "integrity:missing-started",
@@ -909,6 +988,7 @@ test("task-list notification does not advance visible cursor before per-task pay
     type: "review.stream.chunk",
     taskID: "tsk_refresh",
     sequence: 7,
+    orderKey: testEventOrderKey("review.stream.chunk", 1, 7),
     properties: {
       taskID: "tsk_refresh",
       reviewID: "integrity:missing-started",
@@ -1121,6 +1201,64 @@ test("required task-list reload starts after an older in-flight refresh settles"
 
   expect(paths).toEqual(["global/tasks", "global/tasks"])
   expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_fresh_after_mutation"])
+})
+
+test("project-scope task clear disowns in-flight first-page reload before fresh project reload", async () => {
+  let releaseFirst!: () => void
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+  const requests: Array<{ path: string; query?: Record<string, string | number | boolean> }> = []
+  let requestIndex = 0
+  const taskItem = (id: string, created: number) => ({
+    task: {
+      id,
+      title: id,
+      status: "active",
+      time: { created, updated: created },
+    },
+  })
+  const transport = {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push({ path: req.path, query: req.query })
+      if (req.path !== "global/tasks") throw new Error(`unexpected route ${req.path}`)
+      requestIndex += 1
+      if (requestIndex === 1) {
+        await firstPending
+        return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_stale_first_page", 1)] } as T }
+      }
+      return { status: 200, ok: true, headers: {}, body: { tasks: [taskItem("tsk_fresh_project", 2)] } as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport
+  __setHostTransportForTest(transport)
+
+  const staleFirstPage = loadTasks()
+  await waitForRequestCount(requests, 1)
+  clearTasksForMissingDirectory()
+  expect(boardStore.tasks).toEqual([])
+
+  const freshProject = loadTasks()
+  await waitForRequestCount(requests, 2)
+  await freshProject
+  expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_fresh_project"])
+
+  releaseFirst()
+  await staleFirstPage
+
+  expect(requests.map((request) => request.path)).toEqual(["global/tasks", "global/tasks"])
+  expect(boardStore.tasks.map((item) => item.task.id)).toEqual(["tsk_fresh_project"])
+  expect(boardStore.tasksError).toBe("")
 })
 
 test("stale pagination response cannot append after a required fresh task-list reload", async () => {
@@ -1341,9 +1479,9 @@ test("config.changed SSE burst coalesces into one config refresh", async () => {
   configure({ directory: CONFIG_REFRESH_DIRECTORY })
   const beforeToken = sessionConfigRefreshToken()
 
-  expect(routeSSEEvent({ type: "config.changed" })).toBe(true)
-  expect(routeSSEEvent({ type: "config.changed" })).toBe(true)
-  expect(routeSSEEvent({ type: "config.changed" })).toBe(true)
+  expect(routeSSEEvent({ type: "config.changed", orderKey: testEventOrderKey("config.changed", 1, 0) })).toBe(true)
+  expect(routeSSEEvent({ type: "config.changed", orderKey: testEventOrderKey("config.changed", 1, 1) })).toBe(true)
+  expect(routeSSEEvent({ type: "config.changed", orderKey: testEventOrderKey("config.changed", 1, 2) })).toBe(true)
   expect(sessionConfigRefreshToken()).toBe(beforeToken + 3)
 
   await new Promise((resolve) => setTimeout(resolve, 90))
@@ -1357,6 +1495,7 @@ test("session.updated invalidates session config resources", () => {
   expect(
     routeSSEEvent({
       type: "session.updated",
+      orderKey: testEventOrderKey("session.updated", 1),
       properties: {
         info: {
           id: "ses_config_refresh",
@@ -1392,6 +1531,7 @@ test("session.diff SSE is consumed without card or board refresh", () => {
       emittedAt: 1_780_163_309_731,
       timestamp: 1_780_163_309_731,
       sequence: 0,
+      orderKey: testEventOrderKey("session.diff", 1_780_163_309_731),
       summary: "session.diff",
       payload: {
         sessionID: "ses_session_diff",

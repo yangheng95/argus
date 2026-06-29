@@ -21,10 +21,23 @@ describe("app dialog decision visual treatment", () => {
     const host = readText("src/components/AppDialogHost.tsx")
     const css = readText("src/styles/surfaces/dialog.css")
 
-    expect(host).toContain('formClass={isTaskCardDecision() ? "app-dialog-form--decision" : undefined}')
+    expect(host).toContain('formClass={isTaskCardDecision() ? "app-dialog-form--decision" : "app-dialog-form"}')
     expect(css).toContain(".app-dialog-form--decision")
     expect(block(css, ".app-dialog-form--decision")).toContain("max-width: min(calc(520px * var(--ui-scale))")
     expect(block(css, ".app-dialog-form--decision > .dialog-header")).toContain("background: var(--surface)")
+  })
+
+  test("ordinary app dialogs use the shared flat prompt shell", () => {
+    const host = readText("src/components/AppDialogHost.tsx")
+    const css = readText("src/styles/surfaces/dialog.css")
+
+    expect(host).toContain('"app-dialog-form"')
+    expect(css).toContain(".app-dialog-form")
+    expect(block(css, ".app-dialog-form")).toContain("max-width: min(calc(460px * var(--ui-scale))")
+    expect(block(css, ".app-dialog-form > .dialog-header")).toContain("background: var(--surface)")
+    expect(block(css, ".app-dialog-form > .app-dialog-body")).toContain("background: transparent")
+    expect(block(css, ".app-dialog-form > .app-dialog-body")).toContain("box-shadow: none")
+    expect(block(css, ".app-dialog-form > .dialog-actions:not(.compact)")).not.toContain("linear-gradient")
   })
 
   test("decision choices stay flat and avoid decorative gradients", () => {

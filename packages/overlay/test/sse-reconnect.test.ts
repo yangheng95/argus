@@ -32,6 +32,11 @@ import { resetWriter } from "../src/services/tree-writer"
 import { setLocale, setLocaleData } from "../src/utils/i18n"
 import { AppLog, waitForLogDrain } from "../src/utils/log"
 import { clearNotifications, notificationStore } from "../src/services/notify"
+import {
+  __resetConversationRecoveryDiagnosticsSinkForTest,
+  __setConversationRecoveryDiagnosticsSinkForTest,
+} from "../src/services/refresh-diagnostics"
+import { testTaskOrderKey } from "./fixtures/timeline-order"
 
 /**
  * Reconnect policy regression tests.
@@ -70,6 +75,7 @@ afterEach(async () => {
   AppLog.clear()
   clearNotifications()
   __setHostTransportForTest(undefined)
+  __resetConversationRecoveryDiagnosticsSinkForTest()
 })
 
 function makeDeps(opts: {
@@ -146,6 +152,12 @@ async function waitForUploadedLogs(logs: Array<Record<string, unknown>>, min = 1
   }
 }
 
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !condition(); i += 1) {
+    await Promise.resolve()
+  }
+}
+
 function conversationPayload(taskID: string, lastSequence: number) {
   return {
     lastSequence,
@@ -154,6 +166,7 @@ function conversationPayload(taskID: string, lastSequence: number) {
       task: {
         id: taskID,
         directory: TEST_DIRECTORY,
+        orderKey: testTaskOrderKey(taskID, 1_776_000_000_000),
         status: "active",
         request: "tail repair",
         sessionID: `ses_${taskID}`,
@@ -174,8 +187,8 @@ function conversationPayload(taskID: string, lastSequence: number) {
       sinceTimestamp: null,
     },
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { sessions: [] },
-    agentView: { sessions: [] },
+    view: { sessions: [], messages: [] },
+    agentView: { sessions: [], messages: [], topLevelSessionIDs: [] },
     messageWatermark: lastSequence,
   }
 }
@@ -224,6 +237,64 @@ describe("performSseReconnect (audit W2-V10)", () => {
     const item = notificationStore.items.find((entry) => entry.id === "sse:reconnect-failed:tsk_b")
     expect(item?.title).toBe("Live stream disconnected")
     expect(item?.details).toContain("network down")
+  })
+
+  test("afterRestart failure records reconnect failure instead of success", async () => {
+    const logs: Array<Record<string, unknown>> = []
+    const diagnostics: any[] = []
+    installLogTransport(logs)
+    __setConversationRecoveryDiagnosticsSinkForTest((_prefix, record) => {
+      diagnostics.push(record)
+    })
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_tail_fail",
+      after: 100,
+      currentTaskID: () => "tsk_tail_fail",
+      resumeAfter: () => 101,
+    })
+    deps.afterRestart = async () => {
+      throw new Error("tail merge failed")
+    }
+
+    await expect(performSseReconnect(deps)).resolves.toBeUndefined()
+    await waitForUploadedLogs(logs)
+
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_tail_fail" }, 101, { directory: TEST_DIRECTORY }]])
+    expect(spy.retryCalls).toBe(1)
+    expect(diagnostics.map((entry) => entry.event)).toEqual([
+      "conversation-recovery.started",
+      "conversation-recovery.failed",
+    ])
+    expect(diagnostics).not.toContainEqual(expect.objectContaining({ event: "conversation-recovery.succeeded" }))
+    expect(notificationStore.items.some((item) => item.id === "sse:reconnect-failed:tsk_tail_fail")).toBe(true)
+  })
+
+  test("beforeRestart failure records reconnect failure without opening a new stream", async () => {
+    const diagnostics: any[] = []
+    __setConversationRecoveryDiagnosticsSinkForTest((_prefix, record) => {
+      diagnostics.push(record)
+    })
+    installLogTransport()
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_pre_tail_fail",
+      after: 100,
+      currentTaskID: () => "tsk_pre_tail_fail",
+      resumeAfter: () => 101,
+    })
+    deps.beforeRestart = async () => {
+      throw new Error("tail merge failed before stream")
+    }
+
+    await expect(performSseReconnect(deps)).resolves.toBeUndefined()
+
+    expect(spy.restartCalls).toEqual([])
+    expect(spy.retryCalls).toBe(1)
+    expect(diagnostics.map((entry) => entry.event)).toEqual([
+      "conversation-recovery.started",
+      "conversation-recovery.failed",
+    ])
+    expect(diagnostics).not.toContainEqual(expect.objectContaining({ event: "conversation-recovery.succeeded" }))
+    expect(notificationStore.items.some((item) => item.id === "sse:reconnect-failed:tsk_pre_tail_fail")).toBe(true)
   })
 
   test("restart retry re-reads the current resume sequence instead of using a stale cursor", async () => {
@@ -425,7 +496,7 @@ describe("startSSE stream error handling", () => {
   })
 
   test("live replay expiry reconnects from persisted sequence without requesting live replay", async () => {
-    createRoot((dispose) => {
+    await createRoot(async (dispose) => {
       const originalSetTimeout = globalThis.setTimeout
       const originalClearTimeout = globalThis.clearTimeout
       const timers: Array<{ fn: () => void; ms: number }> = []
@@ -473,10 +544,14 @@ describe("startSSE stream error handling", () => {
         const reconnect = timers.find((timer) => timer.ms === 3000)
         expect(reconnect).toBeDefined()
         reconnect!.fn()
+        await waitForCondition(() => streams.length === 2)
 
         expect(streams).toEqual([
           { path: "task/tsk_expired/events", query: { directory: TEST_DIRECTORY, after: "5", after_live: "0" } },
-          { path: "task/tsk_expired/events", query: { directory: TEST_DIRECTORY, after: "6" } },
+          {
+            path: "task/tsk_expired/events",
+            query: { directory: TEST_DIRECTORY, after: "6", after_message_watermark: "6" },
+          },
         ])
         expect(requests).toEqual(["task/tsk_expired/conversation"])
       } finally {

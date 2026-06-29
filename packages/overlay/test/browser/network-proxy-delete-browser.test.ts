@@ -66,7 +66,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
       if (path === "/mission") return send([])
       if (path === "/project/current/worktrees") return send([])

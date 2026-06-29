@@ -23,9 +23,9 @@ describe("overlay theme palette intent", () => {
   const designLanguage = readFileSync(DESIGN_LANGUAGE_PATH, "utf8")
 
   test("dark keeps the April-mid historical Overlay palette", () => {
-    expect(themeToken(dark, "--bg")).toBe("rgba(26, 27, 30, 0.78)")
-    expect(themeToken(dark, "--surface")).toBe("rgba(38, 40, 44, 0.74)")
-    expect(themeToken(dark, "--surface-inset")).toBe("rgba(31, 33, 37, 0.72)")
+    expect(themeToken(dark, "--bg")).toBe("rgb(26, 27, 30)")
+    expect(themeToken(dark, "--surface")).toBe("rgb(38, 40, 44)")
+    expect(themeToken(dark, "--surface-inset")).toBe("rgb(31, 33, 37)")
     expect(themeToken(dark, "--dialog-bg")).toBe("rgb(40, 42, 46)")
     expect(themeToken(dark, "--menu-panel-bg")).toBe("rgb(32, 34, 38)")
     expect(themeToken(dark, "--accent")).toBe("#5b8def")
@@ -35,8 +35,8 @@ describe("overlay theme palette intent", () => {
   })
 
   test("vscode dark is an Overlay-owned fixed palette", () => {
-    expect(themeToken(vscodeDark, "--bg")).toBe("rgba(30, 30, 30, 0.78)")
-    expect(themeToken(vscodeDark, "--surface")).toBe("rgba(37, 37, 38, 0.74)")
+    expect(themeToken(vscodeDark, "--bg")).toBe("rgb(30, 30, 30)")
+    expect(themeToken(vscodeDark, "--surface")).toBe("rgb(37, 37, 38)")
     expect(themeToken(vscodeDark, "--dialog-bg")).toBe("rgb(37, 37, 38)")
     expect(themeToken(vscodeDark, "--menu-panel-bg")).toBe("rgb(31, 31, 31)")
     expect(vscodeDark).not.toContain("--vscode-")
@@ -46,7 +46,7 @@ describe("overlay theme palette intent", () => {
     expect(vscodeDark).not.toContain("rgba(28, 33, 58")
   })
 
-  test("all themes keep window backing materials transparent-capable", () => {
+  test("all themes keep shell backing materials opaque", () => {
     const themes = [
       ["dark", dark],
       ["light", light],
@@ -64,18 +64,13 @@ describe("overlay theme palette intent", () => {
       "--body-bg",
       "--panel-body-bg",
       "--chrome",
-      "--task-bar-bg",
-      "--panel-fill",
-      "--panel-fill-hover",
-      "--card-fill",
-      "--card-fill-hover",
     ]
     const violations: string[] = []
 
     for (const [themeName, css] of themes) {
       for (const token of backingTokens) {
         const value = resolveThemeValue(css, themeToken(css, token))
-        if (!isTransparentCapable(value)) {
+        if (!isOpaqueBackdrop(value)) {
           violations.push(`${themeName} ${token}: ${value}`)
         }
       }
@@ -173,10 +168,8 @@ function resolveThemeValue(css: string, value: string, seen = new Set<string>())
   return value.replace(/var\(\s*(--[a-z][a-z0-9-]*)\s*\)/gi, (raw, token: string) => {
     if (seen.has(token)) return `var(${token})`
     const local = themeTokenOptional(css, token)
-    // Cross-cascade tokens (e.g. --ui-window-opacity lives in base.css, not
-    // in theme files) legitimately resolve outside this file. Leave them as
-    // `var(--token)` rather than throwing — the transparent-capability check
-    // only cares whether the value literally contains rgba/hsla/transparent.
+    // Some supporting tokens still live outside the theme file. Leave those
+    // cross-file var() references intact instead of throwing.
     if (local === null) return raw
     seen.add(token)
     const resolved = resolveThemeValue(css, local, seen)
@@ -191,8 +184,16 @@ function themeTokenOptional(css: string, token: string): string | null {
   return match ? match[1]!.trim() : null
 }
 
-function isTransparentCapable(value: string): boolean {
-  return /\brgba\(/i.test(value) || /\bhsla\(/i.test(value) || /\btransparent\b/i.test(value)
+function isOpaqueBackdrop(value: string): boolean {
+  const normalized = value.replace(/\s+/g, " ").trim()
+  if (/var\(--ui-window-opacity\)/i.test(normalized)) return false
+  if (/\brgba\(/i.test(normalized) || /\bhsla\(/i.test(normalized) || /\btransparent\b/i.test(normalized)) {
+    return false
+  }
+  if (/^linear-gradient\(/i.test(normalized)) {
+    return /\brgb\(/i.test(normalized) || /#[0-9a-f]{6}\b/i.test(normalized)
+  }
+  return isOpaqueColor(normalized)
 }
 
 function isOpaqueColor(value: string): boolean {

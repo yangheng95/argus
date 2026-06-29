@@ -12,7 +12,7 @@ import { For } from "solid-js"
 import { appStore } from "../../store/app"
 import { t } from "../../utils/i18n"
 import type { ToolPermAction } from "../../store/settings"
-import { patchConfig } from "../../services/config"
+import { currentProjectConfigRequestOptions, patchConfig } from "../../services/config"
 import { formatErrorDetails, notifyError } from "../../services/notify"
 import {
   SettingsGroup,
@@ -78,14 +78,24 @@ function errorMessage(error: unknown): string {
 }
 
 function setPermission(key: keyof ToolPermsObj, action: ToolPermAction): void {
-  void patchConfig({ tool_permissions: { [key]: action } }).catch((error) => {
+  try {
+    const options = currentProjectConfigRequestOptions()
+    void patchConfig({ tool_permissions: { [key]: action } }, options).catch((error) => {
+      notifyError({
+        id: `permissions:${key}`,
+        title: t("permissions.title"),
+        message: errorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
     notifyError({
       id: `permissions:${key}`,
       title: t("permissions.title"),
       message: errorMessage(error),
       details: formatErrorDetails(error),
     })
-  })
+  }
 }
 
 // ── Main Panel ──

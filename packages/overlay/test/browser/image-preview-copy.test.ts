@@ -246,7 +246,7 @@ test(
       ) {
         return eventStream()
       }
-      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+      if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
       if (path === "/mission") return send([])
       if (path === "/session") return send([])
       if (path === "/config/prompt") return send([])
@@ -627,9 +627,7 @@ test(
       await page.waitForFunction(() => {
         const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
         return Boolean(
-          image?.complete &&
-            image.naturalWidth > 0 &&
-            image.alt === "desktop-failed-main-side-by-side.png",
+          image?.complete && image.naturalWidth > 0 && image.alt === "desktop-failed-main-side-by-side.png",
         )
       })
       await page.click('#imagePreviewDialog button[aria-label="关闭"]')

@@ -37,5 +37,6 @@ test("center workbench shell does not offset panel headers", () => {
   expect(activityCss).toContain(".sidebar-explorer-panel,\n.sidebar-file-changes-panel,")
   expect(activityCss).toContain("container: side-activity / inline-size")
   expect(activityCss).toContain(".file-changes-body {\n  padding: var(--ui-gap-sm);")
-  expect(inspectorCss).toContain(".file-explorer-toolbar {\n  flex: 0 0 auto;\n  padding: var(--ui-gap-sm);")
+  expect(inspectorCss).not.toContain(".file-explorer-command-surface")
+  expect(inspectorCss).toContain(".file-explorer-panel :where(.file-explorer-search)")
 })

@@ -14,6 +14,7 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "session.updated",
   "session.deleted",
   "session.diff",
+  "session.bridge.persist_failed",
   "task.replay_expired",
   "task.live_replay_expired",
   "task.messages.changed",
@@ -82,11 +83,13 @@ const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set([
   "task.failed",
   "task.cancelled",
   "task.blocked",
+  "task.lifecycle",
   "task.rewound",
   "task.message",
   "agent.coordination.requested",
   "agent.coordination.responded",
   "agent.coordination.cancelled",
+  "agent.coordination.action",
   "acceptance.ready",
   "acceptance.evidence.updated",
 ])
@@ -127,6 +130,7 @@ const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.failed",
   "task.cancelled",
   "task.blocked",
+  "task.lifecycle",
 ])
 
 const BOARD_INVALIDATING_PREFIXES = [

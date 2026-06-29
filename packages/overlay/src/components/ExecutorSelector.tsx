@@ -36,6 +36,7 @@ import {
 import {
   getTaskOperatorModelContext,
   getHexinBudget,
+  currentProjectConfigRequestOptions,
   modelContextID,
   patchConfig,
   patchSessionConfig,
@@ -493,7 +494,10 @@ export function ExecutorSelector() {
     if (appStore.providerCatalog) return
     setProviderLoading(true)
     try {
-      await loadProviderInfo()
+      await loadProviderInfo(undefined, {
+        directory: activeDirectory().trim(),
+        isCurrentDirectory: (directory) => activeDirectory().trim() === directory,
+      })
     } finally {
       setProviderLoading(false)
     }
@@ -545,7 +549,7 @@ export function ExecutorSelector() {
       mirror.close()
       return
     }
-    await patchConfig({ model: value ? value : null })
+    await patchConfig({ model: value ? value : null }, currentProjectConfigRequestOptions())
     mirror.close()
   }
 
@@ -566,7 +570,12 @@ export function ExecutorSelector() {
       await saveSettings()
     }
     setFocusedExternalID(executorID)
-    await setExecutorModel({ executorID, model, directory: activeDirectory().trim() })
+    await setExecutorModel({
+      executorID,
+      model,
+      directory: activeDirectory().trim(),
+      isCurrentDirectory: (directory) => activeDirectory().trim() === directory,
+    })
     external.close()
   }
 

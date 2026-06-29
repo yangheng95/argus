@@ -1261,6 +1261,13 @@ function cardStillOwnsSessionMessage(session: SessionInfo, cardID: string): bool
   return false
 }
 
+function cardCanReceiveSessionLifecycle(session: SessionInfo, cardID: string): boolean {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return false
+  if (card.kind === "phase") return card.phaseSessionID === session.sessionID
+  return !card.sessionID || card.sessionID === session.sessionID
+}
+
 function handleMessageRemoved(event: any): void {
   const p = propsOf(event)
   const sessionID = String(p.sessionID || "")
@@ -1422,6 +1429,7 @@ function handleSessionStatus(event: any): void {
     pendingSessionStatus.set(sessionID, projected)
     return
   }
+  if (!cardCanReceiveSessionLifecycle(info, activeCardID)) return
   // Session lifecycle only touches the ACTIVE turn card. Older turn cards
   // are frozen history; a later terminal status must not retro-flip them.
   applyProjectedSessionStatus(activeCardID, projected)
@@ -1441,6 +1449,7 @@ function handleSessionError(event: any): void {
     pendingSessionStatus.set(sessionID, projected)
     return
   }
+  if (!cardCanReceiveSessionLifecycle(info, activeCardID)) return
   applyProjectedSessionStatus(activeCardID, projected)
 }
 
@@ -1454,6 +1463,7 @@ function drainPendingSessionStatus(sessionID: string): void {
   const activeCardID = session?.activeCardID
   if (!session || !activeCardID || !cardTreeStore.cards[activeCardID]) return
   pendingSessionStatus.delete(sessionID)
+  if (!cardCanReceiveSessionLifecycle(session, activeCardID)) return
   applyProjectedSessionStatus(activeCardID, projected)
 }
 
@@ -2217,14 +2227,19 @@ function resolveTurnCardID(
         phaseID: phase.phaseID,
         phaseSessionKind: stage,
         phaseSessionID: sessionID,
+        phaseSessionOrderKey: orderKey,
         orderKey,
         time,
       })
     } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
-      // Absorbed session replaced (rewind / re-dispatch within the same
-      // goal run). Track the latest so the reply box always targets the
-      // session whose parts are currently streaming.
-      setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID)
+      // Absorbed session replaced (rewind / re-dispatch). Track only a
+      // timeline-newer owner so late events from an older attempt/session do
+      // not retarget phase controls on an attempt-invariant card.
+      const currentOrderKey = cardTreeStore.cards[phaseCardID]!.phaseSessionOrderKey
+      if (!currentOrderKey || compareTimelineOrderKeys(orderKey, currentOrderKey, "phase session owner") >= 0) {
+        setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID)
+        setCardTreeStore("cards", phaseCardID, "phaseSessionOrderKey", orderKey)
+      }
     }
     return { cardID: phaseCardID, isPhase: true }
   }
@@ -3324,7 +3339,10 @@ function rebuildGoalStepCards(board: any): void {
               prev.goalDescription = gw.goalObjective || undefined
               prev.round = orderIndex + 1
               prev.attempt = typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1
-              if (phaseSessionID) prev.phaseSessionID = phaseSessionID
+              if (phaseSessionID) {
+                prev.phaseSessionID = phaseSessionID
+                prev.phaseSessionOrderKey = orderKey
+              }
               prev.orderKey = orderKey
               // startedAt > 0 is invariant (caller filters pending phases).
               prev.time = startedAt
@@ -3346,6 +3364,7 @@ function rebuildGoalStepCards(board: any): void {
                 round: orderIndex + 1,
                 attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
                 ...(phaseSessionID ? { phaseSessionID } : {}),
+                ...(phaseSessionID ? { phaseSessionOrderKey: orderKey } : {}),
                 orderKey,
                 time: startedAt,
               }

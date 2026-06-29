@@ -73,6 +73,10 @@ function profileTypeLabel(profile: PromptProfileOption): string {
   return profile.built_in ? t("prompt_profile.built_in") : t("prompt_profile.custom")
 }
 
+function profileOverlayCount(profile: PromptProfileOption | undefined): number {
+  return Object.values(profile?.agents ?? {}).filter((prompt) => prompt.trim().length > 0).length
+}
+
 function targetValue(draft: PromptProfileDraft, targetID: string): string {
   return draft.agents?.[targetID] ?? ""
 }
@@ -123,6 +127,16 @@ export default function PromptCatalog() {
       return typeof prompt === "string" && prompt.trim().length > 0
     })
   })
+  const selectedProfileTargetCount = createMemo(() => profileTargets().length)
+  const profileNameByID = (profileID: string): string => {
+    const profile = profiles().find((item) => item.id === profileID)
+    return profile?.label ?? profileID
+  }
+  const scopeLabel = createMemo(() =>
+    promptProfileCatalogScope().kind === "session"
+      ? t("prompt_profile.scope_session")
+      : t("prompt_profile.scope_project"),
+  )
 
   async function refreshPromptProfiles(): Promise<void> {
     const scope = promptProfileCatalogScope()
@@ -184,6 +198,8 @@ export default function PromptCatalog() {
   async function handleCreateProfile() {
     const catalog = profileCatalog()
     if (!catalog) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     const nextID = createPromptProfileID(
       catalog.profiles.map((profile) => profile.id),
       "custom-squad",
@@ -198,6 +214,7 @@ export default function PromptCatalog() {
           agents: {},
         },
         catalog.default,
+        directory,
       )
       await reloadPromptSurfaces(nextID)
       showNotice(t("prompt_profile.created"), "active")
@@ -212,6 +229,8 @@ export default function PromptCatalog() {
     const catalog = profileCatalog()
     const profile = currentProfile()
     if (!catalog || !profile) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     const nextID = createPromptProfileID(
       catalog.profiles.map((item) => item.id),
       profile.id,
@@ -230,6 +249,7 @@ export default function PromptCatalog() {
           ),
         },
         catalog.default,
+        directory,
       )
       await reloadPromptSurfaces(nextID)
       showNotice(t("prompt_profile.duplicated"), "active")
@@ -244,6 +264,8 @@ export default function PromptCatalog() {
     const catalog = profileCatalog()
     const profile = currentProfile()
     if (!catalog || !profile || !profile.editable) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     setSaving(true)
     try {
       await savePromptProfile(
@@ -254,6 +276,7 @@ export default function PromptCatalog() {
           agents: { ...(profileDraftState.agents ?? {}) },
         },
         catalog.default,
+        directory,
       )
       await reloadPromptSurfaces(profileDraftState.id)
       showNotice(t("common.saved"), "active")
@@ -268,10 +291,12 @@ export default function PromptCatalog() {
     const catalog = profileCatalog()
     const profile = currentProfile()
     if (!catalog || !profile || !profile.editable) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     const nextActive = catalog.active === profile.id ? catalog.default : catalog.active
     setSaving(true)
     try {
-      await deletePromptProfile(profile.id, nextActive, catalog.default)
+      await deletePromptProfile(profile.id, nextActive, catalog.default, directory)
       await reloadPromptSurfaces(nextActive)
       showNotice(t("prompt_profile.deleted"), "active")
     } catch (error) {
@@ -284,9 +309,11 @@ export default function PromptCatalog() {
   async function handleActivateProfile() {
     const profile = currentProfile()
     if (!profile || projectActiveProfileID() === profile.id) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     setSaving(true)
     try {
-      await setProjectPromptProfileActive(profile.id)
+      await setProjectPromptProfileActive(profile.id, directory)
       await reloadPromptSurfaces(profile.id)
       showNotice(t("prompt_profile.activated"), "active")
     } catch (error) {
@@ -337,9 +364,11 @@ export default function PromptCatalog() {
     const catalog = profileCatalog()
     const preview = importPreview()
     if (!catalog || !preview) return
+    const directory = promptProfileCatalogDirectory()
+    if (!directory) return
     setSaving(true)
     try {
-      await importPromptProfiles(preview, catalog)
+      await importPromptProfiles(preview, catalog, directory)
       const selected = preview.active ?? preview.profiles[0]?.id
       setImportPreview(null)
       await reloadPromptSurfaces(selected)
@@ -483,6 +512,35 @@ export default function PromptCatalog() {
 
           <Show when={!profileLoading()} fallback={<div class="loading-hint">{t("prompt_profile.loading")}</div>}>
             <Show when={profiles().length > 0} fallback={<div class="empty-hint">{t("prompt_profile.none")}</div>}>
+              <div class="prompt-profile-overview" data-ui="prompt-profile-overview">
+                <div class="prompt-profile-overview-item" data-kind="scope">
+                  <span>{t("prompt_profile.scope")}</span>
+                  <strong>{scopeLabel()}</strong>
+                </div>
+                <div class="prompt-profile-overview-item" data-kind="project-active">
+                  <span>{t("prompt_profile.project_active")}</span>
+                  <strong>{profileNameByID(projectActiveProfileID())}</strong>
+                </div>
+                <Show when={currentScopeSessionID()}>
+                  <div class="prompt-profile-overview-item" data-kind="session-active">
+                    <span>{t("prompt_profile.session_active")}</span>
+                    <strong>{profileNameByID(sessionActiveProfileID())}</strong>
+                  </div>
+                </Show>
+                <Show when={currentProfile()}>
+                  {(profile) => (
+                    <div class="prompt-profile-overview-item" data-kind="selected">
+                      <span>{t("prompt_profile.selected_profile")}</span>
+                      <strong>{profile().label}</strong>
+                      <small>
+                        {t("prompt_profile.target_count", { count: selectedProfileTargetCount() })} ·{" "}
+                        {t("prompt_profile.overlay_count", { count: profileOverlayCount(profile()) })}
+                      </small>
+                    </div>
+                  )}
+                </Show>
+              </div>
+
               <div class="prompt-profile-layout" data-ui="prompt-profile-panel">
                 <div class="prompt-profile-list" data-ui="prompt-profile-list">
                   <For each={profiles()}>
@@ -527,101 +585,151 @@ export default function PromptCatalog() {
                         <div class="prompt-profile-detail-copy">
                           <strong>{profile.label}</strong>
                           <span>{profile.id}</span>
+                          <Show when={profile.description}>
+                            <small>{profile.description}</small>
+                          </Show>
+                          <div class="prompt-profile-detail-badges">
+                            <SettingsPill tone={profile.built_in ? "muted" : "ok"}>
+                              {profileTypeLabel(profile)}
+                            </SettingsPill>
+                            <Show when={projectActiveProfileID() === profile.id}>
+                              <SettingsPill tone="accent">{t("prompt_profile.project_active")}</SettingsPill>
+                            </Show>
+                            <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
+                              <SettingsPill tone="ok">{t("prompt_profile.session_active")}</SettingsPill>
+                            </Show>
+                          </div>
                         </div>
-                        <div class="prompt-profile-detail-actions">
+                      </div>
+
+                      <div class="prompt-profile-action-strip" data-ui="prompt-profile-actions">
+                        <Button
+                          type="button"
+                          variant={projectActiveProfileID() === profile.id ? "ghost" : "solid"}
+                          size="sm"
+                          tone={projectActiveProfileID() === profile.id ? "neutral" : "accent"}
+                          data-ui="prompt-profile-activate-project"
+                          disabled={saving() || projectActiveProfileID() === profile.id}
+                          onClick={handleActivateProfile}
+                        >
+                          {projectActiveProfileID() === profile.id
+                            ? t("prompt_profile.project_active")
+                            : t("prompt_profile.activate")}
+                        </Button>
+                        <Show when={currentScopeSessionID()}>
+                          <Button
+                            type="button"
+                            variant={sessionActiveProfileID() === profile.id ? "ghost" : "solid"}
+                            size="sm"
+                            tone={sessionActiveProfileID() === profile.id ? "neutral" : "accent"}
+                            data-ui="prompt-profile-activate-session"
+                            disabled={saving() || sessionActiveProfileID() === profile.id}
+                            onClick={handleActivateProfileForSession}
+                          >
+                            {sessionActiveProfileID() === profile.id
+                              ? t("prompt_profile.session_active")
+                              : t("prompt_profile.activate_session")}
+                          </Button>
+                        </Show>
+                        <Show when={profile.editable}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            tone="danger"
+                            data-ui="prompt-profile-delete"
+                            disabled={saving()}
+                            onClick={handleDeleteProfile}
+                          >
+                            {t("common.delete")}
+                          </Button>
                           <Button
                             type="button"
                             variant="solid"
                             size="sm"
                             tone="accent"
-                            disabled={saving() || projectActiveProfileID() === profile.id}
-                            onClick={handleActivateProfile}
+                            data-ui="prompt-profile-save"
+                            disabled={saving() || !currentProfileDirty()}
+                            onClick={handleSaveProfile}
                           >
-                            {t("prompt_profile.activate")}
+                            {t("common.save")}
                           </Button>
-                          <Show when={currentScopeSessionID()}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              tone="neutral"
-                              disabled={saving() || sessionActiveProfileID() === profile.id}
-                              onClick={handleActivateProfileForSession}
-                            >
-                              {t("prompt_profile.activate_session")}
-                            </Button>
-                          </Show>
-                          <Show when={profile.editable}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              tone="danger"
+                        </Show>
+                      </div>
+
+                      <Show
+                        when={profile.editable}
+                        fallback={<div class="prompt-profile-readonly-note">{t("prompt_profile.readonly_note")}</div>}
+                      >
+                        <div class="prompt-profile-form" data-ui="prompt-profile-metadata">
+                          <div class="prompt-profile-form-head">
+                            <strong>{t("prompt_profile.metadata")}</strong>
+                            <span>{t("prompt_profile.custom")}</span>
+                          </div>
+                          <label class="prompt-profile-field">
+                            <span class="field-label">{t("prompt_profile.label")}</span>
+                            <input
+                              class="field-input"
+                              type="text"
+                              value={profileDraftState.label}
                               disabled={saving()}
-                              onClick={handleDeleteProfile}
-                            >
-                              {t("common.delete")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="solid"
-                              size="sm"
-                              tone="accent"
-                              disabled={saving() || !currentProfileDirty()}
-                              onClick={handleSaveProfile}
-                            >
-                              {t("common.save")}
-                            </Button>
-                          </Show>
+                              onInput={(event) => setProfileDraftState("label", event.currentTarget.value)}
+                            />
+                          </label>
+
+                          <label class="prompt-profile-field">
+                            <span class="field-label">{t("prompt_profile.description")}</span>
+                            <AutoGrowTextarea
+                              class="composer-textarea prompt-profile-description"
+                              rows={3}
+                              value={profileDraftState.description ?? ""}
+                              disabled={saving()}
+                              onInput={(event) => setProfileDraftState("description", event.currentTarget.value)}
+                            />
+                          </label>
                         </div>
-                      </div>
-
-                      <div class="prompt-profile-form">
-                        <label class="prompt-profile-field">
-                          <span class="field-label">{t("prompt_profile.label")}</span>
-                          <input
-                            class="field-input"
-                            type="text"
-                            value={profileDraftState.label}
-                            disabled={saving() || !profile.editable}
-                            onInput={(event) => setProfileDraftState("label", event.currentTarget.value)}
-                          />
-                        </label>
-
-                        <label class="prompt-profile-field">
-                          <span class="field-label">{t("prompt_profile.description")}</span>
-                          <AutoGrowTextarea
-                            class="composer-textarea prompt-profile-description"
-                            rows={3}
-                            value={profileDraftState.description ?? ""}
-                            disabled={saving() || !profile.editable}
-                            onInput={(event) => setProfileDraftState("description", event.currentTarget.value)}
-                          />
-                        </label>
-                      </div>
-
-                      <Show when={!profile.editable}>
-                        <div class="prompt-profile-readonly-note">{t("prompt_profile.readonly_note")}</div>
                       </Show>
 
                       <div class="prompt-profile-targets">
                         <div class="prompt-profile-targets-head">
-                          <strong>{t("prompt_profile.agent_overlays")}</strong>
-                          <span>{t("prompt_profile.overlay_hint")}</span>
+                          <div>
+                            <strong>{t("prompt_profile.agent_overlays")}</strong>
+                            <span>{t("prompt_profile.overlay_hint")}</span>
+                          </div>
+                          <SettingsPill tone="muted">
+                            {t("prompt_profile.target_count", { count: selectedProfileTargetCount() })}
+                          </SettingsPill>
                         </div>
                         <For each={profileTargets()}>
                           {(target) => {
                             const labelID = promptProfileTargetLabelID(target.id)
+                            const value = () => targetValue(profileDraftState, target.id)
+                            const hasOverlay = () => value().trim().length > 0
+                            const editableTarget = () => !!profile.editable && target.editable
                             return (
-                              <div class="prompt-profile-target">
+                              <div
+                                class="prompt-profile-target"
+                                data-editable={editableTarget() ? "true" : "false"}
+                                data-has-overlay={hasOverlay() ? "true" : "false"}
+                              >
                                 <div class="prompt-profile-target-head">
                                   <div class="prompt-profile-target-copy">
                                     <strong id={labelID}>{target.label}</strong>
                                     <span>{target.id}</span>
                                   </div>
-                                  <Show when={target.built_in_only}>
-                                    <SettingsPill tone="muted">{t("prompt_profile.built_in_only")}</SettingsPill>
-                                  </Show>
+                                  <div class="prompt-profile-target-state">
+                                    <SettingsPill tone={editableTarget() ? "ok" : "muted"}>
+                                      {editableTarget() ? t("prompt_profile.editable") : t("prompt_profile.readonly")}
+                                    </SettingsPill>
+                                    <SettingsPill tone={hasOverlay() ? "accent" : "muted"}>
+                                      {hasOverlay()
+                                        ? t("prompt_profile.overlay_configured")
+                                        : t("prompt_profile.overlay_empty")}
+                                    </SettingsPill>
+                                    <Show when={target.built_in_only}>
+                                      <SettingsPill tone="muted">{t("prompt_profile.built_in_only")}</SettingsPill>
+                                    </Show>
+                                  </div>
                                 </div>
                                 <Show when={target.description}>
                                   <small class="prompt-profile-target-description">{target.description}</small>
@@ -632,7 +740,7 @@ export default function PromptCatalog() {
                                     <div class="prompt-preview-card prompt-preview-card--attached">
                                       <div
                                         class="md-content prompt-preview-body"
-                                        innerHTML={promptPreviewHtml(targetValue(profileDraftState, target.id))}
+                                        innerHTML={promptPreviewHtml(value())}
                                       />
                                     </div>
                                   }
@@ -641,7 +749,7 @@ export default function PromptCatalog() {
                                     class="composer-textarea prompt-profile-textarea"
                                     aria-labelledby={labelID}
                                     rows={6}
-                                    value={targetValue(profileDraftState, target.id)}
+                                    value={value()}
                                     disabled={saving() || !target.editable}
                                     onInput={(event) =>
                                       setProfileDraftState("agents", target.id, event.currentTarget.value)

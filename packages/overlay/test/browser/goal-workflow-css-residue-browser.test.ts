@@ -120,7 +120,7 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
     if (path === "/global/health") return send({ version: "goal-workflow-css-residue" })
     if (path === "/global/projects/discover")
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])

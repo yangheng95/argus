@@ -313,13 +313,17 @@ function pickServerErrorDetail(body: unknown): string {
   }
 }
 
+export interface ApiJsonInit extends RequestInit {
+  timeoutMilliseconds?: number | null
+}
+
 // Return type is intentionally `any` (not `unknown`) so this remains a
 // drop-in replacement for the pre-M3 `fetch().then(r => r.json())` chain.
 // Callers across the overlay rely on field-level access without first
 // narrowing — preserving that behaviour keeps M3.A a pure plumbing
 // change. Dedicated typed wrappers can land later in the services layer.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function apiJson(path: string, init?: RequestInit): Promise<any> {
+export async function apiJson(path: string, init?: ApiJsonInit): Promise<any> {
   const transport = getHostTransport()
   const method = methodFromInit(init)
   const { pathOnly, query } = requestTarget(path, method)
@@ -330,6 +334,7 @@ export async function apiJson(path: string, init?: RequestInit): Promise<any> {
     body: bodyFromInit(init),
     headers: headersFromInit(init),
     signal: init?.signal ?? undefined,
+    timeoutMilliseconds: init?.timeoutMilliseconds,
     responseKind: "json",
   })
   if (!res.ok) throw new ApiError(res.status, path, res.body)
@@ -354,7 +359,7 @@ function errorMessage(error: unknown): string {
 export async function apiJsonWithTimeout<T = unknown>(
   path: string,
   timeoutMilliseconds: number,
-  init?: RequestInit,
+  init?: ApiJsonInit,
 ): Promise<T> {
   const timeoutSignal = AbortSignal.timeout(timeoutMilliseconds)
   const signal = init?.signal ? mergeAbortSignals(init.signal, timeoutSignal) : timeoutSignal

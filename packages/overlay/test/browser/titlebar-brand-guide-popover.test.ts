@@ -143,7 +143,7 @@ test("titlebar brand guide popover stays accessible and clears compact titlebar"
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session" || path === "/mission" || path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
     if (path === "/vcs") {
@@ -170,7 +170,7 @@ test("titlebar brand guide popover stays accessible and clears compact titlebar"
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
-    if (path === "/log/tail") return send({ lines: [] })
+    if (path === "/log/tail") return send({ path: "D:/overlay/logs/server.log", lines: [] })
     return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
   })
 

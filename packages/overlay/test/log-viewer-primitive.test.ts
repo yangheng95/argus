@@ -45,12 +45,20 @@ describe("LogViewer primitives", () => {
 
   test("log virtual list owns a stable visible height", () => {
     const css = readFileSync(SETTINGS_CSS, "utf8")
+    const formBody = ruleBody(css, "#logDialog .log-viewer-dialog-form")
     const body = ruleBody(css, ".log-viewer")
+    const errorBody = ruleBody(css, ".log-error-banner")
 
-    expect(body).toContain("height: clamp(")
+    expect(formBody).toContain("height: min(")
+    expect(formBody).toContain("min-height:")
+    expect(formBody).toContain("max-height:")
+    expect(formBody).toContain("resize: both")
+    expect(body).toContain("flex: 1 1 auto")
+    expect(body).toContain("height: auto")
     expect(body).toContain("min-height:")
-    expect(body).toContain("max-height:")
+    expect(body).toContain("max-height: none")
     expect(body).toContain("box-sizing: border-box")
+    expect(errorBody).toContain("overflow-wrap: anywhere")
   })
 
   test("header exposes one refresh entry for server log loading", () => {
@@ -60,13 +68,27 @@ describe("LogViewer primitives", () => {
     const zhLocale = JSON.parse(readFileSync(ZH_LOCALE, "utf8")) as Record<string, string>
 
     expect(source).toContain('id="btnLogRefresh"')
+    expect(source).toContain('id="btnLogOpenFile"')
+    expect(source).toContain('formClass="log-viewer-dialog-form"')
+    expect(source).toContain("parseServerLogTailResponse")
+    expect(source).toContain("nativeOpen(path)")
+    expect(source).toContain("Host did not open the current log file")
+    expect(source).toContain("log-error-banner")
+    expect(source).toContain('role="alert"')
     expect(source).not.toContain("btnLogServerLogs")
     expect(source).not.toContain('t("log.load_server")')
     expect(domSource).not.toContain("btnLogServerLogs")
+    expect(domSource).toContain("btnLogOpenFile")
+    expect(enLocale["log.open_file"]).toBe("Open File")
+    expect(enLocale["log.open_file_hint"]).toBe("Open the current server log file")
+    expect(zhLocale["log.open_file"]).toBe("打开文件")
+    expect(zhLocale["log.open_file_hint"]).toBe("打开当前服务端日志文件")
     expect(enLocale).not.toHaveProperty("log.load_server")
     expect(zhLocale).not.toHaveProperty("log.load_server")
 
     const clickRefreshEntrypoints = source.match(/onClick=\{\(\) => void refreshAction\.run\(\)\}/g) ?? []
     expect(clickRefreshEntrypoints).toHaveLength(1)
+    expect(source.match(/id="btnLogRefresh"/g) ?? []).toHaveLength(1)
+    expect(source.match(/id="btnLogOpenFile"/g) ?? []).toHaveLength(1)
   })
 })

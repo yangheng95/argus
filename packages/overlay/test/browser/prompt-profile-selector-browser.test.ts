@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector, type BrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -182,10 +183,7 @@ const promptProfileScenarios = [
   expectedUnselectedLabels: string[]
 }>
 
-async function waitForAssistantButton(
-  page: any,
-  diagnostics: { badResponses: string[]; consoleMessages: string[]; pageErrors: string[] },
-): Promise<void> {
+async function waitForAssistantButton(page: any, diagnostics: BrowserErrorCollector): Promise<void> {
   for (let i = 0; i < 100; i++) {
     const exists = await page.evaluate(
       () => !!document.querySelector('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]'),
@@ -200,7 +198,13 @@ async function waitForAssistantButton(
     hasComposerMount: !!document.querySelector("#solidChatComposer"),
     scripts: Array.from(document.scripts).map((script) => script.src || script.textContent?.slice(0, 80) || ""),
   }))
-  throw new Error(`Assistant activity button did not mount: ${JSON.stringify({ ...diagnostics, state }, null, 2)}`)
+  throw new Error(
+    `Assistant activity button did not mount: ${JSON.stringify(
+      { errors: diagnostics.unexpectedErrors, state },
+      null,
+      2,
+    )}`,
+  )
 }
 
 for (const scenario of promptProfileScenarios) {
@@ -226,7 +230,7 @@ for (const scenario of promptProfileScenarios) {
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks" || path === "/global/tasks") return send(taskListPayload())
+      if (path === "/global/tasks") return send(taskListPayload())
       if (path === "/global/projects/discover") return send([])
       if (path === "/session") return send([])
       if (path === "/mission") return send([])
@@ -291,18 +295,7 @@ for (const scenario of promptProfileScenarios) {
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      const badResponses: string[] = []
-      const consoleMessages: string[] = []
-      const pageErrors: string[] = []
-      page.on("response", (response: any) => {
-        if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
-      })
-      page.on("console", (message: any) => {
-        consoleMessages.push(`${message.type}: ${message.text}`)
-      })
-      page.on("pageerror", (error: any) => {
-        pageErrors.push(error.message || String(error))
-      })
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1280, height: 860 })
       await page.evaluateOnNewDocument(
         ({ serverUrl, locale }) => {
@@ -348,7 +341,7 @@ for (const scenario of promptProfileScenarios) {
       )
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-      await waitForAssistantButton(page, { badResponses, consoleMessages, pageErrors })
+      await waitForAssistantButton(page, errors)
       const assistantVisible = await page.$eval(
         '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
         (node: HTMLElement) => {
@@ -463,6 +456,7 @@ for (const scenario of promptProfileScenarios) {
         if (!trigger) throw new Error("Missing prompt profile select trigger")
         const content = document.querySelector(".prompt-profile-select-content") as HTMLElement | null
         if (!content) throw new Error("Missing prompt profile select content")
+        const triggerState = renderedState(trigger)
         const triggerStyle = getComputedStyle(trigger)
         const triggerText = trigger.textContent?.replace(/\s+/g, " ").trim() ?? ""
         const contentState = renderedState(content)
@@ -531,7 +525,9 @@ for (const scenario of promptProfileScenarios) {
         return {
           rootTheme,
           bodyTheme,
+          uiScale,
           triggerText,
+          triggerState,
           triggerClassList: Array.from(trigger.classList),
           triggerGapPixels: Number.parseFloat(triggerStyle.columnGap),
           expectedTriggerGapPixels: 10 * uiScale,
@@ -550,6 +546,11 @@ for (const scenario of promptProfileScenarios) {
       )
       assert.ok(result.triggerClassList.includes("oc-select-trigger"))
       assert.ok(result.triggerClassList.includes("prompt-profile-select-trigger"))
+      assert.ok(
+        result.triggerState.rectWidth >= 220 * result.uiScale,
+        `prompt profile trigger must be wider after the layout change: ${JSON.stringify(result.triggerState)}`,
+      )
+      assert.ok(result.contentState.rectWidth >= result.triggerState.rectWidth - 1)
       assert.equal(Math.abs(result.triggerGapPixels - result.expectedTriggerGapPixels) < 0.01, true)
       assert.notEqual(result.contentState.display, "none")
       assert.equal(result.contentState.visibility, "visible")
@@ -675,7 +676,7 @@ for (const scenario of promptProfileScenarios) {
         ),
         true,
       )
-      assert.deepEqual(badResponses, [])
+      errors.assertNoUnexpectedErrors()
     } finally {
       await browser.close()
       await server.close()

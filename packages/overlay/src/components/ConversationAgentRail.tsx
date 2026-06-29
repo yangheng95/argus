@@ -3,9 +3,14 @@ import { cardTreeStore } from "../store/card-tree"
 import { boardStore } from "../store/board"
 import { conversationAgentRecordsForSource } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
-import { conversationCardContainsMessage, loadConversationHistoryUntilCard } from "../services/conversation"
+import {
+  conversationCardContainsMessage,
+  loadConversationHistoryUntilCard,
+  loadConversationSessionHistory,
+} from "../services/conversation"
 import { requestConversationCardScroll } from "../services/conversation-scroll"
-import { notifyWarning } from "../services/notify"
+import { formatErrorDetails, notifyWarning } from "../services/notify"
+import { AppLog } from "../utils/log"
 import type { AgentWorkflowRecord, AgentWorkflowStatus } from "../utils/agent-workflow"
 import { parentIDChainForCard } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
@@ -48,45 +53,91 @@ function describeRecord(record: AgentWorkflowRecord, selector?: string): string 
   return lines.join("\n")
 }
 
+function reportLocateFailure(record: AgentWorkflowRecord, error: unknown): void {
+  const details = `${describeRecord(record)}\n\n${formatErrorDetails(error)}`
+  AppLog.error("ui", "Agent rail locate failed", {
+    sessionID: record.sessionID,
+    renderedCardID: record.renderedCardID,
+    targetMessageID: record.targetMessageID,
+    error: formatErrorDetails(error),
+    notificationID: `agent-rail:locate-failed:${record.sessionID}`,
+    notificationTitle: t("agent_rail.card_unavailable_title"),
+    notificationMessage: t("agent_rail.locate_failed", { agent: record.agentName }),
+    notificationDetails: details,
+  })
+  notifyWarning({
+    id: `agent-rail:locate-failed:${record.sessionID}`,
+    title: t("agent_rail.card_unavailable_title"),
+    message: t("agent_rail.locate_failed", { agent: record.agentName }),
+    details,
+  })
+}
+
+function currentRecordForSession(sessionID: string): AgentWorkflowRecord | undefined {
+  const targetSessionID = String(sessionID || "")
+  if (!targetSessionID) return undefined
+  return conversationAgentRecordsForSource(boardStore.selectedSource).find(
+    (record) => record.sessionID === targetSessionID,
+  )
+}
+
+async function materializeRecordTarget(record: AgentWorkflowRecord): Promise<AgentWorkflowRecord> {
+  if (record.renderedCardID) return record
+  const sessionID = String(record.sessionID || "")
+  const source = boardStore.selectedSource
+  if (!sessionID || source?.kind !== "task") return record
+  const directory = String(boardStore.board?.task?.directory || "").trim()
+  if (!directory) return record
+  const loaded = await loadConversationSessionHistory(sessionID, source.id, { directory })
+  if (!loaded) return currentRecordForSession(sessionID) || record
+  return currentRecordForSession(sessionID) || record
+}
+
 async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
-  if (!record.renderedCardID) {
+  const targetRecord = await materializeRecordTarget(record)
+  if (!targetRecord.renderedCardID) {
     notifyWarning({
       title: t("agent_rail.card_unavailable_title"),
-      message: t("agent_rail.no_rendered_card_target", { agent: record.agentName }),
-      details: describeRecord(record),
+      message: t("agent_rail.no_rendered_card_target", { agent: targetRecord.agentName }),
+      details: describeRecord(targetRecord),
     })
     return
   }
-  const targetMessageID = String(record.targetMessageID || "")
+  const targetMessageID = String(targetRecord.targetMessageID || "")
   const needsHistory =
-    !cardTreeStore.cards[record.renderedCardID] ||
-    (!!targetMessageID && !conversationCardContainsMessage(record.renderedCardID, targetMessageID))
+    !cardTreeStore.cards[targetRecord.renderedCardID] ||
+    (!!targetMessageID && !conversationCardContainsMessage(targetRecord.renderedCardID, targetMessageID))
   if (needsHistory) {
     const directory = String(boardStore.board?.task?.directory || "").trim()
     if (!directory) {
       notifyWarning({
         title: t("agent_rail.card_unavailable_title"),
-        message: t("agent_rail.no_rendered_card_target", { agent: record.agentName }),
-        details: describeRecord(record),
+        message: t("agent_rail.no_rendered_card_target", { agent: targetRecord.agentName }),
+        details: describeRecord(targetRecord),
       })
       return
     }
-    await loadConversationHistoryUntilCard(record.renderedCardID, undefined, {
-      messageID: targetMessageID,
-      sessionID: record.sessionID,
-      directory,
-    })
+    try {
+      await loadConversationHistoryUntilCard(targetRecord.renderedCardID, undefined, {
+        messageID: targetMessageID,
+        sessionID: targetRecord.sessionID,
+        directory,
+      })
+    } catch (error) {
+      reportLocateFailure(targetRecord, error)
+      return
+    }
   }
-  const target = cardTreeStore.cards[record.renderedCardID]
-  setCardExpanded(record.renderedCardID, true, target?.status)
-  for (const parentID of parentIDsForCard(record.renderedCardID)) {
+  const target = cardTreeStore.cards[targetRecord.renderedCardID]
+  setCardExpanded(targetRecord.renderedCardID, true, target?.status)
+  for (const parentID of parentIDsForCard(targetRecord.renderedCardID)) {
     const parent = cardTreeStore.cards[parentID]
     setCardExpanded(parentID, true, parent?.status)
   }
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
       void requestConversationCardScroll({
-        cardID: record.renderedCardID!,
+        cardID: targetRecord.renderedCardID!,
         behavior: "smooth",
         block: "start",
         focus: "header",
@@ -94,15 +145,15 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
       })
         .then((found) => {
           if (found) return
-          const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
+          const selector = `[data-card-id="${CSS.escape(targetRecord.renderedCardID!)}"]`
           notifyWarning({
             title: t("agent_rail.card_unavailable_title"),
-            message: t("agent_rail.rendered_card_missing", { id: record.renderedCardID }),
-            details: describeRecord(record, selector),
+            message: t("agent_rail.rendered_card_missing", { id: targetRecord.renderedCardID }),
+            details: describeRecord(targetRecord, selector),
           })
         })
         .catch((error) => {
-          console.error("[agent-rail] card scroll request failed", error)
+          reportLocateFailure(targetRecord, error)
         })
     })
   })
@@ -198,7 +249,7 @@ function attachRailDragScroll(el: HTMLElement): () => void {
 
 function AgentRailRow(props: {
   record: Accessor<AgentWorkflowRecord>
-  onLocate: (record: AgentWorkflowRecord) => void
+  onLocate: (record: AgentWorkflowRecord) => Promise<void>
 }) {
   const record = props.record
 
@@ -214,9 +265,15 @@ function AgentRailRow(props: {
         size="icon"
         tone="neutral"
         data-ui="conversation-agent-rail-locate"
+        data-session-id={record().sessionID}
+        data-target-message-id={record().targetMessageID || ""}
+        data-rendered-card-id={record().renderedCardID || ""}
         aria-label={compactLabel(record())}
         title={compactLabel(record())}
-        onClick={() => props.onLocate(record())}
+        onClick={() => {
+          const current = record()
+          void props.onLocate(current).catch((error) => reportLocateFailure(current, error))
+        }}
       >
         <Avatar role={record().stage} status={record().status} />
       </Button>

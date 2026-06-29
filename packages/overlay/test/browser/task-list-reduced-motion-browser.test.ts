@@ -5,6 +5,7 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
@@ -69,7 +70,6 @@ test(
     const tasksResponse = new Promise<Response>((resolve) => {
       resolveTasks = resolve
     })
-    const badResponses: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -80,7 +80,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "reduced-motion-test" })
       if (path === "/global/projects/discover") return send([])
-      if (path === "/global/tasks" || path === "/tasks") return tasksResponse
+      if (path === "/global/tasks") return tasksResponse
       if (path === "/mission") return send([])
       if (path === "/executor") return send([])
       if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -129,9 +129,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      page.on("response", (response: any) => {
-        if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
-      })
+      const errors = installBrowserErrorCollector(page)
       await page.setViewport({ width: 1280, height: 760 })
       await page.emulateMedia({ reducedMotion: "reduce" })
       await installOverlaySettings(page, server.origin)
@@ -183,7 +181,7 @@ test(
 
       resolveTasks?.(send({ tasks: [] }))
       await page.close()
-      assert.deepEqual(badResponses, [])
+      errors.assertNoUnexpectedErrors()
     } finally {
       resolveTasks?.(send({ tasks: [] }))
       await browser.close().catch(() => undefined)

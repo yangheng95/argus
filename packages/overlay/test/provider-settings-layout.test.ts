@@ -23,7 +23,7 @@ test("ProvidersPanel uses a dedicated command area and provider row summary", ()
 })
 
 test("provider form discovers OpenAI-compatible models before saving", () => {
-  expect(SOURCE).toContain('apiJson("provider/discover-models"')
+  expect(SOURCE).toContain('providerScopedPath("provider/discover-models", directory)')
   expect(SOURCE).toContain('data-testid="provider-discover-models"')
   expect(SOURCE).toContain("provider.form.error.models_required")
   expect(SOURCE).toContain("setFormModels(result.models.join")
@@ -42,8 +42,17 @@ test("provider deletion disables inherited entries and clears credentials", () =
   expect(SOURCE).toContain("removeDisabledProvider(cfg, id)")
   expect(SOURCE).toContain("addDisabledProvider(cfg, id)")
   expect(SOURCE).toContain("removeProviderModelReferences(cfg, id)")
-  expect(SOURCE).toContain('apiJson(`auth/${id}`, { method: "DELETE" })')
-  expect(SOURCE).toContain("await refreshAuthState()")
+  expect(SOURCE).toContain("providerScopedPath(`auth/${id}`, directory)")
+  expect(SOURCE).toContain("await refreshAuthState(directory)")
+})
+
+test("provider mutations carry the directory captured by the edited form", () => {
+  expect(SOURCE).toContain("const [formDirectory, setFormDirectory]")
+  expect(SOURCE).toContain("setFormDirectory(activeDirectory().trim())")
+  expect(SOURCE).toContain("const directory = formDirectory() || activeDirectory().trim()")
+  expect(SOURCE).toContain("await updateConfig((cfg) => {")
+  expect(SOURCE).toContain("}, { directory })")
+  expect(SOURCE).toContain("authenticateSelectedProvider(providerId, authCallbacks, { directory })")
 })
 
 test("provider API key editor stays inline despite later field.css defaults", () => {

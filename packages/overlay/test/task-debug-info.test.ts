@@ -17,10 +17,11 @@ test("task debug info keeps the concise workflow identity header", () => {
   expect(debugInfo).toContain("task.terminal:")
   expect(debugInfo).toContain("task.directory:")
   expect(debugInfo).toContain("server.url:")
+  expect(debugInfo).toContain("runtime.db:")
   expect(debugInfo).toContain("task.session:")
   expect(debugInfo).toContain("task.run.id:")
   expect(debugInfo).toContain("Goals (${goalWorkflows.length}):")
-  expect(main).toContain("buildTaskDebugBlob(boardStore.board)")
+  expect(main).toContain("buildTaskDebugBlob(boardStore.board, appStore.enginePaths)")
 })
 
 test("task debug info includes only the compact Files panel board projection summary", () => {

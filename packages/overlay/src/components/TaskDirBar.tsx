@@ -23,7 +23,12 @@ import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboardi
 import { t } from "../utils/i18n"
 import { AppLog } from "../utils/log"
 import { canInitGit, initGitCurrent } from "../utils/git"
-import { deleteProjectWorktree, loadProjectWorktrees, type ProjectWorktreeInfo } from "../services/worktree"
+import {
+  deleteProjectWorktree,
+  deleteProjectWorktrees,
+  loadProjectWorktrees,
+  type ProjectWorktreeInfo,
+} from "../services/worktree"
 import { showAppDialog } from "../services/app-dialog"
 import { getHostTransport } from "../services/host-transport"
 import { Icon } from "./Icon"
@@ -61,6 +66,18 @@ function compactBranch(value: string): string {
   const parts = value.split("/").filter(Boolean)
   if (parts.length >= 2) return `.../${parts.slice(-2).join("/")}`
   return `${value.slice(0, 23)}...`
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function showDirectoryError(error: unknown): Promise<void> {
+  await showAppDialog({
+    title: t("cwd.set_failed"),
+    message: t("cwd.set_failed_message", { error: errorMessage(error) }),
+    okLabel: t("common.ok"),
+  })
 }
 
 export function TaskDirContent() {
@@ -155,17 +172,21 @@ export function TaskDirContent() {
       await setDirectory(target)
       syncRecentDirs()
     } catch (err) {
-      AppLog.error("ui", "Failed to set working directory", { error: String(err) })
+      const message = errorMessage(err)
+      AppLog.error("ui", "Failed to set working directory", { error: message })
+      await showDirectoryError(err)
     }
   }
 
   async function chooseRecentDirectory(dir: string): Promise<void> {
-    closeRecentPanel()
     try {
       await setDirectory(dir)
       syncRecentDirs()
+      closeRecentPanel()
     } catch (err) {
-      AppLog.error("ui", "Failed to switch to recent directory", { dir, error: String(err) })
+      const message = errorMessage(err)
+      AppLog.error("ui", "Failed to switch to recent directory", { dir, error: message })
+      await showDirectoryError(err)
     }
   }
 
@@ -185,7 +206,9 @@ export function TaskDirContent() {
       syncPanelData()
       closeRecentPanel()
     } catch (err) {
-      AppLog.error("ui", "Failed to set working directory from cwd editor", { directory: next, error: String(err) })
+      const message = errorMessage(err)
+      AppLog.error("ui", "Failed to set working directory from cwd editor", { directory: next, error: message })
+      await showDirectoryError(err)
     }
   }
 
@@ -280,11 +303,11 @@ export function TaskDirContent() {
               </div>
             </Show>
             <Show when={discoveredProjects().length > 0}>
-              <div class="recent-dir-section">
+              <div class="recent-dir-section" data-kind="discovered">
                 <div class="recent-dir-section-title" title={discoveredRoot()}>
                   {t("cwd.detected_projects")}
                 </div>
-                <div class="recent-dir-list" role="list">
+                <div class="recent-dir-list" data-kind="discovered" role="list">
                   <For each={discoveredProjects()}>
                     {(project) => {
                       const isActive = () => !!dir() && project.directory.toLowerCase() === dir().toLowerCase()
@@ -379,32 +402,67 @@ export function ProjectWorktreeDropdown() {
   const dir = createMemo(directoryMemo)
   const [open, setOpen] = createSignal(false)
   const [worktrees, setWorktrees] = createSignal<ProjectWorktreeInfo[]>([])
+  const [worktreeDirectory, setWorktreeDirectory] = createSignal("")
   const [error, setError] = createSignal("")
+  const [operationError, setOperationError] = createSignal("")
+  const [deletingWorktrees, setDeletingWorktrees] = createSignal(new Set<string>())
+  const [cleanupExpiredOperationDirectory, setCleanupExpiredOperationDirectory] = createSignal("")
   const visibleWorktrees = createMemo(() => worktrees().filter((item) => item.status !== "primary"))
   const activeWorktrees = createMemo(() => worktrees().filter((item) => item.status === "active"))
   const expiredWorktrees = createMemo(() => worktrees().filter((item) => item.status === "expired"))
+  const removableExpiredWorktrees = createMemo(() => expiredWorktrees().filter((item) => item.removable))
+  const cleanupExpiredBusy = createMemo(() => cleanupExpiredBusyFor(worktreeDirectory()))
+  const canCleanupExpired = createMemo(() => removableExpiredWorktrees().length > 0 && !cleanupExpiredBusy())
 
-  async function syncWorktrees(): Promise<void> {
+  function setDeleting(directories: string[], deleting: boolean): void {
+    setDeletingWorktrees((current) => {
+      const next = new Set(current)
+      for (const directory of directories) {
+        if (deleting) next.add(directory)
+        else next.delete(directory)
+      }
+      return next
+    })
+  }
+
+  async function syncWorktrees(options: { requireFresh?: boolean } = {}): Promise<void> {
     const projectDirectory = dir().trim()
     if (!projectDirectory) {
       setWorktrees([])
+      setWorktreeDirectory("")
       setError("")
       return
     }
     try {
       const items = await loadProjectWorktrees(projectDirectory)
+      if (dir().trim() !== projectDirectory) return
       setWorktrees(items)
+      setWorktreeDirectory(projectDirectory)
       setError("")
     } catch (err) {
+      if (dir().trim() !== projectDirectory) return
       const message = err instanceof Error ? err.message : String(err)
-      setWorktrees([])
+      if (worktreeDirectory() !== projectDirectory) {
+        setWorktrees([])
+        setWorktreeDirectory("")
+      }
       setError(message)
       AppLog.warn("ui", "Failed to load project worktrees", { error: message })
+      if (options.requireFresh) throw err
     }
   }
 
   function closePanel(): void {
     setOpen(false)
+  }
+
+  function ownsWorktreeOperation(projectDirectory: string): boolean {
+    return dir().trim() === projectDirectory && worktreeDirectory() === projectDirectory
+  }
+
+  function cleanupExpiredBusyFor(projectDirectory: string): boolean {
+    const directory = projectDirectory.trim()
+    return directory.length > 0 && cleanupExpiredOperationDirectory() === directory
   }
 
   function setWorktreePanelOpen(nextOpen: boolean): void {
@@ -414,7 +472,9 @@ export function ProjectWorktreeDropdown() {
 
   async function removeWorktree(item: ProjectWorktreeInfo, event: MouseEvent): Promise<void> {
     event.stopPropagation()
-    if (!item.removable) return
+    const projectDirectory = worktreeDirectory() || dir().trim()
+    if (!item.removable || deletingWorktrees().has(item.directory) || cleanupExpiredBusyFor(projectDirectory)) return
+    if (!projectDirectory) return
     const confirmed = await showAppDialog({
       title: t("worktree.delete"),
       message: t("worktree.delete_confirm", { path: item.directory }),
@@ -422,13 +482,100 @@ export function ProjectWorktreeDropdown() {
       okLabel: t("common.delete"),
     })
     if (!confirmed.confirmed) return
+    if (dir().trim() !== projectDirectory || worktreeDirectory() !== projectDirectory) return
+    setDeleting([item.directory], true)
+    setOperationError("")
     try {
-      await deleteProjectWorktree(dir(), item.directory)
-      await syncWorktrees()
-      await loadBoard({ sync: true }).catch(() => undefined)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      AppLog.error("ui", "Failed to delete project worktree", { directory: item.directory, error: message })
+      try {
+        await deleteProjectWorktree(projectDirectory, item.directory)
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        setWorktrees((current) => current.filter((candidate) => candidate.directory !== item.directory))
+      } catch (err) {
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        const message = errorMessage(err)
+        setOperationError(t("worktree.delete_failed", { error: message }))
+        setOpen(true)
+        AppLog.error("ui", "Failed to delete project worktree", { directory: item.directory, error: message })
+        return
+      }
+      try {
+        await syncWorktrees({ requireFresh: true })
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        await loadBoard({ sync: true, requireFresh: true })
+        if (!ownsWorktreeOperation(projectDirectory)) return
+      } catch (err) {
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        const message = errorMessage(err)
+        setOperationError(t("worktree.delete_reload_failed", { error: message }))
+        setOpen(true)
+        AppLog.error("ui", "Failed to reload project worktree state after delete", {
+          directory: item.directory,
+          error: message,
+        })
+      }
+    } finally {
+      setDeleting([item.directory], false)
+    }
+  }
+
+  async function cleanupExpiredWorktrees(event: MouseEvent): Promise<void> {
+    event.stopPropagation()
+    const targets = removableExpiredWorktrees()
+    const projectDirectory = worktreeDirectory() || dir().trim()
+    if (!targets.length || !projectDirectory || cleanupExpiredBusyFor(projectDirectory)) return
+    const confirmed = await showAppDialog({
+      title: t("worktree.cleanup_expired"),
+      message: t("worktree.cleanup_expired_confirm", { count: targets.length }),
+      cancel: true,
+      okLabel: t("common.delete"),
+    })
+    if (!confirmed.confirmed) return
+    if (dir().trim() !== projectDirectory || worktreeDirectory() !== projectDirectory) return
+    const directories = targets.map((item) => item.directory)
+    setCleanupExpiredOperationDirectory(projectDirectory)
+    setDeleting(directories, true)
+    setOperationError("")
+    try {
+      try {
+        await deleteProjectWorktrees(projectDirectory, directories)
+      } catch (err) {
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        let message = errorMessage(err)
+        try {
+          await syncWorktrees({ requireFresh: true })
+        } catch (syncErr) {
+          const syncMessage = errorMessage(syncErr)
+          message = `${message}; ${syncMessage}`
+          AppLog.error("ui", "Failed to reload project worktrees after cleanup failure", {
+            directories,
+            error: syncMessage,
+          })
+        }
+        setOperationError(t("worktree.cleanup_failed", { error: message }))
+        setOpen(true)
+        AppLog.error("ui", "Failed to clean expired project worktrees", { directories, error: message })
+        return
+      }
+      try {
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        setWorktrees((current) => current.filter((candidate) => !directories.includes(candidate.directory)))
+        await syncWorktrees({ requireFresh: true })
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        await loadBoard({ sync: true, requireFresh: true })
+        if (!ownsWorktreeOperation(projectDirectory)) return
+      } catch (err) {
+        if (!ownsWorktreeOperation(projectDirectory)) return
+        const message = errorMessage(err)
+        setOperationError(t("worktree.cleanup_reload_failed", { error: message }))
+        setOpen(true)
+        AppLog.error("ui", "Failed to reload project worktree state after cleanup", {
+          directories,
+          error: message,
+        })
+      }
+    } finally {
+      setDeleting(directories, false)
+      if (cleanupExpiredOperationDirectory() === projectDirectory) setCleanupExpiredOperationDirectory("")
     }
   }
 
@@ -472,55 +619,93 @@ export function ProjectWorktreeDropdown() {
                 {t("worktree.expired")} {expiredWorktrees().length}
               </span>
               <Show when={expiredWorktrees().length > 0}>
-                <span class="project-worktree-cleanup-hint">{t("worktree.cleanup_expired")}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="mini"
+                  tone="neutral"
+                  data-ui="project-worktree-cleanup-expired"
+                  data-busy={cleanupExpiredBusy() ? "true" : "false"}
+                  title={t("worktree.cleanup_expired")}
+                  aria-label={t("worktree.cleanup_expired")}
+                  disabled={!canCleanupExpired()}
+                  onClick={(event) => void cleanupExpiredWorktrees(event)}
+                >
+                  <Icon name="refresh" size={11} class="project-worktree-cleanup-icon" />
+                  <span>{cleanupExpiredBusy() ? t("common.loading") : t("worktree.cleanup_expired")}</span>
+                </Button>
               </Show>
             </div>
-            <Show when={!error()} fallback={<div class="project-worktree-empty">{error()}</div>}>
-              <Show
-                when={visibleWorktrees().length > 0}
-                fallback={<div class="project-worktree-empty">{t("worktree.empty")}</div>}
-              >
-                <div class="project-worktree-list">
-                  <For each={visibleWorktrees()}>
-                    {(item) => (
-                      <div class="project-worktree-row" data-status={item.status}>
-                        <DropdownMenu.Item
-                          as="button"
-                          type="button"
-                          class="project-worktree-item"
-                          title={item.directory}
-                          onSelect={() => void openDirectory(item.directory)}
-                        >
-                          <span class="project-worktree-name">{item.name}</span>
-                          <span class="project-worktree-state">{worktreeStateLabel(item)}</span>
-                          <Show when={item.branch}>
-                            <span class="project-worktree-branch" title={item.branch}>
-                              ⎇ {compactBranch(item.branch ?? "")}
-                            </span>
-                          </Show>
-                          <span class="project-worktree-path" title={item.directory}>
-                            {compactPath(item.directory)}
+            <Show when={operationError()}>
+              <div class="project-worktree-error" data-ui="project-worktree-operation-error" role="status">
+                <Icon name="status-failed" size={14} />
+                <span>{operationError()}</span>
+              </div>
+            </Show>
+            <Show when={error() && visibleWorktrees().length > 0}>
+              <div class="project-worktree-error" data-ui="project-worktree-load-error" role="alert">
+                <Icon name="status-failed" size={14} />
+                <span>{error()}</span>
+              </div>
+            </Show>
+            <Show
+              when={visibleWorktrees().length > 0}
+              fallback={<div class="project-worktree-empty">{error() || t("worktree.empty")}</div>}
+            >
+              <div class="project-worktree-list">
+                <For each={visibleWorktrees()}>
+                  {(item) => (
+                    <div class="project-worktree-row" data-status={item.status}>
+                      <DropdownMenu.Item
+                        as="button"
+                        type="button"
+                        class="project-worktree-item"
+                        aria-busy={deletingWorktrees().has(item.directory) ? "true" : "false"}
+                        title={item.directory}
+                        onSelect={() => void openDirectory(item.directory)}
+                      >
+                        <span class="project-worktree-name">{item.name}</span>
+                        <span class="project-worktree-state">{worktreeStateLabel(item)}</span>
+                        <Show when={item.branch}>
+                          <span class="project-worktree-branch" title={item.branch}>
+                            ⎇ {compactBranch(item.branch ?? "")}
                           </span>
-                        </DropdownMenu.Item>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          tone="danger"
-                          data-chrome="icon-action"
-                          data-ui="project-worktree-remove"
-                          title={item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")}
-                          aria-label={item.status === "expired" ? t("worktree.cleanup_expired") : t("worktree.delete")}
-                          disabled={!item.removable}
-                          onClick={(event) => void removeWorktree(item, event)}
-                        >
-                          <Icon name="close" size={12} />
-                        </Button>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </Show>
+                        </Show>
+                        <span class="project-worktree-path" title={item.directory}>
+                          {compactPath(item.directory)}
+                        </span>
+                      </DropdownMenu.Item>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        tone="danger"
+                        data-chrome="icon-action"
+                        data-ui="project-worktree-remove"
+                        data-busy={deletingWorktrees().has(item.directory) ? "true" : "false"}
+                        title={
+                          deletingWorktrees().has(item.directory)
+                            ? t("common.loading")
+                            : item.status === "expired"
+                              ? t("worktree.cleanup_expired")
+                              : t("worktree.delete")
+                        }
+                        aria-label={
+                          deletingWorktrees().has(item.directory)
+                            ? t("common.loading")
+                            : item.status === "expired"
+                              ? t("worktree.cleanup_expired")
+                              : t("worktree.delete")
+                        }
+                        disabled={!item.removable || deletingWorktrees().has(item.directory) || cleanupExpiredBusy()}
+                        onClick={(event) => void removeWorktree(item, event)}
+                      >
+                        <Icon name={deletingWorktrees().has(item.directory) ? "refresh" : "close"} size={12} />
+                      </Button>
+                    </div>
+                  )}
+                </For>
+              </div>
             </Show>
           </div>
         </DropdownMenu.Content>

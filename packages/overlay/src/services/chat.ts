@@ -516,11 +516,9 @@ export async function panelMessage(
       }),
       signal: controller.signal,
     })
-    // Server returned the persisted user Message + parts — write them into
-    // the store immediately so the user sees their bubble before the SSE
-    // round-trip lands. Single source: same id space as the SSE events that
-    // follow, so the by-id merge in applyMessageEvent idempotently no-ops
-    // when the matching `message.updated` arrives over the bus.
+    // Server returned the persisted user Message + parts. Project them
+    // through tree-writer immediately so the user sees their bubble before
+    // the SSE round-trip lands; messageStore live ingestion is retired.
     ingestPersistedConversationMessage(result.user_message)
     await loadBoard()
     // The server may return a control-plane acknowledgement here

@@ -4,18 +4,11 @@ import { Portal } from "solid-js/web"
 import { appStore } from "../../store/app"
 import { boardStore } from "../../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
-import { patchConfig, syncAgentPromptLocale } from "../../services/config"
+import { currentProjectConfigRequestOptions, patchConfig, syncAgentPromptLocale } from "../../services/config"
 import { openDocumentationEntry } from "../../services/documentation"
 import { openConfigDialog } from "../../services/dialog"
 import { CONFIG_SECTIONS } from "../../store/dialog"
-import {
-  applyOpacity,
-  applyTheme,
-  applyZoom,
-  sanitizeOpacity,
-  sanitizeZoom,
-  toggleDevtools,
-} from "../../services/theme"
+import { applyTheme, applyZoom, sanitizeZoom, toggleDevtools } from "../../services/theme"
 import { themeOptionsForCurrentHost } from "../../services/theme-registry"
 import {
   browseDirectory,
@@ -335,17 +328,24 @@ export function TitlebarMenubar() {
   }
 
   async function handlePatchGoalParallelism(value: number) {
-    await patchConfig({ assistant: { max_executor_groups: value } })
+    await patchConfig({ assistant: { max_executor_groups: value } }, currentProjectConfigRequestOptions())
   }
 
   async function handlePatchCompactionThreshold(percent: number) {
     const clamped = Math.min(100, Math.max(10, Math.round(percent)))
     const ratio = Math.round(clamped) / 100
-    await patchConfig({ compaction: { threshold: ratio } })
+    await patchConfig({ compaction: { threshold: ratio } }, currentProjectConfigRequestOptions())
   }
 
   async function handlePatchProposedTaskAutoConfirm(enabled: boolean) {
-    await patchConfig({ experimental: { auto_confirm_proposed_tasks: enabled } })
+    await patchConfig(
+      { experimental: { auto_confirm_proposed_tasks: enabled } },
+      currentProjectConfigRequestOptions(),
+    )
+  }
+
+  async function handlePatchAutoQuestion(enabled: boolean) {
+    await patchConfig({ experimental: { auto_question: enabled } }, currentProjectConfigRequestOptions())
   }
 
   async function setTheme(value: string) {
@@ -356,14 +356,7 @@ export function TitlebarMenubar() {
 
   async function setLocale(value: string) {
     setSettingsStore("locale", value)
-    await syncAgentPromptLocale(value)
-    await saveSettings()
-  }
-
-  async function setOpacityPercent(value: number) {
-    const next = sanitizeOpacity(value / 100)
-    setSettingsStore("opacity", next)
-    applyOpacity(next)
+    await syncAgentPromptLocale(value, currentProjectConfigRequestOptions())
     await saveSettings()
   }
 
@@ -441,7 +434,6 @@ export function TitlebarMenubar() {
     const ratio = Number.isFinite(raw) && raw > 0 ? raw : 0.9
     return Math.round(ratio * 100)
   })
-  const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100))
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100))
   const themeOptions = themeOptionsForCurrentHost()
   const hostCapabilities = getHostTransport().capabilities
@@ -578,7 +570,7 @@ export function TitlebarMenubar() {
                       label={t("titlebar.auto_question")}
                       description={t("titlebar.auto_question_hint")}
                       checked={(appStore.config as any)?.experimental?.auto_question === true}
-                      onChange={(checked) => patchConfig({ experimental: { auto_question: checked } })}
+                      onChange={handlePatchAutoQuestion}
                       testid="titlebar-auto-question"
                     />
                     <MenuCheckboxItem
@@ -656,17 +648,6 @@ export function TitlebarMenubar() {
                     >
                       {t("settings.language")}
                     </MenuItem>
-                    <MenuRange
-                      label={t("settings.opacity.label")}
-                      description={t("settings.opacity.hint")}
-                      value={opacityPercent()}
-                      min={50}
-                      max={100}
-                      step={1}
-                      unit="%"
-                      testid="titlebar-opacity-range"
-                      onChange={setOpacityPercent}
-                    />
                     <MenuRange
                       label={t("titlebar.zoom")}
                       description={t("titlebar.zoom_hint")}

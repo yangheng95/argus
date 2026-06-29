@@ -1409,17 +1409,26 @@ button.s-row:focus-visible {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
+#logDialog .log-viewer-dialog-form {
+  width: min(calc(1040px * var(--ui-scale)), calc(100% - calc(32px * var(--ui-scale))));
+  max-width: calc(100% - calc(32px * var(--ui-scale)));
+  min-width: min(calc(640px * var(--ui-scale)), calc(100% - calc(32px * var(--ui-scale))));
+  height: min(calc(720px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - calc(48px * var(--ui-scale))));
+  min-height: min(calc(520px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - calc(48px * var(--ui-scale))));
+  max-height: calc(var(--ui-overlay-shell-height) - calc(24px * var(--ui-scale)));
+  overflow: auto;
+  resize: both;
+}
+
 /* Log viewer container — scrollable mono-font region that holds
-   the log lines. The 520px max-height was already calc-wrapped
-   in styles.css; everything else converted here. */
+   the log lines. LogViewer owns the dialog height, so the list flexes
+   with the resizable form instead of staying capped at a short fixed size. */
 .log-viewer {
-  height: clamp(
-    calc(220px * var(--ui-scale)),
-    calc(var(--ui-overlay-shell-height) - calc(160px * var(--ui-scale))),
-    calc(520px * var(--ui-scale))
-  );
-  max-height: calc(520px * var(--ui-scale));
-  min-height: calc(220px * var(--ui-scale));
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  min-height: calc(360px * var(--ui-scale));
+  min-width: 0;
   overflow-y: auto;
   background: var(--surface-inset);
   border: var(--oc-border-width) solid var(--border);
@@ -1431,6 +1440,18 @@ button.s-row:focus-visible {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.log-error-banner {
+  flex: 0 0 auto;
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 48%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--bad) 10%, var(--surface));
+  color: var(--bad);
+  font-size: var(--ui-font-control);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* Log line: each row uses content-visibility: auto to skip layout
@@ -2015,9 +2036,44 @@ button.s-row:focus-visible {
 
 .prompt-profile-layout {
   display: grid;
-  grid-template-columns: minmax(calc(220px * var(--ui-scale)), 0.9fr) minmax(0, 1.8fr);
-  gap: calc(14px * var(--ui-scale));
+  grid-template-columns: minmax(calc(240px * var(--ui-scale)), 0.72fr) minmax(0, 1.9fr);
+  gap: calc(16px * var(--ui-scale));
   align-items: start;
+}
+
+.prompt-profile-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(150px * var(--ui-scale)), 1fr));
+  gap: calc(8px * var(--ui-scale));
+  margin: 0 0 calc(14px * var(--ui-scale));
+}
+
+.prompt-profile-overview-item {
+  min-width: 0;
+  display: grid;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: var(--oc-radius-soft);
+  background: var(--settings-surface-muted);
+}
+
+.prompt-profile-overview-item span,
+.prompt-profile-overview-item small {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
+}
+
+.prompt-profile-overview-item strong {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .prompt-profile-head-actions,
@@ -2032,17 +2088,22 @@ button.s-row:focus-visible {
 .prompt-profile-list {
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(3px * var(--ui-scale));
   min-width: 0;
 }
 
+.prompt-profile-list-row {
+  padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
+}
+
 .prompt-profile-list-row[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: inset calc(3px * var(--ui-scale)) 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .prompt-profile-list-copy {
   display: grid;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(3px * var(--ui-scale));
   min-width: 0;
 }
 
@@ -2072,7 +2133,9 @@ button.s-row:focus-visible {
 .prompt-profile-list-meta {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  justify-content: flex-end;
+  max-width: calc(118px * var(--ui-scale));
 }
 
 .prompt-profile-import-preview {
@@ -2136,8 +2199,10 @@ button.s-row:focus-visible {
 .prompt-profile-detail {
   display: flex;
   flex-direction: column;
-  gap: calc(12px * var(--ui-scale));
+  gap: calc(10px * var(--ui-scale));
   min-width: 0;
+  padding-left: calc(14px * var(--ui-scale));
+  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 82%, transparent);
 }
 
 .prompt-profile-detail-head,
@@ -2150,6 +2215,12 @@ button.s-row:focus-visible {
   flex-wrap: wrap;
 }
 
+.prompt-profile-detail-head {
+  align-items: flex-start;
+  padding-bottom: calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 80%, transparent);
+}
+
 .prompt-profile-detail-copy,
 .prompt-profile-target-copy {
   display: grid;
@@ -2157,10 +2228,57 @@ button.s-row:focus-visible {
   min-width: 0;
 }
 
+.prompt-profile-detail-copy small {
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+}
+
+.prompt-profile-detail-badges,
+.prompt-profile-action-strip,
+.prompt-profile-target-state {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.prompt-profile-action-strip {
+  justify-content: flex-start;
+  padding: calc(8px * var(--ui-scale)) 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 64%, transparent);
+}
+
 .prompt-profile-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(9px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 62%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+
+.prompt-profile-form-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  min-width: 0;
+  padding-bottom: calc(4px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 70%, transparent);
+}
+
+.prompt-profile-form-head strong {
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  line-height: 1.35;
+}
+
+.prompt-profile-form-head span {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
 }
 
 .prompt-profile-field {
@@ -2186,11 +2304,23 @@ button.s-row:focus-visible {
 .prompt-profile-targets {
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
 }
 
 .prompt-profile-targets-head {
-  align-items: baseline;
+  align-items: flex-start;
+}
+
+.prompt-profile-targets-head > div {
+  display: grid;
+  gap: calc(3px * var(--ui-scale));
+  min-width: 0;
+}
+
+.prompt-profile-targets-head strong {
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  line-height: 1.35;
 }
 
 .prompt-profile-targets-head span {
@@ -2200,11 +2330,19 @@ button.s-row:focus-visible {
 
 .prompt-profile-target {
   display: grid;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 62%, transparent);
   border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+
+.prompt-profile-target[data-editable="true"] {
   background: var(--surface);
+}
+
+.prompt-profile-target[data-has-overlay="false"] {
+  border-style: dashed;
 }
 
 .prompt-profile-textarea {
@@ -2222,7 +2360,10 @@ button.s-row:focus-visible {
 }
 
 .prompt-preview-body {
-  min-height: calc(72px * var(--ui-scale));
+  min-height: calc(48px * var(--ui-scale));
+  max-height: calc(150px * var(--ui-scale));
+  overflow: auto;
+  padding-right: calc(4px * var(--ui-scale));
 }
 
 .prompt-preview-card--attached {

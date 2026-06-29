@@ -16,14 +16,20 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const now = Date.now()
+    const orderKey = (domain: "task" | "message" | "part", time: number, id: string): string => {
+      const rank = domain === "task" ? 10 : domain === "message" ? 30 : 31
+      return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:0000000000000000:${domain}:${id}`
+    }
     const task = {
       id: "task-1",
       title: "Overlay copy task",
       directory: "D:/overlay/workspace/app",
       status: "completed",
       sessionID: "session-1",
+      orderKey: orderKey("task", now - 20_000, "task-1"),
       time: {
         created: now - 20_000,
+        completed: now - 1_000,
         updated: now - 1_000,
       },
     }
@@ -53,23 +59,44 @@ test(
         task: {
           "task-1": [
             {
-              parts: [{ type: "text", text: "Please copy this transcript." }],
+              parts: [
+                {
+                  id: "part-user-text",
+                  messageID: "msg-user",
+                  sessionID: "session-user",
+                  orderKey: orderKey("part", now - 7_999, "part-user-text"),
+                  type: "text",
+                  text: "Please copy this transcript.",
+                },
+              ],
               info: {
                 id: "msg-user",
                 sessionID: "session-user",
                 role: "user",
+                resolvedRole: "user",
                 channel: "main",
+                orderKey: orderKey("message", now - 8_000, "msg-user"),
                 time: { created: now - 8_000 },
               },
             },
             {
-              parts: [{ type: "text", text: "Transcript ready." }],
+              parts: [
+                {
+                  id: "part-assistant-text",
+                  messageID: "msg-assistant",
+                  sessionID: "session-1",
+                  orderKey: orderKey("part", now - 6_999, "part-assistant-text"),
+                  type: "text",
+                  text: "Transcript ready.",
+                },
+              ],
               info: {
                 id: "msg-assistant",
                 sessionID: "session-1",
                 role: "assistant",
                 resolvedRole: "assistant",
                 channel: "assistant",
+                orderKey: orderKey("message", now - 7_000, "msg-assistant"),
                 time: { created: now - 7_000 },
               },
             },
@@ -142,6 +169,9 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover")
+        return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
+      if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
       if (path === "/task/events" || path === "/task/task-1/events") {
         return new Response(":\n\n", {
           headers: {
@@ -150,7 +180,6 @@ test(
           },
         })
       }
-      if (path === "/tasks") return send(data.tasks)
       if (path === "/global/tasks") return send(data.tasks)
       if (path === "/mission") return send([])
       if (path === "/project/current/worktrees") return send([])
@@ -176,6 +205,18 @@ test(
         })
       }
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
+      if (path === "/task/task-1/operator-model-context") return send({ selected: null, candidates: [] })
+      if (path === "/task/task-1/browser-preview")
+        return send({
+          taskID: "task-1",
+          kind: "missing",
+          status: "missing",
+          projectRoot: "D:/overlay/workspace/app/.opencorvus/tasks/task-1/browser-preview",
+          viewports: [],
+          diagnostics: [],
+          candidates: [],
+          source: "none",
+        })
       if (path === "/task/task-1/conversation") {
         return send({
           board: data.board,
@@ -186,14 +227,37 @@ test(
             sessions: [
               {
                 sessionID: "session-1",
+                orderKey: orderKey("message", now - 7_000, "session-1"),
                 stage: "assistant",
                 messageIDs: ["msg-assistant"],
                 firstMessageTime: now - 7_000,
+                lastMessageTime: now - 7_000,
+                placement: "top_level",
+              },
+            ],
+            messages: [
+              {
+                messageID: "msg-user",
+                sessionID: "session-user",
+                stage: "user",
+                orderKey: orderKey("message", now - 8_000, "msg-user"),
+                time: now - 8_000,
+                placement: "top_level",
+              },
+              {
+                messageID: "msg-assistant",
+                sessionID: "session-1",
+                stage: "assistant",
+                orderKey: orderKey("message", now - 7_000, "msg-assistant"),
+                time: now - 7_000,
                 placement: "top_level",
               },
             ],
           },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
+          messageWatermark: 0,
+          agentView: { sessions: [], messages: [] },
           lastSequence: 0,
         })
       }
@@ -216,6 +280,7 @@ test(
       if (path === "/channel") return send(data.channels)
       if (path === "/executor") return send(data.executors)
       if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
       if (path === "/mcp") return send(data.mcp)
       if (path === "/panel/knowledge/memory") return send(data.memory)
       if (path === "/panel/knowledge/preference") return send(data.preferences)
@@ -314,9 +379,12 @@ test(
       await tab.waitForSelector(".log-line")
       const logLayout = await tab.evaluate(() => {
         const dialog = document.querySelector<HTMLElement>("#logDialog")
+        const form = document.querySelector<HTMLElement>("#logDialog .log-viewer-dialog-form")
         const viewer = document.querySelector<HTMLElement>(".log-viewer")
         const dialogBox = dialog?.getBoundingClientRect()
+        const formBox = form?.getBoundingClientRect()
         const viewerBox = viewer?.getBoundingClientRect()
+        const formStyle = form ? getComputedStyle(form) : null
         const headerActions = Array.from(
           document.querySelectorAll<HTMLButtonElement>("#logDialog .dialog-header-actions button"),
         ).map((button) => ({
@@ -328,30 +396,87 @@ test(
           logPathResidueCount: document.querySelectorAll(".log-path").length,
           serverLogsButtonCount: document.querySelectorAll("#btnLogServerLogs").length,
           refreshButtonCount: document.querySelectorAll("#btnLogRefresh").length,
+          openFileButtonCount: document.querySelectorAll("#btnLogOpenFile").length,
           refreshActionLabels: headerActions
             .filter((button) => button.id === "btnLogRefresh")
+            .map((button) => button.text),
+          openFileActionLabels: headerActions
+            .filter((button) => button.id === "btnLogOpenFile")
             .map((button) => button.text),
           commandActionIds: headerActions.filter((button) => button.id.startsWith("btn")).map((button) => button.id),
           lineCount: document.querySelectorAll(".log-line").length,
           dialogWidth: Math.round(dialogBox?.width ?? 0),
           dialogHeight: Math.round(dialogBox?.height ?? 0),
+          formWidth: Math.round(formBox?.width ?? 0),
+          formHeight: Math.round(formBox?.height ?? 0),
+          formResize: formStyle?.resize || "",
+          formOverflow: formStyle?.overflow || "",
           viewerHeight: Math.round(viewerBox?.height ?? 0),
         }
       })
       assert.equal(logLayout.logPathResidueCount, 0)
       assert.equal(logLayout.serverLogsButtonCount, 0)
       assert.equal(logLayout.refreshButtonCount, 1)
+      assert.equal(logLayout.openFileButtonCount, 1)
       assert.deepEqual(logLayout.refreshActionLabels, ["Refresh"])
-      assert.deepEqual(logLayout.commandActionIds, ["btnLogRefresh", "btnLogCopy", "btnLogClear", "btnCloseLog"])
+      assert.deepEqual(logLayout.openFileActionLabels, ["Open File"])
+      assert.deepEqual(logLayout.commandActionIds, [
+        "btnLogRefresh",
+        "btnLogOpenFile",
+        "btnLogCopy",
+        "btnLogClear",
+        "btnCloseLog",
+      ])
       assert.ok(logLayout.lineCount > 0)
       assert.ok(logLayout.dialogWidth > 320)
       assert.ok(logLayout.dialogHeight > 240)
-      assert.ok(logLayout.viewerHeight > 180)
+      assert.ok(logLayout.formWidth > 700)
+      assert.ok(logLayout.formHeight > 600)
+      assert.equal(logLayout.formResize, "both")
+      assert.notEqual(logLayout.formOverflow, "visible")
+      assert.ok(logLayout.viewerHeight > 480)
       const logDialog = await tab.$("#logDialog")
       assert.ok(logDialog)
       const screenshotPath = resolve(".scratch/log-viewer-single-refresh-entry.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await logDialog.screenshot({}))
+
+      const beforeResize = await tab.evaluate(() => {
+        const form = document.querySelector<HTMLElement>("#logDialog .log-viewer-dialog-form")
+        const viewer = document.querySelector<HTMLElement>(".log-viewer")
+        if (!form || !viewer) throw new Error("Missing log viewer resize targets")
+        const formBox = form.getBoundingClientRect()
+        const viewerBox = viewer.getBoundingClientRect()
+        return {
+          right: formBox.right,
+          bottom: formBox.bottom,
+          formWidth: Math.round(formBox.width),
+          formHeight: Math.round(formBox.height),
+          viewerHeight: Math.round(viewerBox.height),
+        }
+      })
+      await tab.mouse.move(beforeResize.right - 4, beforeResize.bottom - 4)
+      await tab.mouse.down()
+      await tab.mouse.move(beforeResize.right - 120, beforeResize.bottom - 140, { steps: 10 })
+      await tab.mouse.up()
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      const afterResize = await tab.evaluate(() => {
+        const form = document.querySelector<HTMLElement>("#logDialog .log-viewer-dialog-form")
+        const viewer = document.querySelector<HTMLElement>(".log-viewer")
+        if (!form || !viewer) throw new Error("Missing log viewer resize targets")
+        const formBox = form.getBoundingClientRect()
+        const viewerBox = viewer.getBoundingClientRect()
+        return {
+          formWidth: Math.round(formBox.width),
+          formHeight: Math.round(formBox.height),
+          viewerHeight: Math.round(viewerBox.height),
+        }
+      })
+      assert.ok(afterResize.formWidth < beforeResize.formWidth - 40)
+      assert.ok(afterResize.formHeight < beforeResize.formHeight - 40)
+      assert.ok(afterResize.viewerHeight < beforeResize.viewerHeight - 40)
+      const resizedScreenshotPath = resolve(".scratch/log-viewer-manual-resize.png")
+      writeFileSync(resizedScreenshotPath, await logDialog.screenshot({}))
 
       await tab.waitForFunction(() => {
         const button = document.querySelector("#btnLogCopy")
@@ -371,6 +496,7 @@ test(
       assert.equal(afterLog.dialogOpen, false)
       assert.equal(afterLog.writes.length, 1)
       assert.match(afterLog.writes[0], /overlay ready/)
+      assert.deepEqual(errors, [])
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

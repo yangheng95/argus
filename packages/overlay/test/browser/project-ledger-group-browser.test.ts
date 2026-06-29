@@ -433,11 +433,11 @@ test(
       if (path === "/global/projects/discover") {
         return json({ root: "D:/ledger", defaultDirectory: PROJECT_DIR, projects: [] })
       }
-      if (path === "/global/tasks" || path === "/tasks") return json({ tasks })
+      if (path === "/global/tasks") return json({ tasks })
       if (path === "/mission") return json(missions)
       if (path === "/coding/sessions") return json({ sessions, nextCursor: null })
       if (path === "/log") return json({})
-      if (path === "/log/tail") return json({ lines: [] })
+      if (path === "/log/tail") return json({ path: "D:/overlay/logs/server.log", lines: [] })
       if (path === "/executor") return json([])
       if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return json({ profiles: [] })
       if (path === "/path") return json({ directory: PROJECT_DIR, exists: true, git: true })

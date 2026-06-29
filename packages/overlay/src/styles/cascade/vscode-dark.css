@@ -30,23 +30,18 @@ body[data-theme="vscode-dark"] {
   --text-on-accent: #000000;
   --text-on-strong: #000000;
   --text-on-danger: #000000;
-  --bg: rgba(30, 30, 30, 0.78);
-  --surface: rgba(37, 37, 38, 0.74);
-  --surface-hover: rgba(42, 45, 46, 0.78);
-  --surface-inset: rgba(24, 24, 24, 0.72);
-  --surface-strong: rgba(51, 51, 51, 0.8);
-  --rail-surface: color-mix(in srgb, var(--surface) calc(var(--ui-window-opacity) * 100%), transparent);
-  --chat-canvas: color-mix(in srgb, var(--bg) calc(var(--ui-window-opacity) * 100%), transparent);
-  --inspector-surface: color-mix(in srgb, var(--surface) calc(var(--ui-window-opacity) * 100%), transparent);
-
-  /* Body background alpha tracks --ui-window-opacity (single source for
-   * window translucency, rule 8). Does NOT alias --bg because --bg is the
-   * fixed-alpha surface tint shared by panels/canvases; only the body
-   * itself reacts to the opacity slider. */
-  --body-bg: color-mix(in srgb, rgb(30, 30, 30) calc(var(--ui-window-opacity) * 100%), transparent);
-  --panel-body-bg: color-mix(in srgb, var(--bg) calc(var(--ui-window-opacity) * 100%), transparent);
+  --bg: rgb(30, 30, 30);
+  --surface: rgb(37, 37, 38);
+  --surface-hover: rgb(42, 45, 46);
+  --surface-inset: rgb(24, 24, 24);
+  --surface-strong: rgb(51, 51, 51);
+  --rail-surface: var(--surface);
+  --chat-canvas: var(--bg);
+  --inspector-surface: var(--surface);
+  --body-bg: rgb(30, 30, 30);
+  --panel-body-bg: var(--bg);
   --panel-body-blur: none;
-  --chrome: color-mix(in srgb, rgba(60, 60, 60, 0.76) calc(var(--ui-window-opacity) * 100%), transparent);
+  --chrome: rgb(60, 60, 60);
   --border: rgba(255, 255, 255, 0.12);
   --border-hover: rgba(0, 122, 204, 0.5);
   --border-strong: rgba(255, 255, 255, 0.18);

@@ -425,23 +425,21 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("--body-bg alpha is the single source for window translucency", () => {
-    // Window-opacity slider must drive the body background alpha, not a
-    // separate `body { opacity }` rule (rule 8 — single source). Each theme
-    // file folds --ui-window-opacity into --body-bg via color-mix(); base.css
-    // must NOT carry the legacy body-opacity declaration.
+  test("window shell backgrounds no longer depend on window opacity", () => {
     const base = readText(join(OVERLAY_ROOT, "src/styles/cascade/base.css"))
+    expect(base).not.toContain("--ui-window-opacity")
     const bodyBlock = base.match(/^body\s*\{[^}]*\}/m)?.[0] ?? ""
     expect(bodyBlock).not.toMatch(/(?<!-)\bopacity\s*:/)
 
     for (const file of ["dark.css", "vscode-dark.css", "light.css"] as const) {
       const css = readText(join(OVERLAY_ROOT, "src/styles/cascade", file))
+      expect(css).not.toContain("--ui-window-opacity")
       const decl = css.match(/--body-bg\s*:\s*[^;]+;/)?.[0] ?? ""
-      expect(decl).toContain("var(--ui-window-opacity)")
+      expect(decl).not.toMatch(/\brgba\(|\bhsla\(|\btransparent\b/)
     }
   })
 
-  test("vscode-dark :root surfaces transparent palette tokens for shell columns", () => {
+  test("vscode-dark shell columns are opaque palette aliases", () => {
     // Theme palette block moved to styles/cascade/vscode-dark.css 2026-05-04.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
     const headRe = /body\[data-theme="vscode-dark"\]\s*\{/g
@@ -454,9 +452,9 @@ describe("overlay architecture guards", () => {
       lastBlock = styles.slice(open + 1, close)
     }
     expect(lastBlock).not.toBeNull()
-    expect(lastBlock!).toMatch(/--rail-surface:\s*color-mix\(in srgb,\s*var\(--surface\)/)
-    expect(lastBlock!).toMatch(/--chat-canvas:\s*color-mix\(in srgb,\s*var\(--bg\)/)
-    expect(lastBlock!).toMatch(/--inspector-surface:\s*color-mix\(in srgb,\s*var\(--surface\)/)
+    expect(lastBlock!).toMatch(/--rail-surface:\s*var\(--surface\)\s*;/)
+    expect(lastBlock!).toMatch(/--chat-canvas:\s*var\(--bg\)\s*;/)
+    expect(lastBlock!).toMatch(/--inspector-surface:\s*var\(--surface\)\s*;/)
   })
 
   test("inline-pill family has no theme chrome override", () => {
@@ -1254,8 +1252,12 @@ describe("overlay architecture guards", () => {
 
     expect(sources).not.toContain("config-dialog-form")
     expect(sources).not.toContain("config-dialog-head")
-    expect(configDialog).toContain("wider={true}")
-    expect(dialogSurface).toMatch(/\.dialog-wider \.dialog-form\s*\{/)
+    expect(configDialog).toContain("fullscreen={true}")
+    expect(configDialog).toContain("draggable={false}")
+    expect(configDialog).not.toContain("wider={true}")
+    expect(dialogSurface).toMatch(/\.dialog-fullscreen \.dialog-form\s*\{/)
+    expect(settingsSurface).toContain("#configDialog.dialog-fullscreen .dialog-form")
+    expect(settingsSurface).toContain("#configDialog.dialog-fullscreen .config-dialog-layout")
     expect(settingsSurface).not.toMatch(/(^|\n)\.config-dialog-(form|head)\s*\{/)
   })
 

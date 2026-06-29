@@ -139,7 +139,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "card-meta-tooltip-test" })
       if (path === "/global/projects/discover") return send([])
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks: [item] })
+      if (path === "/global/tasks") return send({ tasks: [item] })
       if (path === "/mission") return send([])
       if (path === "/executor") return send([])
       if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })

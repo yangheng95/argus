@@ -134,9 +134,9 @@ export interface TodoActivityHit {
   todos: any[]
 }
 
-/** CardNode is the fundamental unit of the conversation tree. `children` is
- *  ALWAYS an array of ids (not inline objects); the renderer dereferences
- *  through `cardTreeStore.cards[id]`. This indirection is what makes targeted
+/** CardNode is the fundamental unit of the conversation tree. Child
+ *  relationships are ALWAYS stored as ids, never inline objects; the renderer
+ *  dereferences through `cardTreeStore.cards[id]`. This indirection is what makes targeted
  *  writes cheap — moving a card between parents is two `setCardTreeStore`
  *  calls (remove from old, add to new) rather than a full tree rebuild. */
 export interface CardNode {
@@ -200,36 +200,25 @@ export interface CardNode {
    *  `/task/:taskID/session/:sessionID/reply`; build phases use it as
    *  visible target context for task-level operator guidance. */
   phaseSessionID?: string
+  /** Timeline order key of the message/session event that last claimed
+   *  `phaseSessionID`. Prevents late events from older attempts/sessions from
+   *  retargeting controls on an attempt-invariant phase card. */
+  phaseSessionOrderKey?: string
   /** Inline leaves — text / reasoning / tool / patch / file / subtask / boundary /
    *  interaction-question / interaction-permission. Tool parts that are "promoted"
    *  become their own CardNode instead (with `toolPart` populated). */
   parts: any[]
   /** Child card ids (resolved by the renderer via `cardTreeStore.cards[id]`).
-   *  Used by cards that live in `cardTreeStore` — the renderer dereferences
-   *  each id through the store proxy, preserving fine-grained reactivity.
-   *
-   *  Optional: transient cards (tool promotion, legacy old-pipeline nodes)
-   *  use the inline `children` field below instead. Store-backed cards
-   *  always populate this field (writer guarantees `[]` default). */
+   *  The renderer dereferences each id through the store proxy, preserving
+   *  fine-grained reactivity. Writer-created cards populate `[]` by default;
+   *  transient tool cards do not own descendants. */
   childIDs?: string[]
-  /** Inline CardNode children — used only by TRANSIENT cards built on the fly
-   *  by the renderer (e.g. `<CardParts>` promotes a tool `part` into its own
-   *  card via `toolToCardNode`). Transient cards do not live in the store;
-   *  their identity dies with the mount, so they can safely carry inline
-   *  object references. Cards in `cardTreeStore` never set this field.
-   *
-   *  The renderer prefers `childIDs` when present — if a card has both,
-   *  the store-backed children win. */
-  children?: CardNode[]
-  /** Chronological sort key in ms. Required: every card carries its birth
-   *  timestamp. Upstream sources (message.info.time.created, task.time.created,
-   *  goal_run.time_started) are all `Date.now()` on the server — this layer
-   *  does not tolerate missing values. A card without a real time must fall
-   *  back to `Date.now()` at observation (only the `pending:session:<sid>`
-   *  SSE-race stub needs this, and that stub is hidden until the real
-   *  `message.updated` overwrites `time`). If a consumer ever reads an
-   *  undefined `time`, the rebuild sort throws — we surface the bug rather
-   *  than silently park the card at an arbitrary position. */
+  /** Durable cross-domain order key from the backend. Stored top-level cards
+   *  must carry it; transient inline cards may omit it because they never
+   *  participate in timeline ordering. */
+  orderKey?: string
+  /** Display timestamp in ms. Required for durations, headers, and rewind
+   *  pruning. It is deliberately not the card ordering source. */
   time: number
   defaultExpanded?: boolean
   /** Raw tool part for kind="tool" nodes — rendered by <Card> via

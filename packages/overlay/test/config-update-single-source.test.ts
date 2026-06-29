@@ -106,6 +106,48 @@ describe("updateConfig writes through the Solid config store", () => {
     expect(calls[1].body?.value).not.toHaveProperty("agent")
   })
 
+  test("explicit directory owns both updateConfig requests when the global directory changes mid-flight", async () => {
+    const calls: TransportRequest[] = []
+    let config: Record<string, unknown> = { model: "before" }
+    __setHostTransportForTest({
+      kind: "tauri",
+      async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+        calls.push(req)
+        if (req.path !== "config") throw new Error(`unexpected request ${req.path}`)
+        if (req.method === "GET") {
+          configureApi({ directory: "D:/project-b" })
+          return { status: 200, ok: true, headers: {}, body: structuredClone(config) as T }
+        }
+        if (req.method === "PATCH") {
+          const patch = req.body?.kind === "json" ? req.body.value : {}
+          config = mergePatch(config, patch) as Record<string, unknown>
+          return { status: 200, ok: true, headers: {}, body: structuredClone(config) as T }
+        }
+        throw new Error(`unexpected method ${req.method}`)
+      },
+      openStream() {
+        throw new Error("openStream not used")
+      },
+      async native() {
+        throw new Error("native not used")
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    })
+    configureApi({ directory: "D:/project-a" })
+    const { updateConfig } = await import("../src/services/config")
+
+    await updateConfig(
+      (current) => {
+        current.model = "after"
+      },
+      { directory: "D:/project-a" },
+    )
+
+    expect(calls.map((call) => call.query?.directory)).toEqual(["D:/project-a", "D:/project-a"])
+  })
+
   test("session config helpers use explicit directory and do not update appStore.config", async () => {
     const calls: TransportRequest[] = []
     const directory = "D:/workspace/session-app"

@@ -19,12 +19,12 @@ function card(partial: Partial<CardNode> & Pick<CardNode, "id" | "kind" | "title
 }
 
 describe("build phase promotion render policy", () => {
-  test("expanded build steps hydrate historical build sessions directly", () => {
+  test("build step rendering does not hydrate historical sessions from the renderer", () => {
     const source = readFileSync(join(import.meta.dir, "../src/components/Card.tsx"), "utf8")
-    expect(source).toContain('import { loadConversationSessionHistory } from "../services/conversation"')
-    expect(source).toContain("props.node.stepPayload?.buildSessionID")
-    expect(source).toContain('const directory = String(boardStore.board?.task?.directory || "").trim()')
-    expect(source).toContain("loadConversationSessionHistory(sessionID, taskID, { directory })")
+    expect(source).not.toContain('import { loadConversationSessionHistory } from "../services/conversation"')
+    expect(source).not.toContain("props.node.stepPayload?.buildSessionID")
+    expect(source).not.toContain("loadConversationSessionHistory(")
+    expect(source).not.toContain("inFlightBuildHistorySessions")
   })
 
   test("filters the build phase from visible step children", () => {

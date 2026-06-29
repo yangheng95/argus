@@ -92,6 +92,8 @@ test("overlay keeps the global unhandledrejection diagnostic but assigns known a
   expect(main).toContain('"unhandledrejection"')
   expect(main).toContain('reportOverlayRuntimeError("window.unhandledrejection", event.reason)')
   expect(main).toContain("function runMainAsync")
+  expect(main).toContain('runMainAsync("goal.delete"')
+  expect(main).not.toContain('console.error("Failed to delete goal"')
   expect(main).not.toContain("void selectTask(")
   expect(main).not.toContain("void (async () =>")
 
@@ -141,7 +143,7 @@ test("overlay keeps the global unhandledrejection diagnostic but assigns known a
   expect(conversation).toContain("scheduled tail merge owner failed")
   expect(conversation).not.toContain("void run()\n")
 
-  expect(conversationAgentRail).toContain("card scroll request failed")
+  expect(conversationAgentRail).toContain("Agent rail locate failed")
   expect(taskProgressBar).toContain("goal card scroll request failed")
 
   expect(projectLedgerGroup).toContain("function runProjectAction")

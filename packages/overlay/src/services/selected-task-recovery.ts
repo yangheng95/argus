@@ -13,6 +13,8 @@ import {
   recordConversationRecoverySucceeded,
 } from "./refresh-diagnostics"
 import { startSSE } from "./sse"
+import { formatErrorDetails } from "./notify"
+import { AppLog } from "../utils/log"
 
 let recoveryGeneration = 0
 let recoveryAbort: AbortController | null = null
@@ -35,6 +37,20 @@ function errorMessage(error: unknown): string {
 
 function isAbortLike(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
+}
+
+function reportRecoveryFailure(input: { channel: string; reason: string; taskID: string; error: unknown }): void {
+  const title =
+    input.channel === "rewind-clear" ? "Conversation rewind recovery failed" : "Conversation recovery failed"
+  AppLog.error("conversation", `${input.channel} recovery failed for ${input.taskID}`, {
+    taskID: input.taskID,
+    reason: input.reason,
+    error: formatErrorDetails(input.error),
+    notificationID: `conversation:${input.channel}-recovery-failed:${input.taskID}`,
+    notificationTitle: title,
+    notificationMessage: `OpenCorvus could not recover the conversation for task ${input.taskID}.`,
+    notificationDetails: formatErrorDetails(input.error),
+  })
 }
 
 function resumeSequence(): number {
@@ -90,13 +106,11 @@ export async function recoverSelectedTaskConversation(
     const directory = conversationSourceDirectory({ kind: "task", id: taskID })
     if (!replayLive) resetSelectedLiveCursor()
     if (replayLive) cancelConversationReplay()
-    startSSE({ kind: "task", id: taskID }, sequence, { replayLive, directory })
     if (!replayLive) {
-      void mergeLatestConversationTail(taskID, { directory }).catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return
-        console.error("[selected-task-recovery] live replay gap tail merge failed", error)
-      })
+      await mergeLatestConversationTail(taskID, { directory, signal: controller.signal })
+      assertCurrentRecovery(taskID, generation, controller.signal)
     }
+    startSSE({ kind: "task", id: taskID }, sequence, { replayLive, directory })
     recordConversationRecoverySucceeded({
       channel: "selected-task-recovery",
       reason,
@@ -119,6 +133,7 @@ export async function recoverSelectedTaskConversation(
       recordConversationRecoveryAborted(input)
     } else {
       recordConversationRecoveryFailed(input)
+      reportRecoveryFailure({ channel: "selected-task", reason, taskID, error })
     }
     throw error
   } finally {
@@ -189,6 +204,7 @@ export async function recoverSelectedTaskAfterRewindClear(
         recordConversationRecoveryAborted(input)
       } else {
         recordConversationRecoveryFailed(input)
+        reportRecoveryFailure({ channel: "rewind-clear", reason, taskID, error })
       }
       throw error
     } finally {

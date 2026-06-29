@@ -272,7 +272,7 @@
 
 .chat-compose-meta-left {
   display: grid;
-  grid-template-columns: minmax(calc(156px * var(--ui-scale)), calc(180px * var(--ui-scale))) minmax(0, 1fr);
+  grid-template-columns: minmax(calc(208px * var(--ui-scale)), calc(240px * var(--ui-scale))) minmax(0, 1fr);
   align-items: stretch;
   gap: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
   flex: 1 1 100%;

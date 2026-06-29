@@ -32,6 +32,8 @@ function seedMessage(id = "msg_existing"): Message {
       id,
       role: "assistant",
       sessionID: "ses_existing",
+      channel: "assistant",
+      resolvedRole: "assistant",
       orderKey: orderKey("message", 1, id),
       time: { created: 1 },
     },
