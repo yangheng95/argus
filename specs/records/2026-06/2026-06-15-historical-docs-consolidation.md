@@ -4,7 +4,7 @@ Date: 2026-06-15
 
 ## Problem
 
-The repository carries three documentation layers:
+At the time of this cleanup, the repository carried three documentation layers:
 
 - `packages/web/src/content/docs/**`: the Starlight documentation site source.
 - `docs/product/**`: a legacy Markdown product-doc tree that is not loaded by the web app.

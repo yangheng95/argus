@@ -49,7 +49,7 @@ describe("enterprise architecture explorer", () => {
     expect(renderedKinds).toEqual(sourceKinds)
     expect(component).toContain("String(currentEngineArtifactKinds.length)")
     expect(component).toContain(
-      '["run", "goal_run_attempt", "verification-evidence", "integrity_attempt", "agent_coordination_request", "agent_coordination_response", "agent_coordination_action"].length',
+      '["run", "goal_run_attempt", "build_attempt_outcome", "verification-evidence", "integrity_attempt", "agent_coordination_request", "agent_coordination_response", "agent_coordination_action"].length',
     )
   })
 
@@ -74,6 +74,16 @@ describe("enterprise architecture explorer", () => {
     ]) {
       expect(component).toContain(token)
     }
+  })
+
+  test("docs governance sources stay on current specs, records, and implementation surfaces", () => {
+    const docsOps = requiredSection(component, 'id: "docs-ops"', 'id: "operator-surfaces"')
+
+    expect(docsOps).toContain("specs/current/architecture/01-agents.md")
+    expect(docsOps).toContain("specs/current/architecture/09-verification-evidence.md")
+    expect(docsOps).toContain("specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md")
+    expect(docsOps).not.toContain("specs/artifacts/")
+    expect(docsOps).not.toContain("specs/new-arch")
   })
 
   test("search filters and moves selection to the matching view", () => {

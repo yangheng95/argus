@@ -891,6 +891,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
     "acceptance_specialist_review",
     "acceptance_review_threw",
     "acceptance",
+    "build_attempt_outcome",
     "goal_run_attempt",
     "integrity_attempt",
     "fact_check_attempt",
@@ -950,7 +951,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       },
       sequence: ["engine-spine", "a2a-coordination", "worktree-execution", "verification", "overlay-projection", "docs-ops"],
       contracts: [
-        ["engine-spine", "worktree-execution", { en: "goal_run_attempt carries workspace pointers, status, retry count, and build outcome.", zh: "goal_run_attempt 承载 workspace 指针、状态、retry count 和 build outcome。" }],
+        ["engine-spine", "worktree-execution", { en: "goal_run_attempt carries workspace pointers while build_attempt_outcome records the terminal build result.", zh: "goal_run_attempt 承载 workspace 指针，build_attempt_outcome 记录最终 build 结果。" }],
         ["engine-spine", "verification", { en: "verification-evidence and integrity_attempt are artifact rows bound to task/run/goal scope.", zh: "verification-evidence 与 integrity_attempt 是绑定 task/run/goal scope 的 artifact 行。" }],
         ["engine-spine", "a2a-coordination", { en: "agent_coordination_request/response/action are durable rows, not side-channel chat.", zh: "agent_coordination_request/response/action 是持久行，不是旁路聊天。" }],
         ["overlay-projection", "engine-spine", { en: "Overlay reads backend task/board/event surfaces and does not create a second truth source.", zh: "Overlay 读取后端 task/board/event surface，不制造第二事实源。" }],
@@ -1064,7 +1065,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       },
       responsibilities: [
         { en: "Persist task lifecycle and latest observable state.", zh: "持久化 task 生命周期和最新可观察状态。" },
-        { en: "Store run, goal_run_attempt, verification-evidence, integrity_attempt, and A2A artifacts.", zh: "存储 run、goal_run_attempt、verification-evidence、integrity_attempt 和 A2A artifacts。" },
+        { en: "Store run, goal_run_attempt, build_attempt_outcome, verification-evidence, integrity_attempt, and A2A artifacts.", zh: "存储 run、goal_run_attempt、build_attempt_outcome、verification-evidence、integrity_attempt 和 A2A artifacts。" },
               { en: "Reconstruct board/progress/brief projections from durable records.", zh: "从持久记录重建 board、progress、brief 投影。" },
       ],
       boundaries: [
@@ -1074,6 +1075,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       records: [
         "engine_artifact kind=run",
         "engine_artifact kind=goal_run_attempt",
+        "engine_artifact kind=build_attempt_outcome",
         "engine_artifact kind=verification-evidence",
         "engine_artifact kind=integrity_attempt",
         "engine_artifact kind=agent_coordination_*",
@@ -1535,7 +1537,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
       sources: [
         "specs/current/architecture/01-agents.md",
         "specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md",
-        "specs/artifacts/tv2ainvest.md",
+        "specs/current/architecture/09-verification-evidence.md",
         "packages/web/src/content/docs/concepts/architecture.mdx",
         "packages/web/src/content/docs/reference/api.mdx",
         "packages/opencorvus/test/script/document-health.test.ts",
@@ -1813,7 +1815,7 @@ const docsHref = locale === "zh" ? "/docs/zh-cn/concepts/enterprise-architecture
         String(architectureDomains.length),
         String(architectureDomains.reduce((total, domain) => total + domain.components.length, 0)),
         String(currentEngineArtifactKinds.length),
-        String(["run", "goal_run_attempt", "verification-evidence", "integrity_attempt", "agent_coordination_request", "agent_coordination_response", "agent_coordination_action"].length),
+        String(["run", "goal_run_attempt", "build_attempt_outcome", "verification-evidence", "integrity_attempt", "agent_coordination_request", "agent_coordination_response", "agent_coordination_action"].length),
       ]
       for (const [index, label] of copy.statLabels.entries()) {
         const card = createElement("div", "oc-arch-stat")
