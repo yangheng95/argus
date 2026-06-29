@@ -6,6 +6,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const docsScanRoots = ["specs/current/architecture", "docs", "packages/web/src/content/docs"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
 const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".css", ".md", ".mdx", ".txt"])
+const scratchTextExtensions = new Set([".md", ".mdx", ".txt", ".patch", ".current", ".json", ".ts"])
 const skippedRepositoryDirs = new Set([
   ".git",
   ".opencorvus",
@@ -104,6 +105,37 @@ function repositoryFiles(): string[] {
   return repositoryFilesCache
 }
 
+function scratchSpecSnapshotOffenders(): string[] {
+  const scratchRoot = path.join(repoRoot, ".scratch")
+  if (!fs.existsSync(scratchRoot)) return []
+  const offenders: string[] = []
+
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name)
+      const rel = path.relative(repoRoot, fullPath).replace(/\\/g, "/")
+      if (entry.isDirectory()) {
+        if (rel.endsWith("/specs/new-arch") || rel.endsWith("/packages/opencorvus/specs")) {
+          offenders.push(rel)
+          continue
+        }
+        walk(fullPath)
+        continue
+      }
+      if (/specs__new-arch__|packages__opencorvus__specs__/.test(entry.name)) offenders.push(rel)
+      const extension = path.extname(entry.name).toLowerCase()
+      if (!scratchTextExtensions.has(extension)) continue
+      const date = entry.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
+      if (extension === ".md" && date && date < "2026-06-01") offenders.push(rel)
+      const text = fs.readFileSync(fullPath, "utf8")
+      if (/specs\/new-arch|packages\/opencorvus\/specs/.test(text)) offenders.push(rel)
+    }
+  }
+
+  walk(scratchRoot)
+  return offenders.sort()
+}
+
 function candidatesFor(fromFile: string, rawRef: string): string[] {
   const withoutAnchor = rawRef.split("#")[0]?.trim() ?? ""
   if (!withoutAnchor || /^[a-z]+:/i.test(withoutAnchor) || withoutAnchor.startsWith("mailto:")) return []
@@ -165,10 +197,33 @@ function currentArchitectureMarkdownFiles(): string[] {
   return walkDocs(path.join(repoRoot, "specs/current/architecture")).filter((file) => file.endsWith(".md"))
 }
 
-function currentTaskRecordFiles(): string[] {
-  return walkDocs(path.join(repoRoot, "specs/records/2026-06"))
-    .filter((file) => path.basename(file).startsWith("2026-06-29-"))
-    .filter((file) => path.basename(file) !== "2026-06-29-spec-consolidation.md")
+function juneTaskRecordFiles(): string[] {
+  return walkDocs(path.join(repoRoot, "specs/records/2026-06")).filter((file) => file.endsWith(".md"))
+}
+
+function commandLinesInMarkdown(text: string): string[] {
+  const commands: string[] = []
+  let inFence = false
+  const commandPattern = /^\s*(bun|git|node|npm|pnpm|powershell|rg|yarn|ls|dir|find)(?:\s|$)/
+  const maybeAddCommand = (candidate: string) => {
+    if (commandPattern.test(candidate)) commands.push(candidate.trim())
+  }
+
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith("```")) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) {
+      maybeAddCommand(line)
+      if (retiredSpecPathPatterns.some(({ pattern }) => pattern.test(line))) commands.push(line.trim())
+    }
+    else maybeAddCommand(line)
+    for (const match of line.matchAll(/`([^`]+)`/g)) {
+      maybeAddCommand(match[1]!)
+    }
+  }
+  return commands
 }
 
 function linkedFiles(indexPath: string): Set<string> {
@@ -219,6 +274,10 @@ describe("historical docs repository links", () => {
     expect(preJuneSpecs).toEqual([])
   })
 
+  test("scratch snapshots do not retain deleted spec trees", () => {
+    expect(scratchSpecSnapshotOffenders()).toEqual([])
+  }, 30000)
+
   test("current architecture chapters are indexed in the architecture README", () => {
     const readmePath = path.join(repoRoot, "specs/current/architecture/README.md")
     const indexed = linkedFiles(readmePath)
@@ -246,14 +305,36 @@ describe("historical docs repository links", () => {
     expect(offenders).toEqual([])
   })
 
-  test("current task records do not publish deleted spec trees as live command targets", () => {
-    const offenders = currentTaskRecordFiles().flatMap((file) => {
+  test("June task records do not publish deleted spec trees as live command targets", () => {
+    const offenders = juneTaskRecordFiles().flatMap((file) => {
       const rel = path.relative(repoRoot, file).replace(/\\/g, "/")
       const text = fs.readFileSync(file, "utf8")
-      return retiredSpecPathPatterns
-        .filter(({ pattern }) => pattern.test(text))
-        .map(({ label }) => `${rel}: ${label}`)
+      return commandLinesInMarkdown(text).flatMap((line) =>
+        retiredSpecPathPatterns
+          .filter(({ pattern }) => pattern.test(line))
+          .map(({ label }) => `${rel}: ${label}: ${line}`),
+      )
     })
+
+    expect(offenders).toEqual([])
+  })
+
+  test("June records do not present retired spec trees as current evidence or remaining work", () => {
+    const allowedHistoricalMigrationRecord = "specs/records/2026-06/2026-06-29-spec-consolidation.md"
+    const currentClaimPatterns = [
+      /existing specs under `specs\/new-arch`/,
+      /Reindex all existing `specs\/new-arch/,
+      /The repository carries three documentation layers/,
+    ]
+    const offenders = juneTaskRecordFiles()
+      .map((file) => [file, path.relative(repoRoot, file).replace(/\\/g, "/")] as const)
+      .filter(([, rel]) => rel !== allowedHistoricalMigrationRecord)
+      .flatMap(([file, rel]) => {
+        const text = fs.readFileSync(file, "utf8")
+        return currentClaimPatterns
+          .filter((pattern) => pattern.test(text))
+          .map((pattern) => `${rel}: ${pattern.source}`)
+      })
 
     expect(offenders).toEqual([])
   })

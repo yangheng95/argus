@@ -19,7 +19,7 @@ Current facts are taken from the checked-in repository, not from historical diag
 - `specs/current/architecture/README.md` and `specs/current/architecture/01-agents.md` through `16-unified-teardown.md`.
 - `specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md`.
 - `specs/records/2026-06/2026-06-24-overlay-task-deep-link.md`.
-- `specs/artifacts/tv2ainvest.md` for frontend visual evidence discipline and desktop-only parity constraints.
+- `specs/current/architecture/09-verification-evidence.md` and `specs/records/2026-06/2026-06-25-visual-evidence-no-hard-gate-root-repair.md` for frontend visual evidence discipline and desktop-only parity constraints.
 - `packages/opencorvus/src/agent/agent.ts`.
 - `packages/opencorvus/src/task-api/index.ts`.
 - `packages/opencorvus/src/orchestrator/tools.ts`.
