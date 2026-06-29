@@ -87,6 +87,7 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
         acceptanceSpecIDs: ["acc-final-visual"],
         sourceRefs: ["webpage-evidence/reference.png"],
         viewport: "desktop-primary",
+        cropIntent: "full-region",
         required: true,
         status: "passing",
         evidenceRefs: ["webpage-evidence/rendered.png", "visual-qa-report.json"],

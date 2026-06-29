@@ -27,7 +27,7 @@ import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
-import { updateGoalRun } from "./persist"
+import { recordAbortedBuildAttemptOutcome, updateGoalRun } from "./persist"
 import {
   findGoal,
   findRun,
@@ -224,7 +224,10 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
       error: options.reason,
       blocking_reason: null,
     })
-    if (updated) aborted += 1
+    if (updated) {
+      recordAbortedBuildAttemptOutcome({ goalRunID: row.id, reason: options.reason })
+      aborted += 1
+    }
   }
   await finalizeInterruptedQueueTasks(
     rows.map((row) => goalRunQueueTaskID(row)),

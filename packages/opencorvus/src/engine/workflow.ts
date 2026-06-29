@@ -90,7 +90,7 @@ export interface MiniWorkflow {
 
 /** Per-goal 步骤状态 */
 export interface GoalStepStatus {
-  status: "pending" | "running" | "completed" | "skipped" | "failed"
+  status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
   startedAt?: number
   completedAt?: number
 }
@@ -510,7 +510,7 @@ export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record
  *                                   "last active phase" we approximate: failed runs
  *                                   show final phase failed, which is the common case
  *                                   for evaluator-rejection and executor crashes alike.
- *   - aborted                    → all pending
+ *   - aborted                    → all aborted
  *   - blocked                    → current phase running (blocked ≈ waiting for input)
  *
  * `startedAt/completedAt` are propagated to every phase to keep the shape
@@ -539,8 +539,10 @@ function projectPhases(
     case undefined:
     case "queued":
     case "accepted":
-    case "aborted":
       setAll("pending")
+      break
+    case "aborted":
+      setAll("aborted")
       break
     case "planning":
       setCascade(0)
@@ -581,8 +583,9 @@ function mapGoalRunToStepStatus(runStatus: string | undefined): GoalStepStatus["
     case "queued":
     case "accepted":
     case "planning":
-    case "aborted":
       return "pending"
+    case "aborted":
+      return "aborted"
     case "running":
     case "evaluating":
     case "blocked":
@@ -669,5 +672,7 @@ function statusLabel(status: GoalStepStatus["status"]): string {
       return "[SKIPPED]"
     case "failed":
       return "[FAILED]"
+    case "aborted":
+      return "[ABORTED]"
   }
 }

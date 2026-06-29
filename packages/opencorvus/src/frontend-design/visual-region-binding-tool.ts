@@ -8,6 +8,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { buildMultimodalToolResult } from "@/tool/multimodal-result"
+import { BrowserPreviewCropIntent } from "@/browser-preview/region-schema"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
@@ -29,6 +30,7 @@ const RegionBindingSchema = z.object({
   source_bbox: RegionBoxSchema,
   viewport: z.string().min(1),
   region_scope: z.string().min(1),
+  crop_intent: BrowserPreviewCropIntent,
   target_route: z.string().min(1),
   implementation_locator: z.string().min(1),
   component_files: z.array(z.string().min(1)).min(1),
@@ -160,7 +162,7 @@ export function createVisualRegionBindingPackageTool(input: {
     create_visual_region_binding_package: tool({
       description:
         "Materialize a VisualRegionBinding handoff package from a real source reference PNG and source bboxes. " +
-        "Writes real per-region PNG crops, a bbox overlay image, a region contact sheet, and a JSON manifest with source_reference_artifact, source_bbox, viewport, region_scope, target_route, implementation_locator, and component_files. " +
+        "Writes real per-region PNG crops, a bbox overlay image, a region contact sheet, and a JSON manifest with source_reference_artifact, source_bbox, viewport, region_scope, crop_intent, target_route, implementation_locator, and component_files. " +
         "Use this after reading a coordinate atlas and authoring bbox JSON from visible region boundaries. Do not use SVG wrappers, screenshot-only HTML, prose-only references, fake crops, DOM parent-container guesses, or uninspected bbox guesses.",
       inputSchema: VisualRegionBindingInputSchema,
       execute: async (params) => {

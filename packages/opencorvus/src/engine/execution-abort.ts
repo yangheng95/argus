@@ -10,7 +10,7 @@ import {
 } from "./cancellation-scope"
 import { createTaskCancellationIncomplete } from "./cancellation-error"
 import { isLiveGoalRunStatus } from "./catalog"
-import { updateGoalRun } from "./persist"
+import { recordAbortedBuildAttemptOutcome, updateGoalRun } from "./persist"
 import { findActiveRunForTask, findGoalRun, findRun, listGoalRunsForTask } from "./store"
 
 const log = Log.create({ service: "engine.execution-abort" })
@@ -150,6 +150,7 @@ export async function abortGoalRunExecution(input: {
       blocking_reason: null,
       time_completed: Date.now(),
     })
+    recordAbortedBuildAttemptOutcome({ goalRunID: goalRun.id, reason: input.reason })
     result.goalRunAborted = true
   }
 

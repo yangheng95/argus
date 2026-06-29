@@ -13,6 +13,7 @@ import {
 import { describeGoal, goalStatusByID } from "../../src/engine/describe"
 import {
   findAcceptanceByGoalRun,
+  findBuildOutcomeByGoalRun,
   findGoal,
   findGoalLatestWorkspace,
   findGoalRun,
@@ -223,7 +224,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     expect(desc.is_terminal_fail).toBe(false)
   })
 
-  test("aborted tip → pending without a lifecycle reset reason", () => {
+  test("aborted tip → terminal non-satisfying status without a lifecycle reset reason", () => {
     const gr = `grun_aborted_${Date.now()}`
     insertGoalRun({ id: gr, status: "aborted" })
     Database.use((db) =>
@@ -233,7 +234,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     startNewAttempt({ goalID, reason: "manual_retry" })
 
     expect(findGoalRun(gr)?.superseded_reason).toBe("manual_retry")
-    expect(goalStatusByID(goalID)).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("failed")
   })
 })
 
@@ -430,6 +431,15 @@ describe("Goal.startNewAttempt — options", () => {
     expect(row?.workspace_dir).toBe("C:/tmp/ws-preserve")
     expect(row?.workspace_branch).toBe("opencorvus/ws-preserve")
     expect(row?.workspace_base_ref).toBe("abc123")
+    const outcome = findBuildOutcomeByGoalRun(nextRunID)
+    expect(outcome?.terminal_status).toBe("failed")
+    expect(outcome?.outcome_kind).toBe("failed")
+    expect(outcome?.error).toBe("BuildResultSchema rejected passed result with error")
+    expect(outcome?.workspace).toEqual({
+      dir: "C:/tmp/ws-preserve",
+      branch: "opencorvus/ws-preserve",
+      base_ref: "abc123",
+    })
   })
 
   test("finalizeBuildAttempt does not write goal acceptance from reported files when host commit diff is empty", () => {
@@ -466,6 +476,12 @@ describe("Goal.startNewAttempt — options", () => {
 
     const acceptance = findAcceptanceByGoalRun(nextRunID)
     expect(acceptance).toBeUndefined()
+    const outcome = findBuildOutcomeByGoalRun(nextRunID)
+    expect(outcome?.terminal_status).toBe("completed")
+    expect(outcome?.outcome_kind).toBe("no_project_diff")
+    expect(outcome?.no_diff_reason).toBe("actual_changed_files_empty")
+    expect(outcome?.commit_ref).toBe("abc1234")
+    expect(outcome?.changed_files).toEqual([])
   })
 
   test("finalizeBuildAttempt filters runtime worktree paths from goal acceptance diffs", () => {
@@ -522,7 +538,12 @@ describe("Goal.startNewAttempt — options", () => {
     expect(acceptance?.result?.diffs).toEqual([
       { file: "src/index.ts", status: "modified", additions: 1, deletions: 1 },
     ])
+    expect(typeof acceptance?.result?.build_attempt_outcome_id).toBe("string")
     expect(JSON.stringify(acceptance?.result?.diffs)).not.toContain("export const value")
+    const outcome = findBuildOutcomeByGoalRun(nextRunID)
+    expect(outcome?.terminal_status).toBe("completed")
+    expect(outcome?.outcome_kind).toBe("delivered")
+    expect(outcome?.changed_files).toEqual(["src/index.ts"])
   })
 
   test("persistTaskAcceptance stores bounded diff summaries in all acceptance artifacts", () => {

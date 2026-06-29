@@ -62,6 +62,7 @@ function regionBinding(): BrowserPreviewRegionBinding {
     viewport_id: "desktop",
     state_id: "default",
     region_scope: "page-section",
+    crop_intent: "full-region",
     source: {
       reference_artifact_id: "reference.png",
       bbox: { x: 0, y: 0, width: 100, height: 80 },

@@ -48,6 +48,7 @@ function visualBundle(taskID: string, projectDirectory: string, evidenceRefs: st
         acceptanceSpecIDs: ["acc-final-visual"],
         sourceRefs: ["webpage-evidence/reference.png"],
         viewport: "desktop",
+        cropIntent: "full-region",
         required: true,
         status: "passing",
         evidenceRefs,
@@ -76,6 +77,7 @@ async function seedTaskWithReferenceComparison(input: {
   viewportID?: string
   operationKind?: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
   status?: "passed" | "failed"
+  cropIntent?: "full-region" | "content-well"
   artifactNames?: Array<"source.png" | "implementation.png" | "side-by-side.png">
 }): Promise<string> {
   Database.use((db) =>
@@ -102,13 +104,15 @@ async function seedTaskWithReferenceComparison(input: {
     taskID: input.taskID,
     url: "http://127.0.0.1:4173/",
   })
+  const operationKind = input.operationKind ?? "reference-comparison"
   return persistBrowserPreviewEvidence({
     projectRoot: input.projectDirectory,
     taskID: input.taskID,
     targetID: target.id,
     viewportID: input.viewportID ?? "desktop",
-    operationKind: input.operationKind ?? "reference-comparison",
+    operationKind,
     regionID: input.regionID ?? "region_header",
+    ...(operationKind === "reference-comparison" ? { cropIntent: input.cropIntent ?? "full-region" } : {}),
     status: input.status ?? "passed",
     summary: input.status === "failed" ? "Reference comparison failed." : "Reference comparison passed.",
     artifactPaths: {
@@ -334,7 +338,7 @@ test("integrity visual evidence reports zero required regions as not passing", a
   })
 }, 20_000)
 
-test("integrity visual evidence rejects mismatched comparison task, region, viewport, operation, and status", async () => {
+test("integrity visual evidence rejects mismatched comparison task, region, viewport, crop intent, operation, and status", async () => {
   const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
   const dir = await tmpdir({ git: true })
   await Instance.provide({
@@ -383,6 +387,20 @@ test("integrity visual evidence rejects mismatched comparison task, region, view
             viewportID: "mobile",
           }),
           expected: "viewport is mobile, not desktop",
+        })
+      }
+      {
+        const taskID = "tsk_integrity_visual_wrong_crop_intent"
+        cases.push({
+          name: "wrong crop intent",
+          toolTaskID: taskID,
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({
+            taskID,
+            projectDirectory: dir.path,
+            cropIntent: "content-well",
+          }),
+          expected: "crop intent is content-well, not full-region",
         })
       }
       {

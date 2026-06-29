@@ -73,6 +73,7 @@ function routeBinding(input: { regionID: string; route: "/a" | "/b" }): BrowserP
     viewport_id: "desktop",
     state_id: "default",
     region_scope: "page-section",
+    crop_intent: "full-region",
     source: {
       reference_artifact_id: "reference.png",
       bbox: { x: 20, y: 20, width: 280, height: 100 },

@@ -9,7 +9,7 @@ import { evaluateVisual, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visu
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
-import { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-schema"
+import { BrowserPreviewCropIntent, BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-schema"
 import { resolveSourceReferencePath } from "./source-reference"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
@@ -17,6 +17,7 @@ const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 export {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionBox,
+  BrowserPreviewCropIntent,
   BrowserPreviewRegionLocator,
   BrowserPreviewSourceReferenceArtifactID,
 } from "./region-schema"
@@ -102,6 +103,7 @@ export const BrowserPreviewRegionComparisonResult = z.object({
       region_id: z.string(),
       viewport_id: BrowserPreviewViewportID,
       state_id: z.string().optional(),
+      crop_intent: BrowserPreviewCropIntent.optional(),
       status: z.enum(["completed", "failed"]),
       reason: z.string().optional(),
       source_bbox: BrowserPreviewRegionBox.optional(),
@@ -224,6 +226,7 @@ export async function compareBrowserPreviewRegions(
         region_id: binding.region_id,
         viewport_id: binding.viewport_id,
         state_id: binding.state_id,
+        crop_intent: binding.crop_intent,
         status: "failed",
         reason: error instanceof Error ? error.message : String(error),
         source_bbox: binding.source.bbox,
@@ -273,6 +276,7 @@ export async function compareBrowserPreviewRegions(
           region_id: binding.region_id,
           viewport_id: binding.viewport_id,
           state_id: binding.state_id,
+          crop_intent: binding.crop_intent,
           status: "failed",
           reason,
           source_bbox: binding.source.bbox,
@@ -310,6 +314,7 @@ export async function compareBrowserPreviewRegions(
           region_id: binding.region_id,
           viewport_id: binding.viewport_id,
           state_id: binding.state_id,
+          crop_intent: binding.crop_intent,
           status: "failed",
           reason,
           source_bbox: binding.source.bbox,
@@ -337,6 +342,7 @@ export async function compareBrowserPreviewRegions(
       operationKind: "reference-comparison",
       regionID: region.region_id,
       stateID: region.state_id,
+      cropIntent: region.crop_intent,
       manifestPath,
       artifactPaths: region.artifacts,
       status: region.status === "completed" ? "passed" : "failed",
@@ -450,6 +456,7 @@ async function materializeRegionComparison(input: {
     region_id: input.binding.region_id,
     viewport_id: input.binding.viewport_id,
     state_id: input.binding.state_id,
+    crop_intent: input.binding.crop_intent,
     status: completed ? "completed" : "failed",
     reason,
     source_bbox: input.sourceBox,

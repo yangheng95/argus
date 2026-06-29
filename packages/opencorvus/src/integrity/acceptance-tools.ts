@@ -196,7 +196,7 @@ async function renderVisualEvidenceSection(input: {
       lines.push("Regions:")
       for (const region of bundle.regions) {
         lines.push(
-          `- ${region.id}: ${region.label}; required=${region.required}; status=${region.status}; acceptance_specs=${region.acceptanceSpecIDs.join(", ") || "(none)"}; evidence=${region.evidenceRefs.join(", ") || "(none)"}`,
+          `- ${region.id}: ${region.label}; crop_intent=${region.cropIntent}; required=${region.required}; status=${region.status}; acceptance_specs=${region.acceptanceSpecIDs.join(", ") || "(none)"}; evidence=${region.evidenceRefs.join(", ") || "(none)"}`,
         )
       }
     }

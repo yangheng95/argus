@@ -14,6 +14,9 @@ export const BrowserPreviewRegionBox = z
   .strict()
 export type BrowserPreviewRegionBox = z.infer<typeof BrowserPreviewRegionBox>
 
+export const BrowserPreviewCropIntent = z.enum(["full-region", "content-well"])
+export type BrowserPreviewCropIntent = z.infer<typeof BrowserPreviewCropIntent>
+
 export const BrowserPreviewRegionLocator = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("test-id"), value: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("data-oc-region"), value: z.string().min(1) }).strict(),
@@ -28,6 +31,7 @@ export const BrowserPreviewRegionBinding = z
     viewport_id: BrowserPreviewViewportID,
     state_id: z.string().min(1).default("default"),
     region_scope: z.enum(["page-section", "card", "content", "title", "chart", "table", "control", "navigation"]),
+    crop_intent: BrowserPreviewCropIntent,
     source: z
       .object({
         reference_artifact_id: BrowserPreviewSourceReferenceArtifactID,

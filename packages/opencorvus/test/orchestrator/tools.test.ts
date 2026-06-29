@@ -9725,6 +9725,73 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("cancel_subagent recover_stale refuses live goal run with no root ownership", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_cancel_subagent_recover_no_owner_${stamp}`
+    const taskID = `tsk_cancel_subagent_recover_no_owner_${stamp}`
+    const goalID = `gol_cancel_subagent_recover_no_owner_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "cancel_subagent recover_stale no owner",
+      taskTitle: "cancel_subagent recover_stale no owner",
+      request: "Recover stale must not treat missing root ownership as child lifecycle proof",
+      goalTitle: "Recover stale no owner",
+      goalSlug: "recover-stale-no-owner",
+      objective: "Keep live child lifecycle facts separate from root tool ownership",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "recover_stale parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "recover_stale child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              session_id: child.id,
+              mode: "recover_stale",
+              reason: "no live ownership row was found",
+            },
+            buildToolOptions(),
+          ),
+        )
+
+        expect(result).toContain("mode='recover_stale' refused")
+        expect(result).toContain(`goal_run ${goalRunID} status=running`)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+      },
+    })
+  })
+
   test("cancel_subagent refuses to bypass a pending A2A cancellation request", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

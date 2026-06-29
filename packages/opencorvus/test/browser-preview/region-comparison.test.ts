@@ -8,6 +8,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import {
+  BrowserPreviewRegionComparisonResult,
   BrowserPreviewRegionBinding,
   compareBrowserPreviewRegions,
   resolveSourceReferencePath,
@@ -68,6 +69,7 @@ describe("browser preview region comparison", () => {
       viewport_id: "desktop",
       state_id: "default",
       region_scope: "page-section",
+      crop_intent: "full-region",
       source: {
         reference_artifact_id: ".opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png",
         bbox: { x: 0, y: 0, width: 100, height: 80 },
@@ -84,6 +86,33 @@ describe("browser preview region comparison", () => {
     expect(parsed.error.issues.map((issue) => issue.path.join(".")).join("\n")).toContain(
       "source.reference_artifact_id",
     )
+  })
+
+  test("result schema accepts explicit crop intent", () => {
+    const parsed = BrowserPreviewRegionComparisonResult.parse({
+      status: "passed",
+      manifestPath: ".opencorvus/r/t/task/fd/browser-preview/region-comparison/manifest.json",
+      jobID: "job_regioncomparison",
+      taskID: "tsk_regioncomparison",
+      targetID: "target_regioncomparison",
+      operation: "reference-comparison",
+      comparison_mode: "true-size",
+      artifact_note: "true-size comparison",
+      evidenceIDs: {},
+      regions: [
+        {
+          region_id: "hero",
+          viewport_id: "desktop",
+          state_id: "default",
+          crop_intent: "full-region",
+          status: "completed",
+          diagnostics: [],
+        },
+      ],
+      diagnostics: [],
+    })
+
+    expect(parsed.regions[0]?.crop_intent).toBe("full-region")
   })
 
   test(
@@ -127,6 +156,7 @@ describe("browser preview region comparison", () => {
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "page-section",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 320, height: 140 },
@@ -156,6 +186,7 @@ describe("browser preview region comparison", () => {
         expect(result.artifact_note).toContain("True-size comparison")
         expect(result.diagnostics[0]).toContain("True-size comparison")
         expect(result.regions).toHaveLength(1)
+        expect(result.regions[0].crop_intent).toBe("full-region")
         expect(result.regions[0].artifact_note).toContain("True-size comparison")
         expect(result.manifestPath).toContain(".opencorvus/r/")
         expect(result.regions[0].artifacts?.side_by_side).toEndWith("side-by-side.png")
@@ -179,6 +210,7 @@ describe("browser preview region comparison", () => {
         expect(evidence?.operationKind).toBe("reference-comparison")
         expect(evidence?.regionID).toBe("economy")
         expect(evidence?.stateID).toBe("default")
+        expect(evidence?.cropIntent).toBe("full-region")
         expect(evidence?.artifactPaths?.side_by_side).toBe(result.regions[0].artifacts?.side_by_side)
       } finally {
         await server.close()
@@ -228,6 +260,7 @@ describe("browser preview region comparison", () => {
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "card",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 280, height: 110 },
@@ -338,6 +371,7 @@ describe("browser preview region comparison", () => {
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "card",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 320, height: 140 },
@@ -440,6 +474,7 @@ describe("browser preview region comparison", () => {
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "page-section",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 320, height: 140 },
@@ -558,6 +593,7 @@ describe("browser preview region comparison", () => {
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "page-section",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 320, height: 140 },
@@ -673,6 +709,7 @@ describe("browser preview region comparison", () => {
             region_id: "labor-card",
             viewport_id: "desktop",
             region_scope: "card",
+            crop_intent: "full-region",
             source: {
               reference_artifact_id: "reference.png",
               bbox: { x: 40, y: 60, width: 280, height: 110 },
@@ -691,6 +728,7 @@ describe("browser preview region comparison", () => {
             region_id: "trade-card",
             viewport_id: "desktop",
             region_scope: "card",
+            crop_intent: "full-region",
             source: {
               reference_artifact_id: "reference.png",
               bbox: { x: 40, y: 200, width: 280, height: 110 },
@@ -837,6 +875,7 @@ describe("browser preview region comparison", () => {
             viewport_id: "desktop",
             state_id: "compact",
             region_scope: "card",
+            crop_intent: "full-region",
             source: {
               reference_artifact_id: "reference.png",
               bbox: { x: 40, y: 60, width: 280, height: 100 },
@@ -856,6 +895,7 @@ describe("browser preview region comparison", () => {
             viewport_id: "desktop",
             state_id: "expanded",
             region_scope: "card",
+            crop_intent: "full-region",
             source: {
               reference_artifact_id: "reference.png",
               bbox: { x: 40, y: 210, width: 280, height: 160 },
@@ -994,6 +1034,7 @@ describe("browser preview region comparison", () => {
           region_id: "below-fold",
           viewport_id: "desktop",
           region_scope: "page-section",
+          crop_intent: "full-region",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 900, width: 320, height: 140 },
@@ -1044,6 +1085,7 @@ describe("browser preview region comparison", () => {
       region_id: "mobile-module",
       viewport_id: "mobile",
       region_scope: "page-section",
+      crop_intent: "full-region",
       source: {
         reference_artifact_id: "reference-mobile.png",
         bbox: { x: 24, y: 36, width: 300, height: 128 },

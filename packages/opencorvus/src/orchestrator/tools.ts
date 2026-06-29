@@ -136,6 +136,7 @@ import {
   getGoalRetryCount,
   listGoals,
   listGoalsForPlan,
+  findBuildOutcomesForTask,
   listGoalRunsByGoal,
   listGoalRunsForTask,
   requireRun,
@@ -5551,6 +5552,7 @@ export function createOrchestratorTools(input: {
       activeSpecSnapshotID: activeSpec.id,
     })
     const goalRunsForReview = listGoalRunsForTask(taskID)
+    const buildOutcomesForReview = findBuildOutcomesForTask(taskID)
     const replayContext = buildIntegrityReplayContext({
       taskID,
       lineage,
@@ -5559,6 +5561,7 @@ export function createOrchestratorTools(input: {
       requirements,
       buildRecords: deliveriesForAcceptance,
       goalRuns: goalRunsForReview,
+      buildOutcomes: buildOutcomesForReview,
     })
     const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
     const visualQaEntries = decisionLog.readByPhase("visual_qa")
@@ -12085,7 +12088,22 @@ export function createOrchestratorTools(input: {
           return `Error: cancel_subagent mode='recover_stale' only handles build sessions; ${target.sessionID} has kind=${kind}.`
         }
         if (staleRecovery && kind === "build" && !liveOwner) {
-          return `No live build ownership found for ${target.source}; nothing to recover.`
+          const targetGoalRun = target.goalRunID ? findGoalRun(target.goalRunID) : undefined
+          if (targetGoalRun && isLiveGoalRunStatus(targetGoalRun.status)) {
+            return (
+              `Error: cancel_subagent mode='recover_stale' refused because ${target.source} has live ` +
+              `goal_run ${targetGoalRun.id} status=${targetGoalRun.status}, but no live root build ownership. ` +
+              "Root build ownership only proves the dispatch tool lifecycle, not the child build lifecycle. " +
+              "Use durable goal_run/session/refill evidence, or use mode='cancel' only for explicit cancellation."
+            )
+          }
+          if (targetGoalRun) {
+            return (
+              `No live build ownership found for ${target.source}; goal_run ${targetGoalRun.id} is ` +
+              `${targetGoalRun.status}. Stale recovery did not mutate the worker.`
+            )
+          }
+          return `No live build ownership found for ${target.source}; no goal_run lifecycle fact was available to recover.`
         }
         if (kind === "build" && liveOwner) {
           if (staleRecovery) {

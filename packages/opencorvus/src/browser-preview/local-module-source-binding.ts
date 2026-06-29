@@ -144,6 +144,7 @@ export async function bindLocalModuleToSourceRegion(
     viewport_id: input.viewportID,
     state_id: "default",
     region_scope: inferRegionScope(candidateWithExpandedBox, localCapture),
+    crop_intent: "content-well",
     source: {
       reference_artifact_id: input.sourceReferenceArtifactID,
       bbox: sourceBox,

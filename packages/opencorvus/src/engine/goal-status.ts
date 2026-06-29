@@ -52,10 +52,10 @@ function mapRunStatus(runStatus: EngineGoalRunStatus): EngineGoalStatus {
     case "failed":
       return "failed"
     case "aborted":
-      // `aborted` is retriable, not a terminal failure. Keep the lifecycle
-      // projection non-passing while separate describe facts expose retry
-      // intent; do not turn it into a dispatch instruction.
-      return "pending"
+      // `aborted` is terminal and non-satisfying. Retry remains an
+      // orchestrator decision based on the goal_run attempt facts; projecting
+      // it as pending made aborted work look like never-started work.
+      return "failed"
   }
 }
 

@@ -669,6 +669,7 @@ describe("pipeline workflow review topology", () => {
             acceptanceSpecIDs: ["ACC-1"],
             sourceRefs: ["web-clone-source/reference.png"],
             viewport: "desktop",
+            cropIntent: "full-region",
             required: true,
             status: "passing",
             evidenceRefs: ["browser_preview_evidence:art_missing_comparison"],

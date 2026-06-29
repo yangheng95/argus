@@ -29,6 +29,7 @@ import {
   EngineTaskTable,
   type EngineAcceptanceStatus,
   type EngineArtifactKind,
+  type EngineGoalRunStatus,
 } from "./engine.sql"
 import { persistEvidence } from "@/verification/persist"
 import type { ToolFailureCause } from "@/session/tool-failure-cause"
@@ -67,6 +68,8 @@ import {
   type ResearchBrief,
 } from "@/research/schema"
 import { renderSpecsAsText } from "@/acceptance/types"
+
+type EngineDatabaseConnection = Parameters<Parameters<typeof Database.transaction>[0]>[0]
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -1251,6 +1254,7 @@ function appendGoalRunArtifact(input: {
   patch: Partial<import("./store").GoalRunRow>
   label: string
   now: number
+  db?: EngineDatabaseConnection
 }) {
   const merged = { ...input.existing, ...input.patch }
   const payload = {
@@ -1286,7 +1290,7 @@ function appendGoalRunArtifact(input: {
   // selection then flips under load. Bumping to max(existing + 1, now)
   // keeps each append strictly newer regardless of wall-clock resolution.
   const effectiveNow = Math.max(input.existing.time_updated + 1, input.now)
-  Database.use((db) =>
+  const insert = (db: EngineDatabaseConnection) =>
     db
       .insert(EngineArtifactTable)
       .values({
@@ -1300,8 +1304,12 @@ function appendGoalRunArtifact(input: {
         time_created: effectiveNow,
         time_updated: effectiveNow,
       })
-      .run(),
-  )
+      .run()
+  if (input.db) {
+    insert(input.db)
+  } else {
+    Database.use(insert)
+  }
 }
 
 /**
@@ -1435,14 +1443,12 @@ function openGoalImplementationVersion(input: { goal: GoalRow; reason: string; n
 // `last_progress_at` column's only reader was the watchdog — no caller now.
 // The column stays until 6-d-3 table deletion cleans it up in one sweep.
 
-export function updateGoalRun(goalRunID: string, values: Partial<import("./store").GoalRunRow>) {
-  const row = findGoalRun(goalRunID)
-  if (!row) return undefined
+function buildGoalRunPatch(
+  row: import("./store").GoalRunRow,
+  values: Partial<import("./store").GoalRunRow>,
+  now: number,
+): { nextStatus: EngineGoalRunStatus; statusChanged: boolean; patch: Partial<import("./store").GoalRunRow> } {
   const nextStatus = values.status ?? row.status
-  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
-  // goal_run.status to any value at any time; timestamp heuristics below are
-  // informational, not blocking.
-  const now = Date.now()
   const statusChanged = nextStatus !== row.status
   const patch: Partial<import("./store").GoalRunRow> = {
     ...values,
@@ -1457,6 +1463,40 @@ export function updateGoalRun(goalRunID: string, values: Partial<import("./store
       ? { time_completed: now }
       : {}),
   }
+  return { nextStatus, statusChanged, patch }
+}
+
+function emitGoalRunStatusChanged(input: {
+  row: import("./store").GoalRunRow
+  nextStatus: EngineGoalRunStatus
+  previousStatus: EngineGoalRunStatus
+  source: string
+}) {
+  syncGoalStatus(input.row.goal_id, `${input.source} ${input.previousStatus}→${input.nextStatus}`)
+  Database.effect(() =>
+    EngineProtocol.emit(
+      Event.GoalRunUpdated,
+      {
+        taskID: input.row.task_id,
+        goalRunID: input.row.id,
+        goalID: input.row.goal_id,
+        status: input.nextStatus,
+        previousStatus: input.previousStatus,
+        summary: `goal_run ${input.previousStatus}→${input.nextStatus}`,
+      },
+      { source: input.source },
+    ),
+  )
+}
+
+export function updateGoalRun(goalRunID: string, values: Partial<import("./store").GoalRunRow>) {
+  const row = findGoalRun(goalRunID)
+  if (!row) return undefined
+  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
+  // goal_run.status to any value at any time; timestamp heuristics below are
+  // informational, not blocking.
+  const now = Date.now()
+  const { nextStatus, statusChanged, patch } = buildGoalRunPatch(row, values, now)
   Database.transaction(() => {
     appendGoalRunArtifact({
       goalRunID,
@@ -1467,23 +1507,12 @@ export function updateGoalRun(goalRunID: string, values: Partial<import("./store
     })
   })
   if (statusChanged) {
-    syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
-    const taskID = row.task_id
-    const previousStatus = row.status
-    Database.effect(() =>
-      EngineProtocol.emit(
-        Event.GoalRunUpdated,
-        {
-          taskID,
-          goalRunID,
-          goalID: row.goal_id,
-          status: nextStatus,
-          previousStatus,
-          summary: `goal_run ${previousStatus}→${nextStatus}`,
-        },
-        { source: "persist.updateGoalRun" },
-      ),
-    )
+    emitGoalRunStatusChanged({
+      row,
+      nextStatus,
+      previousStatus: row.status,
+      source: "persist.updateGoalRun",
+    })
   }
   return findGoalRun(goalRunID)
 }
@@ -2057,6 +2086,13 @@ export function beginBuildAttempt(input: {
       blocking_reason: null,
       time_completed: now,
     })
+    recordAbortedBuildAttemptOutcome({
+      goalRunID: priorTip.id,
+      reason:
+        `owner process restarted mid-stream; goal_run ${priorTip.id} orphaned and ` +
+        `cannot resume — retired on re-dispatch`,
+      now,
+    })
     priorTip = findLatestTipGoalRun(input.goalID)
   }
   if (priorTip) {
@@ -2175,6 +2211,112 @@ export function beginBuildAttempt(input: {
   return id
 }
 
+type BuildAttemptOutcomeKind = "delivered" | "failed" | "aborted" | "no_project_diff"
+
+function buildAttemptOutcomeKind(input: {
+  status: "completed" | "failed" | "aborted"
+  commitRef?: string
+  acceptanceDiffCount: number
+}): BuildAttemptOutcomeKind {
+  if (input.status === "failed") return "failed"
+  if (input.status === "aborted") return "aborted"
+  return input.commitRef && input.acceptanceDiffCount > 0 ? "delivered" : "no_project_diff"
+}
+
+function buildNoDiffReason(input: {
+  status: "completed" | "failed" | "aborted"
+  commitRef?: string
+  rawDiffCount: number
+  acceptanceDiffCount: number
+}): string | undefined {
+  if (input.status !== "completed") return undefined
+  if (!input.commitRef) return "missing_commit_ref"
+  if (input.rawDiffCount > 0 && input.acceptanceDiffCount === 0) return "runtime_only_changes_filtered"
+  if (input.acceptanceDiffCount === 0) return "actual_changed_files_empty"
+  return undefined
+}
+
+function writeBuildAttemptOutcome(
+  db: EngineDatabaseConnection,
+  input: {
+    now: number
+    goalRun: import("./store").GoalRunRow
+    status: "completed" | "failed" | "aborted"
+    outcomeKind: BuildAttemptOutcomeKind
+    summary?: string
+    error?: string
+    noDiffReason?: string
+    commitRef?: string
+    publishedCommitRef?: string
+    diffBaseRef?: string
+    diffHeadRef?: string
+    workspaceDir?: string | null
+    workspaceBranch?: string | null
+    workspaceBaseRef?: string | null
+    changedFiles: string[]
+  },
+) {
+  const outcomeID = Identifier.ascending("artifact")
+  db.insert(EngineArtifactTable)
+    .values({
+      id: outcomeID,
+      task_id: input.goalRun.task_id,
+      run_id: input.goalRun.coordinator_run_id,
+      goal_run_id: input.goalRun.id,
+      kind: "build_attempt_outcome",
+      label: input.outcomeKind,
+      payload: {
+        task_id: input.goalRun.task_id,
+        goal_id: input.goalRun.goal_id,
+        goal_run_id: input.goalRun.id,
+        run_id: input.goalRun.coordinator_run_id,
+        session_id: input.goalRun.session_id,
+        terminal_status: input.status,
+        outcome_kind: input.outcomeKind,
+        summary: input.summary?.trim() || `Build attempt ${input.goalRun.id} ${input.outcomeKind}.`,
+        error: input.error ?? null,
+        no_diff_reason: input.noDiffReason ?? null,
+        host_facts: {
+          contribution_commit_ref: input.commitRef ?? null,
+          published_commit_ref: input.publishedCommitRef ?? null,
+          diff_base_ref: input.diffBaseRef ?? null,
+          diff_head_ref: input.diffHeadRef ?? null,
+          actual_changed_files: input.changedFiles,
+        },
+        workspace: {
+          dir: input.workspaceDir ?? input.goalRun.workspace_dir,
+          branch: input.workspaceBranch ?? input.goalRun.workspace_branch,
+          base_ref: input.workspaceBaseRef ?? input.goalRun.workspace_base_ref,
+        },
+      },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  return outcomeID
+}
+
+export function recordAbortedBuildAttemptOutcome(input: {
+  goalRunID: string
+  reason: string
+  now?: number
+}): void {
+  const goalRun = findGoalRun(input.goalRunID)
+  if (!goalRun) return
+  const now = input.now ?? Date.now()
+  Database.transaction((db) => {
+    writeBuildAttemptOutcome(db, {
+      now,
+      goalRun,
+      status: "aborted",
+      outcomeKind: "aborted",
+      summary: `Build attempt aborted: ${input.reason}`,
+      error: input.reason,
+      changedFiles: [],
+    })
+  })
+}
+
 /**
  * Finalize a goal_run opened by `beginBuildAttempt`. Updates the existing
  * goal_run via the append-only `updateGoalRun` writer (which sets
@@ -2209,6 +2351,8 @@ export function finalizeBuildAttempt(input: {
   now?: number
 }): void {
   const now = input.now ?? Date.now()
+  const goalRun = findGoalRun(input.goalRunID)
+  if (!goalRun) return
   const patch: Parameters<typeof updateGoalRun>[1] = {
     status: input.status,
     error: input.error ?? null,
@@ -2226,47 +2370,94 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceDir !== undefined) patch.workspace_dir = input.workspaceDir
   if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
-  updateGoalRun(input.goalRunID, patch)
-  const acceptanceDiffs = (Array.isArray(input.diffs) ? input.diffs : []).filter(
+  const rawDiffs = Array.isArray(input.diffs) ? input.diffs : []
+  const acceptanceDiffs = rawDiffs.filter(
     (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
   )
   const acceptanceDiffSummaries = summarizeAcceptanceDiffs(acceptanceDiffs)
   const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffSummaries.length > 0
-  if (!includeAcceptance) return
-  const stats = acceptanceDiffStats(acceptanceDiffSummaries)
-  const acceptanceID = Identifier.ascending("acceptance")
-  const summary =
+  const outcomeKind = buildAttemptOutcomeKind({
+    status: input.status,
+    commitRef: input.commitRef,
+    acceptanceDiffCount: acceptanceDiffSummaries.length,
+  })
+  const noDiffReason = buildNoDiffReason({
+    status: input.status,
+    commitRef: input.commitRef,
+    rawDiffCount: rawDiffs.length,
+    acceptanceDiffCount: acceptanceDiffSummaries.length,
+  })
+  const { nextStatus, statusChanged, patch: goalRunPatch } = buildGoalRunPatch(goalRun, patch, now)
+  const acceptanceSummary =
     input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffSummaries.length} file change(s).`
   Database.transaction((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: acceptanceID,
-        task_id: input.taskID,
-        run_id: input.runID ?? null,
-        goal_run_id: input.goalRunID,
-        acceptance_id: acceptanceID,
-        kind: "acceptance",
-        label: "acceptance-goal_run",
-        payload: {
-          status: "candidate",
-          summary,
-          result: {
-            summary,
-            commit_ref: input.commitRef,
-            published_commit_ref: input.publishedCommitRef,
-            diff_base_ref: input.diffBaseRef,
-            diff_head_ref: input.diffHeadRef,
-            changed_files: acceptanceDiffSummaries.map((d) => d.file),
-            file_changes: input.fileChanges ?? [],
-            diffs: acceptanceDiffSummaries,
-            stats,
+    appendGoalRunArtifact({
+      goalRunID: input.goalRunID,
+      existing: goalRun,
+      patch: goalRunPatch,
+      label: `attempt-${nextStatus}`,
+      now,
+      db,
+    })
+    const outcomeID = writeBuildAttemptOutcome(db, {
+      now,
+      goalRun,
+      status: input.status,
+      outcomeKind,
+      summary: input.summary,
+      error: input.error,
+      noDiffReason,
+      commitRef: input.commitRef,
+      publishedCommitRef: input.publishedCommitRef,
+      diffBaseRef: input.diffBaseRef,
+      diffHeadRef: input.diffHeadRef,
+      workspaceDir: input.workspaceDir,
+      workspaceBranch: input.workspaceBranch,
+      workspaceBaseRef: input.workspaceBaseRef,
+      changedFiles: acceptanceDiffSummaries.map((d) => d.file),
+    })
+    if (includeAcceptance) {
+      const stats = acceptanceDiffStats(acceptanceDiffSummaries)
+      const acceptanceID = Identifier.ascending("acceptance")
+      db.insert(EngineArtifactTable)
+        .values({
+          id: acceptanceID,
+          task_id: input.taskID,
+          run_id: input.runID ?? goalRun.coordinator_run_id ?? null,
+          goal_run_id: input.goalRunID,
+          acceptance_id: acceptanceID,
+          kind: "acceptance",
+          label: "acceptance-goal_run",
+          payload: {
+            status: "candidate",
+            summary: acceptanceSummary,
+            result: {
+              summary: acceptanceSummary,
+              build_attempt_outcome_id: outcomeID,
+              commit_ref: input.commitRef,
+              published_commit_ref: input.publishedCommitRef,
+              diff_base_ref: input.diffBaseRef,
+              diff_head_ref: input.diffHeadRef,
+              changed_files: acceptanceDiffSummaries.map((d) => d.file),
+              file_changes: input.fileChanges ?? [],
+              diffs: acceptanceDiffSummaries,
+              stats,
+            },
           },
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
   })
+  if (statusChanged) {
+    emitGoalRunStatusChanged({
+      row: goalRun,
+      nextStatus,
+      previousStatus: goalRun.status,
+      source: "persist.finalizeBuildAttempt",
+    })
+  }
 }
 
 // `recordBuildAttempt` was a single-shot insert that wrote the goal_run row

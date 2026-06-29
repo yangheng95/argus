@@ -9,6 +9,7 @@ import {
   findGoalLatestWorkspace,
   findLatestTipGoalRun,
   findLatestDeliveredGoalRun,
+  findBuildOutcomeByGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
   findAcceptanceByGoalRun,
@@ -1003,9 +1004,14 @@ function orderPhaseProjection(
   return out
 }
 
-function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" {
+function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" | "aborted" {
   return (
-    value === "pending" || value === "running" || value === "completed" || value === "skipped" || value === "failed"
+    value === "pending" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "skipped" ||
+    value === "failed" ||
+    value === "aborted"
   )
 }
 
@@ -1235,6 +1241,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   let changedFiles: string[] | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
+  let buildOutcome: GoalStepPayload["buildOutcome"]
   // buildSessionID describes the live attempt — read from the tip.
   // changedFiles / changedFileDiffs / diffStats describe what's been merged
   // into master — read from the most-recently-delivered run, which can
@@ -1248,6 +1255,24 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   // longer carries it (rule 8 — single source).
   if (goalRun) {
     buildSessionID = goalRun.session_id ?? undefined
+    const outcome = findBuildOutcomeByGoalRun(goalRun.id)
+    if (outcome) {
+      buildOutcome = {
+        id: outcome.id,
+        goalRunID: outcome.goal_run_id,
+        terminalStatus: outcome.terminal_status,
+        outcomeKind: outcome.outcome_kind,
+        acceptancePresent: findAcceptanceByGoalRun(outcome.goal_run_id) !== undefined,
+        summary: outcome.summary || undefined,
+        error: outcome.error ?? undefined,
+        noDiffReason: outcome.no_diff_reason ?? undefined,
+        changedFiles: outcome.changed_files,
+        commitRef: outcome.commit_ref ?? undefined,
+        publishedCommitRef: outcome.published_commit_ref ?? undefined,
+        diffBaseRef: outcome.diff_base_ref ?? undefined,
+        diffHeadRef: outcome.diff_head_ref ?? undefined,
+      }
+    }
   }
   const deliveredRun = findLatestDeliveredGoalRun(goalID)
   if (deliveredRun) {
@@ -1320,7 +1345,13 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     }
   }
 
-  if (planNodes === undefined && buildSessionID === undefined && changedFiles === undefined && checks === undefined) {
+  if (
+    planNodes === undefined &&
+    buildSessionID === undefined &&
+    changedFiles === undefined &&
+    buildOutcome === undefined &&
+    checks === undefined
+  ) {
     return undefined
   }
   return {
@@ -1333,6 +1364,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     changedFiles,
     changedFileDiffs,
     diffStats,
+    buildOutcome,
     checks,
     evalSummary,
     verdict,

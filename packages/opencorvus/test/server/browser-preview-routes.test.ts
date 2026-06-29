@@ -601,6 +601,7 @@ describe("browser preview routes", () => {
         viewportID: "desktop",
         operationKind: "reference-comparison",
         regionID: "economy",
+        cropIntent: "full-region",
         status: "passed",
         summary: "reference comparison completed",
         artifactPaths: {
@@ -717,6 +718,7 @@ describe("browser preview routes", () => {
         viewportID: "desktop",
         operationKind: "reference-comparison",
         regionID: "economy",
+        cropIntent: "full-region",
         status: "passed",
         summary: "reference comparison completed",
         artifactPaths: {
@@ -1090,6 +1092,7 @@ describe("browser preview routes", () => {
               region_id: "economy",
               viewport_id: "desktop",
               region_scope: "page-section",
+              crop_intent: "full-region",
               source: {
                 reference_artifact_id: "reference.png",
                 bbox: { x: 0, y: 0, width: 100, height: 80 },
@@ -1142,6 +1145,7 @@ describe("browser preview routes", () => {
         viewportID: "desktop",
         operationKind: "reference-comparison",
         regionID: "economy",
+        cropIntent: "full-region",
         status: "passed",
         summary: "comparison passed",
         artifactPaths: {
