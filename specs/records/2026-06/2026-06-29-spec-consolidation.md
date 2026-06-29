@@ -99,7 +99,7 @@ current implementation source/test, cite a current spec, or describe the histori
 4. Run `git diff --check` on changed docs/tests.
 5. Run independent read-only agent review after migration. If reviewers find new issues, fix and rerun review.
 
-## 2026-06-29 Final Review Addendum
+## 2026-06-29 Review Addendum 1
 
 Independent review after the initial document calibration found one remaining
 class of spec drift: active source/test comments and June records still cited
@@ -110,9 +110,9 @@ compatibility ledger.
 The guard was extended so bare deleted pre-June spec filenames are rejected
 outside this migration evidence record and the historical document-health guard.
 
-## 2026-06-29 Second Final Review Addendum
+## 2026-06-29 Review Addendum 2
 
-Independent review after the first final addendum found active overlay script,
+Independent review after the first review addendum found active overlay script,
 test, and dev-error comments still cited deleted overlay flat-redesign and
 implementation-progress spec paths. Those references were rewritten to current
 contract descriptions (`flat redesign migration contract` and `historical

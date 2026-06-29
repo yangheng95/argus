@@ -80,6 +80,8 @@ steer protocol.
 | `specs/records/2026-06/2026-06-24-a2a-agent-lifecycle-coordination.md` | A2A request/response/action introduced the durable mailbox and explicitly rejected unsolicited private steering. |
 | `specs/records/2026-06/2026-06-26-enterprise-a2a-protocol-root-repair.md` | Current implementation contract requires request/response/action atomicity, durable wake, no direct-reply fallback, and visible projection. |
 | `specs/records/2026-06/2026-06-27-a2a-adversarial-audit.md` | Explicitly states operator steer is still not A2A single-source: non-pending direct reply, build card task message, task message/inject/retry/replan, and session cancel are still separate surfaces. |
+| `specs/current/architecture/01-agents.md` | Current orchestrator tool surface still lists task-control tools and `respond_agent_coordination` as worker request response. Operator steer must be documented as a targeted operator-originated coordination request, not a new orchestrator tool. |
+| `specs/current/architecture/16-unified-teardown.md` | Historical architecture says user/operator messages enter the orchestrator session first. This is true for task-root messages but must not remain the model for targeted sub-agent steer. |
 
 ### Full-Repository Grep Evidence
 
@@ -131,13 +133,62 @@ steer protocol.
 
 ### Independent Agent Feedback
 
-Pending. Three read-only agents were started for:
+Three read-only agents were started for:
 
 1. backend A2A/direct-reply/root-cause audit;
 2. overlay UI/service/test audit;
 3. specs/docs/test-health audit.
 
-This section must be filled before implementation is marked complete.
+The overlay review found:
+
+- `Card.tsx` and `ChatBubble.tsx` duplicate the same build/non-build steer
+  router.
+- `AgentSessionReplyBox` comments hard-code direct reply for non-build and task
+  message for build.
+- `agent-session-controls.test.ts`,
+  `agent-reply-box-structured-errors.test.ts`, and
+  `agent-reply-box-primitives.test.ts` currently protect multi-source behavior.
+- The review proposed using `POST /task/:taskID/message` as the only overlay
+  route because `TaskMessageTarget` already supports `agent_session` and
+  `build_session`.
+
+Decision: do **not** use `/task/:taskID/message` as targeted operator steer.
+That route is task-root operator input and remains part of the multi-source
+problem. Reusing it would remove the UI branch while preserving the wrong
+semantic source. The single source must be a target-scoped operator steer route
+that writes coordination artifacts and wakes the orchestrator without writing a
+task-root user message.
+
+The specs/tests review found:
+
+- `2026-06-27-a2a-adversarial-audit.md` already states operator steer is not
+  A2A single-source.
+- New work must explicitly supersede the 2026-06-10 / 2026-06-13 build steer
+  task-root guidance records and the 2026-06-17 bug-hunt repair plan sections
+  that framed build guidance as task-root operator input.
+- Current architecture records (`01-agents.md`, `13-agent-communication-matrix.md`,
+  `16-unified-teardown.md`) must be reconciled after implementation.
+- `document-health.test.ts` should pin any now-conflicting historical records as
+  superseded, or they will remain active-looking evidence for the old design.
+
+The backend review found:
+
+- Current overlay steer writes through at least `/task/:taskID/message`,
+  `/task/:taskID/session/:sessionID/reply`, and `respond_agent_coordination`;
+  `/task/:taskID/inject` is also task-root operator-message input and must not
+  become targeted steer.
+- `/interaction/:interactionID/reply|reject` is a legitimate human-input path
+  for permission/question interactions and is not sub-agent steer.
+- The minimal root fix should be `EngineService.operatorSteer(...)` plus one
+  explicit route. It must reuse agent coordination ownership validation and
+  pending-session-control checks before writing anything.
+- Do not delete `replyAgentSession`, `handleTaskMessage`, interaction replies,
+  or `respond_agent_coordination`; instead remove overlay steer dependence and
+  prevent task-root scoped target spoofing from being the targeted steer path.
+- Existing direct-reply tests that prove no fallback and healthy explicit
+  direct reply should stay, but targeted steer needs its own route tests proving
+  no root message, no child message, no fallback, and correct ownership
+  validation.
 
 ## Design
 
