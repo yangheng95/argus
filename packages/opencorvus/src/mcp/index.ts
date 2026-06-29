@@ -177,9 +177,7 @@ export namespace MCP {
     })
   }
 
-  // Store transports for OAuth servers to allow finishing auth
-  type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
-  const pendingOAuthTransports = new Map<string, TransportWithAuth>()
+  const pendingOAuthFlows = new Set<string>()
 
   // Prompt cache types
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
@@ -221,11 +219,11 @@ export namespace MCP {
     return entry
   }
 
-  function effectiveTimeout(mcp?: Config.Mcp, globalTimeout?: number): number {
+  export function effectiveTimeout(mcp?: Config.Mcp, globalTimeout?: number): number {
     return mcp?.timeout ?? globalTimeout ?? DEFAULT_TIMEOUT
   }
 
-  function mcpRequestOptions(timeout: number): RequestOptions {
+  export function mcpRequestOptions(timeout: number): RequestOptions {
     return {
       resetTimeoutOnProgress: true,
       timeout,
@@ -343,7 +341,7 @@ export namespace MCP {
       await Promise.all(
         objectValues(state.connections).map((connection) => closeConnection(connection.key, connection)),
       )
-      pendingOAuthTransports.clear()
+      pendingOAuthFlows.clear()
     },
   )
 
@@ -574,8 +572,6 @@ export namespace MCP {
               reason: "needs_client_registration",
             }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
           } else {
-            // Store transport for later finishAuth call
-            pendingOAuthTransports.set(authKey, transport)
             status = { status: "needs_auth" as const }
             Bus.publish(AuthRequired, {
               name: key,
@@ -583,6 +579,16 @@ export namespace MCP {
               reason: "needs_auth",
             }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
           }
+          await client?.close().catch((closeError) => {
+            log.error("Failed to close auth-required remote MCP client", { key, transport: transportName, error: closeError })
+          })
+          await transport.close().catch((closeError) => {
+            log.error("Failed to close auth-required remote MCP transport", {
+              key,
+              transport: transportName,
+              error: closeError,
+            })
+          })
         } else {
           await client?.close().catch((closeError) => {
             log.error("Failed to close failed remote MCP client", { key, transport: transportName, error: closeError })
@@ -1017,20 +1023,17 @@ export namespace MCP {
       return { authorizationUrl: "" }
     } catch (error) {
       if (error instanceof UnauthorizedError && capturedUrl) {
-        // Store transport for finishAuth
-        pendingOAuthTransports.set(authKey, transport)
+        pendingOAuthFlows.add(authKey)
         return { authorizationUrl: capturedUrl.toString() }
       }
       throw error
     } finally {
-      if (!pendingOAuthTransports.has(authKey)) {
-        await client?.close().catch((closeError) => {
-          log.error("Failed to close OAuth probe MCP client", { mcpName, transport: transportName, error: closeError })
-        })
-        await transport.close().catch((closeError) => {
-          log.error("Failed to close OAuth probe MCP transport", { mcpName, transport: transportName, error: closeError })
-        })
-      }
+      await client?.close().catch((closeError) => {
+        log.error("Failed to close OAuth probe MCP client", { mcpName, transport: transportName, error: closeError })
+      })
+      await transport.close().catch((closeError) => {
+        log.error("Failed to close OAuth probe MCP transport", { mcpName, transport: transportName, error: closeError })
+      })
     }
   }
 
@@ -1113,13 +1116,33 @@ export namespace MCP {
   export async function finishAuth(mcpName: string, authorizationCode: string): Promise<Status> {
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
-    requireMcpEntry(config, mcpName)
+    const mcpConfig = requireMcpEntry(config, mcpName)
     const authKey = mcpAuthKey(mcpName)
-    const transport = pendingOAuthTransports.get(authKey)
 
-    if (!transport) {
+    if (!pendingOAuthFlows.has(authKey)) {
       throw new Error(`No pending OAuth flow for MCP server: ${mcpName}`)
     }
+    if (!isMcpConfigured(mcpConfig)) {
+      throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
+    }
+    if (mcpConfig.type !== "remote") {
+      throw new Error(`MCP server ${mcpName} is not a remote server`)
+    }
+    const oauthConfig = typeof mcpConfig.oauth === "object" ? mcpConfig.oauth : undefined
+    const authProvider = new McpOAuthProvider(
+      mcpName,
+      authKey,
+      mcpConfig.url,
+      {
+        clientId: oauthConfig?.clientId,
+        clientSecret: oauthConfig?.clientSecret,
+        scope: oauthConfig?.scope,
+      },
+      {
+        onRedirect: async () => {},
+      },
+    )
+    const { name: transportName, transport } = createRemoteTransport(mcpConfig, authProvider)
 
     try {
       // Call finishAuth on the transport
@@ -1128,16 +1151,8 @@ export namespace MCP {
       // Clear the code verifier after successful auth
       await McpAuth.clearCodeVerifier(authKey)
 
-      // Now try to reconnect
-      const latestConfig = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
-      const mcpConfig = requireMcpEntry(latestConfig, mcpName)
-
-      if (!isMcpConfigured(mcpConfig)) {
-        throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
-      }
-
       // Re-add the MCP server to establish connection
-      pendingOAuthTransports.delete(authKey)
+      pendingOAuthFlows.delete(authKey)
       const result = await add(mcpName, mcpConfig)
 
       const statusRecord = result.status as Record<string, Status>
@@ -1148,6 +1163,11 @@ export namespace MCP {
     } catch (error) {
       log.error("failed to finish oauth", { mcpName, error })
       throw error
+    } finally {
+      pendingOAuthFlows.delete(authKey)
+      await transport.close().catch((closeError) => {
+        log.error("Failed to close OAuth finish MCP transport", { mcpName, transport: transportName, error: closeError })
+      })
     }
   }
 
@@ -1161,7 +1181,7 @@ export namespace MCP {
     const authKey = mcpAuthKey(mcpName)
     await McpAuth.remove(authKey)
     McpOAuthCallback.cancelPending(authKey)
-    pendingOAuthTransports.delete(authKey)
+    pendingOAuthFlows.delete(authKey)
     await McpAuth.clearOAuthState(authKey)
     log.info("removed oauth credentials", { mcpName })
   }

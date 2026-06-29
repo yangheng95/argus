@@ -5,6 +5,8 @@ import { requireRuntimePackage } from "@/runtime/package-require"
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 export const MAX_MODEL_IMAGE_INPUT_DIMENSION = 8000
+export const MODEL_IMAGE_INPUT_PIXEL_BUDGET = 1_048_576
+export const MODEL_IMAGE_INPUT_COMPRESSION_WARNING_RATIO = 2
 const BLANK_MARGIN_CROP_THRESHOLD = 10
 
 export interface ImageDimensions {
@@ -22,13 +24,36 @@ export interface ModelImageBlankMarginCrop {
   trimOffsetTop?: number
 }
 
+export interface ModelImageResize {
+  inputWidth: number
+  inputHeight: number
+  width: number
+  height: number
+  scale: number
+  maxDimension: number
+  maxPixels: number
+}
+
 export interface PreparedModelImageInput {
   mime: string
   bytes: Buffer
   dimensions?: ImageDimensions
   crop?: ModelImageBlankMarginCrop
+  resize?: ModelImageResize
   note?: string
 }
+
+export const modelImagePixelSummarySchema = z.object({
+  currentPixels: z.number(),
+  compressedPixels: z.number(),
+  compressedWidth: z.number(),
+  compressedHeight: z.number(),
+  compressionRatio: z.number(),
+  preferPartialScreenshot: z.boolean(),
+  text: z.string(),
+})
+
+export type ModelImagePixelSummary = z.infer<typeof modelImagePixelSummarySchema>
 
 export const ModelImageInputTooLargeError = NamedError.create(
   "ModelImageInputTooLargeError",
@@ -38,7 +63,9 @@ export const ModelImageInputTooLargeError = NamedError.create(
     source: z.string(),
     width: z.number(),
     height: z.number(),
+    pixels: z.number().optional(),
     maxDimension: z.number(),
+    maxPixels: z.number().optional(),
     originalWidth: z.number().optional(),
     originalHeight: z.number().optional(),
     blankMarginCrop: z
@@ -60,27 +87,61 @@ export function readModelImageDimensions(bytes: Buffer): ImageDimensions | undef
   return readPngDimensions(bytes) ?? readJpegDimensions(bytes) ?? readWebpDimensions(bytes)
 }
 
+export const modelImagePixelSummary = (
+  width: number,
+  height: number,
+  maxPixels = MODEL_IMAGE_INPUT_PIXEL_BUDGET,
+): ModelImagePixelSummary => {
+  const currentPixels = width * height
+  const target = modelImageInputTargetDimensions({ width, height, maxPixels })
+  const compressedWidth = target.width
+  const compressedHeight = target.height
+  const compressedPixels = compressedWidth * compressedHeight
+  const compressionRatio =
+    compressedWidth > 0 && compressedHeight > 0
+      ? Number(Math.max(width / compressedWidth, height / compressedHeight).toFixed(2))
+      : 1
+  const preferPartialScreenshot = compressionRatio >= MODEL_IMAGE_INPUT_COMPRESSION_WARNING_RATIO
+  return {
+    currentPixels,
+    compressedPixels,
+    compressedWidth,
+    compressedHeight,
+    compressionRatio,
+    preferPartialScreenshot,
+    text:
+      `当前像素: ${currentPixels} (${width}x${height}); 压缩后像素: ${compressedPixels} (${compressedWidth}x${compressedHeight}); ` +
+      `压缩率: ${compressionRatio.toFixed(2)}x` +
+      (preferPartialScreenshot ? "; 压缩率过大，请优先使用 selector 或 clip 做局部截图。" : ""),
+  }
+}
+
 export function assertModelImageInputWithinLimits(input: {
   mime: string
   bytes: Buffer
   source: string
   maxDimension?: number
+  maxPixels?: number
 }): void {
   if (!input.mime.toLowerCase().startsWith("image/")) return
   const dimensions = readModelImageDimensions(input.bytes)
   if (!dimensions) return
   const maxDimension = input.maxDimension ?? MAX_MODEL_IMAGE_INPUT_DIMENSION
-  if (dimensions.width <= maxDimension && dimensions.height <= maxDimension) return
+  const maxPixels = input.maxPixels ?? MODEL_IMAGE_INPUT_PIXEL_BUDGET
+  const pixels = dimensions.width * dimensions.height
+  if (dimensions.width <= maxDimension && dimensions.height <= maxDimension && pixels <= maxPixels) return
   throw new ModelImageInputTooLargeError({
     mime: input.mime,
     source: input.source,
     width: dimensions.width,
     height: dimensions.height,
+    pixels,
     maxDimension,
+    maxPixels,
     message:
       `Model image input too large: ${input.source} is ${dimensions.width}x${dimensions.height} ` +
-      `(${input.mime}); max supported dimension is ${maxDimension}px. ` +
-      "Use a viewport screenshot, scroll slice, region crop, or coordinate atlas instead of sending the full image.",
+      `(${pixels} pixels, ${input.mime}); max supported dimension is ${maxDimension}px and ` +
+      `max model image pixels is ${maxPixels}.`,
   })
 }
 
@@ -89,6 +150,7 @@ export async function prepareModelImageInput(input: {
   bytes: Buffer
   source: string
   maxDimension?: number
+  maxPixels?: number
 }): Promise<PreparedModelImageInput> {
   if (!input.mime.toLowerCase().startsWith("image/")) {
     return { mime: input.mime, bytes: input.bytes }
@@ -105,11 +167,26 @@ export async function prepareModelImageInput(input: {
     bytes: input.bytes,
     originalDimensions,
   })
-  const bytes = cropped?.bytes ?? input.bytes
-  const dimensions = readModelImageDimensions(bytes) ?? originalDimensions
+  let bytes = cropped?.bytes ?? input.bytes
+  let dimensions = readModelImageDimensions(bytes) ?? originalDimensions
   const crop = cropped?.crop
   const maxDimension = input.maxDimension ?? MAX_MODEL_IMAGE_INPUT_DIMENSION
-  if (dimensions.width > maxDimension || dimensions.height > maxDimension) {
+  const maxPixels = input.maxPixels ?? MODEL_IMAGE_INPUT_PIXEL_BUDGET
+  const resized = await resizeForModelInputLimits({
+    mime: input.mime,
+    bytes,
+    dimensions,
+    source: input.source,
+    maxDimension,
+    maxPixels,
+  })
+  const resize = resized?.resize
+  if (resized) {
+    bytes = resized.bytes
+    dimensions = resized.dimensions
+  }
+  const pixels = dimensions.width * dimensions.height
+  if (dimensions.width > maxDimension || dimensions.height > maxDimension || pixels > maxPixels) {
     const afterCrop =
       crop && (crop.originalWidth !== dimensions.width || crop.originalHeight !== dimensions.height)
         ? ` after blank-margin crop from ${crop.originalWidth}x${crop.originalHeight}`
@@ -119,26 +196,71 @@ export async function prepareModelImageInput(input: {
       source: input.source,
       width: dimensions.width,
       height: dimensions.height,
+      pixels,
       maxDimension,
+      maxPixels,
       originalWidth: crop?.originalWidth,
       originalHeight: crop?.originalHeight,
       blankMarginCrop: crop,
       message:
         `Model image input too large: ${input.source} is ${dimensions.width}x${dimensions.height}${afterCrop} ` +
-        `(${input.mime}); max supported dimension is ${maxDimension}px. ` +
-        "Use a viewport screenshot, scroll slice, region crop, or coordinate atlas instead of sending the full image.",
+        `(${pixels} pixels, ${input.mime}); max supported dimension is ${maxDimension}px and ` +
+        `max model image pixels is ${maxPixels}.`,
     })
   }
 
-  const note = crop
-    ? `[model-image-input] Cropped blank margins for ${input.source}: original ${crop.originalWidth}x${crop.originalHeight}, model input ${crop.width}x${crop.height}. Original attachment remains unchanged.`
-    : undefined
+  const notes: string[] = []
+  if (crop) {
+    notes.push(
+      `[model-image-input] Cropped blank margins for ${input.source}: original ${crop.originalWidth}x${crop.originalHeight}, model input ${crop.width}x${crop.height}. Original attachment remains unchanged.`,
+    )
+  }
+  if (resize) {
+    notes.push(
+      `[model-image-input] Resized ${input.source} for model input: ${resize.inputWidth}x${resize.inputHeight} to ${resize.width}x${resize.height} (${resize.scale.toFixed(4)}x scale, max ${resize.maxDimension}px, pixel budget ${resize.maxPixels}). Original attachment remains unchanged.`,
+    )
+  }
+  const note = notes.length > 0 ? notes.join("\n") : undefined
   return {
     mime: input.mime,
     bytes,
     dimensions,
     ...(crop ? { crop } : {}),
+    ...(resize ? { resize } : {}),
     ...(note ? { note } : {}),
+  }
+}
+
+export function modelImageInputTargetDimensions(input: {
+  width: number
+  height: number
+  maxDimension?: number
+  maxPixels?: number
+}): { width: number; height: number; scale: number } {
+  const maxDimension = input.maxDimension ?? MAX_MODEL_IMAGE_INPUT_DIMENSION
+  const maxPixels = input.maxPixels ?? MODEL_IMAGE_INPUT_PIXEL_BUDGET
+  const pixels = input.width * input.height
+  const scale = Math.min(
+    1,
+    maxDimension / input.width,
+    maxDimension / input.height,
+    pixels > maxPixels ? Math.sqrt(maxPixels / pixels) : 1,
+  )
+  let width = Math.max(1, Math.round(input.width * scale))
+  let height = Math.max(1, Math.round(input.height * scale))
+  while (width > maxDimension) width--
+  while (height > maxDimension) height--
+  while (width * height > maxPixels && (width > 1 || height > 1)) {
+    if (width / input.width >= height / input.height && width > 1) {
+      width--
+    } else {
+      height--
+    }
+  }
+  return {
+    width,
+    height,
+    scale,
   }
 }
 
@@ -181,6 +303,64 @@ function encoderForMime(mime: string): ((image: SharpPipeline) => SharpPipeline)
       return (image) => image.webp()
     default:
       return undefined
+  }
+}
+
+async function resizeForModelInputLimits(input: {
+  mime: string
+  bytes: Buffer
+  dimensions: ImageDimensions
+  source: string
+  maxDimension: number
+  maxPixels: number
+}): Promise<{ bytes: Buffer; dimensions: ImageDimensions; resize: ModelImageResize } | undefined> {
+  const target = modelImageInputTargetDimensions({
+    width: input.dimensions.width,
+    height: input.dimensions.height,
+    maxDimension: input.maxDimension,
+    maxPixels: input.maxPixels,
+  })
+  if (target.width === input.dimensions.width && target.height === input.dimensions.height) return undefined
+  const encoder = encoderForMime(input.mime)
+  if (!encoder) {
+    throw new ModelImageInputTooLargeError({
+      mime: input.mime,
+      source: input.source,
+      width: input.dimensions.width,
+      height: input.dimensions.height,
+      pixels: input.dimensions.width * input.dimensions.height,
+      maxDimension: input.maxDimension,
+      maxPixels: input.maxPixels,
+      message:
+        `Model image input too large: ${input.dimensions.width}x${input.dimensions.height} ` +
+        `(${input.dimensions.width * input.dimensions.height} pixels, ${input.mime}); encoder unavailable for resize.`,
+    })
+  }
+  const { data, info } = await encoder(
+    sharp(input.bytes, { failOn: "error" }).resize({
+      width: target.width,
+      height: target.height,
+      fit: "inside",
+      withoutEnlargement: true,
+    }),
+  ).toBuffer({ resolveWithObject: true })
+  const dimensions = readModelImageDimensions(data) ?? {
+    format: input.dimensions.format,
+    width: info.width,
+    height: info.height,
+  }
+  return {
+    bytes: data,
+    dimensions,
+    resize: {
+      inputWidth: input.dimensions.width,
+      inputHeight: input.dimensions.height,
+      width: dimensions.width,
+      height: dimensions.height,
+      scale: Math.min(dimensions.width / input.dimensions.width, dimensions.height / input.dimensions.height),
+      maxDimension: input.maxDimension,
+      maxPixels: input.maxPixels,
+    },
   }
 }
 

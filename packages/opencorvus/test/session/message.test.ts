@@ -6,7 +6,7 @@ import { Message } from "../../src/session/message"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
-import { ModelImageInputTooLargeError } from "../../src/session/model-image-input"
+import { MODEL_IMAGE_INPUT_PIXEL_BUDGET, readModelImageDimensions } from "../../src/session/model-image-input"
 import type { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
@@ -121,6 +121,22 @@ async function pngImage(width: number, height: number): Promise<Buffer> {
       `</svg>`,
   )
   return await sharp(svg).png().toBuffer()
+}
+
+function decodeDataUrlImageBytes(url: string): Buffer {
+  const marker = ";base64,"
+  const index = url.indexOf(marker)
+  if (index < 0) throw new Error(`Expected image data URL, got ${url.slice(0, 40)}`)
+  return Buffer.from(url.slice(index + marker.length), "base64")
+}
+
+function expectModelImageBytesWithinBudget(bytes: Buffer) {
+  const dimensions = readModelImageDimensions(bytes)
+  expect(dimensions).toBeDefined()
+  expect(dimensions!.width).toBeLessThanOrEqual(8000)
+  expect(dimensions!.height).toBeLessThanOrEqual(8000)
+  expect(dimensions!.width * dimensions!.height).toBeLessThanOrEqual(MODEL_IMAGE_INPUT_PIXEL_BUDGET)
+  return dimensions!
 }
 
 function handoffFixture(): CompactionHandoff.Info {
@@ -520,13 +536,14 @@ describe("session.message.toModelMessage", () => {
     })
   }, 20000)
 
-  test("rejects oversized stored user image refs before provider conversion", async () => {
+  test("resizes oversized stored user image refs before provider conversion", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const messageID = "m-user-oversized-ref"
-        const ref = await AttachmentStore.write(Instance.project.id, await pngImage(1440, 19773), "image/png", "full.png")
+        const original = await pngImage(1440, 19773)
+        const ref = await AttachmentStore.write(Instance.project.id, original, "image/png", "full.png")
         const input: Message.WithParts[] = [
           {
             info: userInfo(messageID),
@@ -542,30 +559,31 @@ describe("session.message.toModelMessage", () => {
           },
         ]
 
-        let caught: unknown
-        try {
-          await Message.toModelMessages(input, model)
-        } catch (error) {
-          caught = error
-        }
+        const result = await Message.toModelMessages(input, model)
+        const file = (result[0].content as Array<{ type: string; data?: string; filename?: string }>).find(
+          (part) => part.type === "file",
+        )
+        expect(file?.filename).toBe("full.png")
+        const modelDimensions = expectModelImageBytesWithinBudget(decodeDataUrlImageBytes(file!.data!))
+        const originalLocation = AttachmentStore.nameFromUrl(ref.url)!
+        const originalDimensions = readModelImageDimensions(
+          await AttachmentStore.read(originalLocation.projectID, originalLocation.name),
+        )
 
-        expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
-        expect(
-          (caught as { data: { width: number; height: number; maxDimension: number; source: string } }).data,
-        ).toMatchObject({
+        expect(originalDimensions).toMatchObject({
           width: 1440,
           height: 19773,
-          maxDimension: 8000,
-          source: "full.png",
         })
-        const serialized = Message.fromError(caught, { providerID: "test" })
-        expect(serialized.name).toBe("ModelImageInputTooLargeError")
-        expect(Message.Assistant.shape.error.safeParse(serialized).success).toBe(true)
+        expect(modelDimensions.width).toBeLessThan(originalDimensions!.width)
+        expect(modelDimensions.height).toBeLessThan(originalDimensions!.height)
+        expect((result[0].content as Array<{ type: string; text?: string }>).some((part) => part.text?.includes("Resized full.png"))).toBe(
+          true,
+        )
       },
     })
   }, 20000)
 
-  test("rejects oversized tool result data URL images before image-data replay", async () => {
+  test("resizes oversized tool result data URL images before image-data replay", async () => {
     const userID = "m-user-oversized-tool"
     const assistantID = "m-assistant-oversized-tool"
     const payload = (await pngImage(1440, 19773)).toString("base64")
@@ -610,20 +628,23 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    let caught: unknown
-    try {
-      await Message.toModelMessages(input, model)
-    } catch (error) {
-      caught = error
-    }
+    const result = await Message.toModelMessages(input, model)
+    const toolMessage = result.find((message) => message.role === "tool") as
+      | {
+          role: "tool"
+          content: Array<{
+            output: { type: string; value: Array<{ type: string; data?: string; text?: string }> }
+          }>
+        }
+      | undefined
+    const output = toolMessage?.content[0]?.output
+    const imagePart = output?.value.find((part) => part.type === "image-data")
+    const textPart = output?.value.find((part) => part.type === "text")
+    const dimensions = expectModelImageBytesWithinBudget(Buffer.from(imagePart!.data!, "base64"))
 
-    expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
-    expect((caught as { data: { width: number; height: number; mime: string; source: string } }).data).toMatchObject({
-      mime: "image/png",
-      source: "full.png",
-      width: 1440,
-      height: 19773,
-    })
+    expect(dimensions.width).toBeLessThan(1440)
+    expect(dimensions.height).toBeLessThan(19773)
+    expect(textPart?.text).toContain("Resized full.png")
   })
 
   test("rejects malformed user image data URLs before provider conversion", async () => {

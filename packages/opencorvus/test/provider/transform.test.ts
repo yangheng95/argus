@@ -4,6 +4,7 @@ import z from "zod"
 import sharp from "sharp"
 import { ProviderTransform } from "../../src/provider/transform"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
+import { MODEL_IMAGE_INPUT_PIXEL_BUDGET } from "../../src/session/model-image-input"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -519,6 +520,34 @@ describe("ProviderTransform.message - local attachment transport", () => {
       .toBuffer()
   }
 
+  async function largePngWithBoundedContent(): Promise<Buffer> {
+    const dot = await sharp({
+      create: {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: "#000000",
+      },
+    })
+      .png()
+      .toBuffer()
+    return await sharp({
+      create: {
+        width: 3000,
+        height: 2000,
+        channels: 3,
+        background: "#ffffff",
+      },
+    })
+      .composite([
+        { input: dot, left: 2999, top: 0 },
+        { input: dot, left: 0, top: 1999 },
+        { input: dot, left: 2999, top: 1999 },
+      ])
+      .png()
+      .toBuffer()
+  }
+
   async function withProject<T>(fn: (projectID: string) => Promise<T>): Promise<T> {
     await using tmp = await tmpdir()
     const projectID = `attachment-transport-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -598,6 +627,32 @@ describe("ProviderTransform.message - local attachment transport", () => {
       expect(result[0].content[1]).toMatchObject({
         type: "text",
         text: expect.stringContaining("Cropped blank margins"),
+      })
+    })
+  })
+
+  test("resizes oversized local model image refs before provider inlining", async () => {
+    await withProject(async (projectID) => {
+      const ref = await AttachmentStore.write(projectID, await largePngWithBoundedContent(), "image/png", "large.png")
+      const result = (await ProviderTransform.message(
+        [
+          {
+            role: "user",
+            content: [{ type: "file", data: ref.url, mediaType: "image/png", filename: "large.png" }],
+          },
+        ] as any[],
+        model,
+        {},
+      )) as any[]
+
+      const resized = Buffer.from(result[0].content[0].data, "base64")
+      const metadata = await sharp(resized).metadata()
+      expect(metadata.width).toBe(1254)
+      expect(metadata.height).toBe(836)
+      expect(metadata.width! * metadata.height!).toBeLessThanOrEqual(MODEL_IMAGE_INPUT_PIXEL_BUDGET)
+      expect(result[0].content[1]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("Resized large.png"),
       })
     })
   })
@@ -1614,6 +1669,7 @@ describe("ProviderTransform.message - anthropic empty content filtering", () => 
 
   test("filters out empty text parts from array content", async () => {
     const msgs = [
+      { role: "user", content: "Before" },
       {
         role: "assistant",
         content: [
@@ -1622,17 +1678,19 @@ describe("ProviderTransform.message - anthropic empty content filtering", () => 
           { type: "text", text: "" },
         ],
       },
+      { role: "user", content: "After" },
     ] as any[]
 
     const result = await ProviderTransform.message(msgs, anthropicModel, {})
 
-    expect(result).toHaveLength(1)
-    expect(result[0].content).toHaveLength(1)
-    expect(result[0].content[0]).toEqual({ type: "text", text: "Hello" })
+    expect(result).toHaveLength(3)
+    expect(result[1].content).toHaveLength(1)
+    expect(result[1].content[0]).toEqual({ type: "text", text: "Hello" })
   })
 
   test("filters out empty reasoning parts from array content", async () => {
     const msgs = [
+      { role: "user", content: "Before" },
       {
         role: "assistant",
         content: [
@@ -1641,13 +1699,14 @@ describe("ProviderTransform.message - anthropic empty content filtering", () => 
           { type: "reasoning", text: "" },
         ],
       },
+      { role: "user", content: "After" },
     ] as any[]
 
     const result = await ProviderTransform.message(msgs, anthropicModel, {})
 
-    expect(result).toHaveLength(1)
-    expect(result[0].content).toHaveLength(1)
-    expect(result[0].content[0]).toEqual({ type: "text", text: "Answer" })
+    expect(result).toHaveLength(3)
+    expect(result[1].content).toHaveLength(1)
+    expect(result[1].content[0]).toEqual({ type: "text", text: "Answer" })
   })
 
   test("removes entire message when all parts are empty", async () => {
@@ -2016,6 +2075,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     }
     const msgs = [
+      { role: "user", content: "Before" },
       {
         role: "assistant",
         content: [
@@ -2030,12 +2090,13 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
           },
         ],
       },
+      { role: "user", content: "After" },
     ] as any[]
 
     // store=false preserves metadata for non-openai packages
     const result = (await ProviderTransform.message(msgs, anthropicModel, { store: false })) as any[]
 
-    expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
+    expect(result[1].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
   })
 
   test("preserves metadata using providerID key when store is false", async () => {
@@ -2049,6 +2110,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     }
     const msgs = [
+      { role: "user", content: "Before" },
       {
         role: "assistant",
         content: [
@@ -2068,8 +2130,8 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
 
     const result = (await ProviderTransform.message(msgs, opencorvusModel, { store: false })) as any[]
 
-    expect(result[0].content[0].providerOptions?.opencorvus?.itemId).toBe("msg_123")
-    expect(result[0].content[0].providerOptions?.opencorvus?.otherOption).toBe("value")
+    expect(result[1].content[0].providerOptions?.opencorvus?.itemId).toBe("msg_123")
+    expect(result[1].content[0].providerOptions?.opencorvus?.otherOption).toBe("value")
   })
 
   test("preserves itemId across all providerOptions keys", async () => {
@@ -2139,6 +2201,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
           },
         ],
       },
+      { role: "user", content: "After" },
     ] as any[]
 
     const result = (await ProviderTransform.message(msgs, anthropicModel, {})) as any[]

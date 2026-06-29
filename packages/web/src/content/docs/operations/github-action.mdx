@@ -20,6 +20,10 @@ Supported triggers (`packages/opencorvus/src/cli/cmd/github.ts`):
 
 - `issue_comment` — Issue & PR comments (distinguished by `issue.pull_request`)
 - `pull_request_review_comment` — line-level review comments
+- `issues` — issue lifecycle events
+- `pull_request` — PR lifecycle events
+- `schedule` — scheduled repository automation
+- `workflow_dispatch` — manually triggered repository automation
 
 ## Inputs
 
@@ -120,11 +124,12 @@ jobs:
 ## Code flow
 
 ```
-issue_comment / pull_request_review_comment
+issue_comment / pull_request_review_comment / issues / pull_request / schedule / workflow_dispatch
   ├─ isPullRequest()
   │  ├─ same-repo PR → checkoutLocalBranch → chat → pushToLocalBranch
   │  └─ fork PR     → checkoutForkBranch  → chat → pushToForkBranch
-  └─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
+  ├─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
+  └─ Repository automation → checkoutNewBranch → chat → pushToNewBranch
 ```
 
 (`packages/opencorvus/src/cli/cmd/github.ts`)
@@ -132,14 +137,7 @@ issue_comment / pull_request_review_comment
 ## Local testing
 
 ```bash
-cd /path/to/test-repo
-
-MODEL=alibaba-coding-plan-cn/qwen3.5-plus \
-  ALIBABA_CODING_PLAN_API_KEY=sk-... \
-  GITHUB_RUN_ID=dummy \
-  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run \
-    --token github_pat_... \
-    --event '{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}'
+bun test packages/opencorvus/test/cli/github-action-run.test.ts
 ```
 
-`--token` needs a PAT with `admin` or `write`.
+Repository tests mock event payloads and still exercise the same OIDC App-token exchange path as the published Action.

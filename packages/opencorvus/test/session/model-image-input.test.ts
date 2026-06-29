@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import sharp from "sharp"
 import {
+  MODEL_IMAGE_INPUT_PIXEL_BUDGET,
   ModelImageInputTooLargeError,
   assertModelImageInputWithinLimits,
+  modelImageInputTargetDimensions,
   prepareModelImageInput,
   readModelImageDimensions,
 } from "../../src/session/model-image-input"
@@ -98,6 +100,34 @@ async function pngWithBlackBlock(input: {
     .toBuffer()
 }
 
+async function pngWithBlackCorners(width: number, height: number): Promise<Buffer> {
+  const dot = await sharp({
+    create: {
+      width: 1,
+      height: 1,
+      channels: 3,
+      background: "#000000",
+    },
+  })
+    .png()
+    .toBuffer()
+  return await sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: "#ffffff",
+    },
+  })
+    .composite([
+      { input: dot, left: width - 1, top: 0 },
+      { input: dot, left: 0, top: height - 1 },
+      { input: dot, left: width - 1, top: height - 1 },
+    ])
+    .png()
+    .toBuffer()
+}
+
 describe("session.model-image-input", () => {
   test("reads dimensions from provider-bound image headers", () => {
     expect(readModelImageDimensions(pngHeader(1440, 900))).toMatchObject({
@@ -122,7 +152,7 @@ describe("session.model-image-input", () => {
     })
   })
 
-  test("throws typed error when any model-bound image dimension exceeds the limit", () => {
+  test("strict image limit assertion throws a typed error when any image dimension exceeds the limit", () => {
     let caught: unknown
     try {
       assertModelImageInputWithinLimits({
@@ -140,6 +170,14 @@ describe("session.model-image-input", () => {
       height: 19773,
       maxDimension: 8000,
     })
+  })
+
+  test("computes proportional target dimensions from the shared model image pixel budget", () => {
+    expect(modelImageInputTargetDimensions({ width: 3000, height: 2000 })).toMatchObject({
+      width: 1254,
+      height: 836,
+    })
+    expect(1254 * 836).toBeLessThanOrEqual(MODEL_IMAGE_INPUT_PIXEL_BUDGET)
   })
 
   test("crops blank screenshot margins before binding image bytes to the model", async () => {
@@ -168,7 +206,7 @@ describe("session.model-image-input", () => {
     expect(prepared.note).toContain("original 32x16, model input 8x16")
   })
 
-  test("still fails when blank-cropped image exceeds the model dimension limit", async () => {
+  test("resizes after blank crop when cropped image exceeds the model dimension limit", async () => {
     const source = await pngWithBlackBlock({
       width: 20,
       height: 8010,
@@ -178,25 +216,49 @@ describe("session.model-image-input", () => {
       blockHeight: 8010,
     })
 
-    let caught: unknown
-    try {
-      await prepareModelImageInput({
-        mime: "image/png",
-        bytes: source,
-        source: "tall-screenshot.png",
-      })
-    } catch (error) {
-      caught = error
-    }
+    const prepared = await prepareModelImageInput({
+      mime: "image/png",
+      bytes: source,
+      source: "tall-screenshot.png",
+    })
+    const dimensions = readModelImageDimensions(prepared.bytes)
 
-    expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
-    expect(
-      (caught as { data: { width: number; height: number; originalWidth?: number; originalHeight?: number } }).data,
-    ).toMatchObject({
+    expect(prepared.crop).toMatchObject({
       width: 10,
       height: 8010,
       originalWidth: 20,
       originalHeight: 8010,
     })
+    expect(prepared.resize).toMatchObject({
+      inputWidth: 10,
+      inputHeight: 8010,
+      height: 8000,
+      maxDimension: 8000,
+      maxPixels: MODEL_IMAGE_INPUT_PIXEL_BUDGET,
+    })
+    expect(dimensions?.height).toBeLessThanOrEqual(8000)
+    expect((dimensions?.width ?? 0) * (dimensions?.height ?? 0)).toBeLessThanOrEqual(MODEL_IMAGE_INPUT_PIXEL_BUDGET)
+    expect(prepared.note).toContain("Resized tall-screenshot.png for model input")
+  })
+
+  test("resizes large-area images even when both dimensions are below the single-dimension limit", async () => {
+    const source = await pngWithBlackCorners(3000, 2000)
+
+    const prepared = await prepareModelImageInput({
+      mime: "image/png",
+      bytes: source,
+      source: "large-area.png",
+    })
+    const dimensions = readModelImageDimensions(prepared.bytes)
+
+    expect(dimensions).toMatchObject({ width: 1254, height: 836 })
+    expect(prepared.resize).toMatchObject({
+      inputWidth: 3000,
+      inputHeight: 2000,
+      width: 1254,
+      height: 836,
+      maxPixels: MODEL_IMAGE_INPUT_PIXEL_BUDGET,
+    })
+    expect(1254 * 836).toBeLessThanOrEqual(MODEL_IMAGE_INPUT_PIXEL_BUDGET)
   })
 })

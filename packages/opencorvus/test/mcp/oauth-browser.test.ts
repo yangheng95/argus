@@ -83,6 +83,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
     async finishAuth(_code: string) {
       // Mock successful auth completion
     }
+    async close() {}
   },
 }))
 
@@ -98,6 +99,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
     async start() {
       throw new Error("Mock SSE transport cannot connect")
     }
+    async close() {}
   },
 }))
 
@@ -107,6 +109,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
     }
+    async close() {}
   },
 }))
 

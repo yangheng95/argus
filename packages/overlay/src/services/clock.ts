@@ -1,8 +1,9 @@
 // ── Shared 1Hz tick signal ──
 //
 // Single source of "now" for any UI that renders live elapsed time
-// (CardHeader duration chip for running cards, TaskStatusHeader's task
-// elapsed label, future per-card timers). One module-level signal, one
+// (CardHeader duration chip for running cards, future per-card timers).
+// TaskStatusHeader uses selected-task SSE activity, not this wall-clock tick.
+// One module-level signal, one
 // interval, visibility-gated so the overlay window in the background
 // does not burn battery.
 //

@@ -20,6 +20,11 @@ import {
   resetConversationAgentView,
 } from "../store/conversation-agents"
 import { markSelectedMessageWatermark } from "./selected-stream-cursor"
+import {
+  recordSelectedTaskSseEventActivity,
+  recordSelectedTaskSseSnapshot,
+  selectedTaskSseActivityAt,
+} from "./task-runtime-activity"
 import { formatErrorDetails } from "./notify"
 import { AppLog } from "../utils/log"
 
@@ -193,6 +198,53 @@ function parseRewindCursor(raw: any): number | null {
   return value
 }
 
+function eventTaskID(event: any): string {
+  return String(
+    event?.taskID ||
+      event?.task_id ||
+      event?.properties?.taskID ||
+      event?.properties?.task_id ||
+      event?.payload?.taskID ||
+      event?.payload?.task_id ||
+      "",
+  )
+}
+
+function selectedTaskActivityTimestamp(input: { events: any[]; messageWatermark: number; taskID: string }): number {
+  let activityAt = input.messageWatermark
+  for (const event of input.events) {
+    const taskID = eventTaskID(event)
+    if (taskID && taskID !== input.taskID) continue
+    activityAt = Math.max(activityAt, selectedTaskSseActivityAt(event))
+  }
+  return activityAt
+}
+
+function recordHydratedSelectedTaskActivity(input: {
+  board: Record<string, unknown>
+  events: any[]
+  messageWatermark: number
+  taskID: string
+}): void {
+  const task = (input.board as any).task
+  recordSelectedTaskSseSnapshot({
+    task,
+    taskID: input.taskID,
+    active: task?.status === "active",
+    activityAt: selectedTaskActivityTimestamp(input),
+  })
+}
+
+function recordReplayedSelectedTaskEventActivity(taskID: string, event: any): void {
+  const task = boardStore.board?.task
+  recordSelectedTaskSseEventActivity({
+    event,
+    task,
+    taskID,
+    active: task?.status === "active",
+  })
+}
+
 function prewarmTranscriptMarkdown(transcript: readonly unknown[]): void {
   const sources: string[] = []
   for (const message of transcript) {
@@ -345,6 +397,7 @@ async function continueConversationReplay(
     }
     for (const event of events) {
       assertActiveReplay({ kind: "task", id: taskID }, epoch, signal)
+      recordReplayedSelectedTaskEventActivity(taskID, event)
       replayTaskEventToTree(event)
     }
     replay = nextReplay
@@ -442,9 +495,18 @@ export async function hydrateConversation(
     markSelectedMessageWatermark(messageWatermark)
     historySource = source
     historyState = history
+    if (source.kind === "task") {
+      recordHydratedSelectedTaskActivity({
+        board,
+        events,
+        messageWatermark,
+        taskID: source.id,
+      })
+    }
 
     for (const event of events) {
       assertActiveReplay(source, epoch, signal)
+      if (source.kind === "task") recordReplayedSelectedTaskEventActivity(source.id, event)
       replayTaskEventToTree(event)
     }
 
@@ -514,7 +576,14 @@ export async function mergeLatestConversationTail(
     setHydratedRewindCursor(rewindCursor)
     hydrateConversationAgentView(sourceKey({ kind: "task", id: selectedTaskID }), agentView)
     markSelectedMessageWatermark(messageWatermark)
+    recordHydratedSelectedTaskActivity({
+      board,
+      events,
+      messageWatermark,
+      taskID: selectedTaskID,
+    })
     for (const event of events) {
+      recordReplayedSelectedTaskEventActivity(selectedTaskID, event)
       replayTaskEventToTree(event)
     }
   } finally {

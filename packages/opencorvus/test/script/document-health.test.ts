@@ -18,6 +18,16 @@ function packageReadmeBunRunCommands(readmePath: string) {
   }))
 }
 
+function markdownCodeBlocks(text: string, language: string) {
+  return Array.from(text.matchAll(new RegExp("^[ \\t]*```" + language + "\\r?\\n([\\s\\S]*?)^[ \\t]*```", "gm"))).map(
+    (match) => {
+      const lines = match[1]!.replace(/\s+$/, "").split(/\r?\n/)
+      const indent = Math.min(...lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0))
+      return lines.map((line) => line.slice(indent)).join("\n")
+    },
+  )
+}
+
 function walkTextFiles(relativeDir: string, out: string[] = []) {
   const dir = path.join(repoRoot, relativeDir)
   if (!fs.existsSync(dir)) return out
@@ -379,6 +389,8 @@ describe("document health audit regressions", () => {
       expect(text).not.toContain("DASHSCOPE_API_KEY")
       expect(text).not.toContain("MOCK_TOKEN")
       expect(text).not.toContain("MOCK_EVENT")
+      expect(text).not.toContain("--token")
+      expect(text).not.toContain("github_pat")
       expect(text).not.toContain("use_github_token")
       expect(text).not.toContain("GITHUB_TOKEN")
       expect(text).not.toContain("contents: write")
@@ -386,6 +398,22 @@ describe("document health audit regressions", () => {
       expect(text).not.toContain("issues: write")
       expect(text).not.toContain("OPENCORVUS_CONFIG_CONTENT")
       expect(text).not.toContain("https://coding.dashscope.aliyuncs.com/v1")
+      for (const eventName of [
+        "issue_comment",
+        "pull_request_review_comment",
+        "issues",
+        "pull_request",
+        "schedule",
+        "workflow_dispatch",
+      ]) {
+        expect(text).toContain(`\`${eventName}\``)
+      }
+      const workflowExample = markdownCodeBlocks(text, "yaml").find((block) =>
+        block.includes("yangheng95/opencorvus/github@latest"),
+      )
+      expect(workflowExample).toBeDefined()
+      const parsedWorkflow = Bun.YAML.parse(workflowExample!)
+      expect(parsedWorkflow.jobs.opencorvus.steps).toHaveLength(2)
     }
 
     const workflow = read(".github/workflows/opencorvus.yml")
@@ -408,10 +436,24 @@ describe("document health audit regressions", () => {
     expect(actionReadme).toContain("issues: read")
     expect(actionReadme).toContain("OPENCORVUS_PERMISSION: '{\"bash\": \"deny\"}'")
     expect(actionReadme).toContain("model: alibaba-coding-plan-cn/qwen3.5-plus")
-    expect(actionReadme).toContain("MODEL=alibaba-coding-plan-cn/qwen3.5-plus")
     expect(actionReadme).toContain("ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}")
-    expect(actionReadme).toContain("ALIBABA_CODING_PLAN_API_KEY=sk-1234567890")
     expect(actionReadme).not.toContain("contents: write")
+    expect(actionReadme).not.toContain("MODEL=alibaba-coding-plan-cn/qwen3.5-plus")
+    expect(actionReadme).not.toContain("ALIBABA_CODING_PLAN_API_KEY=sk-1234567890")
+    expect(actionReadme).not.toContain("--token")
+    expect(actionReadme).not.toContain("github_pat")
+    expect(actionReadme).not.toContain("personal access token")
+    const workflowExamples = markdownCodeBlocks(actionReadme, "yml")
+    const workflowExample = workflowExamples.find((block) => block.includes("yangheng95/opencorvus/github@latest"))
+    expect(workflowExample).toBeDefined()
+    const parsedWorkflow = Bun.YAML.parse(workflowExample!)
+    const steps = parsedWorkflow.jobs.opencorvus.steps
+    expect(steps).toHaveLength(2)
+    expect(steps[1]).toMatchObject({
+      name: "Run OpenCorvus",
+      uses: "yangheng95/opencorvus/github@latest",
+      with: { model: "alibaba-coding-plan-cn/qwen3.5-plus" },
+    })
     expect(actionReadme).not.toContain("use_github_token: true")
     expect(actionReadme).not.toContain("MOCK_TOKEN")
     expect(actionReadme).not.toContain("MOCK_EVENT")
@@ -427,6 +469,10 @@ describe("document health audit regressions", () => {
     expect(githubCli).not.toContain("normalizeUseGithubToken")
     expect(githubCli).not.toContain("USE_GITHUB_TOKEN")
     expect(githubCli).not.toContain('process.env["GITHUB_TOKEN"]')
+    expect(githubCli).not.toContain("exchange_github_app_token_with_pat")
+    expect(githubCli).not.toContain("github_pat")
+    expect(githubCli).toContain("https://opencorvus.ai/docs/operations/github-action/")
+    expect(githubCli).not.toContain("https://opencorvus.ai/docs/github/#usage-examples")
   })
 
   test("public model examples use real agent config keys", () => {
@@ -1000,8 +1046,10 @@ describe("document health audit regressions", () => {
     const mcpSource = read("packages/opencorvus/src/mcp/index.ts")
     expect(mcpSource).toContain("function createRemoteTransport")
     expect(mcpSource).toContain("createRemoteTransport(mcpConfig, authProvider)")
+    expect(mcpSource).not.toContain("pendingOAuthTransports")
     expect(mcpSource).not.toContain("const transports")
     expect(mcpSource).not.toContain("for (const { name, transport } of transports)")
+    expectFilesNotToContain(walkTextFiles("specs"), ["pendingOAuthTransports"])
 
     expect(read("packages/opencorvus/src/config/config.ts")).toContain("Remote MCP transport")
     expect(read("packages/opencorvus/src/config/config.ts")).toContain("Defaults to 30000 (30 seconds)")

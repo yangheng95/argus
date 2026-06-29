@@ -15,6 +15,9 @@ const INVALID_TASK_ID = "tsk_invalid_completed_time"
 const ACTIVE_TASK_ID = "tsk_active_sse_time"
 const QUEUED_TASK_ID = "tsk_queued_no_elapsed"
 const DIRECTORY = "D:/overlay/workspace/status-header"
+const ACTIVE_STARTED_AT = 1_780_000_020_000
+const ACTIVE_INITIAL_WATERMARK = ACTIVE_STARTED_AT + 3_400
+const ACTIVE_LIVE_WATERMARK = ACTIVE_STARTED_AT + 5_200
 const sseEncoder = new TextEncoder()
 
 function route(url: URL) {
@@ -44,11 +47,12 @@ function eventStream(taskID?: string) {
           controller.close()
           return
         }
-        controller.enqueue(sseEncoder.encode(`data: ${JSON.stringify(taskMessageChangedEvent(taskID, 2))}\n\n`))
         timer = setTimeout(() => {
-          controller.enqueue(sseEncoder.encode(`data: ${JSON.stringify(taskMessageChangedEvent(taskID, 3))}\n\n`))
+          controller.enqueue(
+            sseEncoder.encode(`data: ${JSON.stringify(taskMessageChangedEvent(taskID, 2, ACTIVE_LIVE_WATERMARK))}\n\n`),
+          )
           controller.close()
-        }, 1150)
+        }, 1500)
       },
     }),
     {
@@ -60,12 +64,19 @@ function eventStream(taskID?: string) {
   )
 }
 
-function taskMessageChangedEvent(taskID: string, sequence: number): Record<string, unknown> {
+function taskMessageChangedEvent(taskID: string, sequence: number, watermark: number): Record<string, unknown> {
   return {
     type: "task.messages.changed",
-    taskID,
+    task_id: taskID,
+    emittedAt: watermark + 100,
+    timestamp: watermark + 100,
     sequence,
     orderKey: `v1:0001780000000000:0000000000000010:${String(sequence).padStart(16, "0")}:event:${taskID}`,
+    payload: {
+      taskID,
+      watermark,
+      summary: "Task message append/update tables changed",
+    },
   }
 }
 
@@ -105,9 +116,9 @@ const tasks = {
     title: "Active SSE time",
     status: "active",
     time: {
-      created: 1_780_000_020_000,
-      started: 1_780_000_020_000,
-      updated: 1_780_000_020_000,
+      created: ACTIVE_STARTED_AT,
+      started: ACTIVE_STARTED_AT,
+      updated: ACTIVE_STARTED_AT,
     },
   }),
   [QUEUED_TASK_ID]: taskRecord({
@@ -139,7 +150,7 @@ function conversationPayload(taskID: string) {
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions: [], messages: [] },
     agentView: { sessions: [], messages: [], topLevelSessionIDs: [] },
-    messageWatermark: 1,
+    messageWatermark: taskID === ACTIVE_TASK_ID ? ACTIVE_INITIAL_WATERMARK : 0,
   }
 }
 
@@ -314,20 +325,45 @@ test(
 )
 
 test(
-  "TaskStatusHeader counts only active selected-task SSE update time",
+  "TaskStatusHeader restores active selected-task runtime from persisted SSE activity",
   async () => {
     await withTaskStatusPage(ACTIVE_TASK_ID, async ({ page }) => {
       await page.waitForFunction(
         () => {
           const text = document.querySelector("#taskElapsed")?.textContent?.trim() || ""
-          return /^([1-9]\d*)s$/.test(text)
+          const match = text.match(/^(\d+)s$/)
+          return match !== null && Number(match[1]) >= 3
         },
         { timeout: 5_000 },
       )
       const seconds = await elapsedSeconds(page)
-      assert.ok(seconds >= 1 && seconds <= 2, `expected one SSE interval, got ${seconds}s`)
+      assert.ok(seconds >= 3, `expected restored SSE activity time, got ${seconds}s`)
       await saveTaskStatusScreenshot(page, "task-status-header-active-sse-time.png")
     })
+  },
+  { timeout: 60_000 },
+)
+
+test(
+  "TaskStatusHeader does not restart active selected-task runtime when re-entering",
+  async () => {
+    const samples: number[] = []
+    for (const name of ["first", "second"]) {
+      await withTaskStatusPage(ACTIVE_TASK_ID, async ({ page }) => {
+        await page.waitForFunction(
+          () => {
+            const text = document.querySelector("#taskElapsed")?.textContent?.trim() || ""
+            const match = text.match(/^(\d+)s$/)
+            return match !== null && Number(match[1]) >= 3
+          },
+          { timeout: 5_000 },
+        )
+        const seconds = await elapsedSeconds(page)
+        samples.push(seconds)
+        await saveTaskStatusScreenshot(page, `task-status-header-active-sse-time-${name}.png`)
+      })
+    }
+    assert.ok(samples.every((seconds) => seconds >= 3), `expected restored elapsed on every entry, got ${samples}`)
   },
   { timeout: 60_000 },
 )

@@ -148,8 +148,8 @@ Later independent review rounds found and fixed these remaining drift classes:
    now clears in `finally` and `unref`s supported timers so rejected or fast
    operations cannot leave active timeout handles behind.
 5. `.env.example` still published retired GitHub Action token-mode variables.
-   `GITHUB_TOKEN` and `USE_GITHUB_TOKEN` examples were removed, and the
-   document-health guard now rejects their return.
+   Those direct-token examples were removed, and the document-health guard now
+   rejects their return.
 6. June records could still publish retired root-level spec file paths. June
    records outside this migration record now reject root-level `specs/*.md` /
    `specs/*.txt` references.
@@ -158,19 +158,43 @@ Later independent review rounds found and fixed these remaining drift classes:
    on the published composite action's own Bun setup, and the document-health
    guard rejects the private setup step in that README.
 8. `MCP.startAuth(...)` could leak the OAuth probe client and transport on
-   already-authenticated success or non-auth connection failure. The start-auth
-   path now closes probe resources unless the transport is intentionally handed
-   to `pendingOAuthTransports` for `finishAuth(...)`.
+   already-authenticated success or non-auth connection failure. The OAuth
+   path now records only the pending flow key and closes both probe and
+   token-exchange transports after their short-lived work completes.
 9. `.scratch` still retained ignored text snapshots with deleted pre-June spec
    filename references. The stale scratch files were deleted, and
    `historical-docs-links.test.ts` now scans scratch text for the same deleted
    filename contract.
+10. The GitHub Action README workflow example became invalid YAML after the
+    private setup-bun step was removed. The example indentation was repaired,
+    and document-health now parses the README workflow block with Bun's YAML
+    parser before accepting it.
+11. The GitHub installer outro still linked to retired `/docs/github/` docs.
+    It now points to `/docs/operations/github-action/`, and document-health
+    rejects the retired URL.
+12. MCP OAuth pending auth still held probe transports and the CLI debug path
+    still used the SDK default connect behavior. Pending OAuth state is now a
+    flow key instead of a transport handle; start, finish, and debug probes use
+    explicit MCP timeout options and close their short-lived resources.
+13. `.scratch` still had CSS and text snapshots with retired overlay/root spec
+    paths. The stale ignored files were deleted, `.css` is scanned, and scratch
+    text now reuses the retired spec path pattern checks.
+14. `specs/records/README.md` still existed as a second records index outside
+    the selected storage model. It was deleted; `historical-docs-links.test.ts`
+    now rejects that file, asserts every `specs/**` file belongs under
+    `specs/README.md`, `specs/current/**`, `specs/records/2026-06/**`, or
+    `specs/artifacts/**`, and verifies `AGENTS.md` keeps the Recall/storage
+    governance rules.
 
 Validation after these addenda includes:
 
 - `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/overlay/test/mcp-service.test.ts`
 - `bun test ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts packages/opencorvus/test/util/timeout.test.ts`
+- `bun test packages/opencorvus/test/provider/models-snapshot.test.ts packages/opencorvus/test/provider/transform.test.ts`
+- `bun test packages/opencorvus/test/session/model-image-input.test.ts packages/opencorvus/test/session/message.test.ts packages/opencorvus/test/mcp/browser-tools-resource.test.ts`
+- `bun run --cwd packages/overlay test:browser test/browser/task-status-header-missing-completion-browser.test.ts`
 - `bun run docs:check`
 - `bun run api:routes-check`
 - `bun run typecheck`
+- `bun run overlay:i18n-check`
 - `git diff --check`

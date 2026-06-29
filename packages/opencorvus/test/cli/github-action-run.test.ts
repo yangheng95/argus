@@ -144,7 +144,7 @@ describe("github action run", () => {
       const url = String(input)
       const headers = new Headers(init?.headers)
       fetchCalls.push({ url, method: init?.method, authorization: headers.get("Authorization") })
-      if (url === "https://api.opencorvus.ai/exchange_github_app_token_with_pat") {
+      if (url === "https://api.opencorvus.ai/exchange_github_app_token") {
         return Response.json({ token: "app-token" })
       }
       if (url === "https://api.github.com/installation/token") {
@@ -181,7 +181,6 @@ describe("github action run", () => {
       const { GithubRunCommand } = await import("../../src/cli/cmd/github")
       await expect(
         GithubRunCommand.handler?.({
-          token: "github_pat_test",
           event: JSON.stringify({
             eventName: "issues",
             actor: "alice",
@@ -204,9 +203,9 @@ describe("github action run", () => {
 
     expect(promptCalls).toHaveLength(2)
     expect(fetchCalls).toContainEqual({
-      url: "https://api.opencorvus.ai/exchange_github_app_token_with_pat",
+      url: "https://api.opencorvus.ai/exchange_github_app_token",
       method: "POST",
-      authorization: "Bearer github_pat_test",
+      authorization: "Bearer oidc-token",
     })
     expect(fetchCalls).toContainEqual({
       url: "https://api.github.com/installation/token",

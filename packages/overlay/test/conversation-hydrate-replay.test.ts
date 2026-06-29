@@ -618,7 +618,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
                 request: "restore conversation",
                 sessionID: "ses_root",
                 directory: TEST_DIRECTORY,
-                time: { created: 1_776_000_000_000 },
+                time: { created: 1_776_000_000_000, started: 1_776_000_000_000 },
                 attachments: [],
               },
               goalWorkflows: [],
