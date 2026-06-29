@@ -70,6 +70,7 @@ test("headers are passed to transports when oauth is enabled (default)", async (
       // Trigger MCP initialization - it will fail to connect but we can check the transport options
       await MCP.add("test-server", {
         type: "remote",
+        transport: "streamable-http",
         url: "https://example.com/mcp",
         headers: {
           Authorization: "Bearer test-token",
@@ -102,6 +103,7 @@ test("headers are passed to transports when oauth is explicitly disabled", async
 
       await MCP.add("test-server-no-oauth", {
         type: "remote",
+        transport: "streamable-http",
         url: "https://example.com/mcp",
         oauth: false,
         headers: {
@@ -133,6 +135,7 @@ test("timeout requestInit is passed when headers are not provided", async () => 
 
       await MCP.add("test-server-no-headers", {
         type: "remote",
+        transport: "streamable-http",
         url: "https://example.com/mcp",
       }).catch(() => {})
 
@@ -144,6 +147,16 @@ test("timeout requestInit is passed when headers are not provided", async () => 
       }
     },
   })
+})
+
+test("remote transport helper rejects missing transport instead of silently selecting streamable HTTP", () => {
+  expect(() =>
+    MCP.createRemoteTransport({
+      type: "remote",
+      url: "https://example.com/mcp",
+    } as Parameters<typeof MCP.createRemoteTransport>[0]),
+  ).toThrow("Unsupported remote MCP transport")
+  expect(transportCalls).toEqual([])
 })
 
 test("remote MCP uses SSE only when transport is explicit", async () => {

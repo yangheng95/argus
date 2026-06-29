@@ -53,7 +53,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`
 | `enabled`     | `false` 跳过连接                     |
 | `timeout`     | 请求超时 ms（默认 30000）            |
 
-### 远程 HTTP Server
+### 远程 OAuth Server
 
 ```jsonc
 {
@@ -62,8 +62,6 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`
       "type": "remote",
       "transport": "streamable-http",
       "url": "https://mcp.example.com/api",
-      "headers": { "Authorization": "Bearer sk-..." },
-      "oauth": false,
       "enabled": true,
       "timeout": 30000,
     },
@@ -76,8 +74,8 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`
 | 字段                 | 说明                                             |
 | -------------------- | ------------------------------------------------ |
 | `url`                | MCP Server HTTP(S) 地址                          |
-| `headers`            | 请求头（Bearer Token 常用）                      |
-| `oauth`              | `McpOAuth \| false`；`false` 禁用自动 OAuth 检测 |
+| `headers`            | Server 要求的非认证路由或租户请求头             |
+| `oauth`              | `McpOAuth \| false`；远程 server 默认启用 OAuth |
 | `oauth.clientId`     | 静态 client ID（跳过动态注册）                   |
 | `oauth.clientSecret` | client secret                                    |
 | `oauth.scope`        | OAuth scope                                      |

@@ -41,24 +41,22 @@ After connecting, `client.listTools()` runs; tool names are sanitized and regist
 
 Source: `src/config/config.ts`.
 
-**Remote (HTTP):**
+**Remote OAuth server:**
 
 ```jsonc
 {
   "mcp": {
-    "my-remote": {
+    "my-remote-server": {
       "type": "remote",
       "transport": "streamable-http",
       "url": "https://mcp.example.com/api",
-      "headers": { "Authorization": "Bearer sk-..." },
-      "oauth": false,
       "timeout": 30000,
     },
   },
 }
 ```
 
-OAuth: `oauth: false` disables auto-detection; `oauth: { clientId, clientSecret, scope }` uses a pre-registered client. Source: `src/config/config.ts`.
+OAuth is enabled by default for remote servers. Use `oauth: { clientId, clientSecret, scope }` only when the provider requires a pre-registered client. Source: `src/config/config.ts`.
 
 ## Capabilities
 

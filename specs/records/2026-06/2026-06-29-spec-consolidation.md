@@ -240,7 +240,22 @@ Later independent review rounds found and fixed these remaining drift classes:
     global test hook to tear down. The test now cleans each project through
     `MCP.removeAuth("oauth")`, so the regression coverage exercises the same
     pending-flow cancellation contract as production code.
-
+25. A later independent docs review found the public GitHub Action page
+    description still narrowed the trigger surface to PR/Issue comments. The
+    English and Chinese frontmatter/lead text now describe all supported
+    GitHub event classes, and document health rejects the old comment-only
+    description.
+26. A later storage-guard review found the pre-June dated spec guard rejected
+    `.md` filenames but not `.txt` filenames in live specs or scratch
+    snapshots. `historical-docs-links.test.ts` now uses one `.md` / `.txt`
+    dated-spec filename helper for live spec files and scratch snapshot files.
+27. A later MCP/API review found public MCP docs still showed Bearer-token
+    remote examples, API reference generation omitted request/error contracts,
+    and `createRemoteTransport(...)` still treated non-`sse` remote transports
+    as streamable HTTP. Public MCP docs now present the default OAuth remote
+    path without Bearer-token examples, API reference generation includes
+    OpenAPI body fields and named errors in route summaries, and remote
+    transport construction only accepts explicit `sse` or `streamable-http`.
 Validation after these addenda includes:
 
 - `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/overlay/test/mcp-service.test.ts`

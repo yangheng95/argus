@@ -496,7 +496,33 @@ describe("document health audit regressions", () => {
       expect(text).not.toContain("远程 GitHub（Bearer Token）")
       expect(text).not.toContain("api.githubcopilot.com/mcp")
       expect(text).not.toContain("ghp_")
-      expect(text).not.toContain('"Authorization": "Bearer ghp_')
+      expect(text).not.toContain('"Authorization": "Bearer')
+      expect(text).not.toContain("Remote (HTTP)")
+      expect(text).not.toContain("远程 HTTP Server")
+      expect(text).not.toContain("Bearer Token")
+      expect(text).not.toContain("Bearer sk-")
+      expect(text).not.toContain("oauth: false")
+      expect(text).not.toContain('"oauth": false')
+    }
+    expect(read("packages/web/src/content/docs/mcp-servers.mdx")).toContain(
+      "OAuth is enabled by default for remote servers",
+    )
+    expect(read("packages/web/src/content/docs/zh-cn/mcp-servers.mdx")).toContain("远程 server 默认启用 OAuth")
+  })
+
+  test("API reference exposes MCP OAuth callback body and state error", () => {
+    const apiDocs = [
+      "packages/web/src/content/docs/reference/api.mdx",
+      "packages/web/src/content/docs/zh-cn/reference/api.mdx",
+    ]
+    for (const file of apiDocs) {
+      const text = read(file)
+      const callbackLine = text
+        .split(/\r?\n/)
+        .find((line) => line.includes("`/mcp/{name}/auth/callback`") && line.includes("`mcp.auth.callback`"))
+      expect(callbackLine).toContain("`code`")
+      expect(callbackLine).toContain("`state`")
+      expect(callbackLine).toContain("`MCPOAuthStateError`")
     }
   })
 

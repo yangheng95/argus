@@ -21,21 +21,21 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 |---|---|---|---|
 | GET | `/event` | Subscribe to events | `event.subscribe` |
 | GET | `/global/config` | Get global configuration | `global.config.get` |
-| PATCH | `/global/config` | Update global configuration | `global.config.update` |
+| PATCH | `/global/config` | Update global configuration Errors: `BadRequestError`. | `global.config.update` |
 | GET | `/global/db/mysql/export` | Export MySQL transfer snapshot | `global.db.mysql.export` |
-| POST | `/global/db/mysql/import` | Import MySQL transfer snapshot | `global.db.mysql.import` |
+| POST | `/global/db/mysql/import` | Import MySQL transfer snapshot Body: `snapshot`; Errors: `ActiveExecutorSessionsError`, `BadRequestError`. | `global.db.mysql.import` |
 | GET | `/global/db/mysql/schema` | Export MySQL staging schema | `global.db.mysql.schema` |
-| POST | `/global/db/reset` | Reset database | `global.db.reset` |
-| POST | `/global/dispose` | Dispose instance | `global.dispose` |
+| POST | `/global/db/reset` | Reset database Body: `database`; Errors: `ActiveExecutorSessionsError`, `BadRequestError`. | `global.db.reset` |
+| POST | `/global/dispose` | Dispose instance Errors: `ActiveExecutorSessionsError`. | `global.dispose` |
 | GET | `/global/event` | Get global events | `global.event` |
 | GET | `/global/health` | Get health | `global.health` |
-| GET | `/global/projects/discover` | Discover local OpenCorvus projects | `global.projects.discover` |
+| GET | `/global/projects/discover` | Discover local OpenCorvus projects Errors: `BadRequestError`. | `global.projects.discover` |
 | GET | `/global/tasks` | List tasks across projects | `task.global.list` |
-| POST | `/instance/dispose` | Dispose instance | `instance.dispose` |
-| GET | `/log` | Read logs | `log.read` |
-| POST | `/log` | Write log | `app.log` |
+| POST | `/instance/dispose` | Dispose instance Errors: `ActiveExecutorSessionsError`. | `instance.dispose` |
+| GET | `/log` | Read logs Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `log.read` |
+| POST | `/log` | Write log Body: `level`, `message`, `service`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `app.log` |
 | GET | `/log/files` | List log files | `log.files` |
-| GET | `/log/tail` | Read recent logs | `log.tail` |
+| GET | `/log/tail` | Read recent logs Errors: `LogFileNotFoundError`, `NotFoundError`. | `log.tail` |
 | POST | `/restart` | Restart the server | `server.restart` |
 | POST | `/shutdown` | Shutdown the server | `server.shutdown` |
 
@@ -43,20 +43,20 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| DELETE | `/auth/{providerID}` | Remove auth credentials | `auth.remove` |
-| PUT | `/auth/{providerID}` | Set auth credentials | `auth.set` |
+| DELETE | `/auth/{providerID}` | Remove auth credentials Errors: `BadRequestError`. | `auth.remove` |
+| PUT | `/auth/{providerID}` | Set auth credentials Errors: `BadRequestError`. | `auth.set` |
 
 ### Configuration
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| GET | `/command` | List commands | `command.list` |
+| GET | `/command` | List commands Errors: `UnknownError`. | `command.list` |
 | GET | `/config` | Get configuration | `config.get` |
-| PATCH | `/config` | Update configuration (JSON Merge Patch) | `config.update` |
+| PATCH | `/config` | Update configuration (JSON Merge Patch) Errors: `BadRequestError`. | `config.update` |
 | GET | `/config/prompt` | List prompt catalog | `config.prompt` |
 | GET | `/config/prompt-profile` | List prompt profiles | `config.promptProfile` |
 | GET | `/config/providers` | List config providers | `config.providers` |
-| POST | `/config/proxy/test` | Test network proxy | `config.proxy.test` |
+| POST | `/config/proxy/test` | Test network proxy Errors: `NetworkProxyTestResponse`. | `config.proxy.test` |
 | GET | `/formatter` | Get formatter status | `formatter.status` |
 | GET | `/path` | Get paths | `path.get` |
 
@@ -65,14 +65,14 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/project` | List all projects | `project.list` |
-| DELETE | `/project/current` | Delete current project | `project.current.delete` |
+| DELETE | `/project/current` | Delete current project Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `project.current.delete` |
 | GET | `/project/current` | Get current project | `project.current` |
-| PATCH | `/project/current` | Update current project | `project.current.update` |
-| GET | `/project/current/cleanup-candidates` | Inspect current project cleanup candidates | `project.current.cleanupCandidates` |
-| POST | `/project/current/init-git` | Initialize git in current directory | `project.current.initGit` |
-| DELETE | `/project/current/worktrees` | Delete a current project worktree | `project.current.worktrees.delete` |
-| GET | `/project/current/worktrees` | List current project worktrees | `project.current.worktrees` |
-| PATCH | `/project/{projectID}` | Update project | `project.update` |
+| PATCH | `/project/current` | Update current project Body: `name`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.current.update` |
+| GET | `/project/current/cleanup-candidates` | Inspect current project cleanup candidates Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.current.cleanupCandidates` |
+| POST | `/project/current/init-git` | Initialize git in current directory Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.current.initGit` |
+| DELETE | `/project/current/worktrees` | Delete a current project worktree Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.current.worktrees.delete` |
+| GET | `/project/current/worktrees` | List current project worktrees Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.current.worktrees` |
+| PATCH | `/project/{projectID}` | Update project Body: `commands`, `icon`, `name`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `project.update` |
 | GET | `/vcs` | Get VCS info | `vcs.get` |
 | GET | `/vcs/diff` | Get VCS diff | `vcs.diff` |
 
@@ -80,67 +80,67 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| GET | `/goal-run/{goalRunID}/acceptance` | Get goal-run acceptance | `goalRun.acceptance` |
-| DELETE | `/goal/{goalID}` | Delete goal | `goal.delete` |
-| PATCH | `/goal/{goalID}` | Update goal | `goal.update` |
-| POST | `/interaction/{interactionID}/reject` | Reject interaction | `interaction.reject` |
-| POST | `/interaction/{interactionID}/reply` | Reply to interaction | `interaction.reply` |
+| GET | `/goal-run/{goalRunID}/acceptance` | Get goal-run acceptance Errors: `LogFileNotFoundError`, `NotFoundError`. | `goalRun.acceptance` |
+| DELETE | `/goal/{goalID}` | Delete goal Errors: `LogFileNotFoundError`, `NotFoundError`. | `goal.delete` |
+| PATCH | `/goal/{goalID}` | Update goal Body: `acceptance_specs`, `description`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `goal.update` |
+| POST | `/interaction/{interactionID}/reject` | Reject interaction Body: `autoReply`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reject` |
+| POST | `/interaction/{interactionID}/reply` | Reply to interaction Body: `autoReply`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reply` |
 | GET | `/mission` | List Missions | `mission.list` |
-| POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
-| DELETE | `/mission/{missionID}` | Delete a Mission | `mission.delete` |
-| POST | `/mission/{missionID}/abort` | Abort a Mission | `mission.abort` |
-| GET | `/mission/{missionID}/project-archive` | Download Mission project archive | `mission.projectArchive` |
-| GET | `/mission/{missionID}/status` | Get Mission status | `mission.status` |
-| PATCH | `/mission/{missionID}/title` | Rename a Mission | `mission.rename` |
-| GET | `/run/{runID}` | Get run | `run.get` |
-| POST | `/run/{runID}/abort` | Abort run | `run.abort` |
-| GET | `/run/{runID}/acceptance` | Get run acceptance | `run.acceptance` |
-| GET | `/run/{runID}/artifacts` | List run artifacts | `run.artifacts` |
-| GET | `/run/{runID}/brief` | Get run brief | `run.brief` |
-| GET | `/run/{runID}/evaluations` | List run evaluations | `run.evaluations` |
-| POST | `/task` | Create task | `task.create` |
-| PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory | `task.queue.reorder` |
+| POST | `/mission/wake` | Wake the Mission agent Body: `text`; Errors: `BadRequestError`. | `mission.wake` |
+| DELETE | `/mission/{missionID}` | Delete a Mission Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.delete` |
+| POST | `/mission/{missionID}/abort` | Abort a Mission Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `mission.abort` |
+| GET | `/mission/{missionID}/project-archive` | Download Mission project archive Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.projectArchive` |
+| GET | `/mission/{missionID}/status` | Get Mission status Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.status` |
+| PATCH | `/mission/{missionID}/title` | Rename a Mission Body: `title`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `mission.rename` |
+| GET | `/run/{runID}` | Get run Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.get` |
+| POST | `/run/{runID}/abort` | Abort run Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `run.abort` |
+| GET | `/run/{runID}/acceptance` | Get run acceptance Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.acceptance` |
+| GET | `/run/{runID}/artifacts` | List run artifacts Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.artifacts` |
+| GET | `/run/{runID}/brief` | Get run brief Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.brief` |
+| GET | `/run/{runID}/evaluations` | List run evaluations Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.evaluations` |
+| POST | `/task` | Create task Body: `request`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.create` |
+| PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory Body: `directory`. | `task.queue.reorder` |
 | GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |
-| DELETE | `/task/{taskID}` | Delete task | `task.delete` |
-| GET | `/task/{taskID}` | Get task | `task.get` |
+| DELETE | `/task/{taskID}` | Delete task Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.delete` |
+| GET | `/task/{taskID}` | Get task Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.get` |
 | GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
-| GET | `/task/{taskID}/board` | Get task board | `task.board` |
-| GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
-| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target | `browserPreview.taskTarget` |
-| POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence | `browserPreview.captureTaskTarget` |
-| POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence | `browserPreview.compareTaskTargetRegions` |
-| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence | `browserPreview.readTaskEvidence` |
-| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact | `browserPreview.readTaskEvidenceArtifact` |
-| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot | `browserPreview.readTaskEvidenceCapture` |
-| POST | `/task/{taskID}/browser-preview/live/input` | Send input to interactive browser preview | `browserPreview.liveInput` |
-| POST | `/task/{taskID}/browser-preview/live/snapshot` | Capture interactive browser preview snapshot | `browserPreview.liveSnapshot` |
-| PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target | `browserPreview.selectTaskTarget` |
-| PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
-| POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
-| GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
-| GET | `/task/{taskID}/conversation/events` | Page task conversation replay events | `task.conversation.events` |
-| GET | `/task/{taskID}/conversation/history` | Page older task conversation transcript | `task.conversation.history` |
-| GET | `/task/{taskID}/conversation/session/{sessionID}` | Get one task conversation session transcript | `task.conversation.session` |
+| GET | `/task/{taskID}/board` | Get task board Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.board` |
+| GET | `/task/{taskID}/brief` | Get task brief Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.brief` |
+| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
+| POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence Body: `targetID`, `viewportIDs`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.captureTaskTarget` |
+| POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence Body: `inlineBindings`, `targetID`, `viewportIDs`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.compareTaskTargetRegions` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceArtifact` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceCapture` |
+| POST | `/task/{taskID}/browser-preview/live/input` | Send input to interactive browser preview Body: `inputs`, `targetID`, `viewportID`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.liveInput` |
+| POST | `/task/{taskID}/browser-preview/live/snapshot` | Capture interactive browser preview snapshot Body: `targetID`, `viewportID`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.liveSnapshot` |
+| PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target Body: `targetID`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.selectTaskTarget` |
+| PATCH | `/task/{taskID}/budget` | Update task budget Body: `budget`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.updateBudget` |
+| POST | `/task/{taskID}/cancel` | Cancel task Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.cancel` |
+| GET | `/task/{taskID}/conversation` | Hydrate task conversation state Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.conversation` |
+| GET | `/task/{taskID}/conversation/events` | Page task conversation replay events Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.conversation.events` |
+| GET | `/task/{taskID}/conversation/history` | Page older task conversation transcript Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.conversation.history` |
+| GET | `/task/{taskID}/conversation/session/{sessionID}` | Get one task conversation session transcript Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.conversation.session` |
 | GET | `/task/{taskID}/events` | Subscribe to task events | `task.events` |
-| POST | `/task/{taskID}/followup` | Generate follow-up suggestion | `task.followup` |
-| POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
-| GET | `/task/{taskID}/interactions` | List task interactions | `task.interactions` |
-| POST | `/task/{taskID}/message` | Handle task message | `task.message` |
-| GET | `/task/{taskID}/operator-model-context` | Get task operator model context | `task.operatorModelContext` |
-| GET | `/task/{taskID}/progress` | Get task progress | `task.progress` |
-| GET | `/task/{taskID}/project-archive` | Download task project archive | `task.projectArchive` |
-| POST | `/task/{taskID}/replan` | Replan task | `task.replan` |
-| POST | `/task/{taskID}/retry` | Retry task | `task.retry` |
-| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset goal worktree files | `task.rewind` |
-| POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (visibility only; will not unrevert any reset worktree files) | `task.clearRewindCursor` |
-| GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
-| POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
-| POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
-| POST | `/task/{taskID}/start-now` | Start a queued task immediately | `task.queue.startNow` |
-| GET | `/task/{taskID}/status` | Get task status | `task.status` |
-| PATCH | `/task/{taskID}/title` | Update task title | `task.updateTitle` |
-| GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
-| GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
+| POST | `/task/{taskID}/followup` | Generate follow-up suggestion Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.followup` |
+| POST | `/task/{taskID}/inject` | Inject message into running task Body: `message`; Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.inject` |
+| GET | `/task/{taskID}/interactions` | List task interactions Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.interactions` |
+| POST | `/task/{taskID}/message` | Handle task message Body: `source`, `text`; Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.message` |
+| GET | `/task/{taskID}/operator-model-context` | Get task operator model context Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.operatorModelContext` |
+| GET | `/task/{taskID}/progress` | Get task progress Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.progress` |
+| GET | `/task/{taskID}/project-archive` | Download task project archive Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.projectArchive` |
+| POST | `/task/{taskID}/replan` | Replan task Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.replan` |
+| POST | `/task/{taskID}/retry` | Retry task Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.retry` |
+| POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset goal worktree files Body: `anchor`, `resetWorktree`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.rewind` |
+| POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (visibility only; will not unrevert any reset worktree files) Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.clearRewindCursor` |
+| GET | `/task/{taskID}/runs` | List task runs Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.runs` |
+| POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.session.cancel` |
+| POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session Body: `message`; Errors: `AgentSessionAttachmentReferenceError`, `AgentSessionPendingCoordinationError`, `BuildSessionDirectReplyError`, `InvalidReplyTargetKindError`, `LogFileNotFoundError`, `MissingModelConfigError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `SessionRuntimeContractMissingError`, `TaskCancellationIncompleteError`. | `task.session.reply` |
+| POST | `/task/{taskID}/start-now` | Start a queued task immediately Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.queue.startNow` |
+| GET | `/task/{taskID}/status` | Get task status Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.status` |
+| PATCH | `/task/{taskID}/title` | Update task title Body: `title`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.updateTitle` |
+| GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.trace` |
+| GET | `/task/{taskID}/transcript` | Get task transcript Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |
 
 ### Session
@@ -148,33 +148,33 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/session` | List sessions | `session.list` |
-| POST | `/session` | Create session | `session.create` |
-| GET | `/session/global` | List sessions across projects | `session.listGlobal` |
-| GET | `/session/status` | Get session status | `session.status` |
-| DELETE | `/session/{sessionID}` | Delete session | `session.delete` |
-| GET | `/session/{sessionID}` | Get session | `session.get` |
-| PATCH | `/session/{sessionID}` | Update session | `session.update` |
-| POST | `/session/{sessionID}/abort` | Abort session | `session.abort` |
-| GET | `/session/{sessionID}/children` | Get session children | `session.children` |
-| POST | `/session/{sessionID}/command` | Send command | `session.command` |
-| GET | `/session/{sessionID}/config` | Get session effective configuration | `session.config.get` |
-| PATCH | `/session/{sessionID}/config` | Update session configuration overlay | `session.config.update` |
-| GET | `/session/{sessionID}/conversation` | Hydrate session conversation state | `session.conversation` |
+| POST | `/session` | Create session Body: `kind`; Errors: `BadRequestError`. | `session.create` |
+| GET | `/session/global` | List sessions across projects Errors: `BadRequestError`. | `session.listGlobal` |
+| GET | `/session/status` | Get session status Errors: `BadRequestError`. | `session.status` |
+| DELETE | `/session/{sessionID}` | Delete session Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.delete` |
+| GET | `/session/{sessionID}` | Get session Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.get` |
+| PATCH | `/session/{sessionID}` | Update session Body: `time`, `title`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.update` |
+| POST | `/session/{sessionID}/abort` | Abort session Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `session.abort` |
+| GET | `/session/{sessionID}/children` | Get session children Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.children` |
+| POST | `/session/{sessionID}/command` | Send command Body: `arguments`, `command`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.command` |
+| GET | `/session/{sessionID}/config` | Get session effective configuration Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.config.get` |
+| PATCH | `/session/{sessionID}/config` | Update session configuration overlay Body: `agent`, `model`, `prompt`, `prompt_profile`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.config.update` |
+| GET | `/session/{sessionID}/conversation` | Hydrate session conversation state Errors: `LogFileNotFoundError`, `NotFoundError`. | `session.conversation` |
 | GET | `/session/{sessionID}/diff` | Get message diff | `session.diff` |
 | GET | `/session/{sessionID}/events` | Subscribe to session events | `session.events` |
-| POST | `/session/{sessionID}/fork` | Fork session | `session.fork` |
-| POST | `/session/{sessionID}/init` | Initialize session | `session.init` |
-| GET | `/session/{sessionID}/message` | Get session messages | `session.messages` |
-| POST | `/session/{sessionID}/message` | Send message | `session.prompt` |
-| DELETE | `/session/{sessionID}/message/{messageID}` | Delete message | `session.deleteMessage` |
-| GET | `/session/{sessionID}/message/{messageID}` | Get message | `session.message` |
-| DELETE | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) | `part.delete` |
-| PATCH | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) | `part.update` |
-| POST | `/session/{sessionID}/prompt_async` | Send async message | `session.prompt_async` |
-| GET | `/session/{sessionID}/prompt_async/{taskID}` | Get async prompt task status | `session.prompt_async_status` |
-| POST | `/session/{sessionID}/shell` | Run shell command | `session.shell` |
-| POST | `/session/{sessionID}/summarize` | Summarize session | `session.summarize` |
-| GET | `/session/{sessionID}/todo` | Get session todos | `session.todo` |
+| POST | `/session/{sessionID}/fork` | Fork session Body: `messageID`. | `session.fork` |
+| POST | `/session/{sessionID}/init` | Initialize session Body: `messageID`, `modelID`, `providerID`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.init` |
+| GET | `/session/{sessionID}/message` | Get session messages Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.messages` |
+| POST | `/session/{sessionID}/message` | Send message Body: `parts`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt` |
+| DELETE | `/session/{sessionID}/message/{messageID}` | Delete message Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.deleteMessage` |
+| GET | `/session/{sessionID}/message/{messageID}` | Get message Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.message` |
+| DELETE | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `part.delete` |
+| PATCH | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `part.update` |
+| POST | `/session/{sessionID}/prompt_async` | Send async message Body: `parts`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt_async` |
+| GET | `/session/{sessionID}/prompt_async/{taskID}` | Get async prompt task status Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.prompt_async_status` |
+| POST | `/session/{sessionID}/shell` | Run shell command Body: `agent`, `command`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.shell` |
+| POST | `/session/{sessionID}/summarize` | Summarize session Body: `modelID`, `providerID`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.summarize` |
+| GET | `/session/{sessionID}/todo` | Get session todos Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `session.todo` |
 | GET | `/session/{sessionID}/trace` | Get session AgentTrace events | `session.trace` |
 
 ### Executor
@@ -183,30 +183,30 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 |---|---|---|---|
 | GET | `/executor` | List executors | `executor.list` |
 | GET | `/executor/{executorID}/model` | Get executor model | `executor.getModel` |
-| PATCH | `/executor/{executorID}/model` | Set executor model | `executor.setModel` |
+| PATCH | `/executor/{executorID}/model` | Set executor model Body: `model`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `executor.setModel` |
 
 ### Coding
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| POST | `/coding/cli/open` | Open coding CLI | `coding.cli.open` |
-| GET | `/coding/cli/profiles` | List installed coding CLIs | `coding.cli.profiles` |
+| POST | `/coding/cli/open` | Open coding CLI Body: `cliID`, `cwd`, `terminalProfileID`; Errors: `BadRequestError`. | `coding.cli.open` |
+| GET | `/coding/cli/profiles` | List installed coding CLIs Errors: `BadRequestError`. | `coding.cli.profiles` |
 | POST | `/coding/session` | Create right sidebar coding assistant session | `coding.session.create` |
-| DELETE | `/coding/session/{sessionID}` | Delete right sidebar coding assistant session | `coding.session.delete` |
-| GET | `/coding/session/{sessionID}` | Claim right sidebar coding assistant session | `coding.session.get` |
-| PATCH | `/coding/session/{sessionID}` | Update right sidebar coding assistant session | `coding.session.update` |
-| POST | `/coding/session/{sessionID}/abort` | Abort right sidebar coding assistant session | `coding.session.abort` |
-| PATCH | `/coding/session/{sessionID}/selection` | Update right sidebar coding assistant task selection | `coding.session.selection.update` |
-| GET | `/coding/sessions` | List right sidebar coding assistant sessions | `coding.sessions.list` |
+| DELETE | `/coding/session/{sessionID}` | Delete right sidebar coding assistant session Errors: `LogFileNotFoundError`, `NotFoundError`. | `coding.session.delete` |
+| GET | `/coding/session/{sessionID}` | Claim right sidebar coding assistant session Errors: `LogFileNotFoundError`, `NotFoundError`. | `coding.session.get` |
+| PATCH | `/coding/session/{sessionID}` | Update right sidebar coding assistant session Body: `title`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `coding.session.update` |
+| POST | `/coding/session/{sessionID}/abort` | Abort right sidebar coding assistant session Errors: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `coding.session.abort` |
+| PATCH | `/coding/session/{sessionID}/selection` | Update right sidebar coding assistant task selection Body: `taskID`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `coding.session.selection.update` |
+| GET | `/coding/sessions` | List right sidebar coding assistant sessions Errors: `BadRequestError`. | `coding.sessions.list` |
 
 ### Channel
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/channel` | List channels | `channel.list` |
-| POST | `/channel/attachment` | Create a temporary channel attachment URL | `channel.attachment.create` |
-| GET | `/channel/attachment/{id}` | Read a temporary channel attachment | `channel.attachment.get` |
-| POST | `/channel/message` | Handle channel message | `channel.message` |
+| POST | `/channel/attachment` | Create a temporary channel attachment URL Body: `data`, `filename`, `mime`; Errors: `BadRequestError`. | `channel.attachment.create` |
+| GET | `/channel/attachment/{id}` | Read a temporary channel attachment Errors: `LogFileNotFoundError`, `NotFoundError`. | `channel.attachment.get` |
+| POST | `/channel/message` | Handle channel message Body: `channel`, `platform`, `text`, `thread`. | `channel.message` |
 | GET | `/channel/runtime` | Get managed channel runtime | `channel.runtime` |
 | POST | `/channel/runtime/restart` | Restart managed channel runtime | `channel.runtime.restart` |
 
@@ -215,9 +215,9 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/gateway/capabilities` | List gateway capabilities | `gateway.capabilities` |
-| POST | `/gateway/channel/{platform}/message` | Handle gateway channel message | `gateway.channel.message` |
+| POST | `/gateway/channel/{platform}/message` | Handle gateway channel message Body: `channel`, `text`, `thread`. | `gateway.channel.message` |
 | POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
-| POST | `/gateway/control/message` | Handle gateway control message | `gateway.control.message` |
+| POST | `/gateway/control/message` | Handle gateway control message Body: `text`. | `gateway.control.message` |
 | GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
 
 ### Attachment
@@ -232,11 +232,11 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 |---|---|---|---|
 | GET | `/panel/capabilities` | List panel capabilities | `panel.capabilities` |
 | GET | `/panel/knowledge/memory` | List memory files for current project | `panel.knowledge.memory.list` |
-| POST | `/panel/knowledge/memory/search` | Search memories | `panel.knowledge.memory.search` |
-| DELETE | `/panel/knowledge/memory/{id}` | Delete memory file | `panel.knowledge.memory.delete` |
-| GET | `/panel/knowledge/memory/{id}` | Get memory file content (all chunks) | `panel.knowledge.memory.get` |
-| POST | `/panel/message` | Handle desktop panel message | `panel.message` |
-| POST | `/panel/message/stream` | Handle desktop panel message with streaming | `panel.message.stream` |
+| POST | `/panel/knowledge/memory/search` | Search memories Body: `query`. | `panel.knowledge.memory.search` |
+| DELETE | `/panel/knowledge/memory/{id}` | Delete memory file Errors: `LogFileNotFoundError`, `NotFoundError`. | `panel.knowledge.memory.delete` |
+| GET | `/panel/knowledge/memory/{id}` | Get memory file content (all chunks) Errors: `LogFileNotFoundError`, `NotFoundError`. | `panel.knowledge.memory.get` |
+| POST | `/panel/message` | Handle desktop panel message Body: `surface`, `text`. | `panel.message` |
+| POST | `/panel/message/stream` | Handle desktop panel message with streaming Body: `surface`, `text`. | `panel.message.stream` |
 
 ### Skill
 
@@ -245,16 +245,16 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/agent` | List agents | `app.agents` |
 | GET | `/skill` | List skills | `app.skills` |
 | GET | `/skill/directories` | Get skill directories | `skill.directories` |
-| POST | `/skill/import-and-mount` | Import a dropped skill and mount it to an agent | `skill.importAndMount` |
-| POST | `/skill/import-file` | Import a dropped skill source | `skill.importFile` |
-| POST | `/skill/install` | Install or import a skill source | `skill.install` |
+| POST | `/skill/import-and-mount` | Import a dropped skill and mount it to an agent Body: `agent`, `import`. | `skill.importAndMount` |
+| POST | `/skill/import-file` | Import a dropped skill source Body: `archiveBase64`, `content`, `filename`, `files`, `policy`, `sourceName`. | `skill.importFile` |
+| POST | `/skill/install` | Install or import a skill source Body: `kind`, `value`. | `skill.install` |
 | GET | `/skill/installed` | List installed skills | `skill.installed` |
 | GET | `/skill/market` | List skill markets | `skill.market` |
-| POST | `/skill/mount` | Mount a skill to an agent | `skill.mount` |
+| POST | `/skill/mount` | Mount a skill to an agent Body: `agent`, `skill`. | `skill.mount` |
 | GET | `/skill/mounts` | List agent skill mounts | `skill.mounts` |
-| POST | `/skill/policy` | Set skill permission policy | `skill.policy` |
-| POST | `/skill/remove` | Remove a skill source | `skill.remove` |
-| POST | `/skill/unmount` | Unmount a skill from an agent | `skill.unmount` |
+| POST | `/skill/policy` | Set skill permission policy Body: `action`, `name`. | `skill.policy` |
+| POST | `/skill/remove` | Remove a skill source Body: `source`. | `skill.remove` |
+| POST | `/skill/unmount` | Unmount a skill from an agent Body: `agent`, `skill`. | `skill.unmount` |
 
 ### Control
 
@@ -266,33 +266,33 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| GET | `/export/session/{sessionID}` | Export session messages | `export.session` |
+| GET | `/export/session/{sessionID}` | Export session messages Errors: `LogFileNotFoundError`, `NotFoundError`. | `export.session` |
 
 ### QuickNote
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| POST | `/api/v1/notes` | Create QuickNote | `quicknote.create` |
+| POST | `/api/v1/notes` | Create QuickNote Errors: `BadRequestError`. | `quicknote.create` |
 
 ### MCP
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/mcp` | Get MCP status | `mcp.status` |
-| POST | `/mcp` | Add MCP server | `mcp.add` |
-| DELETE | `/mcp/{name}/auth` | Remove MCP OAuth | `mcp.auth.remove` |
-| POST | `/mcp/{name}/auth` | Start MCP OAuth | `mcp.auth.start` |
-| POST | `/mcp/{name}/auth/authenticate` | Authenticate MCP OAuth | `mcp.auth.authenticate` |
-| POST | `/mcp/{name}/auth/callback` | Complete MCP OAuth | `mcp.auth.callback` |
-| POST | `/mcp/{name}/connect` | (no summary) | `mcp.connect` |
-| POST | `/mcp/{name}/disconnect` | (no summary) | `mcp.disconnect` |
+| POST | `/mcp` | Add MCP server Body: `config`, `name`; Errors: `BadRequestError`. | `mcp.add` |
+| DELETE | `/mcp/{name}/auth` | Remove MCP OAuth Errors: `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `mcp.auth.remove` |
+| POST | `/mcp/{name}/auth` | Start MCP OAuth Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `mcp.auth.start` |
+| POST | `/mcp/{name}/auth/authenticate` | Authenticate MCP OAuth Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `mcp.auth.authenticate` |
+| POST | `/mcp/{name}/auth/callback` | Complete MCP OAuth Body: `code`, `state`; Errors: `BadRequestError`, `LogFileNotFoundError`, `MCPOAuthStateError`, `NotFoundError`, `UnknownError`. | `mcp.auth.callback` |
+| POST | `/mcp/{name}/connect` | (no summary) Errors: `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `mcp.connect` |
+| POST | `/mcp/{name}/disconnect` | (no summary) Errors: `LogFileNotFoundError`, `NotFoundError`. | `mcp.disconnect` |
 
 ### Permission
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/permission` | List pending permissions | `permission.list` |
-| POST | `/permission/{requestID}/reply` | Respond to permission request | `permission.reply` |
+| POST | `/permission/{requestID}/reply` | Respond to permission request Body: `autoReply`, `reply`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `permission.reply` |
 
 ### Provider
 
@@ -300,51 +300,51 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 |---|---|---|---|
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
-| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models | `provider.discover.models` |
+| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models Body: `api`; Errors: `BadRequestError`. | `provider.discover.models` |
 | GET | `/provider/hexin/budget` | Get hexin gateway key budget | `provider.hexin.budget` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
 | POST | `/provider/refresh` | Refresh the provider model registry | `provider.refresh` |
-| POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |
-| POST | `/provider/{providerID}/auth/prompts` | Get auth prompts | `provider.auth.prompts` |
-| POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize | `provider.oauth.authorize` |
-| POST | `/provider/{providerID}/oauth/callback` | OAuth callback | `provider.oauth.callback` |
-| POST | `/provider/{providerID}/test` | Test provider connection | `provider.test` |
+| POST | `/provider/{providerID}/auth/execute` | Execute auth method Body: `method`; Errors: `BadRequestError`. | `provider.auth.execute` |
+| POST | `/provider/{providerID}/auth/prompts` | Get auth prompts Body: `method`; Errors: `BadRequestError`. | `provider.auth.prompts` |
+| POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize Body: `method`; Errors: `BadRequestError`. | `provider.oauth.authorize` |
+| POST | `/provider/{providerID}/oauth/callback` | OAuth callback Body: `method`; Errors: `BadRequestError`. | `provider.oauth.callback` |
+| POST | `/provider/{providerID}/test` | Test provider connection Body: `modelID`; Errors: `BadRequestError`. | `provider.test` |
 
 ### Question
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/question` | List pending questions | `question.list` |
-| POST | `/question/{requestID}/reject` | Reject question request | `question.reject` |
-| POST | `/question/{requestID}/reply` | Reply to question request | `question.reply` |
+| POST | `/question/{requestID}/reject` | Reject question request Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `question.reject` |
+| POST | `/question/{requestID}/reply` | Reply to question request Body: `answers`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `question.reply` |
 
 ### PTY
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/pty` | List PTY sessions | `pty.list` |
-| POST | `/pty` | Create PTY session | `pty.create` |
-| DELETE | `/pty/{ptyID}` | Remove PTY session | `pty.remove` |
-| GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
-| PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |
-| GET | `/pty/{ptyID}/connect` | Connect to PTY session | `pty.connect` |
-| POST | `/terminal/open` | Open system terminal | `terminal.open` |
-| GET | `/terminal/profiles` | List system terminal profiles | `terminal.profiles` |
+| POST | `/pty` | Create PTY session Body: `command`; Errors: `BadRequestError`. | `pty.create` |
+| DELETE | `/pty/{ptyID}` | Remove PTY session Errors: `LogFileNotFoundError`, `NotFoundError`. | `pty.remove` |
+| GET | `/pty/{ptyID}` | Get PTY session Errors: `LogFileNotFoundError`, `NotFoundError`. | `pty.get` |
+| PUT | `/pty/{ptyID}` | Update PTY session Body: `size`, `title`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `pty.update` |
+| GET | `/pty/{ptyID}/connect` | Connect to PTY session Errors: `LogFileNotFoundError`, `NotFoundError`. | `pty.connect` |
+| POST | `/terminal/open` | Open system terminal Body: `cwd`; Errors: `BadRequestError`. | `terminal.open` |
+| GET | `/terminal/profiles` | List system terminal profiles Errors: `BadRequestError`. | `terminal.profiles` |
 
 ### File / Search
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/file` | List files | `file.list` |
-| GET | `/file/content` | Read file | `file.read` |
-| PATCH | `/file/content` | Write file | `file.write` |
-| DELETE | `/file/item` | Delete file item | `file.delete` |
-| PATCH | `/file/item` | Move file item | `file.move` |
-| POST | `/file/item` | Create file item | `file.create` |
+| GET | `/file/content` | Read file Errors: `FileNotFoundError`, `UnknownError`. | `file.read` |
+| PATCH | `/file/content` | Write file Body: `content`, `path`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `UnknownError`. | `file.write` |
+| DELETE | `/file/item` | Delete file item Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `file.delete` |
+| PATCH | `/file/item` | Move file item Body: `newPath`, `path`; Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.move` |
+| POST | `/file/item` | Create file item Body: `path`, `type`; Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.create` |
 | GET | `/file/status` | Get file status | `file.status` |
-| POST | `/file/upload` | Upload files | `file.upload` |
-| GET | `/find` | Find text | `find.text` |
-| GET | `/find/file` | Find files | `find.files` |
+| POST | `/file/upload` | Upload files Body: `files`, `targetDir`; Errors: `AgentSessionPendingCoordinationError`, `BadRequestError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `file.upload` |
+| GET | `/find` | Find text Errors: `UnknownError`. | `find.text` |
+| GET | `/find/file` | Find files Errors: `UnknownError`. | `find.files` |
 | GET | `/find/symbol` | Find symbols | `find.symbols` |
 | GET | `/lsp` | Get LSP status | `lsp.status` |
 
@@ -352,21 +352,21 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
-| GET | `/experimental/event-schedule` | List event-triggered tasks | `experimental.eventschedule.list` |
-| POST | `/experimental/event-schedule` | Create event-triggered task | `experimental.eventschedule.create` |
-| DELETE | `/experimental/event-schedule/{id}` | Cancel event-triggered task | `experimental.eventschedule.delete` |
-| GET | `/experimental/resource` | Get MCP resources | `experimental.resource.list` |
-| GET | `/experimental/schedule` | List scheduled tasks | `experimental.schedule.list` |
-| POST | `/experimental/schedule` | Create scheduled task | `experimental.schedule.create` |
-| DELETE | `/experimental/schedule/{id}` | Cancel scheduled task | `experimental.schedule.delete` |
-| GET | `/experimental/scratchpad` | Get scratchpad content | `experimental.scratchpad.get` |
-| GET | `/experimental/task-plan` | List tasks for a session | `experimental.taskplan.list` |
-| GET | `/experimental/tool` | List tools | `tool.list` |
-| GET | `/experimental/tool/ids` | List tool IDs | `tool.ids` |
+| GET | `/experimental/event-schedule` | List event-triggered tasks Errors: `BadRequestError`. | `experimental.eventschedule.list` |
+| POST | `/experimental/event-schedule` | Create event-triggered task Body: `eventType`, `name`, `prompt`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.eventschedule.create` |
+| DELETE | `/experimental/event-schedule/{id}` | Cancel event-triggered task Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.eventschedule.delete` |
+| GET | `/experimental/resource` | Get MCP resources Errors: `UnknownError`. | `experimental.resource.list` |
+| GET | `/experimental/schedule` | List scheduled tasks Errors: `BadRequestError`. | `experimental.schedule.list` |
+| POST | `/experimental/schedule` | Create scheduled task Body: `expression`, `name`, `prompt`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.schedule.create` |
+| DELETE | `/experimental/schedule/{id}` | Cancel scheduled task Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.schedule.delete` |
+| GET | `/experimental/scratchpad` | Get scratchpad content Errors: `LogFileNotFoundError`, `NotFoundError`. | `experimental.scratchpad.get` |
+| GET | `/experimental/task-plan` | List tasks for a session Errors: `LogFileNotFoundError`, `NotFoundError`. | `experimental.taskplan.list` |
+| GET | `/experimental/tool` | List tools Errors: `BadRequestError`. | `tool.list` |
+| GET | `/experimental/tool/ids` | List tool IDs Errors: `BadRequestError`. | `tool.ids` |
 | GET | `/experimental/workspace` | List workspaces | `experimental.workspace.list` |
-| DELETE | `/experimental/workspace/{id}` | Remove workspace | `experimental.workspace.remove` |
-| POST | `/experimental/workspace/{id}` | Create workspace | `experimental.workspace.create` |
-| DELETE | `/experimental/worktree` | Remove worktree | `worktree.remove` |
+| DELETE | `/experimental/workspace/{id}` | Remove workspace Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `experimental.workspace.remove` |
+| POST | `/experimental/workspace/{id}` | Create workspace Body: `branch`, `config`; Errors: `BadRequestError`. | `experimental.workspace.create` |
+| DELETE | `/experimental/worktree` | Remove worktree Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `worktree.remove` |
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
-| POST | `/experimental/worktree` | Create worktree | `worktree.create` |
-| POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
+| POST | `/experimental/worktree` | Create worktree Errors: `BadRequestError`. | `worktree.create` |
+| POST | `/experimental/worktree/reset` | Reset worktree Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `worktree.reset` |

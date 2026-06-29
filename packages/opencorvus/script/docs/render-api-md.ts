@@ -41,6 +41,8 @@ type Op = {
   path: string
   operationId: string
   summary?: string
+  requestBodyFields: string[]
+  errorNames: string[]
 }
 
 type Group = {
@@ -68,6 +70,43 @@ function firstSegment(p: string): string {
   return seg.toLowerCase()
 }
 
+function requestBodyFields(op: any): string[] {
+  const schema = op?.requestBody?.content?.["application/json"]?.schema
+  if (!schema || typeof schema !== "object") return []
+  const required = Array.isArray(schema.required) ? schema.required : []
+  const properties = schema.properties && typeof schema.properties === "object" ? Object.keys(schema.properties) : []
+  const names = required.length > 0 ? required : properties
+  return names.filter((name): name is string => typeof name === "string").sort()
+}
+
+function schemaRefName(ref: string): string {
+  return ref.split("/").at(-1) ?? ref
+}
+
+function namedErrorNamesFromSchema(schema: unknown, out = new Set<string>()): Set<string> {
+  if (!schema || typeof schema !== "object") return out
+  const node = schema as Record<string, any>
+  if (typeof node.$ref === "string") out.add(schemaRefName(node.$ref))
+  const nameConst = node.properties?.name?.const
+  if (typeof nameConst === "string") out.add(nameConst)
+  for (const key of ["anyOf", "oneOf", "allOf"] as const) {
+    if (Array.isArray(node[key])) {
+      for (const child of node[key]) namedErrorNamesFromSchema(child, out)
+    }
+  }
+  return out
+}
+
+function responseErrorNames(op: any): string[] {
+  const names = new Set<string>()
+  for (const [status, response] of Object.entries(op?.responses ?? {})) {
+    if (!/^[45]\d\d$/.test(status)) continue
+    const schema = (response as any)?.content?.["application/json"]?.schema
+    namedErrorNamesFromSchema(schema, names)
+  }
+  return Array.from(names).sort()
+}
+
 function collectOps(spec: any): Op[] {
   const out: Op[] = []
   for (const [pth, item] of Object.entries(spec.paths ?? {})) {
@@ -80,6 +119,8 @@ function collectOps(spec: any): Op[] {
         path: pth,
         operationId: op.operationId,
         summary: typeof op.summary === "string" ? op.summary : undefined,
+        requestBodyFields: requestBodyFields(op),
+        errorNames: responseErrorNames(op),
       })
     }
   }
@@ -176,11 +217,24 @@ function render(groups: Group[], i18n: I18n, lang: Lang): string {
     lines.push(`|---|---|---|---|`)
     for (const op of g.ops) {
       const summary = (op.summary ?? "").trim() || noSummary
-      lines.push(`| ${op.method} | \`${op.path}\` | ${escapeCell(summary)} | \`${op.operationId}\` |`)
+      lines.push(`| ${op.method} | \`${op.path}\` | ${escapeCell(withContract(summary, op, isZh))} | \`${op.operationId}\` |`)
     }
     lines.push("")
   }
   return lines.join("\n").replace(/\n+$/g, "") + "\n"
+}
+
+function withContract(summary: string, op: Op, isZh: boolean): string {
+  const details: string[] = []
+  if (op.requestBodyFields.length > 0) {
+    const label = isZh ? "请求体" : "Body"
+    details.push(`${label}: ${op.requestBodyFields.map((name) => `\`${name}\``).join(", ")}`)
+  }
+  if (op.errorNames.length > 0) {
+    const label = isZh ? "错误" : "Errors"
+    details.push(`${label}: ${op.errorNames.map((name) => `\`${name}\``).join(", ")}`)
+  }
+  return details.length > 0 ? `${summary} ${details.join("; ")}.` : summary
 }
 
 function escapeCell(s: string): string {

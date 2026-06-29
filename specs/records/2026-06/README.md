@@ -8,6 +8,7 @@ Current incident records:
 
 - [2026-06-29-database-ioerr-runtime-boundary.md](2026-06-29-database-ioerr-runtime-boundary.md) records the SQLite `SQLITE_IOERR_READ` backend crash root cause and runtime-boundary fix plan.
 - [2026-06-29-model-image-input-auto-resize.md](2026-06-29-model-image-input-auto-resize.md) records the model-bound image auto-resize plan for oversized screenshot and attachment inputs.
+- [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md) records the single-source operator steer plan that replaces overlay direct-reply/build-message/A2A split routing.
 - [2026-06-29-project-delete-unhandled-rejection.md](2026-06-29-project-delete-unhandled-rejection.md) records the project deletion async-lifecycle root cause and no-unhandled-rejection fix plan.
 
 ## Rules
