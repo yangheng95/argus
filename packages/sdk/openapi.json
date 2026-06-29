@@ -19550,7 +19550,8 @@
                       "enum": [
                         "preview-capture",
                         "reference-comparison",
-                        "source-binding"
+                        "source-binding",
+                        "layout-geometry"
                       ]
                     },
                     "regionID": {
