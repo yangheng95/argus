@@ -153,4 +153,22 @@ export const VisualQaReportSchema = z.object({
   fact_check_items: FactCheckItemListSchema.default([]),
 })
 
+export const VisualQaAcceptanceSchema = z
+  .object({
+    submittedAccepted: z.boolean(),
+    effectiveAccepted: z.boolean(),
+    selfReportIssues: z.array(z.string()),
+    blockingIssues: z.array(z.string()),
+  })
+  .strict()
+
+export const VisualQaDecisionRecordSchema = z
+  .object({
+    report: VisualQaReportSchema,
+    acceptance: VisualQaAcceptanceSchema,
+  })
+  .strict()
+
 export type VisualQaReport = z.infer<typeof VisualQaReportSchema>
+export type VisualQaAcceptance = z.infer<typeof VisualQaAcceptanceSchema>
+export type VisualQaDecisionRecord = z.infer<typeof VisualQaDecisionRecordSchema>
