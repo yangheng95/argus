@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { applyBundledEnv } from "../src/bundled-env"
+
+const repoRoot = path.resolve(import.meta.dir, "../../..")
 
 const temp: string[] = []
 const vars = [
@@ -104,5 +107,12 @@ describe("bundled env", () => {
     expect(result.expired).toBe(true)
     expect(process.env.BUNDLE_TOKEN).toBe("manual-user-token")
     expect(process.env.BUNDLE_ONLY).toBeUndefined()
+  })
+
+  test("bundle example names the runtime env variable", () => {
+    const example = readFileSync(path.join(repoRoot, "packages/channel-runtime/.env.bundle.example"), "utf8")
+
+    expect(example).toContain("OPENCORVUS_CHANNEL_BUNDLED_ENV_FILE")
+    expect(example).not.toContain("OPENCORVUS_BOT_BUNDLED_ENV_FILE")
   })
 })

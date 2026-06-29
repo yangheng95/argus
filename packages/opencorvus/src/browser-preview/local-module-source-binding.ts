@@ -7,6 +7,7 @@ import { BrowserRuntime } from "@/browser/runtime"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import { RUNTIME_CAPTURE_DEFAULTS } from "@/runtime/capture-contract"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 import {
   BrowserPreviewRegionBinding,
@@ -80,6 +81,7 @@ type LocalModuleSidecarInput = {
   executablePath: string
   launchArgs: string[]
   launchTimeoutMs: number
+  navigationTimeoutMs: number
   viewport: { width: number; height: number }
   locator: BrowserPreviewRegionLocator
 }
@@ -334,11 +336,12 @@ async function captureLocalModule(input: {
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
+      navigationTimeoutMs: RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms,
       viewport: { width: viewport.width, height: viewport.height },
       locator: input.locator,
     } satisfies LocalModuleSidecarInput,
     payloadEnvName: "OPENCORVUS_BROWSER_PREVIEW_LOCAL_MODULE_BINDING_INPUT",
-    hardTimeoutMs: launchTimeoutMs + 60_000,
+    inactivityTimeoutMs: launchTimeoutMs + RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms + 60_000,
     label: "Browser preview local module binding runner",
     signal: input.signal,
   }).catch((error) => {
@@ -829,6 +832,126 @@ function routeUrl(base, route) {
   return new URL(route || "/", base).toString();
 }
 
+function isBrowserImplicitAssetRequest(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico";
+  } catch {
+    return false;
+  }
+}
+
+function browserActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.message === "string") return event + " " + payload.message;
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.text === "string") return event + " " + payload.text;
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+function taggedBrowserInactivityError(message) {
+  const error = new Error(message);
+  error.opencorvusBrowserInactivity = true;
+  return error;
+}
+
+function isBrowserInactivityError(error) {
+  return Boolean(error && error.opencorvusBrowserInactivity === true);
+}
+
+function installBrowserFailureTracker(page, label) {
+  const failures = [];
+  const listeners = [];
+  const record = (source) => {
+    if (!failures.includes(source)) failures.push(source);
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(url)) {
+      record(browserActivityLabel("response", payload) + " HTTP " + status);
+    }
+  });
+  on("requestfailed", (payload) => {
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (isBrowserImplicitAssetRequest(url)) return;
+    record(browserActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => record(browserActivityLabel("pageerror", payload)));
+  return {
+    assertNoFailures(stage) {
+      if (failures.length > 0) throw new Error(label + " browser failure before " + stage + ": " + failures.join("; "));
+    },
+    dispose() {
+      for (const [event, handler] of listeners) page.off(event, handler);
+    },
+  };
+}
+
+async function withBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  let rejectFailure;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const browserFailure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(taggedBrowserInactivityError(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    rejectFailure(new Error(label + " browser failure before source binding: " + source));
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(browserActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(url)) {
+      fail(browserActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(browserActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => {
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (isBrowserImplicitAssetRequest(url)) return;
+    fail(browserActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => fail(browserActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive, browserFailure]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 function selectorFor(locator) {
   if (locator.kind === "selector") return locator.value;
   if (locator.kind === "test-id") return "[data-testid=" + JSON.stringify(locator.value) + "]";
@@ -853,17 +976,38 @@ async function main() {
     });
     const context = await browser.newContext({ viewport: input.viewport, deviceScaleFactor: 1 });
     const page = await context.newPage();
-    await page.goto(routeUrl(input.url, input.route), { waitUntil: "networkidle", timeout: 30000 });
-    const locator = await findNode(page, input.locator);
-    const visible = await locator.isVisible();
-    if (!visible) throw new Error("Implementation locator did not match any visible element.");
-    await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
-    await page.waitForTimeout(200);
-    const box = await locator.boundingBox();
-    if (!box || box.width <= 0 || box.height <= 0) {
-      throw new Error("Implementation locator did not match any visible element.");
-    }
-    const capture = await locator.evaluate((node, bbox) => {
+    const targetUrl = routeUrl(input.url, input.route);
+    const browserFailures = installBrowserFailureTracker(page, "local module source binding");
+    let capture;
+    let screenshotPath;
+    try {
+      await withBrowserInactivity(
+        page,
+        "navigate " + targetUrl,
+        input.navigationTimeoutMs,
+        () => page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 0 }),
+      );
+      await withBrowserInactivity(
+        page,
+        "networkidle " + targetUrl,
+        Math.min(5000, input.navigationTimeoutMs),
+        () => page.waitForLoadState("networkidle", { timeout: 0 }),
+      ).catch((error) => {
+        if (isBrowserInactivityError(error)) return undefined;
+        throw error;
+      });
+      browserFailures.assertNoFailures("source binding capture");
+      const locator = await findNode(page, input.locator);
+      const visible = await locator.isVisible();
+      if (!visible) throw new Error("Implementation locator did not match any visible element.");
+      await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await page.waitForTimeout(200);
+      browserFailures.assertNoFailures("source binding capture");
+      const box = await locator.boundingBox();
+      if (!box || box.width <= 0 || box.height <= 0) {
+        throw new Error("Implementation locator did not match any visible element.");
+      }
+      capture = await locator.evaluate((node, bbox) => {
       const fullText = (node.innerText || node.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
       const texts = [];
       function add(value) {
@@ -889,10 +1033,14 @@ async function main() {
         textAnchors: texts.slice(0, 16),
         fullText,
       };
-    }, box);
-    await fs.mkdir(input.outDir, { recursive: true });
-    const screenshotPath = path.join(input.outDir, "local-fullpage.png");
-    await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
+      }, box);
+      await fs.mkdir(input.outDir, { recursive: true });
+      screenshotPath = path.join(input.outDir, "local-fullpage.png");
+      await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
+      browserFailures.assertNoFailures("source binding capture");
+    } finally {
+      browserFailures.dispose();
+    }
     await context.close();
     process.stdout.write(JSON.stringify({ ok: true, capture: { ...capture, screenshotPath } }));
   } catch (error) {

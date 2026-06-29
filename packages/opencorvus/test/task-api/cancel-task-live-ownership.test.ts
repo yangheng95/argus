@@ -155,7 +155,7 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
             })
             .run(),
         )
-        const request = createAgentCoordinationRequest({
+        const request = await createAgentCoordinationRequest({
           taskID,
           sessionID: childID,
           agent: "frontend-research",
@@ -187,12 +187,12 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     expect(cancelled).toContain(descendantID)
     expect(SessionPromptState.isActive(descendantID, tmp.path)).toBe(false)
     expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
-    const queueRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get())
+    const queueRow = Database.use((db) =>
+      db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get(),
+    )
     expect(queueRow?.status).toBe("failed")
     expect(queueRow?.error_message).toBe("task cancelled")
-    expect(findAgentCoordinationRequest({ taskID, requestID: coordinationRequestID })?.payload.status).toBe(
-      "cancelled",
-    )
+    expect(findAgentCoordinationRequest({ taskID, requestID: coordinationRequestID })?.payload.status).toBe("cancelled")
     const part = (await Message.parts(messageID)).find((item) => item.id === partID)
     expect(part?.type).toBe("tool")
     if (part?.type !== "tool") throw new Error("expected tool part")

@@ -195,6 +195,24 @@ describe("build-session compaction tail selection", () => {
                 extraKeys: [],
               },
             },
+            agentHandoff: {
+              kind: "build",
+              deliverables: [
+                {
+                  fact: "Assistant tail filtering is the build-session compaction deliverable",
+                  evidence: tailStart,
+                },
+              ],
+              codeChanges: [],
+              verification: [],
+              runtimeState: [
+                {
+                  fact: "Assistant step tail markers are rejected by compacted history filtering",
+                  evidence: tailStart,
+                },
+              ],
+              handoffArtifacts: [],
+            },
             decisions: [],
             evidence: [],
             files: [],

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findRun, findTask } from "../../src/engine/store"
-import { updateTask } from "../../src/engine/state"
+import { terminalTask, updateTask } from "../../src/engine/state"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -70,11 +70,21 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
 }
 
 describe("terminal task writes finalize live runs", () => {
+  test("ordinary task updates reject terminal status intents", async () => {
+    const { taskID } = seedRunningTaskRun()
+
+    await expect(
+      updateTask(findTask(taskID)!, { status: "failed", error: "hidden failure" } as any, "hidden failure"),
+    ).rejects.toThrow("updateTask cannot write terminal task lifecycle")
+
+    expect(findTask(taskID)?.time_completed).toBeNull()
+  })
+
   test("completed task closes the live run as completed", async () => {
     const { taskID, runID, now } = seedRunningTaskRun()
     const completed = now + 10
 
-    await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "Task completed")
+    await terminalTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "Task completed")
 
     const run = findRun(runID)
     expect(run?.status).toBe("completed")
@@ -87,7 +97,7 @@ describe("terminal task writes finalize live runs", () => {
     const { taskID, runID, now } = seedRunningTaskRun()
     const completed = now + 20
 
-    await updateTask(
+    await terminalTask(
       findTask(taskID)!,
       { status: "failed", error: "acceptance publish failed", time_completed: completed },
       "acceptance publish failed",
@@ -104,7 +114,7 @@ describe("terminal task writes finalize live runs", () => {
     const { taskID, runID, now } = seedRunningTaskRun()
     const completed = now + 30
 
-    await updateTask(
+    await terminalTask(
       findTask(taskID)!,
       { status: "cancelled", error: "task cancelled", time_completed: completed },
       "Task cancelled",
@@ -121,7 +131,7 @@ describe("terminal task writes finalize live runs", () => {
     const completed = Date.now() - 500
     const { taskID, runID } = seedRunningTaskRun({ taskCompleted: completed })
 
-    await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "Task completed")
+    await terminalTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "Task completed")
 
     const run = findRun(runID)
     expect(run?.status).toBe("completed")

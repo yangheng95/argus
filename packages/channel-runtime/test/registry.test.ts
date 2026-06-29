@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { ChannelCatalog } from "@opencorvus-ai/channel-config"
 import type { ChannelAdapter, MessageHandler } from "../src/adapter"
 import { registerAdapters, READY_CHANNELS } from "../src/registry"
+
+const repoRoot = resolve(import.meta.dir, "../../..")
 
 class Fake implements ChannelAdapter {
   constructor(
@@ -423,5 +428,15 @@ describe("channel registry", () => {
   test("no planned channels remain", () => {
     expect(READY_CHANNELS).toContain("dingtalk")
     expect(READY_CHANNELS).toContain("qq")
+  })
+
+  test("env example documents every required ChannelCatalog key", () => {
+    const example = readFileSync(resolve(repoRoot, "packages/channel-runtime/.env.example"), "utf8")
+    const requiredEnv = ChannelCatalog.flatMap((channel) =>
+      channel.fields.filter((field) => field.required && field.env).map((field) => field.env!),
+    )
+    const missing = requiredEnv.filter((env) => !new RegExp(`^#?\\s*${env}=`, "m").test(example))
+
+    expect(missing).toEqual([])
   })
 })

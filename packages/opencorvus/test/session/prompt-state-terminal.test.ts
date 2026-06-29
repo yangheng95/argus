@@ -16,12 +16,14 @@ afterEach(async () => {
 
 test("prompt loop finish cleans state without publishing terminal aborted", async () => {
   await using tmp = await tmpdir({ git: true })
-  const sessionID = "ses_prompt_finish_cleanup"
   const events: SessionStatus.Info[] = []
+  let sessionID = ""
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "prompt finish cleanup" })
+      sessionID = session.id
       unsubscribers.push(
         Bus.subscribe(SessionStatus.Event.Status, (event) => {
           if (event.properties.sessionID === sessionID) events.push(event.properties.status)
@@ -67,14 +69,37 @@ test("prompt state survives instance disposal until explicit cancellation finish
   expect(SessionPromptState.isActive(sessionID, tmp.path)).toBe(false)
 })
 
-test("prompt cancel remains the user cancellation terminal source", async () => {
+test("prompt finish uses abort owner after instance context is gone", async () => {
   await using tmp = await tmpdir({ git: true })
-  const sessionID = "ses_prompt_cancel_terminal"
-  const events: SessionStatus.Info[] = []
+  const sessionID = "ses_prompt_finish_after_instance_context"
+  let abort: AbortSignal | undefined
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      abort = SessionPromptState.start(sessionID, tmp.path)
+      expect(abort).toBeDefined()
+      SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
+    },
+  })
+
+  await Instance.disposeAll()
+
+  expect(abort).toBeDefined()
+  SessionPromptState.finish(sessionID, abort!)
+  expect(SessionPromptState.isActive(sessionID, tmp.path)).toBe(false)
+})
+
+test("prompt cancel remains the user cancellation terminal source", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const events: SessionStatus.Info[] = []
+  let sessionID = ""
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "prompt cancel terminal" })
+      sessionID = session.id
       unsubscribers.push(
         Bus.subscribe(SessionStatus.Event.Status, (event) => {
           if (event.properties.sessionID === sessionID) events.push(event.properties.status)
@@ -89,6 +114,33 @@ test("prompt cancel remains the user cancellation terminal source", async () => 
 
   expect(events).toEqual([{ type: "streaming" }, { type: "terminal", reason: "aborted" }])
   expect(SessionStatus.get(sessionID)).toEqual({ type: "terminal", reason: "aborted" })
+})
+
+test("prompt loop rejects instead of attaching behind a cancelled unfinished owner", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "cancelled owner attach" })
+      const abort = SessionPromptState.start(session.id, tmp.path)
+      expect(abort).toBeDefined()
+      SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+      try {
+        expect(SessionPromptState.cancel(session.id, tmp.path)).toBe(true)
+        const outcome = await Promise.race([
+          SessionPrompt.loop({ sessionID: session.id }).then(
+            () => "resolved",
+            (error) => (error instanceof Error ? error.message : String(error)),
+          ),
+          Bun.sleep(100).then(() => "timed-out"),
+        ])
+
+        expect(outcome).toContain("cancelled prompt owner")
+      } finally {
+        SessionPromptState.finish(session.id, abort!, tmp.path)
+      }
+    },
+  })
 })
 
 test("prompt loop exception marks the session terminal error", async () => {

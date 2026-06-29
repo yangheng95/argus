@@ -27,6 +27,9 @@ export namespace SessionPromptState {
       }[]
       finished: Promise<void>
       finish(): void
+      timeCreated: number
+      timeUpdated: number
+      timeCancelled?: number
     }
   >
 
@@ -102,13 +105,50 @@ export namespace SessionPromptState {
     if (s[sessionID]) return
     const controller = new AbortController()
     const finished = createFinishSignal()
+    const now = Date.now()
     s[sessionID] = {
       abort: controller,
       callbacks: [],
       finished: finished.finished,
       finish: finished.finish,
+      timeCreated: now,
+      timeUpdated: now,
     }
     return controller.signal
+  }
+
+  export function touch(sessionID: string, directory?: string): void {
+    const match = existingStateEntryForSession(sessionID, directory).promptState?.[sessionID]
+    if (!match) return
+    match.timeUpdated = Date.now()
+  }
+
+  export function activity(sessionID: string, directory?: string) {
+    const match = existingStateEntryForSession(sessionID, directory).promptState?.[sessionID]
+    if (!match) return undefined
+    return {
+      timeCreated: match.timeCreated,
+      timeUpdated: match.timeUpdated,
+      timeCancelled: match.timeCancelled,
+    }
+  }
+
+  export function attach(sessionID: string, directory?: string): Promise<Message.WithParts> {
+    const match = existingStateEntryForSession(sessionID, directory).promptState?.[sessionID]
+    if (!match) {
+      return Promise.reject(new Error(`Session ${sessionID} prompt owner missing during attach`))
+    }
+    if (match.abort.signal.aborted || match.timeCancelled !== undefined) {
+      return Promise.reject(
+        new Error(
+          `Session ${sessionID} has a cancelled prompt owner that has not finished; refusing to attach a new prompt callback`,
+        ),
+      )
+    }
+    touch(sessionID, directory)
+    return new Promise<Message.WithParts>((resolve, reject) => {
+      match.callbacks.push({ resolve, reject })
+    })
   }
 
   export function isActive(sessionID: string, directory?: string): boolean {
@@ -145,6 +185,9 @@ export namespace SessionPromptState {
       return false
     }
     match.abort.abort()
+    const now = Date.now()
+    match.timeCancelled = now
+    match.timeUpdated = now
     // Reject all pending callbacks before deleting state so that
     // executePrompt() callers (task-queue-service) are unblocked.
     const error = new Error("session cancelled")
@@ -182,6 +225,7 @@ export namespace SessionPromptState {
   export function flushCallbacks(sessionID: string, result: Message.WithParts, directory?: string) {
     const s = existingStateEntryForSession(sessionID, directory).promptState?.[sessionID]
     if (!s) return
+    s.timeUpdated = Date.now()
     for (const q of s.callbacks) q.resolve(result)
     s.callbacks = []
   }

@@ -47,7 +47,7 @@ export const BrowserPreviewBindLocalModuleTool = Tool.define(BrowserPreviewBindL
   description:
     "Bind the local module currently being edited to the corresponding source webpage module. " +
     "Captures the local module by locator, extracts visible anchors, searches task frontend-design source evidence for a source region that fully contains the corresponding module, materializes source/local crops plus a puzzle image, and returns that puzzle as an image attachment directly in this tool result. " +
-    "Use this before browser_preview_compare_regions when the source bbox is missing or questionable.",
+    "Use this only when a source/local binding puzzle is directly useful for visual investigation.",
   parameters: BrowserPreviewBindLocalModuleToolParameters,
   async execute(params: BrowserPreviewBindLocalModuleToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
@@ -115,7 +115,7 @@ function renderPublicResult(result: LocalModuleSourceBindingResult): Record<stri
     artifacts: result.artifacts,
     diagnostics: result.diagnostics,
     nextStep:
-      "Read the attached binding puzzle. If the source crop fully contains the corresponding source module and the local crop is the same module, pass metadata.binding to browser_preview_compare_regions for repair-loop comparison. If the source crop is wrong, call this tool again with better textAnchors or a more precise local locator.",
+      "Read the attached binding puzzle. If the source crop is wrong, call this tool again with better textAnchors or a more precise local locator. If the source/local crops identify a visual mismatch, repair the implementation and verify with fresh task-scoped screenshots.",
   }
 }
 

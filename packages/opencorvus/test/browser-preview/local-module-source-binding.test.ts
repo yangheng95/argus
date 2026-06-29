@@ -830,6 +830,53 @@ describe("browser preview local module source binding", () => {
   )
 
   test(
+    "rejects late browser page errors before writing passed binding evidence",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeReferenceScreenshot(paths.sourcePackageAbsolute)
+      await writeSourceCandidateFiles(paths.sourcePackageAbsolute)
+      const server = await startLatePageErrorLocalModuleServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+
+        await expect(
+          bindLocalModuleToSourceRegion({
+            projectRoot: tmp.path,
+            taskID,
+            targetID: target.id,
+            viewportID: "desktop",
+            regionID: "local-module",
+            route: "/",
+            implementationLocator: { kind: "data-oc-region", value: "local-module" },
+            componentFiles: ["src/LocalModule.tsx"],
+            sourceReferenceArtifactID: "reference.png",
+            textAnchors: ["Local Module", "Deep Anchor"],
+            sourcePadding: 0,
+            localPadding: 0,
+          }),
+        ).rejects.toThrow("late local module pageerror")
+
+        const evidenceRows = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            Database.use((db) =>
+              db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+            ),
+        })
+        expect(evidenceRows.filter((row) => row.kind === "browser_preview_evidence")).toHaveLength(0)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: LOCAL_MODULE_BINDING_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "binds local modules through test-id, role, and owned selector locators",
     async () => {
       await using tmp = await tmpdir({ git: true })
@@ -1054,6 +1101,47 @@ async function startLocalModuleServer(
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("local module test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startLatePageErrorLocalModuleServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((_req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Late local module pageerror</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; min-height: 900px; }
+            [data-oc-region="local-module"] {
+              margin: 36px;
+              width: 260px;
+              height: 128px;
+              box-sizing: border-box;
+              padding: 18px;
+              background: #e0f2fe;
+              color: #075985;
+            }
+          </style>
+          <script>setTimeout(() => { throw new Error("late local module pageerror") }, 100)</script>
+        </head>
+        <body>
+          <section data-oc-region="local-module"><h2>Local Module</h2><p>Deep Anchor</p></section>
+        </body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("late pageerror test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>

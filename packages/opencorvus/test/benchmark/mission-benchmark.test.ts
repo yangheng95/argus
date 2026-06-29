@@ -6,6 +6,7 @@ import {
   DEFAULT_MISSION_VERIFY_CMD,
   MISSION_BENCHMARK_STAGES,
   evaluateMissionBenchmarkReport,
+  missionTasksReadyForBenchmarkEvaluation,
   missionStateMentionsTerminalTasks,
   missionTaskRows,
   terminalMissionTasks,
@@ -107,6 +108,87 @@ describe("mission benchmark scenario", () => {
       localVerify: { status: "completed", exitCode: 0 },
     })
     expect(accepted).toEqual({ verdict: "accepted", failures: [] })
+  })
+
+  test("report verdict rejects completed mission tasks without evaluation verdicts", () => {
+    const base = {
+      missionID: "m1",
+      sessionID: "ses_1",
+      firstWakeCreated: true,
+      secondWakeCreated: false,
+      missionState: {
+        "frontier.md": "done",
+        "tasks.md": "task_good | completed | benchmark",
+        "handoff.md": "task_good completed; mission complete",
+        "notes.md": "investigation notes",
+      },
+      localVerify: { status: "completed", exitCode: 0 },
+    }
+
+    for (const evaluation of [undefined, {}, { verdict: "" }]) {
+      const rejected = evaluateMissionBenchmarkReport({
+        ...base,
+        missionTasks: [
+          {
+            task: {
+              id: "task_good",
+              source: "mission",
+              status: "completed",
+              metadata: { actor: "mission", mission: { id: "m1", session_id: "ses_1" } },
+            },
+            evaluation,
+          },
+        ],
+      })
+      expect(rejected.verdict).toBe("rejected")
+      expect(rejected.failures).toContain("at least one completed mission task is missing an evaluation verdict")
+    }
+
+    const rejectedByVerdict = evaluateMissionBenchmarkReport({
+      ...base,
+      missionTasks: [
+        {
+          task: {
+            id: "task_good",
+            source: "mission",
+            status: "completed",
+            metadata: { actor: "mission", mission: { id: "m1", session_id: "ses_1" } },
+          },
+          evaluation: { verdict: "rejected" },
+        },
+      ],
+    })
+    expect(rejectedByVerdict.verdict).toBe("rejected")
+    expect(rejectedByVerdict.failures).toContain("at least one completed mission task was not accepted by evaluation")
+  })
+
+  test("mission task readiness waits for completed task evaluation verdicts", () => {
+    const completedWithoutEval = [
+      {
+        task: {
+          id: "task_good",
+          source: "mission",
+          status: "completed",
+          metadata: { actor: "mission", mission: { id: "m1", session_id: "ses_1" } },
+        },
+      },
+    ]
+    const completedAccepted = [
+      {
+        ...completedWithoutEval[0],
+        evaluation: { verdict: "accepted" },
+      },
+    ]
+    const completedRejected = [
+      {
+        ...completedWithoutEval[0],
+        evaluation: { verdict: "rejected" },
+      },
+    ]
+
+    expect(missionTasksReadyForBenchmarkEvaluation(completedWithoutEval)).toBe(false)
+    expect(missionTasksReadyForBenchmarkEvaluation(completedAccepted)).toBe(true)
+    expect(missionTasksReadyForBenchmarkEvaluation(completedRejected)).toBe(true)
   })
 
   test("report verdict rejects stale mission state that has not reconciled terminal tasks", () => {
@@ -212,8 +294,14 @@ describe("mission benchmark executable wiring", () => {
 
   test("validates Mission-dispatched task provenance in the benchmark report", () => {
     expect(src).toContain("missionTaskRows")
+    expect(src).toContain("missionTasksReadyForBenchmarkEvaluation(rows)")
     expect(src).toContain("source: item.task?.source")
     expect(src).toContain("metadata: item.task?.metadata")
+  })
+
+  test("does not collapse unreadable mission state files into empty strings", () => {
+    expect(src).toContain("mission state ${file} is unreadable")
+    expect(src).not.toContain('.catch(() => "")')
   })
 
   test("disposes isolated instance state before stopping the benchmark server", () => {

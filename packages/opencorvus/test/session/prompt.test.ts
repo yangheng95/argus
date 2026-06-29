@@ -1,17 +1,23 @@
 import path from "path"
-import { describe, expect, test } from "bun:test"
-import { fileURLToPath } from "url"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Log } from "../../src/util/log"
+import { LSP } from "../../src/lsp"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
 describe("session.prompt missing file", () => {
+  afterEach(() => {
+    mock.restore()
+  })
+
   test("materializes binary data URL file parts into AttachmentStore refs before persistence", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -46,7 +52,9 @@ describe("session.prompt missing file", () => {
         })
 
         if (msg.info.role !== "user") throw new Error("expected user message")
+        expect(msg.parts.every((part) => typeof part.orderKey === "string" && part.orderKey.length > 0)).toBe(true)
         const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        expect(msg.parts.map((part) => part.orderKey)).toEqual(stored.parts.map((part) => part.orderKey))
         const filePart = stored.parts.find((part) => part.type === "file")
         if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
 
@@ -106,7 +114,50 @@ describe("session.prompt missing file", () => {
     })
   }, 20000)
 
-  test("does not fail the prompt when a file part is missing", async () => {
+  test("rejects malformed data URL file parts before message persistence", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "coding",
+            noReply: true,
+            parts: [
+              {
+                type: "file",
+                mime: "image/png",
+                filename: "broken.png",
+                url: "data:image/png;base64,not base64!*",
+              },
+            ],
+          }),
+        ).rejects.toThrow(/invalid base64 payload/)
+
+        const messages: Message.WithParts[] = []
+        for await (const item of Message.stream(session.id)) messages.push(item)
+        expect(messages).toEqual([])
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("rejects prompt creation when a local file part is missing", async () => {
+    spyOn(Provider, "getModel").mockResolvedValue({ providerID: "openai", modelID: "gpt-5.2" } as any)
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -124,36 +175,139 @@ describe("session.prompt missing file", () => {
         const session = await Session.create({ kind: "assistant" })
 
         const missing = path.join(tmp.path, "does-not-exist.ts")
-        const msg = await SessionPrompt.prompt({
-          sessionID: session.id,
-          agent: "coding",
-          noReply: true,
-          parts: [
-            { type: "text", text: "please review @does-not-exist.ts" },
-            {
-              type: "file",
-              mime: "text/plain",
-              url: `file://${missing}`,
-              filename: "does-not-exist.ts",
-            },
-          ],
-        })
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "coding",
+            noReply: true,
+            parts: [
+              { type: "text", text: "please review @does-not-exist.ts" },
+              {
+                type: "file",
+                mime: "text/plain",
+                url: pathToFileURL(missing).href,
+                filename: "does-not-exist.ts",
+              },
+            ],
+          }),
+        ).rejects.toThrow("does-not-exist.ts")
 
-        if (msg.info.role !== "user") throw new Error("expected user message")
-
-        const hasFailure = msg.parts.some(
-          (part) => part.type === "text" && part.text.includes("Host-provided file context failed to read"),
-        )
-        expect(hasFailure).toBe(true)
+        const messages = await Session.messages({ sessionID: session.id })
+        expect(
+          messages.some((message) =>
+            message.parts.some(
+              (part) => part.type === "text" && part.text.includes("Host-provided file context failed to read"),
+            ),
+          ),
+        ).toBe(false)
 
         await Session.remove(session.id)
       },
     })
   }, 20000)
 
-  test("keeps stored part order stable when file resolution is async", async () => {
+  test("rejects malformed local text file ranges without persisting downgraded content", async () => {
     await using tmp = await tmpdir({
       git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "range.ts"), "one\ntwo\nthree\n")
+      },
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cases: Array<{ query: string; message: RegExp }> = [
+          { query: "start=3x", message: /file range start must be a positive integer/ },
+          { query: "start=0", message: /file range start must be a positive integer/ },
+          { query: "start=3&end=2", message: /file range end must be greater than or equal to start/ },
+        ]
+
+        for (const item of cases) {
+          const session = await Session.create({ kind: "assistant" })
+          const file = path.join(tmp.path, "range.ts")
+          await expect(
+            SessionPrompt.prompt({
+              sessionID: session.id,
+              agent: "coding",
+              noReply: true,
+              parts: [
+                {
+                  type: "file",
+                  mime: "text/plain",
+                  url: `${pathToFileURL(file).href}?${item.query}`,
+                  filename: "range.ts",
+                },
+              ],
+            }),
+          ).rejects.toThrow(item.message)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(messages.some((message) => message.parts.some((part) => part.type === "text"))).toBe(false)
+          await Session.remove(session.id)
+        }
+      },
+    })
+  }, 20000)
+
+  test("rejects local text file symbol range when LSP document symbols fail", async () => {
+    spyOn(LSP, "documentSymbol").mockRejectedValueOnce(new Error("symbol server unavailable"))
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "symbol.ts"), "export function target() {}\n")
+      },
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const file = path.join(tmp.path, "symbol.ts")
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "coding",
+            noReply: true,
+            parts: [
+              {
+                type: "file",
+                mime: "text/plain",
+                url: `${pathToFileURL(file).href}?start=1&end=1`,
+                filename: "symbol.ts",
+              },
+            ],
+          }),
+        ).rejects.toThrow("symbol server unavailable")
+
+        const messages = await Session.messages({ sessionID: session.id })
+        expect(messages.some((message) => message.parts.some((part) => part.type === "text"))).toBe(false)
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("keeps stored part order stable when file resolution is async", async () => {
+    spyOn(Provider, "getModel").mockResolvedValue({ providerID: "openai", modelID: "gpt-5.2" } as any)
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "still-present.ts"), "const value = 42\n")
+      },
       config: {
         agent: {
           coding: {
@@ -168,7 +322,7 @@ describe("session.prompt missing file", () => {
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
 
-        const missing = path.join(tmp.path, "still-missing.ts")
+        const file = path.join(tmp.path, "still-present.ts")
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "coding",
@@ -177,8 +331,8 @@ describe("session.prompt missing file", () => {
             {
               type: "file",
               mime: "text/plain",
-              url: `file://${missing}`,
-              filename: "still-missing.ts",
+              url: pathToFileURL(file).href,
+              filename: "still-present.ts",
             },
             { type: "text", text: "after-file" },
           ],
@@ -193,7 +347,7 @@ describe("session.prompt missing file", () => {
         const text = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
 
         expect(text[0]?.startsWith("Host-provided file context (not a model tool call):")).toBe(true)
-        expect(text[1]?.includes("Host-provided file context failed to read")).toBe(true)
+        expect(text[1]).toContain("const value = 42")
         expect(text[2]).toBe("after-file")
 
         await Session.remove(session.id)

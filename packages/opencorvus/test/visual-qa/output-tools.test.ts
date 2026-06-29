@@ -32,7 +32,7 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     ],
     findings: [],
     production_blockers: [],
-    follow_up_task: null,
+    unresolved_code_module_problems: [],
     repairs: [],
     evidence: [
       {
@@ -127,13 +127,37 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("ADVISORIES")
+    expect(result).toContain("BLOCKERS")
     expect(result).toContain("without fresh visual or functional evidence")
+    expect(result).toContain("without screenshot comparison or screen-by-screen screenshot evidence")
     expect(result).toContain("without coverage items")
     expect(kit.getCollector().final?.accepted).toBe(true)
   })
 
-  test("records accepted report with blockers and follow-up as effective failure", async () => {
+  test("records accepted report without screenshot-bearing evidence as effective failure", async () => {
+    const kit = createVisualQaOutputTools()
+    const result = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        evidence: [
+          {
+            type: "command",
+            ref: "node node_modules/playwright/cli.js test visual.spec.ts",
+            note: "Command output only; no screenshot artifact was inspected.",
+          },
+        ],
+      }),
+    )
+
+    expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=false")
+    expect(result).toContain("BLOCKERS")
+    expect(result).toContain("without screenshot comparison or screen-by-screen screenshot evidence")
+    expect(kit.getCollector().final?.accepted).toBe(true)
+  })
+
+  test("records accepted report with blockers and unresolved module problems as effective failure", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(
       kit.tools,
@@ -151,21 +175,27 @@ describe("visual-qa output tools", () => {
             evidence_refs: ["artifacts/map.png"],
           },
         ],
-        follow_up_task: {
-          title: "Complete production dashboard surface",
-          request: "Continue from the current task evidence and complete the dashboard production blockers.",
-          reason: "Visual QA found blockers that require a new implementation round.",
-          priority: "high",
-          blocker_ids: ["blocker_map_fidelity"],
-        },
+        unresolved_code_module_problems: [
+          {
+            id: "problem_map_module",
+            code_module_reference: {
+              entity: "packages/app/src/components/EconomyMap.tsx",
+              problem:
+                "The map module still renders a low-fidelity placeholder instead of the required choropleth surface.",
+            },
+            reason: "Visual QA found a module-specific blocker that cannot be safely repaired in this review pass.",
+            blocker_ids: ["blocker_map_fidelity"],
+            evidence_refs: ["artifacts/map.png"],
+          },
+        ],
       }),
     )
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("ADVISORIES")
+    expect(result).toContain("BLOCKERS")
     expect(result).toContain("production blockers")
-    expect(result).toContain("follow_up_task")
+    expect(result).toContain("unresolved_code_module_problems")
     expect(kit.getCollector().final?.production_blockers[0]?.id).toBe("blocker_map_fidelity")
   })
 
@@ -190,12 +220,12 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("ADVISORIES")
-    expect(result).toContain("without browser_preview_compare_regions reference_comparison evidence refs")
+    expect(result).toContain("BLOCKERS")
+    expect(result).toContain("without reference_comparison evidence refs")
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
   })
 
-  test("records reference parity report with incomplete region coverage as advisory", async () => {
+  test("records host-derived incomplete reference coverage as advisory diagnostics", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_context_regions_${Date.now()}`
     await Instance.provide({
@@ -223,7 +253,7 @@ describe("visual-qa output tools", () => {
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
                 state: "default",
-                note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+                note: "Fresh task-scoped reference comparison evidence.",
               },
             ],
             reference_parity: {
@@ -273,7 +303,7 @@ describe("visual-qa output tools", () => {
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
                 state: "default",
-                note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+                note: "Fresh task-scoped reference comparison evidence.",
               },
             ],
             coverage: [
@@ -304,7 +334,7 @@ describe("visual-qa output tools", () => {
     })
   }, 20_000)
 
-  test("records failed report without blockers as advisory", async () => {
+  test("records failed report without blockers as blocker feedback", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(
       kit.tools,
@@ -318,11 +348,12 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
+    expect(result).toContain("BLOCKERS")
     expect(result).toContain("accepted=false was submitted without production_blockers")
     expect(kit.getCollector().final?.accepted).toBe(false)
   })
 
-  test("failed report renders production blockers and follow-up task in the terminal report", async () => {
+  test("failed report renders production blockers and unresolved module problems in the terminal report", async () => {
     const kit = createVisualQaOutputTools()
     const result = await callTool(
       kit.tools,
@@ -341,13 +372,18 @@ describe("visual-qa output tools", () => {
             evidence_refs: ["artifacts/hero.png"],
           },
         ],
-        follow_up_task: {
-          title: "Restore reference hero hierarchy",
-          request: "Continue from visual QA evidence and restore the reference hero hierarchy before final acceptance.",
-          reason: "Visual QA cannot safely complete the reference-structure repair in the current review pass.",
-          priority: "high",
-          blocker_ids: ["blocker_density"],
-        },
+        unresolved_code_module_problems: [
+          {
+            id: "problem_hero_hierarchy",
+            code_module_reference: {
+              entity: "packages/app/src/components/Hero.tsx",
+              problem: "The hero component hierarchy no longer matches the authoritative reference.",
+            },
+            reason: "Visual QA cannot safely complete the reference-structure repair in the current review pass.",
+            blocker_ids: ["blocker_density"],
+            evidence_refs: ["artifacts/hero.png"],
+          },
+        ],
       }),
     )
 
@@ -357,8 +393,9 @@ describe("visual-qa output tools", () => {
     expect(kit.buildReport().detail).toContain("## Production Blockers")
     expect(kit.buildReport().detail).toContain("blocker_density")
     expect(kit.buildReport().detail).toContain("reference-structure")
-    expect(kit.buildReport().detail).toContain("## Follow-up Task")
-    expect(kit.buildReport().detail).toContain("Restore reference hero hierarchy")
+    expect(kit.buildReport().detail).toContain("## Unresolved Code Module Problems")
+    expect(kit.buildReport().detail).toContain("problem_hero_hierarchy")
+    expect(kit.buildReport().detail).toContain("packages/app/src/components/Hero.tsx")
     expect(kit.buildReport().detail).toContain("blockers=blocker_density")
   })
 

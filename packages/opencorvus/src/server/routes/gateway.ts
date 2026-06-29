@@ -56,14 +56,12 @@ const GatewayStats = z.object({
     queries: z.number(),
     mutations: z.number(),
   }),
-  channelRuntime: z
-    .object({
-      running: z.boolean(),
-      status: z.string(),
-      channels: z.array(z.string()),
-      detail: z.string().optional(),
-    })
-    .optional(),
+  channelRuntime: z.object({
+    running: z.boolean(),
+    status: z.string(),
+    channels: z.array(z.string()),
+    detail: z.string().optional(),
+  }),
 })
 
 // Lazy schema factory — defers `ChannelIngressInput.omit(...)` evaluation so
@@ -114,7 +112,7 @@ function countByStatus(tasks: Array<{ task?: { status?: string } }>) {
 async function gatewayStats(input: z.infer<typeof GatewayStatsQuery>) {
   const [board, runtime] = await Promise.all([
     EngineService.getGlobalTaskBoard({ directory: input.directory, limit: input.limit }),
-    ChannelSupervisor.status().catch(() => undefined),
+    ChannelSupervisor.status(),
   ])
   const actions = panelCapabilities("gateway").actions
   return GatewayStats.parse({
@@ -143,16 +141,12 @@ async function gatewayStats(input: z.infer<typeof GatewayStatsQuery>) {
       queries: actions.filter((item) => item.kind === "query").length,
       mutations: actions.filter((item) => item.kind === "mutation").length,
     },
-    ...(runtime
-      ? {
-          channelRuntime: {
-            running: runtime.running,
-            status: runtime.status,
-            channels: runtime.channels,
-            detail: runtime.detail,
-          },
-        }
-      : {}),
+    channelRuntime: {
+      running: runtime.running,
+      status: runtime.status,
+      channels: runtime.channels,
+      detail: runtime.detail,
+    },
   })
 }
 

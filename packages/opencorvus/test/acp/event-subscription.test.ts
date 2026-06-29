@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
+import { pathToFileURL } from "url"
 import { ACP } from "../../src/acp/agent"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import type { Event, EventMessagePartUpdated, ToolStatePending, ToolStateRunning } from "@opencorvus-ai/sdk"
@@ -59,6 +61,7 @@ function toolEvent(
           status: "pending",
           input: opts.input,
           raw: opts.raw,
+          time: { start: Date.now() },
         }
   const payload: EventMessagePartUpdated = {
     type: "message.part.updated",
@@ -195,6 +198,7 @@ function createFakeAgent() {
     sessionCreate: 0,
   }
   const promptRequests: any[] = []
+  const sessionDeleteRequests: any[] = []
 
   const sdk = {
     global: {
@@ -213,16 +217,29 @@ function createFakeAgent() {
           },
         }
       },
-      get: async (_params?: any) => {
+      fork: async () => {
+        calls.sessionCreate++
         return {
           data: {
-            id: "ses_1",
+            id: `ses_${calls.sessionCreate}`,
+            time: { created: new Date().toISOString() },
+          },
+        }
+      },
+      get: async (params?: any) => {
+        return {
+          data: {
+            id: params?.sessionID ?? "ses_1",
             time: { created: new Date().toISOString() },
           },
         }
       },
       messages: async () => {
         return { data: [] }
+      },
+      delete: async (params?: any) => {
+        sessionDeleteRequests.push(params)
+        return { data: true }
       },
       prompt: async (params?: any) => {
         promptRequests.push(params)
@@ -304,10 +321,220 @@ function createFakeAgent() {
     ;(agent as any).eventAbort.abort()
   }
 
-  return { agent, controller, calls, updates, chunks, promptRequests, sessionUpdates, stop, sdk, connection }
+  return {
+    agent,
+    controller,
+    calls,
+    updates,
+    chunks,
+    promptRequests,
+    sessionUpdates,
+    sessionDeleteRequests,
+    stop,
+    sdk,
+    connection,
+  }
+}
+
+async function waitForSessionUpdate(
+  sessionUpdates: SessionUpdateParams[],
+  predicate: (params: SessionUpdateParams) => boolean,
+  label: string,
+): Promise<SessionUpdateParams["update"]> {
+  for (let i = 0; i < 100; i += 1) {
+    const found = sessionUpdates.find(predicate)
+    if (found) return found.update
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  const observed = sessionUpdates.map((params) => {
+    const update = params.update as any
+    return {
+      sessionUpdate: update?.sessionUpdate,
+      status: update?.status,
+      toolCallId: update?.toolCallId,
+    }
+  })
+  throw new Error(`timed out waiting for ACP session update: ${label}; observed=${JSON.stringify(observed)}`)
+}
+
+async function waitForEventSubscription(calls: { eventSubscribe: number }, label: string): Promise<void> {
+  for (let i = 0; i < 100; i += 1) {
+    if (calls.eventSubscribe > 0) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`timed out waiting for ACP event subscription: ${label}`)
 }
 
 describe("acp.agent event subscription", () => {
+  test("newSession rejects when requested MCP server attachment reports failure", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, sessionDeleteRequests, stop } = createFakeAgent()
+        let addCalls = 0
+        sdk.mcp.add = async (input: { directory?: string; name?: string }) => {
+          addCalls += 1
+          expect(input.directory).toBe(tmp.path)
+          expect(input.name).toBe("broken")
+          return {
+            data: {
+              broken: {
+                status: "failed",
+                error: "spawn failed",
+              },
+            },
+          }
+        }
+
+        try {
+          await expect(
+            agent.newSession({
+              cwd: tmp.path,
+              mcpServers: [{ name: "broken", command: "missing-command", args: [], env: [] }],
+            } as any),
+          ).rejects.toThrow("MCP server broken failed to attach with status failed: spawn failed")
+          expect(addCalls).toBe(1)
+          expect(sessionDeleteRequests).toEqual([{ sessionID: "ses_1", directory: tmp.path }])
+          await expect(
+            agent.prompt({
+              sessionId: "ses_1",
+              prompt: [{ type: "text", text: "must not prompt a failed session" }],
+            } as any),
+          ).rejects.toThrow()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession restores the previous ACP manager state when initialization fails", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, promptRequests, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+          sdk.config.providers = async () => {
+            throw new Error("providers failed during loadSession")
+          }
+
+          await expect(agent.loadSession({ sessionId, cwd: tmp.path, mcpServers: [] } as any)).rejects.toThrow(
+            "providers failed during loadSession",
+          )
+          expect(sessionDeleteRequests).toEqual([])
+
+          await agent.prompt({
+            sessionId,
+            prompt: [{ type: "text", text: "previous manager state still works" }],
+          } as any)
+          expect(promptRequests).toHaveLength(1)
+          expect(promptRequests[0].sessionID).toBe(sessionId)
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("newSession deletes the created persistent session when provider loading fails", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          sdk.config.providers = async () => {
+            throw new Error("providers failed after session create")
+          }
+
+          await expect(agent.newSession({ cwd: tmp.path, mcpServers: [] } as any)).rejects.toThrow(
+            "providers failed after session create",
+          )
+          expect(sessionDeleteRequests).toEqual([{ sessionID: "ses_1", directory: tmp.path }])
+          await expect(
+            agent.prompt({
+              sessionId: "ses_1",
+              prompt: [{ type: "text", text: "failed new session must not remain" }],
+            } as any),
+          ).rejects.toThrow()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("newSession reports cleanup failure together with initialization failure", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, stop } = createFakeAgent()
+        try {
+          sdk.mcp.add = async () => ({
+            data: {
+              broken: {
+                status: "failed",
+                error: "spawn failed",
+              },
+            },
+          })
+          sdk.session.delete = async () => {
+            throw new Error("delete cleanup failed")
+          }
+
+          const rejection = agent.newSession({
+            cwd: tmp.path,
+            mcpServers: [{ name: "broken", command: "missing-command", args: [], env: [] }],
+          } as any)
+          await expect(rejection).rejects.toThrow("ACP session initialization cleanup failed for ses_1")
+          try {
+            await rejection
+          } catch (error) {
+            expect(error).toBeInstanceOf(AggregateError)
+            const errors = (error as AggregateError).errors.map((item) =>
+              item instanceof Error ? item.message : String(item),
+            )
+            expect(errors.some((message) => message.includes("MCP server broken failed"))).toBe(true)
+            expect(errors).toContain("delete cleanup failed")
+          }
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession without previous manager state unregisters failed ACP state without deleting persistent session", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          sdk.config.providers = async () => {
+            throw new Error("providers failed during first load")
+          }
+
+          await expect(agent.loadSession({ sessionId: "ses_existing", cwd: tmp.path, mcpServers: [] } as any))
+            .rejects.toThrow("providers failed during first load")
+          expect(sessionDeleteRequests).toEqual([])
+          await expect(
+            agent.prompt({
+              sessionId: "ses_existing",
+              prompt: [{ type: "text", text: "failed load must not register" }],
+            } as any),
+          ).rejects.toThrow()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
   test("forwards https prompt image URIs as SDK file parts", async () => {
     await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
     await Instance.provide({
@@ -333,6 +560,44 @@ describe("acp.agent event subscription", () => {
           type: "file",
           url: "https://example.test/reference.png",
           filename: "image",
+          mime: "image/png",
+        })
+
+        stop()
+      },
+    })
+  })
+
+  test("forwards file prompt image URIs as SDK file parts", async () => {
+    await using tmp = await tmpdir({
+      config: ACP_TEST_CONFIG,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "reference.png"), Buffer.from("png"))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, promptRequests, stop } = createFakeAgent()
+        const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+        const imagePath = path.join(tmp.path, "reference.png")
+
+        await agent.prompt({
+          sessionId,
+          prompt: [
+            {
+              type: "image",
+              uri: pathToFileURL(imagePath).href,
+              mimeType: "image/png",
+            },
+          ],
+        } as any)
+
+        expect(promptRequests).toHaveLength(1)
+        expect(promptRequests[0].parts).toContainEqual({
+          type: "file",
+          url: pathToFileURL(imagePath).href,
+          filename: "reference.png",
           mime: "image/png",
         })
 
@@ -446,6 +711,323 @@ describe("acp.agent event subscription", () => {
         expect(calls.eventSubscribe).toBe(1)
 
         stop()
+      },
+    })
+  })
+
+  test("loadSession replays stored attachment file parts as ACP image content", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sessionUpdates, sdk, stop } = createFakeAgent()
+        try {
+          const stored = await AttachmentStore.write(
+            Instance.project.id,
+            Buffer.from("stored-image-bytes"),
+            "image/png",
+            "replay.png",
+          )
+          sdk.session.messages = async () => ({
+            data: [
+              {
+                info: {
+                  id: "msg_replay_image",
+                  role: "user",
+                  sessionID: "ses_1",
+                  time: { created: new Date().toISOString() },
+                },
+                parts: [
+                  {
+                    id: "part_replay_image",
+                    messageID: "msg_replay_image",
+                    sessionID: "ses_1",
+                    type: "file",
+                    mime: "image/png",
+                    filename: "replay.png",
+                    url: stored.url,
+                  },
+                ],
+              },
+            ],
+          })
+
+          await agent.loadSession({ sessionId: "ses_1", cwd: tmp.path, mcpServers: [] } as any)
+
+          const imageUpdate = sessionUpdates.find((params) => {
+            const update = params.update as any
+            return update.sessionUpdate === "user_message_chunk" && update.content?.type === "image"
+          })
+          expect(imageUpdate).toBeTruthy()
+          const content = (imageUpdate!.update as any).content
+          expect(content.mimeType).toBe("image/png")
+          expect(content.data).toBe(Buffer.from("stored-image-bytes").toString("base64"))
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession rejects when ACP image replay sessionUpdate fails", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, connection, sdk, stop } = createFakeAgent()
+        try {
+          const stored = await AttachmentStore.write(
+            Instance.project.id,
+            Buffer.from("stored-image-bytes"),
+            "image/png",
+            "replay.png",
+          )
+          sdk.session.messages = async () => ({
+            data: [
+              {
+                info: {
+                  id: "msg_replay_image_fail",
+                  role: "user",
+                  sessionID: "ses_replay_image_fail",
+                  time: { created: new Date().toISOString() },
+                },
+                parts: [
+                  {
+                    id: "part_replay_image_fail",
+                    messageID: "msg_replay_image_fail",
+                    sessionID: "ses_replay_image_fail",
+                    type: "file",
+                    mime: "image/png",
+                    filename: "replay.png",
+                    url: stored.url,
+                  },
+                ],
+              },
+            ],
+          })
+          const originalSessionUpdate = connection.sessionUpdate.bind(connection)
+          connection.sessionUpdate = async (params: SessionUpdateParams) => {
+            const update = params.update as any
+            if (update.sessionUpdate === "user_message_chunk" && update.content?.type === "image") {
+              throw new Error("ACP image replay unavailable")
+            }
+            return originalSessionUpdate(params)
+          }
+
+          await expect(
+            agent.loadSession({ sessionId: "ses_replay_image_fail", cwd: tmp.path, mcpServers: [] } as any),
+          ).rejects.toThrow("ACP image replay unavailable")
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession rejects malformed data URL file parts instead of replaying empty content", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sessionUpdates, sdk, stop } = createFakeAgent()
+        try {
+          sdk.session.messages = async () => ({
+            data: [
+              {
+                info: {
+                  id: "msg_malformed_data_url",
+                  role: "user",
+                  sessionID: "ses_malformed_data_url",
+                  time: { created: new Date().toISOString() },
+                },
+                parts: [
+                  {
+                    id: "part_malformed_data_url",
+                    messageID: "msg_malformed_data_url",
+                    sessionID: "ses_malformed_data_url",
+                    type: "file",
+                    mime: "text/plain",
+                    filename: "malformed.txt",
+                    url: "data:text/plain,hello%20world",
+                  },
+                ],
+              },
+            ],
+          })
+
+          await expect(
+            agent.loadSession({ sessionId: "ses_malformed_data_url", cwd: tmp.path, mcpServers: [] } as any),
+          ).rejects.toThrow('expected data URL of form "data:<mime>;base64,<bytes>"')
+          expect(
+            sessionUpdates.some((params) => {
+              const update = params.update as any
+              return update.sessionUpdate === "user_message_chunk" && update.content?.type === "resource"
+            }),
+          ).toBe(false)
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession rejects when persisted history cannot be fetched", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, stop } = createFakeAgent()
+        try {
+          sdk.session.messages = async () => {
+            throw new Error("history store unavailable")
+          }
+
+          await expect(agent.loadSession({ sessionId: "ses_history_fail", cwd: tmp.path, mcpServers: [] } as any))
+            .rejects.toThrow("history store unavailable")
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("unstable_forkSession rejects when forked history cannot be fetched", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          sdk.session.fork = async () => ({
+            data: {
+              id: "ses_forked",
+              time: { created: new Date().toISOString() },
+            },
+          })
+          sdk.session.messages = async () => {
+            throw new Error("forked history unavailable")
+          }
+
+          await expect(agent.unstable_forkSession({ sessionId: "ses_source", cwd: tmp.path, mcpServers: [] } as any))
+            .rejects.toThrow("forked history unavailable")
+          expect(sessionDeleteRequests).toEqual([{ sessionID: "ses_forked", directory: tmp.path }])
+          await expect(
+            agent.prompt({
+              sessionId: "ses_forked",
+              prompt: [{ type: "text", text: "failed fork child must not remain" }],
+            } as any),
+          ).rejects.toThrow()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("unstable_resumeSession restores previous ACP manager state when initialization fails", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, promptRequests, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+          sdk.config.providers = async () => {
+            throw new Error("providers failed during resume")
+          }
+
+          await expect(agent.unstable_resumeSession({ sessionId, cwd: tmp.path, mcpServers: [] } as any))
+            .rejects.toThrow("providers failed during resume")
+          expect(sessionDeleteRequests).toEqual([])
+
+          await agent.prompt({
+            sessionId,
+            prompt: [{ type: "text", text: "previous resumed state still works" }],
+          } as any)
+          expect(promptRequests).toHaveLength(1)
+          expect(promptRequests[0].sessionID).toBe(sessionId)
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("unstable_resumeSession without previous manager state unregisters failed ACP state", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sdk, sessionDeleteRequests, stop } = createFakeAgent()
+        try {
+          sdk.config.providers = async () => {
+            throw new Error("providers failed during first resume")
+          }
+
+          await expect(
+            agent.unstable_resumeSession({ sessionId: "ses_existing_resume", cwd: tmp.path, mcpServers: [] } as any),
+          ).rejects.toThrow("providers failed during first resume")
+          expect(sessionDeleteRequests).toEqual([])
+          await expect(
+            agent.prompt({
+              sessionId: "ses_existing_resume",
+              prompt: [{ type: "text", text: "failed resume must not register" }],
+            } as any),
+          ).rejects.toThrow()
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("loadSession replays persisted HTTPS file parts as ACP resource links", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sessionUpdates, sdk, stop } = createFakeAgent()
+        try {
+          sdk.session.messages = async () => ({
+            data: [
+              {
+                info: {
+                  id: "msg_remote_resource",
+                  role: "user",
+                  sessionID: "ses_1",
+                  time: { created: new Date().toISOString() },
+                },
+                parts: [
+                  {
+                    id: "part_remote_resource",
+                    messageID: "msg_remote_resource",
+                    sessionID: "ses_1",
+                    type: "file",
+                    mime: "image/png",
+                    filename: "remote.png",
+                    url: "https://example.test/remote.png",
+                  },
+                ],
+              },
+            ],
+          })
+
+          await agent.loadSession({ sessionId: "ses_1", cwd: tmp.path, mcpServers: [] } as any)
+
+          const resourceLink = sessionUpdates.find((params) => {
+            const update = params.update as any
+            return update.sessionUpdate === "user_message_chunk" && update.content?.type === "resource_link"
+          })
+          expect(resourceLink).toBeTruthy()
+          expect((resourceLink!.update as any).content).toMatchObject({
+            type: "resource_link",
+            uri: "https://example.test/remote.png",
+            name: "remote.png",
+            mimeType: "image/png",
+          })
+        } finally {
+          stop()
+        }
       },
     })
   })
@@ -615,9 +1197,10 @@ describe("acp.agent event subscription", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { agent, controller, sessionUpdates, stop } = createFakeAgent()
+        const { agent, controller, calls, sessionUpdates, stop } = createFakeAgent()
         const cwd = tmp.path
         const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        await waitForEventSubscription(calls, "completed tool image attachments")
         const image = await AttachmentStore.write(
           Instance.project.id,
           Buffer.from("side-by-side-png"),
@@ -628,7 +1211,7 @@ describe("acp.agent event subscription", () => {
         controller.push(
           completedToolEvent(sessionId, cwd, {
             callID: "call_compare",
-            tool: "browser_preview_compare_regions",
+            tool: "browser_preview_compare_scroll_slices",
             input: { targetID: "art_previewtarget_1" },
             output: "comparison completed",
             attachments: [
@@ -637,6 +1220,59 @@ describe("acp.agent event subscription", () => {
                 mime: image.mime,
                 filename: image.filename,
                 url: image.url,
+              },
+            ],
+          }),
+        )
+        const completed = await waitForSessionUpdate(
+          sessionUpdates,
+          (params) =>
+            params.sessionId === sessionId &&
+            params.update.sessionUpdate === "tool_call_update" &&
+            params.update.status === "completed" &&
+            params.update.toolCallId === "call_compare",
+          "completed call_compare tool image update",
+        )
+        expect(completed?.sessionUpdate).toBe("tool_call_update")
+        expect(completed?.status).toBe("completed")
+        const content = completed?.content ?? []
+        expect(
+          content.some(
+            (item: any) =>
+              item.type === "content" &&
+              item.content?.type === "image" &&
+              item.content.mimeType === "image/png" &&
+              item.content.data === Buffer.from("side-by-side-png").toString("base64"),
+          ),
+        ).toBe(true)
+        stop()
+      },
+    })
+  })
+
+  test("does not emit completed tool updates when local image attachment reads fail", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, controller, calls, sessionUpdates, stop } = createFakeAgent()
+        const cwd = tmp.path
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        await waitForEventSubscription(calls, "missing tool image attachments")
+        const missingUrl = `/attachment/${Instance.project.id}/missing-image.png`
+
+        controller.push(
+          completedToolEvent(sessionId, cwd, {
+            callID: "call_missing_image",
+            tool: "browser_preview_compare_scroll_slices",
+            input: { targetID: "art_previewtarget_missing" },
+            output: "comparison completed",
+            attachments: [
+              {
+                type: "file",
+                mime: "image/png",
+                filename: "missing-image.png",
+                url: missingUrl,
               },
             ],
           }),
@@ -650,20 +1286,52 @@ describe("acp.agent event subscription", () => {
             (update) =>
               update.sessionUpdate === "tool_call_update" &&
               update.status === "completed" &&
-              update.toolCallId === "call_compare",
+              update.toolCallId === "call_missing_image",
           )
-        expect(completed?.sessionUpdate).toBe("tool_call_update")
-        expect(completed?.status).toBe("completed")
-        const content = completed?.content ?? []
-        expect(
-          content.some(
-            (item: any) =>
-              item.type === "content" &&
-              item.content?.type === "image" &&
-              item.content.mimeType === "image/png" &&
-              item.content.data === Buffer.from("side-by-side-png").toString("base64"),
-          ),
-        ).toBe(true)
+        expect(completed).toBeUndefined()
+        stop()
+      },
+    })
+  })
+
+  test("does not emit completed tool updates when image attachment URL is unsupported", async () => {
+    await using tmp = await tmpdir({ config: ACP_TEST_CONFIG })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, controller, calls, sessionUpdates, stop } = createFakeAgent()
+        const cwd = tmp.path
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        await waitForEventSubscription(calls, "unsupported tool image attachments")
+
+        controller.push(
+          completedToolEvent(sessionId, cwd, {
+            callID: "call_remote_image",
+            tool: "browser_preview_compare_scroll_slices",
+            input: { targetID: "art_previewtarget_remote" },
+            output: "comparison completed",
+            attachments: [
+              {
+                type: "file",
+                mime: "image/png",
+                filename: "remote-image.png",
+                url: "https://example.test/remote-image.png",
+              },
+            ],
+          }),
+        )
+        await new Promise((r) => setTimeout(r, 20))
+
+        const completed = sessionUpdates
+          .filter((u) => u.sessionId === sessionId)
+          .map((u) => u.update)
+          .find(
+            (update) =>
+              update.sessionUpdate === "tool_call_update" &&
+              update.status === "completed" &&
+              update.toolCallId === "call_remote_image",
+          )
+        expect(completed).toBeUndefined()
         stop()
       },
     })

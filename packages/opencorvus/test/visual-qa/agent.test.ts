@@ -6,7 +6,6 @@ import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
 import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
 import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
-import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 
 describe("visual-qa agent", () => {
   test("runtime tool surface matches the dedicated static contract", async () => {
@@ -28,7 +27,6 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).toContain("browser_preview")
         expect(Object.keys(tools)).toContain("browser_preview_bind_local_module")
-        expect(Object.keys(tools)).toContain("browser_preview_compare_regions")
         expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
@@ -38,7 +36,6 @@ describe("visual-qa agent", () => {
         for (const info of [
           BrowserPreviewTool,
           BrowserPreviewBindLocalModuleTool,
-          BrowserPreviewCompareRegionsTool,
           BrowserPreviewCompareScrollSlicesTool,
         ]) {
           const initialized = await info.init()
@@ -79,16 +76,22 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("Do not chase visual scores or external judge verdicts")
     expect(prompt).toContain("structured report's own accepted/blocker fields")
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
+    expect(prompt).toContain("prioritize screenshot comparison")
     expect(prompt).toContain("browser_preview_bind_local_module")
-    expect(prompt).toContain("browser_preview_compare_regions")
     expect(prompt).toContain("browser_preview_compare_scroll_slices")
+    expect(prompt).toContain("inspect the page screen by screen")
+    expect(prompt).toContain("Do not judge the whole webpage from one full-page screenshot")
     expect(prompt).toContain("supporting visual_diff evidence")
-    expect(prompt).toContain("task-scoped `reference-comparison` evidence")
+    expect(prompt).toContain("`reference-comparison` evidence")
+    expect(prompt).toContain("instead of inventing proof or reference-comparison refs")
+    expect(prompt).toContain("fresh screenshot-bearing evidence")
+    expect(prompt).toContain("per-screen screenshots or scroll-slice comparisons")
     expect(prompt).toContain("Frontend Design Context")
     expect(prompt).not.toContain("Frontend Research Work Packets")
     expect(prompt).toContain("Use Node for Playwright")
-    expect(prompt).toContain("no follow_up_task")
-    expect(prompt).toContain("include follow_up_task with a complete new-round task request")
+    expect(prompt).toContain("no unresolved_code_module_problems")
+    expect(prompt).toContain("report unresolved_code_module_problems tied to blocker IDs")
+    expect(prompt).toContain("do not submit a new-task request")
   })
 
   test("product design principles render abstract prompt criteria without fixture examples", () => {

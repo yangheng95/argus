@@ -13,7 +13,7 @@ import { CronService } from "../../scheduler/cron-service"
 import { EventService } from "../../scheduler/event-service"
 import { Session } from "../../session"
 import { zodToJsonSchema } from "zod-to-json-schema"
-import { errors } from "../error"
+import { errors, namedErrorResponse } from "../error"
 import { lazy } from "../../util/lazy"
 import { NotFoundError } from "../../storage/db"
 
@@ -291,8 +291,7 @@ export const ExperimentalRoutes = lazy(() =>
       validator("json", Worktree.remove.schema),
       async (c) => {
         const body = c.req.valid("json")
-        const removed = await Worktree.removeProjectWorktree(body)
-        await Project.removeSandbox(Instance.project.id, removed.directory)
+        await Worktree.removeProjectWorktree(body)
         return c.json(true)
       },
     )
@@ -307,13 +306,13 @@ export const ExperimentalRoutes = lazy(() =>
             description: "Worktree reset",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
-          ...errors(400),
+          ...errors(400, 404),
         },
       }),
       validator("json", Worktree.reset.schema),
       async (c) => {
         const body = c.req.valid("json")
-        await Worktree.reset(body)
+        await Worktree.resetProjectWorktree(body)
         return c.json(true)
       },
     )
@@ -328,6 +327,7 @@ export const ExperimentalRoutes = lazy(() =>
             description: "Scheduled tasks",
             content: { "application/json": { schema: resolver(z.array(CronJobView)) } },
           },
+          ...errors(400),
         },
       }),
       validator("query", ProjectScopedRouteQuery),
@@ -349,6 +349,7 @@ export const ExperimentalRoutes = lazy(() =>
               },
             },
           },
+          ...errors(400, 404),
         },
       }),
       validator("json", CreateScheduleBody),
@@ -367,6 +368,7 @@ export const ExperimentalRoutes = lazy(() =>
             description: "Cancelled",
             content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
           },
+          ...errors(400, 404),
         },
       }),
       validator("query", ProjectScopedRouteQuery),
@@ -389,6 +391,7 @@ export const ExperimentalRoutes = lazy(() =>
             description: "Event-triggered tasks",
             content: { "application/json": { schema: resolver(z.array(EventJobView)) } },
           },
+          ...errors(400),
         },
       }),
       validator("query", ProjectScopedRouteQuery),
@@ -410,6 +413,7 @@ export const ExperimentalRoutes = lazy(() =>
               },
             },
           },
+          ...errors(400, 404),
         },
       }),
       validator("json", CreateEventScheduleBody),
@@ -428,6 +432,7 @@ export const ExperimentalRoutes = lazy(() =>
             description: "Cancelled",
             content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
           },
+          ...errors(400, 404),
         },
       }),
       validator("query", ProjectScopedRouteQuery),
@@ -506,6 +511,7 @@ export const ExperimentalRoutes = lazy(() =>
             description: "MCP resources",
             content: { "application/json": { schema: resolver(z.record(z.string(), MCP.Resource)) } },
           },
+          500: namedErrorResponse("MCP resources failed", "UnknownError"),
         },
       }),
       async (c) => {

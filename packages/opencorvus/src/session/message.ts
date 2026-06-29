@@ -345,6 +345,9 @@ export namespace Message {
       status: z.literal("pending"),
       input: z.unknown(),
       raw: z.string(),
+      time: z.object({
+        start: z.number(),
+      }),
     })
     .meta({
       ref: "ToolStatePending",
@@ -472,6 +475,26 @@ export namespace Message {
     })
   export type Part = z.infer<typeof Part>
 
+  export const VisiblePart = z
+    .discriminatedUnion("type", [
+      TextPart.extend({ orderKey: z.string().min(1) }),
+      SubtaskPart.extend({ orderKey: z.string().min(1) }),
+      ReasoningPart.extend({ orderKey: z.string().min(1) }),
+      FilePart.extend({ orderKey: z.string().min(1) }),
+      ToolPart.extend({ orderKey: z.string().min(1) }),
+      StepStartPart.extend({ orderKey: z.string().min(1) }),
+      StepFinishPart.extend({ orderKey: z.string().min(1) }),
+      SnapshotPart.extend({ orderKey: z.string().min(1) }),
+      PatchPart.extend({ orderKey: z.string().min(1) }),
+      AgentPart.extend({ orderKey: z.string().min(1) }),
+      RetryPart.extend({ orderKey: z.string().min(1) }),
+      CompactionPart.extend({ orderKey: z.string().min(1) }),
+    ])
+    .meta({
+      ref: "VisibleMessagePart",
+    })
+  export type VisiblePart = z.infer<typeof VisiblePart>
+
   export const Assistant = Base.extend({
     role: z.literal("assistant"),
     time: z.object({
@@ -520,11 +543,21 @@ export namespace Message {
   })
   export type Info = z.infer<typeof Info>
 
+  export const VisibleInfo = z
+    .discriminatedUnion("role", [
+      User.extend({ orderKey: z.string().min(1) }),
+      Assistant.extend({ orderKey: z.string().min(1) }),
+    ])
+    .meta({
+      ref: "VisibleMessage",
+    })
+  export type VisibleInfo = z.infer<typeof VisibleInfo>
+
   export const Event = {
     Updated: BusEvent.define(
       "message.updated",
       z.object({
-        info: Info,
+        info: VisibleInfo,
       }),
       { tier: 3 },
     ),
@@ -539,7 +572,8 @@ export namespace Message {
     PartUpdated: BusEvent.define(
       "message.part.updated",
       z.object({
-        part: Part,
+        orderKey: z.string().min(1),
+        part: VisiblePart,
       }),
       { tier: 3 },
     ),
@@ -570,6 +604,16 @@ export namespace Message {
     parts: z.array(Part),
   })
   export type WithParts = z.infer<typeof WithParts>
+
+  export const VisibleWithParts = z
+    .object({
+      info: VisibleInfo,
+      parts: z.array(VisiblePart),
+    })
+    .meta({
+      ref: "VisibleMessageWithParts",
+    })
+  export type VisibleWithParts = z.infer<typeof VisibleWithParts>
 
   /**
    * Tools whose output is a snapshot of current task state (no side effects,
@@ -1125,7 +1169,7 @@ export namespace Message {
   }
 
   function persistedPart(row: typeof PartTable.$inferSelect): Message.Part {
-    return {
+    const part = {
       ...row.data,
       id: row.id,
       sessionID: row.session_id,
@@ -1135,7 +1179,15 @@ export namespace Message {
         time: row.time_created,
         id: row.id,
       }),
-    } as Message.Part
+    }
+    const parsed = VisiblePart.safeParse(part)
+    if (!parsed.success) {
+      const issues = parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+        .join("; ")
+      throw new Error(`Session.persistedPart: persisted part ${row.id} violates Message.VisiblePart: ${issues}`)
+    }
+    return parsed.data
   }
 
   export const stream = fn(Identifier.schema("session"), async function* (sessionID) {

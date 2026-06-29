@@ -23,6 +23,7 @@ import {
   FrontendTemplateBasicsToolInputSchema,
   FrontendTemplateCompactItemToolInputSchema,
   FrontendTemplateMarkdownSectionToolInputSchema,
+  FrontendReferenceArtifactToolInputSchema,
   FrontendTemplateStringItemToolInputSchema,
   FrontendTemplateSubmitSchema,
   FrontendTemplateToolInputSchema,
@@ -52,6 +53,104 @@ type FrontendTemplateDraft = Partial<FrontendTemplateToolInput>
 const StaticHtmlScreenshotScript = String.raw`
 const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
 
+function opencorvusActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.message === "string") return event + " " + payload.message;
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.text === "string") return event + " " + payload.text;
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+function opencorvusTaggedInactivityError(message) {
+  const error = new Error(message);
+  error.opencorvusBrowserInactivity = true;
+  return error;
+}
+
+function opencorvusIsBrowserInactivityError(error) {
+  return Boolean(error && error.opencorvusBrowserInactivity === true);
+}
+
+function installOpencorvusBrowserFailureTracker(page, label) {
+  const failures = [];
+  const listeners = [];
+  const record = (source) => {
+    if (!failures.includes(source)) failures.push(source);
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    if (status >= 400) record(opencorvusActivityLabel("response", payload) + " HTTP " + status);
+  });
+  on("requestfailed", (payload) => record(opencorvusActivityLabel("requestfailed", payload)));
+  on("pageerror", (payload) => record(opencorvusActivityLabel("pageerror", payload)));
+  return {
+    assertNoFailures(stage) {
+      if (failures.length > 0) throw new Error(label + " browser failure before " + stage + ": " + failures.join("; "));
+    },
+    dispose() {
+      for (const [event, handler] of listeners) page.off(event, handler);
+    },
+  };
+}
+
+async function opencorvusWithBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(opencorvusTaggedInactivityError(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    rejectInactive(new Error(label + " browser failure before evidence capture: " + source));
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(opencorvusActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    if (status >= 400) {
+      fail(opencorvusActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(opencorvusActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => fail(opencorvusActivityLabel("requestfailed", payload)));
+  on("pageerror", (payload) => fail(opencorvusActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 function decodePayload() {
   const raw = Buffer.from(process.env.OPENCORVUS_FRONTEND_RENDER_PAYLOAD || "", "base64").toString("utf8");
   return JSON.parse(raw);
@@ -71,8 +170,30 @@ function decodePayload() {
       viewport: { width: payload.viewport.width, height: payload.viewport.height },
       deviceScaleFactor: 1,
     });
-    await page.goto(payload.url, { waitUntil: "networkidle", timeout: payload.timeoutMs });
-    const bytes = await page.screenshot({ type: "png", fullPage: false });
+    const browserFailures = installOpencorvusBrowserFailureTracker(page, "static HTML screenshot");
+    let bytes;
+    try {
+      await opencorvusWithBrowserInactivity(
+        page,
+        "navigate " + payload.url,
+        payload.timeoutMs,
+        () => page.goto(payload.url, { waitUntil: "domcontentloaded", timeout: 0 }),
+      );
+      await opencorvusWithBrowserInactivity(
+        page,
+        "networkidle " + payload.url,
+        Math.min(5000, payload.timeoutMs),
+        () => page.waitForLoadState("networkidle", { timeout: 0 }),
+      ).catch((error) => {
+        if (opencorvusIsBrowserInactivityError(error)) return undefined;
+        throw error;
+      });
+      browserFailures.assertNoFailures("evidence capture");
+      bytes = await page.screenshot({ type: "png", fullPage: false });
+      browserFailures.assertNoFailures("evidence capture");
+    } finally {
+      browserFailures.dispose();
+    }
     process.stdout.write(JSON.stringify({ ok: true, screenshotBase64: bytes.toString("base64") }));
   } catch (error) {
     process.stdout.write(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
@@ -225,7 +346,7 @@ function renderVisualValidationEvidence(
         `  - rendered_entrypoint: ${item.rendered_entrypoint}`,
         `  - renderer: ${item.renderer}`,
         `  - viewport: ${item.viewport}`,
-        `  - screenshot_artifact: ${item.screenshot_artifact}`,
+        `  - rendered_skeleton_preview_artifact: ${item.screenshot_artifact}`,
         `  - source_reference_artifact: ${item.source_reference_artifact}`,
         `  - screenshot_sha256: ${item.screenshot_sha256}`,
         `  - source_reference_sha256: ${item.source_reference_sha256}`,
@@ -1214,7 +1335,7 @@ export async function renderVisualHtmlSkeletonScreenshotForValidation(input: {
       viewport: input.viewport,
     },
     payloadEnvName: "OPENCORVUS_FRONTEND_RENDER_PAYLOAD",
-    hardTimeoutMs: timeoutMs + 10_000,
+    inactivityTimeoutMs: timeoutMs + 10_000,
     label: "frontend visual baseline static render",
   })
   if (!sidecar.result.ok) {
@@ -1563,11 +1684,11 @@ export function createFrontendTemplateOutputTools(
 
     update_frontend_reference: tool({
       description:
-        "Update one canonical reference artifact path/id used as evidence. Repeated identical references are ignored.",
-      inputSchema: FrontendTemplateStringItemToolInputSchema,
+        "Update one canonical source/reference artifact path or id used as evidence. Repeated identical references are ignored. Rendered skeleton screenshots/previews must first be materialized under visual-html-skeleton/... and then registered only through update_frontend_visual_evidence.screenshot_artifact.",
+      inputSchema: FrontendReferenceArtifactToolInputSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
-        const input = FrontendTemplateStringItemToolInputSchema.parse(rawInput)
+        const input = FrontendReferenceArtifactToolInputSchema.parse(rawInput)
         const items = arrayField<string>(collector.draft, "reference_artifacts")
         const mode = appendUniqueString(items, input.value)
         collector.semantic_error = undefined

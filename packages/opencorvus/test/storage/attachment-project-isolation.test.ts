@@ -3,7 +3,7 @@ import path from "node:path"
 
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProjectTable } from "../../src/project/project.sql"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { EngineService } from "../../src/task-api"
 import { tmpdir } from "../fixture/fixture"
@@ -64,6 +64,81 @@ describe("Attachment project isolation", () => {
         source: "test",
       }),
     ).rejects.toThrow(`expected task project ${projectAID}`)
+  })
+
+  test("task attachment registration rejects caller metadata drift from canonical sidecar metadata", async () => {
+    await using project = await tmpdir()
+    const projectID = `proj_attach_meta_${Date.now()}`
+    const taskID = `tsk_attach_meta_${Date.now()}`
+    seedProject({ id: projectID, worktree: project.path })
+    seedTask({ id: taskID, projectID })
+
+    const ref = await AttachmentStore.write(projectID, Buffer.from("canonical-bytes"), "image/png", "canonical.png")
+    const drifted = {
+      ...ref,
+      sha: "0".repeat(64),
+      mime: "text/plain",
+      size: ref.size + 1,
+      filename: "caller.png",
+    }
+
+    await expect(EngineService.appendTaskAttachment(taskID, drifted)).rejects.toThrow(
+      "file metadata does not match canonical AttachmentStore metadata (sha, mime, size, filename)",
+    )
+    await expect(
+      EngineService.appendTaskSystemArtifact(taskID, {
+        ...drifted,
+        intent: "visual_reference",
+        source: "test",
+      }),
+    ).rejects.toThrow("file metadata does not match canonical AttachmentStore metadata")
+
+    const task = Database.use((db) =>
+      db
+        .select({
+          attachments: EngineTaskTable.attachments,
+          systemArtifacts: EngineTaskTable.system_artifacts,
+        })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.id, taskID))
+        .get(),
+    )
+    expect(task?.attachments).toBeNull()
+    expect(task?.systemArtifacts).toEqual([])
+  })
+
+  test("task system artifact registration stores AttachmentStore metadata with caller semantic intent only", async () => {
+    await using project = await tmpdir()
+    const projectID = `proj_attach_semantic_${Date.now()}`
+    const taskID = `tsk_attach_semantic_${Date.now()}`
+    seedProject({ id: projectID, worktree: project.path })
+    seedTask({ id: taskID, projectID })
+
+    const ref = await AttachmentStore.write(projectID, Buffer.from("semantic-bytes"), "image/png", "canonical.png")
+    await EngineService.appendTaskSystemArtifact(taskID, {
+      ...ref,
+      intent: "rendered_output",
+      source: "test",
+    })
+
+    const task = Database.use((db) =>
+      db
+        .select({ systemArtifacts: EngineTaskTable.system_artifacts })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.id, taskID))
+        .get(),
+    )
+    expect(task?.systemArtifacts).toEqual([
+      {
+        sha: ref.sha,
+        url: ref.url,
+        mime: ref.mime,
+        size: ref.size,
+        filename: ref.filename,
+        intent: "rendered_output",
+        source: "test",
+      },
+    ])
   })
 
   test("build staging rejects attachment refs from another project", async () => {

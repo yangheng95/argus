@@ -1,3 +1,5 @@
+import { compareTimelineOrderKeys, timelineMessageOrderKey, timelineOrderKey } from "@/timeline/order"
+
 export interface ConversationPhaseLocation {
   stepID: string
   phaseID: string
@@ -5,6 +7,7 @@ export interface ConversationPhaseLocation {
 
 export interface ConversationSessionView {
   sessionID: string
+  orderKey: string
   stage: string
   parentSessionID?: string
   goalID?: string
@@ -21,6 +24,7 @@ export interface ConversationSessionView {
 
 export interface ConversationMessageView {
   messageID: string
+  orderKey: string
   sessionID: string
   stage: string
   parentSessionID?: string
@@ -38,6 +42,7 @@ export interface ConversationView {
 
 export interface ConversationAgentSessionLedgerEntry {
   sessionID: string
+  orderKey: string
   stage: string
   parentSessionID?: string
   goalID?: string
@@ -57,6 +62,10 @@ interface ConversationLifecycleEvent {
   timestamp?: number
   payload?: Record<string, unknown>
   properties?: Record<string, unknown>
+}
+
+export function conversationTranscriptMessageOrder(left: any, right: any): number {
+  return compareTimelineOrderKeys(timelineMessageOrderKey(left), timelineMessageOrderKey(right))
 }
 
 function stageFromChannel(channel: unknown): string {
@@ -103,7 +112,8 @@ function shouldIncludeAgentStage(stage: string): boolean {
 }
 
 function statusFromLifecycleStatus(status: unknown): NonNullable<ConversationSessionView["status"]> {
-  const value = status && typeof status === "object" && !Array.isArray(status) ? (status as Record<string, unknown>) : {}
+  const value =
+    status && typeof status === "object" && !Array.isArray(status) ? (status as Record<string, unknown>) : {}
   const type = String(value.type || "")
   if (type === "streaming" || type === "retry") return "running"
   if (type === "idle") return "idle"
@@ -162,7 +172,11 @@ function applyLedgerSession(
   const stage = stageFromLedgerStage(ledger.stage)
   if (!shouldIncludeAgentStage(stage)) return
   const observedAt = Number(ledger.timeCreated || 0)
-  if (!(observedAt > 0)) throw new Error(`projectConversationAgentView: ledger session ${sessionID} missing timeCreated`)
+  if (!(observedAt > 0))
+    throw new Error(`projectConversationAgentView: ledger session ${sessionID} missing timeCreated`)
+  if (typeof ledger.orderKey !== "string" || !ledger.orderKey) {
+    throw new Error(`projectConversationAgentView: ledger session ${sessionID} missing orderKey`)
+  }
   const lastObservedAt = Math.max(observedAt, Number(ledger.timeUpdated || 0))
   const parentSessionID = String(ledger.parentSessionID || "")
   const goalID = String(ledger.goalID || "")
@@ -172,6 +186,7 @@ function applyLedgerSession(
   if (!existing) {
     const created: ConversationSessionView = {
       sessionID,
+      orderKey: ledger.orderKey,
       stage,
       parentSessionID: parentSessionID || undefined,
       goalID: goalID || undefined,
@@ -231,9 +246,7 @@ export function projectConversationView(
   transcript: any[],
   lifecycleEvents: ConversationLifecycleEvent[] = [],
 ): ConversationView {
-  const sorted = [...(Array.isArray(transcript) ? transcript : [])].sort(
-    (left, right) => Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
-  )
+  const sorted = [...(Array.isArray(transcript) ? transcript : [])].sort(conversationTranscriptMessageOrder)
 
   const bySession = new Map<string, ConversationSessionView>()
   const messages: ConversationMessageView[] = []
@@ -255,8 +268,10 @@ export function projectConversationView(
     const phase = phaseLocation(board, stage)
     const placement = placementOf(board, stage, goalID)
     if (displayMessageID) {
+      const orderKey = timelineMessageOrderKey(message)
       messages.push({
         messageID,
+        orderKey,
         sessionID,
         stage,
         parentSessionID: parentSessionID || undefined,
@@ -277,6 +292,11 @@ export function projectConversationView(
     }
     bySession.set(sessionID, {
       sessionID,
+      orderKey: timelineOrderKey({
+        domain: "session",
+        time: created,
+        id: sessionID,
+      }),
       stage,
       parentSessionID: parentSessionID || undefined,
       goalID: goalID || undefined,
@@ -291,7 +311,9 @@ export function projectConversationView(
     })
   }
   void lifecycleEvents
-  const sessions = [...bySession.values()].sort((left, right) => left.firstMessageTime - right.firstMessageTime)
+  const sessions = [...bySession.values()].sort((left, right) => {
+    return compareTimelineOrderKeys(left.orderKey, right.orderKey)
+  })
   const topLevelSessionIDs = sessions
     .filter((session) => session.placement === "top_level" && session.messageIDs.length > 0)
     .map((session) => session.sessionID)
@@ -325,10 +347,14 @@ export function projectConversationAgentView(
     if (!existing.goalID && session.goalID) existing.goalID = session.goalID
   }
   const sessionStatusEvents = [...lifecycleEvents].filter((event) => event.type === "session.status")
-  for (const event of sessionStatusEvents.sort((left, right) => lifecycleObservedAt(left) - lifecycleObservedAt(right))) {
+  for (const event of sessionStatusEvents.sort(
+    (left, right) => lifecycleObservedAt(left) - lifecycleObservedAt(right),
+  )) {
     applyLifecycleSession(board, bySession, event)
   }
-  const sessions = [...bySession.values()].sort((left, right) => left.firstMessageTime - right.firstMessageTime)
+  const sessions = [...bySession.values()].sort((left, right) => {
+    return compareTimelineOrderKeys(left.orderKey, right.orderKey)
+  })
   const sessionIDs = new Set(sessions.map((session) => session.sessionID))
   return {
     topLevelSessionIDs: sessions

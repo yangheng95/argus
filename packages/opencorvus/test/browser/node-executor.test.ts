@@ -59,19 +59,39 @@ describe("browser Node sidecar executor", () => {
     ).rejects.toThrow("diagnostic detail")
   })
 
-  test("kills a sidecar that exceeds the hard timeout", async () => {
+  test("does not kill a sidecar that keeps emitting output past the inactivity timeout", async () => {
+    const run = await execute<{ ok: true }>(
+      `
+      let count = 0;
+      const timer = setInterval(() => {
+        process.stderr.write("tick");
+        count += 1;
+        if (count === 4) {
+          clearInterval(timer);
+          process.stdout.write(JSON.stringify({ ok: true }));
+        }
+      }, 150);
+    `,
+      {},
+      { inactivityTimeoutMs: 500 },
+    )
+
+    expect(run.result).toEqual({ ok: true })
+  })
+
+  test("kills a silent sidecar after one inactive timeout window", async () => {
     await expect(
       execute(
         `
       setTimeout(() => {}, 10_000);
     `,
         {},
-        { hardTimeoutMs: 25 },
+        { inactivityTimeoutMs: 25 },
       ),
-    ).rejects.toThrow("timed out after 25ms")
+    ).rejects.toThrow("inactive for 25ms")
   })
 
-  test("kills child processes when a sidecar exceeds the hard timeout", async () => {
+  test("kills child processes when a sidecar exceeds the inactivity timeout", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-node-sidecar-tree-"))
     tempDirs.push(dir)
     const childPidFile = path.join(dir, "child.pid")
@@ -90,9 +110,9 @@ describe("browser Node sidecar executor", () => {
       setInterval(() => {}, 10_000);
     `,
         { childPidFile },
-        { hardTimeoutMs: 100 },
+        { inactivityTimeoutMs: 100 },
       ),
-    ).rejects.toThrow("timed out after 100ms")
+    ).rejects.toThrow("inactive for 100ms")
 
     const childPid = Number(fs.readFileSync(childPidFile, "utf8"))
     expect(Number.isFinite(childPid) && childPid > 0).toBe(true)
@@ -109,7 +129,7 @@ describe("browser Node sidecar executor", () => {
       setTimeout(() => {}, 10_000);
     `,
         {},
-        { signal: controller.signal, hardTimeoutMs: 5_000 },
+        { signal: controller.signal, inactivityTimeoutMs: 5_000 },
       ),
     ).rejects.toThrow("executor aborted by test")
   })
@@ -137,7 +157,7 @@ function execute<TResult>(
   payload: unknown,
   options: {
     signal?: AbortSignal
-    hardTimeoutMs?: number
+    inactivityTimeoutMs?: number
   } = {},
 ): Promise<BrowserNodeSidecarRunResult<TResult>> {
   return runBrowserNodeSidecar<TResult>({
@@ -145,7 +165,7 @@ function execute<TResult>(
     script,
     payload,
     payloadEnvName: "TEST_PAYLOAD",
-    hardTimeoutMs: options.hardTimeoutMs ?? 5_000,
+    inactivityTimeoutMs: options.inactivityTimeoutMs ?? 5_000,
     signal: options.signal,
     label: "test sidecar",
   })

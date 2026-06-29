@@ -59,12 +59,14 @@ describe("panel memory routes", () => {
       headers: { "x-opencorvus-directory": projectA.path },
     })
     expect(foreignGet.status).toBe(404)
+    expect((await foreignGet.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
 
     const foreignDelete = await app.request(`/panel/knowledge/memory/${projectBFileID}`, {
       method: "DELETE",
       headers: { "x-opencorvus-directory": projectA.path },
     })
     expect(foreignDelete.status).toBe(404)
+    expect((await foreignDelete.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
 
     const ownDelete = await app.request(`/panel/knowledge/memory/${projectAFileID}`, {
       method: "DELETE",

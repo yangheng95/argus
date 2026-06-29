@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../../../overlay/test/launch"
+import { gotoWithBrowserInactivity, reloadWithBrowserInactivity } from "./browser-inactivity"
 
 const PROJECT_DIR = process.argv[2]
 if (!PROJECT_DIR) {
@@ -65,24 +66,47 @@ const codeBundle = (await Promise.all(srcFiles.map(readSafe))).join("\n")
 function run(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; timeoutMs?: number } = {},
+  opts: { cwd?: string; inactivityTimeoutMs?: number } = {},
 ): Promise<{ code: number; out: string; err: string }> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd: opts.cwd ?? ROOT, shell: true })
+    const inactivityTimeoutMs = opts.inactivityTimeoutMs ?? 600_000
     let out = "",
       err = ""
+    let settled = false
+    let inactivityTimer: ReturnType<typeof setTimeout> | undefined
+    const clearInactivityTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+      inactivityTimer = undefined
+    }
+    const finish = (code: number) => {
+      if (settled) return
+      settled = true
+      clearInactivityTimer()
+      resolve({ code, out, err })
+    }
+    const resetInactivityTimer = (source: string) => {
+      clearInactivityTimer()
+      inactivityTimer = setTimeout(() => {
+        err += `\n[audit] ${cmd} inactive for ${inactivityTimeoutMs}ms after ${source}; terminating process`
+        child.kill("SIGKILL")
+      }, inactivityTimeoutMs)
+    }
     child.stdout.on("data", (d) => {
       out += d.toString()
+      resetInactivityTimer("stdout")
     })
     child.stderr.on("data", (d) => {
       err += d.toString()
+      resetInactivityTimer("stderr")
     })
-    const t = setTimeout(() => {
-      child.kill("SIGKILL")
-    }, opts.timeoutMs ?? 600_000)
+    child.on("spawn", () => resetInactivityTimer("spawn"))
+    child.on("error", (error) => {
+      err += `\n[audit] ${cmd} failed to start: ${error instanceof Error ? error.message : String(error)}`
+      finish(-1)
+    })
     child.on("close", (code) => {
-      clearTimeout(t)
-      resolve({ code: code ?? -1, out, err })
+      finish(code ?? -1)
     })
   })
 }
@@ -90,7 +114,7 @@ function run(
 const hasNodeModules = await fileExists(path.join(ROOT, "node_modules"))
 if (!hasNodeModules) {
   console.log("[audit] npm install …")
-  const r = await run("npm", ["install", "--no-audit", "--no-fund"], { timeoutMs: 600_000 })
+  const r = await run("npm", ["install", "--no-audit", "--no-fund"], { inactivityTimeoutMs: 600_000 })
   if (r.code !== 0) {
     record("BUILD-INSTALL", "npm install", "fail", `exit=${r.code}\n${r.err.slice(-1500)}`)
   } else record("BUILD-INSTALL", "npm install", "pass", "ok")
@@ -100,7 +124,7 @@ const pkgJson = pkg ? JSON.parse(pkg) : {}
 const hasBuild = !!pkgJson.scripts?.build
 if (hasBuild) {
   console.log("[audit] npm run build …")
-  const r = await run("npm", ["run", "build"], { timeoutMs: 300_000 })
+  const r = await run("npm", ["run", "build"], { inactivityTimeoutMs: 300_000 })
   if (r.code !== 0) record("BUILD", "npm run build", "fail", `exit=${r.code}\n${(r.err || r.out).slice(-2000)}`)
   else record("BUILD", "npm run build", "pass", "ok")
 } else record("BUILD", "npm run build", "fail", "no build script")
@@ -108,6 +132,16 @@ if (hasBuild) {
 // --- 3. boot preview ------------------------------------------------------
 let preview: ChildProcess | null = null
 let baseURL = ""
+async function fetchWithDeadline(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(new Error(`fetch inactive for ${timeoutMs}ms`)), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function startPreview(): Promise<string> {
   // Vite preview on a deterministic port
   const port = 4173 + Math.floor(Math.random() * 200)
@@ -117,23 +151,52 @@ async function startPreview(): Promise<string> {
     stdio: ["ignore", "pipe", "pipe"],
   })
   let log = ""
+  let previewExit: { code: number | null; signal: NodeJS.Signals | null } | null = null
   preview.stdout?.on("data", (d) => {
     log += d.toString()
+    markPreviewActivity("stdout")
   })
   preview.stderr?.on("data", (d) => {
     log += d.toString()
+    markPreviewActivity("stderr")
+  })
+  preview.on("exit", (code, signal) => {
+    previewExit = { code, signal }
+    log += `\n[audit] preview exited code=${code ?? "null"} signal=${signal ?? "null"}`
+    markPreviewActivity("stderr")
   })
   // Wait until "Local:" line shows up (vite logs the URL)
   const url = `http://127.0.0.1:${port}/`
-  const t0 = Date.now()
-  while (Date.now() - t0 < 30_000) {
+  const previewStartupInactivityTimeoutMs = 30_000
+  let lastPreviewActivityAt = Date.now()
+  function markPreviewActivity(source: "stdout" | "stderr" | "authoritative-probe"): void {
+    lastPreviewActivityAt = Date.now()
+    log += `\n[audit] preview activity: ${source}`
+  }
+  while (Date.now() - lastPreviewActivityAt < previewStartupInactivityTimeoutMs) {
+    if (previewExit) {
+      throw new Error(
+        `vite preview exited before startup code=${previewExit.code ?? "null"} signal=${previewExit.signal ?? "null"}: ${log.slice(-1000)}`,
+      )
+    }
     try {
-      const resp = await fetch(url).catch(() => null)
-      if (resp && resp.ok) return url
-    } catch {}
+      const remaining = previewStartupInactivityTimeoutMs - (Date.now() - lastPreviewActivityAt)
+      const resp = await fetchWithDeadline(url, Math.max(100, Math.min(2_000, remaining)))
+      if (resp.ok && log.includes(`127.0.0.1:${port}`)) {
+        markPreviewActivity("authoritative-probe")
+        return url
+      }
+      if (resp.ok) {
+        await new Promise((r) => setTimeout(r, 500))
+        continue
+      }
+      throw new Error(`vite preview returned HTTP ${resp.status}`)
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("vite preview returned HTTP ")) throw err
+    }
     await new Promise((r) => setTimeout(r, 500))
   }
-  throw new Error(`vite preview did not come up: ${log.slice(-1000)}`)
+  throw new Error(`vite preview inactive for ${previewStartupInactivityTimeoutMs}ms: ${log.slice(-1000)}`)
 }
 
 try {
@@ -154,8 +217,16 @@ if (baseURL) {
   page.on("console", (m) => {
     if (m.type() === "error") consoleErrors.push(`console.error: ${m.text()}`)
   })
+  page.on("response", (response) => {
+    const status = response.status()
+    if (status >= 400) consoleErrors.push(`http ${status}: ${response.url()}`)
+  })
+  page.on("requestfailed", (request) => {
+    const failure = request.failure()
+    consoleErrors.push(`requestfailed: ${request.url()}${failure?.errorText ? ` ${failure.errorText}` : ""}`)
+  })
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(baseURL, { waitUntil: "networkidle", timeout: 30_000 })
+  await gotoWithBrowserInactivity(page, baseURL, "networkidle", 30_000)
   await new Promise((r) => setTimeout(r, 1500))
   await page.screenshot({ path: path.join(REPORT_DIR, "01-desktop-default.png"), fullPage: true })
 }
@@ -163,18 +234,6 @@ if (baseURL) {
 async function shot(name: string) {
   if (!page) return
   await page.screenshot({ path: path.join(REPORT_DIR, name), fullPage: true })
-}
-
-// helpers to drive common interactions; resilient to button-naming variation.
-async function clickByText(text: string): Promise<boolean> {
-  if (!page) return false
-  return await page.evaluate((t) => {
-    const buttons = Array.from(document.querySelectorAll("button, [role=button], .button, .btn"))
-    const target = buttons.find((b) => (b.textContent || "").trim() === t) as HTMLElement | undefined
-    if (!target) return false
-    target.click()
-    return true
-  }, text)
 }
 
 async function readDisplay(): Promise<string> {
@@ -312,20 +371,126 @@ if (page && baseURL) {
         : "no rendered live expression evidence",
   )
 
-  // R6: history panel — exists, max 20, click-to-fill, clear-history
-  const histRefs = {
-    cap20:
-      /(?:max|MAX|HISTORY_LIMIT|MAX_HISTORY)\s*[:=]\s*20|\.slice\(\s*-?20\s*\)|\.slice\(0,\s*20\s*\)|\.length\s*>\s*20|history.*20|20.*history/.test(
-        codeBundle,
+  // R6: history panel — rendered cap, clear action, click-to-fill, persistence
+  const historyBeforeClick = await page.evaluate(() => {
+    function visible(element: HTMLElement): boolean {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+    }
+    function historyElements(): HTMLElement[] {
+      const semantic = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          "[data-testid*=history i], [data-ui*=history i], .history, .history-item, [class*=history i], [id*=history i]",
+        ),
+      ).filter(visible)
+      const scoped = semantic.flatMap((root) =>
+        Array.from(root.querySelectorAll<HTMLElement>("button, [role=button], li, [data-testid], [data-ui]")).filter(
+          visible,
+        ),
+      )
+      return [...new Set([...semantic, ...scoped])].filter((element) => {
+        const text = (element.textContent || "").replace(/\s+/g, " ").trim()
+        return /\d/.test(text) && /[+\-*/=]|÷|×|√|%/.test(text)
+      })
+    }
+    function clearControl(): HTMLElement | undefined {
+      return Array.from(document.querySelectorAll<HTMLElement>("button, [role=button]")).find((element) => {
+        if (!visible(element)) return false
+        const text = `${element.textContent || ""} ${element.getAttribute("aria-label") || ""}`
+        const meta = `${element.id} ${element.className}`
+        return /clear.*history|history.*clear|清空.*历史|历史.*清空/i.test(`${text} ${meta}`)
+      })
+    }
+    const items = historyElements()
+    const storage = Object.keys(localStorage)
+      .filter((key) => /history/i.test(key))
+      .map((key) => ({ key, value: localStorage.getItem(key) || "" }))
+    return {
+      count: items.length,
+      sample: items.slice(0, 5).map((item) => (item.textContent || "").replace(/\s+/g, " ").trim()),
+      hasClear: !!clearControl(),
+      hasPersistedStorage: storage.some((entry) => entry.value.trim().length > 2),
+    }
+  })
+  const historyFillBack = historyBeforeClick.count
+    ? await page.evaluate(() => {
+        function visible(element: HTMLElement): boolean {
+          const rect = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+        }
+        const item = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            "[data-testid*=history i] button, [data-ui*=history i] button, .history button, .history-item, [class*=history i] button, [id*=history i] button",
+          ),
+        ).find((element) => visible(element) && /\d/.test(element.textContent || ""))
+        if (!item) return false
+        item.click()
+        return true
+      })
+    : false
+  await new Promise((r) => setTimeout(r, 200))
+  const historyDisplayAfterClick = historyFillBack ? await readDisplay() : ""
+  await reloadWithBrowserInactivity(page, "networkidle", 30_000)
+  await new Promise((r) => setTimeout(r, 500))
+  const historyAfterReload = await page.evaluate(() => {
+    function visible(element: HTMLElement): boolean {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+    }
+    const historyItems = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "[data-testid*=history i] button, [data-ui*=history i] button, .history button, .history-item, [class*=history i] button, [id*=history i] button",
       ),
-    clearHistory: /clear[_-]?history|clearHistory|清空历史/i.test(codeBundle),
-    clickToFill: /history.*click|clickHistory|onHistoryClick|历史.*点击|click.*history/i.test(codeBundle),
-    persist: /localStorage.*history|history.*localStorage/i.test(codeBundle),
-  }
-  record("R6-cap20", "history cap = 20", histRefs.cap20 ? "pass" : "fail", histRefs.cap20 ? "" : "no cap-20 evidence")
-  record("R6-clear", "clear history present", histRefs.clearHistory ? "pass" : "fail", "")
-  record("R6-fillback", "click history to fill back", histRefs.clickToFill ? "pass" : "fail", "")
-  record("R6-persist", "history persisted to localStorage", histRefs.persist ? "pass" : "fail", "")
+    ).filter((element) => {
+      const text = (element.textContent || "").replace(/\s+/g, " ").trim()
+      return visible(element) && /\d/.test(text) && /[+\-*/=]|÷|×|√|%/.test(text)
+    })
+    const item = historyItems[0]
+    if (item) item.click()
+    return {
+      count: historyItems.length,
+      sample: historyItems.slice(0, 5).map((element) => (element.textContent || "").replace(/\s+/g, " ").trim()),
+      clicked: !!item,
+    }
+  })
+  await new Promise((r) => setTimeout(r, 200))
+  const historyDisplayAfterReloadClick = historyAfterReload.clicked ? await readDisplay() : ""
+  record(
+    "R6-cap20",
+    "history cap = 20",
+    historyBeforeClick.count > 0 && historyBeforeClick.count <= 20 ? "pass" : "fail",
+    JSON.stringify({ count: historyBeforeClick.count, sample: historyBeforeClick.sample }),
+  )
+  record(
+    "R6-clear",
+    "clear history present",
+    historyBeforeClick.hasClear ? "pass" : "fail",
+    historyBeforeClick.hasClear ? "rendered clear-history control found" : "no rendered clear-history control",
+  )
+  record(
+    "R6-fillback",
+    "click history to fill back",
+    historyFillBack && /\d/.test(historyDisplayAfterClick) ? "pass" : "fail",
+    JSON.stringify({ clicked: historyFillBack, display: historyDisplayAfterClick }),
+  )
+  record(
+    "R6-persist",
+    "history persisted after reload",
+    historyBeforeClick.hasPersistedStorage &&
+      historyAfterReload.count > 0 &&
+      historyAfterReload.count <= 20 &&
+      /\d/.test(historyDisplayAfterReloadClick)
+      ? "pass"
+      : "fail",
+    JSON.stringify({
+      storage: historyBeforeClick.hasPersistedStorage,
+      afterReload: historyAfterReload,
+      display: historyDisplayAfterReloadClick,
+    }),
+  )
 
   // R7: keyboard already exercised (R1).  Now confirm Escape clears.
   await pressKey("Escape").catch(() => {})
@@ -341,12 +506,67 @@ if (page && baseURL) {
   record("R7-backspace", "Backspace removes one digit", /^12\b/.test(afterBs) ? "pass" : "fail", `display="${afterBs}"`)
 
   // R8: pressed-state visual feedback
-  const pressedFeedback = /:active|pressed|btn--active|button-pressed|key-pressed|active\s*\{/i.test(codeBundle)
+  const pressedTarget = await page.evaluate(() => {
+    function visible(element: HTMLElement): boolean {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+    }
+    const button = Array.from(document.querySelectorAll<HTMLElement>("button, [role=button]")).find(
+      (element) => visible(element) && /\d|[+\-*/=]|÷|×/.test(element.textContent || ""),
+    )
+    if (!button) return null
+    const rect = button.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const pressedBefore = pressedTarget
+    ? await page.evaluate(() => {
+        const button = Array.from(document.querySelectorAll<HTMLElement>("button, [role=button]")).find(
+          (element) => /\d|[+\-*/=]|÷|×/.test(element.textContent || "") && element.getBoundingClientRect().width > 0,
+        )
+        if (!button) return ""
+        const style = getComputedStyle(button)
+        return JSON.stringify({
+          className: button.className,
+          background: style.backgroundColor,
+          color: style.color,
+          transform: style.transform,
+          boxShadow: style.boxShadow,
+          filter: style.filter,
+          borderColor: style.borderColor,
+        })
+      })
+    : ""
+  if (pressedTarget) {
+    await page.mouse.move(pressedTarget.x, pressedTarget.y)
+    await page.mouse.down()
+    await new Promise((r) => setTimeout(r, 120))
+  }
+  const pressedAfter = pressedTarget
+    ? await page.evaluate(() => {
+        const button = Array.from(document.querySelectorAll<HTMLElement>("button, [role=button]")).find(
+          (element) => /\d|[+\-*/=]|÷|×/.test(element.textContent || "") && element.getBoundingClientRect().width > 0,
+        )
+        if (!button) return ""
+        const style = getComputedStyle(button)
+        return JSON.stringify({
+          className: button.className,
+          background: style.backgroundColor,
+          color: style.color,
+          transform: style.transform,
+          boxShadow: style.boxShadow,
+          filter: style.filter,
+          borderColor: style.borderColor,
+        })
+      })
+    : ""
+  if (pressedTarget) await page.mouse.up()
+  const pressedFeedback = !!pressedTarget && pressedBefore !== pressedAfter
   record(
     "R8-pressed",
     "pressed-state visual feedback",
     pressedFeedback ? "pass" : "fail",
-    "css :active or active class",
+    JSON.stringify({ hasButton: !!pressedTarget, changed: pressedFeedback }),
   )
 
   // R9: scientific notation > 12 digits
@@ -363,68 +583,185 @@ if (page && baseURL) {
   )
 
   // R10: dark default + light theme toggle persisted
-  const themeRefs = {
-    toggle: /theme[-_]toggle|toggle[-_]theme|switch[-_]theme/i.test(codeBundle),
-    storage: /localStorage.*theme|theme.*localStorage/i.test(codeBundle),
-    darkClass: /\bdata-theme\b|\btheme-dark\b|\.dark\b|prefers-color-scheme/i.test(codeBundle),
-  }
-  record("R10-toggle", "theme toggle exists", themeRefs.toggle ? "pass" : "fail", "")
-  record("R10-storage", "theme persisted to localStorage", themeRefs.storage ? "pass" : "fail", "")
-  record("R10-dark-default", "dark theme as default", themeRefs.darkClass ? "pass" : "fail", "")
-  // capture light-theme screenshot if a toggle is clickable
-  const togglerSelectors = [
-    "[data-testid=theme-toggle]",
-    ".theme-toggle",
-    "#theme-toggle",
-    "button[aria-label*=theme i]",
-    "button[aria-label*=主题 i]",
-  ]
-  let toggled = false
-  for (const sel of togglerSelectors) {
-    const ok = await page.$(sel)
-    if (ok) {
-      try {
-        await ok.click()
-        toggled = true
-        break
-      } catch {}
-    }
-  }
-  if (!toggled)
-    toggled =
-      (await clickByText("☀️")) ||
-      (await clickByText("🌙")) ||
-      (await clickByText("Light")) ||
-      (await clickByText("浅色"))
+  const themePage = page
+  const readThemeState = () =>
+    themePage.evaluate(() => {
+      function rgbLuma(value: string): number | null {
+        const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(value)
+        if (!match) return null
+        const r = Number(match[1])
+        const g = Number(match[2])
+        const b = Number(match[3])
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      function themeControl(): HTMLElement | undefined {
+        const selectors = [
+          "[data-testid=theme-toggle]",
+          "[data-ui=theme-toggle]",
+          ".theme-toggle",
+          "#theme-toggle",
+          "button[aria-label*=theme i]",
+          "button[aria-label*=主题 i]",
+        ]
+        for (const selector of selectors) {
+          const element = document.querySelector<HTMLElement>(selector)
+          if (element) return element
+        }
+        const labels = /^(?:☀️|🌙|Light|Dark|浅色|深色)$/i
+        return Array.from(document.querySelectorAll<HTMLElement>("button, [role=button], .button, .btn")).find((item) =>
+          labels.test((item.textContent || "").trim()),
+        )
+      }
+      const bg = getComputedStyle(document.body).backgroundColor
+      const luma = rgbLuma(bg)
+      const rootTheme = document.documentElement.getAttribute("data-theme") || ""
+      const bodyTheme = document.body.getAttribute("data-theme") || ""
+      const classTheme = `${document.documentElement.className} ${document.body.className}`
+      const storage = Object.keys(localStorage)
+        .filter((key) => /theme/i.test(key))
+        .sort()
+        .map((key) => ({ key, value: localStorage.getItem(key) || "" }))
+      const dark =
+        /dark/i.test(`${rootTheme} ${bodyTheme} ${classTheme}`) ||
+        (luma !== null && luma < 128 && !/light/i.test(`${rootTheme} ${bodyTheme} ${classTheme}`))
+      const control = themeControl()
+      return {
+        hasToggle: !!control,
+        dark,
+        luma,
+        bg,
+        rootTheme,
+        bodyTheme,
+        classTheme,
+        storage,
+        signature: JSON.stringify({ rootTheme, bodyTheme, classTheme, bg, storage }),
+      }
+    })
+  const themeBefore = await readThemeState()
+  record(
+    "R10-toggle",
+    "theme toggle exists",
+    themeBefore.hasToggle ? "pass" : "fail",
+    themeBefore.hasToggle ? "rendered toggle control found" : "no rendered theme toggle control",
+  )
+  record(
+    "R10-dark-default",
+    "dark theme as default",
+    themeBefore.dark ? "pass" : "fail",
+    `theme=${themeBefore.rootTheme || themeBefore.bodyTheme || themeBefore.classTheme || "(none)"} bg=${themeBefore.bg}`,
+  )
+  const toggled = themeBefore.hasToggle
+    ? await themePage.evaluate(() => {
+        function themeControl(): HTMLElement | undefined {
+          const selectors = [
+            "[data-testid=theme-toggle]",
+            "[data-ui=theme-toggle]",
+            ".theme-toggle",
+            "#theme-toggle",
+            "button[aria-label*=theme i]",
+            "button[aria-label*=主题 i]",
+          ]
+          for (const selector of selectors) {
+            const element = document.querySelector<HTMLElement>(selector)
+            if (element) return element
+          }
+          const labels = /^(?:☀️|🌙|Light|Dark|浅色|深色)$/i
+          return Array.from(document.querySelectorAll<HTMLElement>("button, [role=button], .button, .btn")).find(
+            (item) => labels.test((item.textContent || "").trim()),
+          )
+        }
+        const control = themeControl()
+        if (!control) return false
+        control.click()
+        return true
+      })
+    : false
   await new Promise((r) => setTimeout(r, 300))
+  const themeAfter = await readThemeState()
+  const persistedTheme = themeAfter.storage.some((entry) => entry.value.trim().length > 0)
+  record(
+    "R10-storage",
+    "theme persisted to localStorage",
+    toggled && persistedTheme && themeAfter.signature !== themeBefore.signature ? "pass" : "fail",
+    JSON.stringify({ toggled, before: themeBefore.storage, after: themeAfter.storage }),
+  )
   await shot("04-after-theme-toggle.png")
+  await reloadWithBrowserInactivity(themePage, "networkidle", 30_000)
+  await new Promise((r) => setTimeout(r, 300))
+  const themeAfterReload = await readThemeState()
+  record(
+    "R10-reload",
+    "persisted theme restored after reload",
+    toggled && persistedTheme && themeAfterReload.signature === themeAfter.signature ? "pass" : "fail",
+    JSON.stringify({ after: themeAfter.storage, afterReload: themeAfterReload.storage, bg: themeAfterReload.bg }),
+  )
 
   // R11: layout sanity — 4 columns, large monospace display, distinct operator color
   const layout = await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll("button, [role=button]"))
-    const top = buttons.slice(0, 24).map((b) => ({
-      text: (b.textContent || "").trim(),
-      cs: (() => {
-        const r = b.getBoundingClientRect()
-        const cs = getComputedStyle(b as Element)
-        return { x: r.x, y: r.y, w: r.width, h: r.height, bg: cs.backgroundColor, color: cs.color, font: cs.fontFamily }
-      })(),
-    }))
+    const keyPattern =
+      /^(?:\d|00|\.|=|\+|−|-|×|x|\*|÷|\/|%|AC|C|CE|DEL|Delete|⌫|Back|sin|cos|tan|log|ln|sqrt|√|\(|\)|π|pi|e|x²|x\^2)$/i
+    const keys = buttons
+      .map((b) => ({
+        text: (b.textContent || "").trim(),
+        cs: (() => {
+          const r = b.getBoundingClientRect()
+          const cs = getComputedStyle(b as Element)
+          return {
+            x: r.x,
+            y: r.y,
+            w: r.width,
+            h: r.height,
+            bg: cs.backgroundColor,
+            color: cs.color,
+            font: cs.fontFamily,
+          }
+        })(),
+      }))
+      .filter((button) => button.cs.w > 0 && button.cs.h > 0 && keyPattern.test(button.text))
     const display = document.querySelector(".display, #display, .calculator__display, .screen, .main-display, .result")
     const dcs = display ? getComputedStyle(display as Element) : null
     return {
-      buttons: top,
+      buttons: keys,
       display: dcs ? { font: dcs.fontFamily, fontSize: dcs.fontSize, textAlign: dcs.textAlign } : null,
     }
   })
   await fs.writeFile(path.join(REPORT_DIR, "layout.json"), JSON.stringify(layout, null, 2))
   const xs = layout.buttons.map((b) => b.cs.x).filter((n) => Number.isFinite(n))
+  const ys = layout.buttons.map((b) => b.cs.y).filter((n) => Number.isFinite(n))
   const cols = new Set(xs.map((x) => Math.round(x / 8)))
+  const rows = new Set(ys.map((y) => Math.round(y / 8)))
+  const colorKey = (button: (typeof layout.buttons)[number]) => `${button.cs.bg}|${button.cs.color}`
+  const numberKeys = layout.buttons.filter((button) => /^(?:\d|00|\.)$/.test(button.text))
+  const operatorKeys = layout.buttons.filter((button) => /^(?:=|\+|−|-|×|x|\*|÷|\/|%|AC|C|CE|DEL|Delete|⌫|Back)$/i.test(button.text))
+  const functionKeys = layout.buttons.filter((button) => /^(?:sin|cos|tan|log|ln|sqrt|√|\(|\)|π|pi|e|x²|x\^2)$/i.test(button.text))
+  const numberColors = new Set(numberKeys.map(colorKey))
+  const operatorColors = new Set(operatorKeys.map(colorKey))
+  const functionColors = new Set(functionKeys.map(colorKey))
+  const colorDistinctFromNumbers = (colors: Set<string>) => [...colors].some((color) => !numberColors.has(color))
   record(
     "R11-grid",
-    "approximately 4-column grid",
-    cols.size >= 3 && cols.size <= 6 ? "pass" : "fail",
+    "4-column keypad grid",
+    cols.size === 4 ? "pass" : "fail",
     `unique x-buckets=${cols.size}`,
+  )
+  record(
+    "R11-rows",
+    "5-row keypad grid",
+    rows.size === 5 ? "pass" : "fail",
+    `unique y-buckets=${rows.size}`,
+  )
+  record(
+    "R11-operator-color",
+    "operator keys have distinct color",
+    numberColors.size > 0 && operatorColors.size > 0 && colorDistinctFromNumbers(operatorColors) ? "pass" : "fail",
+    JSON.stringify({ numberColors: [...numberColors], operatorColors: [...operatorColors] }),
+  )
+  record(
+    "R11-function-color",
+    "function keys have distinct color",
+    numberColors.size > 0 && functionColors.size > 0 && colorDistinctFromNumbers(functionColors) ? "pass" : "fail",
+    JSON.stringify({ numberColors: [...numberColors], functionColors: [...functionColors] }),
   )
   record(
     "R11-mono",
@@ -441,7 +778,7 @@ if (page && baseURL) {
 
   // R12: mobile 360px
   await page.setViewportSize({ width: 360, height: 720 })
-  await page.reload({ waitUntil: "networkidle" })
+  await reloadWithBrowserInactivity(page, "networkidle", 30_000)
   await new Promise((r) => setTimeout(r, 800))
   await shot("05-mobile-360.png")
   const mobileCheck = await page.evaluate(() => {
@@ -459,7 +796,7 @@ if (page && baseURL) {
     JSON.stringify(mobileCheck),
   )
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.reload({ waitUntil: "networkidle" })
+  await reloadWithBrowserInactivity(page, "networkidle", 30_000)
   await new Promise((r) => setTimeout(r, 600))
 
   // R13: no lorem / no obvious placeholder text
@@ -505,7 +842,7 @@ if (page && baseURL) {
 // --- 5. tests / typecheck -------------------------------------------------
 if (pkgJson.scripts?.["test:run"] || pkgJson.scripts?.test) {
   const r = await run("npm", ["run", pkgJson.scripts?.["test:run"] ? "test:run" : "test", "--", "--reporter=basic"], {
-    timeoutMs: 180_000,
+    inactivityTimeoutMs: 180_000,
   })
   record("TESTS", "unit tests", r.code === 0 ? "pass" : "fail", `exit=${r.code}\n${(r.err || r.out).slice(-1500)}`)
 } else record("TESTS", "unit tests", "fail", "no test script in package.json")

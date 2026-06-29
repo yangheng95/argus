@@ -194,11 +194,9 @@ const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
 const INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS = 18_000
 const INTEGRITY_EVIDENCE_LIMITS = {
   userRequestChars: 800,
-  requirements: 8,
   requirementDescriptionChars: 120,
   requirementAcceptanceChars: 100,
   requirementNonGoalChars: 80,
-  requirementStatusRows: 8,
   requirementStatusGoals: 4,
   requirementStatusSpecs: 6,
   buildDirectories: 24,
@@ -277,6 +275,7 @@ export async function reviewIntegrity(input: {
       collector,
       taskID: input.taskID,
       goals: input.goals,
+      requirements: input.requirements,
       acceptance: input.acceptance,
       frontendDesign: input.frontendDesign,
       visualQa: input.visualQa,
@@ -361,6 +360,7 @@ async function createSingleSessionIntegrityToolKit(input: {
   collector: ConsensusCollector
   taskID?: string
   goals: GoalContractFields[]
+  requirements?: ParsedRequirement[]
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
   visualQa?: string
@@ -390,11 +390,15 @@ async function createSingleSessionIntegrityToolKit(input: {
       ...evidenceTools,
       ...previewTools,
       submit_integrity_consensus: tool({
-        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. Every reviewers[] entry must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], and investigationPlan.passCriteria[]. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
+        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. Every reviewers[] entry must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], and investigationPlan.passCriteria[]. Every active Requirements-produced REQ-N must appear in reviewer coverage, findings, or requiredRepairs before final verdict. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: IntegrityTeamReportSchema,
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
           if (!parsed.success) return `Error: integrity review failed schema validation: ${parsed.error.message}`
+          const requirementCoverageIssues = integrityRequirementCoverageIssues(parsed.data, input.requirements)
+          if (requirementCoverageIssues.length > 0) {
+            return `Error: integrity review omitted active requirement coverage: ${requirementCoverageIssues.join("; ")}`
+          }
           const advisories = await summarizeIntegrityConsensusVisualEvidenceAdvisories({
             report: parsed.data,
             projectRoot: input.projectRoot,
@@ -428,11 +432,15 @@ async function summarizeIntegrityConsensusVisualEvidenceAdvisories(input: {
 }): Promise<string[]> {
   if (input.report.verdict !== "pass" || !input.visualEvidenceRequired) return []
   if (!input.taskID || !input.projectRoot) {
-    return ["pass verdict was submitted while reference visual evidence was expected, but task-scoped project context was unavailable."]
+    return [
+      "pass verdict was submitted while reference visual evidence was expected, but task-scoped project context was unavailable.",
+    ]
   }
   const bundles = input.visualEvidence ?? []
   if (bundles.length === 0) {
-    return ["pass verdict was submitted while reference visual evidence was expected, but no VisualEvidenceBundle was available."]
+    return [
+      "pass verdict was submitted while reference visual evidence was expected, but no VisualEvidenceBundle was available.",
+    ]
   }
   const advisories: string[] = []
   for (const bundle of bundles) {
@@ -450,6 +458,36 @@ async function summarizeIntegrityConsensusVisualEvidenceAdvisories(input: {
     }
   }
   return advisories
+}
+
+function integrityRequirementCoverageIssues(
+  report: IntegrityTeamReport,
+  requirements: readonly ParsedRequirement[] | undefined,
+): string[] {
+  const knownRequirementIDs = [...new Set((requirements ?? []).map((requirement) => requirement.id).filter(Boolean))]
+  if (knownRequirementIDs.length === 0) return []
+
+  const touchedRequirementIDs = new Set<string>()
+  for (const reviewer of report.reviewers) {
+    for (const row of reviewer.coverage) {
+      if (row.requirementID) touchedRequirementIDs.add(row.requirementID)
+    }
+    for (const finding of reviewer.findings) {
+      for (const requirementID of finding.requirementIDs) touchedRequirementIDs.add(requirementID)
+    }
+  }
+  for (const finding of report.findings) {
+    for (const requirementID of finding.requirementIDs) touchedRequirementIDs.add(requirementID)
+  }
+  for (const repair of report.requiredRepairs) {
+    for (const requirementID of repair.requirementIDs) touchedRequirementIDs.add(requirementID)
+  }
+
+  const missing = knownRequirementIDs.filter((requirementID) => !touchedRequirementIDs.has(requirementID))
+  if (missing.length === 0) return []
+  return [
+    `${missing.join(", ")} missing from reviewer coverage rows, findings, and requiredRepairs; each active Requirements-produced REQ-N must be explicitly covered, missing, or inconclusive before final verdict.`,
+  ]
 }
 
 async function createIntegrityPreviewTools(input: { taskID: string; signal?: AbortSignal }): Promise<ToolSet> {
@@ -517,6 +555,7 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
     buildIntegrityEvidencePrompt(input),
     "Use scoped evidence tools for the initial falsification pass: inspect overview, changed directories, goal summary, executor reports, and then exact files/diffs/runtime/visual evidence for the reviewer perspectives that matter. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
     "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces no reviewer actually inspected.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use `status:\"missing\"` or `status:\"inconclusive\"` coverage rows instead of silently skipping a REQ-N.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
@@ -574,6 +613,7 @@ export function buildSupervisorConsensusPrompt(
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
     "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked. If a reviewer report only summarizes executor claims without falsification-oriented drilldown, treat that surface as uninspected.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use missing/inconclusive coverage rows instead of silently skipping a REQ-N.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
@@ -648,9 +688,8 @@ function renderVisualEvidenceSummary(visualEvidence: VisualEvidenceBundle[]): st
 }
 
 function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
-  const visible = requirements.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirements)
-  const lines = ["# Requirements", `Rendered ${visible.length}/${requirements.length} requirements.`]
-  for (const r of visible) {
+  const lines = ["# Requirements", `Rendered all ${requirements.length} requirements.`]
+  for (const r of requirements) {
     const row = [
       `- ${r.id} (${r.type}): ${sanitizePromptBlock(r.description, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
     ]
@@ -667,17 +706,12 @@ function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
     }
     lines.push(row.join("\n"))
   }
-  appendOmittedLine(lines, requirements.length, visible.length, "requirements")
   return lines.join("\n")
 }
 
 function renderRequirementStatusSummary(rows: RequirementStatusRow[]): string {
-  const visibleRows = rows.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirementStatusRows)
-  const lines = [
-    "# Requirement Status Snapshot",
-    `Rendered ${visibleRows.length}/${rows.length} requirement status rows.`,
-  ]
-  for (const row of visibleRows) {
+  const lines = ["# Requirement Status Snapshot", `Rendered all ${rows.length} requirement status rows.`]
+  for (const row of rows) {
     lines.push(
       `## ${row.reqID}: ${sanitizePromptBlock(row.reqDescription, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
     )
@@ -697,7 +731,6 @@ function renderRequirementStatusSummary(rows: RequirementStatusRow[]): string {
     if (row.claimingGoals.length === 0) lines.push("- no claiming goal")
     appendOmittedLine(lines, row.claimingGoals.length, visibleGoals.length, "claiming goals")
   }
-  appendOmittedLine(lines, rows.length, visibleRows.length, "requirement status rows")
   return lines.join("\n")
 }
 
@@ -844,8 +877,7 @@ function renderScopeBoundedMaturityEvidenceSection(input: ReviewPromptInput): st
     "Visible bounded REQs from requirements/scope:",
   ]
   if (input.requirements?.length) {
-    const visible = input.requirements.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirements)
-    for (const req of visible) {
+    for (const req of input.requirements) {
       lines.push(
         `- ${req.id}: ${sanitizePromptBlock(req.description, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
       )
@@ -862,7 +894,6 @@ function renderScopeBoundedMaturityEvidenceSection(input: ReviewPromptInput): st
         )
       }
     }
-    appendOmittedLine(lines, input.requirements.length, visible.length, "bounded maturity requirements")
   } else {
     lines.push("- (none rendered)")
   }

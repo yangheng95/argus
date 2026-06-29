@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { decodeRawBase64Payload } from "@/session/text-mime"
 
 export interface MaterializedMcpToolResult {
   text: string
@@ -25,7 +26,7 @@ export async function materializeMcpToolResult(input: {
       attachments.push(
         await AttachmentStore.write(
           input.projectID,
-          Buffer.from(contentItem.data, "base64"),
+          decodeRawBase64Payload(contentItem.data, "MCP tool image content"),
           contentItem.mimeType,
           input.imageFilename,
         ),
@@ -34,13 +35,24 @@ export async function materializeMcpToolResult(input: {
     }
     if (contentItem.type === "resource") {
       const { resource } = contentItem
-      if ("text" in resource && resource.text) textParts.push(resource.text)
+      let materialized = false
+      if ("text" in resource && resource.text) {
+        textParts.push(resource.text)
+        materialized = true
+      }
       if ("blob" in resource && resource.blob) {
         const mime = resource.mimeType ?? "application/octet-stream"
         attachments.push(
-          await AttachmentStore.write(input.projectID, Buffer.from(resource.blob, "base64"), mime, resource.uri),
+          await AttachmentStore.write(
+            input.projectID,
+            decodeRawBase64Payload(resource.blob, `MCP tool resource blob ${resource.uri}`),
+            mime,
+            resource.uri,
+          ),
         )
+        materialized = true
       }
+      if (!materialized) throw new Error(`MCP tool resource ${resource.uri} did not return usable text or blob content`)
       continue
     }
     throw new Error(`Unsupported MCP content item type: ${(contentItem as { type?: string }).type ?? "(missing)"}`)

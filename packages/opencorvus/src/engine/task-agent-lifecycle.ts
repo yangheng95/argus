@@ -2,15 +2,9 @@ import { Session } from "@/session"
 import type { TaskRow } from "./store"
 import { findActiveRunForTask, listGoalRunsForTask } from "./store"
 import { isLiveGoalRunStatus } from "./catalog"
-import {
-  listLiveOrchestratorToolOwnership,
-  type OrchestratorToolOwnershipRow,
-} from "./tool-ownership"
+import { listLiveOrchestratorToolOwnership, type OrchestratorToolOwnershipRow } from "./tool-ownership"
 import { cancelPendingAgentCoordinationRequestsForTask } from "./agent-coordination"
-import {
-  cancelSessionPromptInScope,
-  type TaskAgentPromptSession,
-} from "./cancellation-scope"
+import { cancelSessionPromptInScope, type TaskAgentPromptSession } from "./cancellation-scope"
 
 export type TaskAgentLifecycleReport = {
   taskID: string
@@ -92,7 +86,7 @@ export async function requestTaskAgentLifecycleCancellation(input: {
     }
   }
 
-  const pendingCoordinationRequestsCancelled = cancelPendingAgentCoordinationRequestsForTask({
+  const pendingCoordinationRequestsCancelled = await cancelPendingAgentCoordinationRequestsForTask({
     taskID: input.task.id,
     reason: input.reason,
   })

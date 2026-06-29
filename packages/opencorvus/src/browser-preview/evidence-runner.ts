@@ -201,7 +201,7 @@ export async function runBrowserPreviewEvidenceJob(
       viewports,
     },
     payloadEnvName: "OPENCORVUS_BROWSER_PREVIEW_EVIDENCE_INPUT",
-    hardTimeoutMs: launchTimeoutMs + viewports.length * (navigationTimeoutMs + settleMs + 15_000) + 30_000,
+    inactivityTimeoutMs: launchTimeoutMs + viewports.length * (navigationTimeoutMs + settleMs + 15_000) + 30_000,
     label: "Browser preview evidence runner",
     signal: input.signal,
   }).catch((error) => {
@@ -279,6 +279,7 @@ export async function runBrowserPreviewRegionComparisonCapture(
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
+      navigationTimeoutMs: RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms,
       settleMs: RUNTIME_CAPTURE_DEFAULTS.settle_ms,
       viewportIDs: input.viewportIDs,
       viewportByID: Object.fromEntries(
@@ -291,7 +292,8 @@ export async function runBrowserPreviewRegionComparisonCapture(
       includeFullpageOverview: input.includeFullpageOverview,
     },
     payloadEnvName: "OPENCORVUS_BROWSER_PREVIEW_REGION_COMPARISON_INPUT",
-    hardTimeoutMs: launchTimeoutMs + input.bindings.length * 15_000 + 30_000,
+    inactivityTimeoutMs:
+      launchTimeoutMs + input.bindings.length * (RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms + 15_000) + 30_000,
     label: "Browser preview region comparison runner",
     signal: input.signal,
   }).catch((error) => {
@@ -501,6 +503,73 @@ function isResourceLoadConsoleError(text) {
   return String(text || "").trimStart().startsWith("Failed to load resource:");
 }
 
+function browserActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+async function withBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  let rejectFailure;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const browserFailure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(new Error(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    rejectFailure(new Error(label + " browser failure before evidence capture: " + source));
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(browserActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(url)) {
+      fail(browserActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(browserActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => {
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (isBrowserImplicitAssetRequest(url)) return;
+    fail(browserActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => fail(browserActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive, browserFailure]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 async function collectDom(page) {
   return page.evaluate(() => {
     const body = document.body;
@@ -695,7 +764,12 @@ async function captureViewport(browser, input, viewport) {
         window.__opencorvusCaptureUnhandledRejection?.(message);
       });
     });
-    const response = await page.goto(input.url, { waitUntil: "load", timeout: input.navigationTimeoutMs });
+    const response = await withBrowserInactivity(
+      page,
+      "navigate " + input.url,
+      input.navigationTimeoutMs,
+      () => page.goto(input.url, { waitUntil: "load", timeout: 0 }),
+    );
     const status = response?.status() || 0;
     const contentType = String(response?.headers()["content-type"] || "").toLowerCase();
     const bodyBuf = response ? await response.body() : Buffer.alloc(0);
@@ -812,6 +886,60 @@ function routeUrl(base, route) {
   return new URL(route || "/", base).toString();
 }
 
+function browserActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+function isResourceLoadConsoleError(text) {
+  return String(text || "").trimStart().startsWith("Failed to load resource:");
+}
+
+async function withBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(new Error(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(browserActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && isBrowserImplicitAssetRequest(url)) return;
+    reset(browserActivityLabel("response", payload));
+  });
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 async function collectDom(page) {
   return page.evaluate(() => {
     const body = document.body;
@@ -861,7 +989,8 @@ function createRouteDiagnosticsRecorder(page) {
     failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText || "request failed" });
   });
   page.on("console", (msg) => {
-    if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400));
+    const text = msg.text();
+    if (msg.type() === "error" && !isResourceLoadConsoleError(text)) consoleErrors.push(text.slice(0, 400));
   });
   page.on("pageerror", (err) => pageErrors.push((err?.message || String(err)).slice(0, 400)));
   return {
@@ -885,7 +1014,13 @@ async function navigateAndDiagnose(page, recorder, input, route, screenshotPath)
   let response = null;
   let navigationError = "";
   try {
-    response = await page.goto(routeUrl(input.url, route), { waitUntil: "load", timeout: 30000 });
+    const targetUrl = routeUrl(input.url, route);
+    response = await withBrowserInactivity(
+      page,
+      "navigate " + targetUrl,
+      input.navigationTimeoutMs,
+      () => page.goto(targetUrl, { waitUntil: "load", timeout: 0 }),
+    );
   } catch (error) {
     navigationError = error?.message || String(error);
   }
@@ -923,13 +1058,19 @@ async function navigateAndDiagnose(page, recorder, input, route, screenshotPath)
     status < 300 &&
     contentType.includes("text/html") &&
     bodyLength >= 200 &&
-    dom.body_descendant_count > 0;
+    dom.body_descendant_count > 0 &&
+    recorded.failed_requests.length === 0 &&
+    recorded.console_errors.length === 0 &&
+    recorded.page_errors.length === 0;
   const reasons = [];
   if (navigationError) reasons.push("navigation=" + navigationError);
   if (status < 200 || status >= 300) reasons.push("status=" + status);
   if (!contentType.includes("text/html")) reasons.push("content-type=" + (contentType || "(missing)"));
   if (bodyLength < 200) reasons.push("body=" + bodyLength + "B");
   if (dom.body_descendant_count <= 0) reasons.push("dom_descendants=" + dom.body_descendant_count);
+  if (recorded.failed_requests.length > 0) reasons.push("failed_requests=" + recorded.failed_requests.length);
+  if (recorded.console_errors.length > 0) reasons.push("console_errors=" + recorded.console_errors.length);
+  if (recorded.page_errors.length > 0) reasons.push("page_errors=" + recorded.page_errors.length);
   return {
     route,
     url: page.url(),

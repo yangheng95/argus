@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
 import z from "zod"
+import sharp from "sharp"
 import { ProviderTransform } from "../../src/provider/transform"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
 import { AttachmentStore } from "../../src/storage/attachment-store"
@@ -494,6 +495,30 @@ describe("ProviderTransform.message - local attachment transport", () => {
   const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
   const pdfBytes = Buffer.from("%PDF-1.7")
 
+  async function widePngWithBlankRight(): Promise<Buffer> {
+    const block = await sharp({
+      create: {
+        width: 8,
+        height: 16,
+        channels: 3,
+        background: "#000000",
+      },
+    })
+      .png()
+      .toBuffer()
+    return await sharp({
+      create: {
+        width: 32,
+        height: 16,
+        channels: 3,
+        background: "#ffffff",
+      },
+    })
+      .composite([{ input: block, left: 4, top: 0 }])
+      .png()
+      .toBuffer()
+  }
+
   async function withProject<T>(fn: (projectID: string) => Promise<T>): Promise<T> {
     await using tmp = await tmpdir()
     const projectID = `attachment-transport-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -552,19 +577,92 @@ describe("ProviderTransform.message - local attachment transport", () => {
     })
   })
 
-  test("leaves existing data URLs unchanged", async () => {
+  test("crops blank margins before inlining local model image refs", async () => {
+    await withProject(async (projectID) => {
+      const ref = await AttachmentStore.write(projectID, await widePngWithBlankRight(), "image/png", "wide.png")
+      const result = (await ProviderTransform.message(
+        [
+          {
+            role: "user",
+            content: [{ type: "file", data: ref.url, mediaType: "image/png", filename: "wide.png" }],
+          },
+        ] as any[],
+        model,
+        {},
+      )) as any[]
+
+      const cropped = Buffer.from(result[0].content[0].data, "base64")
+      const metadata = await sharp(cropped).metadata()
+      expect(metadata.width).toBe(8)
+      expect(metadata.height).toBe(16)
+      expect(result[0].content[1]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("Cropped blank margins"),
+      })
+    })
+  })
+
+  test("normalizes existing file data URLs to raw base64 payloads", async () => {
+    const payload = pngBytes.toString("base64")
     const result = (await ProviderTransform.message(
       [
         {
           role: "user",
-          content: [{ type: "file", data: "data:image/jpeg;base64,abc", mediaType: "image/jpeg" }],
+          content: [{ type: "file", data: `data:image/png;base64,${payload}`, mediaType: "image/png" }],
         },
       ] as any[],
       model,
       {},
     )) as any[]
 
-    expect(result[0].content[0].data).toBe("data:image/jpeg;base64,abc")
+    expect(result[0].content[0].data).toBe(payload)
+  })
+
+  test("normalizes valid raw file data base64 payloads", async () => {
+    const payload = pngBytes.toString("base64")
+    const result = (await ProviderTransform.message(
+      [
+        {
+          role: "user",
+          content: [{ type: "file", data: payload, mediaType: "image/png", filename: "raw.png" }],
+        },
+      ] as any[],
+      model,
+      {},
+    )) as any[]
+
+    expect(result[0].content[0].data).toBe(payload)
+    expect(result[0].content[0].mediaType).toBe("image/png")
+  })
+
+  test("rejects malformed existing file data URLs", async () => {
+    await expect(
+      ProviderTransform.message(
+        [
+          {
+            role: "user",
+            content: [{ type: "file", data: "data:image/png;base64,not base64!*", mediaType: "image/png" }],
+          },
+        ] as any[],
+        model,
+        {},
+      ),
+    ).rejects.toThrow(/invalid base64 payload/)
+  })
+
+  test("rejects malformed raw file data base64 payloads", async () => {
+    await expect(
+      ProviderTransform.message(
+        [
+          {
+            role: "user",
+            content: [{ type: "file", data: "not base64!*", mediaType: "image/png", filename: "raw.png" }],
+          },
+        ] as any[],
+        model,
+        {},
+      ),
+    ).rejects.toThrow(/invalid base64 payload/)
   })
 
   test("leaves remote HTTPS URLs unchanged", async () => {
@@ -582,15 +680,11 @@ describe("ProviderTransform.message - local attachment transport", () => {
     expect(result[0].content[0].data).toBe("https://example.com/x.png")
   })
 
-  test("preserves the original part when attachment read fails", async () => {
+  test("rejects recognized local attachment refs when attachment read fails", async () => {
     const original = { type: "file", data: "/attachment/missing/abcdef.png", mediaType: "image/png" }
-    const result = (await ProviderTransform.message(
-      [{ role: "user", content: [original] }] as any[],
-      model,
-      {},
-    )) as any[]
-
-    expect(result[0].content[0]).toBe(original)
+    await expect(
+      ProviderTransform.message([{ role: "user", content: [original] }] as any[], model, {}),
+    ).rejects.toThrow()
   })
 
   test("inlines PDF attachment refs with their media type", async () => {
@@ -1386,7 +1480,7 @@ describe("ProviderTransform.message - empty image handling", () => {
     headers: {},
   } as any
 
-  test("should replace empty base64 image with error text", async () => {
+  test("rejects empty base64 image data URLs", async () => {
     const msgs = [
       {
         role: "user",
@@ -1397,15 +1491,21 @@ describe("ProviderTransform.message - empty image handling", () => {
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, mockModel, {})
+    await expect(ProviderTransform.message(msgs, mockModel, {})).rejects.toThrow(/expected non-empty base64 payload/)
+  })
 
-    expect(result).toHaveLength(1)
-    expect(result[0].content).toHaveLength(2)
-    expect(result[0].content[0]).toEqual({ type: "text", text: "What is in this image?" })
-    expect(result[0].content[1]).toEqual({
-      type: "text",
-      text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
-    })
+  test("rejects malformed non-empty image data URLs", async () => {
+    const msgs = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "What is in this image?" },
+          { type: "image", image: "data:image/png;base64,not base64!*" },
+        ],
+      },
+    ] as any[]
+
+    await expect(ProviderTransform.message(msgs, mockModel, {})).rejects.toThrow(/invalid base64 payload/)
   })
 
   test("should keep valid base64 images unchanged", async () => {
@@ -1429,7 +1529,7 @@ describe("ProviderTransform.message - empty image handling", () => {
     expect(result[0].content[1]).toEqual({ type: "image", image: `data:image/png;base64,${validBase64}` })
   })
 
-  test("should handle mixed valid and empty images", async () => {
+  test("rejects mixed image content when any data URL is empty", async () => {
     const validBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     const msgs = [
@@ -1443,16 +1543,7 @@ describe("ProviderTransform.message - empty image handling", () => {
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, mockModel, {})
-
-    expect(result).toHaveLength(1)
-    expect(result[0].content).toHaveLength(3)
-    expect(result[0].content[0]).toEqual({ type: "text", text: "Compare these images" })
-    expect(result[0].content[1]).toEqual({ type: "image", image: `data:image/png;base64,${validBase64}` })
-    expect(result[0].content[2]).toEqual({
-      type: "text",
-      text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
-    })
+    await expect(ProviderTransform.message(msgs, mockModel, {})).rejects.toThrow(/expected non-empty base64 payload/)
   })
 })
 

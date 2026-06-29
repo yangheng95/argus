@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { $ } from "bun"
 import { createServer, type Server } from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -10,10 +9,6 @@ import {
   BrowserPreviewBindLocalModuleTool,
   BrowserPreviewBindLocalModuleToolParameters,
 } from "../../src/tool/browser-preview-bind-local-module"
-import {
-  browserPreviewRegionComparisonAttachmentImages,
-  BrowserPreviewCompareRegionsTool,
-} from "../../src/tool/browser-preview-compare-regions"
 import { Agent } from "../../src/agent/agent"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
@@ -23,10 +18,10 @@ import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
+  BrowserPreviewEvidenceCorruptionError,
   findLatestBrowserPreviewTarget,
   findReadableBrowserPreviewEvidenceByID,
   persistBrowserPreviewEvidence,
-  resolveRuntimeRelativePath,
 } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -55,55 +50,6 @@ function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PRE
 
 afterEach(async () => {
   await resetDatabase()
-})
-
-test("browser_preview_compare_regions exposes failed comparison images for model repair", () => {
-  const projectRoot = "C:/repo"
-  const result = {
-    status: "failed",
-    manifestPath: ".opencorvus/r/t/tsk/bp/job/manifest.json",
-    jobID: "job",
-    taskID: "tsk",
-    targetID: "target",
-    operation: "reference-comparison",
-    evidenceIDs: {},
-    diagnostics: [],
-    regions: [
-      {
-        region_id: "good-region",
-        viewport_id: "desktop",
-        status: "completed",
-        artifacts: {
-          source_crop: ".opencorvus/r/t/tsk/bp/job/good/source.png",
-          implementation_crop: ".opencorvus/r/t/tsk/bp/job/good/implementation.png",
-          side_by_side: ".opencorvus/r/t/tsk/bp/job/good/side-by-side.png",
-        },
-        diagnostics: [],
-      },
-      {
-        region_id: "bad-region",
-        viewport_id: "desktop",
-        status: "failed",
-        reason: "Visual mismatch",
-        artifacts: {
-          source_crop: ".opencorvus/r/t/tsk/bp/job/bad/source.png",
-          implementation_crop: ".opencorvus/r/t/tsk/bp/job/bad/implementation.png",
-          side_by_side: ".opencorvus/r/t/tsk/bp/job/bad/side-by-side.png",
-          diff: ".opencorvus/r/t/tsk/bp/job/bad/diff.png",
-        },
-        diagnostics: ["Visual mismatch"],
-      },
-    ],
-  } as any
-
-  const images = browserPreviewRegionComparisonAttachmentImages({ projectRoot, result })
-
-  expect(images.map((image) => image.filename)).toEqual([
-    "desktop-failed-bad-region-side-by-side.png",
-    "desktop-failed-bad-region-diff.png",
-    "desktop-completed-good-region-side-by-side.png",
-  ])
-  expect(images[0].path).toBe(path.resolve(projectRoot, ".opencorvus/r/t/tsk/bp/job/bad/side-by-side.png"))
 })
 
 async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -184,14 +130,12 @@ describe("tool.browser_preview", () => {
           const globalIDs = await ToolRegistry.ids()
           expect(globalIDs).toContain("browser_preview")
           expect(globalIDs).not.toContain("browser_preview_bind_local_module")
-          expect(globalIDs).not.toContain("browser_preview_compare_regions")
           expect(globalIDs).not.toContain("browser_preview_compare_scroll_slices")
 
           const visualQa = await Agent.get("visual-qa")
           const visualQaTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
           const visualQaIDs = visualQaTools.map((tool) => tool.id)
           expect(visualQaIDs).toContain("browser_preview_bind_local_module")
-          expect(visualQaIDs).toContain("browser_preview_compare_regions")
           expect(visualQaIDs).toContain("browser_preview_compare_scroll_slices")
         },
       })
@@ -796,46 +740,6 @@ describe("tool.browser_preview", () => {
   )
 
   test(
-    "compare regions tool requires a persisted target ID",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await BrowserPreviewCompareRegionsTool.init()
-          await expect(
-            tool.execute(
-              {
-                targetID: "art_previewtarget_missing",
-                viewportIDs: ["desktop"],
-                inlineBindings: [
-                  {
-                    region_id: "economy",
-                    viewport_id: "desktop",
-                    region_scope: "page-section",
-                    source: {
-                      reference_artifact_id: "reference.png",
-                      bbox: { x: 0, y: 0, width: 100, height: 80 },
-                      semantic_role: "economy section",
-                    },
-                    implementation: {
-                      route: "/",
-                      locator: { kind: "data-oc-region", value: "economy" },
-                    },
-                  },
-                ],
-              },
-              { ...baseCtx, extra: { taskID } },
-            ),
-          ).rejects.toThrow("Browser preview target not found: art_previewtarget_missing")
-        },
-      })
-    },
-    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
-  )
-
-  test(
     "browser preview evidence without operation kind is not readable",
     async () => {
       await using tmp = await tmpdir({ git: true })
@@ -879,12 +783,16 @@ describe("tool.browser_preview", () => {
               })
               .run(),
           )
-          const evidence = await findReadableBrowserPreviewEvidenceByID({
-            projectRoot: tmp.path,
-            taskID,
-            evidenceID: "art_missing_operation_kind",
-          })
-          expect(evidence).toBeUndefined()
+          try {
+            await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: "art_missing_operation_kind",
+            })
+            throw new Error("Expected browser preview evidence corruption")
+          } catch (error) {
+            expect(BrowserPreviewEvidenceCorruptionError.isInstance(error)).toBe(true)
+          }
         },
       })
     },
@@ -969,7 +877,7 @@ describe("tool.browser_preview", () => {
   })
 
   test(
-    "bind local module tool feeds compare regions tool and persists reference comparison evidence",
+    "bind local module tool persists source-binding evidence",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -1017,72 +925,6 @@ describe("tool.browser_preview", () => {
               evidenceID: result.metadata.evidenceID,
             })
             expect(bindingEvidence?.operationKind).toBe("source-binding")
-
-            const compareTool = await BrowserPreviewCompareRegionsTool.init()
-            const comparison = await compareTool.execute(
-              {
-                targetID: target.id,
-                viewportIDs: ["desktop"],
-                inlineBindings: [result.metadata.binding],
-                includeDiff: true,
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const comparisonPayload = JSON.parse(comparison.output)
-            const evidenceID = comparison.metadata.evidenceIDs["desktop:default:tool-local-module"]
-            const evidence = await findReadableBrowserPreviewEvidenceByID({
-              projectRoot: tmp.path,
-              taskID,
-              evidenceID,
-            })
-
-            expect(comparison.title).toBe("Region comparison completed")
-            expect(comparison.attachments).toHaveLength(2)
-            expect(comparison.metadata.status).toBe("passed")
-            expect(comparisonPayload.operation).toBe("reference-comparison")
-            const comparedRegion = comparisonPayload.regions[0]
-            expect(comparedRegion.status).toBe("completed")
-            expect(comparedRegion.reason).toBeUndefined()
-            const artifacts = comparedRegion.artifacts
-            expect(artifacts.source_crop).toEndWith("source.png")
-            expect(artifacts.implementation_crop).toEndWith("implementation.png")
-            expect(artifacts.side_by_side).toEndWith("side-by-side.png")
-            expect(artifacts.diff).toEndWith("diff.png")
-            expect(evidence?.operationKind).toBe("reference-comparison")
-            expect(evidence?.regionID).toBe("tool-local-module")
-            expect(evidence?.status).toBe("passed")
-            expect(evidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
-            expect(evidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
-            expect(evidence?.artifactPaths?.side_by_side).toBe(artifacts.side_by_side)
-            expect(evidence?.artifactPaths?.diff).toBe(artifacts.diff)
-
-            const sourceCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.source_crop)
-            const implementationCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.implementation_crop)
-            const sideBySidePath = resolveRuntimeRelativePath(tmp.path, artifacts.side_by_side)
-            const diffPath = resolveRuntimeRelativePath(tmp.path, artifacts.diff)
-            expect(await fileExists(sourceCropPath)).toBe(true)
-            expect(await fileExists(implementationCropPath)).toBe(true)
-            expect(await fileExists(sideBySidePath)).toBe(true)
-            expect(await fileExists(diffPath)).toBe(true)
-            const sourceDimensions = {
-              width: Math.ceil(comparedRegion.source_bbox.width),
-              height: Math.ceil(comparedRegion.source_bbox.height),
-            }
-            const implementationDimensions = {
-              width: Math.ceil(comparedRegion.implementation_bbox.width),
-              height: Math.ceil(comparedRegion.implementation_bbox.height),
-            }
-            await expectPngDimensions(sourceCropPath, sourceDimensions)
-            await expectPngDimensions(implementationCropPath, implementationDimensions)
-            await expectPngDimensions(diffPath, sourceDimensions)
-            await expectPngDimensions(sideBySidePath, {
-              width: sourceDimensions.width + implementationDimensions.width + 16,
-              height: 62 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
-            })
-            await expectPngHasColorDiversity(sourceCropPath)
-            await expectPngHasColorDiversity(implementationCropPath)
-            await expectPngHasColorDiversity(sideBySidePath)
-            await expectPngHasColorDiversity(diffPath)
           },
         })
       } finally {
@@ -1092,95 +934,7 @@ describe("tool.browser_preview", () => {
     { timeout: 60_000 },
   )
 
-  test(
-    "compare regions tool writes task evidence under the primary project root when invoked from a linked worktree",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = await seedTask(tmp.path)
-      const linkedWorktree = `${tmp.path}-goal-worktree`
-      await $`git worktree add ${linkedWorktree} -b ${`opencorvus/test-browser-preview-${Date.now()}`}`
-        .cwd(tmp.path)
-        .quiet()
-      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
-      await writeBindingToolReference(paths.sourcePackageAbsolute)
-      const server = await startBindingToolPreviewServer()
-      try {
-        const target = await Instance.provide({
-          directory: tmp.path,
-          fn: () =>
-            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
-        })
-        await Instance.provide({
-          directory: linkedWorktree,
-          fn: async () => {
-            const compareTool = await BrowserPreviewCompareRegionsTool.init()
-            const comparison = await compareTool.execute(
-              {
-                targetID: target.id,
-                viewportIDs: ["desktop"],
-                inlineBindings: [
-                  {
-                    region_id: "linked-worktree-module",
-                    viewport_id: "desktop",
-                    state_id: "default",
-                    region_scope: "page-section",
-                    source: {
-                      reference_artifact_id: "reference.png",
-                      bbox: { x: 24, y: 30, width: 180, height: 92 },
-                      semantic_role: "linked worktree module",
-                      text_anchors: ["Tool Local Module", "Binding Anchor"],
-                      source_refs: ["source screenshot"],
-                    },
-                    implementation: {
-                      route: "/",
-                      locator: { kind: "data-oc-region", value: "tool-local-module" },
-                      component_files: ["src/ToolLocalModule.tsx"],
-                    },
-                    acceptance_refs: ["linked worktree evidence root"],
-                  },
-                ],
-                includeDiff: true,
-              },
-              { ...baseCtx, extra: { taskID } },
-            )
-            const payload = JSON.parse(comparison.output)
-            const region = payload.regions[0]
-            const evidenceID = comparison.metadata.evidenceIDs["desktop:default:linked-worktree-module"]
-            const evidence = await findReadableBrowserPreviewEvidenceByID({
-              projectRoot: tmp.path,
-              taskID,
-              evidenceID,
-            })
-
-            expect(comparison.metadata.status).toBe("passed")
-            expect(comparison.attachments).toHaveLength(2)
-            expect(evidence?.status).toBe("passed")
-            expect(await fileExists(resolveRuntimeRelativePath(tmp.path, region.artifacts.side_by_side))).toBe(true)
-            expect(await fileExists(resolveRuntimeRelativePath(linkedWorktree, region.artifacts.side_by_side))).toBe(
-              false,
-            )
-          },
-        })
-      } finally {
-        await server.close()
-        await $`git worktree remove --force ${linkedWorktree}`
-          .cwd(tmp.path)
-          .quiet()
-          .catch(() => {})
-      }
-    },
-    { timeout: 60_000 },
-  )
 })
-
-async function fileExists(input: string): Promise<boolean> {
-  try {
-    await fs.access(input)
-    return true
-  } catch {
-    return false
-  }
-}
 
 async function expectPngDimensions(input: string, expected: { width: number; height: number }): Promise<void> {
   const metadata = await sharp(input).metadata()

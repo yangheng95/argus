@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import sharp from "sharp"
 import {
   ModelImageInputTooLargeError,
   assertModelImageInputWithinLimits,
+  prepareModelImageInput,
   readModelImageDimensions,
 } from "../../src/session/model-image-input"
 
@@ -65,6 +67,37 @@ function webpVp8lHeader(width: number, height: number): Buffer {
   return bytes
 }
 
+async function pngWithBlackBlock(input: {
+  width: number
+  height: number
+  left: number
+  top: number
+  blockWidth: number
+  blockHeight: number
+}): Promise<Buffer> {
+  const block = await sharp({
+    create: {
+      width: input.blockWidth,
+      height: input.blockHeight,
+      channels: 3,
+      background: "#000000",
+    },
+  })
+    .png()
+    .toBuffer()
+  return await sharp({
+    create: {
+      width: input.width,
+      height: input.height,
+      channels: 3,
+      background: "#ffffff",
+    },
+  })
+    .composite([{ input: block, left: input.left, top: input.top }])
+    .png()
+    .toBuffer()
+}
+
 describe("session.model-image-input", () => {
   test("reads dimensions from provider-bound image headers", () => {
     expect(readModelImageDimensions(pngHeader(1440, 900))).toMatchObject({
@@ -106,6 +139,64 @@ describe("session.model-image-input", () => {
       width: 1440,
       height: 19773,
       maxDimension: 8000,
+    })
+  })
+
+  test("crops blank screenshot margins before binding image bytes to the model", async () => {
+    const source = await pngWithBlackBlock({
+      width: 32,
+      height: 16,
+      left: 4,
+      top: 0,
+      blockWidth: 8,
+      blockHeight: 16,
+    })
+
+    const prepared = await prepareModelImageInput({
+      mime: "image/png",
+      bytes: source,
+      source: "wide-screenshot.png",
+    })
+
+    expect(readModelImageDimensions(prepared.bytes)).toMatchObject({ width: 8, height: 16 })
+    expect(prepared.crop).toMatchObject({
+      originalWidth: 32,
+      originalHeight: 16,
+      width: 8,
+      height: 16,
+    })
+    expect(prepared.note).toContain("original 32x16, model input 8x16")
+  })
+
+  test("still fails when blank-cropped image exceeds the model dimension limit", async () => {
+    const source = await pngWithBlackBlock({
+      width: 20,
+      height: 8010,
+      left: 2,
+      top: 0,
+      blockWidth: 10,
+      blockHeight: 8010,
+    })
+
+    let caught: unknown
+    try {
+      await prepareModelImageInput({
+        mime: "image/png",
+        bytes: source,
+        source: "tall-screenshot.png",
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
+    expect(
+      (caught as { data: { width: number; height: number; originalWidth?: number; originalHeight?: number } }).data,
+    ).toMatchObject({
+      width: 10,
+      height: 8010,
+      originalWidth: 20,
+      originalHeight: 8010,
     })
   })
 })

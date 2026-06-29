@@ -3,10 +3,18 @@ import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assist
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ProtocolStore } from "../../src/protocol/store"
+import { Question } from "../../src/question"
+import { protocolSessionEvent } from "../../src/server/routes/session"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionStatus } from "../../src/session/status"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+
+function sessionOrderKey(sessionID: string, timeCreated: number) {
+  return timelineOrderKey({ domain: "session", time: timeCreated, id: sessionID })
+}
 
 function sseReader(response: Response): () => Promise<any> {
   const reader = response.body?.getReader()
@@ -189,6 +197,32 @@ describe("session conversation routes", () => {
     })
   })
 
+  test("GET /session/:sessionID/conversation returns explicit positive empty history state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "Empty Assistant" })
+
+        const response = await Server.App().request(`/session/${session.id}/conversation`, {
+          headers: { "x-opencorvus-directory": tmp.path },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as any
+        expect(body.transcript).toEqual([])
+        expect(body.agentView).toBeDefined()
+        expect(body.history).toEqual({
+          oldestTimestamp: null,
+          oldestOrderKey: null,
+          oldestMessageID: null,
+          hasMore: false,
+          limit: 1,
+        })
+      },
+    })
+  })
+
   test("GET /session/:sessionID/conversation agentView includes child execution sessions", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -235,6 +269,7 @@ describe("session conversation routes", () => {
           text: "child assistant output",
         })
         const emittedAt = Date.now() + 10
+        const childOrderKey = sessionOrderKey(child.id, child.time.created)
         await ProtocolStore.appendEvent({
           kind: "event",
           type: "session.status",
@@ -243,7 +278,9 @@ describe("session conversation routes", () => {
           session_id: child.id,
           source: "test",
           emitted_at: emittedAt,
+          order_key: childOrderKey,
           payload: {
+            orderKey: childOrderKey,
             sessionID: child.id,
             channel: "assistant",
             parentSessionID: session.id,
@@ -519,11 +556,154 @@ describe("session conversation routes", () => {
           expect(mirrored.payload.info.resolvedRole).toBe("assistant")
           expect(mirrored.payload.channel).toBe("assistant")
           expect(mirrored.payload.resolvedRole).toBe("assistant")
+          expect(mirrored.orderKey).toBe(mirrored.payload.orderKey)
+          expect(mirrored.payload.orderKey).toBe(mirrored.payload.info.orderKey)
         } finally {
           clearTimeout(timeout)
           abort.abort("test complete")
         }
       },
     })
+  })
+
+  test("GET /session/:sessionID/events enriches plain assistant session status events for rail", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "Cloud assistant SSE status" })
+        const abort = new AbortController()
+        const timeout = setTimeout(() => abort.abort("timed out waiting for assistant session.status"), 6_000)
+        try {
+          const response = await Server.App().request(`/session/${session.id}/events`, {
+            headers: { "x-opencorvus-directory": tmp.path },
+            signal: abort.signal,
+          })
+          expect(response.status).toBe(200)
+          const readEvent = sseReader(response)
+          expect((await readEvent()).type).toBe("session.connected")
+
+          SessionStatus.set(session.id, { type: "streaming" })
+
+          let mirrored: any
+          while (!mirrored) {
+            const event = await readEvent()
+            if (event.type === "session.status") mirrored = event
+          }
+          expect(mirrored.session_id).toBe(session.id)
+          expect(mirrored.summary).toBe("session status: streaming")
+          expect(mirrored.payload.sessionID).toBe(session.id)
+          expect(mirrored.payload.status).toEqual({ type: "streaming" })
+          expect(mirrored.payload.channel).toBe("assistant")
+          expect(mirrored.payload.resolvedRole).toBe("assistant")
+          expect(mirrored.orderKey).toBe(mirrored.payload.orderKey)
+          expect(mirrored.orderKey).toContain(":session:")
+        } finally {
+          SessionStatus.set(session.id, { type: "idle" }, { publish: false })
+          clearTimeout(timeout)
+          abort.abort("test complete")
+        }
+      },
+    })
+  })
+
+  test("GET /session/:sessionID/events gives standalone question cards a top-level orderKey", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "Cloud assistant SSE question" })
+        const requestID = Identifier.ascending("question")
+        const abort = new AbortController()
+        const timeout = setTimeout(() => abort.abort("timed out waiting for question.asked"), 6_000)
+        let pending: Promise<unknown> = Promise.resolve([])
+        try {
+          const response = await Server.App().request(`/session/${session.id}/events`, {
+            headers: { "x-opencorvus-directory": tmp.path },
+            signal: abort.signal,
+          })
+          expect(response.status).toBe(200)
+          const readEvent = sseReader(response)
+          expect((await readEvent()).type).toBe("session.connected")
+
+          pending = Question.ask({
+            sessionID: session.id,
+            requestID,
+            questions: [
+              {
+                header: "Deploy",
+                question: "Deploy now?",
+                options: [{ label: "Yes", description: "Proceed" }],
+              },
+            ],
+          }).catch(() => [])
+
+          let mirrored: any
+          while (!mirrored) {
+            const event = await readEvent()
+            if (event.type === "question.asked") mirrored = event
+          }
+          expect(mirrored.session_id).toBe(session.id)
+          expect(mirrored.payload.id).toBe(requestID)
+          expect(mirrored.payload.sessionID).toBe(session.id)
+          expect(mirrored.orderKey).toBe(mirrored.payload.orderKey)
+          expect(mirrored.orderKey).toContain(":interaction:")
+          expect(mirrored.payload.channel).toBe("assistant")
+          expect(mirrored.payload.resolvedRole).toBe("assistant")
+        } finally {
+          clearTimeout(timeout)
+          abort.abort("test complete")
+          await Question.reject(requestID).catch(() => undefined)
+          await pending
+        }
+      },
+    })
+  })
+
+  test("standalone session event envelopes reject missing orderKey instead of emitting unordered UI events", () => {
+    expect(() =>
+      protocolSessionEvent({
+        id: "ephemeral-missing-order-key",
+        kind: "event",
+        type: "session.status",
+        aggregate: "session",
+        aggregateID: "ses_missing_order_key",
+        sessionID: "ses_missing_order_key",
+        sequence: 12,
+        summary: "session status: streaming",
+        payload: { sessionID: "ses_missing_order_key", status: { type: "streaming" } },
+        time: {
+          emitted: 1_780_900_000_000,
+          created: 1_780_900_000_000,
+          updated: 1_780_900_000_000,
+        },
+      } as any),
+    ).toThrow(/orderKey|expected string/)
+
+    const messageOrderKey =
+      "v1:0001780900000000:0000000000000030:0000000000000000:message:msg_wrong_session_status"
+    expect(() =>
+      protocolSessionEvent({
+        id: "ephemeral-wrong-domain-order-key",
+        kind: "event",
+        type: "session.status",
+        aggregate: "session",
+        aggregateID: "ses_wrong_domain_order_key",
+        sessionID: "ses_wrong_domain_order_key",
+        sequence: 13,
+        orderKey: messageOrderKey,
+        summary: "session status: streaming",
+        payload: {
+          orderKey: messageOrderKey,
+          sessionID: "ses_wrong_domain_order_key",
+          status: { type: "streaming" },
+        },
+        time: {
+          emitted: 1_780_900_000_000,
+          created: 1_780_900_000_000,
+          updated: 1_780_900_000_000,
+        },
+      } as any),
+    ).toThrow(/expected session orderKey/)
   })
 })

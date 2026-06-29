@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { Filesystem } from "../../src/util/filesystem"
 
 describe("InstructionPrompt.resolve", () => {
   test("loads project AGENTS.md and CLAUDE.md as authoritative system paths", async () => {
@@ -90,6 +91,29 @@ describe("InstructionPrompt.resolve", () => {
     })
   })
 
+  test("fails when a discovered system instruction file cannot be read", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "AGENTS.md"), "# Root Instructions")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const originalReadText = Filesystem.readText
+        const readText = spyOn(Filesystem, "readText").mockImplementation(async (filepath: string) => {
+          if (filepath === path.join(tmp.path, "AGENTS.md")) throw new Error("EACCES")
+          return originalReadText(filepath)
+        })
+        try {
+          await expect(InstructionPrompt.system()).rejects.toThrow(path.join(tmp.path, "AGENTS.md"))
+        } finally {
+          readText.mockRestore()
+        }
+      },
+    })
+  })
+
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -172,6 +196,33 @@ describe("InstructionPrompt.resolve", () => {
 
         const results = await InstructionPrompt.resolve([], filepath, "test-message-2")
         expect(results).toEqual([])
+      },
+    })
+  })
+
+  test("fails when a discovered subdirectory instruction file cannot be read", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await Bun.write(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const target = path.join(tmp.path, "subdir", "AGENTS.md")
+        const originalReadText = Filesystem.readText
+        const readText = spyOn(Filesystem, "readText").mockImplementation(async (filepath: string) => {
+          if (filepath === target) throw new Error("EACCES")
+          return originalReadText(filepath)
+        })
+        try {
+          await expect(
+            InstructionPrompt.resolve([], path.join(tmp.path, "subdir", "nested", "file.ts"), "test-message-fail"),
+          ).rejects.toThrow(target)
+        } finally {
+          readText.mockRestore()
+        }
       },
     })
   })

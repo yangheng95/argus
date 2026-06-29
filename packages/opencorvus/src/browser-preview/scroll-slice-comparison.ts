@@ -14,8 +14,8 @@ import { BrowserPreviewViewportID } from "./viewport"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 const SCROLL_SLICE_CAPTURE_EXTRA_TIMEOUT_MS = 45_000
-const SCROLL_SLICE_ROUTE_NAVIGATION_TIMEOUT_MS = 30_000
-const SCROLL_SLICE_NETWORK_IDLE_TIMEOUT_MS = 5_000
+const SCROLL_SLICE_ROUTE_NAVIGATION_INACTIVITY_MS = 30_000
+const SCROLL_SLICE_NETWORK_IDLE_INACTIVITY_MS = 5_000
 const SCROLL_SLICE_SETTLE_AFTER_SCROLL_MS = 250
 const SIDE_BY_SIDE_TITLE_HEIGHT_PX = 44
 const SIDE_BY_SIDE_LABEL_HEIGHT_PX = 32
@@ -200,7 +200,7 @@ export async function compareBrowserPreviewScrollSlice(
     artifacts,
     diagnostics: [
       "Scroll-slice comparison is supporting Visual QA evidence only.",
-      "It is not browser_preview_compare_regions reference-comparison proof.",
+      "It is not reference-comparison proof.",
     ],
   }
   const publicResult = normalizeRuntimePathRefs(projectRoot, result) as BrowserPreviewScrollSliceComparisonResult
@@ -235,7 +235,7 @@ async function captureImplementationSlice(input: {
       launchTimeoutMs,
     },
     payloadEnvName: "OPENCORVUS_BROWSER_PREVIEW_SCROLL_SLICE_INPUT",
-    hardTimeoutMs: launchTimeoutMs + SCROLL_SLICE_CAPTURE_EXTRA_TIMEOUT_MS,
+    inactivityTimeoutMs: launchTimeoutMs + SCROLL_SLICE_CAPTURE_EXTRA_TIMEOUT_MS,
     label: "Browser preview scroll-slice comparison runner",
     signal: input.signal,
   }).catch((error) => {
@@ -354,6 +354,126 @@ const { chromium } = require("playwright");
 
 const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_BROWSER_PREVIEW_SCROLL_SLICE_INPUT || "", "base64").toString("utf8"));
 
+function browserActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.message === "string") return event + " " + payload.message;
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.text === "string") return event + " " + payload.text;
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+function isBrowserImplicitAssetRequest(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico";
+  } catch {
+    return false;
+  }
+}
+
+function taggedBrowserInactivityError(message) {
+  const error = new Error(message);
+  error.opencorvusBrowserInactivity = true;
+  return error;
+}
+
+function isBrowserInactivityError(error) {
+  return Boolean(error && error.opencorvusBrowserInactivity === true);
+}
+
+function installBrowserFailureTracker(page, label) {
+  const failures = [];
+  const listeners = [];
+  const record = (source) => {
+    if (!failures.includes(source)) failures.push(source);
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(url)) {
+      record(browserActivityLabel("response", payload) + " HTTP " + status);
+    }
+  });
+  on("requestfailed", (payload) => {
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (isBrowserImplicitAssetRequest(url)) return;
+    record(browserActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => record(browserActivityLabel("pageerror", payload)));
+  return {
+    assertNoFailures(stage) {
+      if (failures.length > 0) throw new Error(label + " browser failure before " + stage + ": " + failures.join("; "));
+    },
+    dispose() {
+      for (const [event, handler] of listeners) page.off(event, handler);
+    },
+  };
+}
+
+async function withBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  let rejectFailure;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const browserFailure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(taggedBrowserInactivityError(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    rejectFailure(new Error(label + " browser failure before scroll-slice capture: " + source));
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(browserActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(url)) {
+      fail(browserActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(browserActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => {
+    const url = typeof payload.url === "function" ? payload.url() : "";
+    if (isBrowserImplicitAssetRequest(url)) return;
+    fail(browserActivityLabel("requestfailed", payload));
+  });
+  on("pageerror", (payload) => fail(browserActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive, browserFailure]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
+}
+
 (async () => {
   let browser;
   try {
@@ -368,58 +488,80 @@ const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_BROWSER_PREVIEW_SCRO
       deviceScaleFactor: 1,
     });
     const routeUrl = new URL(input.route || "/", input.targetUrl).toString();
-    const response = await page.goto(routeUrl, { waitUntil: "domcontentloaded", timeout: ${SCROLL_SLICE_ROUTE_NAVIGATION_TIMEOUT_MS} });
-    await page.waitForLoadState("networkidle", { timeout: ${SCROLL_SLICE_NETWORK_IDLE_TIMEOUT_MS} }).catch(() => undefined);
-    const status = response ? response.status() : undefined;
-    if (typeof status === "number" && status >= 400) {
-      throw new Error("Implementation route returned HTTP " + status + ": " + routeUrl);
-    }
-    const metricsBeforeScroll = await page.evaluate(() => ({
-      scrollHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0),
-      clientHeight: Math.ceil(document.documentElement.clientHeight || window.innerHeight || 0),
-    }));
-    const maxScrollY = Math.max(0, metricsBeforeScroll.scrollHeight - metricsBeforeScroll.clientHeight);
-    if (input.scrollY > maxScrollY) {
-      throw new Error(
-        "Requested scrollY exceeds implementation scroll range: scrollY=" +
-          input.scrollY +
-          " maxScrollY=" +
-          maxScrollY +
-          " url=" +
-          routeUrl
+    const browserFailures = installBrowserFailureTracker(page, "scroll-slice comparison");
+    let result;
+    try {
+      const response = await withBrowserInactivity(
+        page,
+        "navigate " + routeUrl,
+        ${SCROLL_SLICE_ROUTE_NAVIGATION_INACTIVITY_MS},
+        () => page.goto(routeUrl, { waitUntil: "domcontentloaded", timeout: 0 }),
       );
+      await withBrowserInactivity(
+        page,
+        "networkidle " + routeUrl,
+        ${SCROLL_SLICE_NETWORK_IDLE_INACTIVITY_MS},
+        () => page.waitForLoadState("networkidle", { timeout: 0 }),
+      ).catch((error) => {
+        if (isBrowserInactivityError(error)) return undefined;
+        throw error;
+      });
+      browserFailures.assertNoFailures("scroll-slice capture");
+      const status = response ? response.status() : undefined;
+      if (typeof status === "number" && status >= 400) {
+        throw new Error("Implementation route returned HTTP " + status + ": " + routeUrl);
+      }
+      const metricsBeforeScroll = await page.evaluate(() => ({
+        scrollHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0),
+        clientHeight: Math.ceil(document.documentElement.clientHeight || window.innerHeight || 0),
+      }));
+      const maxScrollY = Math.max(0, metricsBeforeScroll.scrollHeight - metricsBeforeScroll.clientHeight);
+      if (input.scrollY > maxScrollY) {
+        throw new Error(
+          "Requested scrollY exceeds implementation scroll range: scrollY=" +
+            input.scrollY +
+            " maxScrollY=" +
+            maxScrollY +
+            " url=" +
+            routeUrl
+        );
+      }
+      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), input.scrollY);
+      await page.waitForTimeout(${SCROLL_SLICE_SETTLE_AFTER_SCROLL_MS});
+      browserFailures.assertNoFailures("scroll-slice capture");
+      const capture = await page.evaluate(() => ({
+        actualScrollY: Math.round(window.scrollY),
+        scrollHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0),
+        clientHeight: Math.ceil(document.documentElement.clientHeight || window.innerHeight || 0),
+        pageWidth: Math.ceil(document.documentElement.scrollWidth || document.body.scrollWidth || window.innerWidth || 0),
+        pageHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || window.innerHeight || 0),
+        title: document.title || "",
+      }));
+      if (capture.actualScrollY !== input.scrollY) {
+        throw new Error(
+          "Implementation did not reach requested scrollY: requested=" +
+            input.scrollY +
+            " actual=" +
+            capture.actualScrollY +
+            " url=" +
+            routeUrl
+        );
+      }
+      await page.screenshot({ path: input.screenshotPath, type: "png", fullPage: false });
+      browserFailures.assertNoFailures("scroll-slice capture");
+      result = {
+        ok: true,
+        screenshotPath: input.screenshotPath,
+        url: routeUrl,
+        actualScrollY: capture.actualScrollY,
+        maxScrollY,
+        viewport: { width: input.viewport.width, height: input.viewport.height },
+        pageSize: { width: capture.pageWidth, height: capture.pageHeight },
+        title: capture.title,
+      };
+    } finally {
+      browserFailures.dispose();
     }
-    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), input.scrollY);
-    await page.waitForTimeout(${SCROLL_SLICE_SETTLE_AFTER_SCROLL_MS});
-    const capture = await page.evaluate(() => ({
-      actualScrollY: Math.round(window.scrollY),
-      scrollHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0),
-      clientHeight: Math.ceil(document.documentElement.clientHeight || window.innerHeight || 0),
-      pageWidth: Math.ceil(document.documentElement.scrollWidth || document.body.scrollWidth || window.innerWidth || 0),
-      pageHeight: Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || window.innerHeight || 0),
-      title: document.title || "",
-    }));
-    if (capture.actualScrollY !== input.scrollY) {
-      throw new Error(
-        "Implementation did not reach requested scrollY: requested=" +
-          input.scrollY +
-          " actual=" +
-          capture.actualScrollY +
-          " url=" +
-          routeUrl
-      );
-    }
-    await page.screenshot({ path: input.screenshotPath, type: "png", fullPage: false });
-    const result = {
-      ok: true,
-      screenshotPath: input.screenshotPath,
-      url: routeUrl,
-      actualScrollY: capture.actualScrollY,
-      maxScrollY,
-      viewport: { width: input.viewport.width, height: input.viewport.height },
-      pageSize: { width: capture.pageWidth, height: capture.pageHeight },
-      title: capture.title,
-    };
     process.stdout.write(JSON.stringify(result));
   } catch (error) {
     process.stdout.write(

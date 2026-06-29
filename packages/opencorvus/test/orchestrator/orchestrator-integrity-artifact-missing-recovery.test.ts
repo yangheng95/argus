@@ -7,8 +7,13 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { ProtocolStore } from "../../src/protocol/store"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+
+function sessionOrderKey(sessionID: string, timeCreated: number) {
+  return timelineOrderKey({ domain: "session", time: timeCreated, id: sessionID })
+}
 
 function buildToolOptions(label = "artifact_missing") {
   const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -123,6 +128,7 @@ describe("orchestrator integrity artifact_missing recovery", () => {
         })
         seedWorkflowTask({ taskID, specID, goalID, rootSessionID: root.id, now })
 
+        const integrityOrderKey = sessionOrderKey(integritySession.id, integritySession.time.created)
         await ProtocolStore.appendEvent({
           kind: "event",
           type: "session.status",
@@ -132,7 +138,9 @@ describe("orchestrator integrity artifact_missing recovery", () => {
           session_id: integritySession.id,
           source: "test",
           emitted_at: now + 10,
+          order_key: integrityOrderKey,
           payload: {
+            orderKey: integrityOrderKey,
             sessionID: integritySession.id,
             status: {
               type: "terminal",

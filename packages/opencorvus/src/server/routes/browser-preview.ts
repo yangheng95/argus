@@ -15,7 +15,6 @@ import {
 } from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
-  failedBrowserPreviewTarget,
   resolveBrowserPreviewTarget,
   taskBrowserPreviewTarget,
 } from "../../browser-preview/target"
@@ -28,6 +27,8 @@ import {
   compareBrowserPreviewRegions,
 } from "../../browser-preview/region-comparison"
 import { browserPreviewTaskEvidenceRoot } from "../../browser-preview/task-evidence-root"
+import { NotFoundError } from "../../storage/db"
+import { errors, namedErrorResponse } from "../error"
 
 const BrowserPreviewLiveRequest = z
   .object({
@@ -97,6 +98,8 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
+          500: namedErrorResponse("Browser preview evidence is corrupt", "BrowserPreviewEvidenceCorruptionError"),
         },
       }),
       validator(
@@ -130,6 +133,11 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
+          500: namedErrorResponse(
+            "Browser preview evidence capture is corrupt",
+            "BrowserPreviewEvidenceCorruptionError",
+          ),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1), evidenceID: z.string().min(1) })),
@@ -141,7 +149,7 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskID,
           evidenceID,
         })
-        if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
+        if (!evidence) throw new NotFoundError({ message: `Browser preview evidence not found: ${evidenceID}` })
         return c.json(stripRuntimePathRefs(evidence) as PersistedBrowserPreviewEvidence)
       },
     )
@@ -160,6 +168,11 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
+          500: namedErrorResponse(
+            "Browser preview evidence artifact is corrupt",
+            "BrowserPreviewEvidenceCorruptionError",
+          ),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1), evidenceID: z.string().min(1) })),
@@ -171,7 +184,8 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskID,
           evidenceID,
         })
-        if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
+        if (!capturePath)
+          throw new NotFoundError({ message: `Browser preview evidence capture not found: ${evidenceID}` })
         const bytes = await fs.readFile(resolveRuntimeRelativePath(projectRoot, capturePath))
         return new Response(bytes, {
           headers: {
@@ -197,6 +211,8 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
+          500: namedErrorResponse("Browser preview evidence is corrupt", "BrowserPreviewEvidenceCorruptionError"),
         },
       }),
       validator(
@@ -217,7 +233,9 @@ export const BrowserPreviewRoutes = lazy(() =>
           artifactName,
         })
         if (!artifactPath)
-          return c.json({ message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}` }, 404)
+          throw new NotFoundError({
+            message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}`,
+          })
         const bytes = await fs.readFile(resolveRuntimeRelativePath(projectRoot, artifactPath))
         return new Response(bytes, {
           headers: {
@@ -242,6 +260,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
@@ -252,15 +271,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
         const targetID = body.targetID
         const persisted = await promoteBrowserPreviewTarget({ taskID, targetID })
-        if (!persisted)
-          return c.json(
-            failedBrowserPreviewTarget({
-              projectRoot,
-              taskID,
-              diagnostics: [`Browser preview target not found: ${targetID}`],
-            }),
-            404,
-          )
+        if (!persisted) throw new NotFoundError({ message: `Browser preview target not found: ${targetID}` })
         return c.json(
           taskBrowserPreviewTarget({
             id: persisted.id,
@@ -289,6 +300,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
@@ -298,7 +310,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
         const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!persisted) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        if (!persisted) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
         const target = taskBrowserPreviewTarget({
           id: persisted.id,
           taskID,
@@ -334,6 +346,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
@@ -343,7 +356,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
         const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
         const result = await compareBrowserPreviewRegions({
           projectRoot,
           taskID,
@@ -374,6 +387,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
@@ -383,7 +397,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         browserPreviewTaskEvidenceRoot(taskID)
         const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
         const bytes = await captureBrowserPreviewLiveSnapshot({
           taskID,
           targetID: body.targetID,
@@ -414,6 +428,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ taskID: z.string().min(1) })),
@@ -423,7 +438,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         browserPreviewTaskEvidenceRoot(taskID)
         const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
         const bytes = await interactBrowserPreviewLive({
           taskID,
           targetID: body.targetID,

@@ -110,9 +110,7 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).not.toContain("Active prompt profile:")
     expect(PromptProfile.builtIns["frontend-replica"].agents.mission).not.toContain("Coordinate frontend work")
-    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).not.toContain(
-      "bias planning and retries",
-    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).not.toContain("bias planning and retries")
   })
 
   test("direct session agents also receive scene-specific overlays", () => {

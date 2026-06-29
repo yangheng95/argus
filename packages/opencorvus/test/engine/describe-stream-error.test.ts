@@ -21,8 +21,8 @@ import { tmpdir } from "../fixture/fixture"
  * (_session-r2-glm5.out 14:47:25).
  *
  * The fix surfaces those artifacts through the describe layer so the
-   * orchestrator LLM sees them on its next wake and decides retry /
-   * re-dispatch / fail itself. This test seeds the artifacts
+ * orchestrator LLM sees them on its next wake and decides retry /
+ * re-dispatch / fail itself. This test seeds the artifacts
  * directly and asserts the projection + rendering.
  */
 
@@ -107,6 +107,7 @@ async function appendOpenToolPart(input: {
             status: "pending",
             input: { source_url: "https://example.com" },
             raw: "",
+            time: { start: now },
           },
   })
 }

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
 import { Bus } from "../../src/bus"
 
@@ -31,7 +32,7 @@ afterEach(async () => {
 test("SessionStatus.set: cross-Instance terminal race — only the first terminal escapes", async () => {
   await using tmpA = await tmpdir({ git: true })
   await using tmpB = await tmpdir({ git: true })
-  const sessionID = "ses_cross_inst_test"
+  let sessionID = ""
 
   // The bus is process-global (not lazyInstanceState), so a subscriber
   // installed under Instance A sees publishes that originated from Instance B
@@ -42,6 +43,8 @@ test("SessionStatus.set: cross-Instance terminal race — only the first termina
   await Instance.provide({
     directory: tmpA.path,
     fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "cross instance status" })
+      sessionID = session.id
       sub = Bus.subscribe(SessionStatus.Event.Status, (msg) => {
         if (msg.properties.sessionID === sessionID && msg.properties.status.type === "terminal") {
           terminals.push(msg.properties.status)
@@ -73,12 +76,13 @@ test("SessionStatus.set: cross-Instance terminal race — only the first termina
 
 test("SessionStatus.set: re-entrant subscriber sees sealed state during publish (H1 race)", async () => {
   await using tmp = await tmpdir({ git: true })
-  const sessionID = "ses_reentrant_test"
   const terminals: SessionStatus.Info[] = []
 
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "reentrant status" })
+      const sessionID = session.id
       // Subscriber re-enters set() synchronously when it sees the first
       // terminal. Pre-fix, the state write happened AFTER publish, so
       // the re-entrant call's check at line 97 saw state still un-sealed

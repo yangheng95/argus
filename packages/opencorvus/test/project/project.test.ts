@@ -82,6 +82,26 @@ async function loadProject() {
   return (await import("../../src/project/project")).Project
 }
 
+async function withDirectoryAlias(target: string, run: (alias: string) => Promise<void>) {
+  const parent = path.join(
+    path.dirname(target),
+    `${path.basename(target)}-alias-${Math.random().toString(36).slice(2)}`,
+  )
+  const alias = path.join(parent, "visible")
+  await fs.mkdir(parent, { recursive: true })
+  try {
+    await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir")
+  } catch (error) {
+    await fs.rm(parent, { recursive: true, force: true })
+    throw error
+  }
+  try {
+    await run(alias)
+  } finally {
+    await fs.rm(parent, { recursive: true, force: true })
+  }
+}
+
 describe("Project.fromDirectory", () => {
   beforeEach(() => {
     resetDatabase()
@@ -122,6 +142,50 @@ describe("Project.fromDirectory", () => {
     const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
     const fileExists = await Filesystem.exists(opencorvusFile)
     expect(fileExists).toBe(true)
+  })
+
+  test("preserves selected root path when git top-level is the same real directory", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const { project, sandbox } = await p.fromDirectory(alias)
+
+      expect(project.id).not.toBe("global")
+      expect(project.worktree).toBe(alias)
+      expect(sandbox).toBe(alias)
+      expect(Project.get(project.id)?.worktree).toBe(alias)
+      expect(Project.isGitRepo(project.worktree)).toBe(true)
+    })
+  })
+
+  test("rewrites an existing realpath-equivalent project row to the selected root path", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+
+    const original = await p.fromDirectory(tmp.path)
+    expect(Project.get(original.project.id)?.worktree).toBe(tmp.path)
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const resolved = await p.fromDirectory(alias)
+
+      expect(resolved.project.id).toBe(original.project.id)
+      expect(resolved.project.worktree).toBe(alias)
+      expect(resolved.sandbox).toBe(alias)
+      expect(Project.get(original.project.id)?.worktree).toBe(alias)
+      expect(resolved.project.sandboxes).not.toContain(tmp.path)
+    })
+  })
+
+  test("recognizes same filesystem identity even when real paths differ", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+    const first = path.join(tmp.path, "first.txt")
+    const second = path.join(tmp.path, "second.txt")
+    await fs.writeFile(first, "same inode", "utf8")
+    await fs.link(first, second)
+
+    expect(await p.sameFilesystemLocation(first, second)).toBe(true)
   })
 
   test("keeps git vcs when rev-list exits non-zero with empty output", async () => {

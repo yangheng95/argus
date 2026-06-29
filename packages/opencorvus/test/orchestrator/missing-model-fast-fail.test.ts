@@ -13,13 +13,13 @@ import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
-describe("Orchestrator missing-model fast-fail", () => {
+describe("Orchestrator missing-model visible error", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
   })
 
-  test("marks task failed and emits task.updated in the first wake", async () => {
+  test("records task error and emits task.updated without a terminal failure", async () => {
     await using tmp = await tmpdir({ config: { agent: {} } })
     const prevHome = process.env.OPENCORVUS_HOME
     const prevGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
@@ -59,8 +59,8 @@ describe("Orchestrator missing-model fast-fail", () => {
 
           const task = findTask(taskID)
           expect(task).toBeDefined()
-          expect(deriveTaskStatus(task!)).toBe("failed")
-          expect(task!.time_completed).toBeNumber()
+          expect(deriveTaskStatus(task!)).toBe("active")
+          expect(task!.time_completed).toBeNull()
           expect(task!.error).toContain('No model configured for agent "orchestrator"')
           expect(prompt).not.toHaveBeenCalled()
           let events = ProtocolStore.listTaskEvents(taskID)
@@ -72,7 +72,7 @@ describe("Orchestrator missing-model fast-fail", () => {
             expect.objectContaining({
               type: "task.updated",
               payload: expect.objectContaining({
-                status: "failed",
+                status: "active",
                 summary: expect.stringContaining('No model configured for agent "orchestrator"'),
               }),
             }),

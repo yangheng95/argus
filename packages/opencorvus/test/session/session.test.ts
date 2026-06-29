@@ -213,6 +213,7 @@ describe("Session.fork", () => {
 
         const child = await Session.fork({ sessionID: root.id })
         const childMessages = await Session.messages({ sessionID: child.id })
+        const parentOrderKeys = new Set([user.orderKey, summary.orderKey, recentUser.orderKey])
         const childUsers = new Set(
           childMessages.filter((message) => message.info.role === "user").map((message) => message.info.id),
         )
@@ -221,6 +222,8 @@ describe("Session.fork", () => {
         )
 
         expect(childAssistants).toHaveLength(2)
+        expect(childMessages.every((message) => message.info.orderKey.includes(":message:"))).toBe(true)
+        expect(childMessages.some((message) => parentOrderKeys.has(message.info.orderKey))).toBe(false)
         for (const message of childAssistants) {
           expect(childUsers.has(message.info.parentID)).toBe(true)
           expect(message.info.parentID).not.toBe(user.id)
@@ -293,9 +296,46 @@ describe("Session.updateMessage", () => {
 
         expect(updated.time.created).toBe(created)
         expect(events.at(-1)?.time.created).toBe(created)
+        expect(updated.orderKey).toBe(events.at(-1)?.orderKey)
+        expect(events.every((event) => typeof event.orderKey === "string" && event.orderKey.includes(":message:"))).toBe(
+          true,
+        )
         expect(persistedMessage?.info.time.created).toBe(created)
         expect(persistedMessage?.info.role === "assistant" ? persistedMessage.info.tokens.output : undefined).toBe(1)
 
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("visible message.updated bus events reject missing orderKey", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        await expect(
+          Bus.publish(Message.Event.Updated, {
+            info: {
+              id: Identifier.ascending("message"),
+              sessionID: session.id,
+              role: "assistant",
+              time: { created: Date.now() },
+              parentID: "user-parent",
+              modelID: "test-model",
+              providerID: "test-provider",
+              agent: "frontend-research",
+              path: { cwd: projectRoot, root: projectRoot },
+              cost: 0,
+              tokens: {
+                input: 0,
+                output: 0,
+                reasoning: 0,
+                total: 0,
+                cache: { read: 0, write: 0 },
+              },
+            } as any,
+          }),
+        ).rejects.toThrow(/orderKey/)
         await Session.remove(session.id)
       },
     })

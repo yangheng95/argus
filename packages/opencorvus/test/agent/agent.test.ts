@@ -112,7 +112,6 @@ test("build agent has correct default properties", async () => {
       expect(ids.has("web_clone_prepare_context")).toBe(false)
       expect(ids.has("web_clone_source_audit")).toBe(false)
       expect(ids.has("web_clone_generate_source_project")).toBe(false)
-      expect(ids.has("browser_preview_compare_regions")).toBe(true)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(false)
     },
   })
@@ -136,7 +135,6 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "webpage_vision_judge")).not.toBe("allow")
       expect(evalPerm(visualQa, "browser_preview")).toBe("allow")
       expect(evalPerm(visualQa, "browser_preview_bind_local_module")).toBe("allow")
-      expect(evalPerm(visualQa, "browser_preview_compare_regions")).toBe("allow")
       expect(evalPerm(visualQa, "browser_preview_compare_scroll_slices")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
       const visible = visibleToolIDs(visualQa)
@@ -144,7 +142,6 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(visible.has("webpage_extract")).toBe(false)
       expect(visible.has("browser_preview")).toBe(true)
       expect(visible.has("browser_preview_bind_local_module")).toBe(true)
-      expect(visible.has("browser_preview_compare_regions")).toBe(true)
       expect(visible.has("browser_preview_compare_scroll_slices")).toBe(true)
       expect(visible.has("webpage_render")).toBe(false)
       expect(visible.has("webpage_evaluate")).toBe(false)
@@ -159,7 +156,6 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(ids.has("webpage_evaluate")).toBe(false)
       expect(ids.has("webpage_vision_judge")).toBe(false)
       expect(ids.has("browser_preview_bind_local_module")).toBe(true)
-      expect(ids.has("browser_preview_compare_regions")).toBe(true)
       expect(ids.has("browser_preview_compare_scroll_slices")).toBe(true)
     },
   })
@@ -267,6 +263,36 @@ test("custom default tool pool excludes task-scoped agent coordination", () => {
   expect(AgentToolPool.customDefault().global).not.toContain("request_orchestrator_decision")
 })
 
+test("all live task-owned worker roles expose the A2A request tool", () => {
+  const liveTaskWorkerRoles = AgentRoleContract.ids.filter((role) => {
+    const contract = AgentRoleContract.get(role)
+    return (
+      contract.archetype === "worker" &&
+      contract.agentOwnedSessionKind &&
+      contract.runtimeContractRequired &&
+      contract.liveRuntimeContinuation
+    )
+  })
+
+  expect(liveTaskWorkerRoles).toEqual([
+    "build",
+    "visual-qa",
+    "explore",
+    "requirements",
+    "architect",
+    "frontend-design",
+    "intent-analysis",
+    "integrity",
+    "fact-check",
+    "deep-research",
+    "frontend-research",
+    "goal-workload-analyst",
+  ])
+  for (const role of liveTaskWorkerRoles) {
+    expect(AgentToolPool.hasTool(AgentToolPool.assignment(role), "request_orchestrator_decision")).toBe(true)
+  }
+})
+
 test("explore agent limits exposed tools without permission denials", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -285,8 +311,10 @@ test("explore agent limits exposed tools without permission denials", async () =
       // must also resolve `websearch`.
       expect(visible.has("websearch")).toBe(true)
       expect(visible.has("webfetch")).toBe(true)
+      expect(visible.has("request_orchestrator_decision")).toBe(true)
       const exploreTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, explore)
       expect(exploreTools.map((t) => t.id)).toContain("websearch")
+      expect(exploreTools.map((t) => t.id)).toContain("request_orchestrator_decision")
     },
   })
   // ToolRegistry.tools() does cold first-time init of every registered tool
@@ -352,7 +380,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(visible.has("select_expert_squad")).toBe(true)
       expect(visible.has("browser_preview")).toBe(true)
       expect(visible.has("browser_preview_bind_local_module")).toBe(false)
-      expect(visible.has("browser_preview_compare_regions")).toBe(false)
       expect(visible.has("wait")).toBe(true)
       expect(visible.has("panel")).toBe(false)
       expect(visible.has("task")).toBe(false)
@@ -367,7 +394,6 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       expect(tools.map((tool) => tool.id)).not.toContain("task_report")
       expect(tools.map((tool) => tool.id)).not.toContain("memory")
       expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_bind_local_module")
-      expect(tools.map((tool) => tool.id)).not.toContain("browser_preview_compare_regions")
     },
   })
 })
@@ -602,7 +628,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(visualVisible.has("request_orchestrator_decision")).toBe(true)
       expect(visualVisible.has("browser_preview")).toBe(true)
       expect(visualVisible.has("browser_preview_bind_local_module")).toBe(true)
-      expect(visualVisible.has("browser_preview_compare_regions")).toBe(true)
       expect(visualVisible.has("bash")).toBe(true)
       expect(visualVisible.has("webpage_render")).toBe(false)
       expect(visualVisible.has("webpage_evaluate")).toBe(false)
@@ -740,6 +765,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       const visible = visibleToolIDs(orchestrator)
       for (const tool of [
         "propose_task",
+        "complete_task",
         "fail_task",
         "cancel_task",
         "retry_task",
@@ -769,6 +795,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
 test("task lifecycle tools are exposed only to the orchestrator scheduler", () => {
   const taskLifecycleTools = [
     "propose_task",
+    "complete_task",
     "fail_task",
     "cancel_task",
     "retry_task",
@@ -797,7 +824,6 @@ test("orchestrator tool pool covers every self-built orchestrator tool", async (
         signal: new AbortController().signal,
       })
       expect(Object.keys(tools)).not.toContain("browser_preview_bind_local_module")
-      expect(Object.keys(tools)).not.toContain("browser_preview_compare_regions")
 
       for (const toolName of Object.keys(tools)) {
         expect(visible.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)

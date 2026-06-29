@@ -33,6 +33,7 @@ async function removeDatabaseFile(file: string) {
       return
     } catch (error) {
       if (!isBusyRemovalError(error) || attempt >= 99) throw error
+      Database.close()
       Bun.gc(true)
       await Bun.sleep(100)
     }
@@ -44,7 +45,7 @@ export async function resetDatabase() {
   Database.close()
   const dbPath = Database.Path()
   assertTestDatabasePath(dbPath)
-  await removeDatabaseFile(dbPath)
   await removeDatabaseFile(`${dbPath}-wal`)
   await removeDatabaseFile(`${dbPath}-shm`)
+  await removeDatabaseFile(dbPath)
 }

@@ -51,9 +51,11 @@ describe("message-bridge persistence guard", () => {
     }
   })
 
-  test("stamps only part orderKey into Message.Part, never route metadata", () => {
-    expect(bridgeSource).toContain("partOrderKeyForEvent")
+  test("stamps message orderKey on part events and only part orderKey into Message.Part", () => {
+    expect(bridgeSource).toContain("partOrderKeysForEvent")
+    expect(bridgeSource).toContain("messageOrderKey")
     expect(bridgeSource).toContain("enriched.part = { ...partRecord(properties), orderKey: partOrderKey }")
+    expect(bridgeSource).toContain("enriched.orderKey = messageOrderKey")
     expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*resolvedRole/)
     expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*channel/)
     expect(bridgeSource).not.toMatch(/enriched\.part\s*=\s*{[^}]*parentSessionID/)

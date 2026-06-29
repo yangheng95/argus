@@ -12,7 +12,7 @@ function slash(input: string) {
 }
 
 describe("Worktree.remove", () => {
-  test("continues when git remove exits non-zero after detaching", async () => {
+  test("removes a registered worktree without delegating physical deletion to git worktree remove", async () => {
     await using tmp = await tmpdir({ git: true })
     const root = tmp.path
     const name = `remove-regression-${Date.now().toString(36)}`
@@ -27,16 +27,18 @@ describe("Worktree.remove", () => {
 
     const bin = path.join(root, "bin")
     const shim = path.join(bin, "git")
+    const forbidden = path.join(root, "git-worktree-remove-called.txt")
     await fs.mkdir(bin, { recursive: true })
     await Bun.write(
       shim,
       [
         "#!/bin/bash",
         `REAL_GIT=${JSON.stringify(real)}`,
+        `FORBIDDEN=${JSON.stringify(forbidden)}`,
         'if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then',
-        '  "$REAL_GIT" "$@" >/dev/null 2>&1',
-        '  echo "fatal: failed to remove worktree: Directory not empty" >&2',
-        "  exit 1",
+        '  echo "$@" > "$FORBIDDEN"',
+        '  echo "fatal: git worktree remove must not own physical teardown" >&2',
+        "  exit 97",
         "fi",
         'exec "$REAL_GIT" "$@"',
       ].join("\n"),
@@ -59,6 +61,7 @@ describe("Worktree.remove", () => {
 
     expect(ok).toBe(true)
     expect(await Filesystem.exists(dir)).toBe(false)
+    expect(await Filesystem.exists(forbidden)).toBe(false)
 
     const list = await $`git worktree list --porcelain`.cwd(root).quiet().text()
     expect(list).not.toContain(`worktree ${dir}`)

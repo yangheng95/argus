@@ -92,6 +92,28 @@ export function compareTimelineOrderKeys(left: string, right: string): number {
   return a.localeCompare(b)
 }
 
+export function timelineOrderKeyDomain(value: unknown, label = "timeline order key"): TimelineOrderDomain {
+  const key = String(value || "").trim()
+  if (!key) throw new Error(`${label} is required`)
+  if (!key.startsWith("v1:")) throw new Error(`${label} has unsupported version: ${key}`)
+  const domain = key.split(":", 6)[4] || ""
+  if (!(domain in DOMAIN_RANK)) throw new Error(`${label} has unknown domain: ${key}`)
+  return domain as TimelineOrderDomain
+}
+
+export function requireTimelineOrderKeyDomain(
+  value: unknown,
+  label: string,
+  expectedDomain: TimelineOrderDomain,
+): string {
+  const key = String(value || "").trim()
+  const actualDomain = timelineOrderKeyDomain(key, label)
+  if (actualDomain !== expectedDomain) {
+    throw new Error(`${label} expected ${expectedDomain} orderKey, got ${actualDomain}: ${key}`)
+  }
+  return key
+}
+
 export function compareTimelineOrderedItems(left: { orderKey?: unknown }, right: { orderKey?: unknown }): number {
   const leftKey = typeof left?.orderKey === "string" ? left.orderKey : ""
   const rightKey = typeof right?.orderKey === "string" ? right.orderKey : ""

@@ -219,7 +219,9 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
       if (viewport.comparison) lines.push(`  comparison: ${viewport.comparison}`)
     }
     if (visualIteration.layoutWidthContract) {
-      lines.push(`- layoutWidthContract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`)
+      lines.push(
+        `- layoutWidthContract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`,
+      )
     } else {
       lines.push(
         "- layoutWidthContract: missing; do not infer full-width or centered layout without source layout bounds.",

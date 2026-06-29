@@ -118,8 +118,53 @@ describe("browser preview region route diagnostics", () => {
         expect(region.status).toBe("completed")
         expect(region.route_diagnostics?.status).toBe(200)
         expect(region.route_diagnostics?.valid_app_page).toBe(true)
+        expect(region.route_diagnostics?.console_errors).toEqual([])
         expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
         expect(await fileExists(resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side))).toBe(true)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_ROUTE_DIAGNOSTICS_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "marks routes with browser failures invalid even when the target locator is visible",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeReferenceScreenshot(paths.sourcePackageAbsolute)
+      const server = await startBrokenAssetPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [
+            routeBinding({
+              regionID: "broken-asset-region",
+              route: "/broken-asset",
+              locatorValue: "economic-trends-dashboard",
+            }),
+          ],
+        })
+
+        expect(result.status).toBe("failed")
+        const region = result.regions[0]
+        expect(region.status).toBe("failed")
+        expect(region.reason).toContain("Implementation route did not render a valid app page")
+        expect(region.route_diagnostics?.status).toBe(200)
+        expect(region.route_diagnostics?.valid_app_page).toBe(false)
+        expect(region.route_diagnostics?.failed_requests.length).toBeGreaterThan(0)
+        expect(region.route_diagnostics?.reason).toContain("failed_requests=1")
+        expect(region.artifacts).toBeUndefined()
       } finally {
         await server.close()
       }
@@ -305,6 +350,62 @@ async function startLongRequestPreviewServer(): Promise<{ url: string; close: ()
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("long request test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startBrokenAssetPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const pathname = new URL(req.url ?? "/", "http://127.0.0.1").pathname
+    if (pathname === "/missing.png") {
+      res.writeHead(404, { "content-type": "image/png" })
+      res.end("missing")
+      return
+    }
+    if (pathname !== "/broken-asset") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>World Economy</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; min-height: 720px; }
+            [data-oc-region="economic-trends-dashboard"] {
+              width: 320px;
+              height: 140px;
+              background: #dbeafe;
+              color: #1e3a8a;
+              box-sizing: border-box;
+              padding: 24px;
+              font-size: 24px;
+            }
+          </style>
+        </head>
+        <body>
+          <main>
+            <section data-oc-region="economic-trends-dashboard">Economic trends broken asset</section>
+            <img src="/missing.png" alt="missing reference asset">
+            <p>Additional content keeps the route body representative of an application shell.</p>
+          </main>
+        </body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("broken asset test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>

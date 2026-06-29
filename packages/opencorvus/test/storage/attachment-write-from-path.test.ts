@@ -36,6 +36,14 @@ describe("AttachmentStore.writeFromPath", () => {
         const located = AttachmentStore.nameFromUrl(ref.url)!
         const bytes = await AttachmentStore.read(located.projectID, located.name)
         expect(bytes.equals(PNG_MAGIC)).toBe(true)
+        const metadata = await AttachmentStore.readReference(located.projectID, located.name)
+        expect(metadata).toMatchObject({
+          sha: ref.sha,
+          url: ref.url,
+          mime: "image/png",
+          size: PNG_MAGIC.length,
+          filename: "shot-1.png",
+        })
       },
     })
   })

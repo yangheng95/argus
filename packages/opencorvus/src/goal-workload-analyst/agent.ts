@@ -16,6 +16,7 @@ import { runAgentSession } from "@/agent/runner"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { createGoalWorkloadOutputTools } from "./output-tools"
@@ -50,10 +51,19 @@ export namespace GoalWorkloadAnalystAgent {
     const knownGoalIDs = input.goals.map((g) => g.id)
     const knownContractIDs = (input.contractGraph?.contracts ?? []).map((c) => c.id)
     const outputToolKit = createGoalWorkloadOutputTools({ knownGoalIDs, knownContractIDs })
-    const contextTools = await filterAgentTools(createAgentContextTools(), "goal-workload-analyst", {
+    const coordinationTools = await createAgentCoordinationRuntimeTools({
+      agent: "goal-workload-analyst",
       taskID: input.taskID,
-      sessionID: input.parentSessionID,
+      signal: input.signal,
     })
+    const contextTools = await filterAgentTools(
+      { ...createAgentContextTools(), ...coordinationTools },
+      "goal-workload-analyst",
+      {
+        taskID: input.taskID,
+        sessionID: input.parentSessionID,
+      },
+    )
 
     log.info("goal-workload-analyst starting", {
       goals: input.goals.length,

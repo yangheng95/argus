@@ -379,7 +379,7 @@ describe("filesystem", () => {
       try {
         process.chdir(tmp.path)
         expect(Filesystem.resolve(path.join("nested", "..", "file.txt"))).toBe(
-          Filesystem.normalizePath(path.resolve("file.txt")),
+          Filesystem.normalizeWindowsPath(path.resolve("file.txt")),
         )
       } finally {
         process.chdir(original)
@@ -388,7 +388,7 @@ describe("filesystem", () => {
 
     test("converts Git Bash paths at the boundary", () => {
       if (process.platform === "win32") {
-        expect(Filesystem.resolve("/c/Users/test")).toBe(Filesystem.normalizePath(path.resolve("C:/Users/test")))
+        expect(Filesystem.resolve("/c/Users/test")).toBe(Filesystem.normalizeWindowsPath(path.resolve("C:/Users/test")))
         return
       }
 
@@ -396,8 +396,26 @@ describe("filesystem", () => {
     })
 
     test("expands shell-style home paths before resolving", () => {
-      expect(Filesystem.resolve("~/economy_2")).toBe(Filesystem.normalizePath(path.resolve(homedir(), "economy_2")))
-      expect(Filesystem.resolve("~")).toBe(Filesystem.normalizePath(path.resolve(homedir())))
+      expect(Filesystem.resolve("~/economy_2")).toBe(
+        Filesystem.normalizeWindowsPath(path.resolve(homedir(), "economy_2")),
+      )
+      expect(Filesystem.resolve("~")).toBe(Filesystem.normalizeWindowsPath(path.resolve(homedir())))
+    })
+
+    test("preserves visible directory aliases instead of resolving to their physical target", async () => {
+      await using tmp = await tmpdir()
+      const parent = path.join(path.dirname(tmp.path), `${path.basename(tmp.path)}-fs-alias-${Date.now().toString(36)}`)
+      const alias = path.join(parent, "visible")
+      await fs.mkdir(parent, { recursive: true })
+      try {
+        await fs.symlink(tmp.path, alias, process.platform === "win32" ? "junction" : "dir")
+        const physical = await fs.realpath(alias)
+
+        expect(Filesystem.resolve(alias)).toBe(Filesystem.normalizeWindowsPath(path.resolve(alias)))
+        expect(Filesystem.resolve(alias)).not.toBe(Filesystem.normalizeWindowsPath(path.resolve(physical)))
+      } finally {
+        await fs.rm(parent, { recursive: true, force: true })
+      }
     })
   })
 

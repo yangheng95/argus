@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { updateTask } from "../../src/engine/state"
+import { terminalTask } from "../../src/engine/state"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import * as Queue from "../../src/engine/queue"
 import { Identifier } from "../../src/id/id"
@@ -104,7 +104,7 @@ describe("task terminal lineage notifications", () => {
         const child = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, childTaskID)).get(),
         )!
-        await updateTask(child, { status: "completed" }, "child delivered")
+        await terminalTask(child, { status: "completed" }, "child delivered")
         await waitFor(async () => {
           const messages = await Session.messages({ sessionID: parentRoot.id })
           return messages.some((message) =>
@@ -161,7 +161,7 @@ describe("task terminal lineage notifications", () => {
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )!
 
-        await updateTask(task, { status: "failed", error: "acceptance failed" }, "task failed acceptance")
+        await terminalTask(task, { status: "failed", error: "acceptance failed" }, "task failed acceptance")
         await waitFor(() => wake.mock.calls.length > 0)
 
         expect(wake).toHaveBeenCalledWith(

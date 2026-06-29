@@ -234,10 +234,10 @@ export function sessionIDsForTask(taskID: string): string[] {
 
 // List direct child task IDs of `parentTaskID` — children are tasks whose
 // `metadata.parent_task_id` matches. The relationship is currently only
-// written by `propose_task` (orchestrator follow-up); both that and the
-// mission dispatch path go through engine_task.metadata, so a JSON-extract
-// scan is the only correct source. There is no FK column because the
-// parentage is logical (mission lineage), not structural.
+// written by the scheduler-owned createSchedulerChildTask path. Mission has
+// separate metadata.mission provenance, so a JSON-extract scan remains the
+// only correct source. There is no FK column because the parentage is
+// logical lineage, not structural ownership.
 export function findChildrenOfTask(parentTaskID: string): string[] {
   return Database.use((db) =>
     db

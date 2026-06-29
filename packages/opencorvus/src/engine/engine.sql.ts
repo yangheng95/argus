@@ -187,8 +187,9 @@ export const EngineTaskTable = sqliteTable(
     /** Phase-6-f: `active_plan_version_id` cache column removed. Derive via
      *  `findActivePlanForTask(taskID)` (engine_plan_version.status='active').
      *  Rule 22 — single source in the plan status column. */
-    /** Phase-6-f-3: `active_run_id` cache column removed. Derive via
-     *  `findActiveRunForTask(taskID)` (newest engine_artifact kind="run"). */
+    /** Phase-6-f-3: `active_run_id` cache column removed. Derive active
+     *  execution via `findActiveRunForTask(taskID)` (latest tip if live);
+     *  read `findLatestRunForTask(taskID)` for terminal run history. */
     request_id: text(),
     source: text().notNull().default("api"),
     title: text().notNull(),

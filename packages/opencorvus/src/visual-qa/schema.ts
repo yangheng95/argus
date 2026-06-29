@@ -61,18 +61,28 @@ export const VisualQaProductionBlockerSchema = z.object({
   evidence_refs: z.array(z.string().min(1)).default([]),
 })
 
-export const VisualQaFollowUpTaskSchema = z.object({
-  title: z.string().min(1).describe("Concise title for the inheriting follow-up task."),
-  request: z
+export const VisualQaCodeModuleReferenceSchema = z.object({
+  entity: z
     .string()
     .min(1)
-    .describe("Complete, self-contained request for the next task round that addresses the unrepairable blockers."),
+    .describe(
+      "Concrete code module reference entity: file path, component, tool, service, route, schema, table, class, or function.",
+    ),
+  problem: z
+    .string()
+    .min(1)
+    .describe("Observed problem tied to that entity. Generic project improvement text is not a valid problem."),
+})
+
+export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
+  id: z.string().min(1),
+  code_module_reference: VisualQaCodeModuleReferenceSchema,
   reason: z
     .string()
     .min(1)
-    .describe("Evidence-backed reason Visual QA cannot safely repair these blockers inside the current worktree."),
-  priority: z.enum(["critical", "high", "normal", "low"]).default("high"),
-  blocker_ids: z.array(z.string().min(1)).min(1).describe("Production blocker IDs this follow-up task must address."),
+    .describe("Evidence-backed reason Visual QA cannot safely repair this code module problem inside the current worktree."),
+  blocker_ids: z.array(z.string().min(1)).min(1).describe("Production blocker IDs that expose this problem."),
+  evidence_refs: z.array(z.string().min(1)).default([]),
 })
 
 export const VisualQaRepairSchema = z.object({
@@ -106,7 +116,7 @@ export const VisualQaReferenceParitySchema = z.object({
   reference_comparison_evidence_refs: z
     .array(z.string().min(1))
     .default([])
-    .describe("Artifact IDs from browser_preview_compare_regions reference-comparison evidence."),
+    .describe("Artifact IDs from persisted browser preview comparison evidence."),
   missing_regions: z.array(z.string().min(1)).default([]),
   blocker_ids: z
     .array(z.string().min(1))
@@ -127,7 +137,7 @@ export const VisualQaReportSchema = z.object({
   coverage: z.array(VisualQaCoverageSchema).default([]),
   findings: z.array(VisualQaFindingSchema).default([]),
   production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),
-  follow_up_task: VisualQaFollowUpTaskSchema.nullable().default(null),
+  unresolved_code_module_problems: z.array(VisualQaUnresolvedCodeModuleProblemSchema).default([]),
   repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
   reference_parity: VisualQaReferenceParitySchema.default({

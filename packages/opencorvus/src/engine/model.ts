@@ -1,10 +1,13 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
+import { TimelineMessage } from "@/control/timeline"
 import { ExecutorName } from "@/executor/contract"
 import { Identifier } from "@/id/id"
+import { Message } from "@/session/message"
 import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
 import { isModelReference } from "@/provider/model-ref"
+import { decodeRawBase64Payload } from "@/session/text-mime"
 
 export const Budget = z.object({
   maxExecutorGroups: z.number().int().positive().optional(),
@@ -201,6 +204,16 @@ const TaskAttachmentInput = z.object({
   data: z.string(),
   /** Optional display name shown in the overlay message and LLM file part */
   filename: z.string().optional(),
+}).superRefine((attachment, ctx) => {
+  try {
+    decodeRawBase64Payload(attachment.data, `attachment ${attachment.filename ?? attachment.mime}`)
+  } catch (error) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["data"],
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
 })
 
 /**
@@ -280,14 +293,15 @@ export const CreateTaskInput = z.object({
 
 export const Task = z.object({
   id: Identifier.schema("task"),
+  orderKey: z.string().min(1),
   projectID: z.string(),
   directory: z.string().optional(),
   sessionID: Identifier.schema("session").nullable().optional(),
   activePlanVersionID: Identifier.schema("plan").nullable().optional(),
   activeRunID: Identifier.schema("run").nullable().optional(),
   requestID: z.string().optional(),
-  /** ID of the task that spawned this one — projected read-only from
-   *  `metadata.parent_task_id` (single source of truth, no DB column).
+  /** ID of the task that spawned this one through the scheduler-owned child
+   *  creation path — projected read-only from `metadata.parent_task_id` (single source of truth, no DB column).
    *  Overlay uses this to render lineage as a tree; agent panels can also
    *  see it but reconcile children via findChildrenOfTask(). */
   parentTaskID: Identifier.schema("task").nullable().optional(),
@@ -405,6 +419,7 @@ export const Run = z.object({
 export const Interaction = z.object({
   id: Identifier.schema("interaction"),
   taskID: Identifier.schema("task"),
+  orderKey: z.string().min(1),
   runID: Identifier.schema("run").nullable(),
   sessionID: Identifier.schema("session").nullable().optional(),
   externalID: z.string(),
@@ -581,6 +596,19 @@ export const InjectMessageInput = z.object({
   message: z.string().min(1),
 })
 
+const TaskMessageUserInfo = Message.User.extend({
+  orderKey: z.string().min(1),
+}).meta({
+  ref: "TaskMessageUserInfo",
+})
+const TaskMessageUserPart = Message.Part.and(
+  z.object({
+    orderKey: z.string().min(1),
+  }),
+).meta({
+  ref: "TaskMessageUserPart",
+})
+
 export const TaskMessageResult = z.object({
   kind: z.enum(["goal", "plan", "note"]),
   message: z.string(),
@@ -594,8 +622,8 @@ export const TaskMessageResult = z.object({
    *  when the task has no session_id (e.g. failed task short-circuit). */
   user_message: z
     .object({
-      info: z.any(),
-      parts: z.array(z.any()),
+      info: TaskMessageUserInfo,
+      parts: z.array(TaskMessageUserPart),
     })
     .optional(),
 })
@@ -684,6 +712,7 @@ export const TaskBoardWorkflowPhase = z.object({
 
 export const TaskBoardWorkflowStep = z.object({
   id: z.string(),
+  orderKey: z.string().min(1),
   label: z.string(),
   tool: z.string(),
   scope: z.enum(["task", "goal"]),
@@ -803,6 +832,7 @@ export const TaskBoardGoalStepPayload = z.object({
 
 export const TaskBoardGoalWorkflowStep = z.object({
   stepID: z.string(),
+  orderKey: z.string().min(1),
   label: z.string(),
   status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
   startedAt: z.number().optional(),
@@ -821,6 +851,7 @@ export const TaskBoardGoalWorkflowStep = z.object({
     .record(
       z.string(),
       z.object({
+        orderKey: z.string().min(1),
         status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
         startedAt: z.number().optional(),
         completedAt: z.number().optional(),
@@ -837,6 +868,7 @@ export const TaskBoardGoalContract = z.object({
 
 export const TaskBoardGoalWorkflow = z.object({
   goalID: z.string(),
+  orderKey: z.string().min(1),
   goalTitle: z.string(),
   /** Authoritative goal summary written by the Architect: a 1–2 sentence
    *  execution directive for this goal. Surfaces inside the goal card
@@ -949,6 +981,7 @@ export const GlobalTaskBoard = z.object({
 export const TaskEvent = z.object({
   event_id: z.string(),
   task_id: Identifier.schema("task"),
+  orderKey: z.string().min(1),
   run_id: Identifier.schema("run").optional(),
   type: z.string(),
   emittedAt: z.number().int().positive(),
@@ -968,6 +1001,7 @@ export const TaskConversationPhaseLocation = z.object({
 
 export const TaskConversationSessionView = z.object({
   sessionID: z.string(),
+  orderKey: z.string().min(1),
   stage: z.string(),
   parentSessionID: z.string().optional(),
   goalID: z.string().optional(),
@@ -984,6 +1018,7 @@ export const TaskConversationSessionView = z.object({
 
 export const TaskConversationMessageView = z.object({
   messageID: z.string(),
+  orderKey: z.string().min(1),
   sessionID: z.string(),
   stage: z.string(),
   parentSessionID: z.string().optional(),
@@ -1009,6 +1044,7 @@ export const TaskConversationEventReplay = z.object({
 
 export const TaskConversationHistoryState = z.object({
   oldestTimestamp: z.number().nullable(),
+  oldestOrderKey: z.string().nullable(),
   oldestMessageID: z.string().nullable().optional(),
   hasMore: z.boolean(),
   limit: z.number().int().positive(),
@@ -1018,12 +1054,12 @@ export const TaskConversationHydration = z.object({
   lastSequence: z.number().int().nonnegative(),
   messageWatermark: z.number().nonnegative(),
   board: TaskBoard,
-  transcript: z.array(z.any()),
-  timeline: z.array(z.any()),
+  transcript: Message.VisibleWithParts.array(),
+  timeline: TimelineMessage.array(),
   events: TaskEvent.array(),
   eventReplay: TaskConversationEventReplay,
-  history: TaskConversationHistoryState.optional(),
-  agentView: TaskConversationView.optional(),
+  history: TaskConversationHistoryState,
+  agentView: TaskConversationView,
   view: TaskConversationView,
 })
 
@@ -1038,6 +1074,7 @@ export const SessionBoardEnvelope = z.object({
 export const SessionEvent = z.object({
   event_id: z.string(),
   session_id: z.string(),
+  orderKey: z.string().min(1),
   type: z.string(),
   emittedAt: z.number().int().positive(),
   timestamp: z.number(),
@@ -1049,11 +1086,11 @@ export const SessionEvent = z.object({
 
 export const SessionConversationHydration = z.object({
   board: SessionBoardEnvelope,
-  transcript: z.array(z.any()),
-  timeline: z.array(z.any()),
+  transcript: Message.VisibleWithParts.array(),
+  timeline: TimelineMessage.array(),
   events: SessionEvent.array(),
-  history: TaskConversationHistoryState.optional(),
-  agentView: TaskConversationView.optional(),
+  history: TaskConversationHistoryState,
+  agentView: TaskConversationView,
   view: TaskConversationView,
 })
 
@@ -1063,8 +1100,8 @@ export const TaskConversationEventPage = z.object({
 })
 
 export const TaskConversationHistoryPage = z.object({
-  transcript: z.array(z.any()),
-  timeline: z.array(z.any()),
+  transcript: Message.VisibleWithParts.array(),
+  timeline: TimelineMessage.array(),
   events: TaskEvent.array(),
   view: TaskConversationView,
   history: TaskConversationHistoryState,
@@ -1359,6 +1396,17 @@ export const Event = {
     }),
     { tier: 3 },
   ),
+  TaskLifecycleFact: BusEvent.define(
+    "task.lifecycle",
+    z.object({
+      taskID: Identifier.schema("task"),
+      fact: z.enum(["server_restart_active_task_recovered"]),
+      status: Task.shape.status.optional(),
+      orphaned: z.boolean().optional(),
+      summary: z.string(),
+    }),
+    { tier: 2 },
+  ),
   RunProgress: BusEvent.define(
     "run.progress",
     z.object({
@@ -1389,6 +1437,25 @@ export const Event = {
       summary: z.string(),
     }),
   ),
+  TaskReport: BusEvent.define(
+    "task.report",
+    z.object({
+      taskID: Identifier.schema("task").optional(),
+      sessionID: Identifier.schema("session"),
+      status: z.enum(["progress", "need_input", "done", "failed"]),
+      summary: z.string(),
+      question: z.string().optional(),
+      next_plan: z.string().optional(),
+      artifacts: z.array(z.string()).optional(),
+      error: z.string().optional(),
+    }),
+    (payload) =>
+      payload.status === "failed" || payload.status === "need_input"
+        ? { tier: 1, badge: true }
+        : payload.status === "done"
+          ? { tier: 2 }
+          : { tier: 3 },
+  ),
   AgentCoordinationRequested: BusEvent.define(
     "agent.coordination.requested",
     z.object({
@@ -1408,8 +1475,23 @@ export const Event = {
       taskID: Identifier.schema("task"),
       requestID: Identifier.schema("artifact"),
       responseID: Identifier.schema("artifact"),
+      actionID: Identifier.schema("artifact"),
       sessionID: Identifier.schema("session"),
       decision: z.enum(["continue", "cancel_worker", "redispatch", "fail_task", "ask_user"]),
+      summary: z.string(),
+    }),
+    { tier: 2 },
+  ),
+  AgentCoordinationActionUpdated: BusEvent.define(
+    "agent.coordination.action",
+    z.object({
+      taskID: Identifier.schema("task"),
+      requestID: Identifier.schema("artifact"),
+      responseID: Identifier.schema("artifact"),
+      actionID: Identifier.schema("artifact"),
+      sessionID: Identifier.schema("session"),
+      action: z.enum(["continue_worker", "cancel_worker", "redispatch_worker", "fail_task", "ask_user"]),
+      status: z.enum(["pending", "completed", "failed"]),
       summary: z.string(),
     }),
     { tier: 2 },

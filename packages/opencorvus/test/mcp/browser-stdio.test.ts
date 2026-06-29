@@ -66,6 +66,7 @@ describe("built-in browser MCP stdio", () => {
         res.end("missing")
         return
       }
+      const diagnosticFixture = req.url === "/diagnostic"
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
       res.end(`<!doctype html>
         <html>
@@ -93,10 +94,10 @@ describe("built-in browser MCP stdio", () => {
               <div id="drop-target">Drop here</div>
               <iframe id="fixture-frame" src="/frame"></iframe>
               <div id="color-block"></div>
-              <img src="/missing.png" alt="missing diagnostic fixture" />
+              ${diagnosticFixture ? '<img src="/missing.png" alt="missing diagnostic fixture" />' : ""}
             </main>
             <script>
-              console.error("fixture-error")
+              ${diagnosticFixture ? 'console.error("fixture-error")' : ""}
               const source = document.getElementById("drag-source")
               const target = document.getElementById("drop-target")
               source.addEventListener("dragstart", (event) => event.dataTransfer.setData("text/plain", "dragged fixture"))
@@ -293,12 +294,19 @@ describe("built-in browser MCP stdio", () => {
       expect(
         (downloadHistory.structuredContent as { downloads?: unknown[] }).downloads?.length ?? 0,
       ).toBeGreaterThanOrEqual(1)
+      const preVisualDiagnostics = await mcp.callTool({ name: "diagnostics_get", arguments: { sessionId } }, undefined, {
+        timeout: 30_000,
+      })
+      expect(preVisualDiagnostics.structuredContent).toMatchObject({ consoleErrors: [], failedRequests: [], httpErrors: [] })
 
       const observed = await mcp.callTool(
         { name: "observe", arguments: { sessionId, includeScreenshot: true } },
         undefined,
         { timeout: 30_000 },
       )
+      if (observed.isError) {
+        throw new Error(observed.content.map((item) => ("text" in item ? item.text : "")).join("\n"))
+      }
       const observeData = observed.structuredContent as {
         url?: string
         title?: string
@@ -430,9 +438,74 @@ describe("built-in browser MCP stdio", () => {
       const diagnostics = await mcp.callTool({ name: "diagnostics_get", arguments: { sessionId } }, undefined, {
         timeout: 30_000,
       })
+      const diagnosticData = diagnostics.structuredContent as {
+        consoleErrors?: unknown[]
+        failedRequests?: unknown[]
+        httpErrors?: unknown[]
+      }
+      expect(diagnosticData.consoleErrors?.length ?? 0).toBe(0)
+      expect(diagnosticData.failedRequests?.length ?? 0).toBe(0)
+      expect(diagnosticData.httpErrors?.length ?? 0).toBe(0)
+    } finally {
+      await mcp
+        .callTool({ name: "session_destroy", arguments: { sessionId } }, undefined, { timeout: 30_000 })
+        .catch(() => undefined)
+    }
+  }, 30_000)
+
+  test("fails navigation and visual tools when a page accumulates diagnostics", async () => {
+    const executable = await BrowserRuntime.findBrowserExecutable().catch(() => undefined)
+    if (!executable) {
+      await using tmp = await tmpdir()
+      await expectMissingBrowserDiagnostic(path.join(tmp.path, "missing-browser.exe"))
+      return
+    }
+    const baseUrl = await startFixtureServer()
+    const mcp = await connectClient("opencorvus-browser-session-diagnostics")
+
+    const created = await mcp.callTool(
+      { name: "session_create", arguments: { viewport: { width: 640, height: 480 } } },
+      undefined,
+      { timeout: 30_000 },
+    )
+    const sessionId = (created.structuredContent as { sessionId?: string } | undefined)?.sessionId
+    expect(sessionId?.startsWith("sess_")).toBe(true)
+    if (!sessionId) throw new Error("session_create did not return a sessionId")
+
+    try {
+      const navigated = await mcp.callTool(
+        { name: "navigate", arguments: { sessionId, url: `${baseUrl}/diagnostic`, waitUntil: "load" } },
+        undefined,
+        { timeout: 30_000 },
+      )
+      expect(navigated.isError).toBe(true)
+      const navigateText = navigated.content.map((item) => ("text" in item ? item.text : "")).join("\n")
+      expect(navigateText).toContain("fixture-error")
+
+      const diagnostics = await mcp.callTool({ name: "diagnostics_get", arguments: { sessionId } }, undefined, {
+        timeout: 30_000,
+      })
       const diagnosticData = diagnostics.structuredContent as { consoleErrors?: unknown[]; httpErrors?: unknown[] }
       expect(diagnosticData.consoleErrors?.length ?? 0).toBeGreaterThanOrEqual(1)
       expect(diagnosticData.httpErrors?.length ?? 0).toBeGreaterThanOrEqual(1)
+
+      const observed = await mcp.callTool(
+        { name: "observe", arguments: { sessionId, includeScreenshot: true } },
+        undefined,
+        { timeout: 30_000 },
+      )
+      expect(observed.isError).toBe(true)
+      const observeText = observed.content.map((item) => ("text" in item ? item.text : "")).join("\n")
+      expect(observeText).toContain("Browser MCP observe blocked")
+
+      const screenshot = await mcp.callTool(
+        { name: "screenshot", arguments: { sessionId, hideCursor: true } },
+        undefined,
+        { timeout: 30_000 },
+      )
+      expect(screenshot.isError).toBe(true)
+      const screenshotText = screenshot.content.map((item) => ("text" in item ? item.text : "")).join("\n")
+      expect(screenshotText).toContain("Browser MCP screenshot blocked")
     } finally {
       await mcp
         .callTool({ name: "session_destroy", arguments: { sessionId } }, undefined, { timeout: 30_000 })

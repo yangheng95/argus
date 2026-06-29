@@ -1,6 +1,5 @@
 import path from "path"
-import { existsSync } from "fs"
-import { mkdir } from "fs/promises"
+import { mkdir, readdir } from "fs/promises"
 import { afterEach, describe, expect, test } from "bun:test"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
@@ -44,7 +43,7 @@ describe("global project discovery", () => {
     expect(body.projects.every((project) => path.basename(project.marker) === ".opencorvus")).toBe(true)
   })
 
-  test("GET /global/projects/discover creates a short uuid directory when no project dir is passed", async () => {
+  test("GET /global/projects/discover is read-only when no project dir is passed", async () => {
     await using root = await tmpdir()
     const nested = path.join(root.path, "nested-project")
     await mkdir(path.join(nested, ".opencorvus"), { recursive: true })
@@ -63,10 +62,10 @@ describe("global project discovery", () => {
     }
     const secondBody = (await second.json()) as { defaultDirectory: string }
     expect(path.resolve(body.root)).toBe(path.resolve(root.path))
-    expect(path.dirname(path.resolve(body.defaultDirectory))).toBe(path.resolve(root.path))
-    expect(path.basename(body.defaultDirectory)).toMatch(/^[0-9a-f]{8}$/)
-    expect(existsSync(body.defaultDirectory)).toBe(true)
-    expect(path.resolve(secondBody.defaultDirectory)).toBe(path.resolve(body.defaultDirectory))
+    expect(body.defaultDirectory).toBe("")
+    expect(secondBody.defaultDirectory).toBe("")
+    const children = await readdir(root.path, { withFileTypes: true })
+    expect(children.some((entry) => entry.isDirectory() && /^[0-9a-f]{8}$/.test(entry.name))).toBe(false)
     expect(body.projects.map((project) => path.resolve(project.directory))).toEqual([path.resolve(nested)])
   })
 })

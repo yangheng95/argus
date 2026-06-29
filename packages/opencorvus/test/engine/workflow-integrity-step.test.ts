@@ -33,7 +33,7 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
     ],
     findings: [],
     production_blockers: [],
-    follow_up_task: null,
+    unresolved_code_module_problems: [],
     repairs: [],
     evidence: [
       {
@@ -323,7 +323,7 @@ describe("pipeline workflow review topology", () => {
         ],
         findings: [],
         production_blockers: [],
-        follow_up_task: null,
+        unresolved_code_module_problems: [],
         repairs: [],
         evidence: [
           {
@@ -447,16 +447,18 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify(visualQaReport({
-        summary: "Report claimed acceptance but cited no comparison evidence.",
-        reference_parity: {
-          required: true,
-          required_regions: ["region_header@desktop"],
-          reference_comparison_evidence_refs: [],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-      })),
+      value: JSON.stringify(
+        visualQaReport({
+          summary: "Report claimed acceptance but cited no comparison evidence.",
+          reference_parity: {
+            required: true,
+            required_regions: ["region_header@desktop"],
+            reference_comparison_evidence_refs: [],
+            missing_regions: [],
+            blocker_ids: [],
+          },
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
@@ -502,25 +504,27 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify(visualQaReport({
-        summary: "Report claimed acceptance while listing missing reference regions.",
-        evidence: [
-          {
-            type: "reference_comparison",
-            ref: "browser_preview_evidence:art_header",
-            viewport: { width: 1440, height: 900 },
-            state: "default",
-            note: "Header reference comparison.",
+      value: JSON.stringify(
+        visualQaReport({
+          summary: "Report claimed acceptance while listing missing reference regions.",
+          evidence: [
+            {
+              type: "reference_comparison",
+              ref: "browser_preview_evidence:art_header",
+              viewport: { width: 1440, height: 900 },
+              state: "default",
+              note: "Header reference comparison.",
+            },
+          ],
+          reference_parity: {
+            required: true,
+            required_regions: ["region_header@desktop", "region_footer@desktop"],
+            reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
+            missing_regions: ["region_footer@desktop"],
+            blocker_ids: [],
           },
-        ],
-        reference_parity: {
-          required: true,
-          required_regions: ["region_header@desktop", "region_footer@desktop"],
-          reference_comparison_evidence_refs: ["browser_preview_evidence:art_header"],
-          missing_regions: ["region_footer@desktop"],
-          blocker_ids: [],
-        },
-      })),
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
@@ -572,16 +576,18 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify(visualQaReport({
-        summary: "Screenshot-only report claimed parity not required.",
-        reference_parity: {
-          required: false,
-          required_regions: [],
-          reference_comparison_evidence_refs: [],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-      })),
+      value: JSON.stringify(
+        visualQaReport({
+          summary: "Screenshot-only report claimed parity not required.",
+          reference_parity: {
+            required: false,
+            required_regions: [],
+            reference_comparison_evidence_refs: [],
+            missing_regions: [],
+            blocker_ids: [],
+          },
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
@@ -675,16 +681,18 @@ describe("pipeline workflow review topology", () => {
     createDecisionLog(taskID).append({
       phase: "visual_qa",
       key: "report_1",
-      value: JSON.stringify(visualQaReport({
-        summary: "Screenshot-only report claimed parity not required.",
-        reference_parity: {
-          required: false,
-          required_regions: [],
-          reference_comparison_evidence_refs: [],
-          missing_regions: [],
-          blocker_ids: [],
-        },
-      })),
+      value: JSON.stringify(
+        visualQaReport({
+          summary: "Screenshot-only report claimed parity not required.",
+          reference_parity: {
+            required: false,
+            required_regions: [],
+            reference_comparison_evidence_refs: [],
+            missing_regions: [],
+            blocker_ids: [],
+          },
+        }),
+      ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
 
@@ -751,7 +759,7 @@ describe("pipeline workflow review topology", () => {
         ],
         findings: [],
         production_blockers: [],
-        follow_up_task: null,
+        unresolved_code_module_problems: [],
         repairs: [],
         evidence: [
           {
@@ -834,7 +842,7 @@ describe("pipeline workflow review topology", () => {
         ],
         findings: [],
         production_blockers: [],
-        follow_up_task: null,
+        unresolved_code_module_problems: [],
         repairs: [],
         evidence: [
           {

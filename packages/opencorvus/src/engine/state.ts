@@ -15,31 +15,75 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 const log = Log.create({ service: "engine-state" })
 
 /**
- * Caller-facing task-update shape. `status` is a logical verb (queued /
- * active / completed / failed / cancelled) that the writer maps to
- * concrete fact fields; there is no `status` column anymore (6-f-2).
+ * Caller-facing non-terminal task-update shape. `status` is a logical verb
+ * (queued / active) that the writer maps to concrete fact fields; there is no
+ * `status` column anymore (6-f-2).
  *
  * Mapping:
- *   active    → time_started defaults to now if unset
- *   completed → time_completed defaults to now; clears error
- *   failed    → time_completed defaults to now; error required
- *   cancelled → time_completed defaults to now; stamps metadata.cancelled=true
- *   queued    → clears time_started / time_completed
+ *   active → time_started defaults to now if unset
+ *   queued → clears time_started / time_completed
+ *
+ * Terminal task lifecycle is owned by `terminalTask` so completed / failed /
+ * cancelled cannot be written through ordinary field updates.
  */
 export type TaskUpdateValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
-  status?: "queued" | "active" | "completed" | "failed" | "cancelled"
+  status?: "queued" | "active"
 }
 export type TaskUpdateOptions = {
   projectDir?: string
+}
+
+export type TerminalTaskStatus = "completed" | "failed" | "cancelled"
+export type TerminalTaskValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
+  status: TerminalTaskStatus
+}
+
+type InternalTaskUpdateValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
+  status?: TaskUpdateValues["status"] | TerminalTaskStatus
 }
 
 const TERMINAL_TASK_RUN_STATUS = {
   completed: "completed",
   failed: "failed",
   cancelled: "aborted",
-} as const satisfies Partial<Record<NonNullable<TaskUpdateValues["status"]>, RunRow["status"]>>
+} as const satisfies Record<TerminalTaskStatus, RunRow["status"]>
 
 export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary: string, options?: TaskUpdateOptions) {
+  if (
+    (values as InternalTaskUpdateValues).status === "completed" ||
+    (values as InternalTaskUpdateValues).status === "failed" ||
+    (values as InternalTaskUpdateValues).status === "cancelled"
+  ) {
+    throw new Error("updateTask cannot write terminal task lifecycle; use terminalTask.")
+  }
+  return applyTaskUpdate(row, values, summary, options)
+}
+
+export async function terminalTask(
+  row: TaskRow,
+  values: TerminalTaskValues,
+  summary: string,
+  options?: TaskUpdateOptions,
+) {
+  if (values.status === "completed" && values.error != null) {
+    throw new Error("terminalTask completed status must not carry an error.")
+  }
+  if ((values.status === "failed" || values.status === "cancelled") && !nonEmptyString(values.error)) {
+    throw new Error(`terminalTask ${values.status} status requires a non-empty error.`)
+  }
+  return applyTaskUpdate(row, values, summary, options)
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+async function applyTaskUpdate(
+  row: TaskRow,
+  values: InternalTaskUpdateValues,
+  summary: string,
+  options?: TaskUpdateOptions,
+) {
   const { status: intent, ...rest } = values
   const now = Date.now()
 
@@ -206,7 +250,7 @@ async function notifyTaskLineageTerminal(
 
 async function finalizeLiveRunForTerminalTask(
   task: TaskRow,
-  intent: TaskUpdateValues["status"],
+  intent: InternalTaskUpdateValues["status"],
   resolved: Partial<typeof EngineTaskTable.$inferInsert>,
   summary: string,
   _options?: TaskUpdateOptions,

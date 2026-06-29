@@ -8,6 +8,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Project } from "../../src/project/project"
 import { Worktree } from "../../src/worktree"
 import { WorktreeGC } from "../../src/worktree/gc"
 import { Filesystem } from "../../src/util/filesystem"
@@ -16,6 +17,10 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000
+
+function slash(input: string) {
+  return input.replace(/\\/g, "/")
+}
 
 function seedProject(projectID: string, primaryDir: string, now: number) {
   Database.use((db) =>
@@ -69,6 +74,74 @@ describe("WorktreeGC orphan sweep", () => {
         expect(await Filesystem.exists(wt.directory)).toBe(false)
         const ref = await $`git show-ref --verify --quiet refs/heads/${wt.branch}`.cwd(tmp.path).quiet().nothrow()
         expect(ref.exitCode).not.toBe(0)
+        expect(Project.get(Instance.project.id)?.sandboxes).not.toContain(wt.directory)
+      },
+    })
+  }, 30_000)
+
+  test("removes a managed registry-only prunable worktree and clears sandbox state", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        seedProject(Instance.project.id, tmp.path, now)
+        const wt = await Worktree.create({ name: "gc-registry-prunable" })
+        await fs.rm(wt.directory, { recursive: true, force: true })
+
+        const plan = await WorktreeGC.inspect({ now })
+        const candidate = plan.candidates.find((item) => item.directory === wt.directory)
+        expect(candidate?.reason).toBe("registry-prunable")
+
+        const result = await WorktreeGC.apply(plan)
+        expect(result.removed).toBeGreaterThanOrEqual(1)
+        const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
+        expect(slash(list)).not.toContain(slash(path.resolve(wt.directory)))
+        const ref = await $`git show-ref --verify --quiet refs/heads/${wt.branch}`.cwd(tmp.path).quiet().nothrow()
+        expect(ref.exitCode).not.toBe(0)
+        expect(Project.get(Instance.project.id)?.sandboxes).not.toContain(wt.directory)
+      },
+    })
+  }, 30_000)
+
+  test("preserves registry-only worktrees whose branch contains in-transit commits", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        seedProject(Instance.project.id, tmp.path, now)
+        const wt = await Worktree.create({ name: "gc-registry-in-transit" })
+        await Bun.write(path.join(wt.directory, "feature.txt"), "acceptance")
+        await $`git add -A`.cwd(wt.directory).quiet()
+        await $`git -c user.name=t -c user.email=t@t commit -m "in-transit attempt"`.cwd(wt.directory).quiet()
+        await fs.rm(wt.directory, { recursive: true, force: true })
+
+        const plan = await WorktreeGC.inspect({ now })
+        expect(plan.candidates.map((c) => c.directory)).not.toContain(wt.directory)
+        const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
+        expect(slash(list)).toContain(slash(path.resolve(wt.directory)))
+        const ref = await $`git show-ref --verify --quiet refs/heads/${wt.branch}`.cwd(tmp.path).quiet().nothrow()
+        expect(ref.exitCode).toBe(0)
+        expect(Project.get(Instance.project.id)?.sandboxes).toContain(wt.directory)
+      },
+    })
+  }, 30_000)
+
+  test("clears a missing managed sandbox that has no git registry entry", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        seedProject(Instance.project.id, tmp.path, now)
+        const sandbox = path.join(Worktree.worktreesRoot(tmp.path), "aa", "bbbbbb", "worktree")
+        await Project.addSandbox(Instance.project.id, sandbox)
+
+        const plan = await WorktreeGC.inspect({ now })
+        const candidate = plan.candidates.find((item) => item.directory === sandbox)
+        expect(candidate?.reason).toBe("sandbox-missing")
+
+        const result = await WorktreeGC.apply(plan)
+        expect(result.removed).toBeGreaterThanOrEqual(1)
+        expect(Project.get(Instance.project.id)?.sandboxes).not.toContain(sandbox)
       },
     })
   }, 30_000)

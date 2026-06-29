@@ -55,6 +55,70 @@ test("ask - adds to pending list", async () => {
   })
 })
 
+test("ask - joins identical stable requestID calls", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = "que_stable_join"
+      const questions = [
+        {
+          question: "Which path should continue?",
+          header: "Path",
+          options: [
+            { label: "A", description: "Use path A" },
+            { label: "B", description: "Use path B" },
+          ],
+        },
+      ]
+
+      const first = Question.ask({ sessionID: "ses_test", requestID, questions })
+      const second = Question.ask({ sessionID: "ses_test", requestID, questions })
+
+      const pending = await Question.list()
+      expect(pending).toHaveLength(1)
+      expect(pending[0].id).toBe(requestID)
+
+      await Question.reply({ requestID, answers: [["B"]] })
+      await expect(first).resolves.toEqual([["B"]])
+      await expect(second).resolves.toEqual([["B"]])
+    },
+  })
+})
+
+test("ask - rejects stable requestID replay with changed payload", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = "que_stable_changed_payload"
+      const questions = [
+        {
+          question: "Which path should continue?",
+          header: "Path",
+          options: [{ label: "A", description: "Use path A" }],
+        },
+      ]
+
+      Question.ask({ sessionID: "ses_test", requestID, questions })
+
+      await expect(
+        Question.ask({
+          sessionID: "ses_test",
+          requestID,
+          questions: [
+            {
+              question: "Which different path should continue?",
+              header: "Path",
+              options: [{ label: "B", description: "Use path B" }],
+            },
+          ],
+        }),
+      ).rejects.toThrow(/changed the question payload/)
+    },
+  })
+})
+
 // reply tests
 
 test("reply - resolves the pending ask with answers", async () => {

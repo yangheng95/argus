@@ -68,7 +68,15 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(hostPrepared).toContain("Desktop visual iteration viewport")
     expect(webCloneTool).toContain("Desktop visual iteration viewport")
 
-    const modelReadableText = [schema, agent, outputTools, skeletonTool, sourceProjectGenerator, hostPrepared, webCloneTool]
+    const modelReadableText = [
+      schema,
+      agent,
+      outputTools,
+      skeletonTool,
+      sourceProjectGenerator,
+      hostPrepared,
+      webCloneTool,
+    ]
       .join("\n")
       .replace(/\s+/g, " ")
 

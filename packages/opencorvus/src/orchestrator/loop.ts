@@ -199,7 +199,10 @@ async function runTaskLoopInner(input: { taskID: string; event?: OrchestratorEve
     const { EngineGit } = await import("@/engine/git")
     const result = await EngineGit.prepare(task)
     if (result.error) {
-      log.warn("EngineGit.prepare failed", { taskID, error: result.error })
+      log.error("EngineGit.prepare failed", { taskID, error: result.error })
+      const { terminalTask } = await import("@/engine/state")
+      await terminalTask(task, { status: "failed", error: result.error }, `Task git baseline failed: ${result.error}`)
+      return
     }
   }
 

@@ -1,7 +1,7 @@
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
-import { createHash, randomUUID } from "crypto"
+import { createHash } from "crypto"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
@@ -11,7 +11,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
-import { mkdir, readdir } from "fs/promises"
+import { realpath, readdir, stat } from "fs/promises"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 import { which } from "@/util/which"
@@ -58,8 +58,46 @@ export namespace Project {
     return comparePath(a) === comparePath(b)
   }
 
-  function standaloneCommon(worktree: string, common: string) {
-    return samePath(common, path.join(worktree, ".git"))
+  function isMissingPathError(error: unknown) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
+    return code === "ENOENT" || code === "ENOTDIR"
+  }
+
+  async function realComparePath(value: string) {
+    try {
+      return comparePath(await realpath(value))
+    } catch (error) {
+      if (isMissingPathError(error)) return undefined
+      throw error
+    }
+  }
+
+  async function statIdentity(value: string) {
+    try {
+      const info = await stat(value)
+      if (info.ino === 0) return undefined
+      return `${info.dev}:${info.ino}`
+    } catch (error) {
+      if (isMissingPathError(error)) return undefined
+      throw error
+    }
+  }
+
+  export async function sameFilesystemLocation(a: string, b: string) {
+    if (samePath(a, b)) return true
+    const [left, right] = await Promise.all([realComparePath(a), realComparePath(b)])
+    if (left !== undefined && right !== undefined && left === right) return true
+    const [leftIdentity, rightIdentity] = await Promise.all([statIdentity(a), statIdentity(b)])
+    return leftIdentity !== undefined && rightIdentity !== undefined && leftIdentity === rightIdentity
+  }
+
+  async function standaloneCommon(worktree: string, common: string) {
+    const localCommon = path.join(worktree, ".git")
+    return samePath(common, localCommon) || (await sameFilesystemLocation(common, localCommon))
+  }
+
+  async function displayGitTop(directory: string, gitTop: string) {
+    return (await sameFilesystemLocation(directory, gitTop)) ? directory : gitTop
   }
 
   async function identify(common: string, worktree: string) {
@@ -75,12 +113,12 @@ export namespace Project {
 
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, cached)).get())
     if (!row) return cached
-    if (samePath(row.worktree, worktree)) return cached
+    if (samePath(row.worktree, worktree) || (await sameFilesystemLocation(row.worktree, worktree))) return cached
 
     // A standalone repository must never reuse another local project's ID.
     // Copied starter repos can share both the root commit and a stale marker;
     // rewrite only this repo's marker to its local .git identity.
-    if (standaloneCommon(worktree, common)) {
+    if (await standaloneCommon(worktree, common)) {
       await Filesystem.write(markerPath, localID).catch(() => undefined)
       return localID
     }
@@ -231,13 +269,14 @@ export namespace Project {
         let sandbox = directory
         const top = await text(["rev-parse", "--show-toplevel"], sandbox)
         if (top) {
-          sandbox = gitpath(sandbox, top)
+          sandbox = await displayGitTop(directory, gitpath(sandbox, top))
         }
 
         const commonText = await text(["rev-parse", "--git-common-dir"], sandbox)
         const common = commonText ? gitpath(sandbox, commonText) : undefined
         const resolvedCommon = common || path.join(sandbox, ".git")
-        const worktree = !common || common === sandbox ? sandbox : path.dirname(common)
+        const rawWorktree = !common || common === sandbox ? sandbox : path.dirname(common)
+        const worktree = await displayGitTop(directory, rawWorktree)
         const id = await identify(resolvedCommon, worktree)
 
         return {
@@ -255,7 +294,7 @@ export namespace Project {
     })
 
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
-    if (row && !samePath(row.worktree, data.worktree)) {
+    if (row && !samePath(row.worktree, data.worktree) && !(await sameFilesystemLocation(row.worktree, data.worktree))) {
       throw new WorktreeIdentityConflictError({
         projectID: data.id,
         existingWorktree: row.worktree,
@@ -288,7 +327,15 @@ export namespace Project {
     }
     if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
       result.sandboxes.push(data.sandbox)
-    result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
+    result.sandboxes = (
+      await Promise.all(
+        result.sandboxes
+          .filter((x) => existsSync(x))
+          .map(async (x) => ({ path: x, isProjectRoot: await sameFilesystemLocation(x, result.worktree) })),
+      )
+    )
+      .filter((x) => !x.isProjectRoot)
+      .map((x) => x.path)
     const insert = {
       id: result.id,
       worktree: result.worktree,
@@ -378,8 +425,6 @@ export namespace Project {
     }
   }
 
-  const generatedDefaultDirectories = new Map<string, string>()
-
   function explicitLaunchProjectDirectory() {
     const value = process.env.OPENCORVUS_PROJECT_DIR
     return typeof value === "string" && value.trim() ? Filesystem.resolve(value) : ""
@@ -387,25 +432,6 @@ export namespace Project {
 
   function launchDirectory() {
     return explicitLaunchProjectDirectory() || Filesystem.resolve(process.cwd())
-  }
-
-  async function generatedDefaultDirectory(root: string) {
-    const cached = generatedDefaultDirectories.get(root)
-    if (cached) return cached
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const name = randomUUID().slice(0, 8)
-      const directory = path.join(root, name)
-      if (await Filesystem.exists(directory)) continue
-      try {
-        await mkdir(directory, { recursive: false })
-      } catch (error) {
-        if ((error as { code?: string })?.code === "EEXIST") continue
-        throw error
-      }
-      generatedDefaultDirectories.set(root, directory)
-      return directory
-    }
-    throw new Error(`Unable to create generated default project directory under ${root}`)
   }
 
   function projectName(directory: string) {
@@ -428,7 +454,7 @@ export namespace Project {
     const root = launchDirectory()
     const candidates = [root, ...(await immediateDirectories(root))]
     const projects: DiscoveredProject[] = []
-    const defaultDirectory = explicitLaunchProjectDirectory() || (await generatedDefaultDirectory(root))
+    const defaultDirectory = explicitLaunchProjectDirectory()
     for (const directory of candidates) {
       if (!(await hasOpenCorvusMarker(directory))) continue
       projects.push({

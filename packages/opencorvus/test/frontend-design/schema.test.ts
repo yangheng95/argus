@@ -3,7 +3,9 @@ import { asSchema } from "ai"
 import {
   FrontendTemplateFinalSchema,
   FrontendTemplateToolInputSchema,
+  ToolVisualValidationEvidenceSchema,
   VisualSpecSchema,
+  VisualValidationEvidenceSchema,
 } from "../../src/frontend-design/schema"
 
 function minimalFrontendTemplateInput() {
@@ -88,6 +90,310 @@ test("frontend-design schema module owns compact submit schema and visual spec s
 
   expect(final.fact_check_items).toEqual([])
   expect(final.frontend_project.role).toBe("source_baseline_input")
+})
+
+test("visual validation evidence keeps source reference and rendered preview roles distinct", () => {
+  expect(VisualValidationEvidenceSchema.parse(visualValidationEvidence()).source_reference_artifact).toBe(
+    "web-clone-source/reference.png",
+  )
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      screenshot_artifact: "visual-html-skeleton/reference.png",
+    }),
+  ).toThrow("screenshot_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      source_reference_artifact: "visual-html-skeleton/screenshot-desktop.png",
+    }),
+  ).toThrow("source_reference_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      source_reference_artifact: "visual-html-skeleton/reference.png",
+    }),
+  ).toThrow("source_reference_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      source_reference_artifact: "webpage-evidence/reference.png",
+    }),
+  ).toThrow("source_reference_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      source_reference_artifact: "reference.png",
+    }),
+  ).toThrow("source_reference_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      screenshot_artifact: "screenshots/desktop.png",
+    }),
+  ).toThrow("screenshot_artifact")
+
+  expect(() =>
+    VisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      diff_artifact: "diffs/desktop.json",
+    }),
+  ).toThrow("diff_artifact")
+
+  expect(
+    ToolVisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      source_reference_artifact: ".opencorvus/r/t/demo/fd/web-clone-source/reference.png",
+    }).source_reference_artifact,
+  ).toContain("web-clone-source/reference.png")
+
+  expect(() =>
+    ToolVisualValidationEvidenceSchema.parse({
+      ...visualValidationEvidence(),
+      screenshot_artifact: "web-clone-source/reference.png",
+    }),
+  ).toThrow("screenshot_artifact")
+})
+
+test("frontend-design source refs reject rendered local preview screenshots", () => {
+  const base = minimalFrontendTemplateInput()
+  const localPreview = "/tmp/opencorvus-capture/1782540923070-jbqnrq/screenshot.png"
+  const durablePreview = "visual-html-skeleton/screenshots/desktop.png"
+  const durableDiff = "visual-html-skeleton/visual-diffs/desktop.json"
+  const localhostPreview = "http://127.0.0.1:4177/index.html"
+  const bareLocalhostPreview = "http://localhost"
+  const schemelessLocalhostPreview = "localhost:4177/index.html"
+  const schemelessLoopbackPreview = "127.0.0.1:4177/index.html"
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      reference_artifacts: [localPreview],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      reference_artifacts: [durablePreview],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      reference_artifacts: [durableDiff],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Rendered skeleton preview",
+          detail: "This is a rendered preview and must not be a source material reference.",
+          source_refs: [localPreview],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Rendered skeleton preview",
+          detail: "Task-scoped rendered previews are not source material references.",
+          source_refs: [durablePreview, durableDiff],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Local preview URL",
+          detail: "Local preview URLs are rendered outputs, not source material references.",
+          source_refs: [localhostPreview],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Schemeless loopback preview URL",
+          detail: "Schemeless loopback URLs are rendered outputs, not source material references.",
+          source_refs: [schemelessLoopbackPreview],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Schemeless local preview URL",
+          detail: "Schemeless localhost URLs are rendered outputs, not source material references.",
+          source_refs: [schemelessLocalhostPreview],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      material_inventory_items: [
+        {
+          title: "Bare local preview URL",
+          detail: "Bare localhost URLs are rendered outputs, not source material references.",
+          source_refs: [bareLocalhostPreview],
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: [localPreview],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["visual baseline"],
+      },
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: ["visual-html-skeleton/visual-diff.json"],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["visual baseline"],
+      },
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: [schemelessLocalhostPreview],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["visual baseline"],
+      },
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      reference_artifacts: ["http://127.0.0.1:4177/index.html"],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      reference_artifacts: ["http://127.0.0.1?preview=1"],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: [localhostPreview],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["visual baseline"],
+      },
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateToolInputSchema.safeParse({
+      ...base,
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: "visual-html-skeleton",
+        source_package: "web-clone-source",
+        entrypoints: [bareLocalhostPreview],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["visual baseline"],
+      },
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      visual_validation_evidence: [
+        {
+          ...visualValidationEvidence(),
+          screenshot_artifact: localPreview,
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      visual_validation_evidence: [
+        {
+          ...visualValidationEvidence(),
+          diff_artifact: "/tmp/opencorvus-capture/1782540923070-jbqnrq/manifest.json",
+        },
+      ],
+    }).success,
+  ).toBe(false)
+
+  expect(
+    FrontendTemplateFinalSchema.safeParse({
+      ...base,
+      visual_validation_evidence: [
+        {
+          ...visualValidationEvidence(),
+          screenshot_artifact: durablePreview,
+        },
+      ],
+    }).success,
+  ).toBe(true)
 })
 
 test("frontend-design submit schemas reject unknown fields instead of stripping evidence contract drift", () => {

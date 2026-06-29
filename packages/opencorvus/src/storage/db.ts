@@ -210,6 +210,13 @@ export namespace Database {
   export function close() {
     const sqlite = state.sqlite
     if (!sqlite) return
+    try {
+      sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+    } catch (error) {
+      log.warn("database WAL checkpoint failed during close", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
     sqlite.close()
     state.sqlite = undefined
     Client.reset()

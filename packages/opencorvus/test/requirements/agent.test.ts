@@ -118,6 +118,7 @@ describe("RequirementsAgent prompt precedence", () => {
           expect(input.format).toBeUndefined()
           expect(input.terminalTool?.toolName).toBe("submit_requirements")
           expect(input.terminalTool?.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
+          expect(input.toolKit.tools.request_orchestrator_decision).toBeDefined()
           expect(input.toolKit.tools.submit_requirements).toBeDefined()
           const parts = await input.buildUserParts()
           const text = parts.map((part: any) => (part?.type === "text" ? (part.text ?? "") : "")).join("\n")

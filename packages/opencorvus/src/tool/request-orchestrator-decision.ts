@@ -1,8 +1,5 @@
 import z from "zod"
-import {
-  cancelPendingAgentCoordinationRequestsForSession,
-  createAgentCoordinationRequest,
-} from "@/engine/agent-coordination"
+import { cancelPendingAgentCoordinationRequest, createAgentCoordinationRequest } from "@/engine/agent-coordination"
 import { dispatchTaskLoop } from "@/engine/queue"
 import { taskIDForSession } from "@/orchestrator/task-event"
 import { Session } from "@/session"
@@ -36,7 +33,9 @@ export async function executeRequestOrchestratorDecision(
   const runtimeContract = SessionPrompt.getSessionRuntimeContract(ctx.sessionID)
   const owningTask = taskIDForSession(ctx.sessionID)
   if (owningTask && owningTask !== taskID) {
-    throw new Error(`request_orchestrator_decision session ${ctx.sessionID} belongs to task ${owningTask}, not ${taskID}`)
+    throw new Error(
+      `request_orchestrator_decision session ${ctx.sessionID} belongs to task ${owningTask}, not ${taskID}`,
+    )
   }
   const derivedGoalID = runtimeContract?.identity.goalID ?? session.goalID
   if (params.goal_id && derivedGoalID && params.goal_id !== derivedGoalID) {
@@ -52,11 +51,12 @@ export async function executeRequestOrchestratorDecision(
   }
   const goalID = derivedGoalID ?? params.goal_id
   const goalRunID = derivedGoalRunID ?? params.goal_run_id
-  const row = createAgentCoordinationRequest({
+  const row = await createAgentCoordinationRequest({
     taskID,
     sessionID: ctx.sessionID,
     agent: ctx.agent,
     messageID: ctx.messageID,
+    callID: ctx.callID,
     summary: params.summary,
     details: params.details,
     blocking: params.blocking,
@@ -67,6 +67,27 @@ export async function executeRequestOrchestratorDecision(
     goalRunID,
   })
 
+  if (!row.createdNow) {
+    return {
+      title: "coordination request",
+      output: JSON.stringify({
+        request_id: row.payload.request_id,
+        task_id: taskID,
+        session_id: ctx.sessionID,
+        blocking: row.payload.blocking,
+        replayed: true,
+        orchestrator_wake: "not_dispatched",
+        message:
+          "Existing coordination request returned for this message replay. No duplicate orchestrator wake emitted.",
+      }),
+      metadata: {
+        requestID: row.payload.request_id,
+        taskID,
+        sessionID: ctx.sessionID,
+      },
+    }
+  }
+
   let dispatchResult: Awaited<ReturnType<DispatchTaskLoop>>
   try {
     dispatchResult = await dispatch({
@@ -76,23 +97,26 @@ export async function executeRequestOrchestratorDecision(
           `Worker coordination request ${row.payload.request_id} from ${ctx.agent}: ` +
           `${row.payload.summary}. Read the pending coordination request in task context and respond through ` +
           `respond_agent_coordination.`,
+        coordinationRequest: { requestID: row.payload.request_id },
       },
     })
   } catch (error) {
-    cancelPendingAgentCoordinationRequestsForSession({
+    await cancelPendingAgentCoordinationRequest({
       taskID,
-      sessionID: ctx.sessionID,
+      requestID: row.payload.request_id,
       reason: `orchestrator wake failed: ${error instanceof Error ? error.message : String(error)}`,
     })
     throw error
   }
   if (dispatchResult === "ignored") {
-    cancelPendingAgentCoordinationRequestsForSession({
+    await cancelPendingAgentCoordinationRequest({
       taskID,
-      sessionID: ctx.sessionID,
+      requestID: row.payload.request_id,
       reason: "orchestrator wake ignored",
     })
-    throw new Error(`request_orchestrator_decision recorded ${row.payload.request_id} but orchestrator wake was ignored`)
+    throw new Error(
+      `request_orchestrator_decision recorded ${row.payload.request_id} but orchestrator wake was ignored`,
+    )
   }
 
   return {

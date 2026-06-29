@@ -7,6 +7,7 @@ import { ChannelAttachment } from "@/channel/attachment"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import z from "zod"
+import { NotFoundError } from "../../storage/db"
 
 export const ChannelRoutes = lazy(() =>
   new Hono()
@@ -84,10 +85,10 @@ export const ChannelRoutes = lazy(() =>
       async (c) => {
         const id = c.req.param("id")
         if (!ChannelAttachment.authorize(id, c.req.query("e") ?? null, c.req.query("s") ?? null)) {
-          return c.json({ error: "not found" }, 404)
+          throw new NotFoundError({ message: `Channel attachment not found: ${id}` })
         }
         const file = await ChannelAttachment.get(id)
-        if (!file) return c.json({ error: "not found" }, 404)
+        if (!file) throw new NotFoundError({ message: `Channel attachment not found: ${id}` })
         return new Response(Bun.file(file.path), {
           headers: {
             "content-type": file.mime,

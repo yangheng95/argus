@@ -8,7 +8,7 @@ import {
   maybeTripOrchestratorStreamErrorFuse,
 } from "../../src/engine/persist"
 import { findTask } from "../../src/engine/store"
-import { isTaskTerminal, isTaskFailed } from "../../src/engine/task-status"
+import { isTaskTerminal } from "../../src/engine/task-status"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -18,11 +18,12 @@ import { tmpdir } from "../fixture/fixture"
  * specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md.
  *
  * Three orchestrator-stream-error artifacts within
- * ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS for the same task transitions
- * the task to `failed`, so repeated operator wakes do not keep replaying
- * an unrecoverable prompt. This caps the deterministic-replay loop observed
- * on tsk_e078e1f2a001t4ZwUl5SWgoG8o (277 identical DeepSeek 400s in
- * 2.5 minutes).
+ * ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS for the same task records a
+ * visible task error without writing terminal failed. The scheduler sees the
+ * durable artifacts/error and decides repair vs fail_task explicitly. This
+ * caps the deterministic-replay loop observed on
+ * tsk_e078e1f2a001t4ZwUl5SWgoG8o (277 identical DeepSeek 400s in 2.5 minutes)
+ * without making a host-side terminal lifecycle decision.
  */
 
 let projectID = ""
@@ -125,7 +126,7 @@ describe("maybeTripOrchestratorStreamErrorFuse", () => {
     })
   })
 
-  test("trips when threshold reached in window — task transitions to failed", async () => {
+  test("trips when threshold reached in window — records scheduler-visible error without failing task", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -146,10 +147,10 @@ describe("maybeTripOrchestratorStreamErrorFuse", () => {
         expect(result.consecutive).toBeGreaterThanOrEqual(3)
         const task = findTask(taskID)
         expect(task).toBeDefined()
-        expect(isTaskFailed(task!)).toBe(true)
+        expect(isTaskTerminal(task!)).toBe(false)
         expect(task!.error).toContain("consecutive")
         expect(task!.error).toContain("HTTP 400")
-        expect(task!.time_completed).not.toBeNull()
+        expect(task!.time_completed).toBeNull()
       },
     })
   })

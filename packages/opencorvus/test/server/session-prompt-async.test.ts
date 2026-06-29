@@ -232,12 +232,15 @@ describe("session prompt_async route", () => {
         expect(response.status).toBe(202)
         const { taskID, user_message } = (await response.json()) as {
           taskID: string
-          user_message: { info: { id: string } }
+          user_message: { info: { id: string }; parts: Array<{ id: string; orderKey?: string }> }
         }
         const before = await Session.messages({ sessionID: session.id })
         expect(before.filter((message) => message.info.role === "user").map((message) => message.info.id)).toEqual([
           user_message.info.id,
         ])
+        const persistedUser = before.find((message) => message.info.id === user_message.info.id)
+        expect(user_message.parts[0]?.orderKey).toBeString()
+        expect(user_message.parts[0]?.orderKey).toBe(persistedUser?.parts[0]?.orderKey)
 
         await TaskQueueService.runNow()
         expect(loop).toHaveBeenCalledTimes(1)
@@ -314,8 +317,9 @@ describe("session prompt_async route", () => {
           },
         })
         expect(response.status).toBe(404)
-        const body = (await response.json()) as { message: string }
-        expect(body.message).toContain("task_missing_123")
+        const body = (await response.json()) as { data?: { message?: string }; name?: string }
+        expect(body.name).toBe("NotFoundError")
+        expect(body.data?.message).toContain("task_missing_123")
       },
     })
   })
@@ -356,6 +360,9 @@ describe("session prompt_async route", () => {
           },
         })
         expect(response.status).toBe(404)
+        const body = (await response.json()) as { data?: { message?: string }; name?: string }
+        expect(body.name).toBe("NotFoundError")
+        expect(body.data?.message).toContain(taskID)
       },
     })
   })

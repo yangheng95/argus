@@ -268,8 +268,9 @@ describe("orchestrator architect fidelity diagnostics", () => {
           ),
       ),
     ).toBe(true)
-    expect(architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), { requireReferenceCoverage: true }))
-      .toEqual([])
+    expect(
+      architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), { requireReferenceCoverage: true }),
+    ).toEqual([])
   })
 
   test("reports text-only visual judge as missing visual evidence acceptance", () => {
@@ -278,9 +279,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     })
 
     expect(
-      findings.some(
-        (finding) => finding.code === "missing_final_visual_acceptance" && finding.severity === "concern",
-      ),
+      findings.some((finding) => finding.code === "missing_final_visual_acceptance" && finding.severity === "concern"),
     ).toBe(true)
   })
 

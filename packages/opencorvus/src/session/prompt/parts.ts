@@ -10,7 +10,6 @@ import { Agent } from "../../agent/agent"
 import { Provider } from "../../provider/provider"
 import { resolveAgentModelRef } from "../../agent/model"
 import { Instance } from "../../project/instance"
-import { Bus } from "../../bus"
 import { InstructionPrompt } from "../instruction"
 import { Plugin } from "../../plugin"
 import { MCP } from "../../mcp"
@@ -20,14 +19,13 @@ import { FileTime } from "../../file/time"
 import { ConfigMarkdown } from "../../config/markdown"
 import { EffectiveConfig } from "../../config/effective"
 import type { Config } from "../../config/config"
-import { NamedError } from "@opencorvus-ai/util/error"
 import { PermissionNext } from "@/permission/next"
 import { Tool } from "@/tool/tool"
 import { iife } from "@/util/iife"
 import { defer } from "../../util/defer"
 import { fileURLToPath, pathToFileURL } from "bun"
 import type { PromptInput } from "./schema"
-import { isDecodableText, decodeDataUrlBase64, decodeDataUrlText } from "../text-mime"
+import { isDecodableText, decodeDataUrlBase64Bytes, decodeDataUrlText, decodeRawBase64Payload } from "../text-mime"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { setSessionTitleFromFirstUserMessage } from "../first-message-title"
 
@@ -35,6 +33,17 @@ const log = Log.create({ service: "session.prompt" })
 
 function hostFileContextLabel(args: Record<string, unknown>) {
   return `Host-provided file context (not a model tool call): ${JSON.stringify(args)}`
+}
+
+function parseFileRangeLine(value: string, name: string): number {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(`file range ${name} must be a positive integer`)
+  }
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`file range ${name} must be a safe integer`)
+  }
+  return parsed
 }
 
 export async function resolvePromptParts(
@@ -157,6 +166,12 @@ export async function createUserMessage(input: PromptInput) {
             // before checking the protocol we check if this is an mcp resource because it needs special handling
             if (part.source?.type === "resource") {
               const { clientName, uri } = part.source
+              const resourceSource = {
+                type: "resource" as const,
+                clientName,
+                uri,
+                text: part.source.text ?? { value: uri, start: 0, end: uri.length },
+              }
               log.info("mcp resource", { clientName, uri, mime: part.mime })
 
               const pieces: Draft<Message.Part>[] = [
@@ -168,49 +183,65 @@ export async function createUserMessage(input: PromptInput) {
                 },
               ]
 
-              try {
-                const resourceContent = await MCP.readResource(clientName, uri)
-                if (!resourceContent) {
-                  throw new Error(`Resource not found: ${clientName}/${uri}`)
+              const resourceContent = await MCP.readResource(clientName, uri)
+              if (!resourceContent) {
+                throw new Error(`Resource not found: ${clientName}/${uri}`)
+              }
+
+              const contents = Array.isArray(resourceContent.contents)
+                ? resourceContent.contents
+                : resourceContent.contents
+                  ? [resourceContent.contents]
+                  : []
+              let materializedResourceContent = false
+
+              for (const content of contents) {
+                if (!content || typeof content !== "object") {
+                  throw new Error(`MCP resource content for ${clientName}/${uri} must be an object`)
                 }
-
-                const contents = Array.isArray(resourceContent.contents)
-                  ? resourceContent.contents
-                  : [resourceContent.contents]
-
-                for (const content of contents) {
-                  if ("text" in content && content.text) {
-                    pieces.push({
-                      messageID: info.id,
-                      sessionID: input.sessionID,
-                      type: "text",
-                      text: content.text as string,
-                    })
-                  } else if ("blob" in content && content.blob) {
-                    const mimeType = "mimeType" in content ? content.mimeType : part.mime
-                    pieces.push({
-                      messageID: info.id,
-                      sessionID: input.sessionID,
-                      type: "text",
-                      text: `[Binary content: ${mimeType}]`,
-                    })
+                if ("text" in content && typeof content.text === "string" && content.text.length > 0) {
+                  pieces.push({
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text",
+                    text: content.text as string,
+                  })
+                  materializedResourceContent = true
+                } else if ("blob" in content && content.blob) {
+                  if (typeof content.blob !== "string") {
+                    throw new Error(`MCP resource blob for ${clientName}/${uri} must be a base64 string`)
                   }
+                  const mimeType =
+                    "mimeType" in content && typeof content.mimeType === "string" && content.mimeType
+                      ? content.mimeType
+                      : part.mime
+                  const fileRef = await AttachmentStore.write(
+                    Instance.project.id,
+                    decodeRawBase64Payload(content.blob, `MCP resource blob for ${clientName}/${uri}`),
+                    mimeType,
+                    part.filename,
+                  )
+                  pieces.push({
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text",
+                    text: `[Binary content: ${mimeType}]`,
+                  })
+                  pieces.push({
+                    ...part,
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    url: fileRef.url,
+                    mime: fileRef.mime,
+                    filename: fileRef.filename ?? part.filename,
+                    source: resourceSource,
+                  })
+                  materializedResourceContent = true
                 }
+              }
 
-                pieces.push({
-                  ...part,
-                  messageID: info.id,
-                  sessionID: input.sessionID,
-                })
-              } catch (error: unknown) {
-                log.error("failed to read MCP resource", { error, clientName, uri })
-                const message = error instanceof Error ? error.message : String(error)
-                pieces.push({
-                  messageID: info.id,
-                  sessionID: input.sessionID,
-                  type: "text",
-                  text: `Failed to read MCP resource ${part.filename}: ${message}`,
-                })
+              if (!materializedResourceContent) {
+                throw new Error(`MCP resource ${clientName}/${uri} did not return usable text or blob content`)
               }
 
               return pieces
@@ -218,12 +249,9 @@ export async function createUserMessage(input: PromptInput) {
             const url = new URL(part.url)
             switch (url.protocol) {
               case "data:": {
-                const bytes = Buffer.from(
-                  decodeDataUrlBase64(
-                    part.url,
-                    `SessionPrompt.createUserMessage data URL file part ${part.filename ?? part.mime}`,
-                  ),
-                  "base64",
+                const bytes = decodeDataUrlBase64Bytes(
+                  part.url,
+                  `SessionPrompt.createUserMessage data URL file part ${part.filename ?? part.mime}`,
                 )
                 const fileRef = await AttachmentStore.write(Instance.project.id, bytes, part.mime, part.filename)
                 const persistedPart: Draft<Message.Part> = {
@@ -274,10 +302,13 @@ export async function createUserMessage(input: PromptInput) {
                   }
                   if (range.start != null) {
                     const filePathURI = part.url.split("?")[0]
-                    let start = parseInt(range.start)
-                    let end = range.end ? parseInt(range.end) : undefined
+                    let start = parseFileRangeLine(range.start, "start")
+                    let end = range.end != null ? parseFileRangeLine(range.end, "end") : undefined
+                    if (end !== undefined && end < start) {
+                      throw new Error("file range end must be greater than or equal to start")
+                    }
                     if (start === end) {
-                      const symbols = await LSP.documentSymbol(filePathURI).catch(() => [])
+                      const symbols = await LSP.documentSymbol(filePathURI)
                       for (const symbol of symbols) {
                         let range: LSP.Range | undefined
                         if ("range" in symbol) {
@@ -292,8 +323,8 @@ export async function createUserMessage(input: PromptInput) {
                         }
                       }
                     }
-                    offset = Math.max(start, 1)
-                    if (end) {
+                    offset = start
+                    if (end !== undefined) {
                       limit = end - (offset - 1)
                     }
                   }
@@ -308,59 +339,41 @@ export async function createUserMessage(input: PromptInput) {
                     },
                   ]
 
-                  await ReadTool.init()
-                    .then(async (t) => {
-                      const model = await Provider.getModel(info.model.providerID, info.model.modelID, { config })
-                      const readCtx: Tool.Context = {
-                        sessionID: input.sessionID,
-                        abort: new AbortController().signal,
-                        agent: input.agent!,
+                  const t = await ReadTool.init()
+                  const model = await Provider.getModel(info.model.providerID, info.model.modelID, { config })
+                  const readCtx: Tool.Context = {
+                    sessionID: input.sessionID,
+                    abort: new AbortController().signal,
+                    agent: input.agent!,
+                    messageID: info.id,
+                    extra: { bypassCwdCheck: true, model },
+                    messages: [],
+                    metadata: async () => {},
+                    ask: async () => {},
+                  }
+                  const result = await t.execute(args, readCtx)
+                  pieces.push({
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text",
+                    text: result.output,
+                  })
+                  if (result.attachments?.length) {
+                    pieces.push(
+                      ...result.attachments.map((attachment) => ({
+                        ...attachment,
+                        filename: attachment.filename ?? part.filename,
                         messageID: info.id,
-                        extra: { bypassCwdCheck: true, model },
-                        messages: [],
-                        metadata: async () => {},
-                        ask: async () => {},
-                      }
-                      const result = await t.execute(args, readCtx)
-                      pieces.push({
-                        messageID: info.id,
                         sessionID: input.sessionID,
-                        type: "text",
-                        text: result.output,
-                      })
-                      if (result.attachments?.length) {
-                        pieces.push(
-                          ...result.attachments.map((attachment) => ({
-                            ...attachment,
-                            filename: attachment.filename ?? part.filename,
-                            messageID: info.id,
-                            sessionID: input.sessionID,
-                          })),
-                        )
-                      } else {
-                        pieces.push({
-                          ...part,
-                          messageID: info.id,
-                          sessionID: input.sessionID,
-                        })
-                      }
+                      })),
+                    )
+                  } else {
+                    pieces.push({
+                      ...part,
+                      messageID: info.id,
+                      sessionID: input.sessionID,
                     })
-                    .catch((error) => {
-                      log.error("failed to read file", { error })
-                      const message = error instanceof Error ? error.message : error.toString()
-                      Bus.publish(Session.Event.Error, {
-                        sessionID: input.sessionID,
-                        error: new NamedError.Unknown({
-                          message,
-                        }).toObject(),
-                      })
-                      pieces.push({
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                        type: "text",
-                        text: `Host-provided file context failed to read ${filepath} with the following error: ${message}`,
-                      })
-                    })
+                  }
 
                   return pieces
                 }
@@ -485,18 +498,15 @@ export async function createUserMessage(input: PromptInput) {
 
   // Persist the message atomically so no observer can ever see a header-only
   // message if the process dies between the message row and its parts.
-  await Session.persistMessage({
+  const persisted = await Session.persistMessage({
     info,
     parts,
   })
   await setSessionTitleFromFirstUserMessage({
     sessionID: input.sessionID,
     messageID: info.id,
-    parts,
+    parts: persisted.parts,
   })
 
-  return {
-    info,
-    parts,
-  }
+  return persisted
 }

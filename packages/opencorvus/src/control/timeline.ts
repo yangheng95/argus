@@ -5,6 +5,7 @@ import { Database, and, asc, eq } from "@/storage/db"
 import { ControlMessageTable } from "./control.sql"
 import { ChannelSurface } from "@/channel/catalog"
 import { ControlStoredAttachment } from "./message-schema"
+import { timelineOrderKey } from "@/timeline/order"
 
 export const TimelineQuery = z.object({
   taskID: z.string().optional(),
@@ -15,6 +16,7 @@ export const TimelineQuery = z.object({
 export const TimelineMessage = z.object({
   info: z.object({
     id: z.string(),
+    orderKey: z.string().min(1),
     role: z.enum(["user", "assistant", "system"]),
     source: z.string().optional(),
     surface: z.string(),
@@ -64,19 +66,32 @@ const AppendInput = z.object({
 export namespace ControlTimeline {
   export function list(raw: z.input<typeof TimelineQuery>) {
     const input = TimelineQuery.parse(raw)
+    const projectID = Instance.project.id
     const rows = Database.use((db) =>
       input.taskID
         ? db
             .select()
             .from(ControlMessageTable)
-            .where(and(eq(ControlMessageTable.scope, "task"), eq(ControlMessageTable.scope_id, input.taskID)))
+            .where(
+              and(
+                eq(ControlMessageTable.project_id, projectID),
+                eq(ControlMessageTable.scope, "task"),
+                eq(ControlMessageTable.scope_id, input.taskID),
+              ),
+            )
             .orderBy(asc(ControlMessageTable.time_created), asc(ControlMessageTable.id))
             .all()
         : input.sessionID
           ? db
               .select()
               .from(ControlMessageTable)
-              .where(and(eq(ControlMessageTable.scope, "session"), eq(ControlMessageTable.scope_id, input.sessionID)))
+              .where(
+                and(
+                  eq(ControlMessageTable.project_id, projectID),
+                  eq(ControlMessageTable.scope, "session"),
+                  eq(ControlMessageTable.scope_id, input.sessionID),
+                ),
+              )
               .orderBy(asc(ControlMessageTable.time_created), asc(ControlMessageTable.id))
               .all()
           : db
@@ -84,6 +99,7 @@ export namespace ControlTimeline {
               .from(ControlMessageTable)
               .where(
                 and(
+                  eq(ControlMessageTable.project_id, projectID),
                   eq(ControlMessageTable.scope, "global"),
                   eq(ControlMessageTable.scope_id, input.surface ?? "panel"),
                 ),
@@ -134,6 +150,11 @@ function view(row: typeof ControlMessageTable.$inferSelect) {
   return {
     info: {
       id: row.id,
+      orderKey: timelineOrderKey({
+        domain: "control",
+        time: row.time_created,
+        id: row.id,
+      }),
       role: row.role,
       source: row.source,
       surface: row.surface,

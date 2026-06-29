@@ -87,6 +87,16 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Baseline-first restoration workflow")
     expect(prompt).toContain("normal agent tool flow")
     expect(prompt).toContain("not by creating project-internal state machines")
+    expect(prompt).toContain("Rendered screenshots, preview captures, and diff/evaluation artifacts")
+    expect(prompt).toContain("recorded only through `visual_validation_evidence`")
+    expect(prompt).toContain("Never persist `/tmp/opencorvus-capture` paths or localhost preview URLs")
+    expect(prompt).toContain("Do not put rendered skeleton screenshots")
+    expect(prompt).not.toContain(
+      "`entrypoints` naming the skeleton directory, `index.html`, CSS, assets, screenshots, and diff/evaluation artifacts",
+    )
+    expect(prompt).not.toContain(
+      "Use concrete artifact paths in `reference_artifacts`, `quality_project_contract`, `visual_consistency_contract`, `baseline_replacement_plan`, and `template_iteration_notes`.",
+    )
     expect(prompt).toContain("static first-candidate metadata")
     expect(prompt).toContain("sourceDomIterationState.ts")
     expect(prompt).toContain("nextSourceDomReplacement")

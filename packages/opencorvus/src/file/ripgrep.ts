@@ -1,6 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
 import z from "zod"
+import { buffer as readStreamBuffer } from "node:stream/consumers"
 import { lazy } from "../util/lazy"
 import { Process } from "../util/process"
 import { Log } from "@/util/log"
@@ -89,6 +90,15 @@ export namespace Ripgrep {
     return { filepath: runtime.filepath }
   })
 
+  function outputText(input: Buffer | Uint8Array | undefined) {
+    return input ? new TextDecoder().decode(input).trim() : ""
+  }
+
+  function ripgrepFailure(action: string, code: number, stderr?: Buffer | Uint8Array, stdout?: Buffer | Uint8Array) {
+    const detail = [outputText(stderr), outputText(stdout)].filter(Boolean).join("\n")
+    return detail ? `ripgrep ${action} failed with code ${code}: ${detail}` : `ripgrep ${action} failed with code ${code}`
+  }
+
   export async function filepath() {
     const { filepath } = await state()
     return filepath
@@ -126,14 +136,15 @@ export namespace Ripgrep {
     const proc = Process.spawn(args, {
       cwd: input.cwd,
       stdout: "pipe",
-      stderr: "ignore",
+      stderr: "pipe",
       abort: input.signal,
     })
 
-    if (!proc.stdout) {
+    if (!proc.stdout || !proc.stderr) {
       throw new Error("Process output not available")
     }
 
+    const stderr = readStreamBuffer(proc.stderr)
     let buffer = ""
     const stream = proc.stdout as AsyncIterable<Buffer | string>
     for await (const chunk of stream) {
@@ -150,7 +161,10 @@ export namespace Ripgrep {
     }
 
     if (buffer) yield buffer
-    await proc.exited
+    const [code, stderrBuffer] = await Promise.all([proc.exited, stderr])
+    if (code !== 0) {
+      throw new Error(ripgrepFailure("files", code, stderrBuffer))
+    }
 
     input.signal?.throwIfAborted()
   }
@@ -237,8 +251,11 @@ export namespace Ripgrep {
     args.push(input.pattern)
 
     const result = await Process.run(args, { cwd: input.cwd, nothrow: true })
-    if (result.code !== 0) {
+    if (result.code === 1) {
       return []
+    }
+    if (result.code !== 0) {
+      throw new Error(ripgrepFailure("search", result.code, result.stderr, result.stdout))
     }
 
     // Handle both Unix (\n) and Windows (\r\n) line endings

@@ -4,9 +4,10 @@ import {
   __conversationHistoryBeforeForTest,
   __conversationHistoryWindowForTest,
 } from "../../src/server/routes/orchestrator"
+import { timelineMessageOrderKey, timelineOrderKey } from "../../src/timeline/order"
 
 function message(id: string, sessionID: string, created: number) {
-  return {
+  const item = {
     info: {
       id,
       sessionID,
@@ -15,6 +16,18 @@ function message(id: string, sessionID: string, created: number) {
       time: { created },
     },
     parts: [],
+  }
+  item.info.orderKey = timelineMessageOrderKey(item)
+  return item
+}
+
+function timelineItem(id: string, timestamp: number) {
+  return {
+    id,
+    timestamp,
+    info: {
+      orderKey: timelineOrderKey({ domain: "control", time: timestamp, id }),
+    },
   }
 }
 
@@ -26,6 +39,7 @@ test("conversation tail window uses a stable message-id cursor for same-timestam
   expect(tail.transcript.map((item) => item.info.id)).toEqual(["msg_b", "msg_c"])
   expect(tail.history).toEqual({
     oldestTimestamp: 100,
+    oldestOrderKey: timelineMessageOrderKey(transcript[1]!),
     oldestMessageID: "msg_b",
     hasMore: true,
     limit: 2,
@@ -33,6 +47,7 @@ test("conversation tail window uses a stable message-id cursor for same-timestam
 
   const older = __conversationHistoryBeforeForTest(transcript, [], {
     before: tail.history.oldestTimestamp!,
+    beforeOrderKey: tail.history.oldestOrderKey!,
     beforeID: tail.history.oldestMessageID!,
     limit: 2,
   })
@@ -43,14 +58,11 @@ test("conversation tail window uses a stable message-id cursor for same-timestam
 
 test("conversation history page keeps timeline events throughout the requested timestamp window", () => {
   const transcript = [message("msg_old", "ses_old", 100), message("msg_boundary", "ses_boundary", 300)]
-  const timeline = [
-    { id: "tl_old", timestamp: 120 },
-    { id: "tl_gap", timestamp: 250 },
-    { id: "tl_newer", timestamp: 320 },
-  ]
+  const timeline = [timelineItem("tl_old", 120), timelineItem("tl_gap", 250), timelineItem("tl_newer", 320)]
 
   const page = __conversationHistoryBeforeForTest(transcript, timeline, {
     before: 300,
+    beforeOrderKey: timelineMessageOrderKey(transcript[1]!),
     beforeID: "msg_boundary",
     limit: 1,
   })

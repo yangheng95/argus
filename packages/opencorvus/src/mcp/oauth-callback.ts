@@ -63,14 +63,9 @@ interface PendingAuth {
 
 export namespace McpOAuthCallback {
   let server: ReturnType<typeof Bun.serve> | undefined
-  // audit-2026-04-29 W2-V21 — pre-fix `pendingAuths` was keyed by
-  // the random oauth `state`, but `cancelPending(mcpName)` looked
-  // up by mcpName — the keys are different values, so cancel was
-  // always a silent no-op. The 5-minute timeout would tick down
-  // anyway, but the user's UI thought the cancel worked while the
-  // pending entry leaked memory + a state slot. Fix by adding a
-  // parallel mcpName → state index so cancelPending can resolve
-  // through it.
+  // The pending owner key is project-scoped for MCP auth flows
+  // (`projectID:mcpName`) so two active projects can authenticate the same
+  // server name without sharing callback cancellation state.
   const pendingAuths = new Map<string, PendingAuth>()
   const mcpNameToState = new Map<string, string>()
 

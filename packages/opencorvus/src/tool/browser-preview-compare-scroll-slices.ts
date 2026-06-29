@@ -21,7 +21,7 @@ export type BrowserPreviewCompareScrollSlicesToolParameters = z.infer<
 
 export const BrowserPreviewCompareScrollSlicesTool = Tool.define(BrowserPreviewCompareScrollSlicesToolID, {
   description:
-    "Visual QA only: compare a finished implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png; never accepts source URLs and never satisfies formal browser_preview_compare_regions reference-comparison proof. Returns a side-by-side PNG attachment for direct inspection.",
+    "Visual QA only: compare a finished implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png; never accepts source URLs. Returns a side-by-side PNG attachment for direct inspection.",
   parameters: BrowserPreviewCompareScrollSlicesToolParameters,
   async execute(params: BrowserPreviewCompareScrollSlicesToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
@@ -76,6 +76,6 @@ function renderPublicResult(result: BrowserPreviewScrollSliceComparisonResult): 
   return {
     ...result,
     evidenceSemantics:
-      "Supporting visual_diff evidence only. This is not browser_preview_compare_regions reference-comparison proof.",
+      "Supporting visual_diff evidence only. This is not reference-comparison proof.",
   }
 }

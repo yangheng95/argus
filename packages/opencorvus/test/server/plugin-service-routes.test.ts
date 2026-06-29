@@ -8,6 +8,9 @@ import { Server } from "../../src/server/server"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
+import { eq } from "drizzle-orm"
 
 async function writeFixturePlugin(root: string) {
   const pluginDir = path.join(root, ".opencorvus", "plugin")
@@ -39,6 +42,32 @@ async function writePlugin(root: string, name: string, source: string) {
   const pluginDir = path.join(root, ".opencorvus", "plugin")
   await mkdir(pluginDir, { recursive: true })
   await writeFile(path.join(pluginDir, name), source)
+}
+
+async function seedTask(directory: string, title: string): Promise<string> {
+  const taskID = Identifier.ascending("task")
+  await Instance.provide({
+    directory,
+    fn: () => {
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: null,
+            source: "test",
+            title,
+            request: title,
+            priority: "normal",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
+      )
+    },
+  })
+  return taskID
 }
 
 describe("plugin service routes", () => {
@@ -215,6 +244,58 @@ describe("plugin service routes", () => {
       },
     })
   }, 60_000)
+
+  test("taskArtifacts reject foreign project task ids", async () => {
+    await using projectA = await tmpdir({
+      init: async (dir) => {
+        await writePlugin(
+          dir,
+          "artifact-service.ts",
+          `
+            export const ArtifactPlugin = async (input) => ({
+              service: async () => ({
+                id: "artifact-fixture",
+                app: {
+                  fetch: async (request) => {
+                    const body = await request.json()
+                    const artifact = await input.taskArtifacts.create({
+                      taskID: body.taskID,
+                      kind: "verification-evidence",
+                      label: "foreign",
+                      payload: { ok: true },
+                    })
+                    return Response.json({ artifact })
+                  },
+                },
+              }),
+            })
+          `,
+        )
+      },
+    })
+    await using projectB = await tmpdir()
+    const foreignTaskID = await seedTask(projectB.path, "foreign plugin task")
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        const response = await Server.App().request("/plugin/artifact-fixture/create", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": projectA.path,
+          },
+          body: JSON.stringify({ taskID: foreignTaskID }),
+        })
+
+        expect(response.status).toBe(500)
+        const artifact = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, foreignTaskID)).get(),
+        )
+        expect(artifact).toBeUndefined()
+      },
+    })
+  }, 30_000)
 
   test("core plugin runtime does not import the coding-agent-tui implementation", () => {
     const source = readFileSync(path.resolve(import.meta.dir, "../../src/plugin/index.ts"), "utf8")

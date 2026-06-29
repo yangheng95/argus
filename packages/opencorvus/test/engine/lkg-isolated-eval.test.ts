@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { $ } from "bun"
 import { PNG } from "pngjs"
+import { readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -17,6 +18,12 @@ afterEach(async () => {
 })
 
 describe("isolated acceptance LKG evaluation", () => {
+  test("temporary cleanup uses the canonical worktree remover", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../src/acceptance/lkg-isolated-eval.ts"), "utf8")
+    expect(source).toContain("await Worktree.remove({ directory: evalDir })")
+    expect(source).not.toContain('git(["worktree", "remove"')
+  })
+
   test("evaluates and rolls back only the temporary worktree, leaving primary HEAD unchanged", async () => {
     const dir = await makeGitDir()
     try {

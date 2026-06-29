@@ -26,9 +26,27 @@ test("interactive browser preview command abort and timeout paths release listen
   const live = source("src/browser-preview/live.ts")
 
   expect(live).toContain("const pending = this.pending.get(id)")
-  expect(live).toContain("pending.reject(new Error(`Browser preview live command timed out.")
+  expect(live).toContain("LIVE_COMMAND_INACTIVITY_TIMEOUT_MILLISECONDS")
+  expect(live).toContain("private refreshCommandInactivityTimer(id: number, source: string): void")
+  expect(live).toContain("private refreshAllCommandInactivityTimers(source: string): void")
+  expect(live).toContain("Browser preview live command inactive for")
   expect(live).toContain('new Error("Browser preview live command aborted.")')
   expect(live).toContain('signal?.removeEventListener("abort", abort)')
+  expect(live).toContain('this.refreshAllCommandInactivityTimers("stdout")')
+  expect(live).toContain('this.refreshAllCommandInactivityTimers("stderr")')
+  expect(live).not.toContain("LIVE_COMMAND_TIMEOUT_MILLISECONDS")
+  expect(live).not.toContain("Browser preview live command timed out.")
+})
+
+test("interactive browser preview sidecar forwards browser activity to the host command timer", () => {
+  const live = source("src/browser-preview/live.ts")
+
+  expect(live).toContain("function writeActivityResponse(id, source)")
+  expect(live).toContain("activity: true")
+  expect(live).toContain("function commandActivityWriter(id)")
+  expect(live).toContain("if (typeof onActivity === \"function\") onActivity(source);")
+  expect(live).toContain("options.onActivity")
+  expect(live).toContain("this.refreshCommandInactivityTimer(id, message.source || \"sidecar-activity\")")
 })
 
 test("interactive browser preview live sidecar observes background failures", () => {

@@ -16,6 +16,7 @@ import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { filterAgentTools } from "@/agent/filter-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import { createFactCheckOutputTools, type FactCheckCollector } from "./tools"
@@ -185,6 +186,18 @@ export namespace FactCheckAgent {
       taskID: input.taskID,
       sessionID: input.orchestratorSessionID,
     })
+    const coordinationTools = await filterAgentTools(
+      await createAgentCoordinationRuntimeTools({
+        agent: "fact-check",
+        taskID: input.taskID,
+        signal: input.signal,
+      }),
+      "fact-check",
+      {
+        taskID: input.taskID,
+        sessionID: input.orchestratorSessionID,
+      },
+    )
     const outputToolKit = createFactCheckOutputTools()
     // Continuation mode appends a visible same-session recovery prompt from
     // runAgentSession, so buildUserPrompt is not called and the stale target
@@ -210,7 +223,7 @@ export namespace FactCheckAgent {
             }
           : undefined,
         toolKit: {
-          tools: { ...retrievalTools, ...outputToolKit.tools },
+          tools: { ...retrievalTools, ...coordinationTools, ...outputToolKit.tools },
           getCollector: outputToolKit.getCollector,
           buildReport: outputToolKit.buildReport,
         },

@@ -247,7 +247,7 @@ const PIPELINE: MiniWorkflow = {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "所有 blocking build terminal 后、final acceptance 前的一次性 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
+      hint: "所有 blocking build terminal 后、final acceptance 前的一次性 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -419,7 +419,9 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   return "pending"
 }
 
-function parseVisualQaReportProjection(value: string): { effectiveAccepted: boolean; productionBlockers: number } | undefined {
+function parseVisualQaReportProjection(
+  value: string,
+): { effectiveAccepted: boolean; productionBlockers: number } | undefined {
   try {
     const parsed = VisualQaReportSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined

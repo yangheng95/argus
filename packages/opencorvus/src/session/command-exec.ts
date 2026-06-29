@@ -13,6 +13,7 @@ import { EffectiveConfig } from "../config/effective"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "."
 import { SessionPromptState } from "./prompt/state"
+import { sessionLifecycleOrderKey } from "./status"
 
 export namespace SessionCommand {
   const { log } = SessionPromptState
@@ -115,6 +116,7 @@ export namespace SessionCommand {
         const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
         Bus.publish(Session.Event.Error, {
           sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
           error: new NamedError.Unknown({ message: `Model not found: ${providerID}/${modelID}.${hint}` }).toObject(),
         })
       }
@@ -129,6 +131,7 @@ export namespace SessionCommand {
       const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
       Bus.publish(Session.Event.Error, {
         sessionID: input.sessionID,
+        orderKey: sessionLifecycleOrderKey(input.sessionID),
         error: error.toObject(),
       })
       throw error

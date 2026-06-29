@@ -4,7 +4,12 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
-import { conversationMessageHasDisplay, projectConversationAgentView, projectConversationView } from "@/conversation/view"
+import {
+  conversationMessageHasDisplay,
+  conversationTranscriptMessageOrder,
+  projectConversationAgentView,
+  projectConversationView,
+} from "@/conversation/view"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
@@ -23,6 +28,7 @@ import { Snapshot } from "@/snapshot"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Log } from "../../util/log"
 import { badRequestBody, errors } from "../error"
+import { NotFoundError } from "../../storage/db"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
 import { enrichStandaloneSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
@@ -35,6 +41,7 @@ import {
 } from "@/coding-assistant/session"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { requireTimelineOrderKeyDomain, timelineOrderKey } from "@/timeline/order"
 
 const log = Log.create({ service: "server" })
 
@@ -51,21 +58,44 @@ async function applySessionPromptRouteOverlay(sessionID: string, prompt: Omit<Se
   return SessionAgentIdentity.applyToPrompt(session.kind, prompt)
 }
 
-function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+export function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   const timestamp = event.time.emitted
   if (!(typeof timestamp === "number" && timestamp > 0)) {
     throw new Error(`protocolSessionEvent: event ${event.id} missing time.emitted (schema-invariant violated)`)
   }
   const notify = BusEvent.resolveNotify(event.type, event.payload ?? {})
+  const payload = event.payload || {}
+  const orderKey = typeof event.orderKey === "string" && event.orderKey.length > 0 ? event.orderKey : undefined
+  if (!orderKey) {
+    throw new Error(`protocolSessionEvent: event ${event.id} (${event.type}) missing orderKey`)
+  }
+  const payloadOrderKey =
+    typeof payload.orderKey === "string"
+      ? payload.orderKey
+      : event.type.startsWith("message.") && payload.info && typeof payload.info === "object"
+        ? (payload.info as Record<string, unknown>).orderKey
+        : undefined
+  if (typeof payloadOrderKey === "string" && payloadOrderKey.length > 0 && payloadOrderKey !== orderKey) {
+    throw new Error(`protocolSessionEvent: event ${event.id} (${event.type}) orderKey drift between envelope and payload`)
+  }
+  if (event.type === "session.status" || event.type === "session.idle" || event.type === "session.error") {
+    requireTimelineOrderKeyDomain(orderKey, `protocolSessionEvent: event ${event.id} (${event.type}) envelope`, "session")
+    requireTimelineOrderKeyDomain(
+      payloadOrderKey,
+      `protocolSessionEvent: event ${event.id} (${event.type}) payload`,
+      "session",
+    )
+  }
   return {
     event_id: event.id,
     session_id: event.sessionID,
+    orderKey,
     type: event.type.replace("engine.", ""),
     emittedAt: timestamp,
     timestamp,
     sequence: event.sequence,
     summary: event.summary,
-    payload: event.payload || {},
+    payload,
     ...(notify ? { notify } : {}),
   }
 }
@@ -200,32 +230,55 @@ export const SessionRoutes = lazy(() =>
       describeRoute({
         summary: "List sessions across projects",
         description:
-          "List sessions across all projects with cursor-based pagination and optional archived inclusion. Sets x-next-cursor response header when more results are available.",
+          "List sessions across all projects with compound cursor-based pagination and optional archived inclusion. Sets x-next-cursor-updated and x-next-cursor-session-id response headers when more results are available.",
         operationId: "session.listGlobal",
         responses: {
           200: {
             description: "List of sessions across projects",
+            headers: {
+              "x-next-cursor-updated": {
+                description: "Next page compound cursor updated timestamp when more sessions are available",
+                schema: { type: "string" },
+              },
+              "x-next-cursor-session-id": {
+                description: "Next page compound cursor session ID when more sessions are available",
+                schema: { type: "string" },
+              },
+            },
             content: { "application/json": { schema: resolver(Session.GlobalInfo.array()) } },
           },
+          ...errors(400),
         },
       }),
       validator(
         "query",
-        z.object({
-          directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
-          roots: z.coerce.boolean().optional().meta({ description: "Only return root sessions (no parentID)" }),
-          start: z.coerce
-            .number()
-            .optional()
-            .meta({ description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)" }),
-          cursor: z.coerce
-            .number()
-            .optional()
-            .meta({ description: "Return sessions updated before this timestamp (milliseconds since epoch)" }),
-          search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
-          limit: z.coerce.number().optional().meta({ description: "Maximum number of sessions to return" }),
-          archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
-        }),
+        z
+          .object({
+            directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
+            roots: z.coerce.boolean().optional().meta({ description: "Only return root sessions (no parentID)" }),
+            start: z.coerce
+              .number()
+              .optional()
+              .meta({ description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)" }),
+            cursorUpdated: z.coerce
+              .number()
+              .optional()
+              .meta({ description: "Compound cursor updated timestamp (milliseconds since epoch)" }),
+            cursorSessionID: z.string().trim().min(1).optional().meta({ description: "Compound cursor session ID" }),
+            search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
+            limit: z.coerce.number().optional().meta({ description: "Maximum number of sessions to return" }),
+            archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
+          })
+          .superRefine((value, ctx) => {
+            const hasUpdated = value.cursorUpdated !== undefined
+            const hasSessionID = value.cursorSessionID !== undefined
+            if (hasUpdated === hasSessionID) return
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: hasUpdated ? ["cursorSessionID"] : ["cursorUpdated"],
+              message: "cursorUpdated and cursorSessionID must be supplied together",
+            })
+          }),
       ),
       async (c) => {
         const query = c.req.valid("query")
@@ -235,7 +288,8 @@ export const SessionRoutes = lazy(() =>
           directory: query.directory,
           roots: query.roots,
           start: query.start,
-          cursor: query.cursor,
+          cursorUpdated: query.cursorUpdated,
+          cursorSessionID: query.cursorSessionID,
           search: query.search,
           limit: limit + 1,
           archived: query.archived,
@@ -245,7 +299,8 @@ export const SessionRoutes = lazy(() =>
         const hasMore = sessions.length > limit
         const list = hasMore ? sessions.slice(0, limit) : sessions
         if (hasMore && list.length > 0) {
-          c.header("x-next-cursor", String(list[list.length - 1].time.updated))
+          c.header("x-next-cursor-updated", String(list[list.length - 1].time.updated))
+          c.header("x-next-cursor-session-id", list[list.length - 1].id)
         }
         return c.json(list)
       },
@@ -368,11 +423,9 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const session = await getActiveProjectSession(sessionID)
         const sessionIDs = await Session.treeInProject({ sessionID, projectID: Instance.project.id })
-        const messages = (
-          await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
-        )
+        const messages = (await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id }))))
           .flat()
-          .sort((left, right) => (left.info.time?.created ?? 0) - (right.info.time?.created ?? 0))
+          .sort(conversationTranscriptMessageOrder)
         const transcript = enrichStandaloneSessionTranscript(messages).filter(conversationMessageHasDisplay)
         const board = {
           kind: "session" as const,
@@ -396,9 +449,10 @@ export const SessionRoutes = lazy(() =>
           agentView,
           history: {
             oldestTimestamp: transcript[0]?.info?.time?.created ?? null,
+            oldestOrderKey: transcript[0]?.info?.orderKey ?? null,
             oldestMessageID: transcript[0]?.info?.id ?? null,
             hasMore: false,
-            limit: transcript.length,
+            limit: Math.max(1, transcript.length),
           },
         })
       },
@@ -427,7 +481,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await assertActiveProjectSession(sessionID)
+        const session = await assertActiveProjectSession(sessionID)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
@@ -473,11 +527,18 @@ export const SessionRoutes = lazy(() =>
             },
             { sessionID },
           )
-          stopMirror = subscribeSessionMirror(sessionID)
+          stopMirror = subscribeSessionMirror(sessionID, (error) => {
+            cleanup({ closeStream: true, error })
+          })
           await writeData(
             JSON.stringify({
               event_id: `session-connected-${Date.now()}`,
               session_id: sessionID,
+              orderKey: timelineOrderKey({
+                domain: "session",
+                time: session.time.created,
+                id: sessionID,
+              }),
               type: "session.connected",
               emittedAt: Date.now(),
               timestamp: Date.now(),
@@ -492,10 +553,16 @@ export const SessionRoutes = lazy(() =>
           }
           heartbeat = setInterval(() => {
             const now = Date.now()
+            const eventID = `session-heartbeat-${now}`
             void writeData(
               JSON.stringify({
-                event_id: `session-heartbeat-${now}`,
+                event_id: eventID,
                 session_id: sessionID,
+                orderKey: timelineOrderKey({
+                  domain: "session",
+                  time: session.time.created,
+                  id: sessionID,
+                }),
                 type: "session.heartbeat",
                 emittedAt: now,
                 timestamp: now,
@@ -889,7 +956,7 @@ export const SessionRoutes = lazy(() =>
         responses: {
           200: {
             description: "List of messages",
-            content: { "application/json": { schema: resolver(Message.WithParts.array()) } },
+            content: { "application/json": { schema: resolver(Message.VisibleWithParts.array()) } },
           },
           ...errors(400, 404),
         },
@@ -928,12 +995,7 @@ export const SessionRoutes = lazy(() =>
             description: "Message",
             content: {
               "application/json": {
-                schema: resolver(
-                  z.object({
-                    info: Message.Info,
-                    parts: Message.Part.array(),
-                  }),
-                ),
+                schema: resolver(Message.VisibleWithParts),
               },
             },
           },
@@ -1023,7 +1085,7 @@ export const SessionRoutes = lazy(() =>
         responses: {
           200: {
             description: "Successfully updated part",
-            content: { "application/json": { schema: resolver(Message.Part) } },
+            content: { "application/json": { schema: resolver(Message.VisiblePart) } },
           },
           ...errors(400, 404),
         },
@@ -1064,8 +1126,8 @@ export const SessionRoutes = lazy(() =>
               "application/json": {
                 schema: resolver(
                   z.object({
-                    info: Message.Assistant,
-                    parts: Message.Part.array(),
+                    info: Message.Assistant.extend({ orderKey: z.string().min(1) }),
+                    parts: Message.VisiblePart.array(),
                   }),
                 ),
               },
@@ -1107,7 +1169,7 @@ export const SessionRoutes = lazy(() =>
                 schema: resolver(
                   z.object({
                     taskID: z.string(),
-                    user_message: Message.WithParts,
+                    user_message: Message.VisibleWithParts,
                   }),
                 ),
               },
@@ -1181,7 +1243,7 @@ export const SessionRoutes = lazy(() =>
           taskID,
           source: "session.prompt_async",
         })
-        if (!status) return c.json({ message: `Task ${taskID} not found` }, 404)
+        if (!status) throw new NotFoundError({ message: `Task ${taskID} not found` })
         return c.json(status)
       },
     )
@@ -1198,8 +1260,8 @@ export const SessionRoutes = lazy(() =>
               "application/json": {
                 schema: resolver(
                   z.object({
-                    info: Message.Assistant,
-                    parts: Message.Part.array(),
+                    info: Message.Assistant.extend({ orderKey: z.string().min(1) }),
+                    parts: Message.VisiblePart.array(),
                   }),
                 ),
               },
@@ -1232,7 +1294,11 @@ export const SessionRoutes = lazy(() =>
         responses: {
           200: {
             description: "Created message",
-            content: { "application/json": { schema: resolver(Message.Assistant) } },
+            content: {
+              "application/json": {
+                schema: resolver(Message.Assistant.extend({ orderKey: z.string().min(1) })),
+              },
+            },
           },
           ...errors(400, 404),
         },

@@ -6,6 +6,7 @@ import { Orchestrator } from "../../src/orchestrator/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionStatus } from "../../src/session/status"
 import { Database, and, eq } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -162,6 +163,105 @@ describe("orchestrator abort funnel", () => {
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(refreshed?.error ?? null).toBeNull()
+      },
+    })
+  })
+
+  test("prompt inactivity records an orchestrator-stream-error instead of hanging", async () => {
+    installControlModel()
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "mock-control/control",
+        assistant: { activity: { task_queue_run_timeout_ms: 1000 } },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const root = await Session.create({ kind: "root", title: "prompt inactivity root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { model: "mock-control/control" },
+        })
+        insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
+
+        spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          await new Promise<never>(() => {})
+        }) as never)
+
+        const outcome = await Promise.race([
+          Orchestrator.processTask(taskID).then(() => "resolved" as const),
+          new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 5_000)),
+        ])
+        expect(outcome).toBe("resolved")
+
+        const artifacts = streamErrorArtifacts(taskID)
+        expect(artifacts).toHaveLength(1)
+        const payload = artifacts[0]!.payload as { errorName?: string; reason?: string }
+        expect(payload.errorName).toBe("OrchestratorPromptInactiveError")
+        expect(payload.reason).toContain("produced no activity")
+      },
+    })
+  })
+
+  test("descendant session activity refreshes orchestrator prompt inactivity", async () => {
+    installControlModel()
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "mock-control/control",
+        assistant: { activity: { task_queue_run_timeout_ms: 1000 } },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const root = await Session.create({ kind: "root", title: "descendant activity root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { model: "mock-control/control" },
+        })
+        insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
+
+        spyOn(SessionPrompt, "prompt").mockImplementation((async (input) => {
+          const child = await Session.createNext({
+            kind: "explore",
+            parentID: input.sessionID,
+            title: "active child",
+            directory: Instance.directory,
+          })
+          setTimeout(() => {
+            SessionStatus.set(child.id, {
+              type: "retry",
+              attempt: 1,
+              message: "child still active",
+              next: Date.now() + 1000,
+            })
+          }, 700)
+          await new Promise<never>(() => {})
+        }) as never)
+
+        const process = Orchestrator.processTask(taskID).then(() => "resolved" as const)
+        const early = await Promise.race([
+          process,
+          new Promise<"still-running">((resolve) => setTimeout(() => resolve("still-running"), 1300)),
+        ])
+        expect(early).toBe("still-running")
+
+        const final = await Promise.race([
+          process,
+          new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 4_000)),
+        ])
+        expect(final).toBe("resolved")
+        const artifacts = streamErrorArtifacts(taskID)
+        expect(artifacts).toHaveLength(1)
       },
     })
   })

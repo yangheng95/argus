@@ -5,8 +5,9 @@ import { Session } from "@/session"
 import { Message } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { ToolRegistry } from "@/tool/registry"
-import { Database, eq } from "@/storage/db"
+import { Database, and, eq } from "@/storage/db"
 import { EngineTaskTable } from "@/engine"
+import { SessionTable } from "@/session/session.sql"
 import { panelCapabilityPrompt } from "@/panel/capability"
 import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
@@ -14,6 +15,7 @@ import { Bus } from "@/bus"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineService } from "@/task-api"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "control-message" })
 const ResultSchema = z.toJSONSchema(ControlMessageResult)
@@ -332,7 +334,7 @@ async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
   const persistent = input.surface === "panel" && !input.taskID
   if (persistent && input.sessionID) {
     return {
-      info: await Session.get(input.sessionID),
+      info: await Session.getInProject({ sessionID: input.sessionID, projectID: Instance.project.id }),
       created: false,
       persistent: true,
       keep: true,
@@ -411,24 +413,36 @@ async function appendSummary(sessionID: string, message: Message.WithParts, text
 }
 
 function scope(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
-  const taskID = result.task_id ?? input.taskID
-  const sessionID = result.session_id ?? input.sessionID ?? taskSession(taskID)
+  const task = taskScope(result.task_id ?? input.taskID)
+  const sessionID = sessionScope(result.session_id ?? input.sessionID) ?? task?.sessionID
   return {
-    ...(taskID ? { taskID } : {}),
+    ...(task ? { taskID: task.taskID } : {}),
     ...(sessionID ? { sessionID } : {}),
   }
 }
 
-function taskSession(taskID?: string) {
+function sessionScope(sessionID?: string) {
+  if (!sessionID) return
+  const row = Database.use((db) =>
+    db
+      .select({ sessionID: SessionTable.id })
+      .from(SessionTable)
+      .where(and(eq(SessionTable.id, sessionID), eq(SessionTable.project_id, Instance.project.id)))
+      .get(),
+  )
+  return row?.sessionID
+}
+
+function taskScope(taskID?: string) {
   if (!taskID) return
   const row = Database.use((db) =>
     db
-      .select({ sessionID: EngineTaskTable.session_id })
+      .select({ taskID: EngineTaskTable.id, sessionID: EngineTaskTable.session_id })
       .from(EngineTaskTable)
-      .where(eq(EngineTaskTable.id, taskID))
+      .where(and(eq(EngineTaskTable.id, taskID), eq(EngineTaskTable.project_id, Instance.project.id)))
       .get(),
   )
-  return row?.sessionID ?? undefined
+  return row
 }
 
 function loggedInput(input: z.infer<typeof ControlMessageInput>) {

@@ -86,7 +86,7 @@ export async function evaluateLKGInIsolatedWorktree(input: {
     }
   } finally {
     if (created) {
-      await removeEvalWorktree(primaryDir, evalDir)
+      await removeEvalWorktree(evalDir)
       log.info("removed isolated acceptance LKG worktree", {
         taskID: input.task.id,
         iteration: input.iteration,
@@ -106,20 +106,15 @@ function resolveAttachmentPath(url: string, label: "rendered" | "reference"): st
   return resolved
 }
 
-async function removeEvalWorktree(primaryDir: string, evalDir: string): Promise<void> {
-  let lastError = ""
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const removed = await Worktree.withGitLock(() =>
-      git(["worktree", "remove", "--force", evalDir], {
-        cwd: primaryDir,
-        timeoutProfile: "default",
-      }),
-    )
-    if (removed.exitCode === 0) return
-    lastError = gitError(removed)
-    if (attempt < 2) await sleep(500)
+async function removeEvalWorktree(evalDir: string): Promise<void> {
+  try {
+    await Worktree.remove({ directory: evalDir })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`evaluateLKGInIsolatedWorktree: remove eval worktree failed: ${message}`, {
+      cause: error instanceof Error ? error : undefined,
+    })
   }
-  throw new Error(`evaluateLKGInIsolatedWorktree: git worktree remove failed: ${lastError}`)
 }
 
 function safePathPart(value: string): string {
@@ -133,8 +128,4 @@ function safePathPart(value: string): string {
 
 function gitError(result: { stdout?: Buffer; stderr?: Buffer }): string {
   return [result.stderr?.toString().trim(), result.stdout?.toString().trim()].filter(Boolean).join("\n") || "git failed"
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

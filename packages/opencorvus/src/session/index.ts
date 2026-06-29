@@ -28,7 +28,7 @@ import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
 import { iife } from "@/util/iife"
 import { NamedError } from "@opencorvus-ai/util/error"
-import { timelinePartOrderKey } from "@/timeline/order"
+import { timelineMessageOrderKey, timelinePartOrderKey } from "@/timeline/order"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -245,7 +245,7 @@ export namespace Session {
       messageID: Identifier.schema("message").optional(),
     }),
     async (input) => {
-      const original = await get(input.sessionID)
+      const original = await getInProject({ sessionID: input.sessionID, projectID: Instance.project.id })
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
       // fork = clone: inherits the original session's kind and goal. This
@@ -267,16 +267,18 @@ export namespace Session {
         idMap.set(msg.info.id, newID)
 
         const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
+        const { orderKey: _clonedMessageOrderKey, ...messageInfo } = msg.info
         const cloned = await updateMessage({
-          ...msg.info,
+          ...messageInfo,
           sessionID: session.id,
           id: newID,
           ...(parentID && { parentID }),
         })
 
         for (const part of msg.parts) {
+          const { orderKey: _clonedPartOrderKey, ...partInfo } = part
           await updatePart({
-            ...part,
+            ...partInfo,
             id: Identifier.ascending("part"),
             messageID: cloned.id,
             sessionID: session.id,
@@ -892,27 +894,33 @@ export namespace Session {
     return removeSessionTree({ sessionID, projectID, publishDeleted: false })
   })
 
-  function messageWithPersistedCreated(msg: Message.Info, timeCreated: number): Message.Info {
-    return {
+  function messageWithPersistedCreated(msg: Message.Info, timeCreated: number): Message.VisibleInfo {
+    const persisted = {
       ...msg,
       time: {
         ...msg.time,
         created: timeCreated,
       },
     } as Message.Info
+    const orderKey = timelineMessageOrderKey({ info: persisted })
+    if (typeof msg.orderKey === "string" && msg.orderKey.length > 0 && msg.orderKey !== orderKey) {
+      throw new Error(`Session.updateMessage: message ${msg.id} orderKey drift between payload and persisted row`)
+    }
+    return { ...persisted, orderKey } as Message.VisibleInfo
   }
 
   export const updateMessage = fn(Message.Info, async (msg) => {
-    let persisted = msg
+    let persisted: Message.VisibleInfo | undefined
     Database.use((db) => {
       const existing = db
         .select({ time_created: MessageTable.time_created })
         .from(MessageTable)
         .where(eq(MessageTable.id, msg.id))
         .get()
-      persisted = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
-      const time_created = persisted.time.created
-      const { id, sessionID, ...data } = persisted
+      const persistedMessage = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
+      persisted = persistedMessage
+      const time_created = persistedMessage.time.created
+      const { id, sessionID, ...data } = persistedMessage
       db.insert(MessageTable)
         .values({
           id,
@@ -924,10 +932,11 @@ export namespace Session {
         .run()
       Database.effect(() =>
         Bus.publish(Message.Event.Updated, {
-          info: persisted,
+          info: persistedMessage,
         }),
       )
     })
+    if (!persisted) throw new Error(`Session.updateMessage: message ${msg.id} was not persisted`)
     return persisted
   })
 
@@ -938,16 +947,17 @@ export namespace Session {
    * fully assembled. Follow up with `updateMessage` to publish the event.
    */
   export const saveMessage = fn(Message.Info, async (msg) => {
-    let persisted = msg
+    let persisted: Message.VisibleInfo | undefined
     Database.use((db) => {
       const existing = db
         .select({ time_created: MessageTable.time_created })
         .from(MessageTable)
         .where(eq(MessageTable.id, msg.id))
         .get()
-      persisted = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
-      const time_created = persisted.time.created
-      const { id, sessionID, ...data } = persisted
+      const persistedMessage = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
+      persisted = persistedMessage
+      const time_created = persistedMessage.time.created
+      const { id, sessionID, ...data } = persistedMessage
       db.insert(MessageTable)
         .values({
           id,
@@ -958,6 +968,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
     })
+    if (!persisted) throw new Error(`Session.saveMessage: message ${msg.id} was not persisted`)
     return persisted
   })
 
@@ -994,9 +1005,19 @@ export namespace Session {
           touch(input.touchSessionID)
         }
       })
+      const row = Database.use((db) =>
+        db
+          .select({ time_created: MessageTable.time_created })
+          .from(MessageTable)
+          .where(and(eq(MessageTable.id, input.info.id), eq(MessageTable.session_id, input.info.sessionID)))
+          .get(),
+      )
+      if (!row) throw new NotFoundError({ message: `Message not found: ${input.info.id}` })
+      const persistedInfo = messageWithPersistedCreated(input.info, row.time_created)
+      const parts = await Message.parts(input.info.id)
       return {
-        info: input.info,
-        parts: input.parts,
+        info: persistedInfo,
+        parts,
       }
     },
   )
@@ -1103,7 +1124,13 @@ export namespace Session {
   }
 
   export const updatePart = fn(UpdatePartInput, async (part) => {
-    const { id, messageID, sessionID, orderKey: _orderKey, ...data } = part
+    const { id, messageID, sessionID, orderKey: providedOrderKey, ...data } = part
+    const assertProvidedPartOrderKey = (canonicalOrderKey: string) => {
+      const supplied = typeof providedOrderKey === "string" ? providedOrderKey.trim() : ""
+      if (supplied && supplied !== canonicalOrderKey) {
+        throw new Error(`Session.updatePart: part ${id} orderKey drift between input and persisted row`)
+      }
+    }
     // Cheap regex on the serialized string is O(N) over the part payload,
     // dominated by the JSON.stringify cost the insert below would pay
     // anyway. Triggers before the row touches SQLite — keeps the DB clean.
@@ -1116,19 +1143,27 @@ export namespace Session {
     }
     const time = Date.now()
     let outputPart = part
+    let messageOrderKey = ""
     const publishPartUpdated = () =>
       Bus.publish(Message.Event.PartUpdated, {
-        part: outputPart,
+        orderKey: messageOrderKey,
+        part: outputPart as Message.VisiblePart,
       })
     const publishAfterCommit = Database.hasActiveContext()
     let wrotePart = false
     Database.use((db) => {
       const message = db
-        .select({ id: MessageTable.id })
+        .select({ id: MessageTable.id, timeCreated: MessageTable.time_created })
         .from(MessageTable)
         .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, sessionID)))
         .get()
       if (!message) throw new NotFoundError({ message: `Message not found: ${messageID}` })
+      messageOrderKey = timelineMessageOrderKey({
+        info: {
+          id: messageID,
+          time: { created: message.timeCreated },
+        },
+      })
       const existingPart = db
         .select({
           data: PartTable.data,
@@ -1148,21 +1183,25 @@ export namespace Session {
           const prev = existingPart.data as any
           if (prev.type === "tool" && prev.state?.status) {
             if (shouldSkipToolStatusUpdate(prev.state.status, part.state.status)) {
+              const canonicalOrderKey = timelinePartOrderKey({ id, timeCreated: existingPart.timeCreated })
+              assertProvidedPartOrderKey(canonicalOrderKey)
               outputPart = {
                 ...prev,
                 id,
                 sessionID,
                 messageID,
-                orderKey: timelinePartOrderKey({ id, timeCreated: existingPart.timeCreated }),
+                orderKey: canonicalOrderKey,
               } as Message.Part
               return
             }
           }
         }
       }
+      const canonicalOrderKey = timelinePartOrderKey({ id, timeCreated: existingPart?.timeCreated ?? time })
+      assertProvidedPartOrderKey(canonicalOrderKey)
       outputPart = {
         ...part,
-        orderKey: timelinePartOrderKey({ id, timeCreated: existingPart?.timeCreated ?? time }),
+        orderKey: canonicalOrderKey,
       } as Message.Part
       db.insert(PartTable)
         .values({

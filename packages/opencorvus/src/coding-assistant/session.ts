@@ -80,7 +80,6 @@ export async function setRightSidebarCodingAssistantSelectedTask(input: {
 }
 
 export type RightSidebarCodingAssistantSessionListInput = {
-  directory?: string
   limit: number
   cursorUpdated?: number
   cursorSessionID?: string
@@ -100,7 +99,7 @@ export function listRightSidebarCodingAssistantSessions(
 ): RightSidebarCodingAssistantSessionList {
   const conditions: SQL[] = [
     eq(SessionTable.project_id, Instance.project.id),
-    eq(SessionTable.directory, input.directory ?? Instance.directory),
+    eq(SessionTable.directory, Instance.directory),
     eq(SessionTable.kind, "assistant" as const),
     isNull(SessionTable.time_archived),
     sql`json_extract(${SessionTable.metadata}, '$.codingAssistant.surface') = 'right-sidebar'`,
@@ -110,14 +109,15 @@ export function listRightSidebarCodingAssistantSessions(
     conditions.push(or(like(SessionTable.title, `%${search}%`), like(SessionTable.id, `%${search}%`))!)
   }
   if (input.cursorUpdated !== undefined) {
+    if (!input.cursorSessionID) {
+      throw new Error("listRightSidebarCodingAssistantSessions requires cursorSessionID with cursorUpdated")
+    }
     const cursorUpdated = input.cursorUpdated
-    const cursorSessionID = input.cursorSessionID ?? ""
+    const cursorSessionID = input.cursorSessionID
     conditions.push(
       or(
         sql`${SessionTable.time_updated} < ${cursorUpdated}`,
-        cursorSessionID
-          ? sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`
-          : sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ''`,
+        sql`${SessionTable.time_updated} = ${cursorUpdated} AND ${SessionTable.id} < ${cursorSessionID}`,
       )!,
     )
   }

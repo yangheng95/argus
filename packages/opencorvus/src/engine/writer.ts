@@ -422,7 +422,6 @@ async function terminateTaskOwnedSessionsAndMarkInterrupted(input: {
   await updateTask(
     task,
     {
-      status: "failed",
       error: input.reason,
       metadata: {
         ...((task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)

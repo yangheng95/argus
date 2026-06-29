@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT } from "../../src/browser/webpage/default-viewport"
 import {
   ensureLiveWebpageEvidence,
   hasCompletePrimaryEvidence,
@@ -326,7 +327,7 @@ async function writeRuntimeStateEvidence(evidenceDir: string, url: string): Prom
     JSON.stringify({
       version: 1,
       purpose: "webpage-runtime-interaction-state-evidence",
-      source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },
+      source: { url, viewport: DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT, captureEngine: "playwright" },
       artifacts: { screenshotsDir: "interaction-states" },
       snapshots: [
         { id: "initial", scrollY: 0, navigationClusters: [] },

@@ -21,6 +21,12 @@ import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import fs from "node:fs/promises"
 import path from "node:path"
+import {
+  MISSION_E2E_CANCEL_SETTLE_TIMEOUT_MS,
+  MISSION_E2E_INACTIVITY_TIMEOUT_MS,
+  observeMissionParts,
+  type MissionPartRow,
+} from "./mission-e2e-inactivity"
 
 Log.init({ print: false })
 
@@ -48,9 +54,10 @@ function ts(s: string) {
   return new Date().toISOString().slice(11, 19) + " " + s
 }
 
-await Instance.provide({
-  directory: PROJECT,
-  fn: async () => {
+try {
+  await Instance.provide({
+    directory: PROJECT,
+    fn: async () => {
     console.log(ts(`Instance: project=${Instance.project.id} worktree=${Instance.worktree}`))
     console.log(ts(`           directory=${Instance.directory}`))
 
@@ -62,12 +69,13 @@ await Instance.provide({
     // Separate readonly connection for inspection (DB file is initialised by now).
     const raw = new RawSqlite(Database.Path(), { readonly: true })
     const partsQ = raw.query(
-      "SELECT id, json_extract(data,'$.type') t, json_extract(data,'$.tool') tool, " +
+      "SELECT id, time_updated, json_extract(data,'$.type') t, json_extract(data,'$.tool') tool, " +
         "json_extract(data,'$.state.status') st, json_extract(data,'$.state.title') title, " +
         "json_extract(data,'$.text') text FROM part WHERE session_id=? ORDER BY time_created",
     )
 
-    await SessionContext.provide(session, async () => {
+    try {
+      await SessionContext.provide(session, async () => {
       const model = await resolveAgentModelRef("mission", { sessionID: session.id })
       console.log(ts(`Resolved model for agent=mission: ${model.providerID}/${model.modelID}`))
 
@@ -100,27 +108,40 @@ await Instance.provide({
           loopErr = e
         })
 
-      const seen = new Set<string>()
-      const deadlineMs = Date.now() + 6 * 60 * 1000
-      while (!done && Date.now() < deadlineMs) {
+      const seen = new Map<string, string>()
+      let inactivityDeadlineMs = Date.now() + MISSION_E2E_INACTIVITY_TIMEOUT_MS
+      let timedOut = false
+      while (!done && Date.now() < inactivityDeadlineMs) {
         await Bun.sleep(2500)
-        for (const p of partsQ.all(session.id) as any[]) {
-          if (seen.has(p.id)) continue
-          seen.add(p.id)
-          if (p.t === "tool") {
-            console.log(ts(`  TOOL ${p.tool} [${p.st || "-"}] ${(p.title || "").slice(0, 100)}`))
-          } else if (p.t === "text" && p.text && p.text !== PROMPT) {
-            console.log(ts(`  TEXT ${String(p.text).replace(/\s+/g, " ").slice(0, 220)}`))
-          }
+        const activity = observeMissionParts({
+          rows: partsQ.all(session.id) as MissionPartRow[],
+          seen,
+          prompt: PROMPT,
+          emit: console.log,
+          stamp: ts,
+        })
+        if (activity > 0) {
+          inactivityDeadlineMs = Date.now() + MISSION_E2E_INACTIVITY_TIMEOUT_MS
         }
       }
 
       if (!done) {
-        console.log(ts("TIMEOUT (6m) — cancelling loop"))
+        console.log(ts("INACTIVITY TIMEOUT (6m without new parts) — cancelling loop"))
+        timedOut = true
         SessionPrompt.cancel(session.id)
       }
-      await loopP
-      if (loopErr) console.error(ts("LOOP ERROR:"), loopErr)
+      if (timedOut) {
+        await Promise.race([
+          loopP,
+          Bun.sleep(MISSION_E2E_CANCEL_SETTLE_TIMEOUT_MS).then(() => {
+            throw new Error("Mission E2E loop did not settle after inactivity cancellation")
+          }),
+        ])
+      } else {
+        await loopP
+      }
+      if (timedOut) throw new Error("Mission E2E inactivity timeout")
+      if (loopErr) throw loopErr
       console.log(ts(`Loop finished. parts observed=${seen.size}`))
     })
 
@@ -128,7 +149,7 @@ await Instance.provide({
     const stateDir = ProjectRuntimePaths.missionRoot(Instance.directory, MISSION_ID)
     console.log("\n===== MISSION STATE FILES (" + stateDir + ") =====")
     for (const f of ["frontier.md", "tasks.md", "handoff.md", "notes.md"]) {
-      const body = await fs.readFile(path.join(stateDir, f), "utf8").catch((e: any) => `<MISSING: ${e.code}>`)
+      const body = await fs.readFile(path.join(stateDir, f), "utf8")
       console.log(`\n----- ${f} -----\n${body}`)
     }
 
@@ -145,29 +166,44 @@ await Instance.provide({
     }
 
     // ---- Verification ----
-    const ver = raw
+      const ver = raw
       .query(
         "SELECT kind, title, project_id, json_extract(metadata,'$.mission.id') mid, " +
           "json_extract(metadata,'$.mission.channelKey') ck FROM session WHERE id=?",
       )
       .get(session.id) as any
-    const toolCounts = raw
+      const toolCounts = raw
       .query(
         "SELECT json_extract(data,'$.tool') tool, count(*) n FROM part WHERE session_id=? AND " +
           "json_extract(data,'$.type')='tool' GROUP BY tool ORDER BY n DESC",
       )
       .all(session.id) as any[]
     console.log("\n===== VERIFICATION =====")
-    console.log(`session.kind                = ${ver.kind}   (expect: mission)`)
-    console.log(`session.title               = ${ver.title}   (expect: Mission Control)`)
-    console.log(`metadata.mission.id         = ${ver.mid}   (expect: ${MISSION_ID})`)
-    console.log(`metadata.mission.channelKey = ${ver.ck}   (expect: mission:${MISSION_ID})`)
+    console.log(`session.kind                = ${ver?.kind ?? "<missing>"}   (expect: mission)`)
+    console.log(`session.title               = ${ver?.title ?? "<missing>"}   (expect: Mission Control)`)
+    console.log(`metadata.mission.id         = ${ver?.mid ?? "<missing>"}   (expect: ${MISSION_ID})`)
+    console.log(`metadata.mission.channelKey = ${ver?.ck ?? "<missing>"}   (expect: mission:${MISSION_ID})`)
     console.log(`tool usage                  = ${toolCounts.map((t) => `${t.tool}:${t.n}`).join(", ") || "(none)"}`)
+    const verificationFailures: string[] = []
+      if (!ver) verificationFailures.push("session row missing")
+      if (ver?.kind !== "mission") verificationFailures.push(`session.kind=${ver?.kind}`)
+      if (ver?.title !== "Mission Control") verificationFailures.push(`session.title=${ver?.title}`)
+      if (ver?.mid !== MISSION_ID) verificationFailures.push(`metadata.mission.id=${ver?.mid}`)
+      if (ver?.ck !== `mission:${MISSION_ID}`) verificationFailures.push(`metadata.mission.channelKey=${ver?.ck}`)
+    if (toolCounts.some((entry) => String(entry.tool ?? "").includes("engine_task"))) {
+      verificationFailures.push("mission dispatched engine_task despite smoke-test prompt")
+    }
+    if (verificationFailures.length > 0) {
+      throw new Error(`Mission E2E verification failed: ${verificationFailures.join("; ")}`)
+    }
 
-    raw.close()
-  },
-})
-
-await Instance.disposeAll().catch(() => {})
-Database.close()
+    } finally {
+      raw.close()
+    }
+    },
+  })
+} finally {
+  await Instance.disposeAll().catch(() => {})
+  Database.close()
+}
 process.exit(0)

@@ -6,13 +6,14 @@ const SCRIPT_PATH = path.join(import.meta.dir, "..", "..", "script", "benchmark"
 
 const src = fs.readFileSync(SCRIPT_PATH, "utf8")
 
-test("browser preview repair pressure benchmark uses inactivity timeout and explicit Bun test timeout", () => {
+test("browser preview repair pressure benchmark uses inactivity timeout and disables Bun elapsed timeout", () => {
   expect(src).toContain("Shell.run(command, { cwd: packageRoot, idleTimeoutMs })")
   expect(src).toContain('"--idle-timeout-ms"')
-  expect(src).toContain('"--per-test-timeout-ms"')
-  expect(src).toContain('"--timeout"')
-  expect(src).toContain("perTestTimeoutMs")
+  expect(src).not.toContain('"--per-test-timeout-ms"')
+  expect(src).toContain('"--timeout", bunTestTimeoutDisabled')
+  expect(src).toContain('const bunTestTimeoutDisabled = "0"')
   expect(src).toContain("idle_timeout_ms=${idleTimeoutMs}")
+  expect(src).toContain("bun_test_timeout_ms=0")
   expect(src).toContain("status=idle_timeout")
   expect(src).not.toContain("Bun.spawn")
   expect(src).not.toContain("proc.exited")

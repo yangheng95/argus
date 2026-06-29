@@ -3,6 +3,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { dispatchTaskLoop } from "@/engine/queue"
 import * as TaskLoop from "@/orchestrator/loop"
 import { Instance } from "../../src/project/instance"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { EngineService } from "../../src/task-api"
@@ -27,7 +28,7 @@ async function waitForMockCalls(mockFn: { mock: { calls: unknown[] } }, count: n
   throw new Error(`Timed out waiting for ${count} mock calls; last=${mockFn.mock.calls.length}`)
 }
 
-async function restartMessages(sessionID: string) {
+async function syntheticRestartMessages(sessionID: string) {
   const messages = await Session.messages({ sessionID })
   return messages.filter(
     (message) =>
@@ -36,28 +37,28 @@ async function restartMessages(sessionID: string) {
   )
 }
 
-async function waitForRestartMessages(sessionID: string, count: number) {
+async function waitForTaskLifecycleEvents(taskID: string, count: number) {
   let last = 0
   let deadline = Date.now() + 15_000
   while (Date.now() <= deadline) {
-    const messages = await restartMessages(sessionID)
-    if (messages.length >= count) return messages
-    if (messages.length !== last) {
-      last = messages.length
+    const events = ProtocolStore.listTaskEvents(taskID).filter((event) => event.type === "task.lifecycle")
+    if (events.length >= count) return events
+    if (events.length !== last) {
+      last = events.length
       deadline = Date.now() + 15_000
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  throw new Error(`Timed out waiting for ${count} restart messages; last=${last}`)
+  throw new Error(`Timed out waiting for ${count} task.lifecycle events; last=${last}`)
 }
 
-describe("restart active task message", () => {
+describe("restart active task lifecycle fact", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
   })
 
-  test("startup liveness sends one visible restart message only to active tasks without a current loop", async () => {
+  test("startup liveness records one lifecycle fact and no synthetic operator message for active tasks without a current loop", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
 
     await Instance.provide({
@@ -86,7 +87,7 @@ describe("restart active task message", () => {
                 session_id: orphanRoot.id,
                 source: "test",
                 title: "orphan active restart task",
-                request: "append a restart message after server restart",
+                request: "wake from lifecycle fact after server restart",
                 priority: "normal",
                 time_started: now,
                 time_created: now,
@@ -112,27 +113,45 @@ describe("restart active task message", () => {
         await waitForMockCalls(runTaskLoop, 1)
 
         EngineService.init()
-        const orphanRestartMessages = await waitForRestartMessages(orphanRoot.id, 1)
+        const orphanLifecycleEvents = await waitForTaskLifecycleEvents(orphanTaskID, 1)
         await waitForMockCalls(runTaskLoop, 2)
 
-        expect(orphanRestartMessages).toHaveLength(1)
-        expect((orphanRestartMessages[0]?.info as any)?.extra?.operator_message?.source).toBe("server_restart")
+        expect(orphanLifecycleEvents).toHaveLength(1)
+        expect(orphanLifecycleEvents[0]).toMatchObject({
+          type: "task.lifecycle",
+          source: "engine.liveness",
+          target: "orchestrator",
+          payload: {
+            taskID: orphanTaskID,
+            fact: "server_restart_active_task_recovered",
+            status: "active",
+            orphaned: true,
+          },
+        })
+        expect(await syntheticRestartMessages(orphanRoot.id)).toHaveLength(0)
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID: orphanTaskID,
           event: {
-            operatorMessage: {
-              text: "请继续执行剩余任务",
-              source: "server_restart",
-              messageID: orphanRestartMessages[0]?.info.id,
+            lifecycleFact: {
+              kind: "server_restart_active_task_recovered",
+              eventID: orphanLifecycleEvents[0]?.id,
             },
           },
         })
-        expect(await restartMessages(currentRoot.id)).toHaveLength(0)
+        expect((runTaskLoop.mock.calls[1]?.[0] as any)?.event?.note).toBeUndefined()
+        expect((runTaskLoop.mock.calls[1]?.[0] as any)?.event?.operatorMessage).toBeUndefined()
+        expect(await syntheticRestartMessages(currentRoot.id)).toHaveLength(0)
+        expect(
+          ProtocolStore.listTaskEvents(currentTaskID).filter((event) => event.type === "task.lifecycle"),
+        ).toHaveLength(0)
 
         EngineService.init()
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(await restartMessages(orphanRoot.id)).toHaveLength(1)
-        expect(await restartMessages(currentRoot.id)).toHaveLength(0)
+        expect(
+          ProtocolStore.listTaskEvents(orphanTaskID).filter((event) => event.type === "task.lifecycle"),
+        ).toHaveLength(1)
+        expect(await syntheticRestartMessages(orphanRoot.id)).toHaveLength(0)
+        expect(await syntheticRestartMessages(currentRoot.id)).toHaveLength(0)
 
         release!()
         await holdLoop

@@ -290,6 +290,7 @@ async function appendPendingToolPart(input: {
       status: "pending",
       input: {},
       raw: "",
+      time: { start: Date.now() },
     },
   })
 }
@@ -414,7 +415,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
           seedTaskRun(taskID, runID, now)
           seedGoalRun(taskID, runID, goalRunID, "gol_converge", DEAD_OWNER, now + 1)
 
-          const reason = "Server startup: previous owner process died before terminalization"
+          const reason = "Server startup: previous owner process died before interruption"
           const result = await convergeDeadOwnerLiveExecution({ reason })
 
           expect(result.tasks).toBeGreaterThanOrEqual(1)
@@ -450,7 +451,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         runID = `run_converge_half_${now}`
         goalRunID = "grun_converge_half"
         const goalID = "gol_converge_half"
-        reason = "Server startup: previous owner process died before terminalization"
+        reason = "Server startup: previous owner process died before interruption"
         const root = await Session.create({ kind: "root", title: "half-converged root" })
         const build = await Session.create({ kind: "build", parentID: root.id, title: "half-converged build" })
         messageID = `msg_converge_half_${now}`
@@ -518,7 +519,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
           )
           seedGoalRun(taskID, runID, goalRunID, "gol_converge_legacy_global", DEAD_OWNER, now + 1)
 
-          const reason = "Server startup: previous owner process died before terminalization"
+          const reason = "Server startup: previous owner process died before interruption"
           const result = await convergeDeadOwnerLiveExecution({ reason })
 
           expect(result.corruptTasks).toBeGreaterThanOrEqual(1)
@@ -544,6 +545,6 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
       source.indexOf("let shutdownPromise"),
     )
     expect(startupBlock).not.toContain("convergeDeadOwnerLiveExecution")
-    expect(startupBlock).not.toContain("previous owner process died before terminalization")
+    expect(startupBlock).not.toContain("previous owner process died before interruption")
   })
 })

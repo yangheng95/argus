@@ -5,6 +5,7 @@ import { withKeyedLock } from "@/util/lock"
 import { Log } from "@/util/log"
 import { ProtocolEventTable } from "./protocol.sql"
 import type { ProtocolAggregate, ProtocolKind } from "./schema"
+import { requireTimelineOrderKeyDomain, timelineOrderKey } from "@/timeline/order"
 
 const eventLocks = new Map<string, Promise<void>>()
 const log = Log.create({ service: "protocol.store" })
@@ -12,7 +13,7 @@ const log = Log.create({ service: "protocol.store" })
 type Payload = Record<string, unknown>
 export type TaskLiveReplayResult = { expired: false; events: EventView[] } | { expired: true; event: EventView }
 
-type EventInput = {
+export type EventInput = {
   kind: ProtocolKind
   type: string
   aggregate: ProtocolAggregate
@@ -30,6 +31,7 @@ type EventInput = {
   reply_to?: string | null
   deadline_ms?: number | null
   emitted_at?: number
+  order_key?: string | null
   payload?: Payload | null
   seq?: number
 }
@@ -48,6 +50,108 @@ type EventSubscription = {
   filter?: EventFilter
   dispatch(event: EventView): boolean
   close(): void
+}
+
+const SESSION_LIFECYCLE_ORDERED_EVENT_TYPES = new Set(["session.status", "session.idle", "session.error"])
+
+export function protocolEventRequiresPayloadOrderKey(type: string): boolean {
+  return SESSION_LIFECYCLE_ORDERED_EVENT_TYPES.has(type)
+}
+
+function publishEventSideEffects(input: EventInput, event: EventView) {
+  dispatchEvent(event)
+  if (input.aggregate === "task" && TASK_TERMINAL_EVENT_TYPES.has(input.type)) {
+    clearTaskLiveReplay(input.aggregate_id)
+  }
+}
+
+function explicitPayloadOrderKey(payload: Payload | null | undefined): string {
+  const orderKey = payload && typeof payload.orderKey === "string" ? payload.orderKey.trim() : ""
+  return orderKey
+}
+
+function persistedEventOrderKey(input: EventInput, seq: number, now: number, id: string): string {
+  const explicit = typeof input.order_key === "string" ? input.order_key.trim() : ""
+  const payloadOrderKey = explicitPayloadOrderKey(input.payload)
+  if (protocolEventRequiresPayloadOrderKey(input.type) && !payloadOrderKey) {
+    throw new Error(`ProtocolStore.appendEvent ${input.type} missing payload.orderKey`)
+  }
+  if (protocolEventRequiresPayloadOrderKey(input.type)) {
+    requireTimelineOrderKeyDomain(payloadOrderKey, `ProtocolStore.appendEvent ${input.type} payload.orderKey`, "session")
+  }
+  if (explicit) {
+    if (protocolEventRequiresPayloadOrderKey(input.type)) {
+      requireTimelineOrderKeyDomain(explicit, `ProtocolStore.appendEvent ${input.type} order_key`, "session")
+    }
+    if (payloadOrderKey && payloadOrderKey !== explicit) {
+      throw new Error(`ProtocolStore.appendEvent ${input.type} order_key drift between input and payload`)
+    }
+    return explicit
+  }
+  if (payloadOrderKey) {
+    throw new Error(`ProtocolStore.appendEvent ${input.type} payload has orderKey but input.order_key is missing`)
+  }
+  return timelineOrderKey({ domain: "protocol", time: now, sequence: seq, id })
+}
+
+function insertProtocolEvent(input: EventInput, seq: number, now: number): EventView {
+  const id = Identifier.ascending("protocol_event")
+  const orderKey = persistedEventOrderKey(input, seq, now, id)
+  Database.use((db) =>
+    db
+      .insert(ProtocolEventTable)
+      .values({
+        id,
+        kind: input.kind,
+        type: input.type,
+        aggregate_type: input.aggregate,
+        aggregate_id: input.aggregate_id,
+        task_id: input.task_id ?? null,
+        run_id: input.run_id ?? null,
+        goal_run_id: input.goal_run_id ?? null,
+        session_id: input.session_id ?? null,
+        interaction_id: input.interaction_id ?? null,
+        stream_id: input.stream_id ?? null,
+        source: input.source,
+        target: input.target ?? null,
+        causation_id: input.causation_id ?? null,
+        correlation_id: input.correlation_id ?? null,
+        reply_to: input.reply_to ?? null,
+        seq,
+        order_key: orderKey,
+        deadline_ms: input.deadline_ms ?? null,
+        emitted_at: now,
+        payload: input.payload ?? null,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return eventView({
+    id,
+    kind: input.kind,
+    type: input.type,
+    aggregate_type: input.aggregate,
+    aggregate_id: input.aggregate_id,
+    task_id: input.task_id ?? null,
+    run_id: input.run_id ?? null,
+    goal_run_id: input.goal_run_id ?? null,
+    session_id: input.session_id ?? null,
+    interaction_id: input.interaction_id ?? null,
+    stream_id: input.stream_id ?? null,
+    source: input.source,
+    target: input.target ?? null,
+    causation_id: input.causation_id ?? null,
+    correlation_id: input.correlation_id ?? null,
+    reply_to: input.reply_to ?? null,
+    seq,
+    order_key: orderKey,
+    deadline_ms: input.deadline_ms ?? null,
+    emitted_at: now,
+    payload: input.payload ?? null,
+    time_created: now,
+    time_updated: now,
+  })
 }
 
 // ── Global subscription registry ──
@@ -99,6 +203,8 @@ function dispatchEvent(event: EventView) {
 }
 
 function eventView(row: EventRow) {
+  const orderKey = typeof row.order_key === "string" && row.order_key.length > 0 ? row.order_key : ""
+  if (!orderKey) throw new Error(`protocol_event ${row.id} missing order_key`)
   return {
     id: row.id,
     kind: row.kind,
@@ -118,6 +224,7 @@ function eventView(row: EventRow) {
     correlationID: row.correlation_id ?? undefined,
     replyTo: row.reply_to ?? undefined,
     sequence: row.seq,
+    orderKey,
     liveSequence: undefined as number | undefined,
     liveEpoch: undefined as number | undefined,
     deadlineMs: row.deadline_ms ?? undefined,
@@ -258,8 +365,9 @@ function pruneClosedLiveDeltas(taskID: string, event: EventView) {
 
 function taskLiveReplayExpiredEvent(taskID: string, reason: string): EventView {
   const now = Date.now()
+  const id = `live-replay-expired-${now}-${Math.random().toString(36).slice(2, 8)}`
   return {
-    id: `live-replay-expired-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    id,
     kind: "event",
     type: "task.live_replay_expired",
     aggregate: "task",
@@ -277,6 +385,7 @@ function taskLiveReplayExpiredEvent(taskID: string, reason: string): EventView {
     correlationID: undefined,
     replyTo: undefined,
     sequence: 0,
+    orderKey: timelineOrderKey({ domain: "protocol", time: now, sequence: 0, id }),
     liveSequence: undefined,
     liveEpoch: undefined,
     deadlineMs: undefined,
@@ -294,64 +403,8 @@ export namespace ProtocolStore {
   export async function appendEvent(input: EventInput) {
     const now = input.emitted_at ?? Date.now()
     const insert = (seq: number) => {
-      const id = Identifier.ascending("protocol_event")
-      Database.use((db) =>
-        db
-          .insert(ProtocolEventTable)
-          .values({
-            id,
-            kind: input.kind,
-            type: input.type,
-            aggregate_type: input.aggregate,
-            aggregate_id: input.aggregate_id,
-            task_id: input.task_id ?? null,
-            run_id: input.run_id ?? null,
-            goal_run_id: input.goal_run_id ?? null,
-            session_id: input.session_id ?? null,
-            interaction_id: input.interaction_id ?? null,
-            stream_id: input.stream_id ?? null,
-            source: input.source,
-            target: input.target ?? null,
-            causation_id: input.causation_id ?? null,
-            correlation_id: input.correlation_id ?? null,
-            reply_to: input.reply_to ?? null,
-            seq,
-            deadline_ms: input.deadline_ms ?? null,
-            emitted_at: now,
-            payload: input.payload ?? null,
-            time_created: now,
-            time_updated: now,
-          })
-          .run(),
-      )
-      const event = eventView({
-        id,
-        kind: input.kind,
-        type: input.type,
-        aggregate_type: input.aggregate,
-        aggregate_id: input.aggregate_id,
-        task_id: input.task_id ?? null,
-        run_id: input.run_id ?? null,
-        goal_run_id: input.goal_run_id ?? null,
-        session_id: input.session_id ?? null,
-        interaction_id: input.interaction_id ?? null,
-        stream_id: input.stream_id ?? null,
-        source: input.source,
-        target: input.target ?? null,
-        causation_id: input.causation_id ?? null,
-        correlation_id: input.correlation_id ?? null,
-        reply_to: input.reply_to ?? null,
-        seq,
-        deadline_ms: input.deadline_ms ?? null,
-        emitted_at: now,
-        payload: input.payload ?? null,
-        time_created: now,
-        time_updated: now,
-      })
-      dispatchEvent(event)
-      if (input.aggregate === "task" && TASK_TERMINAL_EVENT_TYPES.has(input.type)) {
-        clearTaskLiveReplay(input.aggregate_id)
-      }
+      const event = insertProtocolEvent(input, seq, now)
+      Database.effect(() => publishEventSideEffects(input, event))
       return event
     }
 
@@ -362,6 +415,20 @@ export namespace ProtocolStore {
     return withKeyedLock(eventLocks, eventKey(input), async () =>
       insert(nextAggregateSequence(input.aggregate, input.aggregate_id)),
     )
+  }
+
+  export function appendEventInTransaction(input: EventInput) {
+    if (!Database.hasActiveContext()) {
+      throw new Error("ProtocolStore.appendEventInTransaction requires an active Database transaction")
+    }
+    const now = input.emitted_at ?? Date.now()
+    const seq =
+      typeof input.seq === "number" && input.seq > 0
+        ? input.seq
+        : nextAggregateSequence(input.aggregate, input.aggregate_id)
+    const event = insertProtocolEvent(input, seq, now)
+    Database.effect(() => publishEventSideEffects(input, event))
+    return event
   }
 
   export function listTaskEventsAfter(taskID: string, sequence: number, opts?: { until?: number; limit?: number }) {
@@ -478,9 +545,12 @@ export namespace ProtocolStore {
     runID?: string
     sessionID?: string
     source: string
+    orderKey: string
     payload?: Payload | null
   }) {
     const now = Date.now()
+    const orderKey = typeof input.orderKey === "string" ? input.orderKey.trim() : ""
+    if (!orderKey) throw new Error(`ProtocolStore.dispatchEphemeral ${input.type} missing orderKey`)
     const taskID = input.aggregate === "task" ? input.taskID : undefined
     const aggregateID = input.aggregate === "task" ? taskID : input.sessionID
     const liveSequence = taskID ? (taskLiveSequences.get(taskID) ?? 0) + 1 : undefined
@@ -504,6 +574,7 @@ export namespace ProtocolStore {
       correlationID: undefined,
       replyTo: undefined,
       sequence: 0,
+      orderKey,
       liveSequence,
       liveEpoch: taskID ? TASK_LIVE_EPOCH : undefined,
       deadlineMs: undefined,

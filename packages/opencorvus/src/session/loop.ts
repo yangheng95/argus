@@ -47,7 +47,7 @@ import { SkillTool } from "@/tool/skill"
 import { Tool } from "@/tool/tool"
 import type { SkillMount } from "@/skill/mounts"
 import { PermissionNext } from "@/permission/next"
-import { SessionStatus } from "./status"
+import { SessionStatus, sessionLifecycleOrderKey } from "./status"
 import { ensureTitle } from "./prompt/title"
 import { Truncate } from "@/tool/truncation"
 import { MemoryInjection } from "@/memory/injection"
@@ -57,7 +57,7 @@ import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { Config } from "@/config/config"
-import { decodeDataUrlBase64 } from "./text-mime"
+import { decodeDataUrlBase64Bytes } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
@@ -94,7 +94,7 @@ export function terminalToolSystemPrompt(toolName: string): string {
 // stamped with a typed error and the caller sees the contract violation.
 
 export namespace SessionLoop {
-  const { log, state, cancel, finish, flushCallbacks, start, resume } = SessionPromptState
+  const { log, state, cancel, finish, flushCallbacks, start, resume, attach, touch } = SessionPromptState
 
   type StrictAITool = AITool & { strict?: boolean }
   const resolvedToolSkillSurfaces = new WeakMap<Record<string, AITool>, SkillMount.ResolvedAgentSkillSurface>()
@@ -947,6 +947,7 @@ export namespace SessionLoop {
     await Session.updateMessage(input.processor.message)
     Bus.publish(Session.Event.Error, {
       sessionID: input.sessionID,
+      orderKey: sessionLifecycleOrderKey(input.sessionID),
       error: input.error,
     })
     return "stop" as const
@@ -1433,12 +1434,9 @@ export namespace SessionLoop {
         const file = attachment as Record<string, unknown>
         if (typeof file.url !== "string" || typeof file.mime !== "string") return attachment
         if (!file.url.startsWith("data:")) return attachment
-        const bytes = Buffer.from(
-          decodeDataUrlBase64(
-            file.url,
-            `SessionLoop.materializeToolResultAttachments ${typeof file.filename === "string" ? file.filename : file.mime}`,
-          ),
-          "base64",
+        const bytes = decodeDataUrlBase64Bytes(
+          file.url,
+          `SessionLoop.materializeToolResultAttachments ${typeof file.filename === "string" ? file.filename : file.mime}`,
         )
         const ref = await AttachmentStore.write(
           Instance.project.id,
@@ -1503,8 +1501,10 @@ export namespace SessionLoop {
   async function enterStandby(input: { sessionID: string; abort: AbortSignal; afterID: string }) {
     SessionCompaction.prune({ sessionID: input.sessionID })
     log.info("entering standby", { sessionID: input.sessionID })
+    touch(input.sessionID)
     SessionStatus.set(input.sessionID, { type: "idle" })
     await waitForUserMessage(input.sessionID, input.abort, input.afterID)
+    touch(input.sessionID)
   }
 
   async function runSubtask(input: {
@@ -2225,6 +2225,7 @@ export namespace SessionLoop {
         await Session.updateMessage(processor.message)
         Bus.publish(Session.Event.Error, {
           sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
           error: processor.message.error,
         })
         return "stop" as const
@@ -2243,6 +2244,7 @@ export namespace SessionLoop {
         await Session.updateMessage(processor.message)
         Bus.publish(Session.Event.Error, {
           sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
           error: processor.message.error,
         })
         return "stop" as const
@@ -2391,19 +2393,16 @@ export namespace SessionLoop {
 
     const abort = resume_existing ? resume(sessionID, directory) : start(sessionID, directory)
     if (!abort) {
-      return new Promise<Message.WithParts>((resolve, reject) => {
-        state(directory)[sessionID].callbacks.push({ resolve, reject })
-      })
+      return attach(sessionID, directory)
     }
 
-    const firstResult = new Promise<Message.WithParts>((resolve, reject) => {
-      state(directory)[sessionID].callbacks.push({ resolve, reject })
-    })
+    const firstResult = attach(sessionID, directory)
 
     void (async () => {
       try {
         let step = 0
         while (true) {
+          touch(sessionID, directory)
           SessionStatus.set(sessionID, { type: "streaming" })
           log.info("loop", { step, sessionID })
           if (abort.aborted) break
@@ -2558,6 +2557,7 @@ export namespace SessionLoop {
               const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
               Bus.publish(Session.Event.Error, {
                 sessionID,
+                orderKey: sessionLifecycleOrderKey(sessionID),
                 error: new NamedError.Unknown({
                   message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
                 }).toObject(),
@@ -2779,7 +2779,7 @@ export namespace SessionLoop {
               status: "running",
               input: args,
               time: {
-                start: Date.now(),
+                start: match.state.time.start,
               },
             },
           })

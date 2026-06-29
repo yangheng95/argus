@@ -1,6 +1,7 @@
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { SessionTable, type SessionKind } from "@/session/session.sql"
 import { Database, eq, sql } from "@/storage/db"
+import { timelineOrderKey } from "@/timeline/order"
 
 /**
  * Session metadata lookups for the SSE bridge.
@@ -50,6 +51,7 @@ const taskIDCache = new LRU<string, string>(LRU_LIMIT)
 
 export interface ConversationAgentSessionLedgerRow {
   sessionID: string
+  orderKey: string
   stage: SessionKind
   parentSessionID?: string
   goalID?: string
@@ -192,6 +194,10 @@ export function matchesTaskEvent(
  * empty tasks.
  */
 export function taskMessageWatermark(taskID: string): number {
+  return taskMessageWatermarkCursor(taskID).watermark
+}
+
+export function taskMessageWatermarkCursor(taskID: string): { watermark: number; signature: string } {
   const row = Database.use((db) =>
     db.get<{ watermark: number | null }>(sql`
       WITH RECURSIVE session_tree(id) AS (
@@ -216,7 +222,38 @@ export function taskMessageWatermark(taskID: string): number {
       )
     `),
   )
-  return Math.max(0, Number(row?.watermark ?? 0) || 0)
+  const watermark = Math.max(0, Number(row?.watermark ?? 0) || 0)
+  if (watermark === 0) {
+    return {
+      watermark,
+      signature: "0:",
+    }
+  }
+  const members = Database.use((db) =>
+    db.all<{ member: string }>(sql`
+      WITH RECURSIVE session_tree(id) AS (
+        SELECT session_id FROM engine_task WHERE id = ${taskID}
+        UNION ALL
+        SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+      )
+      SELECT member FROM (
+        SELECT 'message:' || m.id || ':' || coalesce(cast(m.data AS TEXT), '') AS member
+        FROM message m
+        JOIN session_tree st ON st.id = m.session_id
+        WHERE m.time_updated = ${watermark}
+        UNION ALL
+        SELECT 'part:' || p.id || ':' || coalesce(cast(p.data AS TEXT), '') AS member
+        FROM part p
+        JOIN session_tree st ON st.id = p.session_id
+        WHERE p.time_updated = ${watermark}
+      )
+      ORDER BY member
+    `),
+  )
+  return {
+    watermark,
+    signature: `${watermark}:${members.map((item) => item.member).join("|")}`,
+  }
 }
 
 function toConversationAgentSessionLedgerRows(
@@ -244,6 +281,11 @@ function toConversationAgentSessionLedgerRows(
     }
     return {
       sessionID: row.sessionID,
+      orderKey: timelineOrderKey({
+        domain: "session",
+        time: row.timeCreated,
+        id: row.sessionID,
+      }),
       stage: row.stage,
       parentSessionID: row.parentSessionID ?? undefined,
       goalID: row.goalID ?? undefined,

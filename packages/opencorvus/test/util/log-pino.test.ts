@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { Log } from "../../src/util/log"
@@ -56,4 +57,19 @@ test("Log print mode mirrors to stderr without disabling the durable log file", 
     .map((line) => JSON.parse(line) as Record<string, any>)
 
   expect(lines.some((line) => line.marker === marker && line.message === "print mode durable probe")).toBe(true)
+})
+
+test("Log production cleanup tolerates concurrent init calls", async () => {
+  await fs.mkdir(Log.directory(), { recursive: true })
+  const prefix = `concurrent-cleanup-${Date.now()}`
+  await Promise.all(
+    Array.from({ length: 16 }, (_, index) =>
+      fs.writeFile(path.join(Log.directory(), `${prefix}-${index}.log`), "stale\n", "utf-8"),
+    ),
+  )
+
+  await expect(
+    Promise.all(Array.from({ length: 8 }, () => Log.init({ print: false, level: "DEBUG" }))),
+  ).resolves.toBeDefined()
+  expect(path.basename(Log.file())).toMatch(/\.log$/)
 })

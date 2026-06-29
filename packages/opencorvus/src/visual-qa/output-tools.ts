@@ -30,15 +30,16 @@ function parseReferenceRegionKey(key: string): { regionID: string; viewportID: s
   return { regionID: regionID.trim(), viewportID: viewportID.trim() }
 }
 
-async function summarizeVisualQaReportAdvisories(
+async function summarizeVisualQaReportFeedback(
   report: VisualQaReport,
   context: VisualQaOutputToolContext,
-): Promise<string[]> {
+): Promise<{ blockers: string[]; advisories: string[] }> {
   const semantics = visualQaReportAcceptanceSemantics(report)
-  const advisories: string[] = [...semantics.selfReportIssues]
+  const blockers: string[] = [...semantics.selfReportIssues]
+  const advisories: string[] = []
   const openBlocking = visualQaOpenBlockingFindings(report)
   if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
-    advisories.push("accepted=false was submitted without production_blockers or open critical/major findings.")
+    blockers.push("accepted=false was submitted without production_blockers or open critical/major findings.")
   }
   const referenceParityRequired = Boolean(context.referenceParityRequired || report.reference_parity.required)
   if (referenceParityRequired) {
@@ -59,7 +60,9 @@ async function summarizeVisualQaReportAdvisories(
     ])
     const requiredRegionKeys = [...requiredRegions].sort()
     if (report.accepted && context.referenceParityRequired && !report.reference_parity.required) {
-      advisories.push("accepted=true was submitted while context expects reference parity but report.reference_parity.required=false.")
+      advisories.push(
+        "accepted=true was submitted while context expects reference parity but report.reference_parity.required=false.",
+      )
     }
     if (report.accepted && context.referenceParityRequired && (context.requiredReferenceRegions?.length ?? 0) === 0) {
       advisories.push(
@@ -68,8 +71,8 @@ async function summarizeVisualQaReportAdvisories(
     }
     if (report.accepted && refs.size === 0) {
       const issue =
-        "accepted=true was submitted for reference parity without browser_preview_compare_regions reference_comparison evidence refs."
-      if (!advisories.includes(issue)) advisories.push(issue)
+        "accepted=true was submitted for reference parity without reference_comparison evidence refs."
+      if (!blockers.includes(issue)) blockers.push(issue)
     }
     if (report.accepted && refs.size > 0) {
       if (!context.taskID || !context.projectRoot) {
@@ -94,7 +97,7 @@ async function summarizeVisualQaReportAdvisories(
         }
         if (validEvidence.length === 0) {
           advisories.push(
-            "no submitted reference comparison refs resolved to readable passed browser_preview_compare_regions evidence.",
+            "no submitted reference comparison refs resolved to readable passed browser_preview_evidence.",
           )
         }
         for (const key of requiredRegionKeys) {
@@ -118,23 +121,23 @@ async function summarizeVisualQaReportAdvisories(
       const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
       const unknown = report.reference_parity.blocker_ids.filter((id) => !blockerIDs.has(id))
       if (unknown.length > 0) {
-        advisories.push(`reference_parity.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+        blockers.push(`reference_parity.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
       }
     }
   }
-  if (report.follow_up_task) {
+  if (report.unresolved_code_module_problems.length > 0) {
     const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
-    const unknown = report.follow_up_task.blocker_ids.filter((id) => !blockerIDs.has(id))
+    const unknown = report.unresolved_code_module_problems.flatMap((problem) =>
+      problem.blocker_ids.filter((id) => !blockerIDs.has(id)),
+    )
     if (report.production_blockers.length === 0) {
-      advisories.push(
-        "follow_up_task was submitted without production_blockers for the new task to inherit.",
-      )
+      blockers.push("unresolved_code_module_problems were submitted without production_blockers.")
     }
     if (unknown.length > 0) {
-      advisories.push(`follow_up_task.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+      blockers.push(`unresolved_code_module_problems.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
     }
   }
-  return advisories
+  return { blockers, advisories }
 }
 
 export function buildVisualQaReport(collector: VisualQaCollector) {
@@ -151,15 +154,15 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
     (coverage) =>
       `${coverage.region}: ${coverage.viewports.length} viewport(s), ${coverage.states.length} state(s), evidence=${coverage.evidence_refs.join(", ") || "(none)"}`,
   )
-  const followUpLine = report.follow_up_task
-    ? [
-        `title=${report.follow_up_task.title}`,
-        `priority=${report.follow_up_task.priority}`,
-        `blockers=${report.follow_up_task.blocker_ids.join(", ")}`,
-        `reason=${report.follow_up_task.reason}`,
-        `request=${report.follow_up_task.request}`,
-      ].join("; ")
-    : "- none"
+  const unresolvedProblemLines = report.unresolved_code_module_problems.map((problem) =>
+    [
+      `${problem.id}: entity=${problem.code_module_reference.entity}`,
+      `problem=${problem.code_module_reference.problem}`,
+      `blockers=${problem.blocker_ids.join(", ")}`,
+      `reason=${problem.reason}`,
+      `evidence=${problem.evidence_refs.join(", ") || "(none)"}`,
+    ].join("; "),
+  )
   return {
     summary: limitSummary(report.summary),
     detail: [
@@ -168,7 +171,7 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `## Coverage\n${coverageLines.length ? markdownList(coverageLines) : "- no coverage submitted"}`,
       `## Findings\n${findingLines.length ? markdownList(findingLines) : "- no findings"}`,
       `## Production Blockers\n${blockerLines.length ? markdownList(blockerLines) : "- none"}`,
-      `## Follow-up Task\n${followUpLine}`,
+      `## Unresolved Code Module Problems\n${unresolvedProblemLines.length ? markdownList(unresolvedProblemLines) : "- none"}`,
       `## Evidence\n${report.evidence.length ? markdownList(report.evidence.map((item) => `${item.type}: ${item.ref} — ${item.note}`)) : "- no evidence submitted"}`,
       `## Repairs\n${report.repairs.length ? markdownList(report.repairs.map((repair) => `${repair.files_changed.join(", ") || "(no files)"}: ${repair.reason}`)) : "- no repairs"}`,
       `## Commands\n${report.commands.length ? markdownList(report.commands.map((command) => `${command.passed ? "passed" : "failed"} ${command.command}: ${command.detail}`)) : "- no commands"}`,
@@ -184,21 +187,25 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
     submit_visual_qa_report: tool({
       description:
         "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
-        "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no follow_up_task. " +
-        "When unrepairable production blockers require a new round, submit accepted=false with follow_up_task.",
+        "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no unresolved_code_module_problems. " +
+        "When unrepairable production blockers expose a code-module issue, submit accepted=false and report unresolved_code_module_problems instead of requesting a new task.",
       inputSchema: VisualQaReportSchema,
       execute: async (raw) => {
         if (collector.final)
           return "Error: visual QA report already submitted; duplicate submit_visual_qa_report ignored."
         const report = VisualQaReportSchema.parse(raw)
-        const advisories = await summarizeVisualQaReportAdvisories(report, context)
+        const feedback = await summarizeVisualQaReportFeedback(report, context)
         const semantics = visualQaReportAcceptanceSemantics(report)
         collector.final = report
-        const advisoryText =
-          advisories.length > 0
-            ? `\n\nADVISORIES (${advisories.length}):\n${advisories.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+        const blockerText =
+          feedback.blockers.length > 0
+            ? `\n\nBLOCKERS (${feedback.blockers.length}):\n${feedback.blockers.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
             : ""
-        return `RECORDED: visual QA report recorded with submitted_accepted=${semantics.submittedAccepted}; effective_accepted=${semantics.effectiveAccepted}.${advisoryText}`
+        const advisoryText =
+          feedback.advisories.length > 0
+            ? `\n\nADVISORIES (${feedback.advisories.length}):\n${feedback.advisories.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+            : ""
+        return `RECORDED: visual QA report recorded with submitted_accepted=${semantics.submittedAccepted}; effective_accepted=${semantics.effectiveAccepted}.${blockerText}${advisoryText}`
       },
     }),
   }

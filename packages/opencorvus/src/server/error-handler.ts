@@ -43,6 +43,7 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "AgentSessionPendingCoordinationError") return 409
   if (err.name === "SessionRuntimeContractMissingError") return 410
   if (err.name === "TaskEmptyMessageError") return 400
+  if (err.name === "ExternalChildTaskLineageError") return 400
   if (err.name === "TaskGlobalProjectBindingError") return 409
   if (err.name === "TaskChannelBindingProjectConflictError") return 409
   if (err.name === "TaskCancellationIncompleteError") return 409

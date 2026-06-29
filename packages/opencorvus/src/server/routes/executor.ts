@@ -63,7 +63,7 @@ export const ExecutorRoutes = lazy(() => {
       },
     }),
     async (c) => {
-      await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
+      await ExecutorBootstrap.autoRegister(true)
       const found = await ExecutorDiscovery.scan()
       const opencorvus = protocolInfo("opencorvus")
       const codex = protocolInfo("codex")
@@ -166,10 +166,7 @@ export const ExecutorRoutes = lazy(() => {
             },
           },
         },
-        404: {
-          description: "Executor not found or does not support model switching",
-        },
-        ...errors(400),
+        ...errors(400, 404),
       },
     }),
     validator("json", ExecutorSetModelInput),

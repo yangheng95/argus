@@ -3,6 +3,7 @@ import { Hono } from "hono"
 import { Auth } from "../../src/auth"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { serverErrorResponse } from "../../src/server/error-handler"
 import { ProviderRoutes } from "../../src/server/routes/provider"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -12,7 +13,7 @@ Log.init({ print: false })
 let upstream: ReturnType<typeof Bun.serve> | undefined
 
 function app() {
-  return new Hono().route("/provider", ProviderRoutes())
+  return new Hono().route("/provider", ProviderRoutes()).onError(serverErrorResponse)
 }
 
 afterEach(async () => {
@@ -132,6 +133,78 @@ test("POST /provider/discover-models does not send saved provider keys to arbitr
 
     expect(upstreamCalls).toBe(0)
   } finally {
+    if (previousAuth) await Auth.set("openai", previousAuth)
+    else await Auth.remove("openai").catch(() => undefined)
+    Provider.resetAll()
+  }
+})
+
+test("POST /provider/discover-models propagates saved-auth read failures before upstream discovery", async () => {
+  const originalGet = Auth.get
+  let upstreamCalls = 0
+  upstream = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch() {
+      upstreamCalls++
+      return Response.json({ data: [{ id: "should-not-load" }] })
+    },
+  })
+
+  try {
+    Auth.get = async () => {
+      throw new Error("Failed to read auth file C:/broken/auth.json: invalid JSON")
+    }
+    const response = await app().request("/provider/discover-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api: `http://127.0.0.1:${upstream.port}/v1`,
+        providerID: "openai",
+      }),
+    })
+
+    expect(response.status).toBe(500)
+    expect(upstreamCalls).toBe(0)
+  } finally {
+    Auth.get = originalGet
+  }
+})
+
+test("POST /provider/discover-models propagates provider config read failures before upstream discovery", async () => {
+  const previousAuth = await Auth.get("openai")
+  const originalGetProvider = Provider.getProvider
+  let upstreamCalls = 0
+  upstream = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch() {
+      upstreamCalls++
+      return Response.json({ data: [{ id: "should-not-load" }] })
+    },
+  })
+
+  try {
+    await Auth.set("openai", {
+      type: "api",
+      key: "saved-openai-key",
+    })
+    Provider.getProvider = async () => {
+      throw new Error("Failed to read provider config C:/broken/provider.json: invalid JSON")
+    }
+    const response = await app().request("/provider/discover-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api: `http://127.0.0.1:${upstream.port}/v1`,
+        providerID: "openai",
+      }),
+    })
+
+    expect(response.status).toBe(500)
+    expect(upstreamCalls).toBe(0)
+  } finally {
+    Provider.getProvider = originalGetProvider
     if (previousAuth) await Auth.set("openai", previousAuth)
     else await Auth.remove("openai").catch(() => undefined)
     Provider.resetAll()

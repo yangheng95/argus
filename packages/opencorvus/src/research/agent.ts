@@ -3,6 +3,7 @@ import path from "node:path"
 import type { ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
@@ -131,10 +132,17 @@ export async function runResearchSession(
           sessionID: input.parentSessionID,
         })
       : {}
-  const utilityTools = await createResearchUtilityTools(config.kind, {
-    taskID: input.taskID,
-    signal: input.signal,
-  })
+  const utilityTools = await filterAgentTools(
+    await createResearchUtilityTools(config.kind, {
+      taskID: input.taskID,
+      signal: input.signal,
+    }),
+    config.kind,
+    {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    },
+  )
   const expectedWebpageSourceUrl =
     config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
   const outputToolKit = createResearchOutputTools({ expectedWebpageSourceUrl })
@@ -237,10 +245,16 @@ async function createResearchUtilityTools(
   kind: ResearchLikeAgentKind,
   input: { taskID?: string; signal?: AbortSignal },
 ): Promise<ToolSet> {
-  if (kind !== "frontend-research") return {}
+  const coordinationTools = await createAgentCoordinationRuntimeTools({
+    agent: kind,
+    taskID: input.taskID,
+    signal: input.signal,
+  })
+  if (kind !== "frontend-research") return coordinationTools
   const agent = await Agent.get("frontend-research")
   if (!agent) throw new Error("frontend-research agent definition is missing")
   return {
+    ...coordinationTools,
     skill: await createResearchTool(SkillTool, {
       ...input,
       agentName: "frontend-research",

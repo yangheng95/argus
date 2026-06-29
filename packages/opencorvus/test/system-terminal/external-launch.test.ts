@@ -12,12 +12,7 @@ describe("system terminal external launch command", () => {
 
     expect(command).toEqual({
       command: "cmd.exe",
-      args: [
-        "/d",
-        "/s",
-        "/c",
-        'start "" /D "C:\\repo & whoami | sort" "powershell.exe" "-NoLogo"',
-      ],
+      args: ["/d", "/s", "/c", 'start "" /D "C:\\repo & whoami | sort" "powershell.exe" "-NoLogo"'],
       detached: true,
     })
     expect(command.args.at(-1)).toContain("start")

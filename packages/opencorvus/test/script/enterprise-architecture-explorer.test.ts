@@ -81,12 +81,14 @@ describe("enterprise architecture explorer", () => {
     expect(component).toContain("if (search.length > 0 && !isMatch) continue")
     expect(component).toContain("if (search.length > 0 && !componentMatches(component)) continue")
     expect(component).toContain(
-      "[component.id, component.title, localize(component.responsibility, locale), component.sources.join(\" \")]",
+      '[component.id, component.title, localize(component.responsibility, locale), component.sources.join(" ")]',
     )
   })
 
   test("component selection exposes source-level evidence", () => {
-    expect(component).toContain("type ArchComponent = { id: string; title: string; responsibility: LocalizedText; sources: string[] }")
+    expect(component).toContain(
+      "type ArchComponent = { id: string; title: string; responsibility: LocalizedText; sources: string[] }",
+    )
     expect(component).toContain("selectionPath(found.domain, found.component)")
     expect(component).toContain("localize(found.component.responsibility, locale)")
     expect(component).toContain("found.component.sources")
@@ -95,8 +97,16 @@ describe("enterprise architecture explorer", () => {
   })
 
   test("domain cards keep component buttons outside the domain select button", () => {
-    const renderDomainGrid = requiredSection(component, "function renderDomainGrid(): void", "function renderContracts(): void")
-    const selectBlock = requiredSection(renderDomainGrid, 'const select = createElement("button", "oc-arch-domain-select")', "card.appendChild(select)")
+    const renderDomainGrid = requiredSection(
+      component,
+      "function renderDomainGrid(): void",
+      "function renderContracts(): void",
+    )
+    const selectBlock = requiredSection(
+      renderDomainGrid,
+      'const select = createElement("button", "oc-arch-domain-select")',
+      "card.appendChild(select)",
+    )
 
     expect(renderDomainGrid).toContain('const card = createElement("article", "oc-arch-domain-card")')
     expect(renderDomainGrid).toContain('const chips = createElement("div", "oc-arch-component-list")')

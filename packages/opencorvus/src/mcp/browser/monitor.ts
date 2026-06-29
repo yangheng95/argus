@@ -1,55 +1,39 @@
 import type { IncomingMessage, ServerResponse } from "http"
 import { getSession, getSessions, getSessionStats, getToolCalls } from "./sessions.js"
+import { BrowserMcpScreenshotTimeoutError, captureBrowserMcpViewportScreenshot } from "./screenshot.js"
 
 const escHtml = (s: string) =>
   s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" })[c]!)
 
 // 截图端点：/monitor/screenshot/:sessionId
-// 每个 session 同时只允许一个 CDP captureScreenshot，并发请求返回上次缓存帧
+// 每个 session 同时只允许一个 CDP captureScreenshot，并发请求返回明确错误
 const screenshotInFlight = new Map<string, boolean>()
-const lastScreenshot = new Map<string, Buffer>()
+
+const writeMonitorScreenshotError = (res: ServerResponse, status: number, message: string) => {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" })
+  res.end(JSON.stringify({ ok: false, error: message }))
+}
 
 const handleScreenshot = async (sessionId: string, res: ServerResponse) => {
   if (screenshotInFlight.get(sessionId)) {
-    const cached = lastScreenshot.get(sessionId)
-    if (cached) {
-      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" })
-      res.end(cached)
-    } else {
-      const { viewport } = getSession(sessionId)
-      const w = viewport?.width ?? 1280
-      const h = viewport?.height ?? 720
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#111"/></svg>`
-      res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" })
-      res.end(svg)
-    }
+    writeMonitorScreenshotError(res, 409, `screenshot already in progress for session ${sessionId}`)
     return
   }
   screenshotInFlight.set(sessionId, true)
   try {
     const session = getSession(sessionId)
-    const cdp = await session.page.context().newCDPSession(session.page)
-    try {
-      const { data } = (await Promise.race([
-        cdp.send("Page.captureScreenshot", { format: "png" }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2_000)),
-      ])) as { data: string }
-      const buf = Buffer.from(data, "base64")
-      lastScreenshot.set(sessionId, buf)
-      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" })
-      res.end(buf)
-    } finally {
-      await cdp.detach().catch(() => {})
-    }
+    const capture = await captureBrowserMcpViewportScreenshot(session.page, { timeoutMs: 2_000 })
+    res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" })
+    res.end(capture.buffer)
   } catch (e) {
     const msg = e instanceof Error ? e.message.split("\n")[0] : String(e)
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">
-      <rect width="400" height="60" fill="#1a1a1a"/>
-      <text x="12" y="22" font-family="monospace" font-size="12" fill="#f88">screenshot failed</text>
-      <text x="12" y="44" font-family="monospace" font-size="11" fill="#666">${escHtml(msg)}</text>
-    </svg>`
-    res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" })
-    res.end(svg)
+    const status =
+      e instanceof BrowserMcpScreenshotTimeoutError
+        ? 504
+        : msg.startsWith("Session not found") || msg.startsWith("Session unavailable")
+          ? 404
+          : 500
+    writeMonitorScreenshotError(res, status, `screenshot failed: ${escHtml(msg)}`)
   } finally {
     screenshotInFlight.delete(sessionId)
   }

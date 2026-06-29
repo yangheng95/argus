@@ -26,6 +26,7 @@ import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registr
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { createAgentContextTools } from "@/agent/context-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { IntentAnalysisResult } from "./types"
@@ -67,7 +68,11 @@ export namespace IntentAnalysisAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<AnalyzeOutput> {
-    const toolKit = await buildToolKit({ taskID: input.taskID, sessionID: input.parentSessionID })
+    const toolKit = await buildToolKit({
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+      signal: input.signal,
+    })
     const out = await runAgentSession({
       kind: "intent-analysis",
       core: withFactCheckRegistration(INTENT_CORE),
@@ -131,8 +136,17 @@ export namespace IntentAnalysisAgent {
 // Tool kit — shared read-only context tools + intent-specific collector tools.
 // ---------------------------------------------------------------------------
 
-async function buildToolKit(opts?: { taskID?: string; sessionID?: string }) {
-  const contextTools = await filterAgentTools(createAgentContextTools(), "intent-analysis", opts)
+async function buildToolKit(opts?: { taskID?: string; sessionID?: string; signal?: AbortSignal }) {
+  const coordinationTools = await createAgentCoordinationRuntimeTools({
+    agent: "intent-analysis",
+    taskID: opts?.taskID,
+    signal: opts?.signal,
+  })
+  const contextTools = await filterAgentTools(
+    { ...createAgentContextTools(), ...coordinationTools },
+    "intent-analysis",
+    opts,
+  )
   const outputToolKit = createIntentOutputTools()
   return {
     tools: { ...contextTools, ...outputToolKit.tools },

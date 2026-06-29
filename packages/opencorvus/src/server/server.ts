@@ -3,6 +3,7 @@ import { generateSpecs } from "hono-openapi"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
+import { HTTPException } from "hono/http-exception"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 import { Flag } from "../flag/flag"
@@ -26,6 +27,7 @@ import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import { selectProjectDirectory } from "./directory"
 import { Filesystem } from "@/util/filesystem"
 import { Worktree } from "@/worktree"
+import { CreateTaskInput } from "@/engine/model"
 
 muteAISdkWarnings()
 
@@ -232,6 +234,21 @@ export namespace Server {
     await Project.initGit(input.directory)
   }
 
+  async function validateTaskCreateBodyBeforeDirectoryPrepare(request: Request) {
+    let body: unknown
+    try {
+      body = await request.clone().json()
+    } catch (error) {
+      throw new HTTPException(400, {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+    const parsed = CreateTaskInput.safeParse(body)
+    if (!parsed.success) {
+      throw new HTTPException(400, { message: parsed.error.message })
+    }
+  }
+
   const app = new Hono()
   export const App: () => Hono = lazy(
     () =>
@@ -312,13 +329,13 @@ export namespace Server {
           // a real failure for non-Tauri preview windows that have no UI
           // chance to attach the directory header. Falls through to the
           // root router; if no handler matches, the request 404s cleanly.
-          if (!routeRequiresProjectDirectory(c.req.path, c.req.method)) {
-            return next()
-          }
           const selectedDirectory = selectProjectDirectory({
             queryDirectory: c.req.query("directory"),
             headerDirectory: c.req.header("x-opencorvus-directory"),
           })
+          if (!routeRequiresProjectDirectory(c.req.path, c.req.method) && !selectedDirectory) {
+            return next()
+          }
           if (!selectedDirectory) {
             throw new DirectoryRequiredError({
               message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
@@ -326,6 +343,7 @@ export namespace Server {
           }
           const directory = Filesystem.resolve(selectedDirectory)
           if (isTaskCreateRequest(c.req.path, c.req.method)) {
+            await validateTaskCreateBodyBeforeDirectoryPrepare(c.req.raw)
             await prepareTaskCreateDirectory({
               directory,
               initGit: parseTaskCreateInitGit(c.req.query("init-git")),

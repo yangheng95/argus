@@ -281,7 +281,20 @@ describe("session config route contract", () => {
     expect(sdkIndex).not.toContain("createOpenCorvusTui")
     expect(sdkIndex).not.toContain("TuiOptions")
     expect(rootGenerate).toContain("packages/sdk/js/script/build.ts")
-    expect(rootGenerate).toContain("bun ./script/generate-openapi.ts")
+    expect(rootGenerate).toContain("packages/opencorvus/script/docs/render-api-md.ts")
+    expect(rootGenerate).toContain('import { GENERATED_ARTIFACT_PATHS } from "./generated-artifacts"')
+    expect(rootGenerate).toContain(
+      'Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write", ...GENERATED_ARTIFACT_PATHS]',
+    )
+    expect(rootGenerate).not.toContain("bun ./script/format.ts")
+    expect(rootGenerate).not.toContain("--write .")
+    expect(rootGenerate.indexOf("packages/sdk/js/script/build.ts")).toBeLessThan(
+      rootGenerate.indexOf("packages/opencorvus/script/docs/render-api-md.ts"),
+    )
+    expect(rootGenerate.indexOf("packages/opencorvus/script/docs/render-api-md.ts")).toBeLessThan(
+      rootGenerate.indexOf('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write"'),
+    )
+    expect(rootGenerate).not.toContain("bun ./script/generate-openapi.ts")
     expect(routeCheck).toContain("api:routes-check")
   })
 })

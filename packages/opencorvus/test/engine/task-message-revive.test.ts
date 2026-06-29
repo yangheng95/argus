@@ -11,7 +11,7 @@ import {
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
-import { findActivePlanForTask, findRun, findTask } from "../../src/engine/store"
+import { findActivePlanForTask, findActiveRunForTask, findRun, findTask } from "../../src/engine/store"
 import { EngineRuntime } from "../../src/engine/runtime"
 import { hooks } from "../../src/engine/state"
 import { deriveTaskStatus } from "../../src/engine/task-status"
@@ -95,6 +95,81 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
         expect(event?.operatorIntent).toEqual({ kind: "retry" })
         expect(event?.note).toContain("User requested retry")
         expect(event?.note).not.toContain("User requested replan")
+      },
+    })
+  })
+
+  test("retrying a cancelled task does not expose the aborted latest run as active", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "retry cancelled task" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Retry cancelled task",
+              request: "retry after explicit cancellation",
+              priority: "normal",
+              time_created: now - 2_000,
+              time_updated: now,
+              time_started: now - 1_000,
+              time_completed: now,
+              error: "task cancelled",
+              metadata: { cancelled: true },
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-aborted",
+              payload: {
+                plan_version_id: null,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "aborted",
+                phase: "execute",
+                blocking_reason: null,
+                error: "task cancelled",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: {},
+                time_started: now - 900,
+                time_completed: now,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const immediate = await EngineService.retryTask(taskID)
+        expect(["queued", "active"]).toContain(immediate.status)
+        expect(immediate.terminalReason).toBeUndefined()
+        expect(immediate.activeRunID).toBeUndefined()
+        expect(findActiveRunForTask(taskID)).toBeUndefined()
+
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const view = await EngineService.getTask(taskID)
+        expect(["queued", "active"]).toContain(view.status)
+        expect(view.terminalReason).toBeUndefined()
+        expect(view.activeRunID).toBeUndefined()
+        expect(findRun(runID)?.status).toBe("aborted")
+        expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
+        expect((findTask(taskID)!.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   })

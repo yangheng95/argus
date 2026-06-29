@@ -113,6 +113,24 @@ function handoffFixture(sourceUserMessageID = "m-source"): CompactionHandoff.Inf
         extraKeys: [],
       },
     },
+    agentHandoff: {
+      kind: "build",
+      deliverables: [
+        {
+          fact: "Dispatcher anchor preservation is the build-session compaction deliverable",
+          evidence: sourceUserMessageID,
+        },
+      ],
+      codeChanges: [],
+      verification: [],
+      runtimeState: [
+        {
+          fact: "The first dispatcher user message remains visible outside compacted history",
+          evidence: sourceUserMessageID,
+        },
+      ],
+      handoffArtifacts: [],
+    },
     decisions: [],
     evidence: [],
     files: [],
@@ -330,7 +348,7 @@ describe("session compaction dispatch anchor", () => {
     })
     const selectedWire = JSON.stringify(await Message.toModelMessages(selected.head, model()))
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: undefined,
+      sourceAgent: "build",
       runtime: "<handoff-runtime-state></handoff-runtime-state>",
       context: [],
       dispatchAnchor: { id: "m-dispatch", text: "DISPATCH ANCHOR" },
@@ -350,7 +368,7 @@ describe("session compaction dispatch anchor", () => {
     const tail = "ANCHOR-TAIL-RETAINED"
     const hugeAnchor = [head, "x".repeat(20_000), middle, "y".repeat(20_000), tail].join("\n")
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: undefined,
+      sourceAgent: "build",
       runtime: "<handoff-runtime-state></handoff-runtime-state>",
       context: [],
       dispatchAnchor: { id: "m-dispatch", text: hugeAnchor },
@@ -533,6 +551,7 @@ describe("session compaction dispatch anchor", () => {
                 content: pendingInput,
               },
               raw: pendingRaw,
+              time: { start: 1 },
             },
           },
           {

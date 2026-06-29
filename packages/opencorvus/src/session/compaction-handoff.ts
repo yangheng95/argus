@@ -1,5 +1,6 @@
 import z from "zod"
 import { Todo } from "./todo"
+import type { AgentRoleID } from "../agent/role-contract"
 
 export namespace CompactionHandoff {
   const NonEmpty = z.string().trim().min(1)
@@ -99,7 +100,319 @@ export namespace CompactionHandoff {
     })
     .strict()
 
-  export const Schema = z
+  const Fact = z
+    .object({
+      fact: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const PathFact = z
+    .object({
+      path: NonEmpty,
+      fact: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const CommandFact = z
+    .object({
+      command: NonEmpty,
+      result: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const ArtifactFact = z
+    .object({
+      artifact: NonEmpty,
+      role: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const SessionFact = z
+    .object({
+      sessionID: NonEmpty,
+      agent: NonEmpty,
+      status: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const GoalFact = z
+    .object({
+      goalID: NonEmpty,
+      status: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  const ClaimFact = z
+    .object({
+      claim: SpecificText,
+      status: SpecificText,
+      evidence: NonEmpty,
+    })
+    .strict()
+
+  function codingLikeAgentHandoff(kind: "coding" | "coding-assistant") {
+    return z
+      .object({
+        kind: z.literal(kind),
+        editScope: z.array(Fact),
+        codeChanges: z.array(PathFact),
+        commands: z.array(CommandFact),
+        nextEdits: z.array(Fact),
+      })
+      .strict()
+  }
+
+  function internalAgentHandoff(kind: "compaction" | "title" | "summary") {
+    return z
+      .object({
+        kind: z.literal(kind),
+        maintenanceActions: z.array(Fact),
+        generatedOutputs: z.array(Fact),
+        sourceRequests: z.array(Fact),
+      })
+      .strict()
+  }
+
+  const CodingAgentHandoff = codingLikeAgentHandoff("coding")
+  const CodingAssistantAgentHandoff = codingLikeAgentHandoff("coding-assistant")
+  const BuildAgentHandoff = z
+    .object({
+      kind: z.literal("build"),
+      deliverables: z.array(Fact),
+      codeChanges: z.array(PathFact),
+      verification: z.array(CommandFact),
+      runtimeState: z.array(Fact),
+      handoffArtifacts: z.array(ArtifactFact),
+    })
+    .strict()
+  const VisualQaAgentHandoff = z
+    .object({
+      kind: z.literal("visual-qa"),
+      screenshots: z.array(ArtifactFact),
+      findings: z.array(Fact),
+      interactionChecks: z.array(Fact),
+      repairState: z.array(Fact),
+      acceptanceVerdict: z.array(Fact),
+    })
+    .strict()
+  const GeneralAgentHandoff = z
+    .object({
+      kind: z.literal("general"),
+      findings: z.array(Fact),
+      workProducts: z.array(ArtifactFact),
+      toolEvidence: z.array(Fact),
+      nextActions: z.array(Fact),
+    })
+    .strict()
+  const ExploreAgentHandoff = z
+    .object({
+      kind: z.literal("explore"),
+      filesRead: z.array(PathFact),
+      symbols: z.array(Fact),
+      findings: z.array(Fact),
+      openQuestions: z.array(Fact),
+    })
+    .strict()
+  const CompactionAgentHandoff = internalAgentHandoff("compaction")
+  const TitleAgentHandoff = internalAgentHandoff("title")
+  const SummaryAgentHandoff = internalAgentHandoff("summary")
+  const ControlAgentHandoff = z
+    .object({
+      kind: z.literal("control"),
+      panelActions: z.array(Fact),
+      visibleState: z.array(Fact),
+      pendingUserFollowUp: z.array(Fact),
+    })
+    .strict()
+  const OrchestratorAgentHandoff = z
+    .object({
+      kind: z.literal("orchestrator"),
+      workflowDecisions: z.array(Fact),
+      delegatedSessions: z.array(SessionFact),
+      goalGraphState: z.array(GoalFact),
+      pendingDecisions: z.array(Fact),
+    })
+    .strict()
+  const MissionAgentHandoff = z
+    .object({
+      kind: z.literal("mission"),
+      missionContract: z.array(Fact),
+      roadmap: z.array(Fact),
+      delegatedTasks: z.array(Fact),
+      userCommitments: z.array(Fact),
+      externalEvents: z.array(Fact),
+    })
+    .strict()
+  const RequirementsAgentHandoff = z
+    .object({
+      kind: z.literal("requirements"),
+      requirementInventory: z.array(Fact),
+      constraints: z.array(Fact),
+      clarifications: z.array(Fact),
+      rejectedNonRequirements: z.array(Fact),
+    })
+    .strict()
+  const ArchitectAgentHandoff = z
+    .object({
+      kind: z.literal("architect"),
+      goals: z.array(GoalFact),
+      graphContracts: z.array(ArtifactFact),
+      ownershipBoundaries: z.array(Fact),
+      verificationPlan: z.array(Fact),
+    })
+    .strict()
+  const FrontendDesignAgentHandoff = z
+    .object({
+      kind: z.literal("frontend-design"),
+      referenceSurfaces: z.array(ArtifactFact),
+      visualSystem: z.array(Fact),
+      componentContracts: z.array(Fact),
+      implementationTemplate: z.array(ArtifactFact),
+      fidelityRisks: z.array(Fact),
+    })
+    .strict()
+  const IntentAnalysisAgentHandoff = z
+    .object({
+      kind: z.literal("intent-analysis"),
+      detectedIntents: z.array(Fact),
+      slots: z.array(Fact),
+      clarifications: z.array(Fact),
+      routingAdvice: z.array(Fact),
+    })
+    .strict()
+  const IntegrityAgentHandoff = z
+    .object({
+      kind: z.literal("integrity"),
+      acceptanceFindings: z.array(Fact),
+      requirementCoverage: z.array(Fact),
+      runtimeEvidence: z.array(Fact),
+      verdict: z.array(Fact),
+      rejectionDetails: z.array(Fact),
+    })
+    .strict()
+  const FactCheckAgentHandoff = z
+    .object({
+      kind: z.literal("fact-check"),
+      claims: z.array(ClaimFact),
+      sourceEvidence: z.array(ArtifactFact),
+      unresolvedClaims: z.array(Fact),
+    })
+    .strict()
+  const DeepResearchAgentHandoff = z
+    .object({
+      kind: z.literal("deep-research"),
+      researchQuestions: z.array(Fact),
+      sources: z.array(ArtifactFact),
+      findings: z.array(Fact),
+      uncertainties: z.array(Fact),
+      handoffArtifacts: z.array(ArtifactFact),
+    })
+    .strict()
+  const FrontendResearchAgentHandoff = z
+    .object({
+      kind: z.literal("frontend-research"),
+      sourcePages: z.array(Fact),
+      regionEvidence: z.array(Fact),
+      interactionEvidence: z.array(Fact),
+      dataContracts: z.array(Fact),
+      handoffArtifacts: z.array(ArtifactFact),
+    })
+    .strict()
+  const GoalWorkloadAnalystAgentHandoff = z
+    .object({
+      kind: z.literal("goal-workload-analyst"),
+      goalInventories: z.array(GoalFact),
+      decompositionConcerns: z.array(Fact),
+      executionRisks: z.array(Fact),
+      recommendedSplits: z.array(Fact),
+    })
+    .strict()
+  const CustomAgentHandoff = z
+    .object({
+      kind: z.literal("custom-agent"),
+      agentName: NonEmpty,
+      roleContract: SpecificText,
+      toolSurface: z.array(NonEmpty),
+      workProducts: z.array(Fact),
+      toolEvidence: z.array(Fact),
+      continuationState: z.array(Fact),
+    })
+    .strict()
+
+  export const AgentHandoffSchemaByAgent = {
+    coding: CodingAgentHandoff,
+    "coding-assistant": CodingAssistantAgentHandoff,
+    build: BuildAgentHandoff,
+    "visual-qa": VisualQaAgentHandoff,
+    general: GeneralAgentHandoff,
+    explore: ExploreAgentHandoff,
+    compaction: CompactionAgentHandoff,
+    title: TitleAgentHandoff,
+    summary: SummaryAgentHandoff,
+    control: ControlAgentHandoff,
+    orchestrator: OrchestratorAgentHandoff,
+    mission: MissionAgentHandoff,
+    requirements: RequirementsAgentHandoff,
+    architect: ArchitectAgentHandoff,
+    "frontend-design": FrontendDesignAgentHandoff,
+    "intent-analysis": IntentAnalysisAgentHandoff,
+    integrity: IntegrityAgentHandoff,
+    "fact-check": FactCheckAgentHandoff,
+    "deep-research": DeepResearchAgentHandoff,
+    "frontend-research": FrontendResearchAgentHandoff,
+    "goal-workload-analyst": GoalWorkloadAnalystAgentHandoff,
+  } as const satisfies Record<AgentRoleID, z.ZodType>
+
+  export type KnownAgentHandoffAgent = keyof typeof AgentHandoffSchemaByAgent
+
+  export const AgentHandoffSchema = z.discriminatedUnion("kind", [
+    CodingAgentHandoff,
+    CodingAssistantAgentHandoff,
+    BuildAgentHandoff,
+    VisualQaAgentHandoff,
+    GeneralAgentHandoff,
+    ExploreAgentHandoff,
+    CompactionAgentHandoff,
+    TitleAgentHandoff,
+    SummaryAgentHandoff,
+    ControlAgentHandoff,
+    OrchestratorAgentHandoff,
+    MissionAgentHandoff,
+    RequirementsAgentHandoff,
+    ArchitectAgentHandoff,
+    FrontendDesignAgentHandoff,
+    IntentAnalysisAgentHandoff,
+    IntegrityAgentHandoff,
+    FactCheckAgentHandoff,
+    DeepResearchAgentHandoff,
+    FrontendResearchAgentHandoff,
+    GoalWorkloadAnalystAgentHandoff,
+    CustomAgentHandoff,
+  ])
+
+  export type AgentHandoff = z.infer<typeof AgentHandoffSchema>
+
+  export function agentHandoffKindForAgent(agent: string): AgentHandoff["kind"] {
+    if (Object.prototype.hasOwnProperty.call(AgentHandoffSchemaByAgent, agent)) {
+      return agent as KnownAgentHandoffAgent
+    }
+    return "custom-agent"
+  }
+
+  export function agentHandoffSchemaForAgent(agent: string) {
+    if (Object.prototype.hasOwnProperty.call(AgentHandoffSchemaByAgent, agent)) {
+      return AgentHandoffSchemaByAgent[agent as KnownAgentHandoffAgent]
+    }
+    return CustomAgentHandoff
+  }
+
+  const CommonSchema = z
     .object({
       objective: SpecificText,
       acceptanceCriteria: z.array(SpecificText),
@@ -109,6 +422,7 @@ export namespace CompactionHandoff {
       workingContext: z.array(SpecificText),
       chronology: z.array(ChronologyEntry),
       currentState: CurrentState,
+      agentHandoff: AgentHandoffSchema,
       decisions: z.array(Decision),
       evidence: z.array(Evidence),
       files: z.array(File),
@@ -120,10 +434,19 @@ export namespace CompactionHandoff {
     })
     .strict()
 
+  export const Schema = CommonSchema
+
+  export function schemaForAgent(agent: string) {
+    return CommonSchema.extend({
+      agentHandoff: agentHandoffSchemaForAgent(agent),
+    }).strict()
+  }
+
   export type Info = z.infer<typeof Schema>
 
   export type EvidenceRequirements = {
     sourceUserMessageID: string
+    sourceAgent: string
     instructionPaths: string[]
     patchFiles: string[]
     errorNames: string[]
@@ -133,6 +456,7 @@ export namespace CompactionHandoff {
     errorsAndBlockers: boolean
     acceptanceCriteria: boolean
     todos: Todo.Info[]
+    activeBuildContracts?: z.infer<typeof ActiveBuildContract>[]
     previousHandoff?: {
       acceptanceCriteria: string[]
       workingContext: string[]
@@ -145,6 +469,7 @@ export namespace CompactionHandoff {
       userMessages: string[]
       nextActions: string[]
       openRisks: string[]
+      agentHandoff: string[]
     }
   }
 
@@ -153,8 +478,19 @@ export namespace CompactionHandoff {
     return normalized.replace(/^([A-Za-z]):/, (_, drive: string) => `${drive.toLowerCase()}:`)
   }
 
+  function activeBuildContractKey(value: z.infer<typeof ActiveBuildContract>) {
+    return JSON.stringify({
+      sessionID: value.sessionID,
+      goalID: value.goalID,
+      goalRunID: value.goalRunID,
+      artifactID: value.artifactID,
+      sourceArtifactIDs: value.sourceArtifactIDs,
+      digest: value.digest,
+    })
+  }
+
   export const MODEL_OUTPUT_INSTRUCTIONS = [
-    "Call the StructuredOutput tool exactly once with one object that matches the CompactionHandoff schema.",
+    "Call the StructuredOutput tool exactly once with one object that matches the source-agent-specific CompactionHandoff schema.",
     "Do not write Markdown, prose, or a raw JSON text response; the handoff object must be the StructuredOutput tool input.",
     "Every retained claim must be grounded in the supplied conversation, runtime state, or evidence context.",
     "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
@@ -168,11 +504,12 @@ export namespace CompactionHandoff {
     "When current todos are supplied, copy the todo array exactly into todos with the same item order, content, status, and priority.",
     "Fill workingContext with the compact active working set: concrete requirements, constraints, file relationships, ids, paths, and partial conclusions the next agent must keep in mind.",
     "Fill chronology with ordered progress events from the compacted history, including what changed, what was verified, and what remains unresolved.",
+    "Fill agentHandoff with the dedicated payload for currentState.sourceUserMessage.agent. Do not use another agent's payload kind.",
     "When <previous-handoff-required-retention> is supplied, retain every listed value verbatim in the same handoff field while merging new facts.",
   ].join("\n")
 
   export function renderRequiredEvidence(
-    requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames" | "previousHandoff">,
+    requirements: Pick<EvidenceRequirements, "patchFiles" | "errorNames" | "previousHandoff" | "activeBuildContracts">,
   ) {
     const prior = requirements.previousHandoff
     const priorBlock = prior
@@ -212,6 +549,9 @@ export namespace CompactionHandoff {
           "<openRisks>",
           ...prior.openRisks,
           "</openRisks>",
+          "<agentHandoff>",
+          ...prior.agentHandoff,
+          "</agentHandoff>",
           "</previous-handoff-required-retention>",
         ]
       : []
@@ -223,11 +563,15 @@ export namespace CompactionHandoff {
       "<runtime-error-context>",
       ...requirements.errorNames,
       "</runtime-error-context>",
+      "",
+      "<required-active-build-contracts>",
+      ...(requirements.activeBuildContracts ?? []).map((item) => JSON.stringify(item)),
+      "</required-active-build-contracts>",
       ...priorBlock,
     ].join("\n")
   }
 
-  export const JSON_SCHEMA_DESCRIPTION = `{
+  const COMMON_JSON_SCHEMA_DESCRIPTION = `{
   "objective": "specific active user objective",
   "acceptanceCriteria": ["durable requirements and explicit acceptance checks"],
   "durableInstructionSources": [{"path": "absolute or configured instruction path", "role": "why this source is authoritative"}],
@@ -249,6 +593,7 @@ export namespace CompactionHandoff {
       "extraKeys": ["source extra keys"]
     }
   },
+  "agentHandoff": "source-agent-specific payload; see the dedicated schema below",
   "decisions": [{"decision": "specific decision", "rationale": "why", "evidence": "optional source"}],
   "evidence": [{"kind": "file|command|test|error|tool|artifact", "value": "exact identifier", "detail": "specific observed fact"}],
   "files": [{"path": "exact path", "status": "read|modified|created|deleted|referenced", "detail": "specific relevance"}],
@@ -259,10 +604,56 @@ export namespace CompactionHandoff {
   "openRisks": ["specific unresolved risk"]
 }`
 
+  export function jsonSchemaDescriptionForAgent(agent: string) {
+    const kind = agentHandoffKindForAgent(agent)
+    const schema = z.toJSONSchema(agentHandoffSchemaForAgent(agent))
+    return [
+      COMMON_JSON_SCHEMA_DESCRIPTION,
+      "",
+      `Agent-specific compact payload for source agent "${agent}" must use kind "${kind}":`,
+      JSON.stringify(schema, null, 2),
+    ].join("\n")
+  }
+
+  export const JSON_SCHEMA_DESCRIPTION = jsonSchemaDescriptionForAgent("build")
+
+  function collectStringPathEntries(value: unknown, path: string, result: string[] = []) {
+    if (typeof value === "string") {
+      const trimmed = value.trim()
+      if (trimmed.length > 0 && path !== "agentHandoff.kind") result.push(`${path}=${trimmed}`)
+      return result
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) collectStringPathEntries(item, path, result)
+      return result
+    }
+    if (value && typeof value === "object") {
+      for (const [key, item] of Object.entries(value)) collectStringPathEntries(item, `${path}.${key}`, result)
+    }
+    return result
+  }
+
+  export function agentHandoffRetentionFacts(handoff: AgentHandoff) {
+    return collectStringPathEntries(handoff, "agentHandoff")
+  }
+
   export function validateMinimumEvidence(handoff: Info, requirements: EvidenceRequirements) {
     const missing: string[] = []
     if (handoff.currentState.sourceUserMessage.id !== requirements.sourceUserMessageID) {
       missing.push("currentState.sourceUserMessage.id")
+    }
+    if (handoff.currentState.sourceUserMessage.agent !== requirements.sourceAgent) {
+      missing.push("currentState.sourceUserMessage.agent")
+    }
+    const expectedAgentHandoffKind = agentHandoffKindForAgent(requirements.sourceAgent)
+    if (handoff.agentHandoff.kind !== expectedAgentHandoffKind) {
+      missing.push(`agentHandoff.kind (expected: ${expectedAgentHandoffKind})`)
+    }
+    if (
+      handoff.agentHandoff.kind === "custom-agent" &&
+      handoff.agentHandoff.agentName.trim() !== requirements.sourceAgent
+    ) {
+      missing.push(`agentHandoff.agentName (expected: ${requirements.sourceAgent})`)
     }
     if (requirements.userMessages && handoff.userMessages.length === 0) missing.push("userMessages")
     const reportedInstructionPaths = new Set(
@@ -310,6 +701,18 @@ export namespace CompactionHandoff {
     }
     if (requiresRichContext && handoff.chronology.length === 0) {
       missing.push("chronology")
+    }
+    if (requiresRichContext && agentHandoffRetentionFacts(handoff.agentHandoff).length === 0) {
+      missing.push(`agentHandoff.${expectedAgentHandoffKind}`)
+    }
+    if (requirements.activeBuildContracts && requirements.activeBuildContracts.length > 0) {
+      const reportedActiveBuildContracts = new Set(handoff.activeBuildContracts.map(activeBuildContractKey))
+      const omittedActiveBuildContracts = requirements.activeBuildContracts.filter(
+        (item) => !reportedActiveBuildContracts.has(activeBuildContractKey(item)),
+      )
+      if (omittedActiveBuildContracts.length > 0) {
+        missing.push(`activeBuildContracts (${omittedActiveBuildContracts.length} omitted or changed)`)
+      }
     }
     if (requirements.previousHandoff) {
       const missingAcceptance = requirements.previousHandoff.acceptanceCriteria.filter(
@@ -372,6 +775,13 @@ export namespace CompactionHandoff {
       if (missingOpenRisks.length > 0) {
         missing.push(`previousHandoff.openRisks (${missingOpenRisks.length} omitted)`)
       }
+      const agentHandoffFacts = new Set(agentHandoffRetentionFacts(handoff.agentHandoff))
+      const missingAgentHandoff = requirements.previousHandoff.agentHandoff.filter(
+        (item) => !agentHandoffFacts.has(item),
+      )
+      if (missingAgentHandoff.length > 0) {
+        missing.push(`previousHandoff.agentHandoff (${missingAgentHandoff.length} omitted)`)
+      }
     }
     if (JSON.stringify(handoff.todos) !== JSON.stringify(requirements.todos)) {
       missing.push("todos")
@@ -383,8 +793,17 @@ export namespace CompactionHandoff {
     }
   }
 
+  function agentHandoffMatchesSource(handoff: Info) {
+    const sourceAgent = handoff.currentState.sourceUserMessage.agent
+    const expectedKind = agentHandoffKindForAgent(sourceAgent)
+    if (handoff.agentHandoff.kind !== expectedKind) return false
+    if (handoff.agentHandoff.kind === "custom-agent") return handoff.agentHandoff.agentName.trim() === sourceAgent
+    return true
+  }
+
   export function isValidStructured(value: unknown): value is Info {
-    return Schema.safeParse(value).success
+    const parsed = Schema.safeParse(value)
+    return parsed.success && agentHandoffMatchesSource(parsed.data)
   }
 
   export function isValidSummaryMessage(message: {
@@ -425,9 +844,10 @@ export namespace CompactionHandoff {
       ...normalized.durableInstructionSources.map((item) => `   - ${item.path}: ${item.role}`),
       ...normalized.activeBuildContracts.map(
         (item) =>
-          `   - Active build contract: session=${item.sessionID} goal=${item.goalID} goal_run=${item.goalRunID} artifact=${item.artifactID} digest=${item.digest}`,
+          `   - Active build contract: session=${item.sessionID} goal=${item.goalID} goal_run=${item.goalRunID} artifact=${item.artifactID} source_artifacts=${item.sourceArtifactIDs.join(", ") || "(none)"} digest=${item.digest}`,
       ),
       ...normalized.workingContext.map((item) => `   - Working context: ${item}`),
+      `   - Agent-specific compact payload kind: ${normalized.agentHandoff.kind}`,
       `   - Source agent/model: ${source.agent} using ${source.model.providerID}/${source.model.modelID}`,
       `   - Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
       `   - Source enabled tool switches: ${source.toolNames.join(", ") || "(none)"}`,
@@ -463,6 +883,11 @@ export namespace CompactionHandoff {
       JSON.stringify(normalized.todos, null, 2),
       "```",
       "",
+      "7a. Agent-Specific Handoff (verbatim):",
+      "```json",
+      JSON.stringify(normalized.agentHandoff, null, 2),
+      "```",
+      "",
       "8. Pending Tasks:",
       list(normalized.nextActions).replaceAll("\n- ", "\n   - ").replace(/^- /, "   - "),
       "",
@@ -494,9 +919,30 @@ export namespace CompactionHandoff {
       `- Active task: ${normalized.currentState.activeTask}`,
       `- Source user message: ${source.id}`,
       `- Source agent/model: ${source.agent} ${source.model.providerID}/${source.model.modelID}`,
+      `- Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
+      `- Source enabled tool switches: ${source.toolNames.join(", ") || "(none)"}`,
+      `- Source variant: ${source.variant ?? "(none)"}`,
+      `- Source extra keys: ${source.extraKeys.join(", ") || "(none)"}`,
+      "",
+      "## Durable Instruction Sources",
+      section(normalized.durableInstructionSources, (item) => `- ${item.path}: ${item.role}`)
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
+      "",
+      "## Active Build Contracts",
+      section(
+        normalized.activeBuildContracts,
+        (item) =>
+          `- session=${item.sessionID} goal=${item.goalID} goal_run=${item.goalRunID} artifact=${item.artifactID} source_artifacts=${item.sourceArtifactIDs.join(", ") || "(none)"} digest=${item.digest}`,
+      )
+        .replaceAll("\n   - ", "\n- ")
+        .replace(/^   - /, "- "),
       "",
       "## Working Context",
       list(normalized.workingContext),
+      "",
+      "## Agent-Specific Handoff",
+      JSON.stringify(normalized.agentHandoff, null, 2),
       "",
       "## Chronology",
       section(normalized.chronology, (item) => `- ${item.event}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`)

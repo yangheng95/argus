@@ -379,7 +379,7 @@ export const ProviderRoutes = lazy(() =>
         }
 
         const explicitKey = body.apiKey?.trim()
-        const savedAuth = body.providerID ? await Auth.get(body.providerID).catch(() => undefined) : undefined
+        const savedAuth = body.providerID ? await Auth.get(body.providerID) : undefined
         const savedKey = savedAuth?.type === "api" ? savedAuth.key.trim() : ""
         const requestedApi = normalizeApiBaseURL(body.api)
         if (!requestedApi) {
@@ -394,9 +394,7 @@ export const ProviderRoutes = lazy(() =>
           )
         }
         if (!explicitKey && savedKey) {
-          const provider = body.providerID
-            ? await Provider.getProvider(body.providerID).catch(() => undefined)
-            : undefined
+          const provider = body.providerID ? await Provider.getProvider(body.providerID) : undefined
           if (!providerAllowsSavedKey(provider, requestedApi)) {
             return c.json(
               {

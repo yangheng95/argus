@@ -20,6 +20,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionStatus } from "../../src/session/status"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Log } from "../../src/util/log"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
@@ -314,6 +315,47 @@ describe("task message routes", () => {
     })
   })
 
+  test("GET /task/:taskID/operator-model-context rejects task IDs from another active project", async () => {
+    await using projectA = await tmpdir({ git: true, config: routeTestConfig })
+    await using projectB = await tmpdir({ git: true, config: routeTestConfig })
+    let taskID = ""
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "foreign model context" })
+        await seedRootSession(root.id)
+        taskID = Identifier.ascending("task")
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "foreign model context",
+              request: "foreign model context",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+      },
+    })
+
+    const response = await Server.App().request(`/task/${taskID}/operator-model-context`, {
+      headers: {
+        "x-opencorvus-directory": projectB.path,
+      },
+    })
+
+    expect(response.status).toBe(404)
+  })
+
   test("POST /task/:taskID/message triggers scheduler with natural language", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
@@ -370,8 +412,8 @@ describe("task message routes", () => {
           message: string
           should_resume: boolean
           user_message?: {
-            info: { id: string; sessionID: string; extra?: Record<string, unknown> }
-            parts: Array<{ type: string; text?: string }>
+            info: { id: string; sessionID: string; orderKey?: string; extra?: Record<string, unknown> }
+            parts: Array<{ type: string; text?: string; orderKey?: string }>
           }
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -385,11 +427,16 @@ describe("task message routes", () => {
             target,
           },
         })
+        expect(body.user_message?.info.orderKey).toMatch(/^v1:/)
         expect(body.user_message?.parts).toHaveLength(1)
         expect(body.user_message?.parts[0]).toMatchObject({
           type: "text",
           text: "把当前任务停下来，重新评估策略后继续。",
         })
+        const messages = await Session.messages({ sessionID: root.id })
+        const persistedUser = messages.find((message) => message.info.id === body.user_message?.info.id)
+        expect(body.user_message?.parts[0]?.orderKey).toBeString()
+        expect(body.user_message?.parts[0]?.orderKey).toBe(persistedUser?.parts[0]?.orderKey)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: dispatchTaskLoop trigger schema changed from
         //   trigger: { kind, message, attachmentSummary }
@@ -1194,7 +1241,7 @@ describe("task message routes", () => {
           message: string
           should_resume: boolean
           user_message: {
-            info: { id: string; sessionID: string }
+            info: { id: string; sessionID: string; orderKey?: string }
             parts: Array<{ type: string; mime?: string; filename?: string; url?: string }>
           }
         }
@@ -1203,6 +1250,7 @@ describe("task message routes", () => {
         expect(body.message).toBe("Operator note recorded. Task wake dispatched.")
         expect(body.should_resume).toBe(true)
         expect(body.user_message.info.sessionID).toBe(root.id)
+        expect(body.user_message.info.orderKey).toMatch(/^v1:/)
         expect(body.user_message.parts).toHaveLength(2)
         expect(body.user_message.parts[1]).toMatchObject({
           type: "file",
@@ -1250,6 +1298,74 @@ describe("task message routes", () => {
           mime: "text/plain",
           filename: "spec.txt",
         })
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message rejects malformed attachment base64 before writing attachments or message parts", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const writeAttachment = spyOn(AttachmentStore, "write")
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "malformed attachment message root" })
+        await seedRootSession(root.id, "initial malformed attachment request")
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "malformed attachment message",
+              request: "malformed attachment message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+        const beforeMessages = await Session.messages({ sessionID: root.id })
+        const beforeConfigOverlay = (await Session.get(root.id)).metadata?.configOverlay
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "参考这个坏附件。",
+            source: "panel",
+            promptProfile: "frontend-automation-debug",
+            attachments: [{ mime: "image/png", filename: "bad.png", data: "not base64!*" }],
+          }),
+        })
+
+        expect(response.status).not.toBe(200)
+        expect(writeAttachment).not.toHaveBeenCalled()
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        const task = Database.use((db) =>
+          db
+            .select({ attachments: EngineTaskTable.attachments })
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
+            .get(),
+        )
+        expect(task?.attachments).toBeNull()
+        const afterMessages = await Session.messages({ sessionID: root.id })
+        expect(afterMessages.map((message) => message.info.id)).toEqual(
+          beforeMessages.map((message) => message.info.id),
+        )
+        expect((await Session.get(root.id)).metadata?.configOverlay).toEqual(beforeConfigOverlay)
       },
     })
   })

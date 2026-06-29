@@ -5,10 +5,11 @@ import { Question } from "@/question"
 import { Message, Session, SessionStatus } from "@/session"
 import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
+import { Identifier } from "@/id/id"
 import { Database, and, eq } from "@/storage/db"
-import { MessageTable, PartTable } from "@/session/session.sql"
+import { MessageTable, PartTable, SessionTable } from "@/session/session.sql"
 import { Log } from "@/util/log"
-import { timelineMessageOrderKey, timelinePartOrderKey } from "@/timeline/order"
+import { timelineMessageOrderKey, timelineOrderKey, timelinePartOrderKey } from "@/timeline/order"
 
 const log = Log.create({ service: "session-mirror" })
 
@@ -80,7 +81,7 @@ function messageIDFromPayload(props: Record<string, unknown>): string {
   return ""
 }
 
-function partOrderKeyForPayload(props: Record<string, unknown>): string {
+function partOrderKeysForPayload(props: Record<string, unknown>): { messageOrderKey: string; partOrderKey: string } {
   const part = props.part
   if (!part || typeof part !== "object" || Array.isArray(part)) {
     throw new Error("session-mirror: part event missing part for overlay enrichment")
@@ -92,19 +93,37 @@ function partOrderKeyForPayload(props: Record<string, unknown>): string {
   if (!partID || !messageID || !sessionID) {
     throw new Error("session-mirror: part event missing part id/messageID/sessionID for overlay enrichment")
   }
-  const row = Database.use((db) =>
-    db
+  const rows = Database.use((db) => ({
+    message: db
+      .select({ timeCreated: MessageTable.time_created })
+      .from(MessageTable)
+      .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, sessionID)))
+      .get(),
+    part: db
       .select({ timeCreated: PartTable.time_created })
       .from(PartTable)
       .where(and(eq(PartTable.id, partID), eq(PartTable.message_id, messageID), eq(PartTable.session_id, sessionID)))
       .get(),
-  )
-  if (!row) throw new Error(`session-mirror: part ${partID} missing persisted row for overlay enrichment`)
-  const orderKey = timelinePartOrderKey({ id: partID, timeCreated: row.timeCreated })
-  if (typeof record.orderKey === "string" && record.orderKey.length > 0 && record.orderKey !== orderKey) {
+  }))
+  if (!rows.message) {
+    throw new Error(`session-mirror: message ${messageID} missing persisted row for overlay enrichment`)
+  }
+  if (!rows.part) throw new Error(`session-mirror: part ${partID} missing persisted row for overlay enrichment`)
+  const messageOrderKey = timelineMessageOrderKey({
+    info: {
+      id: messageID,
+      time: { created: rows.message.timeCreated },
+    },
+  })
+  const partOrderKey = timelinePartOrderKey({ id: partID, timeCreated: rows.part.timeCreated })
+  if (typeof record.orderKey === "string" && record.orderKey.length > 0 && record.orderKey !== partOrderKey) {
     throw new Error(`session-mirror: part ${partID} orderKey drift between payload and persisted row`)
   }
-  return orderKey
+  const eventOrderKey = props.orderKey
+  if (typeof eventOrderKey === "string" && eventOrderKey.length > 0 && eventOrderKey !== messageOrderKey) {
+    throw new Error(`session-mirror: part event ${partID} orderKey drift between payload and owning message`)
+  }
+  return { messageOrderKey, partOrderKey }
 }
 
 function overlayInfoForPayload(props: Record<string, unknown>): MessageOverlayInfo {
@@ -112,13 +131,13 @@ function overlayInfoForPayload(props: Record<string, unknown>): MessageOverlayIn
   if (info && typeof info === "object") {
     const record = info as Record<string, unknown>
     if (typeof record.role === "string" && record.role.length > 0) {
+      if (typeof record.orderKey !== "string" || record.orderKey.length === 0) {
+        throw new Error(`session-mirror: message ${String(record.id || "<unknown>")} missing info.orderKey`)
+      }
       const extra = record.extra
       return {
         role: record.role,
-        orderKey:
-          typeof record.orderKey === "string" && record.orderKey
-            ? record.orderKey
-            : timelineMessageOrderKey({ info: record }),
+        orderKey: record.orderKey,
         ...(extra && typeof extra === "object" && !Array.isArray(extra)
           ? { extra: extra as Record<string, unknown> }
           : {}),
@@ -137,6 +156,33 @@ function sessionEventMeta(sessionID: string): { channel: string; resolvedRole: s
   return { channel: kind, resolvedRole: kind }
 }
 
+function sessionOrderKey(sessionID: string): string {
+  const row = Database.use((db) =>
+    db.select({ timeCreated: SessionTable.time_created }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
+  )
+  if (!row) throw new Error(`session-mirror: session ${sessionID} missing persisted row for overlay enrichment`)
+  return timelineOrderKey({
+    domain: "session",
+    time: row.timeCreated,
+    id: sessionID,
+  })
+}
+
+function questionRequestID(props: Record<string, unknown>): string {
+  const id = typeof props.id === "string" ? props.id : typeof props.requestID === "string" ? props.requestID : ""
+  if (!id) throw new Error("session-mirror: question event missing id/requestID for overlay enrichment")
+  return id
+}
+
+function questionOrderKey(props: Record<string, unknown>): string {
+  const requestID = questionRequestID(props)
+  return timelineOrderKey({
+    domain: "interaction",
+    time: Identifier.timestamp(requestID),
+    id: requestID,
+  })
+}
+
 function stampPayloadWithMeta(
   props: Record<string, unknown>,
   meta: { channel: string; resolvedRole: string; orderKey?: string },
@@ -149,14 +195,15 @@ function stampPayloadWithMeta(
       channel: meta.channel,
       resolvedRole: meta.resolvedRole,
     }
+    if (typeof stampedInfo.orderKey !== "string" || stampedInfo.orderKey.length === 0) {
+      throw new Error(`session-mirror: message ${String(stampedInfo.id || "<unknown>")} missing info.orderKey`)
+    }
     payload.info = {
       ...stampedInfo,
-      orderKey:
-        typeof stampedInfo.orderKey === "string" && stampedInfo.orderKey
-          ? stampedInfo.orderKey
-          : timelineMessageOrderKey({ info: stampedInfo as { id?: unknown; time?: { created?: unknown } } }),
+      orderKey: stampedInfo.orderKey,
     }
-  } else if ("orderKey" in meta) {
+  }
+  if ("orderKey" in meta) {
     payload.orderKey = meta.orderKey
   }
   payload.channel = meta.channel
@@ -165,24 +212,29 @@ function stampPayloadWithMeta(
 }
 
 function stampSessionPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
-  return stampPayloadWithMeta(props, overlayMeta(sessionID, "", overlayInfoForPayload(props)))
+  const info = overlayInfoForPayload(props)
+  return stampPayloadWithMeta(props, { ...overlayMeta(sessionID, "", info), orderKey: info.orderKey })
 }
 
 function stampSessionPartPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
   const meta = overlayMeta(sessionID, "", overlayInfoForPayload(props))
-  const partOrderKey = partOrderKeyForPayload(props)
-  const payload = stampPayloadWithMeta(props, { ...meta, orderKey: partOrderKey })
+  const { messageOrderKey, partOrderKey } = partOrderKeysForPayload(props)
+  const payload = stampPayloadWithMeta(props, { ...meta, orderKey: messageOrderKey })
   const part = payload.part
   if (!part || typeof part !== "object" || Array.isArray(part)) {
     throw new Error("session-mirror: stamped part event missing part")
   }
   payload.part = { ...(part as Record<string, unknown>), orderKey: partOrderKey }
-  payload.orderKey = partOrderKey
+  payload.orderKey = messageOrderKey
   return payload
 }
 
-function stampSessionEventPayload(sessionID: string, props: Record<string, unknown>): Record<string, unknown> {
-  return stampPayloadWithMeta(props, sessionEventMeta(sessionID))
+function stampSessionEventPayload(
+  sessionID: string,
+  props: Record<string, unknown>,
+  orderKey = sessionOrderKey(sessionID),
+): Record<string, unknown> {
+  return stampPayloadWithMeta(props, { ...sessionEventMeta(sessionID), orderKey })
 }
 
 export function enrichStandaloneSessionTranscript(messages: Message.WithParts[]): Message.WithParts[] {
@@ -234,10 +286,11 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === SessionStatus.Event.Idle.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "session.idle",
       summary: "Session idle",
-      payload: props,
+      payload,
     }
   }
   if (event.type === Message.Event.Updated.type) {
@@ -292,38 +345,43 @@ export function mapSessionBusEvent(
     }
   }
   if (event.type === PermissionNext.Event.Asked.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "permission.asked",
       summary: `Permission requested: ${String(props.permission ?? "")}`.trim(),
-      payload: props,
+      payload,
     }
   }
   if (event.type === PermissionNext.Event.Replied.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
     return {
       type: "permission.replied",
       summary: `Permission reply: ${String(props.reply ?? "")}`.trim(),
-      payload: props,
+      payload,
     }
   }
   if (event.type === Question.Event.Asked.type) {
+    const payload = stampSessionEventPayload(sessionID, props, questionOrderKey(props))
     return {
       type: "question.asked",
       summary: "Question requested",
-      payload: props,
+      payload,
     }
   }
   if (event.type === Question.Event.Replied.type) {
+    const payload = stampSessionEventPayload(sessionID, props, questionOrderKey(props))
     return {
       type: "question.replied",
       summary: "Question answered",
-      payload: props,
+      payload,
     }
   }
   if (event.type === Question.Event.Rejected.type) {
+    const payload = stampSessionEventPayload(sessionID, props, questionOrderKey(props))
     return {
       type: "question.rejected",
       summary: "Question rejected",
-      payload: props,
+      payload,
     }
   }
   return {
@@ -344,11 +402,16 @@ export async function mirrorSessionBusEvent(event: SessionBusEvent, sessionID: s
   if (!(await shouldMirrorSessionScopedStream(sessionID))) return
   const mapped = mapSessionBusEvent(event, { sessionID })
   if (!mapped) return
+  const orderKey = mapped.payload?.orderKey
+  if (typeof orderKey !== "string" || orderKey.length === 0) {
+    throw new Error(`session-mirror: ${mapped.type} missing envelope orderKey`)
+  }
   ProtocolStore.dispatchEphemeral({
     type: mapped.type,
     aggregate: "session",
     sessionID,
     source: "session.bridge",
+    orderKey,
     payload: {
       ...(mapped.payload ?? {}),
       summary: mapped.summary ?? mapped.type,
@@ -356,7 +419,10 @@ export async function mirrorSessionBusEvent(event: SessionBusEvent, sessionID: s
   })
 }
 
-export function subscribeSessionMirror(sessionID: string): () => void {
+export function subscribeSessionMirror(
+  sessionID: string,
+  onMirrorError?: (error: unknown, event: SessionBusEvent) => void,
+): () => void {
   const handler = (envelope: { payload?: SessionBusEvent }) => {
     const event = envelope.payload
     if (!event || typeof event.type !== "string" || !event.properties) return
@@ -365,6 +431,13 @@ export function subscribeSessionMirror(sessionID: string): () => void {
         sessionID,
         eventType: event.type,
         error: errorMessage(error),
+      })
+      if (onMirrorError) {
+        onMirrorError(error, event)
+        return
+      }
+      queueMicrotask(() => {
+        throw error
       })
     })
   }

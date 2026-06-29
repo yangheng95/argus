@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeDataUrlBase64, decodeDataUrlText } from "../../src/session/text-mime"
+import { decodeDataUrlBase64, decodeDataUrlBase64Bytes, decodeDataUrlText } from "../../src/session/text-mime"
 
 /**
  * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §helper.
@@ -43,6 +43,12 @@ describe("decodeDataUrlBase64", () => {
     expect(() => decodeDataUrlBase64(undefined, "test")).toThrow(/data URL/)
   })
 
+  test("throws on malformed base64 payloads instead of returning corrupt bytes", () => {
+    expect(() => decodeDataUrlBase64("data:image/png;base64,not base64!*", "test")).toThrow(/invalid base64/)
+    expect(() => decodeDataUrlBase64("data:image/png;base64,A", "test")).toThrow(/invalid base64/)
+    expect(() => decodeDataUrlBase64Bytes("data:image/png;base64,not base64!*", "test")).toThrow(/invalid base64/)
+  })
+
   test("error message includes both context and a preview of the bad input", () => {
     let err: Error | undefined
     try {
@@ -55,11 +61,9 @@ describe("decodeDataUrlBase64", () => {
     expect(err?.message).toContain("/attachment/proj/sha.png")
   })
 
-  test("text decoder still works (regression)", () => {
-    // Sanity check that the decodeDataUrlText helper kept its lenient
-    // semantics (it's used for inline-into-request prose where empty
-    // string is a fine "skip this" signal, unlike binary persistence).
+  test("text decoder uses the same strict data URL payload contract", () => {
     expect(decodeDataUrlText("data:text/markdown;base64,IyBIZWxsbw==")).toBe("# Hello")
-    expect(decodeDataUrlText("not a data url")).toBe("")
+    expect(() => decodeDataUrlText("not a data url")).toThrow(/data URL/)
+    expect(() => decodeDataUrlText("data:text/markdown;base64,not base64!*")).toThrow(/invalid base64/)
   })
 })

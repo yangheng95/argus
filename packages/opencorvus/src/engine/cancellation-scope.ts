@@ -14,10 +14,6 @@ function isLivePromptStatus(status: SessionStatus.Info): boolean {
   return status.type === "streaming" || status.type === "retry"
 }
 
-function stalePromptStatusMessage(sessionID: string): string {
-  return `Stale prompt status for ${sessionID}: status was active but no prompt state or activity gate exists in this process`
-}
-
 export function cancelSessionPromptInScope(input: {
   session: Pick<SessionInfo, "id" | "directory">
   taskID?: string
@@ -25,23 +21,21 @@ export function cancelSessionPromptInScope(input: {
   handle?: string
 }): boolean {
   const handle = input.handle ?? "SessionPrompt.cancel"
+  const previousStatus = SessionStatus.get(input.session.id)
   const cancelled = SessionPrompt.cancel(input.session.id, input.session.directory)
-  const status = SessionStatus.get(input.session.id)
-  if (!cancelled && isLivePromptStatus(status)) {
+  if (!cancelled && isLivePromptStatus(previousStatus)) {
     const hasPromptState = SessionPrompt.isActiveInAnyDirectory(input.session.id)
     const hasActivityGate = Boolean(SessionStatus.getActivity(input.session.id))
-    if (!hasPromptState && !hasActivityGate) {
-      SessionStatus.set(
-        input.session.id,
-        {
-          type: "terminal",
-          reason: "aborted",
-          error: stalePromptStatusMessage(input.session.id),
-        },
-        { publish: false },
-      )
-      return false
-    }
+    const cause =
+      !hasPromptState && !hasActivityGate
+        ? "status was active but no prompt state or activity gate exists in this process"
+        : "no live prompt state matched session directory"
+    throw createTaskCancellationIncomplete({
+      taskID: input.taskID,
+      runID: input.runID,
+      handle,
+      cause: new Error(cause),
+    })
   }
   const nextStatus = SessionStatus.get(input.session.id)
   if (!cancelled && nextStatus.type !== "idle" && nextStatus.type !== "terminal") {

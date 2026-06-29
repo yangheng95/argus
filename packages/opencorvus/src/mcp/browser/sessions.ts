@@ -505,15 +505,13 @@ const createSessionForProfile = async (
   }
 }
 
-export const createTab = async (sessionId: string, url?: string) => {
+export const createTab = async (sessionId: string) => {
   const session = getSession(sessionId)
   const result = await createSession({
     profileId: session.profileId,
     virtualCursor: session.virtualCursor,
     perf: session.perfMode,
   })
-  const tab = getSession(result.sessionId)
-  if (url) await tab.page.goto(url, { waitUntil: "domcontentloaded" })
   return getTabInfo(result.sessionId, result.sessionId)
 }
 
@@ -681,6 +679,14 @@ export const recordDownload = (sessionId: string, entry: DownloadEntry) => {
 export const getDownloadHistory = (sessionId: string) => {
   const session = getSession(sessionId)
   return { sessionId, downloads: [...session.downloads] }
+}
+
+export const clearSuccessfulDownloadRequestDiagnostic = (sessionId: string, url: string): void => {
+  const session = sessions.get(sessionId)
+  if (!session) return
+  session.diagnostics.failedRequests = session.diagnostics.failedRequests.filter(
+    (item) => !(item.url === url && item.reason === "net::ERR_ABORTED"),
+  )
 }
 
 export const setViewport = async (sessionId: string, viewport: { width: number; height: number }) => {

@@ -421,6 +421,17 @@ export function remapArchitectContractGraphGoalIDs(
   }
 }
 
+export function assertArchitectContractGraphMatchesExecutableGoals(input: {
+  graph: ArchitectContractGraph
+  goals: readonly GraphValidationGoal[]
+}) {
+  const blockers = validateArchitectContractGraph(input).filter((finding) => finding.severity === "blocker")
+  if (blockers.length === 0) return
+
+  const details = blockers.map((finding, index) => `${index + 1}. [${finding.code}] ${finding.message}`).join("\n")
+  throw new Error(`Architect contract graph does not match executable goal dependencies:\n${details}`)
+}
+
 export function renderContractGraphForPrompt(graph: ArchitectContractGraph, goalID?: string): string {
   const contracts = goalID
     ? graph.contracts.filter(

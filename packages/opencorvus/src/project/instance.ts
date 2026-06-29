@@ -48,6 +48,10 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
+function instanceCacheKey(directory: string) {
+  return process.platform === "win32" ? directory.toLowerCase() : directory
+}
+
 function needsProjectRefresh(ctx: Context) {
   return (ctx.project.id === "global" || ctx.worktree === "/" || !ctx.git) && Project.isGitRepo(ctx.directory)
 }
@@ -95,7 +99,8 @@ export const Instance: InstanceApi = {
   async provide<R>(input: { directory: string; init?: InstanceInit; fn: () => R }): Promise<R> {
     // Normalize project directories once so cache keys and boundary checks stay stable.
     const directory = Filesystem.resolve(input.directory)
-    let existing = cache.get(directory)
+    const key = instanceCacheKey(directory)
+    let existing = cache.get(key)
     if (!existing) {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
@@ -138,9 +143,9 @@ export const Instance: InstanceApi = {
       })
       // Remove rejected promises from cache so they can be retried on the next call.
       existing.catch(() => {
-        if (cache.get(directory) === existing) cache.delete(directory)
+        if (cache.get(key) === existing) cache.delete(key)
       })
-      cache.set(directory, existing)
+      cache.set(key, existing)
     }
     let ctx = await existing
     if (needsProjectRefresh(ctx)) {
@@ -155,11 +160,12 @@ export const Instance: InstanceApi = {
   },
   async tryProvideActive<R>(input: { directory: string; fn: () => R }): Promise<R | undefined> {
     const directory = Filesystem.resolve(input.directory)
-    const existing = cache.get(directory)
+    const key = instanceCacheKey(directory)
+    const existing = cache.get(key)
     if (!existing) return undefined
     const ctx = await existing.catch(() => undefined)
     if (!ctx) return undefined
-    if (cache.get(directory) !== existing) return undefined
+    if (cache.get(key) !== existing) return undefined
     return context.provide(ctx, async () => {
       return input.fn()
     })
@@ -186,12 +192,13 @@ export const Instance: InstanceApi = {
     return context.tryUse()
   },
   async refresh(directory = Instance.directory) {
-    const key = Filesystem.resolve(directory)
-    const next = await Project.fromDirectory(key)
+    const resolved = Filesystem.resolve(directory)
+    const key = instanceCacheKey(resolved)
+    const next = await Project.fromDirectory(resolved)
     const existing = cache.get(key)
     if (!existing) {
       const ctx = {
-        directory: key,
+        directory: resolved,
         worktree: next.sandbox,
         project: next.project,
         git: Project.isGitRepo(next.project.worktree),
@@ -201,7 +208,7 @@ export const Instance: InstanceApi = {
       return ctx
     }
     const ctx = await existing
-    ctx.directory = key
+    ctx.directory = resolved
     ctx.worktree = next.sandbox
     ctx.project = next.project
     ctx.git = Project.isGitRepo(next.project.worktree)
@@ -227,15 +234,16 @@ export const Instance: InstanceApi = {
     return State.create(() => Instance.directory, init, dispose)
   },
   async dispose() {
-    Log.Default.info("disposing instance", { directory: Instance.directory })
-    await State.dispose(Instance.directory)
-    cache.delete(Instance.directory)
+    const directory = Instance.directory
+    Log.Default.info("disposing instance", { directory })
+    await State.dispose(directory)
+    cache.delete(instanceCacheKey(directory))
     GlobalBus.emit("event", {
-      directory: Instance.directory,
+      directory,
       payload: {
         type: "server.instance.disposed",
         properties: {
-          directory: Instance.directory,
+          directory,
         },
       },
     })

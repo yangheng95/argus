@@ -597,6 +597,145 @@ describe("integrity team-agent replay attempts", () => {
     expect(prompt).toContain("Overall verdict values belong only in `verdict` / `verdictImpact`")
   })
 
+  test("single-session integrity prompt renders every requirement and requirement status row", async () => {
+    const { buildSingleSessionIntegrityPrompt } = await import("../../src/integrity/team-agent")
+    const requirements = Array.from({ length: 9 }, (_value, index) => {
+      const id = `REQ-${index + 1}`
+      return {
+        id,
+        type: "explicit" as const,
+        description:
+          id === "REQ-9"
+            ? "Render the page footer with secondary links, legal text, and data-provider credits."
+            : `Render required page section ${index + 1}.`,
+        acceptance:
+          id === "REQ-9"
+            ? "Footer links, legal text, and data-provider credits are visible in the rendered page."
+            : `Section ${index + 1} is visible and verifiable.`,
+        non_goals: "",
+        evidence_refs: [],
+      }
+    })
+    const requirementStatus = requirements.map((requirement) => ({
+      reqID: requirement.id,
+      reqDescription: requirement.description,
+      claimingGoals:
+        requirement.id === "REQ-9"
+          ? []
+          : [
+              {
+                goalID: `goal_${requirement.id.toLowerCase().replace("-", "_")}`,
+                goalTitle: `Goal ${requirement.id}`,
+                runStatus: "completed" as const,
+                specOutcomes: [
+                  {
+                    specID: `acc-${requirement.id.toLowerCase()}`,
+                    severity: "essential" as const,
+                    passed: true,
+                    summary: "checked",
+                  },
+                ],
+              },
+            ],
+    }))
+
+    const prompt = buildSingleSessionIntegrityPrompt({
+      userRequest: "Replicate the full long page including the footer.",
+      taskTitle: "Full page replica",
+      goals: [
+        {
+          id: "goal_page",
+          title: "Page",
+          objective: "Implement the page body.",
+          acceptance_specs: [],
+          owned_paths: ["src/page.tsx"],
+          depends_on: [],
+          priority: "blocking",
+          kind: "feature",
+          requirement_ids: requirements.slice(0, 8).map((requirement) => requirement.id),
+        },
+      ],
+      requirements,
+      requirementStatus,
+      replayContext: replayContext(1),
+    })
+
+    expect(prompt).toContain("Rendered all 9 requirements")
+    expect(prompt).toContain("REQ-9 (explicit): Render the page footer")
+    expect(prompt).toContain("Footer links, legal text, and data-provider credits")
+    expect(prompt).toContain("Rendered all 9 requirement status rows")
+    expect(prompt).toContain("## REQ-9: Render the page footer")
+    expect(prompt).toContain("- no claiming goal")
+    expect(prompt).not.toContain("Rendered 8/9 requirements")
+    expect(prompt).not.toContain("omitted 1 requirements")
+    expect(prompt).not.toContain("omitted 1 requirement status rows")
+  })
+
+  test("submit_integrity_consensus requires every active requirement to be structurally touched", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const requirements = [
+      {
+        id: "REQ-1",
+        type: "explicit" as const,
+        description: "Render primary content.",
+        acceptance: "Primary content is rendered.",
+        non_goals: "",
+        evidence_refs: [],
+      },
+      {
+        id: "REQ-2",
+        type: "explicit" as const,
+        description: "Render secondary footer content.",
+        acceptance: "Secondary footer content is rendered.",
+        non_goals: "",
+        evidence_refs: [],
+      },
+    ]
+    const collector = {}
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector,
+      goals: [
+        {
+          id: "goal_page",
+          title: "Page",
+          objective: "Implement the page.",
+          acceptance_specs: [],
+          owned_paths: ["src/page.tsx"],
+          depends_on: [],
+          priority: "blocking",
+          kind: "feature",
+          requirement_ids: ["REQ-1"],
+        },
+      ],
+      requirements,
+    } as any)
+
+    const omitted = await kit.tools.submit_integrity_consensus.execute!(passTeamReport(), {} as any)
+    expect(String(omitted)).toContain("omitted active requirement coverage")
+    expect(String(omitted)).toContain("REQ-1, REQ-2")
+    expect((collector as any).report).toBeUndefined()
+
+    const report = passTeamReport()
+    ;(report.reviewers[0] as any).coverage = [
+      {
+        requirementID: "REQ-1",
+        status: "covered",
+        evidence: "Primary content evidence inspected.",
+      },
+    ]
+    ;(report.reviewers[1] as any).coverage = [
+      {
+        requirementID: "REQ-2",
+        status: "missing",
+        evidence: "Footer evidence is absent.",
+      },
+    ]
+
+    const recorded = await kit.tools.submit_integrity_consensus.execute!(report, {} as any)
+    expect(String(recorded)).toContain("RECORDED")
+    expect((collector as any).report).toBeDefined()
+  })
+
   test("consensus prompt summarizes oversized reviewer reports instead of replaying full tool dumps", async () => {
     const { buildSupervisorConsensusPrompt } = await import("../../src/integrity/team-agent")
     const prompt = buildSupervisorConsensusPrompt(

@@ -16,6 +16,7 @@ import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Project } from "../../src/project/project"
 import { ProjectTable } from "../../src/project/project.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Worktree } from "../../src/worktree"
 import { SessionTable } from "../../src/session/session.sql"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -46,6 +47,22 @@ async function waitUntil(fn: () => boolean, label: string) {
 
 function projectRow(projectID: string) {
   return Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get())
+}
+
+function slash(input: string) {
+  return input.replace(/\\/g, "/")
+}
+
+async function withDirectoryAlias(target: string, run: (alias: string) => Promise<void>) {
+  const parent = path.join(path.dirname(target), `${path.basename(target)}-route-alias-${Date.now().toString(36)}`)
+  const alias = path.join(parent, "visible")
+  await fs.mkdir(parent, { recursive: true })
+  try {
+    await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir")
+    await run(alias)
+  } finally {
+    await fs.rm(parent, { recursive: true, force: true })
+  }
 }
 
 function sessionRow(sessionID: string) {
@@ -84,6 +101,21 @@ describe("project routes", () => {
       },
     })
     expect(current.status).toBe(200)
+  }, 30_000)
+
+  test("GET /project/current with directory query creates project using the visible alias path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const response = await app.request(`/project/current?directory=${encodeURIComponent(alias)}`)
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as Project.Info
+      expect(body.worktree).toBe(alias)
+      expect(body.sandboxes).not.toContain(tmp.path)
+      expect(projectRow(body.id)?.worktree).toBe(alias)
+    })
   }, 30_000)
 
   test("POST /project/current/init-git is idempotent for git projects", async () => {
@@ -130,9 +162,9 @@ describe("project routes", () => {
     })
     expect(current.status).toBe(200)
     expect(((await current.json()) as Project.Info).name).toBe(nextName)
-    expect(
-      Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, body.id)).get())?.name,
-    ).toBe(nextName)
+    expect(Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, body.id)).get())?.name).toBe(
+      nextName,
+    )
   }, 30_000)
 
   test("PATCH /project/current rejects empty project names", async () => {
@@ -149,6 +181,52 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(400)
+  }, 30_000)
+
+  test("PATCH /project/:projectID rejects foreign projects under the current directory", async () => {
+    await using tmpA = await tmpdir({ git: true })
+    await using tmpB = await tmpdir({ git: true })
+    const app = Server.App()
+
+    const projectAResponse = await app.request("/project/current", {
+      headers: { "x-opencorvus-directory": tmpA.path },
+    })
+    const projectBResponse = await app.request("/project/current", {
+      headers: { "x-opencorvus-directory": tmpB.path },
+    })
+    expect(projectAResponse.status).toBe(200)
+    expect(projectBResponse.status).toBe(200)
+    const projectA = (await projectAResponse.json()) as Project.Info
+    const projectB = (await projectBResponse.json()) as Project.Info
+    const projectBNameBefore = projectRow(projectB.id)?.name
+
+    const foreignResponse = await app.request(`/project/${encodeURIComponent(projectB.id)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmpA.path,
+      },
+      body: JSON.stringify({ name: "should not write foreign project" }),
+    })
+
+    expect(foreignResponse.status).toBe(404)
+    expect(projectRow(projectB.id)?.name).toBe(projectBNameBefore)
+    expect(projectRow(projectB.id)?.name).not.toBe("should not write foreign project")
+
+    const currentByIDResponse = await app.request(`/project/${encodeURIComponent(projectA.id)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmpA.path,
+      },
+      body: JSON.stringify({ name: "current via id" }),
+    })
+    expect(currentByIDResponse.status).toBe(200)
+    expect(((await currentByIDResponse.json()) as Project.Info).name).toBe("current via id")
+    const currentResponse = await app.request("/project/current", {
+      headers: { "x-opencorvus-directory": tmpA.path },
+    })
+    expect(((await currentResponse.json()) as Project.Info).name).toBe("current via id")
   }, 30_000)
 
   test("DELETE /project/current deletes OpenCorvus project state without deleting source files", async () => {
@@ -314,11 +392,17 @@ describe("project routes", () => {
     let queueTaskID = ""
     let queueRun!: Promise<void>
     let queueWakeStarted = false
+    let queueCancellationRequested = false
 
     const loop = spyOn(SessionPrompt, "loop").mockImplementation((async () => {
       queueWakeStarted = true
       await releaseQueue.promise
       return { info: {} as never, parts: [] } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+    }) as never)
+    const originalCancel = SessionPrompt.cancel
+    spyOn(SessionPrompt, "cancel").mockImplementation(((id: string, directory?: string) => {
+      if (id === sessionID) queueCancellationRequested = true
+      return originalCancel(id, directory)
     }) as never)
 
     await Bun.write(sourceSentinel, "keep-source")
@@ -367,16 +451,13 @@ describe("project routes", () => {
       })
       void responsePromise.catch(() => undefined)
       try {
-        await waitUntil(() => {
-          const row = queueRow(queueTaskID)
-          return row?.status === "failed" || row === undefined
-        }, "project delete queue cancellation")
+        await waitUntil(() => queueCancellationRequested, "project delete queue cancellation")
 
         expect(projectRow(projectID)?.id).toBe(projectID)
         expect(sessionRow(sessionID)?.id).toBe(sessionID)
         expect(queueRow(queueTaskID)).toMatchObject({
-          status: "failed",
-          error_message: "project deleted",
+          status: "running",
+          error_message: null,
         })
         expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(true)
         expect(await Filesystem.exists(sourceSentinel)).toBe(true)
@@ -411,27 +492,131 @@ describe("project routes", () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()
     const now = Date.now()
-    const activeDir = path.join(tmp.path, "..", `project-route-active-${now}`)
-    const expiredDir = path.join(tmp.path, "..", `project-route-expired-${now}`)
+    let activeDir = ""
+    let expiredDir = ""
+    const externalDir = path.join(tmp.path, "..", `project-route-external-${now}`)
 
-    await $`git worktree add --no-checkout -b ${`opencorvus/active-${now}`} ${activeDir}`.cwd(tmp.path).quiet()
-    await $`git reset --hard`.cwd(activeDir).quiet()
-    await $`git worktree add --no-checkout -b ${`opencorvus/expired-${now}`} ${expiredDir}`.cwd(tmp.path).quiet()
-    await $`git reset --hard`.cwd(expiredDir).quiet()
+    try {
+      await $`git worktree add --no-checkout -b ${`opencorvus/external-${now}`} ${externalDir}`
+        .cwd(tmp.path)
+        .quiet()
+      await $`git reset --hard`.cwd(externalDir).quiet()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const activeWorktree = await Worktree.create({ name: `route-active-${now}` })
+          const expiredWorktree = await Worktree.create({ name: `route-expired-${now}` })
+          activeDir = activeWorktree.directory
+          expiredDir = expiredWorktree.directory
+          const taskID = `task_project_worktrees_${now}`
+          const goalID = `goal_project_worktrees_${now}`
+          Database.transaction((db) => {
+            db.insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "worktree route task",
+                request: "verify worktree route",
+                priority: "normal",
+                kind: "workflow",
+                queue_order: 0,
+                system_artifacts: [],
+                design_specs: [],
+                criteria_results: [],
+                time_created: now,
+                time_updated: now,
+                time_started: now,
+              })
+              .run()
+            db.insert(EngineGoalTable)
+              .values({
+                id: goalID,
+                task_id: taskID,
+                title: "live route goal",
+                slug: "live-route-goal",
+                objective: "bind active worktree",
+                acceptance_specs: [],
+                owned_paths: [],
+                depends_on: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "test",
+                order_index: 0,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          })
+          seedGoalRunAttemptWithWorkspace({
+            taskID,
+            goalID,
+            workspaceDir: activeWorktree.directory,
+            workspaceBranch: activeWorktree.branch,
+            status: "running",
+            now,
+          })
+        },
+      })
+
+      const response = await app.request("/project/current/worktrees", {
+        headers: {
+          "x-opencorvus-directory": tmp.path,
+        },
+      })
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as Array<{
+        directory: string
+        goalID?: string
+        status: "primary" | "active" | "expired"
+        removable: boolean
+      }>
+      const active = body.find((item) => path.resolve(item.directory) === path.resolve(activeDir))
+      const expired = body.find((item) => path.resolve(item.directory) === path.resolve(expiredDir))
+      const primary = body.find((item) => path.resolve(item.directory) === path.resolve(tmp.path))
+      const external = body.find((item) => path.resolve(item.directory) === path.resolve(externalDir))
+      expect(primary?.status).toBe("primary")
+      expect(primary?.removable).toBe(false)
+      expect(active?.status).toBe("active")
+      expect(active?.goalID).toBe(`goal_project_worktrees_${now}`)
+      expect(active?.removable).toBe(false)
+      expect(expired?.status).toBe("expired")
+      expect(expired?.goalID).toBeUndefined()
+      expect(expired?.removable).toBe(true)
+      expect(external).toBeUndefined()
+    } finally {
+      await $`git worktree remove --force ${externalDir}`.cwd(tmp.path).quiet().nothrow()
+      await fs.rm(externalDir, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  test.each([
+    ["/project/current/worktrees", { ok: true }],
+    ["/experimental/worktree", true],
+  ] as const)("DELETE %s rejects an active managed worktree without deleting it", async (route) => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const now = Date.now()
+    let activeDir = ""
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const taskID = `task_project_worktrees_${now}`
-        const goalID = `goal_project_worktrees_${now}`
+        const activeWorktree = await Worktree.create({ name: `route-active-delete-${now}` })
+        activeDir = activeWorktree.directory
+        const taskID = `task_project_worktree_active_delete_${now}`
+        const goalID = `goal_project_worktree_active_delete_${now}`
         Database.transaction((db) => {
           db.insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
               source: "test",
-              title: "worktree route task",
-              request: "verify worktree route",
+              title: "worktree route active delete task",
+              request: "active worktree must not be deleted",
               priority: "normal",
               kind: "workflow",
               queue_order: 0,
@@ -447,8 +632,8 @@ describe("project routes", () => {
             .values({
               id: goalID,
               task_id: taskID,
-              title: "live route goal",
-              slug: "live-route-goal",
+              title: "active delete guard",
+              slug: "active-delete-guard",
               objective: "bind active worktree",
               acceptance_specs: [],
               owned_paths: [],
@@ -466,51 +651,119 @@ describe("project routes", () => {
         seedGoalRunAttemptWithWorkspace({
           taskID,
           goalID,
-          workspaceDir: activeDir,
-          workspaceBranch: `opencorvus/active-${now}`,
+          workspaceDir: activeWorktree.directory,
+          workspaceBranch: activeWorktree.branch,
           status: "running",
           now,
         })
       },
     })
 
-    const response = await app.request("/project/current/worktrees", {
+    const response = await app.request(route, {
+      method: "DELETE",
       headers: {
+        "content-type": "application/json",
         "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ directory: activeDir }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(await Filesystem.exists(activeDir)).toBe(true)
+  }, 30_000)
+
+  test("POST /experimental/worktree/reset rejects an active managed worktree without cleaning it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const now = Date.now()
+    let activeDir = ""
+    let sentinel = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const activeWorktree = await Worktree.create({ name: `route-active-reset-${now}` })
+        activeDir = activeWorktree.directory
+        sentinel = path.join(activeDir, "active-reset-sentinel.txt")
+        await Bun.write(sentinel, "active worktree must not be cleaned")
+        const taskID = `task_project_worktree_active_reset_${now}`
+        const goalID = `goal_project_worktree_active_reset_${now}`
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "worktree route active reset task",
+              request: "active worktree must not be reset",
+              priority: "normal",
+              kind: "workflow",
+              queue_order: 0,
+              system_artifacts: [],
+              design_specs: [],
+              criteria_results: [],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "active reset guard",
+              slug: "active-reset-guard",
+              objective: "bind active worktree reset",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          workspaceDir: activeWorktree.directory,
+          workspaceBranch: activeWorktree.branch,
+          status: "running",
+          now,
+        })
       },
     })
 
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as Array<{
-      directory: string
-      goalID?: string
-      status: "primary" | "active" | "expired"
-      removable: boolean
-    }>
-    const active = body.find((item) => path.resolve(item.directory) === path.resolve(activeDir))
-    const expired = body.find((item) => path.resolve(item.directory) === path.resolve(expiredDir))
-    const primary = body.find((item) => path.resolve(item.directory) === path.resolve(tmp.path))
-    expect(primary?.status).toBe("primary")
-    expect(primary?.removable).toBe(false)
-    expect(active?.status).toBe("active")
-    expect(active?.goalID).toBe(`goal_project_worktrees_${now}`)
-    expect(active?.removable).toBe(true)
-    expect(expired?.status).toBe("expired")
-    expect(expired?.goalID).toBeUndefined()
-    expect(expired?.removable).toBe(true)
+    const response = await app.request("/experimental/worktree/reset", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ directory: activeDir }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(await Filesystem.exists(activeDir)).toBe(true)
+    expect(await Bun.file(sentinel).text()).toBe("active worktree must not be cleaned")
   }, 30_000)
 
   test("DELETE /project/current/worktrees removes a registered worktree", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()
     const now = Date.now()
-    const expiredDir = path.join(tmp.path, "..", `project-route-delete-${now}`)
+    let expiredDir = ""
 
-    await $`git worktree add --no-checkout -b ${`opencorvus/delete-${now}`} ${expiredDir}`.cwd(tmp.path).quiet()
-    await $`git reset --hard`.cwd(expiredDir).quiet()
     await Instance.provide({
       directory: tmp.path,
-      fn: () => Project.addSandbox(Instance.project.id, expiredDir),
+      fn: async () => {
+        const expiredWorktree = await Worktree.create({ name: `route-delete-${now}` })
+        expiredDir = expiredWorktree.directory
+      },
     })
 
     const response = await app.request("/project/current/worktrees", {
@@ -526,7 +779,7 @@ describe("project routes", () => {
     expect(await response.json()).toEqual({ ok: true })
     expect(await Filesystem.exists(expiredDir)).toBe(false)
     const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
-    expect(list).not.toContain(path.resolve(expiredDir))
+    expect(slash(list)).not.toContain(slash(path.resolve(expiredDir)))
     const project = await Instance.provide({
       directory: tmp.path,
       fn: () => Project.get(Instance.project.id),
@@ -538,15 +791,14 @@ describe("project routes", () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()
     const now = Date.now()
-    const expiredDir = path.join(tmp.path, "..", `experimental-route-delete-${now}`)
+    let expiredDir = ""
 
-    await $`git worktree add --no-checkout -b ${`opencorvus/experimental-delete-${now}`} ${expiredDir}`
-      .cwd(tmp.path)
-      .quiet()
-    await $`git reset --hard`.cwd(expiredDir).quiet()
     await Instance.provide({
       directory: tmp.path,
-      fn: () => Project.addSandbox(Instance.project.id, expiredDir),
+      fn: async () => {
+        const expiredWorktree = await Worktree.create({ name: `experimental-delete-${now}` })
+        expiredDir = expiredWorktree.directory
+      },
     })
 
     const response = await app.request("/experimental/worktree", {
@@ -562,7 +814,7 @@ describe("project routes", () => {
     expect(await response.json()).toBe(true)
     expect(await Filesystem.exists(expiredDir)).toBe(false)
     const list = await $`git worktree list --porcelain`.cwd(tmp.path).quiet().text()
-    expect(list).not.toContain(path.resolve(expiredDir))
+    expect(slash(list)).not.toContain(slash(path.resolve(expiredDir)))
     const project = await Instance.provide({
       directory: tmp.path,
       fn: () => Project.get(Instance.project.id),

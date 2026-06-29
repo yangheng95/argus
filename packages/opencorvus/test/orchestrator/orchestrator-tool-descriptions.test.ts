@@ -29,6 +29,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.propose_task.description).toContain("artifact state")
     expect(tools.propose_task.description).toContain("Independent child tasks may run in parallel")
     expect(tools.propose_task.description).toContain("Dependent follow-up work must queue")
+    expect(tools.propose_task.description).toContain("very specific code-module problem")
+    expect(tools.propose_task.description).toContain("concrete code module reference entity")
+    expect(tools.propose_task.description).toContain("Refuse generic follow-up work")
     expect(tools.propose_task.description).toContain("active workflow contract is fundamentally wrong")
     expect(tools.propose_task.description).toContain("instead of rerunning requirements/plan/executor")
     expect(tools.propose_task.description).toContain("original user request never authorised")
@@ -66,6 +69,19 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.wait.description).toContain("terminal refill polling")
   })
 
+  test("respond_agent_coordination does not advertise generic same-kind redispatch", () => {
+    const decision = tools.respond_agent_coordination.inputSchema!.shape.decision as { description?: string }
+    expect(decision.description).toContain("concrete stage/tool dispatcher binding")
+    expect(decision.description).toContain("Generic same-kind session redispatch is rejected")
+    expect(decision.description).not.toContain("same-kind or stage-specific")
+  })
+
+  test("cancel_subagent description excludes pending A2A request handling", () => {
+    expect(tools.cancel_subagent.description).toContain("Do not use this to answer a pending A2A coordination request")
+    expect(tools.cancel_subagent.description).toContain("respond_agent_coordination")
+    expect(tools.cancel_subagent.description).toContain("cancel_worker")
+  })
+
   test("removed child-session steering tool is not exposed", () => {
     expect(tools[["steer", "subagent"].join("_")]).toBeUndefined()
   })
@@ -79,7 +95,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.skill.description).toContain("Scheduler-only")
     expect(tools.skill.description).toContain("mounted Orchestrator expert-squad skills")
     expect(tools.skill.description).toContain("before calling select_expert_squad")
-    expect(tools.skill.description).toContain("never use it to load production, research, report, or implementation skills")
+    expect(tools.skill.description).toContain(
+      "never use it to load production, research, report, or implementation skills",
+    )
   })
 
   test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {
@@ -204,8 +222,11 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")
+    expect(tools.visual_qa.description).toContain("screenshot comparison")
+    expect(tools.visual_qa.description).toContain("screen-by-screen desktop screenshots")
     expect(tools.visual_qa.description).toContain("production_blockers")
-    expect(tools.visual_qa.description).toContain("does not use visual scores or judge verdicts")
+    expect(tools.visual_qa.description).toContain("one-shot whole-page screenshots")
+    expect(tools.visual_qa.description).toContain("judge verdicts")
     expect(tools.visual_qa.description).not.toContain("UX means User Experience")
     expect(tools.visual_qa.description).not.toContain("post-goal-batch")
     expect(tools.visual_qa.description).not.toContain("webpage_render")
@@ -221,7 +242,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.browser_preview.description).toBe(BrowserPreviewToolStaticDefinition.description)
     expect(tools.browser_preview.inputSchema).toBe(BrowserPreviewToolStaticDefinition.parameters)
     expect(tools.browser_preview_bind_local_module).toBeUndefined()
-    expect(tools.browser_preview_compare_regions).toBeUndefined()
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {

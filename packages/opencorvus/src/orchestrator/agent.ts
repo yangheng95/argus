@@ -79,7 +79,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
-  findActiveRunForTask,
+  findLatestRunForTask,
   findAcceptanceByRun,
   findEvaluationByRun,
   requireTask,
@@ -461,7 +461,7 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
       error: reason,
       summary: `${input.summaryPrefix}: ${reason}`,
     })
-    log.error("orchestrator stream-error fuse tripped - task marked failed", {
+    log.error("orchestrator stream-error fuse tripped - scheduler terminal decision required", {
       taskID: input.taskID,
       consecutive: fuse.consecutive,
       windowMs: fuse.windowMs,
@@ -504,6 +504,17 @@ export interface OrchestratorEvent {
   operatorIntent?: {
     kind: "retry" | "replan"
   }
+  /** Worker-to-orchestrator coordination causality for durable wake replay.
+   * A2A is Agent-to-Agent; this field keeps request identity out of free text. */
+  coordinationRequest?: {
+    requestID: string
+  }
+  /** Durable task lifecycle causality for internal engine wakes. This is not a
+   *  user/operator note and must not synthesize a visible user message. */
+  lifecycleFact?: {
+    kind: "server_restart_active_task_recovered"
+    eventID: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +525,89 @@ const running = new Map<string, AbortController>()
 // Cooldown: when the Orchestrator last finished for each task.
 // Orphan recovery checks this to avoid re-triggering immediately.
 const lastFinished = new Map<string, number>()
+
+class OrchestratorPromptInactiveError extends Error {
+  constructor(input: { taskID: string; sessionID: string; inactivityMs: number }) {
+    super(
+      `Orchestrator prompt ${input.sessionID} for task ${input.taskID} produced no activity for ${input.inactivityMs}ms`,
+    )
+    this.name = "OrchestratorPromptInactiveError"
+  }
+}
+
+async function runOrchestratorPromptWithInactivity<T>(input: {
+  taskID: string
+  session: Session.Info
+  run: () => Promise<T>
+}): Promise<T> {
+  const timeout = (await EngineConfig.get()).activity.task_queue_run_timeout_ms
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    throw new Error(`Invalid assistant.activity.task_queue_run_timeout_ms: ${timeout}`)
+  }
+
+  const pollMs = Math.min(1_000, Math.max(50, Math.floor(timeout / 20)))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let settled = false
+  let lastSignature = ""
+  let idleDeadline = Date.now() + timeout
+
+  const activitySignature = async () => {
+    const sessionIDs = [...new Set([input.session.id, ...(await Session.tree(input.session.id))])]
+    return sessionIDs
+      .map((sessionID) => {
+        const promptActivity = SessionPrompt.ownerActivity(sessionID)
+        const streamActivity = SessionStatus.getActivity(sessionID)
+        const status = SessionStatus.get(sessionID)
+        return [
+          sessionID,
+          JSON.stringify(status),
+          promptActivity?.timeUpdated ?? 0,
+          promptActivity?.timeCancelled ?? 0,
+          streamActivity?.last_activity_at ?? 0,
+        ].join(":")
+      })
+      .join("|")
+  }
+
+  const inactive = new Promise<never>((_, reject) => {
+    const tick = async () => {
+      if (settled) return
+      const signature = await activitySignature()
+      if (signature !== lastSignature) {
+        lastSignature = signature
+        idleDeadline = Date.now() + timeout
+      }
+      if (Date.now() > idleDeadline) {
+        try {
+          SessionPrompt.cancel(input.session.id, input.session.directory)
+        } catch (error) {
+          log.warn("orchestrator prompt inactivity cancellation failed", {
+            taskID: input.taskID,
+            sessionID: input.session.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+        reject(
+          new OrchestratorPromptInactiveError({
+            taskID: input.taskID,
+            sessionID: input.session.id,
+            inactivityMs: timeout,
+          }),
+        )
+        return
+      }
+      timer = setTimeout(() => void tick(), pollMs)
+    }
+    timer = setTimeout(() => void tick(), pollMs)
+  })
+
+  try {
+    return await Promise.race([input.run(), inactive])
+  } finally {
+    settled = true
+    if (timer) clearTimeout(timer)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -593,11 +687,7 @@ export namespace Orchestrator {
           error: structured.message,
           data: structured.envelope.data,
         })
-        await updateTask(
-          task,
-          { status: "failed", error: structured.taskError },
-          `Orchestrator failed: ${structured.message}`,
-        )
+        await updateTask(task, { error: structured.taskError }, `Orchestrator failed: ${structured.message}`)
         return
       }
 
@@ -811,19 +901,24 @@ export namespace Orchestrator {
           runOnce: !appendUserMessage,
         })
         promptInFlight = true
-        finalMessage = appendUserMessage
-          ? ((await SessionPrompt.prompt({
-              sessionID: agentSession.id,
-              model: { providerID: model.providerID, modelID: model.api.id },
-              agent: "orchestrator",
-              system: Array.isArray(system) ? system.join("\n\n") : system,
-              systemMode: "complete",
-              tools: enableMap,
-              parts: partsWithIds,
-            })) as Message.WithParts)
-          : ((await SessionPrompt.loop({
-              sessionID: agentSession.id,
-            })) as Message.WithParts)
+        finalMessage = await runOrchestratorPromptWithInactivity({
+          taskID,
+          session: agentSession,
+          run: async () =>
+            appendUserMessage
+              ? ((await SessionPrompt.prompt({
+                  sessionID: agentSession.id,
+                  model: { providerID: model.providerID, modelID: model.api.id },
+                  agent: "orchestrator",
+                  system: Array.isArray(system) ? system.join("\n\n") : system,
+                  systemMode: "complete",
+                  tools: enableMap,
+                  parts: partsWithIds,
+                })) as Message.WithParts)
+              : ((await SessionPrompt.loop({
+                  sessionID: agentSession.id,
+                })) as Message.WithParts),
+        })
         promptInFlight = false
       } finally {
         SessionPrompt.clearSessionRuntimeContract(agentSession.id)
@@ -975,7 +1070,7 @@ export namespace Orchestrator {
           lastReason: reason,
         })
         if (fuse.tripped) {
-          log.error("orchestrator stream-error fuse tripped — task marked failed", {
+          log.error("orchestrator stream-error fuse tripped — scheduler terminal decision required", {
             taskID,
             consecutive: fuse.consecutive,
             windowMs: fuse.windowMs,
@@ -1045,8 +1140,7 @@ export namespace Orchestrator {
             error,
           })
           noDecisionSelfWakeDispatched =
-            isOrchestratorNoDecisionEnvelope(structured.envelope) &&
-            recordResult.selfWakeDispatched
+            isOrchestratorNoDecisionEnvelope(structured.envelope) && recordResult.selfWakeDispatched
         } else if (wasCtrlAborted) {
           // Abort path: synthesize an envelope from the ctrl reason so the
           // artifact records the explicit cancellation reason — the next wake's
@@ -1073,8 +1167,8 @@ export namespace Orchestrator {
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
       // Don't change task status here — runtime-visible stream faults are
-      // persisted as artifacts above; missing startup prerequisites fast-fail
-      // at their source before the LLM wake begins. Also skip on ctrl abort:
+      // persisted as artifacts above; missing startup prerequisites are
+      // recorded on task.error for the scheduler's terminal decision. Also skip on ctrl abort:
       // aborts are control-flow signals (operator-driven restart or explicit
       // cancel), not "task broken" — task.error would mislead the UI and
       // orphan-recovery into treating the next wake as stuck on a hard failure.
@@ -1361,16 +1455,16 @@ async function buildSystemParts(
     ctx.push(renderWorkflowPrompt(workflow, workflowState, task.id))
   }
 
-  // Run context — delivery + evaluation results for the current active run (if
-  // any). Rendered on every wake from persistent DB state so the orchestrator
+  // Run context — delivery + evaluation results for the latest run (if any).
+  // Rendered on every wake from persistent DB state so the orchestrator
   // sees latest results without depending on a trigger enum to deliver them.
   // The yielded summary is framed as a sub-agent-protocol message with the
   // same per-message ceiling as a tool return; full content stays in the
   // delivery / evaluation rows referenced via the pointer.
-  const activeRunID = findActiveRunForTask(task.id)?.id
-  if (activeRunID) {
-    const acceptance = findAcceptanceByRun(activeRunID)
-    const evaluation = findEvaluationByRun(activeRunID)
+  const latestRunID = findLatestRunForTask(task.id)?.id
+  if (latestRunID) {
+    const acceptance = findAcceptanceByRun(latestRunID)
+    const evaluation = findEvaluationByRun(latestRunID)
     if (acceptance || evaluation) {
       const fields: Array<[string, string | string[]]> = []
       if (acceptance) {
@@ -1395,7 +1489,7 @@ async function buildSystemParts(
       ctx.push("")
       ctx.push(
         SubAgentProtocol.yieldResult({
-          headline: `## Latest Run Result (run ${activeRunID})`,
+          headline: `## Latest Run Result (run ${latestRunID})`,
           fields,
           pointer,
         }),

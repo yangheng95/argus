@@ -284,6 +284,12 @@ export interface ArchitectCollector {
   finalized: boolean
 }
 
+export interface ArchitectGoalCountContract {
+  minGoalCount: number
+  source: "requirements_decision"
+  evidence: string
+}
+
 type ArchitectValidationInput = {
   workDir?: string
   designSpecs?: VisualSpec[]
@@ -291,6 +297,7 @@ type ArchitectValidationInput = {
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
   knownResearchEvidenceRefs?: string[]
+  goalCountContract?: ArchitectGoalCountContract
 }
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
@@ -352,6 +359,18 @@ function formatInternalRuntimeOwnedPathError(goalID: string, paths: readonly str
 }
 
 const MIN_ARCHITECT_GOAL_COUNT = 2
+
+function effectiveMinGoalCount(input?: ArchitectValidationInput): number {
+  const explicit = input?.goalCountContract?.minGoalCount
+  if (typeof explicit !== "number" || !Number.isInteger(explicit)) return MIN_ARCHITECT_GOAL_COUNT
+  return Math.max(MIN_ARCHITECT_GOAL_COUNT, explicit)
+}
+
+function formatGoalCountContractReason(input?: ArchitectValidationInput): string {
+  const contract = input?.goalCountContract
+  if (!contract) return "structural minimum"
+  return `${contract.source}: ${contract.evidence}`
+}
 
 function emptyCollector(): ArchitectCollector {
   return {
@@ -464,14 +483,15 @@ export function architectValidationFindings(
     repairTools: string[] = [],
   ) => findings.push({ code, severity: "concern", scope, message, repair_tools: repairTools })
 
+  const minGoalCount = effectiveMinGoalCount(input)
   if (collector.goals.length === 0) {
-    blocker("no_goals", `No goals registered - Architect must produce at least ${MIN_ARCHITECT_GOAL_COUNT} goals`, {}, [
+    blocker("no_goals", `No goals registered - Architect must produce at least ${minGoalCount} goals`, {}, [
       "register_goal",
     ])
-  } else if (collector.goals.length < MIN_ARCHITECT_GOAL_COUNT) {
+  } else if (collector.goals.length < minGoalCount) {
     blocker(
       "insufficient_goal_decomposition",
-      `Only ${collector.goals.length} goal registered - Architect must split the task into at least ${MIN_ARCHITECT_GOAL_COUNT} independently executable goals; a single large goal is forbidden.`,
+      `Only ${collector.goals.length} goal registered - Architect must split the task into at least ${minGoalCount} independently executable goals; source=${formatGoalCountContractReason(input)}. A single large goal is forbidden.`,
       { goal_ids: collector.goals.map((goal) => goal.id) },
       ["register_goal", "modify_goal"],
     )
@@ -486,6 +506,7 @@ export function architectValidationFindings(
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
   const knownRequirementIDs = new Set(input?.knownRequirementIDs ?? [])
   const requiredTraceability = new Map<string, Set<string>>()
+  const acceptanceByRequirement = new Map<string, Set<string>>()
   const executableGoals = collector.goals.filter((goal) => goal.kind !== "verification")
   for (let leftIndex = 0; leftIndex < executableGoals.length; leftIndex++) {
     const leftGoal = executableGoals[leftIndex]
@@ -585,6 +606,9 @@ export function architectValidationFindings(
           ["register_goal", "modify_goal"],
         )
       }
+      const acceptanceGoalIDs = acceptanceByRequirement.get(spec.source_requirement_id) ?? new Set<string>()
+      acceptanceGoalIDs.add(g.id)
+      acceptanceByRequirement.set(spec.source_requirement_id, acceptanceGoalIDs)
     }
     for (const requirementID of g.requirement_ids) {
       if (knownRequirementIDs.size > 0 && !knownRequirementIDs.has(requirementID)) {
@@ -612,16 +636,63 @@ export function architectValidationFindings(
     }
   }
 
+  if (knownRequirementIDs.size > 0) {
+    const claimedKnownRequirementIDs = new Set(
+      [...requiredTraceability.keys()].filter((requirementID) => knownRequirementIDs.has(requirementID)),
+    )
+    const missingOwnerRequirementIDs = [...knownRequirementIDs].filter(
+      (requirementID) => !claimedKnownRequirementIDs.has(requirementID),
+    )
+    if (missingOwnerRequirementIDs.length > 0) {
+      blocker(
+        "missing_requirement_owner",
+        `Known requirement(s) have no owning goal: ${missingOwnerRequirementIDs.join(", ")}. Architect must register or modify goals so every Requirements-produced REQ-N appears in at least one goal.requirement_ids entry before finalizing.`,
+        {},
+        ["register_goal", "modify_goal"],
+      )
+    }
+    const acceptedKnownRequirementIDs = new Set(
+      [...acceptanceByRequirement.keys()].filter((requirementID) => knownRequirementIDs.has(requirementID)),
+    )
+    const missingAcceptanceRequirementIDs = [...knownRequirementIDs].filter(
+      (requirementID) => !acceptedKnownRequirementIDs.has(requirementID),
+    )
+    if (missingAcceptanceRequirementIDs.length > 0) {
+      blocker(
+        "missing_requirement_acceptance",
+        `Known requirement(s) have no goal-local acceptance spec: ${missingAcceptanceRequirementIDs.join(", ")}. Architect must register or modify goals so every Requirements-produced REQ-N appears in at least one acceptance_specs[].source_requirement_id before finalizing.`,
+        {},
+        ["register_goal", "modify_goal"],
+      )
+    }
+  }
+
   const traceabilityByRequirement = new Map<string, Set<string>>()
   for (const row of collector.traceability) {
+    if (knownRequirementIDs.size > 0 && !knownRequirementIDs.has(row.requirementID)) {
+      blocker(
+        "traceability_unknown_requirement",
+        `Traceability ${row.requirementID}: requirement_id is not in the active Requirements-produced REQ-N list.`,
+        {},
+        ["register_traceability"],
+      )
+    }
     const mappedGoalIDs = traceabilityByRequirement.get(row.requirementID) ?? new Set<string>()
     for (const goalID of row.goalIDs) {
-      if (!knownGoalIDs.has(goalID)) {
-        concern(
+      const mappedGoal = collector.goals.find((goal) => goal.id === goalID)
+      if (!mappedGoal) {
+        blocker(
           "traceability_unknown_goal",
           `Traceability ${row.requirementID}: references unknown goal "${goalID}"`,
           { goal_ids: [goalID] },
           ["register_traceability"],
+        )
+      } else if (knownRequirementIDs.size > 0 && !mappedGoal.requirement_ids.includes(row.requirementID)) {
+        blocker(
+          "traceability_goal_not_owner",
+          `Traceability ${row.requirementID}: goal "${goalID}" does not claim this requirement in goal.requirement_ids.`,
+          { goal_ids: [goalID] },
+          ["register_traceability", "modify_goal"],
         )
       }
       mappedGoalIDs.add(goalID)
@@ -631,22 +702,26 @@ export function architectValidationFindings(
   for (const [requirementID, goalIDs] of requiredTraceability) {
     const mappedGoalIDs = traceabilityByRequirement.get(requirementID)
     if (!mappedGoalIDs) {
-      concern(
-        "missing_traceability",
-        `Missing traceability for ${requirementID}: call register_traceability with goals ${[...goalIDs].join(", ")}`,
-        { goal_ids: [...goalIDs] },
-        ["register_traceability"],
-      )
+      const message = `Missing traceability for ${requirementID}: call register_traceability with goals ${[...goalIDs].join(", ")}`
+      if (knownRequirementIDs.size > 0) {
+        blocker("missing_traceability", message, { goal_ids: [...goalIDs] }, ["register_traceability"])
+      } else {
+        concern("missing_traceability", message, { goal_ids: [...goalIDs] }, ["register_traceability"])
+      }
       continue
     }
     const missingGoalIDs = [...goalIDs].filter((goalID) => !mappedGoalIDs.has(goalID))
     if (missingGoalIDs.length > 0) {
-      concern(
-        "traceability_missing_goal_mapping",
-        `Traceability ${requirementID}: missing goal mappings ${missingGoalIDs.join(", ")}`,
-        { goal_ids: missingGoalIDs },
-        ["register_traceability"],
-      )
+      const message = `Traceability ${requirementID}: missing goal mappings ${missingGoalIDs.join(", ")}`
+      if (knownRequirementIDs.size > 0) {
+        blocker("traceability_missing_goal_mapping", message, { goal_ids: missingGoalIDs }, [
+          "register_traceability",
+        ])
+      } else {
+        concern("traceability_missing_goal_mapping", message, { goal_ids: missingGoalIDs }, [
+          "register_traceability",
+        ])
+      }
     }
   }
 
@@ -963,6 +1038,7 @@ export function createArchitectOutputTools(input: {
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
   knownResearchEvidenceRefs?: string[]
+  goalCountContract?: ArchitectGoalCountContract
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
@@ -984,6 +1060,7 @@ export function createArchitectOutputTools(input: {
       referenceCoverageReasons: input.referenceCoverageReasons,
       knownRequirementIDs: input.knownRequirementIDs,
       knownResearchEvidenceRefs: input.knownResearchEvidenceRefs,
+      goalCountContract: input.goalCountContract,
     })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
@@ -1296,19 +1373,28 @@ export function createArchitectOutputTools(input: {
     }),
 
     register_traceability: tool({
-      description: "Map a requirement to the goals that cover it. Call once per " + "requirement you intend to trace.",
+      description:
+        "Map a requirement to the goals that cover it. Call once per Requirements-produced REQ-N after the owning goals have been registered or modified to claim that requirement.",
       inputSchema: z.object({
         requirement_id: z.string().describe("REQ-N format"),
         goal_ids: z.array(z.string().min(1)).min(1).describe("Goal IDs that implement this requirement"),
       }),
       execute: async ({ requirement_id, goal_ids }) => {
-        const warnings: string[] = []
+        if (knownRequirementIDs && !knownRequirementIDs.has(requirement_id)) {
+          return `Error: requirement_id "${requirement_id}" is not a known Requirements-produced REQ-N; collector unchanged.`
+        }
         const missing = goal_ids.filter((g) => !collector.goals.some((gl) => gl.id === g))
-        if (missing.length > 0) warnings.push(`goals not registered: ${missing.join(", ")}`)
+        if (missing.length > 0) {
+          return `Error: traceability references unregistered goal id(s): ${missing.join(", ")}; collector unchanged.`
+        }
+        const nonOwners = goal_ids.filter(
+          (goalID) => !collector.goals.find((goal) => goal.id === goalID)?.requirement_ids.includes(requirement_id),
+        )
+        if (nonOwners.length > 0) {
+          return `Error: traceability for ${requirement_id} references goal(s) that do not claim the requirement in goal.requirement_ids: ${nonOwners.join(", ")}. Use modify_goal to claim the requirement first; collector unchanged.`
+        }
         collector.traceability.push({ requirementID: requirement_id, goalIDs: goal_ids })
-        let msg = `OK: ${requirement_id} → ${goal_ids.join(", ")}`
-        if (warnings.length > 0) msg += `\nWarning: ${warnings.join("; ")}`
-        return msg
+        return `OK: ${requirement_id} → ${goal_ids.join(", ")}`
       },
     }),
 
@@ -1362,7 +1448,7 @@ export function createArchitectOutputTools(input: {
 
     register_contract: tool({
       description:
-        "Register one Architect Contract Graph contract. producer_goal_id is the goal that creates the surface; every consumer_goal_id must depend on that producer. Use type/function/enum with ir_json for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
+        "Register one Architect Contract Graph contract. producer_goal_id is the goal that creates the surface; every consumer_goal_id must be connected by register_dependency_contract before finalization. Use type/function/enum with ir_json for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
       inputSchema: RegisterContractToolInputSchema,
       execute: async (input) => {
         const contract = parseRegisterContractInput(input)
@@ -1391,11 +1477,6 @@ export function createArchitectOutputTools(input: {
             )
           }
         }
-        for (const consumerID of contract.consumer_goal_ids) {
-          if (!hasCollectorDependencyPath(collector, consumerID, contract.producer_goal_id)) {
-            return `Error: contract "${contract.id}" producer ${contract.producer_goal_id} is not in dependency ancestry for consumer ${consumerID}. The consumer goal must list the producer in depends_on before this contract is valid; collector unchanged.`
-          }
-        }
         if (existingIdx >= 0) {
           collector.contract_graph.contracts[existingIdx] = contract
           return `OK: contract "${contract.id}" overwritten (${collector.contract_graph.contracts.length} contracts total)\nRegistered contract ids: ${[...registeredContractIDs(collector)].join(", ")}`
@@ -1407,7 +1488,7 @@ export function createArchitectOutputTools(input: {
 
     register_dependency_contract: tool({
       description:
-        "Register why a depends_on edge exists. Direction is producer/prerequisite -> consumer/dependent: if goal B depends_on goal A, use from_goal_id=A and to_goal_id=B. reason=contract must name contract_ids; bootstrap_scaffold/integration_order may have no contract_ids but require summary.",
+        "Register and materialize one executable dependency edge. Direction is producer/prerequisite -> consumer/dependent: to make goal B depend on goal A, use from_goal_id=A and to_goal_id=B. Accepted edges are written into the dependent goal's depends_on. reason=contract must name contract_ids; bootstrap_scaffold/integration_order may have no contract_ids but require summary.",
       inputSchema: GoalDependencyContractSchema,
       execute: async (input) => {
         const edge = GoalDependencyContractSchema.parse(input)
@@ -1418,12 +1499,11 @@ export function createArchitectOutputTools(input: {
           const missing = [!fromGoal ? edge.from_goal_id : "", !toGoal ? edge.to_goal_id : ""].filter(Boolean)
           return `Error: dependency contract references unknown goal id(s): ${missing.join(", ")}. Register the goals first; collector unchanged.`
         }
-        if (!toGoal.depends_on.includes(edge.from_goal_id)) {
-          const reversed = fromGoal.depends_on.includes(edge.to_goal_id)
-          return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has no matching depends_on edge; collector unchanged. ${reversed ? "This edge is reversed. " : ""}${dependencyDirectionGuidance(edge.to_goal_id, edge.from_goal_id)}`
-        }
-        if (!hasCollectorDependencyPath(collector, edge.to_goal_id, edge.from_goal_id)) {
-          return `Error: dependency contract producer ${edge.from_goal_id} is not in dependency ancestry for ${edge.to_goal_id}; collector unchanged. ${dependencyDirectionGuidance(edge.from_goal_id, edge.to_goal_id)}`
+        if (
+          edge.from_goal_id === edge.to_goal_id ||
+          hasCollectorDependencyPath(collector, edge.from_goal_id, edge.to_goal_id)
+        ) {
+          return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} would create a dependency cycle; collector unchanged. This edge is reversed. ${dependencyDirectionGuidance(edge.to_goal_id, edge.from_goal_id)}`
         }
         if (edge.reason === "contract" && edge.contract_ids.length === 0) {
           return `Error: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} has reason=contract but no contract_ids; collector unchanged.`
@@ -1459,16 +1539,18 @@ export function createArchitectOutputTools(input: {
         )
         if (existingIdx >= 0) {
           collector.contract_graph.dependency_contracts[existingIdx] = edge
+          if (!toGoal.depends_on.includes(edge.from_goal_id)) toGoal.depends_on.push(edge.from_goal_id)
           return `OK: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} overwritten`
         }
         collector.contract_graph.dependency_contracts.push(edge)
+        if (!toGoal.depends_on.includes(edge.from_goal_id)) toGoal.depends_on.push(edge.from_goal_id)
         return `OK: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} registered`
       },
     }),
 
     submit_architect: tool({
       description:
-        "Finalize the executable Architect goal graph. Requires a decomposition analysis and at least two goals. Blocks only invalid execution graph structure; reports traceability, fidelity, and contract concerns without requiring a retry.",
+        "Finalize the executable Architect goal graph. Requires a decomposition analysis and at least two goals. Blocks invalid execution graph structure and incomplete consumption of known Requirements-produced REQ-N rows; reports fidelity and optional contract concerns without requiring a retry.",
       inputSchema: z.object({
         summary: z.string().min(5).describe("One-line summary of what was decomposed and coordinated"),
         decomposition_analysis: z
@@ -1493,6 +1575,9 @@ export function createArchitectOutputTools(input: {
           designSpecs: input.designSpecs,
           requireReferenceCoverage: input.requireReferenceCoverage,
           referenceCoverageReasons: input.referenceCoverageReasons,
+          knownRequirementIDs: input.knownRequirementIDs,
+          knownResearchEvidenceRefs: input.knownResearchEvidenceRefs,
+          goalCountContract: input.goalCountContract,
         })
         if (collector.decomposition_analysis.length < 80) {
           findings.unshift({

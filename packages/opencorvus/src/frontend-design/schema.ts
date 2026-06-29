@@ -7,6 +7,106 @@
 import { z } from "zod"
 import { FactCheckItemListSchema } from "@/fact-check/schema"
 
+function normalizedArtifactPath(input: string): string {
+  return input.replaceAll("\\", "/")
+}
+
+function artifactBasename(input: string): string {
+  const normalized = normalizedArtifactPath(input)
+  return normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase()
+}
+
+function isSourceReferenceArtifact(input: string): boolean {
+  const normalized = normalizedArtifactPath(input).toLowerCase()
+  if (normalized.includes("visual-html-skeleton/")) return false
+  const base = artifactBasename(input)
+  if (base !== "reference.png" && base !== "reference-mobile.png") return false
+  return normalized === `web-clone-source/${base}` || normalized.endsWith(`/web-clone-source/${base}`)
+}
+
+function isReferenceNamedArtifact(input: string): boolean {
+  return /\breference(?:-[a-z0-9_-]+)?\.png$/i.test(artifactBasename(input))
+}
+
+function isTemporaryCaptureArtifact(input: string): boolean {
+  const normalized = normalizedArtifactPath(input).toLowerCase()
+  return normalized.includes("/opencorvus-capture/") || normalized.startsWith("opencorvus-capture/")
+}
+
+function isLocalPreviewUrl(input: string): boolean {
+  const normalized = normalizedArtifactPath(input)
+  if (/^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\])(?:[:/?#]|$)/i.test(normalized)) return true
+  try {
+    const url = new URL(normalized)
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1"
+  } catch {
+    return false
+  }
+}
+
+function isRenderedPreviewArtifact(input: string): boolean {
+  const normalized = normalizedArtifactPath(input).toLowerCase()
+  const base = artifactBasename(input)
+  if (isTemporaryCaptureArtifact(input)) return true
+  if (isLocalPreviewUrl(input)) return true
+  if (!normalized.includes("visual-html-skeleton/")) return false
+  if (!/\.(?:png|jpe?g|webp|json)$/i.test(base)) return false
+  if (/(?:^|\/)(?:screenshots?|previews?|captures?|renders?|diffs?|visual-diffs?)(?:\/|$)/i.test(normalized)) {
+    return true
+  }
+  return /\b(?:screenshot|preview|capture|diff|render|visual-diff)\b/i.test(normalized)
+}
+
+function isVisualHtmlSkeletonArtifact(input: string): boolean {
+  const normalized = normalizedArtifactPath(input).toLowerCase()
+  return (
+    normalized === "visual-html-skeleton" ||
+    normalized.startsWith("visual-html-skeleton/") ||
+    normalized.includes("/visual-html-skeleton/")
+  )
+}
+
+const SourceReferenceStringSchema = z.string().min(1).refine((value) => !isRenderedPreviewArtifact(value), {
+  message:
+    "source/reference artifacts must cite source evidence; rendered skeleton previews belong in visual_validation_evidence.screenshot_artifact",
+})
+
+const SourceReferenceListSchema = z.array(SourceReferenceStringSchema)
+
+const FrontendProjectEntrypointStringSchema = z.string().min(1).refine((value) => !isRenderedPreviewArtifact(value), {
+  message:
+    "frontend_project.entrypoints must name source-editable entry files; rendered screenshots/diffs belong in visual_validation_evidence",
+})
+
+const RenderedSkeletonPreviewArtifactSchema = z
+  .string()
+  .min(1)
+  .refine(isVisualHtmlSkeletonArtifact, {
+    message: "screenshot_artifact must point to a task-scoped visual-html-skeleton artifact",
+  })
+  .refine((value) => !isReferenceNamedArtifact(value), {
+    message: "screenshot_artifact must be a rendered skeleton preview, not a source reference image",
+  })
+  .refine((value) => !isTemporaryCaptureArtifact(value) && !isLocalPreviewUrl(value), {
+    message:
+      "screenshot_artifact must point to a task-scoped visual-html-skeleton artifact, not temporary or localhost preview output",
+  })
+  .refine(isRenderedPreviewArtifact, {
+    message: "screenshot_artifact must point to a rendered screenshot/preview under visual-html-skeleton",
+  })
+
+const VisualValidationDiffArtifactSchema = z
+  .string()
+  .refine((value) => value === "" || isVisualHtmlSkeletonArtifact(value), {
+    message: "diff_artifact must point to a task-scoped visual-html-skeleton artifact",
+  })
+  .refine((value) => value === "" || (!isTemporaryCaptureArtifact(value) && !isLocalPreviewUrl(value)), {
+    message:
+      "diff_artifact must point to a task-scoped visual-html-skeleton artifact, not temporary or localhost preview output",
+  })
+  .default("")
+
 export const VisualSpecCategory = z.enum([
   "color",
   "typography",
@@ -59,7 +159,7 @@ export const ComponentReusePlanItemSchema = z
     name: z.string().min(1).describe("Human-readable component family name."),
     observed_surface: z.string().min(1).describe("Visible page region or behavior this component family covers."),
     source_refs: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .default([])
       .describe("Evidence anchors such as source ids, skeleton files, screenshot regions, or source-ir paths."),
     implementation_strategy: z
@@ -150,7 +250,7 @@ export const BaselineReplacementPlanItemSchema = z
         "What redundant generated DOM/CSS/asset coverage, if any, can be removed once the replacement passes, and what evidence should remain input-only.",
       ),
     source_refs: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .default([])
       .describe(
         "Evidence anchors such as source-ir paths, skeleton slots, screenshot regions, or web-clone-source files.",
@@ -178,7 +278,7 @@ export const CompactTemplateItemSchema = z
         "Concise implementation detail. Keep this short; refer to source artifacts by path instead of pasting dense content.",
       ),
     source_refs: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .default([])
       .describe(
         "Evidence anchors such as web-clone-source paths, source-ir paths, skeleton slots, or screenshot regions.",
@@ -201,7 +301,7 @@ export const MaterialInventoryItemSchema = z
         "What this material contains, why the frontend skeleton or later project needs it, and any ownership or extraction note.",
       ),
     source_refs: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .default([])
       .describe(
         "Evidence anchors or file/path ids for this material group. Reference paths/ids instead of dense payloads.",
@@ -230,7 +330,7 @@ export const ImplementationPhaseOutcomeSchema = z
       .min(1)
       .describe("Concrete output downstream agents must create, preserve, verify, or audit for this phase."),
     source_refs: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .min(1)
       .describe("Evidence, project, screenshot, package, or source-file refs that bind this phase."),
     acceptance: z
@@ -253,16 +353,16 @@ export const VisualValidationEvidenceSchema = z
       .string()
       .min(1)
       .describe("Rendered HTML entrypoint, normally visual-html-skeleton/index.html."),
-    screenshot_artifact: z
-      .string()
-      .min(1)
-      .describe(
-        "Task-scoped rendered screenshot artifact produced from rendered_entrypoint, not a copied reference image.",
-      ),
+    screenshot_artifact: RenderedSkeletonPreviewArtifactSchema.describe(
+      "Task-scoped rendered skeleton preview artifact under visual-html-skeleton produced from rendered_entrypoint; never a copied source reference image or temporary browser capture path.",
+    ),
     source_reference_artifact: z
       .string()
       .min(1)
-      .describe("Original source reference screenshot compared against the rendered skeleton screenshot."),
+      .refine(isSourceReferenceArtifact, {
+        message: "source_reference_artifact must point to the original source reference image",
+      })
+      .describe("Original source reference screenshot, normally web-clone-source/reference.png."),
     renderer: z
       .enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"])
       .describe("Renderer/provenance used to produce screenshot_artifact from rendered_entrypoint."),
@@ -275,12 +375,9 @@ export const VisualValidationEvidenceSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/i, "source_reference_sha256 must be a 64 character hex digest")
       .describe("SHA-256 of the source reference screenshot artifact."),
-    diff_artifact: z
-      .string()
-      .default("")
-      .describe(
-        "Optional visual diff or comparison manifest artifact produced from screenshot_artifact and source_reference_artifact.",
-      ),
+    diff_artifact: VisualValidationDiffArtifactSchema.describe(
+      "Optional task-scoped visual diff or comparison manifest artifact produced from screenshot_artifact and source_reference_artifact.",
+    ),
     review_status: z
       .enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"])
       .describe("Whether screenshot review found blocking visual debt."),
@@ -382,10 +479,10 @@ export const FrontendTemplateFinalSchema = z
         project_root: z.string().default(""),
         source_package: z.string().default(""),
         entrypoints: z
-          .array(z.string().min(1))
+          .array(FrontendProjectEntrypointStringSchema)
           .default([])
           .describe(
-            "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the source-editable visual-html-skeleton files and validation artifacts such as index.html, token/region CSS, screenshots, or diff outputs. Do not put .opencorvus report paths or prose here.",
+            "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name source-editable visual-html-skeleton entry files such as index.html and token/region CSS. Rendered screenshots, preview captures, and diff outputs belong in visual_validation_evidence, not entrypoints. Do not put .opencorvus report paths or prose here.",
           ),
         generation_tool: z.string().default(""),
         notes: z.array(z.string().min(1)).default([]),
@@ -447,7 +544,7 @@ export const FrontendTemplateFinalSchema = z
         "Final completeness audit and primary human-readable problem/handoff section. Cover known implementation risks, visual/source gaps, extraction-vs-rewrite uncertainty, project source organization, component/library reuse constraints, reference artifacts, and remaining open questions. Do not finalize until this audit says the frontend template is complete enough to hand off.",
       ),
     reference_artifacts: z
-      .array(z.string().min(1))
+      .array(SourceReferenceStringSchema)
       .default([])
       .describe(
         "Compact artifact anchors used as evidence. Prefer small canonical entrypoints such as web-clone-source/README.md, " +
@@ -470,7 +567,7 @@ export const ToolCompactTemplateItemSchema = z
   .object({
     title: z.string().min(1),
     detail: z.string().min(1),
-    source_refs: z.array(z.string().min(1)).default([]),
+    source_refs: SourceReferenceListSchema.default([]),
   })
   .strict()
 
@@ -478,7 +575,7 @@ export const ToolMaterialInventoryItemSchema = z
   .object({
     title: z.string().min(1),
     detail: z.string().min(1),
-    source_refs: z.array(z.string().min(1)).default([]),
+    source_refs: SourceReferenceListSchema.default([]),
   })
   .strict()
 
@@ -488,7 +585,7 @@ export const ToolImplementationPhaseOutcomeSchema = z
     phase: ImplementationPhase,
     title: z.string().min(1),
     deliverable: z.string().min(1),
-    source_refs: z.array(z.string().min(1)).min(1),
+    source_refs: SourceReferenceListSchema.min(1),
     acceptance: z.string().min(1),
   })
   .strict()
@@ -498,7 +595,7 @@ export const ToolComponentReusePlanItemSchema = z
     family_id: z.string().min(1),
     name: z.string().min(1),
     observed_surface: z.string().min(1),
-    source_refs: z.array(z.string().min(1)).default([]),
+    source_refs: SourceReferenceListSchema.default([]),
     implementation_strategy: z.enum([
       "existing_project_component",
       "mature_library",
@@ -539,7 +636,7 @@ export const ToolBaselineReplacementPlanItemSchema = z
       ),
     mature_library_candidates: z.array(z.string().min(1)).default([]),
     deletion_rule: z.string().min(1),
-    source_refs: z.array(z.string().min(1)).default([]),
+    source_refs: SourceReferenceListSchema.default([]),
     parity_guard: z.string().min(1),
     project_specific_reason: z.string().default(""),
   })
@@ -550,15 +647,17 @@ export const ToolVisualValidationEvidenceSchema = z
     id: z.string().min(1),
     render_target: z.enum(["visual-html-skeleton"]),
     rendered_entrypoint: z.string().min(1),
-    screenshot_artifact: z.string().min(1),
-    source_reference_artifact: z.string().min(1),
+    screenshot_artifact: RenderedSkeletonPreviewArtifactSchema,
+    source_reference_artifact: z.string().min(1).refine(isSourceReferenceArtifact, {
+      message: "source_reference_artifact must point to the original source reference image",
+    }),
     renderer: z.enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"]),
     viewport: z.string().min(1),
     screenshot_sha256: z.string().regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest"),
     source_reference_sha256: z
       .string()
       .regex(/^[a-f0-9]{64}$/i, "source_reference_sha256 must be a 64 character hex digest"),
-    diff_artifact: z.string().default(""),
+    diff_artifact: VisualValidationDiffArtifactSchema,
     review_status: z.enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"]),
     review_summary: z.string().min(1),
   })
@@ -621,10 +720,10 @@ export const FrontendProjectToolInputSchema = z
     project_root: z.string().default(""),
     source_package: z.string().default(""),
     entrypoints: z
-      .array(z.string().min(1))
+      .array(FrontendProjectEntrypointStringSchema)
       .default([])
       .describe(
-        "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the visual-html-skeleton files and validation artifacts. Do not put .opencorvus report paths or prose here.",
+        "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name source-editable visual-html-skeleton entry files only. Rendered screenshots, preview captures, and diff outputs belong in visual_validation_evidence. Do not put .opencorvus report paths or prose here.",
       ),
     generation_tool: z.string().default(""),
     notes: z.array(z.string().min(1)).default([]),
@@ -634,6 +733,12 @@ export const FrontendProjectToolInputSchema = z
 export const FrontendTemplateStringItemToolInputSchema = z
   .object({
     value: z.string().min(1),
+  })
+  .strict()
+
+export const FrontendReferenceArtifactToolInputSchema = z
+  .object({
+    value: SourceReferenceStringSchema,
   })
   .strict()
 
@@ -670,7 +775,7 @@ export const FrontendTemplateToolInputSchema = z
     ui_data_contract_items: z.array(ToolCompactTemplateItemSchema).default([]),
     template_iteration_notes: z.array(z.string().min(1)).default([]),
     completeness_review: z.string().default(""),
-    reference_artifacts: z.array(z.string().min(1)).default([]),
+    reference_artifacts: SourceReferenceListSchema.default([]),
     open_questions: FlexibleStringListSchema,
   })
   .strict()

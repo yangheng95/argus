@@ -13,15 +13,11 @@ export interface ToolPoolAssignment {
 export namespace AgentToolPool {
   const CODING_PRIVATE_TOOL_IDS = [
     "browser_preview_bind_local_module",
-    "browser_preview_compare_regions",
     "web_clone_prepare_context",
     "web_clone_generate_source_project",
   ] as const
 
-  const BUILD_PRIVATE_TOOL_IDS = [
-    "browser_preview_bind_local_module",
-    "browser_preview_compare_regions",
-  ] as const
+  const BUILD_PRIVATE_TOOL_IDS = ["browser_preview_bind_local_module"] as const
 
   const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
     "read",
@@ -51,6 +47,7 @@ export namespace AgentToolPool {
     "add_goal",
     "modify_goal",
     "refine",
+    "complete_task",
     "fail_task",
     "cancel_task",
     "retry_task",
@@ -164,6 +161,7 @@ export namespace AgentToolPool {
         "websearch",
         "panel",
         "memory",
+        "request_orchestrator_decision",
       ],
     }),
     compaction: pool({}),
@@ -272,8 +270,6 @@ export namespace AgentToolPool {
   const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
     browser_preview_bind_local_module: async () =>
       (await import("@/tool/browser-preview-bind-local-module")).BrowserPreviewBindLocalModuleTool,
-    browser_preview_compare_regions: async () =>
-      (await import("@/tool/browser-preview-compare-regions")).BrowserPreviewCompareRegionsTool,
     browser_preview_compare_scroll_slices: async () =>
       (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
     web_clone_prepare_context: async () =>

@@ -6,7 +6,7 @@ import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import { findBrowserPreviewTargetByID } from "./persist"
 import { Log } from "@/util/log"
 
-const LIVE_COMMAND_TIMEOUT_MILLISECONDS = 60_000
+const LIVE_COMMAND_INACTIVITY_TIMEOUT_MILLISECONDS = 60_000
 const LIVE_NAVIGATION_TIMEOUT_MILLISECONDS = 20_000
 const LIVE_SETTLE_MILLISECONDS = 80
 const LIVE_IDLE_TIMEOUT_MILLISECONDS = 120_000
@@ -105,6 +105,13 @@ type BrowserPreviewLiveResult = {
   viewport: { width: number; height: number }
 }
 
+type BrowserPreviewLivePendingCommand = {
+  resolve: (result: BrowserPreviewLiveResult) => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout> | undefined
+  lastActivity: string
+}
+
 const liveSessions = new Map<string, BrowserPreviewLiveSidecar>()
 const liveMetrics = {
   created: 0,
@@ -171,14 +178,7 @@ class BrowserPreviewLiveSidecar {
   readonly child: ChildProcessWithoutNullStreams
   readonly createdAt = Date.now()
   lastActiveAt = this.createdAt
-  private readonly pending = new Map<
-    number,
-    {
-      resolve: (result: BrowserPreviewLiveResult) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }
-  >()
+  private readonly pending = new Map<number, BrowserPreviewLivePendingCommand>()
   private idleTimer: ReturnType<typeof setTimeout> | undefined
   private stdoutBuffer = ""
   private stderr = ""
@@ -216,6 +216,7 @@ class BrowserPreviewLiveSidecar {
     this.child.stderr.on("data", (chunk) => {
       this.stderr += String(chunk)
       if (this.stderr.length > 8_000) this.stderr = this.stderr.slice(-8_000)
+      this.refreshAllCommandInactivityTimers("stderr")
     })
     this.child.stdin.on("error", (error) => this.closeWithError(error, onClose))
     this.child.stdout.on("error", (error) => this.closeWithError(error, onClose))
@@ -248,12 +249,6 @@ class BrowserPreviewLiveSidecar {
     const id = ++this.sequence
     const line = `${JSON.stringify({ id, command })}\n`
     return new Promise<BrowserPreviewLiveResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const pending = this.pending.get(id)
-        if (!pending) return
-        this.pending.delete(id)
-        pending.reject(new Error(`Browser preview live command timed out. ${this.stderr}`))
-      }, LIVE_COMMAND_TIMEOUT_MILLISECONDS)
       const abort = () => {
         const pending = this.pending.get(id)
         if (!pending) return
@@ -263,25 +258,36 @@ class BrowserPreviewLiveSidecar {
         )
       }
       signal?.addEventListener("abort", abort, { once: true })
-      this.pending.set(id, {
+      let record: BrowserPreviewLivePendingCommand
+      record = {
         resolve: (result) => {
           signal?.removeEventListener("abort", abort)
-          clearTimeout(timer)
+          this.pending.delete(id)
+          if (record.timer) clearTimeout(record.timer)
+          record.timer = undefined
           this.lastActiveAt = Date.now()
           this.armIdleTimer()
           resolve(result)
         },
         reject: (error) => {
           signal?.removeEventListener("abort", abort)
-          clearTimeout(timer)
+          this.pending.delete(id)
+          if (record.timer) clearTimeout(record.timer)
+          record.timer = undefined
           this.lastActiveAt = Date.now()
           this.armIdleTimer()
           reject(error)
         },
-        timer,
-      })
+        timer: undefined,
+        lastActivity: "command-start",
+      }
+      this.pending.set(id, record)
+      this.refreshCommandInactivityTimer(id, "command-start")
       this.child.stdin.write(line, (error) => {
-        if (!error) return
+        if (!error) {
+          this.refreshCommandInactivityTimer(id, "stdin-write")
+          return
+        }
         const pending = this.pending.get(id)
         if (!pending) return
         this.pending.delete(id)
@@ -291,6 +297,7 @@ class BrowserPreviewLiveSidecar {
   }
 
   private handleStdout(chunk: string): void {
+    this.refreshAllCommandInactivityTimers("stdout")
     this.stdoutBuffer += chunk
     for (;;) {
       const index = this.stdoutBuffer.indexOf("\n")
@@ -298,7 +305,14 @@ class BrowserPreviewLiveSidecar {
       const line = this.stdoutBuffer.slice(0, index).trim()
       this.stdoutBuffer = this.stdoutBuffer.slice(index + 1)
       if (!line) continue
-      let message: { id?: number; ok?: boolean; result?: BrowserPreviewLiveResult; error?: string }
+      let message: {
+        id?: number
+        ok?: boolean
+        result?: BrowserPreviewLiveResult
+        error?: string
+        activity?: boolean
+        source?: string
+      }
       try {
         message = JSON.parse(line)
       } catch {
@@ -309,9 +323,37 @@ class BrowserPreviewLiveSidecar {
       if (!id) continue
       const pending = this.pending.get(id)
       if (!pending) continue
-      this.pending.delete(id)
+      if (message.activity === true) {
+        this.refreshCommandInactivityTimer(id, message.source || "sidecar-activity")
+        continue
+      }
       if (message.ok && message.result) pending.resolve(message.result)
       else pending.reject(new Error(message.error || "Browser preview live sidecar command failed."))
+    }
+  }
+
+  private refreshCommandInactivityTimer(id: number, source: string): void {
+    const pending = this.pending.get(id)
+    if (!pending) return
+    if (pending.timer) clearTimeout(pending.timer)
+    pending.lastActivity = source
+    pending.timer = setTimeout(() => {
+      const current = this.pending.get(id)
+      if (!current) return
+      this.pending.delete(id)
+      const lastActivity = current.lastActivity
+      current.timer = undefined
+      current.reject(
+        new Error(
+          `Browser preview live command inactive for ${LIVE_COMMAND_INACTIVITY_TIMEOUT_MILLISECONDS}ms after ${lastActivity}. ${this.stderr}`,
+        ),
+      )
+    }, LIVE_COMMAND_INACTIVITY_TIMEOUT_MILLISECONDS)
+  }
+
+  private refreshAllCommandInactivityTimers(source: string): void {
+    for (const id of this.pending.keys()) {
+      this.refreshCommandInactivityTimer(id, source)
     }
   }
 
@@ -346,7 +388,7 @@ class BrowserPreviewLiveSidecar {
     this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
-      clearTimeout(pending.timer)
+      if (pending.timer) clearTimeout(pending.timer)
       pending.reject(error)
     }
     onClose()
@@ -359,7 +401,7 @@ class BrowserPreviewLiveSidecar {
     this.clearIdleTimer()
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
-      clearTimeout(pending.timer)
+      if (pending.timer) clearTimeout(pending.timer)
       pending.reject(new Error("Browser preview live sidecar closed."))
     }
     this.onClose()
@@ -428,6 +470,67 @@ function viewportKey(viewport) {
   return viewport.width + "x" + viewport.height;
 }
 
+function browserActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+async function withBrowserInactivity(activePage, label, inactivityTimeoutMs, action, onActivity) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    if (typeof onActivity === "function") onActivity(source);
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(new Error(label + " browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const fail = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    rejectInactive(new Error(label + " browser failure before live capture: " + source));
+  };
+  const on = (event, handler) => {
+    activePage.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(browserActivityLabel("console", payload)));
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0;
+    if (status >= 400) {
+      fail(browserActivityLabel("response", payload) + " HTTP " + status);
+      return;
+    }
+    reset(browserActivityLabel("response", payload));
+  });
+  on("requestfailed", (payload) => fail(browserActivityLabel("requestfailed", payload)));
+  on("pageerror", (payload) => fail(browserActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) activePage.off(event, handler);
+  }
+}
+
 async function ensurePage(command, options = {}) {
   const key = viewportKey(command.viewport);
   if (!browser) {
@@ -453,7 +556,13 @@ async function ensurePage(command, options = {}) {
     currentViewport = key;
   }
   if (currentUrl !== command.url || options.reload === true) {
-    await page.goto(command.url, { waitUntil: "load", timeout: command.navigationTimeoutMs });
+    await withBrowserInactivity(
+      page,
+      "navigate " + command.url,
+      command.navigationTimeoutMs,
+      () => page.goto(command.url, { waitUntil: "load", timeout: 0 }),
+      options.onActivity,
+    );
     currentUrl = command.url;
   }
   return page;
@@ -463,8 +572,13 @@ async function settle(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function capture(command) {
-  const activePage = await ensurePage(command);
+function commandActivityWriter(id) {
+  return (source) => writeActivityResponse(id, source);
+}
+
+async function capture(message) {
+  const command = message.command;
+  const activePage = await ensurePage(command, { onActivity: commandActivityWriter(message.id) });
   await settle(command.settleMs);
   const png = await activePage.screenshot({ type: "png" });
   return {
@@ -493,18 +607,27 @@ async function applyInput(activePage, input) {
   }
 }
 
-async function applyInputs(command) {
-  const activePage = await ensurePage(command);
+async function applyInputs(message) {
+  const command = message.command;
+  const activePage = await ensurePage(command, { onActivity: commandActivityWriter(message.id) });
   for (const input of command.inputs) {
     await applyInput(activePage, input);
   }
-  return capture(command);
+  return capture(message);
 }
 
 async function handle(message) {
   const command = message.command;
-  const result = command.kind === "input" ? await applyInputs(command) : await capture(command);
+  const result = command.kind === "input" ? await applyInputs(message) : await capture(message);
   process.stdout.write(JSON.stringify({ id: message.id, ok: true, result }) + "\n");
+}
+
+function writeActivityResponse(id, source) {
+  process.stdout.write(JSON.stringify({
+    id,
+    activity: true,
+    source,
+  }) + "\n");
 }
 
 function writeErrorResponse(id, error) {

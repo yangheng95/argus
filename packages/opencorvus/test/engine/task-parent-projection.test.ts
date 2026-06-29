@@ -2,7 +2,7 @@
 // Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md §Acceptance criteria.
 //
 // Single source of truth: metadata.parent_task_id (snake_case JSON key
-// written by propose_task and any future caller of CreateTaskInput.metadata).
+// written only by the scheduler-owned createSchedulerChildTask path).
 // viewTask() hoists it as `task.parentTaskID` — a read-only projection,
 // no DB column, no migration.
 
@@ -22,6 +22,7 @@ describe("Task zod schema accepts parentTaskID", () => {
   function fullTask(extra: Record<string, unknown> = {}) {
     return {
       id: "tsk_x",
+      orderKey: "tsk_x",
       projectID: "proj_x",
       source: "user",
       title: "t",
@@ -72,8 +73,9 @@ describe("viewTask hoists metadata.parent_task_id to task.parentTaskID (source c
     expect(MODEL_TS).toMatch(/parentTaskID:\s*Identifier\.schema\("task"\)\.nullable\(\)\.optional\(\)/)
   })
 
-  test("propose_task continues to write metadata.parent_task_id (write-side single source)", () => {
-    expect(PROPOSE_TASK_TS).toContain("parent_task_id: taskID")
+  test("propose_task uses the scheduler-owned child task creation path", () => {
+    expect(PROPOSE_TASK_TS).toContain("createSchedulerChildTask")
+    expect(PROPOSE_TASK_TS).toContain("parentTaskID: taskID")
   })
 })
 
