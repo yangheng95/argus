@@ -41,11 +41,12 @@ jobs:
 
       - name: Commit and push
         run: |
-          git add -A
-          git restore --staged .github/workflows/ 2>/dev/null || true
+          mapfile -t GENERATED_PATHS < <(bun ./script/generated-artifacts.ts --print)
+          bun ./script/generated-artifacts.ts --check-worktree
+          git add -A -- "${GENERATED_PATHS[@]}"
           if [ -z "$(git diff --cached --name-only)" ]; then
             echo "No changes to commit"
             exit 0
           fi
           git commit -m "chore: generate"
-          git push origin HEAD:${{ github.ref_name }} --no-verify
+          git push origin HEAD:${{ github.ref_name }}

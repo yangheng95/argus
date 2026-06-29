@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -44,9 +45,9 @@ describe("vsixFilename", () => {
         target: "linux-x64",
         version: "1.2.3",
         publisher: "yangheng95",
-        name: "opencorvus",
+        name: "opencorvus-vscode",
       }),
-    ).toBe("yangheng95.opencorvus-1.2.3-linux-x64.vsix")
+    ).toBe("yangheng95.opencorvus-vscode-1.2.3-linux-x64.vsix")
   })
 })
 
@@ -89,11 +90,11 @@ describe("readPackageMeta", () => {
     } catch {}
   })
 
-  test("strips workspace scope from name so VSIX filename matches marketplace shape", () => {
+  test("reads the manifest extension name without rewriting it", () => {
     fs.writeFileSync(
       path.join(extensionRoot, "package.json"),
       JSON.stringify({
-        name: "@opencorvus-ai/vscode-extension",
+        name: "opencorvus-vscode",
         version: "0.0.1",
         publisher: "yangheng95",
       }),
@@ -101,7 +102,7 @@ describe("readPackageMeta", () => {
     expect(readPackageMeta(extensionRoot)).toEqual({
       version: "0.0.1",
       publisher: "yangheng95",
-      name: "vscode-extension",
+      name: "opencorvus-vscode",
     })
   })
 
@@ -196,5 +197,64 @@ describe("prepareOverlayUiForVsix", () => {
     })
     expect(buildCalled).toBe(true)
     expect(() => assertPackageOverlayUiAssets(extensionRoot)).not.toThrow()
+  })
+})
+
+describe("workspace package identity", () => {
+  const repoRoot = path.resolve(import.meta.dir, "..", "..", "..")
+  const extensionRoot = path.join(repoRoot, "packages", "vscode-extension")
+
+  function readPackageName(relativePackageJson: string): string {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, relativePackageJson), "utf8")) as {
+      name?: unknown
+    }
+    if (typeof packageJson.name !== "string" || packageJson.name.length === 0) {
+      throw new Error(`${relativePackageJson} missing package name`)
+    }
+    return packageJson.name
+  }
+
+  test("keeps package workspace names unique", () => {
+    const packageJsonPaths = fs
+      .readdirSync(path.join(repoRoot, "packages"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join("packages", entry.name, "package.json"))
+      .filter((relativePackageJson) => fs.existsSync(path.join(repoRoot, relativePackageJson)))
+      .concat(path.join("packages", "sdk", "js", "package.json"))
+
+    const namesByPackageJson = new Map<string, string[]>()
+    for (const relativePackageJson of packageJsonPaths) {
+      const name = readPackageName(relativePackageJson)
+      namesByPackageJson.set(name, [...(namesByPackageJson.get(name) ?? []), relativePackageJson])
+    }
+
+    const duplicateNames = [...namesByPackageJson.entries()].filter(([, paths]) => paths.length > 1)
+    expect(duplicateNames).toEqual([])
+  })
+
+  test("keeps VSIX manifest and bun lock package identity in sync", () => {
+    const manifestName = readPackageName(path.join("packages", "vscode-extension", "package.json"))
+    const lockText = fs.readFileSync(path.join(repoRoot, "bun.lock"), "utf8")
+
+    expect(manifestName).toBe("opencorvus-vscode")
+    expect(lockText).toContain(`"packages/vscode-extension": {\n      "name": "${manifestName}"`)
+    expect(lockText).toContain(`"${manifestName}": ["${manifestName}@workspace:packages/vscode-extension"]`)
+    expect(lockText).not.toContain(
+      `"@opencorvus-ai/vscode-extension": ["@opencorvus-ai/vscode-extension@workspace:packages/vscode-extension"]`,
+    )
+  })
+
+  test("excludes local cache and test-only artifacts from the VSIX file list", () => {
+    const result = spawnSync(process.execPath, ["x", "vsce", "ls", "--no-dependencies"], {
+      cwd: extensionRoot,
+      encoding: "utf8",
+    })
+
+    expect(result.status, String(result.error?.message || result.stderr || result.stdout)).toBe(0)
+    const output = result.stdout.replaceAll("\\", "/")
+    expect(output).not.toContain(".turbo/")
+    expect(output).not.toContain(".vscode-test/")
+    expect(output).not.toContain("e2e/")
+    expect(output).not.toContain("docs/")
   })
 })
