@@ -195,6 +195,12 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 - 已经启动的命令需要收尾时，只允许等待其自然结束或按用户明确要求处理；不得顺手连带关闭、重启或刷新 OpenCorvus / overlay。
 - 违反本规则导致用户运行态丢失、窗口关闭、状态刷新或交互中断，必须立即承认并把本规则补充到 `AGENTS.md`，不得用“构建需要”“文件被占用”等理由包装成可接受行为。
 
+**40（停止前禁止删除 — 2026-06-29）.** 禁止在明确停止 / abort / cancel 完成前删除 Mission、Coding Assistant chat 或 task 记录。
+
+- 停止和删除是两个独立操作：停止必须先通过既有后端 settle / terminal evidence 证明真实执行句柄、队列项、tool ownership 和 session prompt 都已沉淀；之后才允许执行删除、归档或清理记录。
+- 如果停止失败、超时、缺少 live owner 证据或返回 `TaskCancellationIncompleteError` 等未完成信号，必须保留 Mission、Coding Assistant chat 和 task 记录，并把失败原因暴露给用户；禁止通过提前删除记录掩盖未停止的真实问题。
+- 本规则覆盖 UI 行为、server route、orchestrator tool、scheduler cleanup、project delete 级联和 agent 自行收尾。任何“停止前先删记录再补状态”的实现都属于双源 / fallback / gate 违规。
+
 ---
 
 ## 七、元规则
