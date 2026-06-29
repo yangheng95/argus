@@ -12,20 +12,23 @@ export const StatusProgress = z.object({
   percent: z.number().min(0).max(100),
 })
 
+const WorkflowStepRawStatus = z.enum(["pending", "running", "completed", "skipped", "failed", "aborted"])
+type StepStatus = z.infer<typeof WorkflowStepRawStatus>
+
 export const TaskStatusWorkflowStep = z.object({
   id: z.string(),
   label: z.string(),
   scope: z.enum(["task", "goal"]),
   tool: z.string(),
   status: StatusSnapshotState,
-  rawStatus: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  rawStatus: WorkflowStepRawStatus,
 })
 
 export const TaskStatusGoalStep = z.object({
   stepID: z.string(),
   label: z.string(),
   status: StatusSnapshotState,
-  rawStatus: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  rawStatus: WorkflowStepRawStatus,
   startedAt: z.number().optional(),
   completedAt: z.number().optional(),
   summary: z.string().optional(),
@@ -34,7 +37,7 @@ export const TaskStatusGoalStep = z.object({
       z.object({
         phaseID: z.string(),
         status: StatusSnapshotState,
-        rawStatus: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+        rawStatus: WorkflowStepRawStatus,
         startedAt: z.number().optional(),
         completedAt: z.number().optional(),
       }),
@@ -103,7 +106,6 @@ export type StatusSnapshotState = z.infer<typeof StatusSnapshotState>
 export type TaskStatusDetail = z.infer<typeof TaskStatusDetail>
 export type MissionStatusSnapshot = z.infer<typeof MissionStatusSnapshot>
 
-type StepStatus = "pending" | "running" | "completed" | "skipped" | "failed"
 type ProgressInput = Array<{ rawStatus: StepStatus }>
 
 const TaskStatusBoardProjection = z
@@ -115,7 +117,7 @@ const TaskStatusBoardProjection = z
   .passthrough()
 
 function statusFromWorkflowStep(rawStatus: StepStatus): StatusSnapshotState {
-  if (rawStatus === "failed") return "failed"
+  if (rawStatus === "failed" || rawStatus === "aborted") return "failed"
   if (rawStatus === "completed" || rawStatus === "skipped") return "success"
   return "running"
 }
@@ -149,7 +151,7 @@ function progressFromSteps(
   const stats = steps.reduce(
     (acc, step) => {
       if (step.rawStatus === "completed" || step.rawStatus === "skipped") acc.completed += 1
-      else if (step.rawStatus === "failed") acc.failed += 1
+      else if (step.rawStatus === "failed" || step.rawStatus === "aborted") acc.failed += 1
       else if (step.rawStatus === "running") acc.running += 1
       else acc.pending += 1
       return acc
@@ -196,38 +198,43 @@ function goalStatusFromRaw(rawStatus: string, progress: z.infer<typeof StatusPro
 export function taskStatusDetailFromBoard(input: unknown): TaskStatusDetail {
   const board = TaskStatusBoardProjection.parse(input)
   const workflowSteps =
-    board.workflow?.steps.map((step) =>
-      TaskStatusWorkflowStep.parse({
+    board.workflow?.steps.map((step) => {
+      const rawStatus = WorkflowStepRawStatus.parse(step.status)
+      return TaskStatusWorkflowStep.parse({
         id: step.id,
         label: step.label,
         scope: step.scope,
         tool: step.tool,
-        status: statusFromWorkflowStep(step.status),
-        rawStatus: step.status,
-      }),
-    ) ?? []
+        status: statusFromWorkflowStep(rawStatus),
+        rawStatus,
+      })
+    }) ?? []
 
   const goals = (board.goalWorkflows ?? []).map((goal) => {
-    const steps = goal.steps.map((step) =>
-      TaskStatusGoalStep.parse({
+    const steps = goal.steps.map((step) => {
+      const rawStatus = WorkflowStepRawStatus.parse(step.status)
+      return TaskStatusGoalStep.parse({
         stepID: step.stepID,
         label: step.label,
-        status: statusFromWorkflowStep(step.status),
-        rawStatus: step.status,
+        status: statusFromWorkflowStep(rawStatus),
+        rawStatus,
         startedAt: step.startedAt,
         completedAt: step.completedAt,
         summary: step.summary,
         phases: step.phases
-          ? Object.entries(step.phases).map(([phaseID, phase]) => ({
-              phaseID,
-              status: statusFromWorkflowStep(phase.status),
-              rawStatus: phase.status,
-              startedAt: phase.startedAt,
-              completedAt: phase.completedAt,
-            }))
+          ? Object.entries(step.phases).map(([phaseID, phase]) => {
+              const phaseRawStatus = WorkflowStepRawStatus.parse(phase.status)
+              return {
+                phaseID,
+                status: statusFromWorkflowStep(phaseRawStatus),
+                rawStatus: phaseRawStatus,
+                startedAt: phase.startedAt,
+                completedAt: phase.completedAt,
+              }
+            })
           : undefined,
-      }),
-    )
+      })
+    })
     const progress = progressFromSteps(steps)
     return TaskStatusGoalDetail.parse({
       goalID: goal.goalID,
