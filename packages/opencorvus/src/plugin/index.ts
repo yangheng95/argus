@@ -16,7 +16,7 @@ import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { NamedError } from "@opencorvus-ai/util/error"
-import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
+import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencorvus-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
 import { runHookIsolated } from "./isolate"
 import { readFile } from "node:fs/promises"
@@ -93,8 +93,8 @@ export namespace Plugin {
   })
 
   // Built-in plugins that are directly imported (not installed from npm)
-  // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
-  // OpenCorvusClient type is a strict subset of the current one; safe to cast.
+  // GitlabAuthPlugin is compiled against an older plugin interface version
+  // whose OpenCorvusClient type is a strict subset of the current one.
   const INTERNAL_PLUGINS: PluginInstance[] = [GitlabAuthPlugin as unknown as PluginInstance]
 
   function pluginTaskArtifactFromRow(row: typeof EngineArtifactTable.$inferSelect): PluginTaskArtifact {

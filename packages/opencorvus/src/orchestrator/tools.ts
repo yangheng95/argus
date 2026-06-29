@@ -4913,35 +4913,32 @@ export function createOrchestratorTools(input: {
     return status
   }
 
-  async function publishGateArtifactResult(input: {
+  async function publishArtifactExportResult(input: {
     acceptanceID: string
     runID: string
     summary: string
     source: "artifact_export"
   }) {
     const detail =
-      `Publish gate blocked acceptance ${input.acceptanceID}: ${input.summary}. ` +
-      `This is an artifact/export failure, not a acceptance verdict. Task lifecycle is unchanged; ` +
+      `Artifact export blocked acceptance ${input.acceptanceID}: ${input.summary}. ` +
+      `This is an artifact/export failure, not an acceptance verdict. Task lifecycle is unchanged; ` +
       `integrity is the workflow completion authority.`
     const { createDecisionLog } = await import("@/decision-log")
     createDecisionLog(taskID).append({
       phase: "acceptance",
-      key: `publish_gate_rework_${Date.now()}`,
+      key: `artifact_export_rework_${Date.now()}`,
       value: detail,
       reason: input.source,
     })
     return SubAgentProtocol.yieldResult({
-      headline: `Publish gate blocked acceptance artifact export. Task lifecycle is unchanged.`,
+      headline: `Artifact export blocked acceptance handoff. Task lifecycle is unchanged.`,
       fields: [
         ["acceptance_id", input.acceptanceID],
         ["run_id", input.runID],
-        ["publish_gate", input.summary],
-        [
-          "next",
-          "inspect declared changed files vs exported workspace; artifact export needs a separate non-gate tool",
-        ],
+        ["artifact_export", input.summary],
+        ["next", "inspect declared changed files vs exported workspace; use artifact export evidence"],
       ],
-      pointer: `acceptance ${input.acceptanceID}; publish gate failure is post-acceptance export feedback`,
+      pointer: `acceptance ${input.acceptanceID}; artifact export failure is post-acceptance feedback`,
     })
   }
 
@@ -5502,7 +5499,7 @@ export function createOrchestratorTools(input: {
     // queued / running / blocked tip means the build is still in flight —
     // its evidence is incomplete and integrity has nothing real to judge
     // beyond the structural decomposition. Treating in-flight runs as
-    // post_build would let the acceptance freshness gate accept attempts that
+    // post_build would let the freshness evidence accept attempts that
     // were taken mid-build, which is what codex review §6.4 #8 flagged.
     // Per @/engine/catalog GOAL_RUN_STATUS_CATALOG: completed = terminal,
     // failed/aborted = retriable, everything else = live.
@@ -7360,7 +7357,7 @@ export function createOrchestratorTools(input: {
               assessCaptureDiagnostics,
               summarizeCaptureDiagnostics,
               CaptureReferenceError,
-            } = await import("@/frontend-design/capture-gate")
+            } = await import("@/frontend-design/reference-capture")
             const osMod = await import("node:os")
             const outDir = pathMod.join(
               osMod.tmpdir(),
@@ -7400,7 +7397,7 @@ export function createOrchestratorTools(input: {
             })
             materializedCount++
           } catch (shotErr) {
-            const { CaptureReferenceError } = await import("@/frontend-design/capture-gate")
+            const { CaptureReferenceError } = await import("@/frontend-design/reference-capture")
             const stage = shotErr instanceof CaptureReferenceError ? shotErr.stage : "unknown"
             const error = shotErr instanceof Error ? shotErr.message : String(shotErr)
             const failure = {
@@ -7974,7 +7971,7 @@ export function createOrchestratorTools(input: {
     // -----------------------------------------------------------------------
     // Goal Workload Analyst — independent, read-only goal-sizing reviewer.
     //
-    // Runs after architect, before per-goal build (advisory, not a gate). It
+    // Runs after architect, before per-goal build as advisory evidence. It
     // deep-reads the full frontend template (inlined into its prompt) plus the architect
     // goal graph and, per goal, produces a compact brief: countable work
     // surface + why_not_smaller + underestimation_traps + verification_inventory

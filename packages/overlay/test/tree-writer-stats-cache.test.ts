@@ -16,6 +16,7 @@ import {
   stampTestBoard,
   stampTestEvent,
   testEventOrderKey,
+  testBoardOrderKey,
   testMessageOrderKey,
   testPartOrderKey,
   testTaskOrderKey,
@@ -79,6 +80,7 @@ function applyEvent(event: any): void {
 const BOARD = {
   task: {
     id: TASK_ID,
+    orderKey: testTaskOrderKey(TASK_ID, 1_777_000_000_000),
     status: "active",
     request: "stats test",
     sessionID: SID,
@@ -526,22 +528,22 @@ test("resetWriter clears the top-level screenshot cache", () => {
   expect(cardTreeStore.usageAggregate).toEqual({ tokens: 0, costUSD: 0, estimated: false })
 })
 
-test("part-before-message server timestamp refreshes screenshot cache ordering", () => {
+test("part-before-message screenshot cache uses message orderKey time", () => {
   setBoardStore("board", BOARD)
   setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
   resetWriter()
   const originalDateNow = Date.now
   const partFirstMessageID = "msg_part_first_screenshot_stats"
   const partFirstSessionID = "ses_part_first_screenshot_stats"
-  const observationTime = 1_777_000_010_000
+  const emittedAt = 1_777_000_010_000
   const serverTime = 1_777_000_000_500
   const partFirstMessageOrderKey = messageOrderKey(partFirstMessageID, serverTime)
-  Date.now = () => observationTime
+  Date.now = () => emittedAt
   try {
     applyEvent({
       type: "message.part.updated",
       orderKey: partFirstMessageOrderKey,
-      emittedAt: observationTime,
+      emittedAt,
       properties: {
         taskID: TASK_ID,
         orderKey: partFirstMessageOrderKey,
@@ -553,7 +555,7 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
           sessionID: partFirstSessionID,
           resolvedRole: "assistant",
           channel: "assistant",
-          orderKey: partOrderKey("part_first_screenshot", observationTime),
+          orderKey: partOrderKey("part_first_screenshot", emittedAt),
           type: "file",
           url: "/attachment/project/part-first.png",
           mime: "image/png",
@@ -564,9 +566,9 @@ test("part-before-message server timestamp refreshes screenshot cache ordering",
     flushBufferedPartDeltas()
 
     const cardID = `assistant:session:${partFirstSessionID}:message:${partFirstMessageID}`
-    expect(cardTreeStore.cards[cardID]?.time).toBe(observationTime)
-    expect(cardTreeStore.cards[cardID]?.subtreeScreenshotItems?.[0]?.time).toBe(observationTime)
-    expect(cardTreeStore.screenshotItems[0]?.time).toBe(observationTime)
+    expect(cardTreeStore.cards[cardID]?.time).toBe(serverTime)
+    expect(cardTreeStore.cards[cardID]?.subtreeScreenshotItems?.[0]?.time).toBe(serverTime)
+    expect(cardTreeStore.screenshotItems[0]?.time).toBe(serverTime)
 
     applyEvent({
       type: "message.updated",
@@ -1243,28 +1245,44 @@ test("rebuilds that detach a child clear parentID on the orphaned card", async (
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: testTaskOrderKey(TASK_ID, 1_777_000_000_000),
       status: "active",
       request: "orphan rebuild",
       sessionID: SID,
       time: { created: 1_777_000_000_000 },
       attachments: [],
     },
-    workflow: { steps: [{ stepID: "build", phases: [{ id: "plan" }, { id: "build" }] }] },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          orderKey: testBoardOrderKey(`${TASK_ID}-build`, 1_777_000_000_000, 61),
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
     goalWorkflows: [
       {
         goalID: GOAL_ID,
+        orderKey: testBoardOrderKey(GOAL_ID, 1_777_000_001_000, 60),
         goalRunID: "run_initial",
         goalTitle: "rebuild orphan",
+        time: { created: 1_777_000_001_000 },
         orderIndex: 0,
+        retryCount: 0,
         steps: [
           {
             stepID: "build",
+            orderKey: testBoardOrderKey(`${GOAL_ID}-build`, 1_777_000_001_000, 61),
             label: "Executor",
             status: "running",
             startedAt: 1_777_000_001_000,
             phases: {
-              plan: { status: "completed", startedAt: 1_777_000_001_000, completedAt: 1_777_000_001_500 },
-              build: { status: "running", startedAt: 1_777_000_001_600 },
+              build: {
+                status: "running",
+                startedAt: 1_777_000_001_600,
+                orderKey: testBoardOrderKey(`${GOAL_ID}-build-phase`, 1_777_000_001_600, 62),
+              },
             },
             payload: { buildSessionID: BUILD_SID },
           },
@@ -1289,13 +1307,22 @@ test("rebuilds that detach a child clear parentID on the orphaned card", async (
   setBoardStore("board", {
     task: {
       id: TASK_ID,
+      orderKey: testTaskOrderKey(TASK_ID, 1_777_000_000_000),
       status: "active",
       request: "orphan rebuild",
       sessionID: SID,
       time: { created: 1_777_000_000_000 },
       attachments: [],
     },
-    workflow: { steps: [{ stepID: "build", phases: [{ id: "plan" }, { id: "build" }] }] },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          orderKey: testBoardOrderKey(`${TASK_ID}-build`, 1_777_000_000_000, 61),
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
     goalWorkflows: [],
     interactions: [],
   })

@@ -1,19 +1,18 @@
 import { Log } from "@/util/log"
+import { ExecutorName, type ExecutorNameInfo } from "./contract"
 
 const log = Log.create({ service: "executor-runtime-env" })
 
-const EXECUTOR_MODEL_ENV: Record<string, string> = {
+const EXECUTOR_MODEL_ENV: Partial<Record<ExecutorNameInfo, string>> = {
   codex: "OPENCORVUS_EXECUTOR_CODEX_MODEL",
   "claude-code": "OPENCORVUS_EXECUTOR_CLAUDE_MODEL",
 }
 
-export type ExecutorID = keyof typeof EXECUTOR_MODEL_ENV | string
-
-export function envKeyFor(id: ExecutorID): string | undefined {
-  return EXECUTOR_MODEL_ENV[id]
+export function envKeyFor(id: ExecutorNameInfo): string | undefined {
+  return EXECUTOR_MODEL_ENV[ExecutorName.parse(id)]
 }
 
-export function getModelOverride(id: ExecutorID): string | undefined {
+export function getModelOverride(id: ExecutorNameInfo): string | undefined {
   const key = envKeyFor(id)
   if (!key) return undefined
   const model = process.env[key]?.trim()
@@ -22,7 +21,7 @@ export function getModelOverride(id: ExecutorID): string | undefined {
   return model
 }
 
-export function setModelOverride(id: ExecutorID, model: string | null): boolean {
+export function setModelOverride(id: ExecutorNameInfo, model: string | null): boolean {
   const key = envKeyFor(id)
   if (!key) return false
   const next = model?.trim() ?? ""
@@ -37,7 +36,7 @@ export function setModelOverride(id: ExecutorID, model: string | null): boolean 
   return true
 }
 
-export function assertExecutorModel(id: ExecutorID, model: string, key = envKeyFor(id)) {
+export function assertExecutorModel(id: ExecutorNameInfo, model: string, key = envKeyFor(id)) {
   if (id !== "claude-code" && id !== "codex") return
   if (!model.includes("/")) return
   const source = key ? `${key}=${model}` : model

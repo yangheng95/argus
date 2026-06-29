@@ -65,12 +65,13 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
   assert.equal(typeof globalThis.Bun, "undefined")
 
   const requests: Array<{ method: string; path: string }> = []
+  const configPatches: unknown[] = []
   let config: Record<string, unknown> = {
     model: "opencorvus/gpt-5-nano",
     mcp: {
-      browser: { type: "remote", url: "https://mcp.example.com/browser" },
+      browser: { type: "remote", transport: "streamable-http", url: "https://mcp.example.com/browser" },
       filesystem: { type: "local", command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/repo"] },
-      auth: { type: "remote", url: "https://mcp.example.com/auth" },
+      auth: { type: "remote", transport: "streamable-http", url: "https://mcp.example.com/auth" },
     },
   }
   const mcp = {
@@ -126,6 +127,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     if (path === "/config" && req.method === "GET") return send(config)
     if (path === "/config" && req.method === "PATCH") {
       const body = (await req.json()) as Record<string, unknown>
+      configPatches.push(body)
       config = mergePatch(config, body.kind === "json" ? body.value : body) as Record<string, unknown>
       return send(config)
     }
@@ -153,6 +155,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
       })
     }
     if (path === "/mcp" && req.method === "GET") return send(mcp)
+    if (path.startsWith("/mcp/") && path.endsWith("/connect")) return send({ ok: true })
     if (path.startsWith("/mcp/") && path.endsWith("/disconnect")) return send({ ok: true })
     if (path.startsWith("/mcp/") && path.endsWith("/auth") && req.method === "DELETE") {
       return send({ error: "mcp auth removal unavailable" }, { status: 503 })
@@ -356,6 +359,65 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     assert.ok(statusScreenshot.endsWith("skill-mcp-status-pills.png"))
     assert.ok(confirmScreenshot.endsWith("skill-mcp-delete-confirm.png"))
     assert.ok(failureScreenshot.endsWith("skill-mcp-delete-failure.png"))
+
+    requests.length = 0
+    configPatches.length = 0
+    const addMcpButton = '#leftPanelMcp[data-active="true"] [data-ui="tool-panel-action"][aria-label="Add MCP"]'
+    await page.waitForSelector(addMcpButton, { visible: true })
+    await page.click(addMcpButton)
+    await page.waitForSelector("#leftPanelMcp .config-inline-form", { visible: true })
+    await page.waitForSelector('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]', {
+      visible: true,
+    })
+    const transportInitial = await page.$eval(
+      '#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]',
+      (node: HTMLElement) => ({
+        text: node.textContent?.trim() ?? "",
+        width: node.getBoundingClientRect().width,
+        height: node.getBoundingClientRect().height,
+      }),
+    )
+    assert.match(transportInitial.text, /Streamable HTTP/)
+    assert.ok(transportInitial.width > 80 && transportInitial.height > 20)
+    await page.click('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]')
+    await page.waitForSelector('.settings-form-select-option[data-value="streamable-http"]')
+    await page.waitForSelector('.settings-form-select-option[data-value="sse"]')
+    const transportOptions = await page.$$eval(".settings-form-select-option", (nodes: HTMLElement[]) =>
+      nodes.map((node) => ({
+        value: node.dataset.value ?? "",
+        text: node.textContent?.trim() ?? "",
+      })),
+    )
+    assert.ok(
+      transportOptions.some((option) => option.value === "streamable-http" && option.text.includes("Streamable HTTP")),
+      "transport select must expose Streamable HTTP option",
+    )
+    assert.ok(
+      transportOptions.some((option) => option.value === "sse" && option.text.includes("SSE")),
+      "transport select must expose SSE option",
+    )
+    await page.click('.settings-form-select-option[data-value="sse"]')
+    await page.waitForFunction(() =>
+      document
+        .querySelector<HTMLElement>('#leftPanelMcp .settings-form-select-trigger[aria-label="Transport"]')
+        ?.textContent?.includes("SSE"),
+    )
+    await page.type('#leftPanelMcp input[placeholder="exa"]', "newremote")
+    await page.type('#leftPanelMcp input[placeholder="https://example.com/mcp"]', "https://mcp.example.com/new")
+    await page.click("#leftPanelMcp .config-inline-form .dialog-actions button:last-child")
+    for (let attempt = 0; attempt < 50 && configPatches.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    assert.ok(configPatches.length > 0, "adding remote MCP should PATCH config")
+    assert.deepEqual(
+      (config as any).mcp?.newremote,
+      { type: "remote", transport: "sse", url: "https://mcp.example.com/new" },
+      "remote MCP config must persist the selected transport",
+    )
+    assert.ok(
+      requests.some((item) => item.method === "POST" && item.path === "/mcp/newremote/connect"),
+      "adding remote MCP should connect the named server after config patch",
+    )
     errors.assertNoUnexpectedErrors()
   } finally {
     await browser.close()

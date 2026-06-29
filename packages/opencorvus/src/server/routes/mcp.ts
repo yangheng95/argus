@@ -3,18 +3,11 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
-import { errors, namedErrorResponse } from "../error"
+import { badRequestBody, badRequestOrNamedErrorResponse, errors, namedErrorResponse } from "../error"
 import { lazy } from "../../util/lazy"
 
 export const McpRoutes = lazy(() => {
   const app = new Hono()
-  function badRequest(message: string) {
-    return {
-      data: { message },
-      errors: [{ message }],
-      success: false as const,
-    }
-  }
   return (
     app
       // === core ===
@@ -98,7 +91,7 @@ export const McpRoutes = lazy(() => {
           const name = c.req.param("name")
           const supportsOAuth = await MCP.supportsOAuth(name)
           if (!supportsOAuth) {
-            return c.json(badRequest(`MCP server ${name} does not support OAuth`), 400)
+            return c.json(badRequestBody(`MCP server ${name} does not support OAuth`), 400)
           }
           const result = await MCP.startAuth(name)
           return c.json(result)
@@ -120,7 +113,7 @@ export const McpRoutes = lazy(() => {
                 },
               },
             },
-            400: namedErrorResponse("Invalid MCP OAuth callback request", "BadRequestError", "MCPOAuthStateError"),
+            400: badRequestOrNamedErrorResponse("Invalid MCP OAuth callback request", "MCPOAuthStateError"),
             ...errors(404),
             500: namedErrorResponse("MCP OAuth completion failed", "UnknownError"),
           },
@@ -162,7 +155,7 @@ export const McpRoutes = lazy(() => {
           const name = c.req.param("name")
           const supportsOAuth = await MCP.supportsOAuth(name)
           if (!supportsOAuth) {
-            return c.json(badRequest(`MCP server ${name} does not support OAuth`), 400)
+            return c.json(badRequestBody(`MCP server ${name} does not support OAuth`), 400)
           }
           const status = await MCP.authenticate(name)
           return c.json(status)

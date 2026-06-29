@@ -24,6 +24,10 @@ export interface SegmentedControlProps<T extends string> {
   renderOption?: (option: SegmentedControlOption<T>) => JSX.Element
 }
 
+function isActivationKey(event: KeyboardEvent): boolean {
+  return event.key === "Enter" || event.key === " " || event.key === "Space" || event.key === "Spacebar"
+}
+
 export function SegmentedControl<T extends string>(props: SegmentedControlProps<T>): JSX.Element {
   function handleChange(next: string | null) {
     if (next && next !== props.value) props.onChange?.(next as T)
@@ -49,7 +53,7 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
             onClick={() => props.onActivate?.(option.value)}
             onKeyDown={(event) => {
               if (option.disabled || !props.onActivate) return
-              if (event.key === "Enter" || event.key === " ") props.onActivate(option.value)
+              if (isActivationKey(event)) props.onActivate(option.value)
             }}
           >
             {props.renderOption ? props.renderOption(option) : option.label}

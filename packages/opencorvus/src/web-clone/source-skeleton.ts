@@ -235,7 +235,7 @@ export async function writeWebCloneSourceSkeleton(
   await fs.mkdir(skeletonDir, { recursive: true })
   await fs.mkdir(path.join(input.outputDir, "source-ir"), { recursive: true })
   await writeText(skeletonDir, files, "index.html", renderHtmlDocument(input.pageIr, htmlBody, componentHints))
-  await writeText(skeletonDir, files, "styles.css", renderCompatibilityStylesheet())
+  await writeText(skeletonDir, files, "styles.css", renderStylesheetIndex())
   await writeText(skeletonDir, files, "critical.css", cssBundle.criticalCss)
   await writeText(skeletonDir, files, "full-source.css", cssBundle.fullSourceCss)
   await writeText(skeletonDir, files, "used-selectors.json", JSON.stringify(cssBundle.usedSelectors, null, 2))
@@ -689,9 +689,9 @@ async function renderSkeletonCssBundle(
   }
 }
 
-function renderCompatibilityStylesheet(): string {
+function renderStylesheetIndex(): string {
   return [
-    "/* Compatibility entrypoint. Build agents should read critical.css first, then inspect full-source.css only for missing style detail. */",
+    "/* Stylesheet index. Build agents should read critical.css first, then inspect full-source.css only for additional style detail. */",
     "@import url('./critical.css');",
     "",
   ].join("\n")

@@ -3,6 +3,11 @@
 Date: 2026-06-26
 Status: P1 implemented and verified; 2026-06-27 build part-first repair verified; cross-domain orderKey convergence continues in `2026-06-27-message-card-orderkey-convergence.md`
 
+2026-06-29 calibration: later architecture updates narrowed goal-scope phase
+projection to the single backend `build` phase. Planning, review, evaluator,
+and integrity activity are task-scope or protocol surfaces, not per-goal phase
+card kinds.
+
 ## Acronyms
 
 - UI: User Interface, the visible overlay surface.
@@ -165,7 +170,7 @@ split source.
 
 Goal phase cards remain explicit exceptions:
 
-- Goal-scoped build/planner/evaluator messages are absorbed into the phase card.
+- Goal-scoped build messages are absorbed into the phase card.
 - Phase card internal parts are ordered by the same message order key and use
   boundary parts per message.
 - Do not create nested message-turn cards under phase cards in P1.
@@ -436,10 +441,9 @@ patch and not a protocol-event reuse:
 - Protocol rows use `protocol_event.emitted_at + seq + eventID`; ephemeral live
   replay rows do not pretend to be durable timeline rows.
 - Control rows use `control_message.time_created + control_message.id`.
-- Board workflow/goal rows use the backend board projection source fields:
-  task time for task workflow rows, goal `time_created + goalID` for goal rows,
-  and goal-step `startedAt/completedAt` when present or the owning goal order key
-  time otherwise.
+- Board workflow/goal rows use backend-owned `orderKey` values on every
+  task, goal, step, phase, and interaction record. UI projection must not
+  derive a child record's ordering from its owning goal or array position.
 - Rail ledger rows use session ledger `timeCreated + sessionID`; status updates
   can update observed status but must not invent rail existence or row identity.
 

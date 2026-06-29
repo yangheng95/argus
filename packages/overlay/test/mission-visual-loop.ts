@@ -371,7 +371,8 @@ async function applyMocks(page: OverlayPage, runtimeFailures: string[]): Promise
     }
     if (pathname === "/skill/installed" && method === "GET") return void ok([])
     if (pathname === "/skill/market" && method === "GET") return void ok([])
-    if (pathname === "/skill/mounts" && method === "GET") return void ok([])
+    if (pathname === "/skill/mounts" && method === "GET")
+      return void ok({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (pathname === "/mcp" && method === "GET") return void ok({})
     if (pathname === "/provider/auth" && method === "GET") return void ok({})
     if (pathname === "/provider" && method === "GET") return void ok({ all: [], connected: [], default: {} })
@@ -529,7 +530,7 @@ async function applyMocks(page: OverlayPage, runtimeFailures: string[]): Promise
             },
           ],
         },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 0 },
       })
     }
     if (pathname === "/session/session_mission_visual/events" && method === "GET") return void eventStream()

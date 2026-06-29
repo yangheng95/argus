@@ -175,9 +175,9 @@ describe("pre-analysis: entity extraction", () => {
 describe("pre-analysis: working directory extraction", () => {
   test("extracts from 绝对路径", () => {
     const request =
-      "工作目录是 eval-workspace/e5（绝对路径: D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace/e5）"
+      "工作目录是 eval-workspace/e5（绝对路径: D:/myhexin-local/opencorvus-local/packages/opencorvus/eval-workspace/e5）"
     const workDir = extractWorkDir(request)
-    expect(workDir).toBe("D:/myhexin-local/argus-opencode/packages/opencorvus/eval-workspace/e5")
+    expect(workDir).toBe("D:/myhexin-local/opencorvus-local/packages/opencorvus/eval-workspace/e5")
   })
 
   test("extracts from working directory", () => {

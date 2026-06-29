@@ -170,7 +170,7 @@ function conversationPayload(taskID: string, lastSequence: number) {
         status: "active",
         request: "tail repair",
         sessionID: `ses_${taskID}`,
-        time: { created: 1_776_000_000_000 },
+        time: { created: 1_776_000_000_000, started: 1_776_000_000_000 },
         attachments: [],
       },
       goalWorkflows: [],
@@ -186,9 +186,9 @@ function conversationPayload(taskID: string, lastSequence: number) {
       limit: 500,
       sinceTimestamp: null,
     },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { sessions: [], messages: [] },
-    agentView: { sessions: [], messages: [], topLevelSessionIDs: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     messageWatermark: lastSequence,
   }
 }

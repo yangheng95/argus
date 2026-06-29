@@ -24,20 +24,25 @@ import { EngineConfig } from "@/engine/config"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount, type DecodedPNG } from "@/util/pixel-stats"
 
 /** 每一条 visual metric threshold 的判定记录。 */
-export interface VisualGateResult {
-  name: VisualGateName
+export interface VisualMetricCheckResult {
+  name: VisualMetricCheckName
   passed: boolean
   threshold: number
   value: number
   note: string
 }
 
-export type VisualGateName = "phash_hamming" | "ssim" | "chart_region_density" | "unique_color_ratio" | "text_hit_ratio"
+export type VisualMetricCheckName =
+  | "phash_hamming"
+  | "ssim"
+  | "chart_region_density"
+  | "unique_color_ratio"
+  | "text_hit_ratio"
 
 export interface VisualMetricResult {
   passed: boolean
   score: number
-  gates: VisualGateResult[]
+  checks: VisualMetricCheckResult[]
   diffRegionPath?: string
   renderedPath: string
   referencePath: string
@@ -181,7 +186,7 @@ export async function computeVisualMetric(input: {
   const hashR = averageHash(rendered)
   const hashRef = averageHash(reference)
   const hamming = hammingDistance(hashR, hashRef)
-  const phashGate: VisualGateResult = {
+  const phashCheck: VisualMetricCheckResult = {
     name: "phash_hamming",
     passed: hamming <= t.phash_hamming_max,
     threshold: t.phash_hamming_max,
@@ -199,7 +204,7 @@ export async function computeVisualMetric(input: {
     { data: rendForSsim.data as unknown as Uint8ClampedArray, width: rendForSsim.width, height: rendForSsim.height },
     { data: reference.data as unknown as Uint8ClampedArray, width: reference.width, height: reference.height },
   )
-  const ssimGate: VisualGateResult = {
+  const ssimCheck: VisualMetricCheckResult = {
     name: "ssim",
     passed: mssim >= t.ssim_min,
     threshold: t.ssim_min,
@@ -215,7 +220,7 @@ export async function computeVisualMetric(input: {
     input.chartRegion,
   )
   const densityRatio = refDensity === 0 ? 0 : rendDensity / refDensity
-  const densityGate: VisualGateResult = {
+  const densityCheck: VisualMetricCheckResult = {
     name: "chart_region_density",
     passed: densityRatio >= t.chart_region_density_min_ratio,
     threshold: t.chart_region_density_min_ratio,
@@ -230,7 +235,7 @@ export async function computeVisualMetric(input: {
   const refColors = uniqueColorBucketCount(reference)
   const rendColors = uniqueColorBucketCount(rendForSsim)
   const colorRatio = refColors === 0 ? 0 : rendColors / refColors
-  const colorGate: VisualGateResult = {
+  const colorCheck: VisualMetricCheckResult = {
     name: "unique_color_ratio",
     passed: colorRatio >= t.unique_color_ratio_min,
     threshold: t.unique_color_ratio_min,
@@ -243,7 +248,7 @@ export async function computeVisualMetric(input: {
 
   // ---- 5. text hit ratio (P1-B 提供 anchors 后生效) ---------------------
   const textValue = textHitRatio(input.referenceStrings, input.renderedText)
-  const textGate: VisualGateResult =
+  const textCheck: VisualMetricCheckResult =
     textValue === null
       ? {
           name: "text_hit_ratio",
@@ -263,8 +268,8 @@ export async function computeVisualMetric(input: {
               : `reference 字符串命中率=${(textValue * 100).toFixed(1)}% < ${(t.text_hit_ratio_min * 100).toFixed(0)}%（疑似占位文案）`,
         }
 
-  const gates = [phashGate, ssimGate, densityGate, colorGate, textGate]
-  const passed = gates.every((g) => g.passed)
+  const checks = [phashCheck, ssimCheck, densityCheck, colorCheck, textCheck]
+  const passed = checks.every((check) => check.passed)
 
   // ---- 复合 score (LKG 回滚比较用，越大越好，范围 [0,1]) --------------
   const phashNorm = Math.max(0, 1 - hamming / 32) // 32 位差异 = 0 分
@@ -279,7 +284,7 @@ export async function computeVisualMetric(input: {
   return {
     passed,
     score,
-    gates,
+    checks,
     renderedPath: input.renderedPath,
     referencePath: input.referencePath,
     capturedAt: Date.now(),
@@ -290,7 +295,7 @@ export async function computeVisualMetric(input: {
  * 格式化成一行人类可读摘要，嵌入 verdict.rejection_details[].error 里。
  */
 export function summarizeVisualMetric(metric: VisualMetricResult): string {
-  const failed = metric.gates.filter((g) => !g.passed)
+  const failed = metric.checks.filter((check) => !check.passed)
   if (failed.length === 0) {
     return "visual metric diagnostics found no blocking difference"
   }

@@ -3,12 +3,12 @@
 > 对应代码：`src/orchestrator/` · `src/engine/` · `src/agent/` · `src/requirements/` ·
 > `src/architect/` · `src/build/` · `src/frontend-design/` · `src/intent-analysis/` ·
 > `src/integrity/` · `src/acceptance/` · `src/acceptance/checks/` ·
-> `src/executor/` · `src/goal/runner.ts` · `src/task-api/` · `src/control/` ·
+> `src/executor/` · `src/task-api/` · `src/control/` ·
 > `src/channel/` · `src/decision-log/`
 >
-> 注（2026-05-11 状态）：旧 `src/pipeline/` 仅保留 `goal-contract.schema.ts` + `types.ts`
-> 两个 schema 文件，运行时代码全部迁走；`src/engine/goal-pool.ts` / `src/pipeline/executor.ts`
-> 已在 Phase 5 删除；the removed planning package 整目录删除（不再有 per-goal planning tool role，session 级的
+> 注：旧 `src/pipeline/` 仅保留 `goal-contract.schema.ts` + `types.ts`
+> 两个 schema 文件，运行时代码全部迁走；旧 goal-pool 模块与旧 pipeline executor 模块
+> 已删除；the removed planning package 整目录删除（不再有 per-goal planning tool role，session 级的
 > `src/tool/planner.ts` 是 working-memory + scratchpad 工具，与旧 planning tool role 完全不同）；
 > `src/decompose/` 已删除，需求分解逻辑统一落在 `src/requirements/`。
 
@@ -53,7 +53,7 @@
 - `kind="workflow"`：默认路径，走完整 Task Control Loop（Orchestrator 决策 → Workflow 模板）。
 - `kind="build"`：跳过 Orchestrator 分解 / 计划 / 评估，直接运行 build agent。用于一次性编辑、Q&A、简单修复。仍占用 `engine_task` 行，享受统一的 cancel / list / audit。
 
-**没有独立的 `build-dispatch.ts` 文件**：`engine_task.kind="build"` 的快通道路由分布在 `orchestrator/agent.ts`（`task.kind === "build" ? "direct" : 默认 workflow`，~line 161）+ `orchestrator/tools.ts`（build tool 实现，~line 5075）+ `build/agent.ts`（build LLM 入口）+ `engine/workflow.ts`（`direct` workflow 模板）；`goal/runner.ts` 已只保留 `cleanupGoalWorkspace`（121 行），不再承担 dispatch。
+**没有独立的 `build-dispatch.ts` 文件**：`engine_task.kind="build"` 的快通道路由由 `orchestrator/agent.ts` 的 direct workflow 选择、`orchestrator/tools.ts` 的 `build` tool、`build/agent.ts` 的 `BuildAgent.run`、以及 `engine/workflow.ts` 的 `WorkflowRegistry.resolve` / `direct` 模板共同承担；`goal/runner.ts` 只导出 `cleanupGoalWorkspace`，负责目标 worktree 生命周期末端清理，不承担 dispatch、worktree 创建或 executor 调用。
 
 ## MiniWorkflow — 两个声明式模板
 
@@ -72,9 +72,8 @@
 orchestrator/loop.ts — runTaskLoop()
 ┌─────────────────────────────────────────────┐
 │  Decision Point (Orchestrator LLM)          │
-│    触发 kind:                               │
-│      created / batch_complete /             │
-│      acceptance_rejected / retry              │
+│    输入：自由形式 task event                │
+│    不依赖 trigger.kind enum                 │
 │    读 engine_* 全量 + decision-log          │
 │    推理：调 sub-agent? 重试? 加 goal?       │
 │           交付? 终止?                       │
@@ -83,18 +82,18 @@ orchestrator/loop.ts — runTaskLoop()
                   ▼
         ┌─────────────────────────┐
         │  build tool             │  orchestrator/tools.ts (build:)
-        │  同步执行单个 goal       │  执行体：goal/runner.ts
-        │  (旧 GoalPool / pipeline/executor.ts
-        │   已在 Phase 5 删除，   │
-        │   职责吸收至 build tool) │
+        │  创建/复用 worktree      │  调 BuildAgent.run
+        │  (旧 goal pool / pipeline executor
+        │   已删除，执行职责在 build tool + BuildAgent)
         └─────────────────┬───────┘
                           │
                           ▼
         ┌─────────────────────────┐
-        │  goal/runner.ts         │
-        │  Executor (worktree)    │
-        │  claude-code/codex/     │
-        │  opencode               │
+        │  build/agent.ts         │
+        │  Worktree.create        │
+        │  ExecutorRegistry       │
+        │  opencorvus/codex/      │
+        │  claude-code            │
         └─────────────────────────┘
                           │
                           ▼
@@ -109,14 +108,14 @@ orchestrator/loop.ts — runTaskLoop()
               回到 Decision Point
 ```
 
-**Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, acceptance_rejected, retry}` 枚举，已在 Phase 2 移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（无状态机拆除约束已并入 [16-unified-teardown.md](16-unified-teardown.md)）。
+**Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, acceptance_rejected, retry}` 枚举，当前已移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（无状态机拆除约束已并入 [16-unified-teardown.md](16-unified-teardown.md)）。
 
 **Loop 消灭的旧机制**（不要再引入）：
 
 - `recoverOrphanedTasks`（loop 本身就是生命周期；孤儿 task 由 `EngineService.init` 里的 serial-queue recovery 统一重启）
 - `notifyGoalResult` fire-and-forget
 - `agentNotifiedRuns` dedup
-- dispatch gate
+- host-side dispatch branch
 - 无限 wake-up 循环
 
 ## Sub-agents
@@ -130,7 +129,7 @@ orchestrator/loop.ts — runTaskLoop()
 | Frontend Research     | `frontend-research/agent.ts`                                                                                                                                                         | 网页 URL → 直接调查 prepared evidence 与源页面、汇总功能/视觉/layout/style/interaction/content/fidelity evidence brief；按网页调查作用域一次性产出 brief，后续修复消费该 brief，不重复执行 frontend-research | 有网页功能/视觉研究需求的前端或 PRD/SPEC/report 任务                                                |
 | Goal Workload Analyst | `goal-workload-analyst/agent.ts`                                                                                                                                                     | 只读 goal 定型复核：深读 frontend template / contract graph / reference coverage，逐 goal 产反低估清单、验证清单与 `decomposition_concern`；不创建/修改 goal、不写代码、不作为 gate                          | Architect 产出 goal graph 后，特别是网页复刻、复杂 UI 或大型重构任务                                |
 | Integrity Reviewer    | `integrity/team-agent.ts`                                                                                                                                                            | 对抗性 integrity review team：根据真实任务面动态选择 reviewer，复核 requirement scope、runtime evidence、实现质量与验收风险；旧固定维度 review 与 prosecutor 职责已并入此 team                               | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent）                          |
-| Build                 | `build/agent.ts`（独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（worktree + executor 执行体）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | 在 worktree 中实际写代码；通过 task-scoped backend browser evidence 或 Browser MCP screenshot/observe 获取运行时截图证据；通过 `Agent.get("build")` 暴露给 orchestrator                                      | Orchestrator 通过 `build` tool 调起                                                                 |
+| Build                 | `build/agent.ts`（`BuildAgent.run`；同包 `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（`cleanupGoalWorkspace` 清理）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | `BuildAgent.run` 创建/接管 worktree、调用 `ExecutorRegistry.requireCoding` 并实际写代码；通过 task-scoped backend browser evidence 或 Browser MCP screenshot/observe 获取运行时截图证据；`goal/runner.ts` 不创建 worktree、不调用 executor | Orchestrator 通过 `build` tool 调起                                                                 |
 
 > Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory
 > 工具（add*task / update_task / scratchpad*\*），任何 agent 都可以挂载它来管理自己的子
@@ -151,11 +150,14 @@ orchestrator/loop.ts — runTaskLoop()
    `respond_agent_coordination(decision="cancel_worker")`）、`refine`
 6. **用户交互 / 等待 / merge 修复**：`question`、`wait`、`bash`（仅项目根 git merge-state 修复）
 7. **任务繁衍**：`propose_task`（按自动确认配置创建继承 follow-up task）
-8. **A2A 协议响应**：`respond_agent_coordination` 是 orchestrator 回答 worker-to-orchestrator coordination request 的唯一调度响应入口；它只能处理 durable `agent_coordination_request`，并写入 visible `agent_coordination_response` / `agent_coordination_action` 后执行 continue / cancel_worker / ask_user / fail_task / bound redispatch。
+8. **A2A 协议响应**：`respond_agent_coordination` 是 orchestrator 回答 worker/operator-to-orchestrator coordination request 的唯一调度响应入口；它只能处理 durable `agent_coordination_request`，并写入 visible `agent_coordination_response` / `agent_coordination_action` 后执行 continue / cancel_worker / ask_user / fail_task / bound redispatch。
 
 Worker 侧 A2A 请求入口是 `request_orchestrator_decision`，只暴露给 task worker / stage agent 工具池，不暴露给普通 coding 或 custom default。它创建 durable `agent_coordination_request` 并唤醒 task orchestrator；worker 不应通过 task-root message、hidden note、direct reply 或新 subtask chat 请求调度决策。
 
-**Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
+Overlay targeted operator steer 的唯一入口是 `POST /task/:taskID/session/:sessionID/operator-steer` / `EngineService.operatorSteerAgentSession(...)`。它写入 `origin="operator_steer"` 的 durable `agent_coordination_request` 并唤醒 orchestrator，不写 task-root operator message，不写 child-session direct reply，也不伪造 `respond_agent_coordination` tool identity；后续动作仍由真实 orchestrator turn 通过 `respond_agent_coordination` 或其他 visible lifecycle action 决定。
+`POST /task/:taskID/message` 只表示 task-root operator input；它不接受 `target` session/build 字段，不能作为 targeted sub-agent steer 的替代入口。
+
+**Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同旧 goal-pool 模块一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
@@ -171,15 +173,14 @@ orchestrator 通过 `propose_task` 提供"完善上一个 request 的新任务"�
 
 ## 外部执行器
 
-Executor 是**外部**进程，不属于 Agent Team：
+Executor registry 同时包含内置 `opencorvus` executor 和外部 coding executor；它们都不属于 Agent Team：
 
-- `executor/claude-code.ts` · `claude-agent.ts` · `claude-cli.ts`
+- `executor/opencorvus.ts`
 - `executor/codex.ts` · `codex-cli.ts` · `codex-app-server.ts` · `codex-app-server-client.ts`
-- `executor/opencode.ts`
+- `executor/claude-code.ts` · `claude-agent.ts`
 - 共享层：`bootstrap.ts` · `contract.ts` · `discovery.ts` · `external-process.ts` · `managed.ts` · `registry.ts` · `runtime-env.ts`
 
-注册到 `executor/registry.ts`，由 `goal/runner.ts` 在 worktree 内隔离执行，产出 acceptance diff。
-（旧 `pipeline/executor.ts` 已删除；编排层已并入 build tool + goal/runner.ts。）
+`executor/contract.ts` 的当前执行器名是 `opencorvus`、`codex`、`claude-code`。注册由 `executor/registry.ts` 管理；coding executor 的调用点是 `build/agent.ts` 的 `ExecutorRegistry.requireCoding` / `BuildAgent.run`；`goal/runner.ts` 只负责 `cleanupGoalWorkspace`。
 
 ## EngineService 入口一览
 
@@ -187,7 +188,7 @@ Executor 是**外部**进程，不属于 Agent Team：
 
 - `EngineService.init()` — 注册 scheduler poll、订阅 auto-permission、串行队列 recovery
 - `EngineService.createTask(input)` — 创建任务 + 启动 Loop
-- `EngineService.handleTaskMessage / injectMessage / replyInteraction / rejectInteraction / cancelTask / retryTask / updateGoal / deleteGoal / updateTaskChecks` — task mutation
+- `EngineService.handleTaskMessage / operatorSteerAgentSession / injectMessage / replyInteraction / rejectInteraction / cancelTask / retryTask / updateGoal / deleteGoal / updateTaskChecks` — task mutation
 - `EngineService.getBoard / getBrief / getProjectBoard / getGlobalTaskBoard` — workbench 视图（内部委托 `@/workbench/board` 与 `@/workbench/brief`）
 
 ## 相关文档
@@ -195,5 +196,5 @@ Executor 是**外部**进程，不属于 Agent Team：
 - [02-data.md](02-data.md) — `engine_*` 13 张表的行为
 - [03-control.md](03-control.md) — ChannelIngress / ControlMessage / Panel Capability 路由
 - [04-extensions.md](04-extensions.md) — Executor 与 plugin/mcp/acp 的边界
-- [2026-06-27-add-opencorvus-agent-playbook.md](2026-06-27-add-opencorvus-agent-playbook.md) — 新增 native agent 的单源接线、A2A、runtime、handoff、测试清单
+- [2026-06-27-add-opencorvus-agent-playbook.md](../../records/2026-06/2026-06-27-add-opencorvus-agent-playbook.md) — 新增 native agent 的单源接线、A2A、runtime、handoff、测试清单
 - [13-agent-communication-matrix.md](13-agent-communication-matrix.md) — 预期 whitelist 与当前 direct/indirect 通信真相对照

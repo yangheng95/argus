@@ -3,17 +3,13 @@ import { EngineProtocol } from "@/engine/protocol"
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
 
-export type ReviewStreamPhase = "integrity" | "acceptance"
+export type ReviewStreamPhase = "integrity"
 export type ReviewStreamStep = "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
 
 const log = Log.create({ service: "review-stream" })
 
 export function reviewIDForIntegrity(sessionID: string): string {
   return `integrity:${sessionID}`
-}
-
-export function reviewIDForAcceptance(taskID: string, iteration: number): string {
-  return `acceptance:${taskID}:${iteration}`
 }
 
 export function emitReviewStreamStarted(input: {

@@ -14,6 +14,7 @@ const { __setHostTransportForTest } = await import("../src/services/host-transpo
 const { configure } = await import("../src/services/api")
 const { createTauriTransport } = await import("../src/services/tauri-transport")
 const { createTask, panelRequestBody } = await import("../src/services/task")
+const { setBoardStore } = await import("../src/store/board")
 const {
   applySettings,
   bootstrapOverlaySettings,
@@ -72,17 +73,21 @@ const originalLocalStorage = (globalThis as any).localStorage
 beforeEach(() => {
   ;(globalThis as any).localStorage = new MemoryStorage()
   applySettings({ ...DEFAULT_SETTINGS })
+  setBoardStore("selectedSource", null)
+  setBoardStore("board", null)
 })
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
   configure({ directory: "" })
   applySettings({ ...DEFAULT_SETTINGS })
+  setBoardStore("selectedSource", null)
+  setBoardStore("board", null)
   ;(globalThis as any).localStorage = originalLocalStorage
 })
 
 describe("executor settings", () => {
-  test("rejects stale executor ids from persisted settings", async () => {
+  test("rejects invalid executor ids from persisted settings", async () => {
     __setHostTransportForTest(
       fakeTransport(
         () => {
@@ -90,15 +95,15 @@ describe("executor settings", () => {
         },
         (command) => {
           expect(command.kind).toBe("settings.load")
-          return { executor: "opencode" }
+          return { executor: "invalid-executor" }
         },
       ),
     )
 
-    await loadSettings()
+    await expect(loadSettings()).rejects.toThrow("invalid executor id: invalid-executor")
 
     expect(settingsStore.executor).toBe("opencorvus")
-    expect(sanitizeExecutor("opencode")).toBe("opencorvus")
+    expect(() => sanitizeExecutor("invalid-executor")).toThrow("invalid executor id: invalid-executor")
   })
 
   test("tauri settings load ignores stale browser storage", async () => {
@@ -128,14 +133,14 @@ describe("executor settings", () => {
   })
 
   test("browser host settings use browser storage as the single source", async () => {
-    localStorage.setItem("oc_executor", "opencode")
+    localStorage.setItem("oc_executor", "codex")
     localStorage.setItem("oc_theme", "dark")
     localStorage.setItem("oc_preferred_project_editor", "cursor")
     __setHostTransportForTest(createTauriTransport("browser"))
 
     await loadSettings()
 
-    expect(settingsStore.executor).toBe("opencorvus")
+    expect(settingsStore.executor).toBe("codex")
     expect(settingsStore.theme).toBe("dark")
     expect(settingsStore.preferredProjectEditor).toBe("cursor")
 
@@ -249,7 +254,7 @@ describe("executor settings", () => {
     await expect(saveSettings()).rejects.toThrow("settings.save did not confirm persistence")
   })
 
-  test("task creation never sends a stale executor id", async () => {
+  test("task creation rejects invalid executor state before request dispatch", async () => {
     let captured: TransportRequest | undefined
     __setHostTransportForTest(
       fakeTransport((req) => {
@@ -263,13 +268,13 @@ describe("executor settings", () => {
       }),
     )
     configure({ directory: "C:/overlay/workspace/app" })
-    setSettingsStore("executor", "opencode" as any)
+    setSettingsStore("executor", "invalid-executor" as any)
 
-    await createTask({ text: "hello", queue: false, kind: "workflow" })
+    await expect(createTask({ text: "hello", queue: false, kind: "workflow" })).rejects.toThrow(
+      "invalid executor id: invalid-executor",
+    )
 
-    expect(captured?.body?.kind).toBe("json")
-    expect((captured?.body as any).value.executor).toBe("opencorvus")
-    expect((captured?.body as any).value.kind).toBe("workflow")
+    expect(captured).toBeUndefined()
   })
 
   test("task creation forwards an explicit OpenCorvus model", async () => {
@@ -353,7 +358,22 @@ describe("executor settings", () => {
   })
 
   test("panel request body sanitizes explicit executor input", () => {
-    expect(panelRequestBody("hello", {}, "req_1", [], "opencode").executor).toBe("opencorvus")
+    setBoardStore("selectedSource", {
+      kind: "task",
+      id: "tsk_executor_settings",
+      directory: "C:/repo/executor-settings",
+    })
+    setBoardStore("board", {
+      task: {
+        id: "tsk_executor_settings",
+        directory: "C:/repo/executor-settings",
+      },
+    })
+
+    expect(panelRequestBody("hello", {}, "req_1", [], "codex").executor).toBe("codex")
+    expect(() => panelRequestBody("hello", {}, "req_1", [], "invalid-executor")).toThrow(
+      "invalid executor id: invalid-executor",
+    )
   })
 
   test("native settings task id alias restores the workspace task", () => {

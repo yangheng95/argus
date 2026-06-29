@@ -289,7 +289,7 @@ function buildBoard(
     // populated by:
     //   - integrity acceptance verdict (deferred_checks + rejection_details + overall),
     //     sunk via orchestrator/tools.ts → sinkAcceptanceVerdictToCriteria()
-    //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
+    //   - in-process visual-diff check (orchestrator/tools.ts, when task carries
     //     image attachments and a rendered index.html exists)
     // Hidden in the overlay for kind=build tasks (build self-verifies; this
     // panel only applies to workflow tasks running through acceptance).
@@ -573,8 +573,8 @@ function viewBoardAcceptance(row: AcceptanceRow | undefined) {
     evidenceManifest: manifest
       ? {
           id: manifest.id,
-          status: manifest.finalGate.status,
-          summary: clipBoard(manifest.finalGate.summary),
+          status: manifest.evidenceDecision.status,
+          summary: clipBoard(manifest.evidenceDecision.summary),
           requiredChecks: manifest.requiredChecks.map((item) => ({
             id: item.id,
             name: item.name,
@@ -885,12 +885,9 @@ function buildWorkflowFields(
 
   const goalWorkflows = goals.map((goal) => {
     const gws = projectedGoalSteps[goal.id]
-    // Identify the current attempt by the tip goal_run id. Overlay uses
-    // this to scope per-attempt step cards — each new attempt gets its
-    // own cards instead of the prior attempt's cards being mutated
-    // in-place and time-sorted to the bottom. `undefined` when the goal
-    // has never dispatched (no goal_run yet) — overlay treats that as
-    // the "pre-attempt" bucket under a stable pseudo-id.
+    // Identify the tip goal_run id. Overlay card identity is attempt-invariant
+    // (`step:<goalID>:<stepID>`); this value is route context for scoped diff
+    // and acceptance lookups, not a card-id segment.
     const tipRun = findLatestTipGoalRun(goal.id)
     // goalRunID surfaces the run the overlay's per-row diff click fetches
     // via /goal-run/<id>/acceptance. After a targeted retry the tip can be a
@@ -923,16 +920,15 @@ function buildWorkflowFields(
       goalObjective: goal.objective?.trim() ? goal.objective.trim() : undefined,
       goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
-      // Phase B (2026-05-05): persistent worktree pointer comes from the
-      // latest goal_run_attempt artifact (append-only tip + supersede
-      // chain), not from engine_goal columns and not from a step-status
-      // priority sort. Surface here is the single source the overlay's
-      // GoalWorkflowGroup binds to; step payload no longer mirrors it
-      // (rule 8). See goal worktree display contract.
+      // Persistent worktree pointer comes from the latest goal_run_attempt
+      // artifact (append-only tip + supersede chain), not from engine_goal
+      // columns and not from a step-status priority sort. Surface here is the
+      // single source the overlay's GoalWorkflowGroup binds to; step payload
+      // no longer mirrors it.
       workspaceDir: latestWorkspace.directory ?? undefined,
       workspaceBranch: latestWorkspace.branch ?? undefined,
-      // Phase E (2026-05-05): retry_count derived from artifact, not from a
-      // goal column. Same source as orchestrator/architect V labels.
+      // retryCount is derived from artifacts, not from a goal column. Same
+      // source as orchestrator/architect V labels.
       retryCount: getGoalRetryCount(goal.id),
       acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
@@ -1161,9 +1157,8 @@ function currentGoalRun(goalID: string) {
 const latestEvaluationForGoalRun = findLatestEvaluationForGoalRun
 
 /** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks").
- *  Only applies to goal-scope steps that own the plan + build + evaluate
- *  phase block — detected via the `phases` declaration rather than
- *  hardcoded step id, so renaming the step doesn't break the surface. */
+ *  Only applies to goal-scope steps that own declared phases. Detection uses
+ *  the workflow phase declaration rather than hardcoded step ids. */
 function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: string): string | undefined {
   if (!status || status === "pending") return undefined
   if (step.scope !== "goal") return undefined
@@ -1200,18 +1195,17 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
  * StepRow to render. This replaces the old PlanPanel / ExecutorSummaryPanel /
  * CriteriaPanel / EvaluationPanel which read separate top-level fields.
  *
- * Per the panel正本清源 plan: every per-goal step carries its own payload so
- * the frontend never has to cross-reference task-level state. M2b/M2c/M2d
- * gradually fill out the three step types.
+ * Every per-goal step carries its own payload so the frontend never has to
+ * cross-reference task-level state. The pipeline currently exposes the
+ * goal-scope `build` step labelled "Executor".
  */
 export type GoalStepPayload = z.infer<typeof TaskBoardGoalStepPayload>
 
 function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
-  // Payload applies only to goal-scope phase-owning steps — the plan +
-  // build + evaluate block folds into one payload that ships plan nodes,
-  // diff stats, and evaluator checks. Detected by phases presence, not
-  // hardcoded step id.
+  // Payload applies only to goal-scope phase-owning steps. The current build
+  // phase payload ships plan nodes, diff stats, and verification checks.
+  // Detected by phases presence, not hardcoded step id.
   if (step.scope !== "goal") return undefined
   if (!step.phases || step.phases.length === 0) return undefined
 

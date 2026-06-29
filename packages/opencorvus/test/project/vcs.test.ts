@@ -64,7 +64,7 @@ describe("Vcs.diff", () => {
     await resetDatabase()
   })
 
-  test("returns OpenCode-style patches for modified and untracked working-tree files", async () => {
+  test("returns git patches for modified and untracked working-tree files", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Bun.write(path.join(tmp.path, "tracked.txt"), "base\n")

@@ -3,6 +3,7 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 const PROJECT_DIRECTORY = "D:/repo/new-project"
 const CREATED_TASK_ID = "tsk_created_directory"
+const PANEL_MODEL = "openai/gpt-5.5"
 const hydrateCalls: Array<{ taskID: string; options: any }> = []
 const startedStreams: Array<{ kind: string; id: string; sequence: number; options?: any }> = []
 
@@ -54,6 +55,7 @@ mock.module("../src/services/sse", () => ({
 const { panelMessage } = await import("../src/services/chat")
 const { configure } = await import("../src/services/api")
 const { boardStore, setBoardStore, setTasksData } = await import("../src/store/board")
+const { setAppStore } = await import("../src/store/app")
 const { setSelectedTaskID, setMessages, setChatRequest } = await import("../src/store/messages")
 const { setSettingsStore } = await import("../src/store/settings")
 const { taskOwningDirectory } = await import("../src/services/task-directory")
@@ -112,12 +114,14 @@ beforeEach(() => {
   setSelectedTaskID("")
   setMessages([])
   setChatRequest(null as any)
+  setAppStore("config", { model: PANEL_MODEL })
   resetWriter()
 })
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
   configure({ directory: "" })
+  setAppStore("config", null as any)
 })
 
 test("panelMessage freezes the active project directory on a newly created task", async () => {
@@ -129,6 +133,8 @@ test("panelMessage freezes the active project directory on a newly created task"
   expect(result).toEqual({ task_id: CREATED_TASK_ID })
   expect(requests[0]?.path).toBe("task")
   expect(requests[0]?.query?.directory).toBe(PROJECT_DIRECTORY)
+  expect(requests[0]?.body?.kind).toBe("json")
+  expect((requests[0]?.body as any).value.model).toBe(PANEL_MODEL)
   expect(boardStore.selectedSource).toEqual({
     kind: "task",
     id: CREATED_TASK_ID,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs"
 import path from "node:path"
+import { TaskMessageInput } from "../../src/engine/model"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const deletedProductDocsPath = ["docs", "product"].join("/")
@@ -77,8 +78,9 @@ describe("product documentation single source", () => {
     expect(enSdk).not.toContain("Adds `x-opencorvus-directory`")
     expect(zhSdk).not.toContain("添加 `x-opencorvus-directory`")
 
-    expect(taskModel).toContain("export const TaskMessageInput = z.object")
     expect(taskModel).toContain("source: z.string().min(1)")
+    expect(TaskMessageInput.safeParse({ text: "hello", source: "api" }).success).toBe(true)
+    expect(TaskMessageInput.safeParse({ text: "hello" }).success).toBe(false)
     expect(enGuide).toContain('source: "api"')
     expect(enGuide).toContain("`source` is required")
     expect(zhGuide).toContain('source: "api"')

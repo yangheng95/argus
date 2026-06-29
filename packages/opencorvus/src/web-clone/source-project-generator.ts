@@ -4161,8 +4161,8 @@ function semanticElementStyleRecord(
   nodeStyleFallbacks: Map<string, string>,
 ): Record<string, string> | undefined {
   const attrs = node.attribs ?? {}
-  const fallbackStyle = attrs["data-source-node-id"] ? nodeStyleFallbacks.get(attrs["data-source-node-id"]) : undefined
-  return parseStyleRecord(fallbackStyle ? `${attrs.style ?? ""};${fallbackStyle}` : (attrs.style ?? ""))
+  const sourceNodeStyle = attrs["data-source-node-id"] ? nodeStyleFallbacks.get(attrs["data-source-node-id"]) : undefined
+  return parseStyleRecord(sourceNodeStyle ? `${attrs.style ?? ""};${sourceNodeStyle}` : (attrs.style ?? ""))
 }
 
 function semanticElementFrameRole(node: DomNode): string | undefined {
@@ -6146,11 +6146,11 @@ function containsDomNode(root: DomNode, target: DomNode): boolean {
 }
 
 function semanticNodeStyleRecord(node: DomNode, context: SourceDomRenderContext): Record<string, string> | undefined {
-  const fallbackStyle = node.attribs?.["data-source-node-id"]
+  const sourceNodeStyle = node.attribs?.["data-source-node-id"]
     ? context.nodeStyleFallbacks.get(node.attribs["data-source-node-id"])
     : undefined
   const rawStyle = node.attribs?.style ?? ""
-  const style = fallbackStyle ? `${rawStyle};${fallbackStyle}` : rawStyle
+  const style = sourceNodeStyle ? `${rawStyle};${sourceNodeStyle}` : rawStyle
   return renderStyleRecord(style)
 }
 
@@ -6211,7 +6211,7 @@ function allocateSourceSvgAssetGroupName(context: SourceDomRenderContext): strin
 function sourceSvgAssetGroupItem(node: DomNode, nodeStyleFallbacks: Map<string, string>): SourceSvgAssetGroupItem {
   const attribs = node.attribs ?? {}
   const item: SourceSvgAssetGroupItem = { assetPath: normalizeAssetPath(attribs["data-asset-d"] ?? "") }
-  const fallbackStyle = attribs["data-source-node-id"]
+  const sourceNodeStyle = attribs["data-source-node-id"]
     ? nodeStyleFallbacks.get(attribs["data-source-node-id"])
     : undefined
   let hasStyle = false
@@ -6221,7 +6221,7 @@ function sourceSvgAssetGroupItem(node: DomNode, nodeStyleFallbacks: Map<string, 
     if (!name) continue
     if (name === "style") {
       hasStyle = true
-      const style = renderStyleRecord(fallbackStyle ? `${rawValue};${fallbackStyle}` : rawValue)
+      const style = renderStyleRecord(sourceNodeStyle ? `${rawValue};${sourceNodeStyle}` : rawValue)
       if (style) item.style = style
       continue
     }
@@ -6229,8 +6229,8 @@ function sourceSvgAssetGroupItem(node: DomNode, nodeStyleFallbacks: Map<string, 
       name === "src" || name === "href" || name === "xlinkHref" ? normalizeReferencedAssetUrl(rawValue) : rawValue
     item[name] = value
   }
-  if (fallbackStyle && !hasStyle) {
-    const style = renderStyleRecord(fallbackStyle)
+  if (sourceNodeStyle && !hasStyle) {
+    const style = renderStyleRecord(sourceNodeStyle)
     if (style) item.style = style
   }
   return item
@@ -6944,7 +6944,7 @@ function renderJsxAttributes(
 ): string {
   const parts: string[] = []
   const isAssetPath = tag.toLowerCase() === "path" && Boolean(attribs["data-asset-d"])
-  const fallbackStyle = attribs["data-source-node-id"]
+  const sourceNodeStyle = attribs["data-source-node-id"]
     ? nodeStyleFallbacks.get(attribs["data-source-node-id"])
     : undefined
   let hasStyle = false
@@ -6960,7 +6960,7 @@ function renderJsxAttributes(
     if (!name) continue
     if (name === "style") {
       hasStyle = true
-      const style = renderStyleObject(fallbackStyle ? `${rawValue};${fallbackStyle}` : rawValue)
+      const style = renderStyleObject(sourceNodeStyle ? `${rawValue};${sourceNodeStyle}` : rawValue)
       if (style) parts.push(`style={${style}}`)
       continue
     }
@@ -6968,8 +6968,8 @@ function renderJsxAttributes(
       name === "src" || name === "href" || name === "xlinkHref" ? normalizeReferencedAssetUrl(rawValue) : rawValue
     parts.push(`${name}={${JSON.stringify(value)}}`)
   }
-  if (fallbackStyle && !hasStyle) {
-    const style = renderStyleObject(fallbackStyle)
+  if (sourceNodeStyle && !hasStyle) {
+    const style = renderStyleObject(sourceNodeStyle)
     if (style) parts.push(`style={${style}}`)
   }
   return parts.join(" ")

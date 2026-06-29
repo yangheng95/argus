@@ -13,7 +13,7 @@ import { renderVisualContractPreamble } from "../../src/build/agent"
  *
  * The preamble must NOT fire when there are no attachments — emitting it
  * unconditionally would teach the agent to expect references that aren't
- * there and trigger spurious INFORMATION MISSING reports.
+ * present in the visible dispatch context.
  */
 describe("renderVisualContractPreamble", () => {
   test("returns empty string when no attachments are provided", () => {

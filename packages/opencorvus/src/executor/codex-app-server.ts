@@ -845,7 +845,7 @@ function sandboxMode() {
   // _session-20260429-084449.out (round-5): developer prompt still
   // reported workspace-write, blocking 127.0.0.1 ports with EACCES.
   // Benchmark runs are externally sandboxed (per-goal worktrees + ephemeral
-  // home), so the safety surface is the host, not codex's per-call gates.
+  // home), so the safety surface is the host, not codex's per-call approval prompts.
   return "danger-full-access"
 }
 

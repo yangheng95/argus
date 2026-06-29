@@ -120,3 +120,25 @@ export async function copyRuntimeNodeModules(
     )
   }
 }
+
+export async function writePackagedRuntimePackageJson(input: {
+  name: string
+  outdir: string
+  target: Pick<ArtifactNodeRuntimeTarget, "arch" | "os">
+  version: string
+}) {
+  await fs.promises.mkdir(input.outdir, { recursive: true })
+  await fs.promises.writeFile(
+    path.join(input.outdir, "package.json"),
+    `${JSON.stringify(
+      {
+        name: input.name,
+        version: input.version,
+        os: [input.target.os],
+        cpu: [input.target.arch],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+}

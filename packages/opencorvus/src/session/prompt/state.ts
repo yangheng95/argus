@@ -175,7 +175,7 @@ export namespace SessionPromptState {
 
   export function cancel(sessionID: string, directory?: string): boolean {
     log.info("cancel", { sessionID })
-    SessionStatus.abortActivityGate(sessionID, new DOMException("session cancelled", "AbortError"))
+    SessionStatus.abortActivityMonitor(sessionID, new DOMException("session cancelled", "AbortError"))
     const { promptState: s } = existingStateEntryForSession(sessionID, directory)
     const match = s?.[sessionID]
     const statusOptions = directory ? { publish: false } : undefined

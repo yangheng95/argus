@@ -25,12 +25,12 @@ export function countToolCalls(steps: Array<{ toolCalls?: unknown[] }>) {
   return steps.reduce((sum, step) => sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0), 0)
 }
 
-export function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string {
-  if (!summary) return fallbackTitle
+export function ensureMeaningfulSummary(summary: string, defaultTitle: string): string {
+  if (!summary) return defaultTitle
   const trimmed = summary.trim()
-  if (trimmed.length < 5) return fallbackTitle
-  if (/^#+\s/.test(trimmed)) return fallbackTitle
-  if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
+  if (trimmed.length < 5) return defaultTitle
+  if (/^#+\s/.test(trimmed)) return defaultTitle
+  if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return defaultTitle
   return trimmed
 }
 

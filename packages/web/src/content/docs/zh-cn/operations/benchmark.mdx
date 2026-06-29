@@ -1,9 +1,9 @@
 ---
 title: Benchmark
-description: 端到端质量回归框架，以 qualityVerdict（accepted/rejected）作为通过判据。
+description: 端到端质量回归框架，以 qualityVerdict（accepted/rejected/blocked）作为通过判据。
 ---
 
-Benchmark 体系用于**端到端质量回归**。它模拟一次真实任务请求，从创建到交付全流程跑完，给出 `qualityVerdict`（accepted / rejected）作为通过判据。
+Benchmark 体系用于**端到端质量回归**。它模拟一次真实任务请求，从创建到交付全流程跑完，给出 `qualityVerdict`（accepted / rejected / blocked）作为通过判据。只有 `accepted` 算通过。
 
 ## 主脚本
 
@@ -18,10 +18,13 @@ DASHSCOPE_API_KEY=sk-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=D:/path/to/prd.txt" \
+  "--acceptance-verify-cmd=bun test" \
   "--idle-timeout-ms=2700000"
 ```
 
 **注意**：flag 支持 `--name=value` 和 `--name value`；路径中有空格时必须加引号。
+Benchmark 任务 brief 必须显式输入：提供 `--request-file` 或 `--request-attachment`。
+Benchmark 必须显式提供 `--acceptance-verify-cmd` 或 `--reference-images`；两者都缺失时会在任务创建前失败。使用 `--reference-images` 时，还必须提供 `--threshold`、`--worst-threshold`、`--browser-launch-timeout-ms`、`--navigation-timeout-ms` 和 `--settle-ms`。
 
 ## 关键 flag
 
@@ -31,6 +34,11 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 | `--request-attachment=PATH`                 | 附加请求文件，而不是从 `--request-file` 读取任务文本 |
 | `--reference-images=PATHS`                  | 逗号分隔的视觉参考图                                 |
 | `--acceptance-verify-cmd=CMD`               | 显式本地验收验证命令                                 |
+| `--threshold=NUMBER`                        | `--reference-images` 驱动验证时必填的 SSIM 阈值       |
+| `--worst-threshold=NUMBER`                  | 参考图验证必填的 worst-window 阈值                   |
+| `--browser-launch-timeout-ms=NUMBER`        | 参考图验证必填的浏览器启动超时                       |
+| `--navigation-timeout-ms=NUMBER`            | 参考图验证必填的页面导航无活动超时                   |
+| `--settle-ms=NUMBER`                        | 参考图验证必填的页面加载后 settle 等待                |
 | `--executor=opencorvus\|codex\|claude-code` | 执行器：OpenCorvus / Codex / Claude Code             |
 | `--title=TITLE`                             | 任务标题                                             |
 | `--report=PATH`                             | 输出报告 JSON                                        |
@@ -61,7 +69,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 }
 ```
 
-判据源码：`packages/opencorvus/script/benchmark/quality-gates.ts`。
+判据源码：`packages/opencorvus/script/benchmark/quality-checks.ts`。
 
 ## 超时语义
 
@@ -79,7 +87,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 `--report` 产出的 JSON 包含：
 
 - 任务元信息（title、model、executor）
-- orchestrator workflow steps、goal runs、review、本地验证与 quality gates 的耗时
+- orchestrator workflow steps、goal runs、review、本地验证与质量证据检查的耗时
 - 每个 Goal 的 check 结果
 - `qualityVerdict` 与 `localVerify`
 - 失败样本：stderr / stdout 尾部 + 相关 artifact 路径
@@ -96,9 +104,10 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \
       "--request-file=benchmarks/smoke.txt" \
+      "--acceptance-verify-cmd=bun test" \
       "--report=report.json"
 ```
 
 ## 本地定向探针
 
-更小粒度的检查使用 `packages/opencorvus/script/benchmark/` 下维护中的脚本，例如 `html-skeleton-workflow-check.ts`、`visual-diff.ts` 和 `review-deliverable.ts`。每个探针的可用参数写在脚本顶部。
+更小粒度的检查使用 `packages/opencorvus/script/benchmark/` 下维护中的脚本，例如 `html-skeleton-workflow-check.ts`、`visual-diff.ts` 和 `review-deliverable.ts`。`html-skeleton-workflow-check.ts` 和 `visual-diff.ts` 必须提供 `--threshold`、`--worst-threshold`、`--browser-launch-timeout-ms`、`--navigation-timeout-ms` 和 `--settle-ms`；其他探针的可用参数写在脚本顶部。

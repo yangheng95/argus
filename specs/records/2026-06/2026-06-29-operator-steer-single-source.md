@@ -1,6 +1,6 @@
 # 2026-06-29 Operator Steer Single Source
 
-Status: implementation plan
+Status: implementation in progress
 
 ## Goal
 
@@ -338,3 +338,55 @@ The repair is not accepted if any of these remain true:
 - Any target-specific steer machine semantics are parsed from visible text.
 - Independent review finds a new double source or fallback and it remains
   unresolved.
+
+## Current Worktree Implementation Log
+
+2026-06-29 current IDE worktree slice:
+
+- Added `POST /task/:taskID/session/:sessionID/operator-steer`.
+- Added `EngineService.operatorSteerAgentSession(...)`.
+- Added strict `AgentSessionOperatorSteerInput` /
+  `AgentSessionOperatorSteerResult`.
+- Added operator-originated `agent_coordination_request` creation with
+  `origin: "operator_steer"` and `operator_message`.
+- Overlay `Card.tsx` and `ChatBubble.tsx` now call `sendOperatorSteer(...)`
+  instead of choosing between direct reply and task-root build message paths.
+- `TaskMessageTarget` / target-scoped task-root message input is removed from
+  source and generated SDK/OpenAPI artifacts in this worktree.
+- `AgentSessionReplyBox` now describes the one operator-steer route and keeps
+  structured error handling for visible steer failures.
+- Operator steer target validation is derived from
+  `AgentRoleContract.controlSurface === "task-worker"` plus
+  `agentOwnedSessionKind`, so primary/helper/host surfaces are not silently
+  steerable worker targets.
+
+Verified in this worktree:
+
+- `bun test packages/opencorvus/test/server/task-session-operator-steer.test.ts`
+  passed: 10 pass, 0 fail.
+- `bun test packages/overlay/test/agent-session-controls.test.ts` passed as
+  part of the first targeted run.
+- `bun test packages/opencorvus/test/server/task-message-routes.test.ts --test-name-pattern "target-scoped|triggers scheduler|queues behind multiple live build owners|does not interrupt async goal"`
+  passed in isolation: 4 pass, 0 fail.
+- `bun test packages/opencorvus/test/server/reply-error-taxonomy.test.ts`
+  passed: 11 pass, 0 fail.
+- `bun test packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "respond_agent_coordination continue consumes|respond_agent_coordination continue supports frontend-research|respond_agent_coordination redispatch starts the build stage dispatcher|respond_agent_coordination redispatch starts the explore stage dispatcher|respond_agent_coordination cancel_worker completes"`
+  passed: 5 pass, 0 fail.
+- `cd packages/overlay; node test/browser-runner.mjs test/browser/agent-reply-box-primitives.test.ts`
+  passed: 1 pass, 0 fail. Screenshot
+  `.scratch/agent-reply-box-operator-target-error.png` was visually reviewed
+  for preserved draft, visible Steer button, and non-overlapping structured
+  error panel.
+- `bun run typecheck`, `bun run api:routes-check`, `bun run docs:check`, and
+  docs health tests passed after current-worktree edits.
+- Source scans found no `directAgentReplyMode`, `overlay_build_steer`,
+  `sendTaskOperatorMessage(`, or `replyToAgentSession(` in overlay steer
+  components/services, and no `TaskMessageTarget` in backend/SDK/OpenAPI scan.
+
+Not yet sufficient for completion:
+
+- A combined Bun process containing `task-session-operator-steer.test.ts`,
+  `runner-tool-scope.test.ts`, and `session-agent.test.ts` hit test fixture
+  cleanup/SQLite foreign-key noise; the operator steer route file passed when
+  isolated, so follow-up verification should keep server integration files
+  isolated unless the shared fixture issue is being debugged directly.

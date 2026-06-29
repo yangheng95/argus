@@ -19,7 +19,7 @@ const PHASE_STARTED = 1_776_000_100_200
 // it looked up an ID the production code never produces and
 // silently failed across the suite.
 const STEP_ID = "step:goal_projection:build"
-const PHASE_ID = `${STEP_ID}:phase:plan`
+const PHASE_ID = `${STEP_ID}:phase:build`
 
 installRealOverlayI18n()
 
@@ -40,7 +40,7 @@ function boardWith(status: "running" | "failed") {
         {
           id: "build",
           orderKey: testBoardOrderKey(`${TASK_ID}-build`, TASK_CREATED, 61),
-          phases: [{ id: "plan", label: "Plan", sessionKind: "planner" }],
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
       ],
     },
@@ -61,9 +61,10 @@ function boardWith(status: "running" | "failed") {
             status,
             startedAt: STEP_STARTED,
             ...(status === "failed" ? { completedAt: 1_776_000_100_300 } : {}),
+            payload: { buildSessionID: "ses_projection_build" },
             phases: {
-              plan: {
-                orderKey: testBoardOrderKey("goal_projection-build-plan", PHASE_STARTED, 62),
+              build: {
+                orderKey: testBoardOrderKey("goal_projection-build-build", PHASE_STARTED, 62),
                 status: status === "failed" ? "completed" : "running",
                 startedAt: PHASE_STARTED,
                 ...(status === "failed" ? { completedAt: 1_776_000_100_300 } : {}),

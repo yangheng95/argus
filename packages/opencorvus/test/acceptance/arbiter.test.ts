@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { arbitrateAcceptanceGate } from "../../src/acceptance/arbiter"
+import { arbitrateAcceptanceEvidenceDecision } from "../../src/acceptance/arbiter"
 import { Event as EngineEvent } from "../../src/engine/model"
 
-describe("legacy acceptance evidence arbiter", () => {
+describe("acceptance evidence decision arbiter", () => {
   test("acceptance evidence event accepts readiness failure details", () => {
     const parsed = EngineEvent.AcceptanceEvidenceUpdated.properties.safeParse({
       taskID: "tsk_ready",
@@ -59,15 +59,42 @@ describe("legacy acceptance evidence arbiter", () => {
       }).phase,
     ).toBe("integrity")
 
+    expect(() =>
+      EngineEvent.ReviewStreamStarted.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "acceptance:tsk_review:1",
+        phase: "acceptance",
+      }),
+    ).toThrow()
+    expect(() =>
+      EngineEvent.ReviewStreamProgress.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "acceptance:tsk_review:1",
+        phase: "acceptance",
+        attempt: 1,
+        elapsedMs: 123,
+      }),
+    ).toThrow()
+    expect(() =>
+      EngineEvent.ReviewStreamChunk.properties.parse({
+        taskID: "tsk_review",
+        reviewID: "acceptance:tsk_review:1",
+        phase: "acceptance",
+        kind: "reasoning",
+        delta: "thinking",
+        attempt: 1,
+      }),
+    ).toThrow()
+
     expect("IntegrityReviewStarted" in EngineEvent).toBe(false)
     expect("IntegrityReviewProgress" in EngineEvent).toBe(false)
     expect("IntegrityReviewChunk" in EngineEvent).toBe(false)
     expect("AcceptanceReviewCompleted" in EngineEvent).toBe(false)
-    expect("AcceptanceGateRejected" in EngineEvent).toBe(false)
+    expect("AcceptanceEvidenceRejected" in EngineEvent).toBe(false)
   })
 
-  test("arbitrates manifest evidence failures without creating a workflow gate", () => {
-    const verdict = arbitrateAcceptanceGate({
+  test("arbitrates manifest evidence failures without creating workflow control", () => {
+    const verdict = arbitrateAcceptanceEvidenceDecision({
       checks: {
         status: "passed",
         summary: "Evidence passed 0 required check(s).",

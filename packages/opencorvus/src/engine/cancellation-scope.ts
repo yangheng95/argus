@@ -25,10 +25,10 @@ export function cancelSessionPromptInScope(input: {
   const cancelled = SessionPrompt.cancel(input.session.id, input.session.directory)
   if (!cancelled && isLivePromptStatus(previousStatus)) {
     const hasPromptState = SessionPrompt.isActiveInAnyDirectory(input.session.id)
-    const hasActivityGate = Boolean(SessionStatus.getActivity(input.session.id))
+    const hasActivityMonitor = Boolean(SessionStatus.getActivity(input.session.id))
     const cause =
-      !hasPromptState && !hasActivityGate
-        ? "status was active but no prompt state or activity gate exists in this process"
+      !hasPromptState && !hasActivityMonitor
+        ? "status was active but no prompt state or activity monitor exists in this process"
         : "no live prompt state matched session directory"
     throw createTaskCancellationIncomplete({
       taskID: input.taskID,

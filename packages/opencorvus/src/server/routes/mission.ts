@@ -32,7 +32,7 @@ import { buildMissionProjectArchive, ProjectArchiveUnsupportedProjectError } fro
 import { EngineService } from "@/task-api"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
-import { errors } from "../error"
+import { badRequestBody, errors } from "../error"
 
 function newMissionID(): string {
   return randomBytes(8).toString("hex")
@@ -437,7 +437,7 @@ export function MissionRoutes() {
             PromptProfile.assertKnownProfileID(input.promptProfile, await Config.get())
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            return c.json({ data: { message }, errors: [{ message }], success: false }, 400)
+            return c.json(badRequestBody(message), 400)
           }
         }
         const missionID = input.missionID ?? newMissionID()

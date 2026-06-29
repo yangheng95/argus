@@ -1,7 +1,7 @@
 import { createInterface } from "readline"
 import { Process } from "@/util/process"
 import { normalizeExecutableArgv } from "@/util/command"
-import { withStreamActivity, type StreamActivityGate } from "@/util/stream-activity"
+import { withStreamActivity, type StreamActivityMonitor } from "@/util/stream-activity"
 
 type RequestID = string | number
 
@@ -61,11 +61,11 @@ export const JsonRpcLineTransport = {
     let wake: (() => void) | undefined
     let nextID = 0
     let closed = false
-    let requestGate: StreamActivityGate | undefined
+    let requestActivityMonitor: StreamActivityMonitor | undefined
 
-    const clearRequestGate = () => {
-      requestGate?.dispose()
-      requestGate = undefined
+    const clearRequestActivityMonitor = () => {
+      requestActivityMonitor?.dispose()
+      requestActivityMonitor = undefined
     }
 
     const failAll = (error: unknown) => {
@@ -74,7 +74,7 @@ export const JsonRpcLineTransport = {
         item.reject(error)
       }
       pending.clear()
-      clearRequestGate()
+      clearRequestActivityMonitor()
     }
 
     const failTransport = (error: unknown) => {
@@ -88,22 +88,24 @@ export const JsonRpcLineTransport = {
 
     const observeRequestActivity = () => {
       if (pending.size === 0) return
-      requestGate?.observe()
+      requestActivityMonitor?.observe()
     }
 
-    const ensureRequestGate = () => {
-      if (requestGate) {
-        requestGate.observe()
+    const ensureRequestActivityMonitor = () => {
+      if (requestActivityMonitor) {
+        requestActivityMonitor.observe()
         return
       }
-      requestGate = withStreamActivity({
+      requestActivityMonitor = withStreamActivity({
         idleMs: requestIdleMs,
         label: `json-rpc request: ${command.join(" ")}`,
       })
-      requestGate.signal.addEventListener(
+      requestActivityMonitor.signal.addEventListener(
         "abort",
         () => {
-          failTransport(requestGate?.signal.reason ?? new Error(`JSON-RPC request idle timeout: ${command.join(" ")}`))
+          failTransport(
+            requestActivityMonitor?.signal.reason ?? new Error(`JSON-RPC request idle timeout: ${command.join(" ")}`),
+          )
         },
         { once: true },
       )
@@ -113,7 +115,7 @@ export const JsonRpcLineTransport = {
       const item = pending.get(id)
       item?.cleanup()
       pending.delete(id)
-      if (pending.size === 0) clearRequestGate()
+      if (pending.size === 0) clearRequestActivityMonitor()
       settle()
     }
 
@@ -205,7 +207,7 @@ export const JsonRpcLineTransport = {
           pending.set(id, { resolve, reject, cleanup })
         })
         try {
-          ensureRequestGate()
+          ensureRequestActivityMonitor()
           send({
             id,
             method,
@@ -214,7 +216,7 @@ export const JsonRpcLineTransport = {
         } catch (error) {
           cleanup()
           pending.delete(id)
-          if (pending.size === 0) clearRequestGate()
+          if (pending.size === 0) clearRequestActivityMonitor()
           throw error
         }
         return result
@@ -240,10 +242,10 @@ export const JsonRpcLineTransport = {
       },
       async *events(signal?: AbortSignal) {
         // Wire the caller's abort signal into the wake primitive so an
-        // upstream idle gate (e.g. build/agent.ts withStreamActivity)
+        // upstream idle monitor (e.g. build/agent.ts withStreamActivity)
         // can actually unwind this generator. Without the listener the
         // signal-aborted branch only fires AFTER the next event arrives —
-        // which is exactly the scenario the idle gate exists to handle.
+        // which is exactly the scenario the idle monitor exists to handle.
         const onAbort = () => {
           const w = wake
           wake = undefined

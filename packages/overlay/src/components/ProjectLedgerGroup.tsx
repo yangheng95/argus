@@ -83,11 +83,11 @@ function runProjectAction(owner: string, action: () => void | Promise<void>): vo
 export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
   const directoryLabel = () => projectDirectoryLabel(props.directory, t("task.project.unknown"))
   const label = () => {
-    const fallback = directoryLabel()
+    const directoryDefaults = directoryLabel()
     const customName = String(props.projectName || "").trim()
     return {
-      ...fallback,
-      name: customName || fallback.name,
+      ...directoryDefaults,
+      name: customName || directoryDefaults.name,
     }
   }
   const className = () => ["project-group", props.class].filter(Boolean).join(" ")

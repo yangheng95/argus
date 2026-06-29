@@ -4,9 +4,17 @@ This directory contains June 2026 implementation records, investigations, benchm
 
 The 2026-06-29 consolidation moved June records here from scattered spec locations and deleted pre-June spec files. The migration source of truth for this task is [2026-06-29-spec-consolidation.md](2026-06-29-spec-consolidation.md).
 
-2026-06-29 records:
+This README intentionally indexes current-day governance records only. For the complete month inventory, use:
+
+```bash
+rg --files specs/records/2026-06
+```
+
+Current-day records:
 
 - [2026-06-29-a2a-stale-cancel-terminal-status.md](2026-06-29-a2a-stale-cancel-terminal-status.md) records the A2A stale cancel terminal status investigation.
+- [2026-06-29-browser-mcp-node-package-manifest.md](2026-06-29-browser-mcp-node-package-manifest.md) records the browser MCP packaged Node runtime manifest fix.
+- [2026-06-29-browser-mcp-web-research-proxy.md](2026-06-29-browser-mcp-web-research-proxy.md) records the Browser MCP `network.proxy.webResearch` proxy bridge fix.
 - [2026-06-29-browser-preview-layout-geometry-diagnostic.md](2026-06-29-browser-preview-layout-geometry-diagnostic.md) records the browser preview layout geometry diagnostic.
 - [2026-06-29-browser-preview-reference-regions-tool.md](2026-06-29-browser-preview-reference-regions-tool.md) records the combined browser preview source-binding and reference-region comparison tool surface.
 - [2026-06-29-build-outcome-and-visual-evidence-repair.md](2026-06-29-build-outcome-and-visual-evidence-repair.md) records build outcome and visual evidence repair work.
@@ -20,6 +28,7 @@ The 2026-06-29 consolidation moved June records here from scattered spec locatio
 - [2026-06-29-model-image-input-auto-resize.md](2026-06-29-model-image-input-auto-resize.md) records the model-bound image auto-resize plan for oversized screenshot and attachment inputs.
 - [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md) records the single-source operator steer plan that replaces overlay direct-reply/build-message/A2A split routing.
 - [2026-06-29-orchestrator-goal-complete-delete-tools.md](2026-06-29-orchestrator-goal-complete-delete-tools.md) records the orchestrator goal completion and deletion tool plan.
+- [2026-06-29-overlay-task-create-model-forwarding.md](2026-06-29-overlay-task-create-model-forwarding.md) records the overlay new-task model forwarding root cause and repair plan.
 - [2026-06-29-project-delete-unhandled-rejection.md](2026-06-29-project-delete-unhandled-rejection.md) records the project deletion async-lifecycle root cause and no-unhandled-rejection fix plan.
 - [2026-06-29-remove-region-diff-agent-tool.md](2026-06-29-remove-region-diff-agent-tool.md) records the region diff agent tool removal plan.
 - [2026-06-29-scheduler-owned-child-task-lineage.md](2026-06-29-scheduler-owned-child-task-lineage.md) records scheduler-owned child task lineage work.
@@ -36,3 +45,4 @@ The 2026-06-29 consolidation moved June records here from scattered spec locatio
 1. Every record file in this directory must contain `2026-06` in its filename.
 2. Prompt or product-reference artifacts belong in `specs/artifacts/`, not in this records directory.
 3. Current architecture belongs in `specs/current/architecture/`, not in this records directory.
+4. Every new landed plan or implementation record must include a `Recall` section before code or documentation changes continue from that plan.

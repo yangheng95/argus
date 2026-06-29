@@ -7,16 +7,18 @@
 //   --rendered-dir <projectDir>   serve dist/, build/, out/, or project root
 //   --reference <pngPath>         reference screenshot
 //   --viewport <WxH>              Playwright viewport (default: reference image size)
-//   --threshold <0..1>            mean SSIM floor (default 0.85)
-//   --worst-threshold <0..1>      worst-5% window SSIM floor (default 0.55)
-//   --browser-launch-timeout-ms <n> browser launch timeout (default 60000)
+//   --threshold <0..1>            required mean SSIM floor
+//   --worst-threshold <0..1>      required worst-5% window SSIM floor
+//   --browser-launch-timeout-ms <n> required browser launch timeout
+//   --navigation-timeout-ms <n>   required page navigation inactivity timeout
+//   --settle-ms <n>               required post-load settle delay
 //   --out <dir>                   write rendered.png + diff.json here (default repo .scratch/benchmark-runs/visual-diff-out)
 //   --headless                    run Chromium headless
 //
 // Exit code: 0 = passed, 1 = failed, 2 = input/config error.
 //
 // Implementation lives in `@/evaluator/visual` so the orchestrator's per-goal
-// evaluator can run the same gate without shelling out.
+// evaluator can run the same visual check without shelling out.
 
 import path from "node:path"
 import { runVisualDiff, summarizeVisualReport } from "../../src/runtime/visual-page"
@@ -35,6 +37,16 @@ function required(name: string): string {
   const value = flag(name)
   if (!value) {
     console.error(`[visual-diff] missing required flag: ${name}`)
+    process.exit(2)
+  }
+  return value
+}
+
+function requiredNumber(name: string): number {
+  const raw = required(name)
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`[visual-diff] ${name} must be a positive number, got ${raw}`)
     process.exit(2)
   }
   return value
@@ -67,11 +79,11 @@ async function main() {
     process.exit(2)
   }
   const reference = required("--reference")
-  const threshold = Number(flag("--threshold") ?? "0.85")
-  const worstThreshold = Number(flag("--worst-threshold") ?? "0.55")
-  const browserLaunchTimeoutMs = Number(
-    flag("--browser-launch-timeout-ms") ?? process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000,
-  )
+  const threshold = requiredNumber("--threshold")
+  const worstThreshold = requiredNumber("--worst-threshold")
+  const browserLaunchTimeoutMs = requiredNumber("--browser-launch-timeout-ms")
+  const navigationTimeoutMs = requiredNumber("--navigation-timeout-ms")
+  const settleMs = requiredNumber("--settle-ms")
   const headless = process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1"
   const defaultOutDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs", "visual-diff-out")
   const outDir = path.resolve(flag("--out") ?? defaultOutDir)
@@ -93,6 +105,8 @@ async function main() {
       worstThreshold,
       outDir,
       browserLaunchTimeoutMs,
+      navigationTimeoutMs,
+      settleMs,
       headless,
     })
     const verdict = report.passed ? "PASS" : "FAIL"

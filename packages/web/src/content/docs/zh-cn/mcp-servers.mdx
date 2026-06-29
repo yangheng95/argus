@@ -74,6 +74,7 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts`
 | 字段                 | 说明                                             |
 | -------------------- | ------------------------------------------------ |
 | `url`                | MCP Server HTTP(S) 地址                          |
+| `transport`          | 远程 MCP transport；只能是 `streamable-http` 或 `sse` |
 | `headers`            | Server 要求的非认证路由或租户请求头             |
 | `oauth`              | `McpOAuth \| false`；远程 server 默认启用 OAuth |
 | `oauth.clientId`     | 静态 client ID（跳过动态注册）                   |

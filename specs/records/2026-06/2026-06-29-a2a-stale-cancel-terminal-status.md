@@ -3,6 +3,23 @@
 Status: implemented
 Date: 2026-06-29
 
+## Recall
+
+- User request: repair stale A2A cancel/status evidence so completed child
+  sessions are not rewritten as aborted.
+- Acceptance: durable terminal facts remain single-source, stale
+  `cancel_worker` closes coordination without changing completed session
+  outcome, and overlay phase ownership cannot be overwritten by an older
+  session.
+- Hard constraints: no fallback status path, no broad git reset, no new
+  worktree, and all changes must preserve current session/goal-run ownership.
+- Read before implementation: `AGENTS.md`, current session/status code,
+  A2A protocol record, and event evidence from the affected task.
+- Repository sweep: `rg
+"cancel_worker|respond_agent_coordination|agent_coordination_request|SessionStatus.*aborted|cancel_status"`.
+- Independent feedback: DB audit separated the stale G1 cancel from later G11
+  activity; no evidence supported treating G11 as aborted.
+
 ## Evidence
 
 Task `tsk_f0e5c0272001djBGw2eLvbkgkH` recorded a pending

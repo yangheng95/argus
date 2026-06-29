@@ -1,9 +1,9 @@
 ---
 title: Benchmark
-description: End-to-end quality regression harness emitting qualityVerdict (accepted/rejected) as the pass signal.
+description: End-to-end quality regression harness emitting qualityVerdict (accepted/rejected/blocked) as the pass signal.
 ---
 
-The benchmark harness provides **end-to-end quality regression**. It simulates a real request from creation to acceptance and emits `qualityVerdict` (accepted / rejected) as the pass signal.
+The benchmark harness provides **end-to-end quality regression**. It simulates a real request from creation to acceptance and emits `qualityVerdict` (accepted / rejected / blocked) as the pass signal. Only `accepted` is a passing verdict.
 
 ## Main script
 
@@ -18,10 +18,13 @@ DASHSCOPE_API_KEY=sk-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=/path/to/prd.txt" \
+  "--acceptance-verify-cmd=bun test" \
   "--idle-timeout-ms=2700000"
 ```
 
 **Note**: flags support both `--name=value` and `--name value`; quote paths that contain spaces.
+The benchmark task brief is explicit input: provide either `--request-file` or `--request-attachment`.
+The benchmark requires either `--acceptance-verify-cmd` or `--reference-images`; without one, startup fails before task creation. When using `--reference-images`, also provide `--threshold`, `--worst-threshold`, `--browser-launch-timeout-ms`, `--navigation-timeout-ms`, and `--settle-ms`.
 
 ## Key flags
 
@@ -31,6 +34,11 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 | `--request-attachment=PATH`                 | attach a request file instead of reading task text from `--request-file` |
 | `--reference-images=PATHS`                  | comma-separated visual reference images                                  |
 | `--acceptance-verify-cmd=CMD`               | explicit local acceptance verification command                           |
+| `--threshold=NUMBER`                        | required SSIM threshold when `--reference-images` drives verification     |
+| `--worst-threshold=NUMBER`                  | required worst-window threshold for reference-image verification          |
+| `--browser-launch-timeout-ms=NUMBER`        | required browser launch timeout for reference-image verification          |
+| `--navigation-timeout-ms=NUMBER`            | required page navigation inactivity timeout for reference-image verification |
+| `--settle-ms=NUMBER`                        | required post-load settle delay for reference-image verification          |
 | `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code                               |
 | `--title=TITLE`                             | task title                                                               |
 | `--report=PATH`                             | output JSON report                                                       |
@@ -61,7 +69,7 @@ Report JSON:
 }
 ```
 
-Source: `packages/opencorvus/script/benchmark/quality-gates.ts`.
+Source: `packages/opencorvus/script/benchmark/quality-checks.ts`.
 
 ## Timeout semantics
 
@@ -79,7 +87,7 @@ Historical baseline:
 `--report` JSON contains:
 
 - Task metadata (title, model, executor)
-- Per-stage/tool duration for orchestrator workflow steps, goal runs, review, local verification, and quality gates
+- Per-stage/tool duration for orchestrator workflow steps, goal runs, review, local verification, and quality evidence checks
 - Per-goal check results
 - `qualityVerdict` and `localVerify`
 - Failure samples: stdout/stderr tails + artifact paths
@@ -94,9 +102,10 @@ Historical baseline:
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \
       "--request-file=benchmarks/smoke.txt" \
+      "--acceptance-verify-cmd=bun test" \
       "--report=report.json"
 ```
 
 ## Targeted local probes
 
-Use the maintained scripts under `packages/opencorvus/script/benchmark/` for focused checks, for example `html-skeleton-workflow-check.ts`, `visual-diff.ts`, and `review-deliverable.ts`. Each probe documents its own flags at the top of the script.
+Use the maintained scripts under `packages/opencorvus/script/benchmark/` for focused checks, for example `html-skeleton-workflow-check.ts`, `visual-diff.ts`, and `review-deliverable.ts`. `html-skeleton-workflow-check.ts` and `visual-diff.ts` require `--threshold`, `--worst-threshold`, `--browser-launch-timeout-ms`, `--navigation-timeout-ms`, and `--settle-ms`; other probes document their own flags at the top of the script.

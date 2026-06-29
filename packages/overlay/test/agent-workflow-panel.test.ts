@@ -118,20 +118,20 @@ test("right-panel AgentWorkflowPanel is retired in favor of ConversationAgentRai
 test("agent workflow projection maps hidden build phase to the rendered owner step", () => {
   const projection = buildAgentWorkflow({
     traceEvents: [],
-    order: ["step:goal:run:execute"],
+    order: ["step:goal:build"],
     cards: {
-      "step:goal:run:execute": {
-        id: "step:goal:run:execute",
+      "step:goal:build": {
+        id: "step:goal:build",
         kind: "step",
         stage: "executor",
         status: "running",
-        title: "Execute",
+        title: "Executor",
         parts: [],
-        childIDs: ["step:goal:run:execute:phase:build"],
+        childIDs: ["step:goal:build:phase:build"],
         time: 1900,
       } as any,
-      "step:goal:run:execute:phase:build": {
-        id: "step:goal:run:execute:phase:build",
+      "step:goal:build:phase:build": {
+        id: "step:goal:build:phase:build",
         kind: "phase",
         stage: "build",
         status: "running",
@@ -145,8 +145,8 @@ test("agent workflow projection maps hidden build phase to the rendered owner st
     },
   })
 
-  expect(projection.records[0]?.cardID).toBe("step:goal:run:execute:phase:build")
-  expect(projection.records[0]?.renderedCardID).toBe("step:goal:run:execute")
+  expect(projection.records[0]?.cardID).toBe("step:goal:build:phase:build")
+  expect(projection.records[0]?.renderedCardID).toBe("step:goal:build")
 })
 
 test("agent workflow projection carries goal identity for same-stage cards", () => {

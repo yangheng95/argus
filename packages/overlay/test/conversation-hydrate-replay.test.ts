@@ -45,9 +45,18 @@ function positiveFixtureTime(value: unknown, label: string): number {
   return time
 }
 
-function requireExplicitOrderKey(value: unknown, label: string): string {
-  if (typeof value !== "string" || value.length === 0) throw new Error(`test fixture ${label} missing orderKey`)
-  return value
+function requireExplicitOrderKey(
+  value: unknown,
+  label: string,
+  domain?: "message" | "part" | "session" | "task" | "board" | "interaction",
+): string {
+  const key = typeof value === "string" ? value.trim() : ""
+  if (!key) throw new Error(`test fixture ${label} missing orderKey`)
+  if (domain) {
+    const actualDomain = key.split(":", 6)[4] || ""
+    if (actualDomain !== domain) throw new Error(`test fixture ${label} expected ${domain} orderKey, got ${actualDomain}: ${key}`)
+  }
+  return key
 }
 
 function messageOrderKey(id: string, time: number): string {
@@ -82,17 +91,27 @@ function objectRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
+function stampBoardPhase(goal: any, step: any, phaseID: string, phase: any): any {
+  return {
+    ...phase,
+    orderKey: requireExplicitOrderKey(
+      phase?.orderKey,
+      `goal phase ${goal?.goalID || "goal"}/${step?.stepID || "step"}/${phaseID}`,
+      "board",
+    ),
+  }
+}
+
 function stampBoard(board: any): any {
   if (!objectRecord(board)) return board
   const task = objectRecord(board.task) ? board.task : undefined
-  const taskCreated = task ? positiveFixtureTime(task?.time?.created, `task ${task?.id || "<unknown>"}`) : 0
   return {
     ...board,
     ...(task
       ? {
           task: {
             ...task,
-            orderKey: task.orderKey || taskOrderKey(String(task.id || ""), taskCreated),
+            orderKey: requireExplicitOrderKey(task.orderKey, `task ${task.id || "<unknown>"}`, "task"),
           },
         }
       : {}),
@@ -102,81 +121,51 @@ function stampBoard(board: any): any {
           steps: Array.isArray(board.workflow.steps)
             ? board.workflow.steps.map((step: any) => ({
                 ...step,
-                orderKey:
-                  step.orderKey ||
-                  boardOrderKey(`${String(task?.id || "task")}-${String(step?.id || "step")}`, taskCreated, 61),
+                orderKey: requireExplicitOrderKey(
+                  step.orderKey,
+                  `workflow step ${task?.id || "task"}/${step?.id || step?.stepID || "step"}`,
+                  "board",
+                ),
               }))
             : board.workflow.steps,
         }
       : board.workflow,
     goalWorkflows: Array.isArray(board.goalWorkflows)
-      ? board.goalWorkflows.map((goal: any) => {
-          const goalCreated = positiveFixtureTime(
-            goal?.time?.created || taskCreated,
-            `goal ${goal?.goalID || "<unknown>"}`,
-          )
-          return {
-            ...goal,
-            orderKey: goal.orderKey || boardOrderKey(String(goal?.goalID || "goal"), goalCreated, 60),
-            steps: Array.isArray(goal?.steps)
-              ? goal.steps.map((step: any) => {
-                  const stepTime = positiveFixtureTime(
-                    step?.startedAt || step?.completedAt || goalCreated,
-                    `goal step ${goal?.goalID || "goal"}/${step?.stepID || "step"}`,
-                  )
-                  return {
-                    ...step,
-                    orderKey:
-                      step.orderKey ||
-                      boardOrderKey(
-                        `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}`,
-                        stepTime,
-                        61,
-                      ),
-                    phases: objectRecord(step?.phases)
-                      ? Object.fromEntries(
-                          Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => {
-                            const phaseTime = positiveFixtureTime(
-                              phase?.startedAt || phase?.completedAt || stepTime,
-                              `goal phase ${goal?.goalID || "goal"}/${step?.stepID || "step"}/${phaseID}`,
-                            )
-                            return [
-                              phaseID,
-                              {
-                                ...phase,
-                                orderKey:
-                                  phase?.orderKey ||
-                                  boardOrderKey(
-                                    `${String(goal?.goalID || "goal")}-${String(step?.stepID || "step")}-${phaseID}`,
-                                    phaseTime,
-                                    62,
-                                  ),
-                              },
-                            ]
-                          }),
-                        )
-                      : step?.phases,
-                  }
-                })
-              : goal?.steps,
-          }
-        })
+      ? board.goalWorkflows.map((goal: any) => ({
+          ...goal,
+          orderKey: requireExplicitOrderKey(goal?.orderKey, `goal ${goal?.goalID || "<unknown>"}`, "board"),
+          steps: Array.isArray(goal?.steps)
+            ? goal.steps.map((step: any) => ({
+                ...step,
+                orderKey: requireExplicitOrderKey(
+                  step?.orderKey,
+                  `goal step ${goal?.goalID || "goal"}/${step?.stepID || "step"}`,
+                  "board",
+                ),
+                phases: objectRecord(step?.phases)
+                  ? Object.fromEntries(
+                      Object.entries(step.phases).map(([phaseID, phase]: [string, any]) => [
+                        phaseID,
+                        stampBoardPhase(goal, step, phaseID, phase),
+                      ]),
+                    )
+                  : step?.phases,
+              }))
+            : goal?.steps,
+        }))
       : board.goalWorkflows,
     interactions: Array.isArray(board.interactions)
-      ? board.interactions.map((interaction: any) => {
-          const created = positiveFixtureTime(
-            interaction?.time?.created || taskCreated,
+      ? board.interactions.map((interaction: any) => ({
+          ...interaction,
+          orderKey: requireExplicitOrderKey(
+            interaction?.orderKey,
             `interaction ${interaction?.id || "<unknown>"}`,
-          )
-          return {
-            ...interaction,
-            orderKey: interaction.orderKey || interactionOrderKey(String(interaction?.id || ""), created),
-          }
-        })
+            "interaction",
+          ),
+        }))
       : board.interactions,
   }
 }
-
 function setBoardStore(...args: any[]): any {
   if (args[0] === "board" && args.length === 2) return setBoardStoreRaw("board", stampBoard(args[1]))
   return (setBoardStoreRaw as any)(...args)
@@ -389,8 +378,8 @@ test("session conversation hydrate carries the explicit Mission row directory", 
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
-          agentView: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
         },
       }
@@ -428,6 +417,7 @@ test("task conversation hydrate registers task directory from the hydrated board
             snapshotVersion: "board:deep-link",
             task: {
               id: "tsk_deep_link",
+              orderKey: taskOrderKey("tsk_deep_link", 1_776_000_000_000),
               status: "active",
               request: "open linked task",
               sessionID: "ses_root",
@@ -441,8 +431,8 @@ test("task conversation hydrate registers task directory from the hydrated board
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
-          agentView: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
           history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
           lastSequence: 0,
@@ -476,6 +466,7 @@ test("task conversation hydrate requires explicit agentView", async () => {
             snapshotVersion: "board:missing-agent-view",
             task: {
               id: "tsk_missing_agent_view",
+              orderKey: taskOrderKey("tsk_missing_agent_view", 1_776_000_000_000),
               status: "active",
               request: "missing agent view",
               sessionID: "ses_root",
@@ -489,7 +480,7 @@ test("task conversation hydrate requires explicit agentView", async () => {
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
           history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
           lastSequence: 0,
@@ -521,6 +512,7 @@ test("task conversation hydrate requires explicit history state", async () => {
             snapshotVersion: "board:missing-history",
             task: {
               id: "tsk_missing_history",
+              orderKey: taskOrderKey("tsk_missing_history", 1_776_000_000_000),
               status: "active",
               request: "missing history",
               sessionID: "ses_root",
@@ -534,8 +526,8 @@ test("task conversation hydrate requires explicit history state", async () => {
           transcript: [],
           timeline: [],
           events: [],
-          view: { sessions: [] },
-          agentView: { sessions: [] },
+          view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
           lastSequence: 0,
         },
@@ -554,6 +546,7 @@ test("hydration replay consumes persisted executor output without synthesizing a
     snapshotVersion: "board:hydrate",
     task: {
       id: "tsk_hydrate",
+      orderKey: taskOrderKey("tsk_hydrate", 1_776_000_000_000),
       status: "active",
       request: "restore conversation",
       sessionID: "ses_root",
@@ -614,6 +607,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
               snapshotVersion: "board:replay",
               task: {
                 id: "tsk_replay",
+                orderKey: taskOrderKey("tsk_replay", 1_776_000_000_000),
                 status: "active",
                 request: "restore conversation",
                 sessionID: "ses_root",
@@ -627,8 +621,8 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
             transcript: [],
             timeline: [],
             events: [],
-            view: { sessions: [] },
-            agentView: { sessions: [] },
+            view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+            agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
             eventReplay: { cursor: 1, latestSequence: 2, complete: false, limit: 10 },
             history: { oldestTimestamp: null, oldestMessageID: null, oldestOrderKey: null, hasMore: false, limit: 160 },
             lastSequence: 1,
@@ -740,6 +734,7 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
       snapshotVersion: "board:preserve-agents",
       task: {
         id: "tsk_preserve_agents",
+        orderKey: taskOrderKey("tsk_preserve_agents", 1_776_000_000_000),
         status: "active",
         request: "preserve rail agents",
         sessionID: "ses_root",
@@ -753,7 +748,7 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
     transcript: [],
     timeline: [],
     events: [],
-    view: { sessions: [], messages: [], topLevelSessionIDs: [] },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
     agentView: {
       messages: [
         {
@@ -797,6 +792,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     snapshotVersion: "board:lazy",
     task: {
       id: "tsk_lazy",
+      orderKey: taskOrderKey("tsk_lazy", 1_776_000_000_000),
       status: "active",
       request: "restore conversation lazily",
       sessionID: "ses_root",
@@ -1019,6 +1015,7 @@ test("history paging preserves lifecycle-only frontend agent rail records withou
     snapshotVersion: "board:lifecycle-history",
     task: {
       id: "tsk_lifecycle_history",
+      orderKey: taskOrderKey("tsk_lifecycle_history", 1_776_000_030_000),
       status: "active",
       request: "restore lifecycle-only frontend agent",
       sessionID: "ses_root",
@@ -1121,7 +1118,7 @@ test("history paging preserves lifecycle-only frontend agent rail records withou
                   placement: "top_level",
                 },
               ],
-              topLevelSessionIDs: ["ses_frontend_lifecycle"],
+              topLevelSessionIDs: [],
             },
             eventReplay: { cursor: 8, latestSequence: 8, complete: true, limit: 500 },
             history: {
@@ -1158,7 +1155,7 @@ test("history paging preserves lifecycle-only frontend agent rail records withou
                   placement: "top_level",
                 },
               ],
-              topLevelSessionIDs: ["ses_frontend_lifecycle"],
+              topLevelSessionIDs: [],
             },
             history: {
               oldestTimestamp: null,
@@ -1199,6 +1196,7 @@ test("history paging continues when a goal phase card exists but its target mess
     snapshotVersion: "board:phase-history",
     task: {
       id: "tsk_phase_history",
+      orderKey: taskOrderKey("tsk_phase_history", 1_776_000_010_000),
       status: "active",
       request: "restore phase conversation lazily",
       sessionID: "ses_root",
@@ -1210,6 +1208,7 @@ test("history paging continues when a goal phase card exists but its target mess
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`tsk_phase_history-build`, 1_776_000_010_000, 61),
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
       ],
@@ -1219,6 +1218,7 @@ test("history paging continues when a goal phase card exists but its target mess
         goalID: "gol_phase",
         goalTitle: "Phase goal",
         goalObjective: "Keep build output visible",
+        time: { created: 1_776_000_010_100 },
         orderIndex: 0,
         retryCount: 0,
         steps: [
@@ -1461,6 +1461,7 @@ test("goal phase history can hydrate a build session directly by session id", as
     snapshotVersion: "board:phase-session",
     task: {
       id: "tsk_phase_session",
+      orderKey: taskOrderKey("tsk_phase_session", 1_776_000_020_000),
       status: "active",
       request: "restore build session directly",
       sessionID: "ses_root",
@@ -1472,6 +1473,7 @@ test("goal phase history can hydrate a build session directly by session id", as
       steps: [
         {
           id: "build",
+          orderKey: boardOrderKey(`tsk_phase_session-build`, 1_776_000_020_000, 61),
           phases: [{ id: "build", label: "Build", sessionKind: "build" }],
         },
       ],
@@ -1481,6 +1483,7 @@ test("goal phase history can hydrate a build session directly by session id", as
         goalID: "gol_phase_session",
         goalTitle: "Phase session goal",
         goalObjective: "Load old build transcript by session id",
+        time: { created: 1_776_000_020_100 },
         orderIndex: 0,
         retryCount: 0,
         steps: [
@@ -1614,7 +1617,7 @@ test("goal phase history can hydrate a build session directly by session id", as
                   phase: { stepID: "build", phaseID: "build" },
                 },
               ],
-              topLevelSessionIDs: ["ses_root"],
+              topLevelSessionIDs: [],
             },
             eventReplay: { cursor: 8, latestSequence: 8, complete: true, limit: 500 },
             history: {
@@ -1741,6 +1744,7 @@ test("session-scoped history preserves lifecycle-only frontend agent rail record
     snapshotVersion: "board:lifecycle-session",
     task: {
       id: "tsk_lifecycle_session",
+      orderKey: taskOrderKey("tsk_lifecycle_session", 1_776_000_040_000),
       status: "active",
       request: "restore lifecycle-only session card",
       sessionID: "ses_root",
@@ -1843,7 +1847,7 @@ test("session-scoped history preserves lifecycle-only frontend agent rail record
                   placement: "top_level",
                 },
               ],
-              topLevelSessionIDs: ["ses_frontend_session"],
+              topLevelSessionIDs: [],
             },
             eventReplay: { cursor: 7, latestSequence: 7, complete: true, limit: 500 },
             history: {
@@ -1880,7 +1884,7 @@ test("session-scoped history preserves lifecycle-only frontend agent rail record
                   placement: "top_level",
                 },
               ],
-              topLevelSessionIDs: ["ses_frontend_session"],
+              topLevelSessionIDs: [],
             },
             history: {
               oldestTimestamp: 1_776_000_040_200,

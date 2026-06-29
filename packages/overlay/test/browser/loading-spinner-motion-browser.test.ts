@@ -141,7 +141,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })

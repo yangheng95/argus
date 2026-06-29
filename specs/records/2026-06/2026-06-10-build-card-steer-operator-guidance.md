@@ -1,5 +1,13 @@
 # 2026-06-10 Build Card Steer Operator Guidance
 
+> Superseded for overlay targeted steer on 2026-06-29 by
+> [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md).
+> The historical direct-reply/build task-root split below is not current
+> runtime behavior. Current contract: every inline sub-agent steer, including
+> build, uses `POST /task/:taskID/session/:sessionID/operator-steer`; `POST
+> /task/:taskID/message` is strict task-root input and rejects target/build
+> session fields.
+
 ## Problem
 
 The overlay renders the same inline "Steer" box for every non-root agent or

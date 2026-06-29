@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
-import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -68,9 +68,9 @@ describe("mission routes", () => {
         })
 
         expect(response.status).toBe(400)
-        const body = (await response.json()) as { success?: boolean; errors?: Array<{ message?: string }> }
+        const body = (await response.json()) as { success?: boolean; error?: Array<{ message?: string }> }
         expect(body.success).toBe(false)
-        expect(body.errors?.[0]?.message).toContain("Unknown prompt profile")
+        expect(body.error?.[0]?.message).toContain("Unknown prompt profile")
         const spec = await Server.openapi()
         expect(spec.paths?.["/mission/wake"]?.post?.responses?.[400]).toBeDefined()
       },
@@ -156,11 +156,10 @@ describe("mission routes", () => {
           return id
         }
 
-        const activeTaskID = insertTask({
-          title: "Mission active task",
+        const queuedTaskID = insertTask({
+          title: "Mission queued task",
           source: "mission",
           metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
-          started: now,
         })
         const completedTaskID = insertTask({
           title: "Mission completed task",
@@ -198,15 +197,15 @@ describe("mission routes", () => {
         const record = body.find((item) => item.missionID === session.missionID)
         expect(record).toBeDefined()
         expect(record!.interruptible).toBe(true)
-        expect(record!.tasks.map((task) => task.id).sort()).toEqual([activeTaskID, completedTaskID].sort())
+        expect(record!.tasks.map((task) => task.id).sort()).toEqual([queuedTaskID, completedTaskID].sort())
         expect(record!.tasks.map((task) => task.title).sort()).toEqual([
-          "Mission active task",
           "Mission completed task",
+          "Mission queued task",
         ])
         expect(record!.taskStats).toMatchObject({
           total: 2,
-          queued: 0,
-          active: 1,
+          queued: 1,
+          active: 0,
           completed: 1,
           failed: 0,
           cancelled: 0,
@@ -215,7 +214,7 @@ describe("mission routes", () => {
     })
   })
 
-  test("GET /mission/:missionID/status and /task/:taskID/status expose normalized progress details", async () => {
+  test("GET /mission/:missionID/status and /task/:taskID/status expose normalized queued progress details", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -247,46 +246,11 @@ describe("mission routes", () => {
           return id
         }
 
-        const activeTaskID = insertTask({ title: "Mission active status task", started: now - 2000 })
+        const queuedTaskID = insertTask({ title: "Mission queued status task" })
         const completedTaskID = insertTask({
           title: "Mission completed status task",
           started: now - 4000,
           completed: now - 1000,
-        })
-        const goalID = Identifier.ascending("goal")
-        const runID = Identifier.ascending("run")
-        const goalRunID = Identifier.uuid4First8()
-        Database.use((db) => {
-          db.insert(EngineGoalTable)
-            .values({
-              id: goalID,
-              task_id: activeTaskID,
-              title: "Implement status API",
-              slug: "implement-status-api",
-              objective: "Expose detailed mission and task status snapshots.",
-              order_index: 0,
-              time_created: now,
-              time_updated: now,
-            } as any)
-            .run()
-          db.insert(EngineArtifactTable)
-            .values({
-              id: goalRunID,
-              task_id: activeTaskID,
-              run_id: runID,
-              goal_run_id: goalRunID,
-              kind: "goal_run_attempt",
-              label: "running-goal",
-              payload: {
-                goal_id: goalID,
-                status: "running",
-                retry_count: 0,
-                time_started: now - 1500,
-              },
-              time_created: now - 1500,
-              time_updated: now - 1500,
-            })
-            .run()
         })
 
         const missionResponse = await app.request("/mission/m-status/status", {
@@ -316,29 +280,19 @@ describe("mission routes", () => {
             percent: 50,
           },
         })
-        const activeTask = mission.tasks.find((task: any) => task.taskID === activeTaskID)
-        expect(activeTask).toMatchObject({
-          taskID: activeTaskID,
+        const queuedTask = mission.tasks.find((task: any) => task.taskID === queuedTaskID)
+        expect(queuedTask).toMatchObject({
+          taskID: queuedTaskID,
           status: "running",
-          lifecycleStatus: "active",
-          goals: [
-            {
-              goalID,
-              title: "Implement status API",
-              status: "running",
-              rawStatus: "running",
-              progress: {
-                running: 1,
-              },
-            },
-          ],
+          lifecycleStatus: "queued",
+          goals: [],
         })
         expect(mission.tasks.find((task: any) => task.taskID === completedTaskID)).toMatchObject({
           status: "success",
           lifecycleStatus: "completed",
         })
 
-        const taskResponse = await app.request(`/task/${activeTaskID}/status`, {
+        const taskResponse = await app.request(`/task/${queuedTaskID}/status`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
@@ -347,19 +301,10 @@ describe("mission routes", () => {
         expect(taskResponse.status).toBe(200)
         const task = (await taskResponse.json()) as any
         expect(task).toMatchObject({
-          taskID: activeTaskID,
+          taskID: queuedTaskID,
           status: "running",
-          lifecycleStatus: "active",
-        })
-        expect(task.goals[0]).toMatchObject({
-          goalID,
-          status: "running",
-          steps: [
-            {
-              status: "running",
-              rawStatus: "running",
-            },
-          ],
+          lifecycleStatus: "queued",
+          goals: [],
         })
       },
     })
@@ -415,19 +360,19 @@ describe("mission routes", () => {
         const session = await ensureMissionSession({ missionID: "m-abort", defaultCwd: tmp.path })
         SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
         const now = Date.now()
-        const activeTaskID = Identifier.ascending("task")
+        const queuedTaskID = Identifier.ascending("task")
         const completedTaskID = Identifier.ascending("task")
         Database.use((db) => {
           db.insert(EngineTaskTable)
             .values([
               {
-                id: activeTaskID,
+                id: queuedTaskID,
                 project_id: Instance.project.id,
                 source: "mission",
-                title: "Mission active child",
-                request: "active child",
+                title: "Mission queued child",
+                request: "queued child",
                 metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
-                time_started: now,
+                time_started: null,
                 time_completed: null,
                 error: null,
                 time_created: now,
@@ -464,12 +409,12 @@ describe("mission routes", () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toBe(true)
         expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
-        const activeTask = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, activeTaskID)).get(),
+        const queuedTask = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, queuedTaskID)).get(),
         )
-        expect(activeTask?.time_completed).not.toBeNull()
-        expect(activeTask?.error).toBe("task cancelled")
-        expect((activeTask?.metadata as Record<string, unknown> | null)?.cancelled).toBe(true)
+        expect(queuedTask?.time_completed).not.toBeNull()
+        expect(queuedTask?.error).toBe("task cancelled")
+        expect((queuedTask?.metadata as Record<string, unknown> | null)?.cancelled).toBe(true)
         const completedTask = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
         )

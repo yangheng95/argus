@@ -7,7 +7,7 @@ import { apiJson } from "./api"
 import { updateConfig } from "./config"
 import type { ConfigRequestOptions } from "./config"
 
-type RemoteMcpTransport = "streamable-http" | "sse"
+export type RemoteMcpTransport = "streamable-http" | "sse"
 
 export type AddMcpInput = {
   name: string

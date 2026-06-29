@@ -8,7 +8,7 @@
 
 | 入口         | 位置        | 扩展的是                                  | 典型对象                                 |
 | ------------ | ----------- | ----------------------------------------- | ---------------------------------------- |
-| **Executor** | `executor/` | 跑代码的外部进程                          | claude-code / codex / opencode           |
+| **Executor** | `executor/` | 内置执行队列与外部 coding 进程            | opencorvus / codex / claude-code         |
 | **Plugin**   | `plugin/`   | 非 executor 语义的外部插件（hook / auth） | `@opencorvus-ai/plugin` API 下的任意实现 |
 | **MCP**      | `mcp/`      | Model Context Protocol server             | 任意实现 MCP 的工具服务                  |
 | **ACP**      | `acp/`      | Agent Client Protocol（编辑器集成）       | Zed 等外部编辑器                         |
@@ -17,16 +17,15 @@
 
 **代码**：`src/executor/`
 
-三家实现 × 多种形态：
+当前执行器名 × 多种形态：
 
-| 实现         | CLI 形态       | Agent 形态        | App-server 形态                                      |
-| ------------ | -------------- | ----------------- | ---------------------------------------------------- |
-| claude       | —              | `claude-agent.ts` | `claude-code.ts`                                     |
-| codex        | `codex-cli.ts` | —                 | `codex-app-server.ts` + `codex-app-server-client.ts` |
-| opencode     | `opencode.ts`  | —                 | —                                                    |
-| （共享基座） | —              | `codex.ts`        | —                                                    |
+| 执行器名      | CLI / 本地形态        | Agent / SDK 形态   | App-server 形态                                      |
+| ------------- | --------------------- | ------------------ | ---------------------------------------------------- |
+| `opencorvus`  | `opencorvus.ts`       | —                  | —                                                    |
+| `codex`       | `codex-cli.ts`        | `codex.ts`         | `codex-app-server.ts` + `codex-app-server-client.ts` |
+| `claude-code` | —                     | `claude-agent.ts`  | `claude-code.ts`                                     |
 
-**历史变更**：旧的 `claude-cli.ts` 已删除（commit `11fe9bf30` — 从未在生产使用）。
+当前执行器名以 `executor/contract.ts` 的 `ExecutorName` 为准：`opencorvus`、`codex`、`claude-code`。
 
 **关键文件**：
 
@@ -42,15 +41,13 @@
 
 ```
 Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
-   ExecutorRegistry.require() → Executor 进程 → diff / acceptance
+   ExecutorRegistry.requireCoding() → external coding executor → diff evidence
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
 
-（旧 `pipeline/executor.ts` 与 `engine/goal-pool.ts` 已删除。`goal/runner.ts` 当前仅
-121 行，只导出 `cleanupGoalWorkspace`，**不再**承担 worktree 创建或 executor dispatch
-职责；worktree 创建走 `Worktree.create`（在 `build/agent.ts` · `orchestrator/tools.ts`
-直接调用）。`ExecutorRegistry.require()` 调用点在 `build/agent.ts` · `engine/runtime.ts`
-· `task-api/index.ts` 三处。）
+（旧 pipeline executor 与 goal-pool 模块已删除。`goal/runner.ts` 只导出
+`cleanupGoalWorkspace`，不承担 worktree 创建或 executor dispatch 职责；worktree 创建走
+`BuildAgent.run` 内的 `Worktree.create`，external coding executor 调用走 `ExecutorRegistry.requireCoding`。）
 
 ## Plugin —— 非执行器插件
 
@@ -97,7 +94,7 @@ Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
 
 1. **"把 codex 当 executor 用还是 plugin 用？"** — 已统一为 executor，不存在 plugin 形态。
 2. **"MCP 能不能替代 plugin？"** — 理论上可以，实际上 plugin 更紧耦合（in-process 调用，类型共享），MCP 是远程协议（有序列化开销 + 权限/鉴权流）。
-3. **"Executor 多态怎么选 CLI / agent / app-server？"** — 由 `engine_task.executor` 字段决定，用户或 capability `set_executor` 在创建 task 时指定。
+3. **"Executor 多态怎么选内置队列 / CLI / agent / app-server？"** — 由 `engine_task.executor` 字段决定，用户或 capability `set_executor` 在创建 task 时指定；当前合法值是 `opencorvus`、`codex`、`claude-code`。
 
 ## 相关文档
 

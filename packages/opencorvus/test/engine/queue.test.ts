@@ -281,6 +281,26 @@ describe("engine queue", () => {
             operatorIntent: { kind: "replan" },
           },
         })
+
+        runTaskLoop.mockClear()
+        const coordinationResult = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "Operator steer created a coordination request.",
+            coordinationRequest: { requestID: "artifact_operator_steer_queue" },
+          },
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(coordinationResult).toBe("started")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: "Operator steer created a coordination request.",
+            coordinationRequest: { requestID: "artifact_operator_steer_queue" },
+          },
+        })
       },
     })
   })
@@ -1297,11 +1317,10 @@ describe("engine queue", () => {
         const result = await dispatchTaskLoop({
           taskID,
           event: {
-            note: "operator guidance for one failed build",
+            note: "operator guidance for the task root",
             operatorMessage: {
-              text: "resume only the failed build",
-              source: "overlay_build_steer",
-              target: { kind: "build_session", sessionID: `ses_build_a_${now}`, goalID: `goal_queue_multi_a_${now}` },
+              text: "re-evaluate the active build evidence",
+              source: "panel",
             },
           },
         })

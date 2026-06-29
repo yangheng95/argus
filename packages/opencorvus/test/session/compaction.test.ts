@@ -120,7 +120,7 @@ function handoffFixture(): CompactionHandoff.Info {
       {
         command: "bun test packages/opencorvus/test/session/compaction.test.ts",
         result: "pending local verification",
-        evidence: "test command captured before final gate",
+        evidence: "test command captured before final delivery evidence",
       },
     ],
     errorsAndBlockers: [],

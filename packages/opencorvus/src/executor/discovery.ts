@@ -206,7 +206,7 @@ export namespace ExecutorDiscovery {
       locate({
         name: "opencorvus",
         env: "OPENCORVUS_EXECUTOR_OPENCORVUS_BIN",
-        names: process.platform === "win32" ? ["opencode.exe", "opencode.cmd", "opencode"] : ["opencode"],
+        names: process.platform === "win32" ? ["opencorvus.exe", "opencorvus.cmd", "opencorvus"] : ["opencorvus"],
         builtin: true,
       }),
       locate({

@@ -20,14 +20,7 @@ export namespace BrowserMCPNodeLauncher {
   async function serve(transport: "http" | "stdio") {
     const runtime = await resolveRuntime({ transport })
     const { node, bundle } = runtime
-    const env = { ...process.env }
-    if (runtime.packaged) {
-      env.OPENCORVUS_BROWSER_MCP_PACKAGED = "1"
-      delete env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR
-    } else {
-      env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR = path.resolve(import.meta.dir, "../../..")
-      delete env.OPENCORVUS_BROWSER_MCP_PACKAGED
-    }
+    const env = await childEnvironment({ packaged: runtime.packaged })
     const child = spawn(node, [bundle, transport], {
       ...childSpawnOptions({ env }),
     })
@@ -123,6 +116,23 @@ export namespace BrowserMCPNodeLauncher {
     }
   }
 
+  export async function childEnvironment(input: {
+    packaged: boolean
+    directory?: string
+    env?: NodeJS.ProcessEnv
+  }): Promise<NodeJS.ProcessEnv> {
+    const env = { ...(input.env ?? process.env) }
+    if (input.packaged) {
+      env.OPENCORVUS_BROWSER_MCP_PACKAGED = "1"
+      delete env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR
+    } else {
+      env.OPENCORVUS_BROWSER_MCP_SOURCE_PACKAGE_DIR = path.resolve(import.meta.dir, "../../..")
+      delete env.OPENCORVUS_BROWSER_MCP_PACKAGED
+    }
+
+    return env
+  }
+
   async function waitForProcessExit(child: ChildProcess): Promise<void> {
     if (child.exitCode !== null || child.signalCode !== null) return
     await new Promise<void>((resolve) => {
@@ -134,42 +144,30 @@ export namespace BrowserMCPNodeLauncher {
     const pid = child.pid
     if (!pid) return
     if (process.platform === "win32") {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
           stdio: "ignore",
           windowsHide: true,
         })
-        killer.once("exit", () => resolve())
-        killer.once("error", () => {
-          try {
-            child.kill(signal)
-          } catch (error) {
-            logLauncherError("taskkill fallback failed", error)
+        killer.once("exit", (code, childSignal) => {
+          if (code === 0) {
+            resolve()
+            return
           }
-          resolve()
+          reject(new Error(`taskkill exited with ${childSignal ?? code}`))
         })
+        killer.once("error", reject)
       })
       await waitForProcessExit(child)
       return
     }
-    try {
-      process.kill(-pid, signal)
-    } catch {
-      try {
-        child.kill(signal)
-      } catch (error) {
-        logLauncherError("process group terminate fallback failed", error)
-      }
-    }
+    process.kill(-pid, signal)
     const force = setTimeout(() => {
+      if (child.exitCode !== null || child.signalCode !== null) return
       try {
         process.kill(-pid, "SIGKILL")
-      } catch {
-        try {
-          child.kill("SIGKILL")
-        } catch (error) {
-          logLauncherError("process group force kill fallback failed", error)
-        }
+      } catch (error) {
+        logLauncherError("process group force kill failed", error)
       }
     }, 2_000)
     force.unref()
@@ -196,9 +194,7 @@ export namespace BrowserMCPNodeLauncher {
     }
     const js = path.join(outdir, `${transport}.js`)
     const mjs = path.join(outdir, `${transport}.mjs`)
-    await fs.rename(js, mjs).catch(async () => {
-      await fs.copyFile(js, mjs)
-    })
+    await fs.rename(js, mjs)
     return mjs
   }
 

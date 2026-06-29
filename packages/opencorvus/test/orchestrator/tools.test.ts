@@ -1626,7 +1626,7 @@ mock.module("@/visual-qa", () => ({
   },
 }))
 
-mock.module("@/frontend-design/capture-gate", () => {
+mock.module("@/frontend-design/reference-capture", () => {
   class CaptureReferenceError extends Error {
     override readonly cause?: unknown
     constructor(
@@ -1702,9 +1702,9 @@ function acceptanceDecisionFixture(verdict: any) {
         requirementCoverage: [],
         reviewEvidence: [],
         changedFiles: [],
-        finalGate: {
+        evidenceDecision: {
           status: "passed",
-          summary: "Acceptance evidence gate passed 0 required check(s).",
+          summary: "Acceptance evidence passed 0 required check(s).",
           failedCheckIds: [],
           failedCoverageIds: [],
           failedReviewIds: [],
@@ -11969,7 +11969,7 @@ describe("orchestrator tools", () => {
       return minimalFrontendDesignResult({ sessionID: "ses_should_not_start" })
     }
     captureReferenceManifestImpl = async () => {
-      const { CaptureReferenceError } = await import("@/frontend-design/capture-gate")
+      const { CaptureReferenceError } = await import("@/frontend-design/reference-capture")
       throw new CaptureReferenceError("navigation timed out", "navigate")
     }
 
@@ -12876,10 +12876,10 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("publish gate failures are post-acceptance export feedback instead of task lifecycle decisions", async () => {
+  test("artifact export failures are post-acceptance feedback instead of task lifecycle decisions", async () => {
     const source = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
-    expect(source).toContain("publishGateArtifactResult")
+    expect(source).toContain("publishArtifactExportResult")
     expect(source).toContain("Task lifecycle is unchanged")
     expect(source).not.toContain('await updateTask(currentTask, { status: "failed", error: publishResult.summary')
     expect(source).not.toContain('await updateTask(task, { status: "failed", error: result.summary')
@@ -13536,7 +13536,7 @@ describe("orchestrator tools", () => {
                 {
                   path: "src/index.ts",
                   summary: "Changed implementation after review feedback.",
-                  reason: "Prior review feedback is context, not a dispatch gate.",
+                  reason: "Prior review feedback is context, not a dispatch decision.",
                 },
               ],
               tests: [],
@@ -14520,7 +14520,7 @@ describe("orchestrator tools", () => {
                 {
                   path: "src/index.ts",
                   summary: "Changed implementation after correction feedback.",
-                  reason: "Review history is context, not a dispatch gate.",
+                  reason: "Review history is context, not a dispatch decision.",
                 },
               ],
               tests: [],
@@ -14929,7 +14929,7 @@ describe("orchestrator tools", () => {
             phase: "frontend_design",
             key,
             value: `${key} complete for retry attachment regression.`,
-            reason: "Visual build gate requires complete frontend-design template first.",
+            reason: "Visual build prerequisite requires complete frontend-design template first.",
           })
         }
 

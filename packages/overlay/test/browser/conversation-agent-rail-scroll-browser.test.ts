@@ -250,7 +250,7 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     timeline: [],
     events: [],
     eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions, messages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
     agentView: { sessions, messages: agentMessages, topLevelSessionIDs: sessions.map((item) => item.sessionID) },
   }

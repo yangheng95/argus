@@ -20,7 +20,7 @@ import {
   artifactSourcemap,
   parseBuildFlavor,
 } from "../../script/build-artifact"
-import { copyRuntimeNodeModules } from "../../script/build-runtime-node-modules"
+import { copyRuntimeNodeModules, writePackagedRuntimePackageJson } from "../../script/build-runtime-node-modules"
 import { copyRipgrepRuntime } from "../../script/build-runtime-binaries"
 
 function currentRuntimeTarget(): ArtifactNodeRuntimeTarget {
@@ -132,6 +132,51 @@ describe("build-artifact", () => {
     } finally {
       await rm(outdir, { recursive: true, force: true })
       await rm(sourceDir, { recursive: true, force: true })
+    }
+  })
+
+  test("build scripts write package manifests for parent and browser MCP runtimes", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-runtime-package-json-"))
+    try {
+      const target = currentRuntimeTarget()
+      const parentRuntime = resolve(outdir, "opencorvus-overlay-server-windows-x64")
+      const browserRuntime = resolve(parentRuntime, "browser-mcp-node")
+
+      await writePackagedRuntimePackageJson({
+        name: "opencorvus-overlay-server-windows-x64",
+        outdir: parentRuntime,
+        target,
+        version: "0.0.0-test",
+      })
+      await writePackagedRuntimePackageJson({
+        name: "opencorvus-overlay-server-windows-x64-browser-mcp-node",
+        outdir: browserRuntime,
+        target,
+        version: "0.0.0-test",
+      })
+
+      expect(JSON.parse(readFileSync(resolve(parentRuntime, "package.json"), "utf8"))).toMatchObject({
+        name: "opencorvus-overlay-server-windows-x64",
+        version: "0.0.0-test",
+        os: [target.os],
+        cpu: [target.arch],
+      })
+      expect(JSON.parse(readFileSync(resolve(browserRuntime, "package.json"), "utf8"))).toMatchObject({
+        name: "opencorvus-overlay-server-windows-x64-browser-mcp-node",
+        version: "0.0.0-test",
+        os: [target.os],
+        cpu: [target.arch],
+      })
+
+      const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+      const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+      for (const source of [buildSource, localBuildSource]) {
+        expect(source).toContain("writePackagedRuntimePackageJson")
+        expect(source).toContain("outdir: browserMcpRuntimeDir")
+        expect(source).toContain('name: `${name}-browser-mcp-node`')
+      }
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
     }
   })
 

@@ -114,7 +114,7 @@ test(
     }
 
     function conversation(task: typeof taskA) {
-      const emptyView = { topLevelSessionIDs: [], sessions: [] }
+      const emptyView = { topLevelSessionIDs: [], sessions: [], messages: [] }
       return {
         lastSequence: 0,
         messageWatermark: 0,
@@ -123,7 +123,7 @@ test(
         timeline: [],
         events: [],
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 500, sinceTimestamp: null },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
         view: emptyView,
         agentView: emptyView,
       }
@@ -390,7 +390,7 @@ test(
     }
 
     function conversation() {
-      const emptyView = { topLevelSessionIDs: [], sessions: [] }
+      const emptyView = { topLevelSessionIDs: [], sessions: [], messages: [] }
       return {
         lastSequence: 0,
         messageWatermark: 0,
@@ -399,7 +399,7 @@ test(
         timeline: [],
         events: [],
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 500, sinceTimestamp: null },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
         view: emptyView,
         agentView: emptyView,
       }

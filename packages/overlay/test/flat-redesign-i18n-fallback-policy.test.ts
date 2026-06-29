@@ -28,10 +28,10 @@ function lineAtOffset(text: string, offset: number): number {
 describe("flat-redesign i18n fallback policy", () => {
   it("source does not use t(...) string fallback expressions", () => {
     const violations: string[] = []
-    const fallback = /\bt\([^)]*\)\s*\|\|\s*["']/g
+    const fallbackPattern = /\bt\([^)]*\)\s*\|\|\s*["']/g
     for (const file of walkSourceFiles(SRC_ROOT).sort()) {
       const text = readFileSync(file, "utf8")
-      for (const match of text.matchAll(fallback)) {
+      for (const match of text.matchAll(fallbackPattern)) {
         violations.push(`${relativeOverlayPath(file)}:${lineAtOffset(text, match.index ?? 0)}: ${match[0]}`)
       }
     }

@@ -418,10 +418,10 @@ export namespace SessionProcessor {
                       break
 
                     case "tool-call": {
-                      // Pause the chunk-driven idle gate while the SDK runs the
+                      // Pause the chunk-driven idle monitor while the SDK runs the
                       // tool's `execute`. Long-running tools (build agent ~100-300s,
                       // acceptance, architect) hold the LLM stream open without
-                      // emitting chunks; the gate's 180s default would false-positive
+                      // emitting chunks; the monitor's 180s default would false-positive
                       // trip otherwise. Resume on tool-result. Per rule 23 the
                       // pause is scoped to known stream-pause semantics (tool-call
                       // boundary), not a generic disable switch.
@@ -482,7 +482,7 @@ export namespace SessionProcessor {
                     }
                     case "tool-result": {
                       // Pair with `run.pause("tool-call")` from tool-call. resume() is a
-                      // no-op if the gate isn't paused (e.g. tool-result without
+                      // no-op if the monitor isn't paused (e.g. tool-result without
                       // matching tool-call after a recovery), so this is safe to
                       // run unconditionally before the match check.
                       run.resume("tool-call")

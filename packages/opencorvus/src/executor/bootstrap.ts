@@ -111,7 +111,7 @@ function codexProvider(command: string[]) {
           // The bypass flag is the same operating mode claude-code uses for
           // its sandbox; benchmark runs are externally sandboxed (per-goal
           // worktrees + ephemeral home), so the safety surface is the host,
-          // not codex's per-call gates.
+          // not codex's per-call approval prompts.
           "app-server",
           "--listen",
           "stdio://",

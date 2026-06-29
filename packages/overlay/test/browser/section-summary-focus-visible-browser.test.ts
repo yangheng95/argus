@@ -158,7 +158,7 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })

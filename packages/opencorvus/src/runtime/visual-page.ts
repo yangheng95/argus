@@ -1,5 +1,5 @@
 /**
- * Visual similarity evaluator — Browser Runtime screenshot + SSIM gate.
+ * Visual similarity evaluator — Browser Runtime screenshot + SSIM check.
  * SSIM means structural similarity index measure.
  *
  * The same logic that ships in `script/benchmark/visual-diff.ts` (which is
@@ -41,29 +41,33 @@ export interface VisualDiffOptions {
   /** Force a specific browser viewport. Defaults to the reference image's
    *  native pixel size, which is the common case for fig2code. */
   viewport?: { width: number; height: number }
-  /** Mean SSIM floor. Default 0.85. */
-  threshold?: number
-  /** Worst-5%-window SSIM floor. Default 0.55. */
-  worstThreshold?: number
+  /** Explicit mean SSIM floor. */
+  threshold: number
+  /** Explicit worst-5%-window SSIM floor. */
+  worstThreshold: number
   /** Directory to write `rendered.png` and `diff.json`. Created if absent. */
   outDir: string
   /** Optional override for the chrome/edge executable. */
   browserExecutable?: string
-  /** Override browser launch timeout. Default: BrowserRuntime.DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS. */
-  browserLaunchTimeoutMs?: number
+  /** Explicit browser launch timeout. */
+  browserLaunchTimeoutMs: number
+  /** Explicit page navigation inactivity timeout. */
+  navigationTimeoutMs: number
+  /** Explicit settle delay before capture. */
+  settleMs: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
 }
 
 export interface VisualDiffReport {
   passed: boolean
-  /** "ok" if SSIM and runtime capture gates passed, otherwise a categorical reason. */
+  /** "ok" if SSIM and runtime capture checks passed, otherwise a categorical reason. */
   reason: "ok" | "size_mismatch" | "below_mean" | "below_worst" | "below_both" | "runtime_layers"
   mssim: number
   threshold: number
   worstThreshold: number
   distribution: { min: number; p1: number; p5: number; p25: number; mean: number }
-  gate: { meanPassed: boolean; worstPassed: boolean; runtimePassed: boolean }
+  checks: { meanPassed: boolean; worstPassed: boolean; runtimePassed: boolean }
   runtime: { passed: boolean; failedLayers: string[]; layers: RuntimeCaptureLayers }
   viewport: { width: number; height: number }
   rendered: { path: string; width: number; height: number }
@@ -84,6 +88,12 @@ export interface RenderPageCapture {
   layers: RuntimeCaptureLayers
 }
 
+function requirePositiveRenderNumber(value: unknown, name: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`renderPage: invalid ${name}: ${value}`)
+  return parsed
+}
+
 /** Pure-render API — renders an HTML/URL target into `<outDir>/rendered.png`
  *  and returns the absolute path. No SSIM / no comparison. Runtime visual
  *  tools use this to hand the LLM (large language model) a screenshot of the actual built
@@ -100,14 +110,14 @@ export async function renderPage(opts: {
   viewport?: { width: number; height: number }
   referenceForViewport?: string
   browserExecutable?: string
-  /** Override browser launch timeout. Default: BrowserRuntime.DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS. */
-  browserLaunchTimeoutMs?: number
+  /** Explicit browser launch timeout. */
+  browserLaunchTimeoutMs: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
-  /** Override browser page.goto navigation timeout. Default: 90_000ms. */
-  navigationTimeoutMs?: number
-  /** Extra settle delay after window load. Default: 2_500ms. */
-  settleMs?: number
+  /** Explicit browser page.goto navigation inactivity timeout. */
+  navigationTimeoutMs: number
+  /** Explicit settle delay after window load. */
+  settleMs: number
   /** Optional selector that must appear before assertions are evaluated. */
   waitForSelector?: string
   /** Minimum body descendant count for integrity checks. */
@@ -135,6 +145,9 @@ export async function renderPage(opts: {
   interaction?: RuntimeInteractionProbe
   capture: RenderPageCapture
 }> {
+  const browserLaunchTimeoutMs = requirePositiveRenderNumber(opts.browserLaunchTimeoutMs, "browserLaunchTimeoutMs")
+  const navigationTimeoutMs = requirePositiveRenderNumber(opts.navigationTimeoutMs, "navigationTimeoutMs")
+  const settleMs = requirePositiveRenderNumber(opts.settleMs, "settleMs")
   let viewport = opts.viewport
   if (!viewport) {
     if (!opts.referenceForViewport) {
@@ -162,10 +175,10 @@ export async function renderPage(opts: {
     viewport,
     outDir: opts.outDir,
     browserExecutable: opts.browserExecutable,
-    browserLaunchTimeoutMs: opts.browserLaunchTimeoutMs,
+    browserLaunchTimeoutMs,
     headless: opts.headless ?? false,
-    navigationTimeoutMs: opts.navigationTimeoutMs,
-    settleMs: opts.settleMs,
+    navigationTimeoutMs,
+    settleMs,
     waitForSelector: opts.waitForSelector,
     minDomDescendants: opts.minDomDescendants,
     expectSelectors: opts.expectSelectors,
@@ -197,10 +210,10 @@ async function renderPageViaNode(input: {
   viewport: { width: number; height: number }
   outDir: string
   browserExecutable?: string
-  browserLaunchTimeoutMs?: number
+  browserLaunchTimeoutMs: number
   headless: boolean
-  navigationTimeoutMs?: number
-  settleMs?: number
+  navigationTimeoutMs: number
+  settleMs: number
   waitForSelector?: string
   minDomDescendants?: number
   expectSelectors?: string[]
@@ -220,7 +233,7 @@ async function renderPageViaNode(input: {
 }> {
   const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.browserLaunchTimeoutMs)
-  const navigationTimeoutMs = input.navigationTimeoutMs ?? 90_000
+  const navigationTimeoutMs = input.navigationTimeoutMs
   const sidecarSafetyTimeoutMs = Math.max(launchTimeoutMs + 30 * 60_000, 30 * 60_000)
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const run = await runBrowserNodeSidecar<
@@ -624,7 +637,7 @@ async function main() {
         pageErrors.push(("waitForSelector: " + (error && error.message ? error.message : String(error))).slice(0, 400));
       });
     }
-    await new Promise((resolve) => setTimeout(resolve, input.settleMs ?? 2_500));
+    await new Promise((resolve) => setTimeout(resolve, input.settleMs));
     let dom = await collectDom(page);
     let interaction;
     if (input.probeInteractions) {
@@ -688,14 +701,14 @@ main();
 `
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
- *  verification workflows only. The workflow no longer gates on
+ *  verification workflows only. The workflow no longer uses SSIM as the final decision:
  *  SSIM: the LLM compares rendered vs reference via vision (see `renderPage`
  *  + integrity acceptance multimodal attachments), which produces actionable
  *  "header is missing N button, sidebar 20px too wide" feedback instead of
  *  a single opaque similarity number. */
 export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiffReport> {
-  const threshold = opts.threshold ?? 0.85
-  const worstThreshold = opts.worstThreshold ?? 0.55
+  const threshold = opts.threshold
+  const worstThreshold = opts.worstThreshold
   for (const [name, value] of [
     ["threshold", threshold],
     ["worstThreshold", worstThreshold],
@@ -703,6 +716,15 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     if (!Number.isFinite(value) || value <= 0 || value > 1) {
       throw new Error(`runVisualDiff: invalid ${name} (expected 0..1): ${value}`)
     }
+  }
+  if (!Number.isFinite(opts.browserLaunchTimeoutMs) || opts.browserLaunchTimeoutMs <= 0) {
+    throw new Error(`runVisualDiff: invalid browserLaunchTimeoutMs: ${opts.browserLaunchTimeoutMs}`)
+  }
+  if (!Number.isFinite(opts.navigationTimeoutMs) || opts.navigationTimeoutMs <= 0) {
+    throw new Error(`runVisualDiff: invalid navigationTimeoutMs: ${opts.navigationTimeoutMs}`)
+  }
+  if (!Number.isFinite(opts.settleMs) || opts.settleMs <= 0) {
+    throw new Error(`runVisualDiff: invalid settleMs: ${opts.settleMs}`)
   }
   await fs.access(opts.reference).catch(() => {
     throw new Error(`runVisualDiff: reference image not found: ${opts.reference}`)
@@ -715,6 +737,8 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     viewport: opts.viewport ?? { width: refImgProbe.width, height: refImgProbe.height },
     browserExecutable: opts.browserExecutable,
     browserLaunchTimeoutMs: opts.browserLaunchTimeoutMs,
+    navigationTimeoutMs: opts.navigationTimeoutMs,
+    settleMs: opts.settleMs,
     headless: opts.headless,
   })
   const { renderedPath, viewport } = rendered
@@ -736,7 +760,7 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
       threshold,
       worstThreshold,
       distribution: { min: Number.NaN, p1: Number.NaN, p5: Number.NaN, p25: Number.NaN, mean: Number.NaN },
-      gate: { meanPassed: false, worstPassed: false, runtimePassed },
+      checks: { meanPassed: false, worstPassed: false, runtimePassed },
       runtime: runtimeReport,
       viewport,
       rendered: { path: renderedPath, width: rendImg.width, height: rendImg.height },
@@ -782,7 +806,7 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     threshold,
     worstThreshold,
     distribution: { min: minSSIM, p1, p5, p25, mean: mssim },
-    gate: { meanPassed, worstPassed, runtimePassed },
+    checks: { meanPassed, worstPassed, runtimePassed },
     runtime: runtimeReport,
     viewport,
     rendered: { path: renderedPath, width: rendImg.width, height: rendImg.height },

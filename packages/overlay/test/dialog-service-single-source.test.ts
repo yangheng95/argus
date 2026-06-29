@@ -216,6 +216,7 @@ describe("app/session dialog single source", () => {
     expect(appHost).toContain("import { SegmentedControl")
     expect(appHost).toContain("<SegmentedControl")
     expect(appHost).toContain('itemClass="app-dialog-decision__choice"')
+    expect(appHost).toContain("onChange={chooseTaskDecision}")
     expect(appHost).toContain("onActivate={chooseTaskDecision}")
     expect(appHost).toContain("choice.dataset.value === dialogStore.app.selectValue")
     expect(appHost).toContain("focusTarget?.focus()")

@@ -25,11 +25,11 @@
            channel · command · skills · plugin · prompt · instructions ·
            username · locale
 
-assistant: requirements{} · architect{} · acceptance{} · acceptance_visual{} ·
-           frontend_design{} · intent_analysis{} · build{} · activity{} · debug{} ·
+assistant: requirements{} · architect{} · acceptance_visual{} ·
+           frontend_design{} · intent_analysis{} · build{} · activity{} ·
            default_workflow · workflows[] · max_executor_groups
            每个 agent 子项的形状是 agent 特化的（例如 build 只有 max_steps + skills；
-           acceptance 多一个 max_retries；acceptance_visual 全是数值硬门槛阈值）——
+           acceptance_visual owns numeric visual evidence thresholds）——
            没有统一的 max_steps/timeout_ms/quality_threshold/max_attempts/skills 模板。
 
 experimental: auto_question · batch_tool · disable_paste_summary · continue_loop_on_deny
@@ -38,13 +38,14 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 
 > 文档此前未列出的顶级 key：`$schema` / `logLevel` / `server` / `share` / `autoupdate` / `snapshot` / `watcher`（含 `watcher.ignore`） / `disabled_providers` / `enabled_providers` / `tool_permissions`（任务级权限默认值） / `small_model` / `default_agent` / `preview` / `terminal` —— 全部以 `config.ts` 现状为准。
 >
-> **2026-05-11 新增**：顶级 `locale: "en-US" | "zh-CN"` —— operator-selected system language used for assistant replies and Overlay localization（commit `c19da3136` / `bdc33b9b0`）。**这是行为类设置**（影响 LLM 回复语言 + SDK 透传），属 Layer 1，**不**属 Overlay UI 偏好的 `locale`（后者继续存在于 localStorage，仅控制前端 UI 文案）。
+> **Locale contract**：顶级 `locale: "en-US" | "zh-CN"` 是 operator-selected system language，用于 assistant replies 和 Overlay localization。**这是行为类设置**（影响 LLM 回复语言 + SDK 透传），属 Layer 1，**不**属 Overlay UI 偏好的 `locale`（后者继续存在于 localStorage，仅控制前端 UI 文案）。
 >
-> **2026-05-12 更正**：以下旧 schema 字段已删除，不再存在：
+> **已删除 schema 字段**：以下旧 schema 字段已删除，不再存在：
 >
 > - `assistant.spec{}` / `assistant.goal{}` / `assistant.planner{}` / `assistant.evaluator{}` /
->   `assistant.adaptive{}` —— planner / acceptance review 整体下线（见 [01-agents.md](01-agents.md)），
+>   the deleted acceptance-review assistant config field / `assistant.adaptive{}` — planner / acceptance review 整体下线（见 [01-agents.md](01-agents.md)），
 >   spec/goal/adaptive 字段在 workflow 系统替代后删除。
+> - `assistant.debug{}` — host-side prompt injection and stream-marker abort toggles are not config surfaces.
 > - `experimental.unattended` / `experimental.auto_permission` —— 仅剩 `experimental.auto_question`。
 
 **关键原则**：此层决定「系统做什么」，跨设备/session/客户端一致。
@@ -75,7 +76,7 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 - `savedDirectory` · `tempDirectory`
 - `workspaceEpoch` · `directoryEpoch`
 
-## 已删除的内容（本方案执行后）
+## Deleted Runtime Surfaces
 
 | 项                                                                              | 代码路径                         | 状态                                           |
 | ------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------- |
@@ -86,7 +87,7 @@ experimental: auto_question · batch_tool · disable_paste_summary · continue_l
 | Overlay `updateConfig()` 全量替换                                               | overlay                          | 改为 partial diff                              |
 | 死字段 `spec{}` · `max_replans` · `same_plan_retry_limit` · `stage_max_retries` | config schema                    | 已废弃                                         |
 
-## 数据流（重设计后）
+## 当前数据流
 
 ```
 opencorvus.jsonc ──→ Config.get() ──→ Zod 验证 + 层级合并 ──→ 缓存

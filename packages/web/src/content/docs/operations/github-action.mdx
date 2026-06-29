@@ -25,6 +25,8 @@ Supported triggers (`packages/opencorvus/src/cli/cmd/github.ts`):
 - `schedule` — scheduled repository automation
 - `workflow_dispatch` — manually triggered repository automation
 
+Comment triggers read `/opencorvus` or `/oc` from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body.
+
 ## Inputs
 
 | Parameter          | Required | Default                     | Description                                               |
@@ -80,7 +82,7 @@ When a user posts `/oc`, collaboration permission must be `admin` or `write`; ot
 
 ## Workflow examples
 
-### App + Coding Plan
+### Comment triggers
 
 ```yaml
 name: opencorvus
@@ -110,6 +112,37 @@ jobs:
           OPENCORVUS_PERMISSION: '{"bash": "deny"}'
         with:
           model: alibaba-coding-plan-cn/qwen3.5-plus
+```
+
+### Repository events
+
+```yaml
+name: opencorvus-repository
+on:
+  issues: { types: [opened, reopened] }
+  pull_request: { types: [opened, synchronize, reopened, ready_for_review] }
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+jobs:
+  opencorvus:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: yangheng95/opencorvus/github@latest
+        env:
+          ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
+          OPENCORVUS_PERMISSION: '{"bash": "deny"}'
+        with:
+          model: alibaba-coding-plan-cn/qwen3.5-plus
+          prompt: Maintain this repository from the triggering issue, pull request, schedule, or manual dispatch.
 ```
 
 ## Comment triggers

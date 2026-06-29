@@ -182,7 +182,7 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })

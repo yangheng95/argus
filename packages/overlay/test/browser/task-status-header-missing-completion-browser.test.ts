@@ -147,9 +147,9 @@ function conversationPayload(taskID: string) {
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-    view: { sessions: [], messages: [] },
-    agentView: { sessions: [], messages: [], topLevelSessionIDs: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
     messageWatermark: taskID === ACTIVE_TASK_ID ? ACTIVE_INITIAL_WATERMARK : 0,
   }
 }

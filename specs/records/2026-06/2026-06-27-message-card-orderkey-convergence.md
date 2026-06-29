@@ -3,6 +3,10 @@
 Date: 2026-06-27
 Status: Implemented and under regression guard
 
+2026-06-29 calibration: current goal-scope phase projection has exactly one
+backend phase, `build`. Planning, review, evaluator, and integrity activity do
+not become per-goal phase cards.
+
 ## Acronyms
 
 - UI: User Interface, the visible overlay surface.
@@ -139,7 +143,7 @@ Runtime or structural issues repaired in this goal:
     reasoning shells such as `[]` are non-display content.
 22. Goal-phase messages are not repeated top-level timeline boundaries. The
     visible top-level boundary is the owning goal step card, ordered by the
-    backend board `orderKey`. Internal build/planner phase messages update
+    backend board `orderKey`. Internal goal-scope build messages update
     that card in place and must not repeatedly split adjacent top-level agent
     segments that visually remain adjacent after the step card has already
     appeared.

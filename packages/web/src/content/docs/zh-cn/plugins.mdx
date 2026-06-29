@@ -20,7 +20,7 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 
 ### GitLab Auth（内部）
 
-`@gitlab/opencode-gitlab-auth` 编译时静态导入，无需 npm（`src/plugin/index.ts`）。
+运行时代码编译时静态导入 `@gitlab/opencorvus-gitlab-auth`，无需 npm（`src/plugin/index.ts`）。`packages/opencorvus/package.json` 通过 package-manager alias 把这个内部名称解析到上游 npm 包，因为 registry 包尚未改名；源码和公开插件示例只能使用 `@gitlab/opencorvus-gitlab-auth`。
 
 第三方 npm 插件只在 `plugin` 配置数组中显式声明后加载。
 

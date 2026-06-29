@@ -1114,7 +1114,7 @@ export type Config = {
       max_steps?: number
     }
     /**
-     * Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue).
+     * Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).
      */
     activity?: {
       /**
@@ -1129,15 +1129,6 @@ export type Config = {
        * Max idle window without queue task progress, ms
        */
       task_queue_run_timeout_ms?: number
-    }
-    /**
-     * Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.
-     */
-    debug?: {
-      /**
-       * When true, the host injects an INFORMATION MISSING diagnostic section into every agent's system prompt and fails the current run the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.
-       */
-      fail_on_information_missing?: boolean
     }
     /**
      * Maximum parallel agent sessions in fan-out phases such as goal builds and integrity reviewers
@@ -1935,7 +1926,7 @@ export type VisibleMessagePart =
       type: "text"
       text: string
       kind?: "user_content" | "control" | "context"
-      source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+      source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
       time?: {
         start: number
         end?: number
@@ -2109,7 +2100,7 @@ export type TextPart = {
   type: "text"
   text: string
   kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
   time?: {
     start: number
     end?: number
@@ -2265,7 +2256,7 @@ export type TextPartInput = {
   type: "text"
   text: string
   kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+  source?: "user" | "system" | "evaluator" | "goal_evidence" | "task_tool"
   time?: {
     start: number
     end?: number
@@ -3197,7 +3188,7 @@ export type EventReviewStreamStarted = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "acceptance"
+    phase: "integrity"
     sessionID?: string
   }
 }
@@ -3207,7 +3198,7 @@ export type EventReviewStreamProgress = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "acceptance"
+    phase: "integrity"
     currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
     activity?: string
     reviewerID?: string
@@ -3223,7 +3214,7 @@ export type EventReviewStreamChunk = {
   properties: {
     taskID: string
     reviewID: string
-    phase: "integrity" | "acceptance"
+    phase: "integrity"
     kind: "reasoning"
     delta: string
     attempt: number
@@ -13863,6 +13854,7 @@ export type TaskConversationResponses = {
       }
       goalWorkflows?: Array<{
         goalID: string
+        goalRunID?: string
         orderKey: string
         goalTitle: string
         goalObjective?: string
@@ -13949,6 +13941,152 @@ export type TaskConversationResponses = {
           key: string
           value: string
           reason?: string
+        }>
+        acceptanceSpecs?: Array<{
+          /**
+           * Stable spec ID, e.g. 'acc-login-3s'.
+           */
+          id: string
+          /**
+           * Requirement ID this spec was derived from (REQ-N).
+           */
+          source_requirement_id: string
+          /**
+           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+           */
+          goal_id: string
+          title: string
+          /**
+           * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+           */
+          scenario?: {
+            given: Array<string>
+            when: Array<string>
+            then: Array<string>
+          }
+          /**
+           * At least one scorer — a spec without a scorer is untestable.
+           */
+          scorers: Array<
+            | {
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
+                type: "heuristic"
+                name: string
+                spec:
+                  | {
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
+                      kind: "shell"
+                      /**
+                       * Shell command. Exit 0 = pass unless expect.exit_code set.
+                       */
+                      cmd: string
+                      cwd?: string
+                    }
+                  | {
+                      /**
+                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                       */
+                      kind: "script_ref"
+                      /**
+                       * Repo-relative script path that already exists at registration time.
+                       */
+                      path: string
+                      args?: Array<string>
+                    }
+                expect?: {
+                  exit_code?: number
+                }
+              }
+            | {
+                /**
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                 */
+                type: "llm_judge"
+                name: string
+                /**
+                 * Single-criterion evaluation question in natural language.
+                 */
+                criteria: string
+                /**
+                 * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+                 */
+                rubric?: Array<{
+                  /**
+                   * Integer score for this level.
+                   */
+                  score: number
+                  /**
+                   * Short level label, e.g. 'fully met'.
+                   */
+                  label: string
+                  /**
+                   * Behavioral description: what earns this score.
+                   */
+                  anchor: string
+                  /**
+                   * Does this level count as pass for binary verdict?
+                   */
+                  passes: boolean
+                }>
+                /**
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 */
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+              }
+            | {
+                /**
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 */
+                type: "prebuilt"
+                name:
+                  | "factuality"
+                  | "relevance"
+                  | "contains"
+                  | "exact_match"
+                  | "length_within"
+                  | "json_schema"
+                  | "visual-evidence-bundle"
+                config?: {
+                  [key: string]: unknown
+                }
+                /**
+                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 */
+                spec?: {
+                  kind: "visual_evidence_bundle"
+                  viewport?: string
+                }
+                /**
+                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 */
+                expect?: {
+                  status: "passed"
+                }
+              }
+            | {
+                /**
+                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 */
+                type: "contract_audit"
+                name: string
+                spec: {
+                  kind: "contract_graph"
+                  contract_ids: Array<string>
+                }
+                expect: {
+                  status: "passed"
+                }
+              }
+          >
+          severity: "essential" | "important" | "optional" | "pitfall"
+          /**
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+           */
+          trigger?: "on_goal" | "on_integrity"
         }>
       }>
       criteriaResults?: Array<{
@@ -14844,6 +14982,7 @@ export type TaskBoardResponses = {
     }
     goalWorkflows?: Array<{
       goalID: string
+      goalRunID?: string
       orderKey: string
       goalTitle: string
       goalObjective?: string
@@ -14930,6 +15069,152 @@ export type TaskBoardResponses = {
         key: string
         value: string
         reason?: string
+      }>
+      acceptanceSpecs?: Array<{
+        /**
+         * Stable spec ID, e.g. 'acc-login-3s'.
+         */
+        id: string
+        /**
+         * Requirement ID this spec was derived from (REQ-N).
+         */
+        source_requirement_id: string
+        /**
+         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+         */
+        goal_id: string
+        title: string
+        /**
+         * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+         */
+        scenario?: {
+          given: Array<string>
+          when: Array<string>
+          then: Array<string>
+        }
+        /**
+         * At least one scorer — a spec without a scorer is untestable.
+         */
+        scorers: Array<
+          | {
+              /**
+               * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+               */
+              type: "heuristic"
+              name: string
+              spec:
+                | {
+                    /**
+                     * shell — run an inline command. Requires: cmd; optional cwd.
+                     */
+                    kind: "shell"
+                    /**
+                     * Shell command. Exit 0 = pass unless expect.exit_code set.
+                     */
+                    cmd: string
+                    cwd?: string
+                  }
+                | {
+                    /**
+                     * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                     */
+                    kind: "script_ref"
+                    /**
+                     * Repo-relative script path that already exists at registration time.
+                     */
+                    path: string
+                    args?: Array<string>
+                  }
+              expect?: {
+                exit_code?: number
+              }
+            }
+          | {
+              /**
+               * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+               */
+              type: "llm_judge"
+              name: string
+              /**
+               * Single-criterion evaluation question in natural language.
+               */
+              criteria: string
+              /**
+               * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+               */
+              rubric?: Array<{
+                /**
+                 * Integer score for this level.
+                 */
+                score: number
+                /**
+                 * Short level label, e.g. 'fully met'.
+                 */
+                label: string
+                /**
+                 * Behavioral description: what earns this score.
+                 */
+                anchor: string
+                /**
+                 * Does this level count as pass for binary verdict?
+                 */
+                passes: boolean
+              }>
+              /**
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+               */
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+            }
+          | {
+              /**
+               * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+               */
+              type: "prebuilt"
+              name:
+                | "factuality"
+                | "relevance"
+                | "contains"
+                | "exact_match"
+                | "length_within"
+                | "json_schema"
+                | "visual-evidence-bundle"
+              config?: {
+                [key: string]: unknown
+              }
+              /**
+               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               */
+              spec?: {
+                kind: "visual_evidence_bundle"
+                viewport?: string
+              }
+              /**
+               * For name=visual-evidence-bundle, requires a passing current bundle.
+               */
+              expect?: {
+                status: "passed"
+              }
+            }
+          | {
+              /**
+               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+               */
+              type: "contract_audit"
+              name: string
+              spec: {
+                kind: "contract_graph"
+                contract_ids: Array<string>
+              }
+              expect: {
+                status: "passed"
+              }
+            }
+        >
+        severity: "essential" | "important" | "optional" | "pitfall"
+        /**
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+         */
+        trigger?: "on_goal" | "on_integrity"
       }>
     }>
     criteriaResults?: Array<{

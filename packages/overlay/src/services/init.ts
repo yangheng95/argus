@@ -214,10 +214,10 @@ function loadErrorMessage(error: unknown): string {
   return String(error)
 }
 
-function settledValue<T>(key: string, result: PromiseSettledResult<T>, fallback: T, errors: Record<string, string>): T {
+function settledValue<T>(key: string, result: PromiseSettledResult<T>, defaultValue: T, errors: Record<string, string>): T {
   if (result.status === "fulfilled") return result.value
   errors[key] = loadErrorMessage(result.reason)
-  return fallback
+  return defaultValue
 }
 
 function coreConfigLoadError(errors: Record<string, string>): Error | undefined {

@@ -12,6 +12,14 @@ export function timelineOrderKeyDomain(value: unknown, label: string): string {
   return domain
 }
 
+export function timelineOrderKeyTime(value: unknown, label: string): number {
+  const key = requireTimelineOrderKey(value, label)
+  const raw = key.split(":", 3)[1] || ""
+  const time = Number(raw)
+  if (!Number.isFinite(time) || time <= 0) throw new Error(`${label} missing positive orderKey time: ${key}`)
+  return time
+}
+
 export function requireTimelineOrderKeyDomain(value: unknown, label: string, expectedDomain: string): string {
   const key = requireTimelineOrderKey(value, label)
   const domain = timelineOrderKeyDomain(key, label)

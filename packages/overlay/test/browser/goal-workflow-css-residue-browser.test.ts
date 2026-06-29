@@ -172,7 +172,7 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })

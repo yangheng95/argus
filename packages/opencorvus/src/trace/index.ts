@@ -227,11 +227,11 @@ export namespace AgentTrace {
     })
   }
 
-  function envBytes(name: string, fallback: number): number {
+  function envBytes(name: string, defaultValue: number): number {
     const raw = process.env[name]
-    if (!raw) return fallback
+    if (!raw) return defaultValue
     const parsed = Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : defaultValue
   }
 
   function redactAttachmentsEnabled(): boolean {

@@ -11,12 +11,123 @@ describe("html skeleton workflow check", () => {
   test("CLI parser does not expose an artifacts-only pass mode", () => {
     const originalArgv = process.argv
     try {
-      process.argv = ["bun", "html-skeleton-workflow-check.ts", "--artifacts-only", "--out", "out"]
+      process.argv = [
+        "bun",
+        "html-skeleton-workflow-check.ts",
+        "--artifacts-only",
+        "--out",
+        "out",
+        "--threshold",
+        "0.95",
+        "--worst-threshold",
+        "0.8",
+        "--browser-launch-timeout-ms",
+        "60000",
+        "--navigation-timeout-ms",
+        "60000",
+        "--settle-ms",
+        "1",
+      ]
       const parsed = parseHtmlSkeletonWorkflowCheckArgs()
       expect("artifactsOnly" in parsed).toBe(false)
     } finally {
       process.argv = originalArgv
     }
+  })
+
+  test("CLI parser requires explicit visual thresholds and browser timeout", () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ["bun", "html-skeleton-workflow-check.ts", "--out", "out"]
+      expect(() => parseHtmlSkeletonWorkflowCheckArgs()).toThrow("Missing required numeric flag --threshold")
+
+      process.argv = ["bun", "html-skeleton-workflow-check.ts", "--out", "out", "--threshold", "0.95"]
+      expect(() => parseHtmlSkeletonWorkflowCheckArgs()).toThrow("Missing required numeric flag --worst-threshold")
+
+      process.argv = [
+        "bun",
+        "html-skeleton-workflow-check.ts",
+        "--out",
+        "out",
+        "--threshold",
+        "0.95",
+        "--worst-threshold",
+        "0.8",
+      ]
+      expect(() => parseHtmlSkeletonWorkflowCheckArgs()).toThrow(
+        "Missing required numeric flag --browser-launch-timeout-ms",
+      )
+      process.argv = [
+        "bun",
+        "html-skeleton-workflow-check.ts",
+        "--out",
+        "out",
+        "--threshold",
+        "0.95",
+        "--worst-threshold",
+        "0.8",
+        "--browser-launch-timeout-ms",
+        "60000",
+      ]
+      expect(() => parseHtmlSkeletonWorkflowCheckArgs()).toThrow("Missing required numeric flag --navigation-timeout-ms")
+
+      process.argv = [
+        "bun",
+        "html-skeleton-workflow-check.ts",
+        "--out",
+        "out",
+        "--threshold",
+        "0.95",
+        "--worst-threshold",
+        "0.8",
+        "--browser-launch-timeout-ms",
+        "60000",
+        "--navigation-timeout-ms",
+        "60000",
+      ]
+      expect(() => parseHtmlSkeletonWorkflowCheckArgs()).toThrow("Missing required numeric flag --settle-ms")
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  test("programmatic runner requires an explicit browser timeout", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(
+      runHtmlSkeletonWorkflowCheck({
+        outDir: path.join(tmp.path, "out"),
+        threshold: 0.95,
+        worstThreshold: 0.8,
+        headless: true,
+      } as Parameters<typeof runHtmlSkeletonWorkflowCheck>[0]),
+    ).rejects.toThrow("browserLaunchTimeoutMs must be a positive number")
+  })
+
+  test("programmatic runner requires explicit navigation and settle timeouts", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(
+      runHtmlSkeletonWorkflowCheck({
+        outDir: path.join(tmp.path, "out"),
+        threshold: 0.95,
+        worstThreshold: 0.8,
+        browserLaunchTimeoutMs: 60_000,
+        settleMs: 1,
+        headless: true,
+      } as Parameters<typeof runHtmlSkeletonWorkflowCheck>[0]),
+    ).rejects.toThrow("navigationTimeoutMs must be a positive number")
+
+    await expect(
+      runHtmlSkeletonWorkflowCheck({
+        outDir: path.join(tmp.path, "out"),
+        threshold: 0.95,
+        worstThreshold: 0.8,
+        browserLaunchTimeoutMs: 60_000,
+        navigationTimeoutMs: 60_000,
+        headless: true,
+      } as Parameters<typeof runHtmlSkeletonWorkflowCheck>[0]),
+    ).rejects.toThrow("settleMs must be a positive number")
   })
 
   test("static artifact success still fails without a visual diff", async () => {
@@ -93,6 +204,9 @@ describe("html skeleton workflow check", () => {
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 
@@ -180,6 +294,9 @@ describe("html skeleton workflow check", () => {
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 
@@ -212,6 +329,9 @@ describe("html skeleton workflow check", () => {
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 
@@ -242,6 +362,9 @@ describe("html skeleton workflow check", () => {
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 
@@ -319,6 +442,9 @@ describe("html skeleton workflow check", () => {
         outDir: path.join(tmp.path, "out"),
         threshold: 0.95,
         worstThreshold: 0.8,
+        browserLaunchTimeoutMs: 60_000,
+        navigationTimeoutMs: 60_000,
+        settleMs: 1,
         headless: true,
       }),
     ).rejects.toThrow("Task fanout parent is ambiguous")
@@ -364,6 +490,9 @@ describe("html skeleton workflow check", () => {
         outDir: path.join(tmp.path, "out"),
         threshold: 0.95,
         worstThreshold: 0.8,
+        browserLaunchTimeoutMs: 60_000,
+        navigationTimeoutMs: 60_000,
+        settleMs: 1,
         headless: true,
       })
 
@@ -408,6 +537,9 @@ describe("html skeleton workflow check", () => {
       outDir: path.join(tmp.path, "out"),
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 
@@ -435,6 +567,9 @@ describe("html skeleton workflow check", () => {
       outDir,
       threshold: 0.95,
       worstThreshold: 0.8,
+      browserLaunchTimeoutMs: 60_000,
+      navigationTimeoutMs: 60_000,
+      settleMs: 1,
       headless: true,
     })
 

@@ -3,7 +3,7 @@
     <style>
       text { font-family: 'Segoe UI', Arial, sans-serif; }
       .ingress { fill: #fef3c7; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
-      .gateway { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; rx: 8; }
+      .dialog { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; rx: 8; }
       .acp     { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; rx: 8; }
       .http    { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.5; rx: 8; }
       .cp      { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
@@ -45,12 +45,12 @@
   <text class="body" x="180" y="176">确定性路由 · 不过 LLM</text>
   <text class="body" x="180" y="192">task_id 绑定查找</text>
 
-  <rect class="gateway" x="340" y="104" width="280" height="96"/>
-  <text class="h2" x="480" y="124" style="fill:#1d4ed8">Gateway Agent (LLM)</text>
-  <text class="code" x="480" y="140">gateway/agent.ts</text>
-  <text class="body" x="480" y="160">本地用户对话层</text>
-  <text class="body" x="480" y="176">channel_key 单例</text>
-  <text class="body" x="480" y="192">7 个 tools</text>
+  <rect class="dialog" x="340" y="104" width="280" height="96"/>
+  <text class="h2" x="480" y="124" style="fill:#1d4ed8">ControlMessage (LLM)</text>
+  <text class="code" x="480" y="140">control/message.ts</text>
+  <text class="body" x="480" y="160">本地 / 自然语言对话层</text>
+  <text class="body" x="480" y="176">PanelCapabilityRegistry 白名单</text>
+  <text class="body" x="480" y="192">受限 JSON capability action</text>
 
   <rect class="acp" x="640" y="104" width="280" height="96"/>
   <text class="h2" x="780" y="124" style="fill:#4f46e5">ACP</text>
@@ -66,33 +66,33 @@
   <text class="body" x="1070" y="176">task-event SSE 路由</text>
   <text class="body" x="1070" y="192">消费 Bus 事件</text>
 
-  <!-- channel_key 说明条 -->
+  <!-- ControlMessage 说明条 -->
   <rect fill="#fefce8" stroke="#eab308" stroke-width="1" x="40" y="212" width="1160" height="34" rx="6"/>
-  <text class="h3" x="620" y="232">channel_key = "platform:channel:userID" 或 "local:userID" — session_gateway_singleton_idx 保证 Gateway session 单例</text>
+  <text class="h3" x="620" y="232">ControlMessage.handle / handleStream — surface = panel / gateway route / ChannelId；capability action 进入 EngineService / Session / Question</text>
 
   <!-- ================== 核心汇聚 ================== -->
   <rect class="core" x="360" y="266" width="520" height="60"/>
   <text class="h2" x="620" y="290" style="fill:#5b21b6">EngineService / Session / Question</text>
-  <text class="code" x="620" y="310">orchestrator/service.ts · session/ · question/</text>
+  <text class="code" x="620" y="310">task-api/index.ts · session/ · question/</text>
 
   <path class="arrow" d="M 180 200 Q 180 240 420 266"/>
   <path class="arrow" d="M 480 200 L 520 266"/>
   <path class="arrow" d="M 780 200 L 720 266"/>
   <path class="arrow" d="M 1070 200 Q 1070 240 820 266"/>
 
-  <!-- ================== 中层: control-plane / control / bus / trace ================== -->
+  <!-- ================== 中层: workspace / control / bus / trace ================== -->
   <text class="h1" x="40" y="360" style="fill:#64748b;font-size:12px">中层（控制 · 多工作区 · 事件横切）</text>
   <line x1="40" y1="366" x2="1200" y2="366" stroke="#e2e8f0"/>
 
-  <!-- control-plane -->
+  <!-- workspace -->
   <rect class="cp" x="40" y="380" width="380" height="150"/>
-  <text class="h2" x="230" y="402" style="fill:#6d28d9">control-plane — 多工作区代理</text>
+  <text class="h2" x="230" y="402" style="fill:#6d28d9">workspace — 项目元数据</text>
   <text class="code" x="230" y="418">workspace/</text>
-  <text class="body" x="230" y="440">workspace 表 + workspace-server/</text>
-  <text class="body" x="230" y="456">session-proxy-middleware (SSE 透传)</text>
-  <text class="body" x="230" y="472">adaptors/ (worktree 适配)</text>
-  <text class="body" x="230" y="488">sse.ts 解析</text>
-  <text class="body" x="230" y="512" style="fill:#94a3b8;font-style:italic">一个前台进程代理多个独立工作目录</text>
+  <text class="body" x="230" y="440">workspace metadata records</text>
+  <text class="body" x="230" y="456">server/routes/*</text>
+  <text class="body" x="230" y="472">util/sse.ts</text>
+  <text class="body" x="230" y="488">project/path headers</text>
+  <text class="body" x="230" y="512" style="fill:#94a3b8;font-style:italic">前台进程读取项目边界</text>
 
   <!-- control -->
   <rect class="ctrl" x="440" y="380" width="340" height="150"/>
@@ -110,9 +110,9 @@
   <text class="code" x="1000" y="418">bus/ · trace/</text>
   <text class="body" x="1000" y="440">BusEvent.define(name, schema)</text>
   <text class="body" x="1000" y="456">GlobalBus.publish</text>
-  <text class="body" x="1000" y="476">Trace.event() ──→ JSONL</text>
-  <text class="body" x="1000" y="492">              └─→ Bus.publish</text>
-  <text class="body" x="1000" y="514" style="fill:#94a3b8;font-style:italic">替代 AgentTrace + env-gated LLMTrace</text>
+  <text class="body" x="1000" y="476">AgentTrace.record* → JSONL</text>
+  <text class="body" x="1000" y="492">AgentTrace.record* → Bus.publish</text>
+  <text class="body" x="1000" y="514" style="fill:#94a3b8;font-style:italic">AgentTrace + LLMTrace sinks</text>
 
   <!-- 横向事件流 -->
   <path class="ev" d="M 1000 530 Q 1000 560 1070 560 Q 1070 340 1070 200"/>
@@ -124,12 +124,12 @@
   <rect class="ext-exec" x="40" y="592" width="280" height="196"/>
   <text class="h2" x="180" y="614" style="fill:#047857">Executor</text>
   <text class="code" x="180" y="630">executor/</text>
-  <text class="body" x="180" y="652">跑代码的外部进程</text>
+  <text class="body" x="180" y="652">内置队列 + 外部进程</text>
   <text class="body" x="180" y="668">产出 diff / acceptance</text>
-  <text class="body" x="180" y="690" style="font-weight:600">3 家 × 3 形态:</text>
-  <text class="code" x="180" y="708">claude-cli / agent / code</text>
-  <text class="code" x="180" y="724">codex-cli / app-server</text>
-  <text class="code" x="180" y="740">opencode</text>
+  <text class="body" x="180" y="690" style="font-weight:600">3 个执行器名:</text>
+  <text class="code" x="180" y="708">opencorvus / codex</text>
+  <text class="code" x="180" y="724">claude-code</text>
+  <text class="code" x="180" y="740">executor/registry.ts</text>
   <text class="body" x="180" y="766" style="fill:#94a3b8;font-style:italic">worktree 隔离运行</text>
 
   <rect class="ext-plug" x="340" y="592" width="280" height="196"/>

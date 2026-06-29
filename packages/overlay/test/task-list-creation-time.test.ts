@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   boardStore,
-  setBoardStore,
   setPendingTasks,
   setTasksData,
   sortedTasks,
@@ -34,8 +33,8 @@ function taskItem(id: string, created: number, updated: number, status = "active
 }
 
 beforeEach(() => {
-  setBoardStore("tasks", [])
-  setBoardStore("pendingTasks", [])
+  setTasksData([])
+  setPendingTasks([])
 })
 
 test("task list utilities order only by task creation time", () => {
@@ -80,6 +79,35 @@ test("visibleTasks is the shared memoized task projection", () => {
   const first = visibleTasks()
   expect(visibleTasks()).toBe(first)
   expect(taskByID("active")).toBe(first[0])
+})
+
+test("visibleTasks invalidates cached projections when task sources change", () => {
+  const active = taskItem("active", 2_000, 4_000, "active")
+  const pending = {
+    _pending: true,
+    requestID: "pending",
+    task: {
+      id: "pending",
+      requestID: "pending",
+      title: "pending",
+      status: "queued",
+      directory: "C:/repo",
+      time: { created: 3_000 },
+    },
+  }
+
+  const empty = visibleTasks()
+  expect(empty).toEqual([])
+
+  setTasksData([active])
+  const loaded = visibleTasks()
+  expect(loaded).not.toBe(empty)
+  expect(loaded.map((item) => item.task.id)).toEqual(["active"])
+
+  setPendingTasks([pending])
+  const withPending = visibleTasks()
+  expect(withPending).not.toBe(loaded)
+  expect(withPending.map((item) => item.task.id)).toEqual(["pending", "active"])
 })
 
 test("task list refresh preserves unchanged row references", () => {

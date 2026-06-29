@@ -98,7 +98,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   )
     return "goal-workload-analyst"
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner"
-  if (text === "goal" || text === "goal_gate") return "goal"
+  if (text === "goal" || text === "goal_evidence") return "goal"
   // "coding" is the post-rename name of the build worker (commit 2bda4d8a22
   // build→coding). It must share the build lane/icon, not collapse into the
   // generic executor bucket — otherwise the code-writing agent is not split.
@@ -198,7 +198,7 @@ export function roleLabel(role: string): string {
   if (role === "evaluator") return t("chat.role.evaluator")
   if (role === "spec") return t("chat.role.spec")
   if (role === "system") return t("chat.role.system")
-  if (role === "goal" || role === "goal_gate") return t("chat.role.goal")
+  if (role === "goal" || role === "goal_evidence") return t("chat.role.goal")
   if (role === "executor") return t("chat.role.executor")
   if (role === "build") return t("chat.role.build")
   if (role === "explore") return t("chat.role.explore")

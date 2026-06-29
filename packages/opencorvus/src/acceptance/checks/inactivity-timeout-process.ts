@@ -38,7 +38,6 @@ export async function runProcessWithInactivityTimeout(input: {
       timer = setTimeout(() => {
         timedOut = true
         proc.kill()
-        finish(undefined)
       }, input.timeoutMs)
     }
 
@@ -51,7 +50,7 @@ export async function runProcessWithInactivityTimeout(input: {
       refreshTimer()
     })
     proc.once("error", () => finish(undefined))
-    proc.once("exit", (code) => finish(code ?? undefined))
+    proc.once("close", (code) => finish(timedOut ? undefined : (code ?? undefined)))
     refreshTimer()
   })
 

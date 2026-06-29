@@ -4,12 +4,12 @@ import path from "node:path"
 import {
   auditWorkspace,
   deriveRunMetrics,
-  evaluateQualityGates,
+  evaluateQualityChecks,
   moduleBlocksFromRequest,
-} from "../../script/benchmark/quality-gates"
+} from "../../script/benchmark/quality-checks"
 import { tmpdir } from "../fixture/fixture"
 
-describe("benchmark quality gates", () => {
+describe("benchmark quality checks", () => {
   test("artifact audit flags README proliferation and scaffold noise", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src", "entities"), { recursive: true })
@@ -36,7 +36,7 @@ describe("benchmark quality gates", () => {
       evaluationChecks: [{ status: "passed", name: "build" }],
       events: [{ summary: "implemented feature" }],
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: audit,
       runMetrics: metrics,
       taskStatus: "completed",
@@ -46,7 +46,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.failures.some((item) => item.category === "artifact_quality")).toBe(true)
   })
 
-  test("quality gate blocks long verification loops", async () => {
+  test("quality check blocks long verification loops", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
@@ -60,7 +60,7 @@ describe("benchmark quality gates", () => {
         summary: "verify project structure and README",
       })),
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: await auditWorkspace({
         rootDir: tmp.path,
         changedFiles: ["src/feature.ts"],
@@ -78,7 +78,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.primary_failure).toBe("liveness")
   })
 
-  test("quality gate rejects changes outside approved module blocks", async () => {
+  test("quality check rejects changes outside approved module blocks", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src", "hero"), { recursive: true })
     await fs.mkdir(path.join(tmp.path, "src", "search"), { recursive: true })
@@ -105,7 +105,7 @@ describe("benchmark quality gates", () => {
       events: [{ summary: "implement hero module" }],
       moduleBlocks,
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: audit,
       runMetrics: metrics,
       taskStatus: "completed",
@@ -118,7 +118,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.failures.some((item) => item.category === "scope_drift")).toBe(true)
   })
 
-  test("quality gate rejects placeholder implementations", async () => {
+  test("quality check rejects placeholder implementations", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export function feature() { // TODO\n  return null\n}\n")
@@ -136,7 +136,7 @@ describe("benchmark quality gates", () => {
       evaluationChecks: [{ status: "passed", name: "build" }],
       events: [{ summary: "implemented feature" }],
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: audit,
       runMetrics: metrics,
       taskStatus: "completed",
@@ -183,7 +183,7 @@ describe("benchmark quality gates", () => {
       events: [{ summary: "implemented note store" }],
       moduleBlocks,
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: audit,
       runMetrics: metrics,
       taskStatus: "completed",
@@ -201,7 +201,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.primary_failure).toBe("scope_drift")
   })
 
-  test("quality gate acceptance does not depend on vacuous local verify exit code", async () => {
+  test("quality check acceptance does not depend on vacuous local verify exit code", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
@@ -218,7 +218,7 @@ describe("benchmark quality gates", () => {
       changedFiles: ["src/feature.ts"],
       request: "Implement the feature.",
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: audit,
       runMetrics: metrics,
       taskStatus: "completed",
@@ -229,7 +229,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.failures.some((item) => item.evidence.includes("localVerifyExitCode"))).toBe(false)
   })
 
-  test("quality gate rejects failed configured local verification", async () => {
+  test("quality check rejects failed configured local verification", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
@@ -241,7 +241,7 @@ describe("benchmark quality gates", () => {
       evaluationChecks: [{ status: "passed", name: "build" }],
       events: [{ summary: "implemented feature" }],
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: await auditWorkspace({
         rootDir: tmp.path,
         changedFiles,
@@ -261,7 +261,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.failures.some((item) => item.message.includes("local verification"))).toBe(true)
   })
 
-  test("quality gate rejects configured local verification that never ran", async () => {
+  test("quality check rejects configured local verification that never ran", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
@@ -273,7 +273,7 @@ describe("benchmark quality gates", () => {
       evaluationChecks: [{ status: "passed", name: "build" }],
       events: [{ summary: "implemented feature" }],
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: await auditWorkspace({
         rootDir: tmp.path,
         changedFiles,
@@ -293,7 +293,7 @@ describe("benchmark quality gates", () => {
     expect(verdict.failures.some((item) => item.message.includes("did not complete"))).toBe(true)
   })
 
-  test("quality gate rejects missing local verification execution record", async () => {
+  test("quality check rejects missing local verification execution record", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
@@ -305,7 +305,7 @@ describe("benchmark quality gates", () => {
       evaluationChecks: [{ status: "passed", name: "build" }],
       events: [{ summary: "implemented feature" }],
     })
-    const verdict = evaluateQualityGates({
+    const verdict = evaluateQualityChecks({
       artifactAudit: await auditWorkspace({
         rootDir: tmp.path,
         changedFiles,

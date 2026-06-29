@@ -3,7 +3,7 @@ import path from "node:path"
 import os from "node:os"
 import z from "zod"
 
-import { assessCaptureDiagnostics, captureReferenceManifest, summarizeCaptureDiagnostics } from "./capture-gate"
+import { assessCaptureDiagnostics, captureReferenceManifest, summarizeCaptureDiagnostics } from "./reference-capture"
 import { resolveFrontendDesignBrowserProxy } from "./browser-proxy"
 import { DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT } from "@/browser/webpage/default-viewport"
 

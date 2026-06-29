@@ -28,8 +28,7 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
 }
 
 /**
- * Task-level upstream surfaces for the **acceptance** agent — the final acceptance
- * gate. Two ground-truth catalogs (rendered from canonical DB tables, not
+ * Task-level upstream surfaces for final integrity review. Two ground-truth catalogs (rendered from canonical DB tables, not
  * decision-log summaries) plus a narrative frontend-design section.
  *
  * Rationale: acceptance verdicts must trace every accept/reject to a concrete
@@ -57,7 +56,7 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
 
 /**
  * Ground-truth REQ-N catalog: renders every requirement row attached to the
- * task's active spec snapshot. Gating: every REQ must trace to ≥1 PASSED
+ * task's active spec snapshot. Coverage rule: every REQ must trace to ≥1 PASSED
  * acceptance_spec via goal.requirement_ids — an unsatisfied REQ is a reject
  * regardless of acceptance_specs status.
  */
@@ -67,7 +66,7 @@ export function buildRequirementsCatalogSection(taskID: string): string {
   const reqs = findRequirements(snapshot.id)
   if (reqs.length === 0) return ""
   const lines: string[] = []
-  lines.push("# Requirements Catalog (GATING)")
+  lines.push("# Requirements Catalog (REQUIRED COVERAGE)")
   lines.push("")
   lines.push(
     `Authoritative REQ-N list pulled from \`engine_requirement\` (active spec ` +
@@ -98,7 +97,7 @@ export function buildRequirementsCatalogSection(taskID: string): string {
 }
 
 /**
- * Ground-truth per-goal architecture contract catalog. Gating: cross-goal
+ * Ground-truth per-goal architecture contract catalog. Contract rule: cross-goal
  * contract violations (graph mismatch, owned-path overlap,
  * missing dep) reject regardless of acceptance_specs PASS — those would be
  * "the goal works in isolation but breaks the system" failures.
@@ -107,12 +106,12 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
   const goals = listGoals(taskID)
   if (goals.length === 0) return ""
   const lines: string[] = []
-  lines.push("# Architecture Contract Catalog (GATING)")
+  lines.push("# Architecture Contract Catalog (REQUIRED COVERAGE)")
   lines.push("")
   lines.push(
     `Authoritative per-goal interface contract pulled from \`engine_goal\`. ` +
       `Each goal advertises responsibility paths and dep ordering; cross-goal handoffs live in the Architect Contract Graph — these ` +
-      `are CROSS-GOAL gates. A acceptance where every \`acceptance_spec\` PASSES but ` +
+      `are cross-goal constraints. An acceptance where every \`acceptance_spec\` PASSES but ` +
       `a graph contract is missing, or a shared file edit contradicts ` +
       `another goal's declared responsibility, is still a reject (category="contract_violation"). Verify by reading ` +
       `the merged worktree, not by trusting goal-local self-reports. Cite the ` +

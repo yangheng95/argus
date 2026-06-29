@@ -32,7 +32,7 @@ describe("build phase promotion render policy", () => {
       id: "step:g1:build",
       kind: "step",
       title: "Goal",
-      childIDs: ["step:g1:build:phase:build", "step:g1:build:phase:plan"],
+      childIDs: ["step:g1:build:phase:build", "step:g1:build:phase:audit"],
     })
     const build = card({
       id: "step:g1:build:phase:build",
@@ -40,15 +40,15 @@ describe("build phase promotion render policy", () => {
       phaseID: "build",
       title: "Build",
     })
-    const plan = card({
-      id: "step:g1:build:phase:plan",
+    const audit = card({
+      id: "step:g1:build:phase:audit",
       kind: "phase",
-      phaseID: "plan",
-      title: "Plan",
+      phaseID: "audit",
+      title: "Audit",
     })
 
-    expect(buildPhaseChildForStep(step, { [build.id]: build, [plan.id]: plan })).toBe(build)
-    expect(visibleChildIDsForCard(step, { [build.id]: build, [plan.id]: plan })).toEqual([plan.id])
+    expect(buildPhaseChildForStep(step, { [build.id]: build, [audit.id]: audit })).toBe(build)
+    expect(visibleChildIDsForCard(step, { [build.id]: build, [audit.id]: audit })).toEqual([audit.id])
   })
 
   test("promotes build phase status and usage onto the step header node", () => {
@@ -120,9 +120,9 @@ describe("build phase promotion render policy", () => {
     expect(() => visibleChildIDsForCard(missing, {})).toThrow("references missing child missing")
 
     const nonStepMissing = card({
-      id: "phase:g1:plan",
+      id: "phase:g1:audit",
       kind: "phase",
-      title: "Plan",
+      title: "Audit",
       childIDs: ["missing"],
     })
     expect(() => visibleChildIDsForCard(nonStepMissing, {})).toThrow("references missing child missing")

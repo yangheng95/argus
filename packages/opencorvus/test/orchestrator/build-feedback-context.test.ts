@@ -55,9 +55,9 @@ describe("orchestrator build feedback context", () => {
             },
           ],
           changedFiles: ["src/index.html"],
-          finalGate: {
+          evidenceDecision: {
             status: "failed",
-            summary: "Acceptance evidence gate failed.",
+            summary: "Acceptance evidence failed.",
             failedCheckIds: [],
             failedCoverageIds: [],
             failedReviewIds: ["review:contract_audit"],

@@ -10,13 +10,12 @@
  *
  *  stepID / phaseID must match a step defined in the backend workflow
  *  (packages/opencorvus/src/engine/workflow.ts PIPELINE.build.phases).
- *  Backend is the source of truth — if the mapping drifts, the overlay
- *  fails closed (phase claim returns null, session card floats top-level).
+ *  Backend is the source of truth. For goal-owned sessions, tree-writer treats
+ *  a missing mapping as a bridge/workflow drift error instead of rendering a
+ *  top-level session card.
  *
- *  Per 2026-04-20 per-goal evaluator removal: `evaluator` session kind is
- *  gone. The build step now has two phases (plan + build); acceptance-time
- *  adversarial review happens inside the (task-scope) acceptance session,
- *  not inside a goal-scope phase card. */
+ *  The current pipeline build step declares one phase: `build`. Planning and
+ *  review evidence are task-scope workflow steps, not per-goal phase cards. */
 export interface GoalPhaseLocation {
   stepID: string
   phaseID: string
@@ -27,8 +26,6 @@ export function goalStagePhaseID(stage: string): GoalPhaseLocation | null {
     .trim()
     .toLowerCase()
   switch (normalized) {
-    case "planner":
-      return { stepID: "build", phaseID: "plan" }
     case "build":
       return { stepID: "build", phaseID: "build" }
     default:

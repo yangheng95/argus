@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
+import { ExecutorName } from "@/executor/contract"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
 import { ExecutorDiscovery } from "@/executor/discovery"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -40,6 +41,12 @@ const ExecutorSetModelInput = z
     }),
   })
   .strict()
+
+function executorNameParam(value: string) {
+  const parsed = ExecutorName.safeParse(value)
+  if (!parsed.success) throw new NotFoundError({ message: `unknown executor: ${value}` })
+  return parsed.data
+}
 
 export const ExecutorRoutes = lazy(() => {
   const app = new Hono()
@@ -146,7 +153,7 @@ export const ExecutorRoutes = lazy(() => {
       },
     }),
     async (c) => {
-      const executorID = c.req.param("executorID")
+      const executorID = executorNameParam(c.req.param("executorID"))
       return c.json({ model: getModelOverride(executorID) })
     },
   )
@@ -171,7 +178,7 @@ export const ExecutorRoutes = lazy(() => {
     }),
     validator("json", ExecutorSetModelInput),
     async (c) => {
-      const executorID = c.req.param("executorID")
+      const executorID = executorNameParam(c.req.param("executorID"))
       if (!envKeyFor(executorID)) {
         throw new NotFoundError({ message: `executor does not support model switching: ${executorID}` })
       }

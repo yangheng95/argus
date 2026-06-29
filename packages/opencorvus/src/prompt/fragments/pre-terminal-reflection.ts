@@ -14,7 +14,7 @@ export function renderPreTerminalReflectionPrompt(input: {
     `Before calling ${finalizers.join(" or ")} as ${input.agentName}, re-check the prompt-visible original user request and any system-provided authoritative request-bundle path supplied by task context.`,
     renderPreTerminalReflectionContractLine(),
     "If the pending terminal payload would omit, narrow, contradict, or merely summarize away any required user-facing outcome, keep working with the available tools and correct the mismatch before finalizing.",
-    "Do not emit a separate prose checklist unless the terminal schema explicitly asks for one; the reflection is a gate before finalization, not an additional deliverable.",
+    "Do not emit a separate prose checklist unless the terminal schema explicitly asks for one; the reflection is a required review boundary before finalization, not an additional deliverable.",
   ].join("\n")
 }
 

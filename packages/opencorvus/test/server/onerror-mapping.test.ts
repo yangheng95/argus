@@ -426,10 +426,10 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
     const response = await probe.request("/__throw__", { method: "GET" })
     expect(response.status).toBe(400)
     expect(response.headers.get("content-type") ?? "").toContain("application/json")
-    const body = (await response.json()) as { success: boolean; errors: Array<{ message: string }> }
+    const body = (await response.json()) as { success: boolean; error: Array<{ message: string }> }
     expect(body).toMatchObject({
       success: false,
-      errors: [{ message: "invalid task create body" }],
+      error: [{ message: "invalid task create body" }],
     })
   })
 

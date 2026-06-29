@@ -53,7 +53,7 @@ export function specContextText(spec: any): string {
 /**
  * Build plain-text plan context (
  * @param plan Board plan object
- * @param goals Goals cards array from the board lanes
+ * @param goals Goal workflow entries from the task board
  */
 export function planContextText(plan: any, goals: any[]): string {
   const planner = plan.metadata?.planner || {}
@@ -122,12 +122,12 @@ export function planContextText(plan: any, goals: any[]): string {
 
 /**
  * Build plain-text goal list context (
- * @param goals Goals cards array from the board lanes
+ * @param goals Goal workflow entries from the task board
  */
 export function goalContextText(goals: any[]): string {
-  const passed = goals.filter((goal) => goal.status === "passed").length
-  const failed = goals.filter((goal) => goal.status === "failed").length
-  const pending = goals.filter((goal) => goal.status !== "passed" && goal.status !== "failed").length
+  const passed = goals.filter((goal) => goal.goalStatus === "passed").length
+  const failed = goals.filter((goal) => goal.goalStatus === "failed").length
+  const pending = goals.filter((goal) => goal.goalStatus !== "passed" && goal.goalStatus !== "failed").length
   const header =
     passed + failed > 0
       ? t("goal.context.results", {
@@ -139,11 +139,9 @@ export function goalContextText(goals: any[]): string {
       : t("goal.context.list", { total: goals.length })
   const lines = [header, ""]
   for (const goal of goals) {
-    const icon = goal.status === "passed" ? "\u2705" : goal.status === "failed" ? "\u274C" : "\u23F3"
-    lines.push(`${icon} **${goal.title}**`)
-    const goalDef = goal.done_definition
-    if (goalDef) lines.push(t("goal.context.criteria", { value: goalDef }))
-    if (goal.metadata?.origin) lines.push(t("goal.context.origin", { value: goal.metadata.origin }))
+    const icon = goal.goalStatus === "passed" ? "\u2705" : goal.goalStatus === "failed" ? "\u274C" : "\u23F3"
+    lines.push(`${icon} **${goal.goalTitle}**`)
+    if (goal.goalObjective) lines.push(t("goal.context.criteria", { value: goal.goalObjective }))
   }
   return lines.join("\n")
 }
@@ -151,7 +149,7 @@ export function goalContextText(goals: any[]): string {
 /**
  * Build plain-text evaluation context (
  * @param board Board object (must have board.evaluation)
- * @param goals Goals cards array from the board lanes
+ * @param goals Goal workflow entries from the task board
  */
 export function evaluationContextText(board: any, goals: any[]): string {
   const evaluation = board.evaluation
@@ -187,7 +185,7 @@ export function evaluationContextText(board: any, goals: any[]): string {
     for (const item of goalStatuses) {
       const goal = goals[item.goal_index]
       const icon = item.status === "passed" ? "\u2705" : item.status === "failed" ? "\u274C" : "\u23F3"
-      const label = goal?.title || t("evaluation.context.goal_missing", { index: item.goal_index + 1 })
+      const label = goal?.goalTitle || t("evaluation.context.goal_missing", { index: item.goal_index + 1 })
       lines.push(`- ${icon} ${label}: ${item.evidence || item.status}`)
     }
   }

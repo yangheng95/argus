@@ -51,14 +51,10 @@ import { EffectiveConfig } from "@/config/effective"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
-import { INFORMATION_MISSING_DIAGNOSTIC_TEXT } from "@/prompt/information-missing"
 import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
 import {
   AgentRunError,
-  buildInformationMissingError,
   buildHardErrorFromFinalMessage,
-  messageHasInformationMissing,
-  extractInformationMissingBlock,
   toolErrorPartsFromFinalMessage,
 } from "@/agent/runner"
 import { Session } from "@/session"
@@ -90,7 +86,7 @@ import {
   renderWorkflowPrompt,
 } from "@/engine"
 import { EngineProtocol } from "@/engine/protocol"
-import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
+import { Event as EngineEvent } from "@/engine/model"
 import { describeTask, renderTaskDescription, type TaskDesc } from "@/engine/describe"
 import { deriveTaskStatus, isTaskTerminal } from "@/engine/task-status"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
@@ -496,7 +492,6 @@ export interface OrchestratorEvent {
     text: string
     attachmentSummary?: string
     source?: string
-    target?: TaskMessageTargetInput
     messageID?: string
   }
   /** Operator lifecycle intent from public controls. Distinct from `note` so
@@ -719,20 +714,6 @@ export namespace Orchestrator {
       //    the runtime contract instead of synthesizing another user turn.
       const systemContext = await buildSystemParts(task, event, workflow, workflowState)
       const system = systemContext.parts
-      // INFORMATION MISSING diagnostic — single source per rule 8. The runner.ts
-      // path injects this for every worker agent (build / architect / acceptance
-      // / ...); the orchestrator uses its own SessionPrompt.prompt path
-      // (see file header for why) and so must inject here. Without this, a
-      // toggle flipped ON would silently leave the orchestrator without
-      // the diagnostic — the whole point is "every agent's prompt receives
-      // the diagnostic" so that whoever lost their context surfaces it.
-      // Appended as a separate array element so it lands after the static
-      // ORCHESTRATOR_INSTRUCTIONS + the per-wake describe block, matching
-      // the runner's "diagnostic last" placement.
-      const debugCfg = (await EngineConfig.get()).debug
-      if (debugCfg.fail_on_information_missing) {
-        system.push(INFORMATION_MISSING_DIAGNOSTIC_TEXT)
-      }
       const appendUserMessage = Boolean(
         event?.note || event?.operatorMessage || !(await sessionHasUserMessage(agentSession.id)),
       )
@@ -934,29 +915,6 @@ export namespace Orchestrator {
         finishReason: assistantInfo?.finish,
         streamErrors: streamErrors.length,
       })
-
-      // INFORMATION MISSING signal — same contract as the worker path in
-      // agent/runner.ts. When the operator has flipped the toggle and the
-      // orchestrator emits the XML diagnostic block, fail this wake with a
-      // non-retryable AgentRunError so the error is persisted without killing
-      // the sidecar. Mirrors the injection above (rule 8 single source).
-      if (debugCfg.fail_on_information_missing && finalMessage && messageHasInformationMissing(finalMessage)) {
-        const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
-        log.error("INFORMATION MISSING signal — failing orchestrator wake", {
-          agentName: "orchestrator",
-          taskID,
-          sessionID: agentSession.id,
-          block: block.slice(0, 1200),
-        })
-        // eslint-disable-next-line no-console
-        console.error(
-          `\n[FATAL] INFORMATION MISSING detected in orchestrator stream — failing wake.\n` +
-            `Task: ${taskID}\n` +
-            `Session: ${agentSession.id}\n` +
-            `${block}\n`,
-        )
-        throw buildInformationMissingError({ kind: "orchestrator", agentName: "orchestrator", block })
-      }
 
       if (finalMessage) {
         const hardError = buildHardErrorFromFinalMessage({

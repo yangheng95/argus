@@ -8,7 +8,7 @@
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
  * Pipeline 以 build 做实现、以 visual_qa 做 frontend post-build review evidence，
- * 以 integrity 做 session-bound final gate。旧 host acceptance gate 已禁用，不再作为推荐 workflow 的验收步骤。
+ * 以 integrity 做 session-bound final review boundary。旧 host acceptance mechanism 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -16,8 +16,7 @@
  */
 import { createDecisionLog } from "@/decision-log"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
-import { visualQaReportAcceptanceSemantics } from "@/visual-qa/acceptance-semantics"
-import { VisualQaReportSchema } from "@/visual-qa/schema"
+import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
@@ -118,8 +117,8 @@ export interface GoalWorkflowState {
 export interface WorkflowState {
   /** 当前使用的 workflow ID */
   workflowID: string
-  /** per-goal 派生步骤状态。在 prompt 渲染时通常会被 `projectGoalSteps` 覆盖
-   *  （从 goal_run 现算），保留字段是为了向后兼容传入未带 taskID 的渲染调用。 */
+  /** per-goal 派生步骤状态。带 taskID 的渲染调用使用 `projectGoalSteps`
+   *  从 goal_run 现算；无 taskID 的 prompt 预览调用必须显式传入该字段。 */
   goalSteps: Record<string, GoalWorkflowState>
 }
 
@@ -131,7 +130,7 @@ export interface WorkflowState {
  *
  *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
  *  流程：build 实现。需要结构化验收的任务应走 pipeline，这样 integrity
- *  可以读取 requirements / architect / goal build evidence 后做最终 gate。
+ *  可以读取 requirements / architect / goal build evidence 后做最终 review。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
@@ -164,7 +163,7 @@ const DIRECT: MiniWorkflow = {
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
  *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity；
- *  visual_qa 是所有 blocking build terminal 后、final acceptance 前的一次性前端视觉/产品审查证据；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  visual_qa 是所有 blocking build terminal 后、final acceptance 前的一次性前端视觉/产品审查证据；integrity 是 session-bound final review boundary：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
@@ -256,7 +255,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "最终系统完整性 gate：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
+      hint: "最终系统完整性 review boundary：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -408,9 +407,9 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.key.startsWith("report_")) {
-      const report = parseVisualQaReportProjection(entry.value)
-      if (!report) return "failed"
-      return report.effectiveAccepted && report.productionBlockers === 0 ? "completed" : "failed"
+      const effectiveAccepted = parseVisualQaReportProjection(entry.value)
+      if (effectiveAccepted === undefined) return "failed"
+      return effectiveAccepted ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
       continue
@@ -419,19 +418,11 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   return "pending"
 }
 
-function parseVisualQaReportProjection(
-  value: string,
-): { effectiveAccepted: boolean; productionBlockers: number } | undefined {
+function parseVisualQaReportProjection(value: string): boolean | undefined {
   try {
-    const parsed = VisualQaReportSchema.safeParse(JSON.parse(value))
+    const parsed = VisualQaDecisionRecordSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined
-    const report = parsed.data
-    const blockers = report.production_blockers.length
-    const semantics = visualQaReportAcceptanceSemantics(report)
-    return {
-      effectiveAccepted: semantics.effectiveAccepted,
-      productionBlockers: blockers,
-    }
+    return parsed.data.acceptance.effectiveAccepted
   } catch {
     return undefined
   }
@@ -448,14 +439,13 @@ function parseVisualQaReportProjection(
  * goal-scope step (`build`) and its status is whatever the goal's
  * supersede-chain tip goal_run says. One true source, no drift.
  *
- * When a step declares `phases` (e.g. pipeline.build with plan/build/
- * evaluate), we also project per-phase status from the same goal_run.status
- * — goal_run states already encode the phase timeline (planning / running /
- * evaluating). Phase status transitions are deterministic from run status,
- * so there's still one source of truth.
+ * When a step declares `phases` (currently pipeline.build declares only the
+ * `build` phase), we also project per-phase status from the same
+ * goal_run.status. Phase status transitions are deterministic from run
+ * status, so there's still one source of truth.
  *
- * Returns the `goalSteps` shape (keyed by goalID) so callers (board.ts,
- * renderWorkflowPrompt) can consume it as if it had been persisted.
+ * Returns a goalID-keyed projection for board.ts and renderWorkflowPrompt.
+ * The value is computed from engine rows on every read, not persisted state.
  */
 export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record<string, GoalWorkflowState> {
   const goalScopeSteps = workflow.steps.filter((s) => s.scope === "goal")
@@ -496,25 +486,10 @@ export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record
 
 /**
  * Map a goal_run.status to per-phase status within a step that declares
- * phases [plan, build, evaluate] (or any 3-phase decomposition).
+ * phases. The current pipeline build step declares one phase: `build`.
  *
- * The mapping reflects the in-run timeline:
- *   - queued / accepted          → all phases pending
- *   - planning                   → phase[0] running, rest pending
- *   - running                    → phase[0] completed, phase[1] running, phase[2] pending
- *   - evaluating                 → phases[0..1] completed, phase[2] running
- *   - completed                  → all phases completed
- *   - failed                     → the phase matching the status at failure time
- *                                   is marked failed; earlier phases are completed;
- *                                   later phases stay pending. Without a stored
- *                                   "last active phase" we approximate: failed runs
- *                                   show final phase failed, which is the common case
- *                                   for evaluator-rejection and executor crashes alike.
- *   - aborted                    → all aborted
- *   - blocked                    → current phase running (blocked ≈ waiting for input)
- *
- * `startedAt/completedAt` are propagated to every phase to keep the shape
- * simple; the overlay doesn't read them per-phase today.
+ * `startedAt/completedAt` are propagated to every declared phase to keep the
+ * shape simple; the overlay doesn't read them per-phase today.
  */
 function projectPhases(
   phases: MiniWorkflowPhase[],
@@ -526,50 +501,26 @@ function projectPhases(
   const setAll = (s: GoalStepStatus["status"]) => {
     for (const p of phases) out[p.id] = { status: s, startedAt, completedAt }
   }
-  const setCascade = (runningIndex: number) => {
-    // Phases before runningIndex: completed. At runningIndex: running.
-    // After: pending. Works for any phase count ≥ runningIndex + 1.
-    for (let i = 0; i < phases.length; i++) {
-      const status: GoalStepStatus["status"] =
-        i < runningIndex ? "completed" : i === runningIndex ? "running" : "pending"
-      out[phases[i].id] = { status, startedAt, completedAt }
-    }
-  }
   switch (runStatus) {
     case undefined:
     case "queued":
     case "accepted":
+    case "planning":
       setAll("pending")
       break
     case "aborted":
       setAll("aborted")
       break
-    case "planning":
-      setCascade(0)
-      break
     case "running":
     case "evaluating":
-      // `evaluating` is kept as a legal FSM state for backwards compatibility
-      // with existing DB rows (2026-04-20 per-goal evaluator removal); the
-      // orchestrator no longer transitions into it, but projecting any
-      // historical row alongside `running` (the build phase) stays honest.
-      setCascade(1)
-      break
     case "blocked":
-      // Conservative: mark the last known running phase. Without more
-      // information we fall back to "build" (index 1) — that's the phase
-      // most commonly stalled on user input / interaction prompts.
-      setCascade(Math.min(1, phases.length - 1))
+      setAll("running")
       break
     case "completed":
       setAll("completed")
       break
     case "failed":
-      // Mark final phase failed, earlier phases completed. See block comment.
-      for (let i = 0; i < phases.length; i++) {
-        const status: GoalStepStatus["status"] = i < phases.length - 1 ? "completed" : "failed"
-        out[phases[i].id] = { status, startedAt, completedAt }
-      }
+      setAll("failed")
       break
     default:
       setAll("pending")
@@ -612,9 +563,8 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push(`## Stage progress (advisory — agents are dispatched on-demand, not in fixed order)`)
   lines.push("")
 
-  // Project step state from artifacts (rule 23 — no FSM cells). Without a
-  // taskID we have nothing to project from, so every step shows PENDING:
-  // legitimate pre-task state, not data loss.
+  // Project step state from artifacts (rule 23 — no FSM cells). Calls without
+  // taskID are prompt previews and must supply explicit state.goalSteps.
   const derivedGoalSteps = taskID ? projectGoalSteps(taskID, workflow) : state.goalSteps
   const derivedTaskSteps = taskID ? projectTaskSteps(taskID, workflow) : {}
 
@@ -653,7 +603,7 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push("")
   lines.push(
     "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
-      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最后 gate 是 `integrity`；" +
+      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最终 review boundary 是 `integrity`；" +
       "integrity pass 完成任务，非 pass 返回 session-bound review evidence，下一步由编排器基于证据决定。",
   )
 

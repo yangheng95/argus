@@ -12,7 +12,7 @@ afterEach(async () => {
 })
 
 describe("visual metric text evidence", () => {
-  test("fails when text evidence is missing even if image gates pass", async () => {
+  test("fails when text evidence is missing even if image checks pass", async () => {
     const paths = await writeMatchingPNGs()
 
     const missingReferenceStrings = await computeVisualMetric({
@@ -29,17 +29,17 @@ describe("visual metric text evidence", () => {
     })
 
     for (const result of [missingReferenceStrings, missingRenderedText]) {
-      const textGate = result.gates.find((gate) => gate.name === "text_hit_ratio")
-      expect(result.gates.filter((gate) => gate.name !== "text_hit_ratio").every((gate) => gate.passed)).toBe(true)
+      const textCheck = result.checks.find((check) => check.name === "text_hit_ratio")
+      expect(result.checks.filter((check) => check.name !== "text_hit_ratio").every((check) => check.passed)).toBe(true)
       expect(result.passed).toBe(false)
-      expect(textGate?.passed).toBe(false)
-      expect(Number.isNaN(textGate?.value)).toBe(true)
-      expect(textGate?.note).toContain("missing referenceStrings/renderedText evidence")
+      expect(textCheck?.passed).toBe(false)
+      expect(Number.isNaN(textCheck?.value)).toBe(true)
+      expect(textCheck?.note).toContain("missing referenceStrings/renderedText evidence")
       expect(result.score).toBeLessThan(1)
     }
   })
 
-  test("fails placeholder copy while identical screenshots pass image gates", async () => {
+  test("fails placeholder copy while identical screenshots pass image checks", async () => {
     const paths = await writeMatchingPNGs()
 
     const result = await computeVisualMetric({
@@ -50,14 +50,14 @@ describe("visual metric text evidence", () => {
       thresholds,
     })
 
-    const textGate = result.gates.find((gate) => gate.name === "text_hit_ratio")
-    expect(result.gates.filter((gate) => gate.name !== "text_hit_ratio").every((gate) => gate.passed)).toBe(true)
-    expect(textGate?.passed).toBe(false)
-    expect(textGate?.value).toBe(0)
+    const textCheck = result.checks.find((check) => check.name === "text_hit_ratio")
+    expect(result.checks.filter((check) => check.name !== "text_hit_ratio").every((check) => check.passed)).toBe(true)
+    expect(textCheck?.passed).toBe(false)
+    expect(textCheck?.value).toBe(0)
     expect(result.passed).toBe(false)
   })
 
-  test("passes text gate only when required reference strings are present", async () => {
+  test("passes text check only when required reference strings are present", async () => {
     const paths = await writeMatchingPNGs()
 
     const result = await computeVisualMetric({
@@ -68,9 +68,9 @@ describe("visual metric text evidence", () => {
       thresholds,
     })
 
-    const textGate = result.gates.find((gate) => gate.name === "text_hit_ratio")
-    expect(textGate?.passed).toBe(true)
-    expect(textGate?.value).toBe(1)
+    const textCheck = result.checks.find((check) => check.name === "text_hit_ratio")
+    expect(textCheck?.passed).toBe(true)
+    expect(textCheck?.value).toBe(1)
     expect(result.passed).toBe(true)
   })
 })

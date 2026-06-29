@@ -1,5 +1,14 @@
 # 2026-06-13 Build Steer Must Not Interrupt Live Owned Goals
 
+> Superseded for overlay targeted steer on 2026-06-29 by
+> [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md).
+> This record remains historical evidence for live-ownership queuing, but its
+> overlay build guidance contract is no longer current. Current contract:
+> targeted build/sub-agent steer uses
+> `POST /task/:taskID/session/:sessionID/operator-steer`; task-root
+> `/task/:taskID/message` no longer accepts `target`, `build_session`, or
+> `agent_session` payload fields.
+
 ## Problem
 
 Sending an operator message from a failed build card can cancel other parallel

@@ -11,7 +11,7 @@
  *
  * 契约（CLAUDE.md）：
  *  - rule 1：锚点必须来自 manifest，缺失直接抛错，不 fallback 到关键字搜索
- *  - rule 11：禁自造 grep 规则——本模块只做"预先由 capture-gate 记录的串"的字面匹配
+ *  - rule 11：禁自造 grep 规则——本模块只做"预先由 reference capture 记录的串"的字面匹配
  *  - rule 22：不与 visual-metric.ts 的 text_hit_ratio 重复实现 OCR——那个 visual
  *    metric 用同一 reference_strings 数组，本模块只在"软判"维度复用，计算方式相同
  *  - rule 26：不搞近似匹配 / fuzzy；normalize 到 lowercase + collapse 空白即可，
@@ -20,7 +20,7 @@
  * 本轮只实装计算 API，不修 goal 验收入口（那属于 check registry 重构，独立工单）。
  */
 import fs from "node:fs/promises"
-import { CaptureManifest, type CaptureManifestType, type CaptureBboxType } from "@/frontend-design/capture-gate"
+import { CaptureManifest, type CaptureManifestType, type CaptureBboxType } from "@/frontend-design/reference-capture"
 
 /** 从 manifest.json 路径加载 + zod 校验；格式错直接抛，禁 fallback。 */
 export async function loadContentAnchors(manifestPath: string): Promise<CaptureManifestType> {
@@ -126,8 +126,8 @@ export interface ContentFingerprintInput {
     /** Rendered 的命名区域 bbox；缺失的 region 记为 null。 */
     layout: Record<string, CaptureBboxType | null | undefined>
   }
-  /** IoU 下限判 "区域到位"；不影响 averageIoU 计算，仅用于 per-region passed 标。 */
-  regionIouThreshold?: number
+  /** Explicit IoU 下限判 "区域到位"；不影响 averageIoU 计算，仅用于 per-region passed 标。 */
+  regionIouThreshold: number
 }
 
 export interface ContentFingerprintResult {
@@ -139,7 +139,10 @@ export interface ContentFingerprintResult {
 }
 
 export function evaluateContentFingerprint(input: ContentFingerprintInput): ContentFingerprintResult {
-  const threshold = input.regionIouThreshold ?? 0.4
+  const threshold = Number(input.regionIouThreshold)
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+    throw new Error(`content fingerprint regionIouThreshold must be in (0, 1], got ${input.regionIouThreshold}`)
+  }
   const layout = computeLayoutOverlap(input.manifest.layout, input.rendered.layout)
   const regionPassedMask: Record<string, boolean> = {}
   for (const [name, entry] of Object.entries(layout.perRegion)) {

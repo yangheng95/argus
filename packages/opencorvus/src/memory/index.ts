@@ -114,8 +114,8 @@ export namespace Memory {
     return chunks.length > 0 ? chunks : [markdown.trim()]
   }
 
-  function clampMetric(value: number | undefined, fallback: number) {
-    if (typeof value !== "number" || Number.isNaN(value)) return fallback
+  function clampMetric(value: number | undefined, defaultValue: number) {
+    if (typeof value !== "number" || Number.isNaN(value)) return defaultValue
     return Math.max(0, Math.min(100, Math.round(value)))
   }
 

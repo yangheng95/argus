@@ -256,7 +256,7 @@ describe("server.pty-routes", () => {
     expect(ownRemove.status).toBe(200)
   }, 30_000)
 
-  test("streams PTY input and output through the OpenCode connect route", async () => {
+  test("streams PTY input and output through the project connect route", async () => {
     await using tmp = await tmpdir()
     let id = ""
     await Instance.provide({
@@ -322,7 +322,7 @@ describe("server.pty-routes", () => {
     })
   })
 
-  test("publishes OpenCode-style PTY lifecycle events", async () => {
+  test("publishes project PTY lifecycle events", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,

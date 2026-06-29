@@ -59,12 +59,32 @@ async function withTaskDecisionFixture(
     page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>
     taskBodies: unknown[]
     requestLog: string[]
+    waitForTaskPost: () => Promise<void>
   }) => Promise<void>,
 ) {
   const taskBodies: unknown[] = []
   const requestLog: string[] = []
   const taskID = `task-${mode}`
   const projectRoot = "D:/overlay/workspace/app"
+  let resolveTaskPost: (() => void) | null = null
+  const taskPostSeen = new Promise<void>((resolve) => {
+    resolveTaskPost = resolve
+  })
+  async function waitForTaskPost(): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      await Promise.race([
+        taskPostSeen,
+        new Promise<void>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`task POST was not observed\n${JSON.stringify({ requestLog, taskBodies }, null, 2)}`))
+          }, 5_000)
+        }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
@@ -102,7 +122,7 @@ async function withTaskDecisionFixture(
     if (path === "/executor")
       return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/skill/mounts")
-      return send({ scope: "project", skills: [], agents: [], matrix: [], unmounted_count: 0 })
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
@@ -110,6 +130,7 @@ async function withTaskDecisionFixture(
     if (path === "/task/events") return eventStream()
     if (path === "/task" && req.method === "POST") {
       taskBodies.push(await req.json())
+      resolveTaskPost?.()
       return send({ task_id: taskID })
     }
     if (path === `/task/${taskID}/operator-model-context`)
@@ -139,8 +160,8 @@ async function withTaskDecisionFixture(
         transcript: [],
         timeline: [],
         events: [],
-        view: { messages: [] },
-        agentView: { sessions: [], messages: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
         history: {
           oldestTimestamp: null,
@@ -149,7 +170,7 @@ async function withTaskDecisionFixture(
           hasMore: false,
           limit: 50,
         },
-        messageWatermark: null,
+        messageWatermark: 0,
         lastSequence: 0,
       })
     if (path === `/task/${taskID}/board`)
@@ -177,6 +198,7 @@ async function withTaskDecisionFixture(
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === `/task/${taskID}/followup`) return send({ followup: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
+    if (path === `/task/${taskID}/events`) return eventStream()
     if (path === "/log" && req.method === "POST") return send({ ok: true })
     return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
   })
@@ -267,7 +289,7 @@ async function withTaskDecisionFixture(
       visible: true,
     })
 
-    await run({ page, taskBodies, requestLog })
+    await run({ page, taskBodies, requestLog, waitForTaskPost })
 
     errors.assertNoUnexpectedErrors()
   } finally {
@@ -280,7 +302,7 @@ test("app dialog task decision uses the real host and segmented control", async 
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  await withTaskDecisionFixture("enter-start", async ({ page, taskBodies, requestLog }) => {
+  await withTaskDecisionFixture("enter-start", async ({ page, taskBodies, requestLog, waitForTaskPost }) => {
     const initial = await page.evaluate(() => {
       const dialog = document.querySelector<HTMLElement>("#appDialog")
       const choices = document.querySelector<HTMLElement>(".app-dialog-decision__choices")
@@ -396,6 +418,7 @@ test("app dialog task decision uses the real host and segmented control", async 
 
     await page.keyboard.press("Enter")
     await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    await waitForTaskPost()
     assert.equal(taskBodies.length, 1)
     assert.equal((taskBodies[0] as { queue?: unknown }).queue, false)
   })
@@ -405,7 +428,8 @@ test("app dialog task decision settles queue with keyboard and pointer activatio
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  await withTaskDecisionFixture("space-queue", async ({ page, taskBodies }) => {
+  await withTaskDecisionFixture("space-queue", async ({ page, taskBodies, waitForTaskPost }) => {
+    await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.value === "start")
     await page.keyboard.press("ArrowRight")
     await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.value === "queue")
     const queueFocus = await page.$eval('.app-dialog-decision__choice[data-value="queue"]', (node) => {
@@ -427,13 +451,15 @@ test("app dialog task decision settles queue with keyboard and pointer activatio
     writeFileSync(queueFocusScreenshotPath, await form.screenshot({}))
     await page.keyboard.press("Space")
     await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    await waitForTaskPost()
     assert.equal(taskBodies.length, 1)
     assert.equal((taskBodies[0] as { queue?: unknown }).queue, true)
   })
 
-  await withTaskDecisionFixture("click-queue", async ({ page, taskBodies }) => {
+  await withTaskDecisionFixture("click-queue", async ({ page, taskBodies, waitForTaskPost }) => {
     await page.click('.app-dialog-decision__choice[data-value="queue"]')
     await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    await waitForTaskPost()
     assert.equal(taskBodies.length, 1)
     assert.equal((taskBodies[0] as { queue?: unknown }).queue, true)
   })

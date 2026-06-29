@@ -7,6 +7,7 @@ import sharp from "sharp"
 
 import { launchBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 const PORT = 7378
@@ -26,6 +27,7 @@ type FixtureMessage = {
     agent: string
     parentSessionID?: string
     goalID?: string
+    orderKey: string
     time: { created: number; completed?: number }
     tokens?: { input?: number; output?: number; cache_read?: number; cache_write?: number }
     cost?: { total?: number }
@@ -33,7 +35,13 @@ type FixtureMessage = {
     modelID?: string
     summary?: boolean
   }
-  parts: Array<{ id: string; messageID: string; sessionID: string; type: "text"; text: string }>
+  parts: Array<{ id: string; messageID: string; sessionID: string; orderKey: string; type: "text"; text: string }>
+}
+
+type FixtureSession = {
+  sessionID: string
+  parentSessionID?: string
+  goalID?: string
 }
 
 type SseClient = {
@@ -68,6 +76,26 @@ function text(value: string, init?: ResponseInit) {
   })
 }
 
+function orderKey(domain: string, rank: number, time: number, id: string, sequence = 0): string {
+  return `v1:${String(time).padStart(16, "0")}:${String(rank).padStart(16, "0")}:${String(sequence).padStart(16, "0")}:${domain}:${id}`
+}
+
+function taskOrderKey(id: string, time: number): string {
+  return orderKey("task", 10, time, id)
+}
+
+function messageOrderKey(id: string, time: number): string {
+  return orderKey("message", 30, time, id)
+}
+
+function partOrderKey(id: string, time: number): string {
+  return orderKey("part", 31, time, id)
+}
+
+function sessionOrderKey(id: string, time: number): string {
+  return orderKey("session", 50, time, id)
+}
+
 function message(input: {
   id: string
   sessionID: string
@@ -93,6 +121,7 @@ function message(input: {
       agent: input.agent,
       ...(input.parentSessionID ? { parentSessionID: input.parentSessionID } : {}),
       ...(input.goalID ? { goalID: input.goalID } : {}),
+      orderKey: messageOrderKey(input.id, input.created),
       time: { created: input.created },
       ...(input.tokens ? { tokens: input.tokens } : {}),
       ...(input.cost ? { cost: input.cost } : {}),
@@ -101,9 +130,55 @@ function message(input: {
       ...(input.summary ? { summary: true } : {}),
     },
     parts: [
-      { id: `part_${input.id}`, messageID: input.id, sessionID: input.sessionID, type: "text", text: input.body },
+      {
+        id: `part_${input.id}`,
+        messageID: input.id,
+        sessionID: input.sessionID,
+        orderKey: partOrderKey(`part_${input.id}`, input.created + 1),
+        type: "text",
+        text: input.body,
+      },
     ],
   }
+}
+
+function viewMessagesForTranscript(messages: FixtureMessage[]) {
+  return messages.map((item) => ({
+    messageID: item.info.id,
+    orderKey: item.info.orderKey,
+    sessionID: item.info.sessionID,
+    stage: item.info.resolvedRole,
+    ...(item.info.parentSessionID ? { parentSessionID: item.info.parentSessionID } : {}),
+    ...(item.info.goalID ? { goalID: item.info.goalID } : {}),
+    time: item.info.time.created,
+    placement: "top_level",
+  }))
+}
+
+function viewSessionsForTranscript(sessions: FixtureSession[], messages: FixtureMessage[]) {
+  return sessions.flatMap((session) => {
+    const sessionMessages = messages.filter((message) => message.info.sessionID === session.sessionID)
+    const first = sessionMessages[0]
+    const last = sessionMessages.at(-1)
+    if (!first || !last) return []
+    const firstTime = first.info.time.created
+    const lastTime = last.info.time.created
+    return [{
+      sessionID: session.sessionID,
+      orderKey: sessionOrderKey(session.sessionID, firstTime),
+      stage: first.info.resolvedRole,
+      ...(session.parentSessionID ? { parentSessionID: session.parentSessionID } : {}),
+      ...(session.goalID ? { goalID: session.goalID } : {}),
+      messageIDs: sessionMessages.map((message) => message.info.id),
+      lastDisplayMessageID: last.info.id,
+      firstMessageTime: firstTime,
+      lastMessageTime: lastTime,
+      firstObservedAt: firstTime,
+      lastObservedAt: lastTime,
+      status: "completed",
+      placement: "top_level",
+    }]
+  })
 }
 
 function messageUpdatedEvent(item: FixtureMessage, sequence: number) {
@@ -111,6 +186,7 @@ function messageUpdatedEvent(item: FixtureMessage, sequence: number) {
     type: "message.updated",
     taskID: TASK_ID,
     sequence,
+    orderKey: item.info.orderKey,
     emittedAt: item.info.time.created,
     properties: { info: item.info },
   }
@@ -121,8 +197,17 @@ function partUpdatedEvent(item: FixtureMessage, sequence: number) {
     type: "message.part.updated",
     taskID: TASK_ID,
     sequence,
+    orderKey: item.info.orderKey,
     emittedAt: item.info.time.created,
-    properties: { part: item.parts[0] },
+    properties: {
+      taskID: TASK_ID,
+      orderKey: item.info.orderKey,
+      channel: item.info.channel,
+      resolvedRole: item.info.resolvedRole,
+      ...(item.info.parentSessionID ? { parentSessionID: item.info.parentSessionID } : {}),
+      ...(item.info.goalID ? { goalID: item.info.goalID } : {}),
+      part: item.parts[0],
+    },
   }
 }
 
@@ -134,14 +219,21 @@ function sessionStatusEvent(input: {
   emittedAt: number
   channel?: string
 }) {
+  const channel = input.channel ?? "build"
+  const orderKey = sessionOrderKey(input.sessionID, input.emittedAt)
   return {
     type: "session.status",
     taskID: TASK_ID,
     sequence: input.sequence,
+    orderKey,
     emittedAt: input.emittedAt,
     properties: {
+      taskID: TASK_ID,
       sessionID: input.sessionID,
-      channel: input.channel ?? "build",
+      orderKey,
+      channel,
+      resolvedRole: channel,
+      parentSessionID: "ses_root",
       status: {
         type: "terminal",
         reason: input.reason,
@@ -166,13 +258,21 @@ function compactedEvent(sequence: number, sessionID: string, emittedAt: number) 
   }
 }
 
-function eventStream(clients: SseClient[], path: string) {
+function eventSequence(event: unknown): number {
+  if (!event || typeof event !== "object") return 0
+  const sequence = Number((event as { sequence?: unknown }).sequence)
+  return Number.isFinite(sequence) ? sequence : 0
+}
+
+function eventStream(clients: SseClient[], path: string, replayEvents: unknown[] = []) {
   const encoder = new TextEncoder()
+  const sseChunk = (event: unknown) => encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const client: SseClient = { path, controller, closed: false }
       clients.push(client)
       controller.enqueue(encoder.encode(":\n\n"))
+      for (const event of replayEvents) controller.enqueue(sseChunk(event))
     },
     cancel() {
       const client = clients.find((item) => item.path === path && !item.closed)
@@ -211,6 +311,11 @@ function closeStreams(clients: SseClient[]) {
       client.controller.close()
     } catch {}
   }
+}
+
+function isExpectedSseRequestFailure(path: string, errorText: string): boolean {
+  if (path !== "/task/events" && path !== `/task/${TASK_ID}/events`) return false
+  return errorText === "net::ERR_ABORTED" || errorText === "net::ERR_INCOMPLETE_CHUNKED_ENCODING"
 }
 
 async function analyzePng(buffer: Buffer) {
@@ -432,7 +537,6 @@ async function waitForVisualState(
         status: card.status,
         terminalReason: card.terminalReason,
         errorReason: card.errorReason,
-        time: card.time,
         childIDs: card.childIDs,
         partText: card.partText.slice(0, 1200),
       })),
@@ -445,8 +549,13 @@ async function waitForVisualState(
       lastActivity = Date.now()
     }
     if (Date.now() - lastActivity > idleTimeoutMs) {
+      const detail = { snapshot, diagnostics: diagnostics() }
+      writeFileSync(
+        resolve(SCREENSHOT_DIR, `${label.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}.failure.json`),
+        JSON.stringify(detail, null, 2),
+      )
       assert.fail(
-        `No page activity while waiting for ${label}\n${JSON.stringify({ snapshot, diagnostics: diagnostics() }, null, 2)}`,
+        `No page activity while waiting for ${label}\n${JSON.stringify(detail, null, 2)}`,
       )
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -497,7 +606,7 @@ function assertChronology(snapshot: VisualSnapshot, markers: string[]) {
 }
 
 test(
-  `agent compact visual stress covers hydrate, live timing, failures, reload, resume, and narrow layout on port ${PORT}`,
+  `agent compact visual stress covers hydrate, live timing, failures, reload, resume, and the legal minimum layout on port ${PORT}`,
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -527,7 +636,7 @@ test(
     const liveSessionID = "ses_build_compact_live"
     const validationSessionID = "ses_build_compact_validation"
     const unsupportedSessionID = "ses_architect_compact_disabled"
-    const sessions = [
+    const sessions: FixtureSession[] = [
       { sessionID: "ses_root", parentSessionID: "", goalID: "" },
       { sessionID: buildSessionID, parentSessionID: "ses_root", goalID: "" },
       { sessionID: liveSessionID, parentSessionID: "ses_root", goalID: "" },
@@ -663,13 +772,14 @@ test(
       streamed ? [...baselineMessages, liveSummary, liveResume, validationFailure] : baselineMessages
     const task = {
       id: TASK_ID,
+      orderKey: taskOrderKey(TASK_ID, times.user),
       directory: PROJECT_ROOT,
       status: "active",
       sessionID: "ses_root",
       request: "AGC-USER-ANCHOR user asks the goal overlay to survive compaction under long-running agent pressure.",
       title: "Agent compact visual stress",
       attachments: [],
-      time: { created: times.user, updated: Date.now() },
+      time: { created: times.user, started: times.user, updated: Date.now() },
     }
     const board = () => ({
       snapshotVersion: `agent-compact-visual-stress-${sequence}-${streamed ? "streamed" : "baseline"}`,
@@ -684,24 +794,32 @@ test(
       interactions: [],
       goalWorkflows: [],
     })
-    const conversation = () => ({
-      lastSequence: sequence,
-      messageWatermark: sequence,
-      board: board(),
-      transcript: transcriptMessages(),
-      timeline: [],
-      events: [],
-      eventReplay: {
-        cursor: sequence,
-        latestSequence: sequence,
-        complete: true,
-        limit: 100,
-        sinceTimestamp: null,
-      },
-      history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-      view: { rootID: "root", sessions, cards: {}, order: [] },
-      agentView: { rootID: "root", sessions, cards: {}, order: [] },
-    })
+    const conversation = () => {
+      const messages = transcriptMessages()
+      const viewSessions = viewSessionsForTranscript(sessions, messages)
+      const viewMessages = viewMessagesForTranscript(messages)
+      const topLevelSessionIDs = viewSessions
+        .filter((session) => session.placement === "top_level" && session.messageIDs.length > 0)
+        .map((session) => session.sessionID)
+      return {
+        lastSequence: sequence,
+        messageWatermark: sequence,
+        board: board(),
+        transcript: messages,
+        timeline: [],
+        events: [],
+        eventReplay: {
+          cursor: sequence,
+          latestSequence: sequence,
+          complete: true,
+          limit: 100,
+          sinceTimestamp: null,
+        },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        view: { topLevelSessionIDs, sessions: viewSessions, messages: viewMessages },
+        agentView: { topLevelSessionIDs, sessions: viewSessions, messages: viewMessages },
+      }
+    }
     const promptProfileCatalog = {
       active: "compact",
       project_active: "compact",
@@ -802,6 +920,15 @@ test(
         if (path === "/executor") return json([])
         if (path === "/agent") return json([])
         if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return json([])
+        if (path === "/skill/mounts")
+          return json({
+            scope: "project",
+            skills: [],
+            agents: [],
+            matrix: [],
+            project_mounts: { agents: {} },
+            unmounted_count: 0,
+          })
         if (path === "/mcp") return json({})
         if (path === "/panel/knowledge/memory") return json([])
         if (path === "/panel/knowledge/preference") return json([])
@@ -810,10 +937,17 @@ test(
         if (path === `/task/${TASK_ID}/board`) return json(board(), { headers: { etag: `"board-${sequence}"` } })
         if (path === `/task/${TASK_ID}/conversation`) return json(conversation())
         if (path === `/task/${TASK_ID}/conversation/events`) {
+          const after = Number(url.searchParams.get("after") || 0)
+          const until = Number(url.searchParams.get("until") || sequence)
+          const events = streamLog.filter((event) => {
+            const eventSeq = eventSequence(event)
+            return eventSeq > after && eventSeq <= until
+          })
+          const cursor = events.length > 0 ? eventSequence(events.at(-1)) : after
           return json({
-            events: [],
+            events,
             eventReplay: {
-              cursor: sequence,
+              cursor,
               latestSequence: sequence,
               complete: true,
               limit: 100,
@@ -826,7 +960,15 @@ test(
           return json({ events: [], traceDir: `${PROJECT_ROOT}/.opencorvus/trace`, enabled: true })
         if (path === `/task/${TASK_ID}/browser-preview`) return json(browserPreviewTarget)
         if (path === "/control/timeline") return json([])
-        if (path === "/task/events" || path === `/task/${TASK_ID}/events`) return eventStream(sseClients, path)
+        if (path === "/task/events") return eventStream(sseClients, path)
+        if (path === `/task/${TASK_ID}/events`) {
+          const after = Number(url.searchParams.get("after") || 0)
+          return eventStream(
+            sseClients,
+            path,
+            streamLog.filter((event) => eventSequence(event) > after),
+          )
+        }
         if (path === `/task/${TASK_ID}/followup` && req.method === "POST") return json({ suggestion: "" })
         return text(`unhandled ${req.method} ${url.pathname}${url.search}`, { status: 404 })
       },
@@ -837,6 +979,11 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      const browserErrors = installBrowserErrorCollector(page, {
+        allowRequestFailure(failure) {
+          return isExpectedSseRequestFailure(failure.path, failure.errorText)
+        },
+      })
       await page.setViewport({ width: 1440, height: 900 })
       await page.evaluateOnNewDocument((serverUrl) => {
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
@@ -892,7 +1039,13 @@ test(
         }
         const url = item.url?.() || ""
         const errorText = item.failure?.()?.errorText || ""
-        if (url.includes("/events") && errorText.includes("net::ERR_ABORTED")) {
+        let path = ""
+        try {
+          path = new URL(url).pathname
+        } catch {
+          path = ""
+        }
+        if (isExpectedSseRequestFailure(path, errorText)) {
           mark("expected-sse-abort", { method: item.method?.() || "", url, errorText })
           return
         }
@@ -946,12 +1099,14 @@ test(
       screenshots.push({ name: "01-hydrated-compact", ...(await screenshotPanel(page, "01-hydrated-compact")) })
       mark("hydrated-complete")
 
+      mark("waiting-stream-open")
       await waitForVisualState(
         page,
         "task stream open",
         () => sseClients.some((client) => client.path === `/task/${TASK_ID}/events` && !client.closed),
         () => ({ requestLog, streamCount: sseClients.length, errors }),
       )
+      mark("stream-open", { streamCount: sseClients.length })
 
       sequence += 1
       pushEvent(sseClients, streamLog, compactedEvent(sequence, liveSessionID, times.liveSummary - 250))
@@ -975,6 +1130,7 @@ test(
       sequence += 1
       pushEvent(sseClients, streamLog, partUpdatedEvent(liveResume, sequence))
       streamed = true
+      mark("pushed-live-events", { sequence, streamLogLength: streamLog.length })
       snapshot = await waitForVisualState(
         page,
         "live compact timing and resume",
@@ -1053,25 +1209,29 @@ test(
       await scrollMarkerIntoView(page, "AGC-COMPACT-CHECKPOINT")
       screenshots.push({ name: "06-large-handoff", ...(await screenshotPanel(page, "06-large-handoff")) })
 
-      await page.setViewport({ width: 390, height: 844 })
+      await page.setViewport({ width: 1120, height: 844 })
       snapshot = await waitForVisualState(
         page,
-        "narrow compact layout",
-        (item) => item.text.includes("AGC-COMPACT-CHECKPOINT") && item.viewportWidth === 390,
+        "legal minimum compact layout",
+        (item) => item.text.includes("AGC-COMPACT-CHECKPOINT") && item.viewportWidth === 1120,
         () => ({ requestLog, streamLog, errors }),
       )
       assertNoLayoutBreakage(snapshot)
       assertVisible(snapshot, ["AGC-COMPACT-CHECKPOINT", "AGC-RESUME-AFTER-COMPACT", "AGC-VALIDATION-FAILURE"])
-      snapshots["07-narrow-layout"] = snapshot
+      snapshots["07-minimum-layout"] = snapshot
       await scrollMarkerIntoView(page, "AGC-VALIDATION-FAILURE")
-      screenshots.push({ name: "07-narrow-layout", ...(await screenshotPanel(page, "07-narrow-layout")) })
-      mark("narrow-complete")
+      screenshots.push({ name: "07-minimum-layout", ...(await screenshotPanel(page, "07-minimum-layout")) })
+      mark("minimum-layout-complete")
 
+      browserErrors.assertNoUnexpectedErrors()
       assert.deepEqual(errors, [], `browser errors\n${JSON.stringify({ errors, requestLog, streamLog }, null, 2)}`)
+    } catch (error) {
+      mark("test-error", {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : "",
+      })
+      throw error
     } finally {
-      closeStreams(sseClients)
-      await browser.close()
-      await server.close()
       writeFileSync(
         reportFile,
         JSON.stringify(
@@ -1097,6 +1257,13 @@ test(
           2,
         ),
       )
+      closeStreams(sseClients)
+      mark("server-close-start")
+      await server.close()
+      mark("server-close-complete")
+      mark("browser-close-start")
+      await browser.close()
+      mark("browser-close-complete")
     }
   },
   { timeout: 180_000 },

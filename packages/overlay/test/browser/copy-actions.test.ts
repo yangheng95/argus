@@ -224,6 +224,7 @@ test(
           timeline: data.timeline.task["task-1"] || [],
           events: [],
           view: {
+            topLevelSessionIDs: ["session-1"],
             sessions: [
               {
                 sessionID: "session-1",
@@ -257,7 +258,7 @@ test(
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
           history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
           messageWatermark: 0,
-          agentView: { sessions: [], messages: [] },
+          agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
           lastSequence: 0,
         })
       }
@@ -280,7 +281,8 @@ test(
       if (path === "/channel") return send(data.channels)
       if (path === "/executor") return send(data.executors)
       if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-      if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
       if (path === "/mcp") return send(data.mcp)
       if (path === "/panel/knowledge/memory") return send(data.memory)
       if (path === "/panel/knowledge/preference") return send(data.preferences)

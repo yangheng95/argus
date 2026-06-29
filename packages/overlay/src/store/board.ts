@@ -432,7 +432,6 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
  * Omit to keep the current `pendingTasks`.
  */
 export function applyTasks(tasks: any[], nextPending?: any[]): void {
-  invalidateTaskListPagination()
   const list = reconcileTaskItems(Array.isArray(tasks) ? tasks : [], boardStore.tasks)
   const pending = Array.isArray(nextPending)
     ? reconcileTaskItems(nextPending, boardStore.pendingTasks)
@@ -446,6 +445,7 @@ export function applyTasks(tasks: any[], nextPending?: any[]): void {
       setBoardStore("pendingTasks", pending)
     }
   })
+  visibleTaskProjectionCache = null
   if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
     _orphanedSelectionHandler()
   }
@@ -491,6 +491,7 @@ function reconcileTaskItems(next: any[], previous: any[]): any[] {
 
 export function clearTasksForMissingDirectory(): void {
   _tasksLoading = null
+  invalidateTaskListPagination()
   applyTasks([], [])
   setBoardStore("tasksError", "")
   setBoardStore("tasksLoaded", true)
@@ -833,6 +834,7 @@ export function setTaskSequence(sequence: number): void {
 
 export function setPendingTasks(tasks: any[]): void {
   setBoardStore("pendingTasks", Array.isArray(tasks) ? tasks : [])
+  visibleTaskProjectionCache = null
 }
 
 export function bumpTasksSeq(): void {

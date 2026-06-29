@@ -196,8 +196,8 @@ async function notificationReadability(page: any, root: string) {
 
     const cardStyle = getComputedStyle(item)
     const bodyStyle = getComputedStyle(document.body)
-    const fallbackBackground = parseColor(bodyStyle.backgroundColor)
-    const cardBackground = blend(parseColor(cardStyle.backgroundColor), fallbackBackground)
+    const pageBackground = parseColor(bodyStyle.backgroundColor)
+    const cardBackground = blend(parseColor(cardStyle.backgroundColor), pageBackground)
     const samples = [
       { id: "title", node: item.querySelector<HTMLElement>(".app-notification__title") },
       { id: "message", node: item.querySelector<HTMLElement>(".app-notification__message") },
@@ -346,8 +346,8 @@ test("notification task action is an explicit button on toast and panel surfaces
         transcript: [],
         timeline: [],
         events: [],
-        view: { sessions: [] },
-        agentView: { sessions: [] },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         history: { cursor: 0, complete: true, hasMore: false, limit: 100 },
         messageWatermark: 0,

@@ -197,24 +197,26 @@ export const CheckConfig = z.object({
  * The orchestrator decodes them exactly once at task-creation time, writes them
  * to AttachmentStore, and never carries base64 further into the system.
  */
-const TaskAttachmentInput = z.object({
-  /** MIME type, e.g. "image/png", "application/pdf", "audio/mpeg" */
-  mime: z.string(),
-  /** Base64-encoded file bytes (no data-URL prefix) */
-  data: z.string(),
-  /** Optional display name shown in the overlay message and LLM file part */
-  filename: z.string().optional(),
-}).superRefine((attachment, ctx) => {
-  try {
-    decodeRawBase64Payload(attachment.data, `attachment ${attachment.filename ?? attachment.mime}`)
-  } catch (error) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["data"],
-      message: error instanceof Error ? error.message : String(error),
-    })
-  }
-})
+const TaskAttachmentInput = z
+  .object({
+    /** MIME type, e.g. "image/png", "application/pdf", "audio/mpeg" */
+    mime: z.string(),
+    /** Base64-encoded file bytes (no data-URL prefix) */
+    data: z.string(),
+    /** Optional display name shown in the overlay message and LLM file part */
+    filename: z.string().optional(),
+  })
+  .superRefine((attachment, ctx) => {
+    try {
+      decodeRawBase64Payload(attachment.data, `attachment ${attachment.filename ?? attachment.mime}`)
+    } catch (error) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["data"],
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  })
 
 /**
  * Persisted attachment reference. Once the bytes live in AttachmentStore
@@ -565,20 +567,22 @@ export const TaskAccepted = z.object({
   task_id: Identifier.schema("task"),
 })
 
-export const TaskMessageInput = z.object({
-  text: z.string(),
-  source: z.string().min(1),
-  user_id: z.string().optional(),
-  promptProfile: z.string().min(1).optional(),
-  attachments: TaskAttachmentInput.array().optional(),
-  /** Overlay bridge envelope fields. They identify how a rendered message was
-   *  displayed, not what the operator asked. The task service accepts them so
-   *  replay/resume clients can reuse bridge-stamped message objects, but task
-   *  semantics still come only from `text`, `source`, `user_id`, and
-   *  `attachments`. */
-  resolvedRole: z.string().optional(),
-  channel: z.string().optional(),
-}).strict()
+export const TaskMessageInput = z
+  .object({
+    text: z.string(),
+    source: z.string().min(1),
+    user_id: z.string().optional(),
+    promptProfile: z.string().min(1).optional(),
+    attachments: TaskAttachmentInput.array().optional(),
+    /** Overlay bridge envelope fields. They identify how a rendered message was
+     *  displayed, not what the operator asked. The task service accepts them so
+     *  replay/resume clients can reuse bridge-stamped message objects, but task
+     *  semantics still come only from `text`, `source`, `user_id`, and
+     *  `attachments`. */
+    resolvedRole: z.string().optional(),
+    channel: z.string().optional(),
+  })
+  .strict()
 
 export const InjectMessageInput = z.object({
   message: z.string().min(1),
@@ -873,6 +877,9 @@ export const TaskBoardGoalContract = z.object({
 
 export const TaskBoardGoalWorkflow = z.object({
   goalID: z.string(),
+  /** Current delivered goal_run id used by overlay diff grouping and scoped
+   *  acceptance fetches. Omitted before a goal has any run row. */
+  goalRunID: z.string().optional(),
   orderKey: z.string().min(1),
   goalTitle: z.string(),
   /** Authoritative goal summary written by the Architect: a 1–2 sentence
@@ -900,6 +907,8 @@ export const TaskBoardGoalWorkflow = z.object({
   steps: TaskBoardGoalWorkflowStep.array(),
   /** Architect contracts relevant to this specific goal */
   contracts: TaskBoardGoalContract.array().optional(),
+  /** Goal-local acceptance contract rendered by GoalWorkflowGroup. */
+  acceptanceSpecs: AcceptanceSpecSchema.array().optional(),
 })
 
 // ---------------------------------------------------------------------------
@@ -937,7 +946,7 @@ export const TaskBoard = z.object({
   goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
   /** Task-level rollup of every quality criterion that touched this task —
    *  per-goal evaluator outcomes, integrity acceptance review, and external
-   *  quality gates (e.g. visual-diff). Persisted in engine_task.criteria_results
+   *  quality checks (e.g. visual-diff). Persisted in engine_task.criteria_results
    *  and exposed here so acceptance and contract-audit readers use the same
    *  source. */
   criteriaResults: EvaluationCheck.array().optional(),
@@ -1129,9 +1138,11 @@ export const AgentSessionReplyResult = z.object({
   message_id: Identifier.schema("message"),
 })
 
-export const AgentSessionOperatorSteerInput = z.object({
-  message: z.string().trim().min(1),
-}).strict()
+export const AgentSessionOperatorSteerInput = z
+  .object({
+    message: z.string().trim().min(1),
+  })
+  .strict()
 
 export const AgentSessionOperatorSteerResult = z.object({
   task_id: Identifier.schema("task"),
@@ -1211,7 +1222,7 @@ export const RunMetrics = z.object({
 
 export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "acceptance"
 
-export const ReviewStreamPhase = z.enum(["integrity", "acceptance"])
+export const ReviewStreamPhase = z.literal("integrity")
 export const ReviewStreamStep = z.enum(["manifest", "runtime", "visual", "specialist", "agent", "post_repair"])
 
 export const Event = {

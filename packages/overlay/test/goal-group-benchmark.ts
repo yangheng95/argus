@@ -58,62 +58,7 @@ const boardData = {
   acceptance: null,
   acceptedAcceptance: null,
   interactions: [],
-  lanes: [
-    {
-      id: "run",
-      title: "Run",
-      cards: [
-        {
-          id: "run-1",
-          kind: "run",
-          title: "OpenCorvus / executing",
-          status: "running",
-          time: Date.now(),
-        },
-      ],
-    },
-    {
-      id: "acceptance",
-      title: "Acceptance",
-      cards: [],
-    },
-    {
-      id: "goals",
-      title: "Dynamic Goals",
-      cards: [
-        {
-          id: "goal-auth",
-          kind: "goal",
-          title: "Implement JWT authentication module",
-          detail: "Create auth middleware with login/logout/refresh token endpoints",
-          status: "running",
-          time: Date.now() - 60_000,
-          metadata: { sessionID: "exec-session-auth" },
-        },
-        {
-          id: "goal-api",
-          kind: "goal",
-          title: "Add REST API endpoints for dashboard",
-          detail: "CRUD operations for dashboard widgets and user preferences",
-          status: "running",
-          time: Date.now() - 55_000,
-          metadata: { sessionID: "exec-session-api" },
-        },
-        {
-          id: "goal-rbac",
-          kind: "goal",
-          title: "Implement role-based access control",
-          detail: "Admin/editor/viewer roles with permission checks on API routes",
-          status: "pending",
-          time: Date.now() - 50_000,
-          metadata: { sessionID: "exec-session-rbac" },
-        },
-      ],
-    },
-    { id: "staging", title: "Staging", cards: [] },
-    { id: "interactions", title: "Interactions", cards: [] },
-    { id: "history", title: "History", cards: [] },
-  ],
+
   goalWorkflows: [
     {
       goalID: "goal-auth",

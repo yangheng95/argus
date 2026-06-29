@@ -45,6 +45,7 @@ import {
   compareTimelineOrderKeys,
   requireTimelineOrderKey,
   requireTimelineOrderKeyDomain,
+  timelineOrderKeyTime,
 } from "../utils/timeline-order"
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
@@ -290,20 +291,11 @@ let latestTimelineMessage: MessageInfo | undefined
  *  not by `goal.created` events — we just remember existence here so session
  *  bucket claiming is deterministic. */
 const knownGoalIDs = new Set<string>()
-/** goalID → the current attempt's goal_run id. Refreshed from
- *  board.goalWorkflows on every rebuild. Used to scope step/phase card
- *  ids so each attempt (retry / acceptance_rework / modify_contract /
- *  manual_retry) gets its own cards instead of mutating the prior
- *  attempt's cards in-place. A missing entry means the goal has no
- *  dispatched run yet — we fall back to the pseudo-id `"pre"` so the
- *  pre-dispatch stub cards (none today, but future-proof) still have a
- *  stable home that collapses into the first real run once it starts.
- *
- *  The map is the single source of truth for "what's the live attempt?"
- *  — session-side `resolveGoalContainerCardID` reads it when routing a
- *  newly-arrived session's parts to the right phase card, so a session
- *  created under attempt N never leaks its parts onto the attempt N+1
- *  card after rebuild. */
+/** goalID → latest board-projected goal_run id. Refreshed from
+ *  board.goalWorkflows on every rebuild. Step and phase card ids are
+ *  attempt-invariant (`step:<goalID>:<stepID>` and `:phase:<phaseID>`);
+ *  this value is retained as board/diff context for code paths that still
+ *  accept a goalRunID parameter, not as a card-id segment. */
 const goalCurrentRunID = new Map<string, string>()
 /** Legacy integrity child-card ownership map. New integrity runs render on the
  *  session card itself, so this map stays empty for fresh data but remains
@@ -574,7 +566,9 @@ export function applyEvent(event: any): void {
 
   // ── Session lifecycle (single source) ──
   // session.status from packages/opencorvus/src/session/status.ts is the
-  // only signal that flips a session card out of `running`. Carries
+  // only signal that writes terminal lifecycle reasons. Display cards may use
+  // running/completed to mark the currently active rendered turn, but terminal
+  // completed/error/aborted ownership comes from this event. Carries
   // `{sessionID, status:{type:"streaming"|"idle"|"retry"|"terminal", ...}}`.
   // Applies to every session — orchestrator root, requirements / architect /
   // frontend-design / frontend-research / workload_analysis / visual_qa /
@@ -598,10 +592,10 @@ export function applyEvent(event: any): void {
   // — they DO need a UI surface (Round-4 work), but until that lands we
   // accept them silently rather than spamming console.error from the SSE
   // try/catch. Backend (executor/managed.ts) emits these for permission
-  // gates and structured questions.
+  // permission prompts and structured questions.
   if (type === "approval.request" || type === "input.request") return
   // permission.* events fire alongside approval.request when an executor
-  // gates on a tool call (executor/opencorvus.ts:260,267). Handled inline by
+  // pauses on a tool call (executor/opencorvus.ts:260,267). Handled inline by
   // InteractionCard — tree-writer just acknowledges.
   if (type === "permission.asked" || type === "permission.replied") return
   // diff.delta is a streaming preview from the executor — boardStore
@@ -724,18 +718,13 @@ function createSessionCardNode(
 }
 
 /** Per-goal executor step card. Each goal has exactly one goal-scope step
- *  per attempt (see workflow.ts — the `build` step, labelled "Executor",
- *  is the only `scope: "goal"` entry in the pipeline). Every new attempt
- *  (retry / acceptance_rework / modify_contract / manual_retry) creates
- *  a fresh goal_run; the run id is baked into the card id so the prior
- *  attempt's cards survive as frozen history rather than being mutated
- *  by new messages. Goal title, decomposition index (#N), and description
- *  all live on this card.
+ *  card per workflow step (see workflow.ts — the `build` step, labelled
+ *  "Executor", is the only `scope: "goal"` entry in the pipeline). Goal
+ *  title, decomposition index (#N), and description all live on this card.
  *
- *  Format: `step:<goalID>:<goalRunID | "pre">:<stepID>`.
- *  The `"pre"` sentinel is used before the first dispatch (no goal_run
- *  exists yet); it collapses into the real run id on the first rebuild
- *  after the board emits a goalRunID. */
+ *  Format: `step:<goalID>:<stepID>`. `goalRunID` is board/diff context,
+ *  not a card-id segment, because build-session parts can arrive before
+ *  the run artifact is visible to the overlay. */
 function goalStepCardID(goalID: string, _goalRunID: string | undefined, stepID: string): string {
   // Attempt-invariant card ID (rule 22 / rule 23). Build agent parts arrive
   // BEFORE the goal_run artifact lands on the overlay (SSE ordering — the
@@ -746,8 +735,8 @@ function goalStepCardID(goalID: string, _goalRunID: string | undefined, stepID: 
   // empty `:<runID>:` card under the goal — visible symptom: goal card
   // shows a "Build" sub-card with green check but empty body. Removing
   // runID from the card id keeps both observers pointed at the same card
-  // and merges retry attempts into one rolling timeline (per-attempt
-  // separation was a 2026-04-21 addition that broke this invariant).
+  // and merges retry attempts into one rolling timeline (runID-keyed card
+  // separation broke this invariant).
   return `step:${goalID}:${stepID}`
 }
 
@@ -765,13 +754,11 @@ function isTopLevelStepCardID(id: string): boolean {
 }
 
 /** Extract the goalID segment from a step card id (top-level or phase).
- *  Used by the GC pass to drop cards whose owning goal has been removed,
- *  while preserving historical-attempt cards (same goalID, different
- *  goalRunID) that the new alive-set no longer covers. */
+ *  Used by the GC pass to drop cards whose owning goal has been removed. */
 function goalIDFromStepCardID(id: string): string | null {
   if (!id.startsWith("step:")) return null
   const parts = id.split(":")
-  // step:<goalID>:<runID>:<stepID>[...]
+  // step:<goalID>:<stepID>[...]
   return parts.length >= 3 ? parts[1] : null
 }
 
@@ -805,7 +792,7 @@ function handleMessageUpdated(event: any): void {
   const agent = typeof info.agent === "string" ? info.agent : ""
   const parentSessionID = String(info.parentSessionID || "")
   const goalID = String(info.goalID || "")
-  const incomingTimeCreated = Number(info?.time?.created || 0)
+  const incomingTimeCreated = Number(info?.time?.created)
   if (!(incomingTimeCreated > 0)) {
     throw new Error(
       `message.updated info.time.created must be positive (got ${info?.time?.created}); server emitter is the single source of truth`,
@@ -818,6 +805,13 @@ function handleMessageUpdated(event: any): void {
   }
   const orderKey = envelopeOrderKey
   const existingMessage = messages.get(id)
+  if (existingMessage && existingMessage.orderKey !== orderKey) {
+    throw new Error(`message.updated ${id} orderKey drift from existing message owner`)
+  }
+  const pendingPartFirstMessage = pendingPartFirstMessages.get(id)
+  if (pendingPartFirstMessage && pendingPartFirstMessage.orderKey !== orderKey) {
+    throw new Error(`message.updated ${id} orderKey drift from pending part-first owner`)
+  }
   pendingPartFirstMessages.delete(id)
   const timeCreated = existingMessage?.serverTimeConfirmed ? existingMessage.time : incomingTimeCreated
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0
@@ -921,7 +915,6 @@ interface EnsuredPartProjection {
   messageID: string
   sessionID: string
   displayRole: string
-  observationTime?: number
 }
 
 type PartEventRouteMeta = {
@@ -958,23 +951,19 @@ function requirePartEventRouteMeta(
   }
 }
 
-function eventObservationTime(event: any): number | undefined {
-  const emittedAt = Number(event?.timestamp || event?.emittedAt || event?.emitted_at || 0)
-  return Number.isFinite(emittedAt) && emittedAt > 0 ? emittedAt : undefined
+function requirePositiveNumber(value: unknown, label: string): number {
+  const number = Number(value)
+  if (Number.isFinite(number) && number > 0) return number
+  throw new Error(`${label} must be positive`)
 }
 
-function requireDisplayPartObservationTime(
-  eventType: string,
-  messageID: string,
-  observationTime: number | undefined,
-): number {
-  if (Number.isFinite(observationTime) && Number(observationTime) > 0) return Number(observationTime)
-  throw new Error(`${eventType} for ${messageID} missing emittedAt/timestamp for display message ordering`)
+function messageOrderKeyTime(eventType: string, messageID: string, orderKey: string): number {
+  return timelineOrderKeyTime(orderKey, `${eventType} ${messageID}`)
 }
 
 function ensurePartProjection(
   part: any,
-  opts: { observationTime?: number; routeMeta?: PartEventRouteMeta } = {},
+  opts: { routeMeta?: PartEventRouteMeta } = {},
 ): EnsuredPartProjection | null {
   if (!part || typeof part !== "object") throw new Error("message.part.updated missing part")
   const partID = String(part.id || "")
@@ -997,10 +986,18 @@ function ensurePartProjection(
   let displayRole = ""
   const existingMessage = messages.get(messageID)
   if (existingMessage) {
+    if (existingMessage.orderKey !== routeOrderKey) {
+      throw new Error(`message.part.updated ${messageID} orderKey drift from existing message owner`)
+    }
     displayRole = existingMessage.resolvedRole
   } else {
     const pendingMessage = pendingPartFirstMessages.get(messageID)
-    if (pendingMessage) displayRole = pendingMessage.resolvedRole
+    if (pendingMessage) {
+      if (pendingMessage.orderKey !== routeOrderKey) {
+        throw new Error(`message.part.updated ${messageID} orderKey drift from pending part-first owner`)
+      }
+      displayRole = pendingMessage.resolvedRole
+    }
   }
   const eventResolvedRole = typeof opts.routeMeta?.resolvedRole === "string" ? opts.routeMeta.resolvedRole.trim() : ""
   if (!displayRole && eventResolvedRole) displayRole = displayRoleForResolvedRole(eventResolvedRole)
@@ -1010,9 +1007,9 @@ function ensurePartProjection(
     // Bridge stamps channel/goalID/parentSessionID onto the event payload.
     // A part can arrive before its message.updated (saveMessage is silent;
     // updatePart fires before updateMessage). Because messageID is already
-    // known, the turn card's deterministic id is too — build it now at
-    // observation time. The later message.updated overwrites `time` with the
-    // authoritative server timestamp; no synthetic stub / rename.
+    // known, the turn card's deterministic id and message-domain orderKey time
+    // are too — build it now from backend timeline evidence; no synthetic stub
+    // or rename.
     route = requirePartEventRouteMeta(opts.routeMeta, messageID)
     const stage = deriveSessionStage(route)
     if (stage === "filtered") return null
@@ -1033,8 +1030,8 @@ function ensurePartProjection(
     if (!displayRole) {
       throw new Error(`message.part.updated for ${messageID} missing resolved display role`)
     }
-    const observationTime = requireDisplayPartObservationTime("message.part.updated", messageID, opts.observationTime)
     if (!route) route = requirePartEventRouteMeta(opts.routeMeta, messageID)
+    const messageTime = messageOrderKeyTime("message.part.updated", messageID, route.orderKey)
     pendingPartFirstMessages.set(messageID, {
       id: messageID,
       sessionID,
@@ -1045,7 +1042,7 @@ function ensurePartProjection(
       parentSessionID: route.parentSessionID,
       goalID: route.goalID,
       orderKey: route.orderKey,
-      time: observationTime,
+      time: messageTime,
       serverTimeConfirmed: false,
       completed: false,
       pendingPartFirst: true,
@@ -1055,12 +1052,12 @@ function ensurePartProjection(
       goalID: session.goalID,
       role: displayRole,
       orderKey: route.orderKey,
-      time: observationTime,
+      time: messageTime,
       stampServerTime: false,
     })
     cardID = ensured.cardID
     if (ensured.isPhase) {
-      ensureBoundaryPart(session, cardID, messageID, displayRole, observationTime)
+      ensureBoundaryPart(session, cardID, messageID, displayRole, messageTime)
     }
     drainPendingSessionStatus(sessionID)
     drainPendingIntegrity(sessionID)
@@ -1080,7 +1077,6 @@ function ensurePartProjection(
 function handlePartUpdated(event: any): void {
   const props = propsOf(event)
   const part = props.part
-  const observationTime = eventObservationTime(event)
   const envelopeMessageID = String(part?.messageID || "")
   const envelopeOrderKey = requireTimelineOrderKeyDomain(
     event?.orderKey,
@@ -1091,7 +1087,6 @@ function handlePartUpdated(event: any): void {
     throw new Error(`message.part.updated ${envelopeMessageID} orderKey drift between envelope and payload`)
   }
   const projection = ensurePartProjection(part, {
-    observationTime,
     routeMeta: { ...props, orderKey: envelopeOrderKey },
   })
   if (!projection) return
@@ -1099,7 +1094,9 @@ function handlePartUpdated(event: any): void {
   if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
     const message = messages.get(projectedMessageID)
     const boundaryTime =
-      message?.time || requireDisplayPartObservationTime("message.part.updated", projectedMessageID, observationTime)
+      message?.time ??
+      pendingPartFirstMessages.get(projectedMessageID)?.time ??
+      messageOrderKeyTime("message.part.updated", projectedMessageID, envelopeOrderKey)
     ensureBoundaryPart(session, cardID, projectedMessageID, displayRole, boundaryTime)
     reorderPhaseCardParts(cardID)
     rebuildTopLevelOrder()
@@ -2180,20 +2177,30 @@ function ensureSessionProjection(sessionID: string, opts: EnsureSessionOpts): Se
   return info
 }
 
-/** Is this session folded into a goal phase card (build / planner under a
- *  goal)? Phase-absorbed sessions do NOT get message-turn cards — their
- *  parts accumulate on the single phase card, unchanged from P0 (spec
- *  §3.7 — keep existing phase-absorbed build/planner behaviour). */
+/** Is this session folded into a goal phase card under a goal?
+ *  Phase-absorbed sessions do NOT get message-turn cards — their parts
+ *  accumulate on the single phase card. */
 function isPhaseAbsorbedSession(stage: string, goalID: string): boolean {
-  return Boolean(goalID && stage && goalStagePhaseID(stage))
+  return Boolean(resolveGoalStagePhase(stage, goalID))
+}
+
+function resolveGoalStagePhase(stage: string, goalID: string): { stepID: string; phaseID: string } | null {
+  if (!goalID) return null
+  const normalizedStage = String(stage || "").trim()
+  if (!normalizedStage) throw new Error(`goal-owned session ${goalID} missing stage for phase projection`)
+  if (normalizedStage === "executor") return null
+  const phase = goalStagePhaseID(normalizedStage)
+  if (!phase) {
+    throw new Error(`goal-owned session ${goalID} stage ${normalizedStage} is not declared as a workflow phase`)
+  }
+  return phase
 }
 
 /** Resolve the display card id for ONE message turn of a session.
  *
- *  - Phase-absorbed (goal-scope build/planner): the goal phase card. The
- *    phase card is stubbed here if SSE ordering put message/part events
- *    before the board's goalWorkflows arrived; rebuildGoalStepCards later
- *    overlays its real metadata without clobbering accumulated parts.
+ *  - Phase-absorbed goal-scope build sessions: the backend-declared goal
+ *    phase card. The board workflow must materialize that phase before
+ *    message/part events can claim it.
  *  - Otherwise: a deterministic per-message-turn card id. messageID is
  *    durable, so a pending turn card (part-before-message) and the final
  *    turn card share the same id — no stub/rename needed. */
@@ -2208,38 +2215,35 @@ function resolveTurnCardID(
   cardID: string
   isPhase: boolean
 } {
-  if (isPhaseAbsorbedSession(stage, goalID)) {
-    const phase = goalStagePhaseID(stage)!
-    // Read the live run id so the stub lands on the current attempt's card.
+  const phase = resolveGoalStagePhase(stage, goalID)
+  if (phase) {
+    // Read the board-projected run id for context; the phase card id stays
+    // attempt-invariant because goalPhaseCardID does not include run id.
     const runID = goalCurrentRunID.get(goalID)
     const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID)
-    if (!cardTreeStore.cards[phaseCardID]) {
-      setCardTreeStore("cards", phaseCardID, {
-        id: phaseCardID,
-        kind: "phase",
-        stage,
-        accent: stageAccent(stage),
-        status: "running",
-        title: roleTitleKey(stage),
-        parts: [],
-        childIDs: [],
-        goalID,
-        phaseID: phase.phaseID,
-        phaseSessionKind: stage,
-        phaseSessionID: sessionID,
-        phaseSessionOrderKey: orderKey,
-        orderKey,
-        time,
-      })
-    } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
-      // Absorbed session replaced (rewind / re-dispatch). Track only a
-      // timeline-newer owner so late events from an older attempt/session do
-      // not retarget phase controls on an attempt-invariant card.
-      const currentOrderKey = cardTreeStore.cards[phaseCardID]!.phaseSessionOrderKey
-      if (!currentOrderKey || compareTimelineOrderKeys(orderKey, currentOrderKey, "phase session owner") >= 0) {
-        setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID)
-        setCardTreeStore("cards", phaseCardID, "phaseSessionOrderKey", orderKey)
-      }
+    const phaseCard = cardTreeStore.cards[phaseCardID]
+    if (!phaseCard) {
+      throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} missing backend board projection`)
+    }
+    if (phaseCard.kind !== "phase") {
+      throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} resolved non-phase card ${phaseCardID}`)
+    }
+    if (phaseCard.phaseSessionKind !== stage) {
+      throw new Error(
+        `goal phase ${goalID}/${phase.stepID}/${phase.phaseID} expected session kind ${phaseCard.phaseSessionKind}, got ${stage}`,
+      )
+    }
+    if (phaseCard.phaseSessionID && phaseCard.phaseSessionID !== sessionID) {
+      throw new Error(
+        `goal phase ${goalID}/${phase.stepID}/${phase.phaseID} expected session ${phaseCard.phaseSessionID}, got ${sessionID}`,
+      )
+    }
+    if (!phaseCard.phaseSessionID) {
+      throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} missing backend build session owner`)
+    }
+    const currentOrderKey = phaseCard.phaseSessionOrderKey
+    if (!currentOrderKey || compareTimelineOrderKeys(orderKey, currentOrderKey, "phase session owner") > 0) {
+      setCardTreeStore("cards", phaseCardID, "phaseSessionOrderKey", orderKey)
     }
     return { cardID: phaseCardID, isPhase: true }
   }
@@ -2253,8 +2257,8 @@ interface EnsureTurnCardOpts {
   role: string
   orderKey: string
   time: number
-  /** message.updated carries the authoritative server time; a
-   *  part-before-message stamp is observation time only and must not
+  /** message.updated carries the authoritative server time; a part-before-
+   *  message projection uses the backend message orderKey time and must not
    *  overwrite a server time already on the card. */
   stampServerTime: boolean
   /** Hydrate replays many turns then rebuilds once at the end. */
@@ -2465,7 +2469,7 @@ export interface RenderedConversationCardTarget {
   cardID?: string
   renderedCardID: string
   orderKey: string
-  time?: number
+  time: number
   sessionID?: string
   messageID?: string
   stepID?: string
@@ -2482,7 +2486,7 @@ function renderedCardTargetFromProjectedCardID(
   cardID: string,
   source: {
     orderKey: string
-    time?: number
+    time: number
     sessionID?: string
     messageID?: string
   },
@@ -2490,14 +2494,14 @@ function renderedCardTargetFromProjectedCardID(
   const card = cardTreeStore.cards[cardID]
   if (!card) return null
   const orderKey = requireTimelineOrderKey(source.orderKey, `rendered conversation card ${cardID}`)
-  const time = Number(source?.time ?? card.time ?? 0)
+  const time = requirePositiveNumber(source.time, `rendered conversation card ${cardID} time`)
   const phaseIndex = cardID.indexOf(":phase:")
   if (cardID.startsWith("step:") && phaseIndex > 0) {
     return {
       cardID,
       renderedCardID: cardID.slice(0, phaseIndex),
       orderKey,
-      ...(time > 0 ? { time } : {}),
+      time,
       ...(source?.sessionID ? { sessionID: source.sessionID } : {}),
       ...(source?.messageID ? { messageID: source.messageID } : {}),
       stepID: card.stepID || stepIDFromProjectedStepCardID(cardID),
@@ -2507,7 +2511,7 @@ function renderedCardTargetFromProjectedCardID(
   return {
     renderedCardID: cardID,
     orderKey,
-    ...(time > 0 ? { time } : {}),
+    time,
     ...(source?.sessionID ? { sessionID: source.sessionID } : {}),
     ...(source?.messageID ? { messageID: source.messageID } : {}),
   }
@@ -2566,20 +2570,60 @@ export function renderedConversationCardTargetForMessage(
 
 export function renderedConversationCardTargetForGoalPhase(input: {
   goalID?: unknown
+  sessionID?: unknown
   stepID?: unknown
   phaseID?: unknown
   stage?: unknown
 }): RenderedConversationCardTarget | null {
   const goalID = String(input?.goalID || "")
+  if (!goalID) return null
+  const phase = resolveGoalStagePhase(String(input?.stage || ""), goalID)
+  if (!phase) return null
   const explicitStepID = String(input?.stepID || "")
   const explicitPhaseID = String(input?.phaseID || "")
-  const phase =
-    explicitStepID && explicitPhaseID
-      ? { stepID: explicitStepID, phaseID: explicitPhaseID }
-      : goalStagePhaseID(String(input?.stage || ""))
-  if (!goalID || !phase?.stepID || !phase?.phaseID) return null
+  if ((explicitStepID && !explicitPhaseID) || (!explicitStepID && explicitPhaseID)) {
+    throw new Error(`goal phase ${goalID} explicit stepID and phaseID must be provided together`)
+  }
+  if (
+    explicitStepID &&
+    explicitPhaseID &&
+    (explicitStepID !== phase.stepID || explicitPhaseID !== phase.phaseID)
+  ) {
+    throw new Error(
+      `goal phase ${goalID} explicit phase ${explicitStepID}/${explicitPhaseID} does not match stage ${String(
+        input?.stage || "",
+      )} workflow phase ${phase.stepID}/${phase.phaseID}`,
+    )
+  }
   const runID = goalCurrentRunID.get(goalID)
-  return renderedProjectedCardTarget(goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID))
+  const cardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID)
+  const phaseCard = cardTreeStore.cards[cardID]
+  if (!phaseCard) return null
+  if (phaseCard.kind !== "phase") {
+    throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} resolved non-phase card ${cardID}`)
+  }
+  if (phaseCard.phaseSessionKind !== String(input?.stage || "")) {
+    throw new Error(
+      `goal phase ${goalID}/${phase.stepID}/${phase.phaseID} expected session kind ${phaseCard.phaseSessionKind}, got ${String(
+        input?.stage || "",
+      )}`,
+    )
+  }
+  const sessionID = String(input?.sessionID || "")
+  if (!sessionID) {
+    throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} missing sessionID for phase owner validation`)
+  }
+  if (!phaseCard.phaseSessionID) {
+    throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} missing backend build session owner`)
+  }
+  if (phaseCard.phaseSessionID !== sessionID) {
+    throw new Error(`goal phase ${goalID}/${phase.stepID}/${phase.phaseID} expected session ${phaseCard.phaseSessionID}, got ${sessionID}`)
+  }
+  return renderedCardTargetFromProjectedCardID(cardID, {
+    orderKey: phaseCard.orderKey,
+    time: phaseCard.time,
+    sessionID,
+  })
 }
 
 function isReviewStreamPart(part: any): boolean {
@@ -3229,14 +3273,66 @@ function findWorkflowStepDefinition(
   return null
 }
 
+function requireGoalWorkflowOrderIndex(goal: any, goalID: string): number {
+  const orderIndex = Number(goal?.orderIndex)
+  if (!Number.isInteger(orderIndex)) {
+    throw new Error(`goal workflow ${goalID} missing integer orderIndex`)
+  }
+  return orderIndex
+}
+
+function requireGoalWorkflowRetryCount(goal: any, goalID: string): number {
+  const retryCount = Number(goal?.retryCount)
+  if (!Number.isInteger(retryCount) || retryCount < 0) {
+    throw new Error(`goal workflow ${goalID} missing non-negative integer retryCount`)
+  }
+  return retryCount
+}
+
+function requireWorkflowPhaseDefinitions(
+  board: any,
+  goalID: string,
+  stepID: string,
+  phaseEntries: Record<string, unknown>,
+): Array<{ id: string; label: string; sessionKind: string }> {
+  const workflowStep = findWorkflowStepDefinition(board, stepID)
+  if (!workflowStep) throw new Error(`goal step ${goalID}/${stepID} has phases but workflow step definition is missing`)
+  if (!Array.isArray(workflowStep.phases)) {
+    throw new Error(`goal step ${goalID}/${stepID} has phases but workflow phase definitions are missing`)
+  }
+  const phaseDefinitions = workflowStep.phases.map((phase: any) => {
+    const id = typeof phase?.id === "string" && phase.id.length > 0 ? phase.id : ""
+    const label = typeof phase?.label === "string" && phase.label.length > 0 ? phase.label : ""
+    const sessionKind =
+      typeof phase?.sessionKind === "string" && phase.sessionKind.length > 0 ? phase.sessionKind : ""
+    if (!id) throw new Error(`goal step ${goalID}/${stepID} has workflow phase definition without id`)
+    if (!label) throw new Error(`goal step ${goalID}/${stepID}/${id} missing phase label`)
+    if (!sessionKind) throw new Error(`goal step ${goalID}/${stepID}/${id} missing phase sessionKind`)
+    return { id, label, sessionKind }
+  })
+  const definedIDs = new Set(phaseDefinitions.map((phase) => phase.id))
+  for (const phaseID of Object.keys(phaseEntries)) {
+    if (!definedIDs.has(phaseID)) {
+      throw new Error(`goal step ${goalID}/${stepID} phase ${phaseID} is not declared in workflow`)
+    }
+  }
+  return phaseDefinitions
+}
+
+function requireBuildPhaseSessionID(step: any, goalID: string, stepID: string, phaseID: string): string {
+  const sessionID =
+    typeof step?.payload?.buildSessionID === "string" && step.payload.buildSessionID.length > 0
+      ? step.payload.buildSessionID
+      : ""
+  if (!sessionID) throw new Error(`goal phase ${goalID}/${stepID}/${phaseID} missing buildSessionID`)
+  return sessionID
+}
+
 function rebuildGoalStepCards(board: any): void {
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
 
-  // Refresh the per-goal "current attempt" map so session routing reads
-  // the authoritative goalRunID. A goal whose tip has no id yet (pre-
-  // dispatch) is left un-mapped → `"pre"` sentinel is used by the id
-  // helpers, and the card flips to the real run id on the next rebuild
-  // after dispatch.
+  // Refresh the per-goal current run map so session routing and diff context
+  // read the authoritative goalRunID. Card ids stay attempt-invariant.
   goalCurrentRunID.clear()
   for (const gw of goalWorkflows) {
     const gid = String(gw?.goalID || "")
@@ -3245,14 +3341,11 @@ function rebuildGoalStepCards(board: any): void {
     if (rid) goalCurrentRunID.set(gid, rid)
   }
 
-  // GC policy (per-attempt isolation):
-  //   Historical attempt cards (same goalID, older goalRunID) MUST survive
-  //   across rebuilds — they are the frozen record of prior tries. The
-  //   only step cards we drop are those whose owning GOAL no longer
+  // GC policy:
+  //   The only step cards we drop are those whose owning GOAL no longer
   //   exists on the board (goal deleted by modify_goal / plan revision).
-  //   The prior policy ("drop any step card not in the current-tip alive
-  //   set") collapsed every retry onto the same card id and is what the
-  //   per-attempt isolation work is designed to remove.
+  //   We do not compare run ids here because step cards are keyed by
+  //   goalID + stepID, not by goalRunID.
   const liveGoalIDs = new Set<string>()
   for (const gw of goalWorkflows) {
     const gid = String(gw?.goalID || "")
@@ -3279,16 +3372,14 @@ function rebuildGoalStepCards(board: any): void {
     }),
   )
 
-  for (let i = 0; i < goalWorkflows.length; i++) {
-    const gw = goalWorkflows[i]
+  for (const gw of goalWorkflows) {
     const gid = String(gw.goalID)
     const gRunID: string | undefined =
       typeof gw.goalRunID === "string" && gw.goalRunID.length > 0 ? gw.goalRunID : undefined
     const steps = Array.isArray(gw.steps) ? gw.steps : []
-    // Decomposition sequence: prefer the backend-authoritative orderIndex
-    // (stable across later goal removals); fall back to the array position
-    // only when the payload predates the orderIndex field.
-    const orderIndex: number = typeof gw.orderIndex === "number" ? gw.orderIndex : i
+    const orderIndex = requireGoalWorkflowOrderIndex(gw, gid)
+    const retryCount = requireGoalWorkflowRetryCount(gw, gid)
+    const attempt = retryCount + 1
     for (const step of steps) {
       const stepID = String(step.stepID)
       const stepStartedAt = Number(step.startedAt || 0)
@@ -3329,8 +3420,8 @@ function rebuildGoalStepCards(board: any): void {
           produce((cards: Record<string, CardNode>) => {
             const prev = cards[phaseCardID]
             if (prev) {
-              prev.stage = sessionKind || pid
-              prev.accent = stageAccent(sessionKind || pid)
+              prev.stage = sessionKind
+              prev.accent = stageAccent(sessionKind)
               prev.status = status
               prev.title = label
               prev.phaseID = pid
@@ -3338,7 +3429,7 @@ function rebuildGoalStepCards(board: any): void {
               prev.goalID = gid
               prev.goalDescription = gw.goalObjective || undefined
               prev.round = orderIndex + 1
-              prev.attempt = typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1
+              prev.attempt = attempt
               if (phaseSessionID) {
                 prev.phaseSessionID = phaseSessionID
                 prev.phaseSessionOrderKey = orderKey
@@ -3351,8 +3442,8 @@ function rebuildGoalStepCards(board: any): void {
               cards[phaseCardID] = {
                 id: phaseCardID,
                 kind: "phase",
-                stage: sessionKind || pid,
-                accent: stageAccent(sessionKind || pid),
+                stage: sessionKind,
+                accent: stageAccent(sessionKind),
                 status,
                 title: label,
                 parts: [],
@@ -3362,7 +3453,7 @@ function rebuildGoalStepCards(board: any): void {
                 goalID: gid,
                 goalDescription: gw.goalObjective || undefined,
                 round: orderIndex + 1,
-                attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
+                attempt,
                 ...(phaseSessionID ? { phaseSessionID } : {}),
                 ...(phaseSessionID ? { phaseSessionOrderKey: orderKey } : {}),
                 orderKey,
@@ -3376,11 +3467,9 @@ function rebuildGoalStepCards(board: any): void {
       if (phaseEntries) {
         // Look up the workflow-level step definition to get phase id ORDER
         // and labels (the per-goal payload is a record, not ordered).
-        const workflowStep = findWorkflowStepDefinition(board, stepID)
-        const phaseDefs: Array<{ id: string; label: string; sessionKind: string }> =
-          workflowStep && Array.isArray(workflowStep.phases) ? workflowStep.phases : []
+        const phaseDefs = requireWorkflowPhaseDefinitions(board, gid, stepID, phaseEntries)
         for (const pdef of phaseDefs) {
-          const pid = String(pdef.id)
+          const pid = pdef.id
           const entry = phaseEntries[pid]
           const phaseStartedAt = Number(entry?.startedAt || 0)
           // Lazy materialization: a phase surfaces only once the backend
@@ -3393,12 +3482,12 @@ function rebuildGoalStepCards(board: any): void {
           writePhaseCard(
             phaseCardID,
             pid,
-            String(pdef.label || pid),
-            String(pdef.sessionKind || ""),
+            pdef.label,
+            pdef.sessionKind,
             phaseStatus,
             phaseOrderKey,
             phaseStartedAt,
-            pid === "build" ? String(step?.payload?.buildSessionID || "") || undefined : undefined,
+            pid === "build" ? requireBuildPhaseSessionID(step, gid, stepID, pid) : undefined,
           )
           markCardStatsDirty(phaseCardID)
           phaseChildIDs.push(phaseCardID)
@@ -3420,7 +3509,7 @@ function rebuildGoalStepCards(board: any): void {
         title: String(gw.goalTitle || step.label || agentStageLabel(stepID) || stepID),
         subtitle: undefined,
         round: orderIndex + 1,
-        attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
+        attempt,
         parts: [],
         childIDs: phaseChildIDs,
         orderKey: stepOrderKey,
@@ -3786,12 +3875,12 @@ function normalizeStepStatus(raw: any): CardStatus {
   const s = String(raw || "")
     .trim()
     .toLowerCase()
-  if (s === "pending" || s === "running" || s === "completed" || s === "error" || s === "skipped") {
+  if (s === "pending" || s === "running" || s === "completed" || s === "skipped") {
     return s as CardStatus
   }
-  if (s === "failed" || s === "fail") return "error"
-  if (s === "passed" || s === "done" || s === "ok") return "completed"
-  return "pending"
+  if (s === "failed") return "error"
+  if (s === "aborted") return "skipped"
+  throw new Error(`unknown workflow status: ${String(raw)}`)
 }
 
 // ── Top-level ordering ──
@@ -3813,7 +3902,7 @@ function normalizeStepStatus(raw: any): CardStatus {
 //     (parentID anchor only); the step card is their visual proxy. If an
 //     executor turn card does receive visible parts, surface it rather
 //     than hiding real reasoning/text/tool output.
-//   • Phase-absorbed sessions (build/planner under a goal) own no top-level
+//   • Phase-absorbed build sessions under a goal own no top-level
 //     turn card — their parts live on the phase card (a step child), so
 //     `sessionOwnedCardIDs` returns nothing for them here.
 

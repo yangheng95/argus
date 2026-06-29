@@ -3,7 +3,7 @@ import { t } from "../../utils/i18n"
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings"
 import { configure as configureApi } from "../../services/api"
 import { checkConnection } from "../../services/connection"
-import { currentProjectConfigRequestOptions, reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"
+import { reloadProjectScope, resetDatabase } from "../../services/config"
 import type { DatabaseResetTarget } from "../../services/config"
 import { ensureDesktopNotificationPermission } from "../../services/notify"
 import { appStore } from "../../store/app"
@@ -82,22 +82,6 @@ export default function GeneralPanel() {
     }
     setError("")
     if (enabled) void ensureDesktopNotificationPermission()
-  }
-
-  async function handleInformationMissingChange(e: Event) {
-    const input = e.currentTarget as HTMLInputElement
-    const previous = Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)
-    const enabled = input.checked
-    try {
-      await patchConfig({
-        assistant: { debug: { fail_on_information_missing: enabled } },
-      }, currentProjectConfigRequestOptions())
-    } catch (error) {
-      input.checked = previous
-      setError(t("settings.config_save_failed", { error: describeError(error) }))
-      return
-    }
-    setError("")
   }
 
   async function handleDatabaseReset() {
@@ -223,23 +207,6 @@ export default function GeneralPanel() {
               type="checkbox"
               checked={settingsStore.desktopNotifications}
               onChange={handleDesktopNotificationsChange}
-            />
-          }
-        />
-
-        <SettingsRow
-          title={
-            <label for="settings-fail-on-information-missing">{t("settings.fail_on_information_missing_label")}</label>
-          }
-          desc={t("settings.fail_on_information_missing_hint")}
-          align="center"
-          interactive
-          actions={
-            <input
-              id="settings-fail-on-information-missing"
-              type="checkbox"
-              checked={Boolean((appStore.config as any)?.assistant?.debug?.fail_on_information_missing)}
-              onChange={handleInformationMissingChange}
             />
           }
         />

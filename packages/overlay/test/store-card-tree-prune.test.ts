@@ -76,3 +76,25 @@ test("pruneCardsAfterCursor drops dangling childIDs from surviving parent cards"
     resetWriter()
   }
 })
+
+test("pruneCardsAfterCursor rejects cards without positive time", () => {
+  resetWriter()
+  try {
+    const cardID = "requirements:session:ses_missing_time"
+    setCardTreeStore("order", [cardID])
+    setCardTreeStore("cards", {
+      [cardID]: {
+        id: cardID,
+        kind: "agent",
+        title: "Requirements",
+        stage: "requirements",
+        parts: [],
+        childIDs: [],
+      } as CardNode,
+    })
+
+    expect(() => pruneCardsAfterCursor(150)).toThrow(/missing positive time/)
+  } finally {
+    resetWriter()
+  }
+})

@@ -26,6 +26,8 @@ import open from "open"
 import { entries, values as objectValues } from "@/util/object"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import type { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js"
+import { browserMcpBridgeEnvironment } from "./browser/proxy-env"
+import { Env } from "@/runtime/env"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -648,16 +650,13 @@ export namespace MCP {
       const [cmd, ...args] = mcp.command
       const cwd = Instance.directory
       connectionCwd = cwd
+      const env = await localMcpEnvironment(key, cmd, mcp)
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,
         args,
         cwd,
-        env: {
-          ...process.env,
-          ...(cmd === "opencorvus" ? { BUN_BE_BUN: "1" } : {}),
-          ...mcp.environment,
-        },
+        env,
       })
       let stderrText = ""
       transport.stderr?.on("data", (chunk: Buffer) => {
@@ -768,6 +767,16 @@ export namespace MCP {
       mcpConnection,
       status,
     }
+  }
+
+  async function localMcpEnvironment(key: string, cmd: string, mcp: Extract<Config.Mcp, { type: "local" }>) {
+    const env: Record<string, string> = {
+      ...Env.snapshot(),
+      ...(cmd === "opencorvus" ? { BUN_BE_BUN: "1" } : {}),
+      ...mcp.environment,
+    }
+    if (key !== BrowserMCPBuiltin.ServerName) return env
+    return browserMcpBridgeEnvironment(env)
   }
 
   export async function status() {
@@ -1044,6 +1053,7 @@ export namespace MCP {
       mcpFetchRequestInit(authTimeout),
     )
     let client: Client | undefined
+    let retainOAuthState = false
 
     // Try to connect - this will trigger the OAuth flow
     try {
@@ -1057,10 +1067,15 @@ export namespace MCP {
     } catch (error) {
       if (error instanceof UnauthorizedError && capturedUrl) {
         pendingOAuthFlows.add(authKey)
+        retainOAuthState = true
         return { authorizationUrl: capturedUrl.toString() }
       }
       throw error
     } finally {
+      if (!retainOAuthState) {
+        pendingOAuthFlows.delete(authKey)
+        await McpAuth.clearOAuthState(authKey)
+      }
       await client?.close().catch((closeError) => {
         log.error("Failed to close OAuth probe MCP client", { mcpName, transport: transportName, error: closeError })
       })
@@ -1214,6 +1229,7 @@ export namespace MCP {
 
       // Clear the code verifier after successful auth
       await McpAuth.clearCodeVerifier(authKey)
+      await McpAuth.clearOAuthState(authKey)
 
       // Re-add the MCP server to establish connection
       pendingOAuthFlows.delete(authKey)

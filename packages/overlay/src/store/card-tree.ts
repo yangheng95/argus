@@ -18,9 +18,8 @@
 //                                                            session reuse the card until another
 //                                                            session interrupts)
 //   part:<messageID>:<partID>                              — part inside a session card
-//   step:<goalID>:<goalRunID|"pre">:<stepID>               — per-goal executor step (top-level),
-//                                                            scoped to one attempt (goal_run)
-//   step:<goalID>:<goalRunID|"pre">:<stepID>:phase:<phaseID>
+//   step:<goalID>:<stepID>                                — per-goal executor step (top-level)
+//   step:<goalID>:<stepID>:phase:<phaseID>
 //                                                          — phase row inside an executor step
 //   interaction:<interactionID>                            — interaction card
 //
@@ -29,14 +28,9 @@
 // directly at the top level, with goal title / decomposition index
 // (`#orderIndex+1`) / description stamped onto the step card.
 //
-// 2026-04-21 per-attempt isolation: step / phase card ids carry the
-// current `goal_run.id` so each retry / acceptance_rework / modify_contract
-// / manual_retry gets a fresh top-level card appended in time order.
-// Prior attempts survive as frozen history — the renderer shows them in
-// their original position; new activity lands on the new card. The
-// `"pre"` sentinel is used when no goal_run exists yet (pre-dispatch
-// stubs); it collapses into the real run id on the first rebuild after
-// dispatch.
+// Step and phase card ids are attempt-invariant. `goalRunID` remains board
+// and diff context, but it is not part of the card id because build-session
+// parts can arrive before the run artifact is visible to the overlay.
 //
 // The writer (services/tree-writer.ts) is the only module that mutates
 // this store. Components read only. No memos, no derivations — components
@@ -50,7 +44,7 @@ import type { UsageAggregate } from "../utils/format-usage"
 export type CardKind =
   | "agent" // per-session agent card (orchestrator, build worker, planner, ...)
   | "step" // per-goal executor step card — top-level, carries goal metadata
-  | "phase" // phase row inside a step (plan / build / evaluate inside pipeline.build)
+  | "phase" // phase row inside a step (current pipeline.build phase: build)
   | "tool" // promoted tool call (nested card for task/subagent)
   | "message" // user / system message bubble
   | "review" // top-level running/completed review stream card
@@ -175,7 +169,7 @@ export interface CardNode {
    *  once another session interrupts, the next message opens a new segment.
    *  Unset on phase / step / interaction / task-context cards. */
   messageID?: string
-  /** Session kind / stage name (assistant / executor / build / planner / goal / ...). */
+  /** Session kind / stage name (assistant / opencorvus / codex / claude-code / build / goal / ...). */
   stage?: string
   /** Resolved accent colour for this card's stage. */
   accent?: string
@@ -484,6 +478,14 @@ function equalCardTreeOrder(a: readonly string[], b: readonly string[]): boolean
   return true
 }
 
+function requirePrunableCardTime(card: CardNode, id: string): number {
+  const time = Number(card.time)
+  if (!Number.isFinite(time) || time <= 0) {
+    throw new Error(`pruneCardsAfterCursor card ${id} missing positive time`)
+  }
+  return time
+}
+
 export function replaceCardTreeOrder(
   nextOrder: readonly string[] | ((order: readonly string[]) => readonly string[]),
 ): void {
@@ -516,7 +518,7 @@ export function pruneCardsAfterCursor(cursorTime: number) {
     order.filter((id) => {
       const card = cardTreeStore.cards[id]
       if (!card) return false
-      return (card.time ?? 0) <= cursorTime
+      return requirePrunableCardTime(card, id) <= cursorTime
     }),
   )
   // Remove child cards whose time exceeds cursor as well. Keeping them
@@ -524,7 +526,7 @@ export function pruneCardsAfterCursor(cursorTime: number) {
   // renderer dereferences through childIDs.
   const survivors: Record<string, CardNode> = {}
   for (const [id, card] of Object.entries(cardTreeStore.cards)) {
-    if ((card.time ?? 0) <= cursorTime) survivors[id] = card
+    if (requirePrunableCardTime(card, id) <= cursorTime) survivors[id] = card
   }
   setCardTreeStore("cards", reconcile(survivors, { merge: false }))
   const liveCardIDs = new Set(Object.keys(survivors))

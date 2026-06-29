@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { Config } from "../../src/config/config"
 import { EngineConfig } from "../../src/engine/config"
+import { TaskBoardGoalWorkflow } from "../../src/engine/model"
 import { WorkflowRegistry } from "../../src/engine/workflow"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
@@ -41,14 +42,6 @@ describe("overlay contract", () => {
         expect(names).toContain("orchestrator")
         expect(names).not.toContain("task")
 
-        // Every agent the overlay's AgentModelsPanel iterates
-        // audit-2026-04-29 W2-V34 — pre-fix asserted "spec" and
-        // "plan" as builtin agents but neither exists in the
-        // current Agent registry (see W2-V27 for the parallel
-        // plan-mode removal). Trim to the agents that ARE
-        // registered today; the test's intent ("AgentModelsPanel
-        // core tier sees orchestrator + per-stage agents")
-        // is preserved.
         for (const expected of [
           "build",
           "general",
@@ -56,11 +49,12 @@ describe("overlay contract", () => {
           "compaction",
           "title",
           "summary",
-          "acceptance",
           "orchestrator",
           "requirements",
           "architect",
           "frontend-design",
+          "visual-qa",
+          "integrity",
         ]) {
           expect(names).toContain(expected)
         }
@@ -69,22 +63,6 @@ describe("overlay contract", () => {
   })
 
   test("Agent.list surfaces stage agents and user-facing agents", async () => {
-    // audit-2026-04-29 W2-V34 — pre-fix asserted stage agents
-    // (acceptance, orchestrator, requirements, architect,
-    // frontend-design, summary) have UNDEFINED permission and
-    // user-facing agents (build, spec, plan, general, explore,
-    // compaction, title) have ARRAY permission. Two pieces of
-    // drift:
-    //   - "spec" and "plan" agents were removed entirely (W2-V27).
-    //   - acceptance / others now carry permission rulesets
-    //     (see agent.ts:289 for acceptance `PermissionNext.merge(
-    //     defaults, user)`).
-    //     The "AgentRuntime-driven, no permission needed"
-    //     architecture changed.
-    // The assertion was tracking an internal invariant that no
-    // longer holds. Drop the permission shape assertion and just
-    // verify each agent EXISTS (which is what the overlay's
-    // AgentModelsPanel iteration actually relies on).
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -92,11 +70,12 @@ describe("overlay contract", () => {
         const agents = await Agent.list()
 
         for (const stageName of [
-          "acceptance",
           "orchestrator",
           "requirements",
           "architect",
           "frontend-design",
+          "visual-qa",
+          "integrity",
           "summary",
         ]) {
           const a = agents.find((x) => x.name === stageName)
@@ -141,7 +120,7 @@ describe("overlay contract", () => {
         const direct = list.find((w) => w.id === "direct")!
         expect(direct.steps.map((s) => s.id)).toEqual(["analyze_intent", "build"])
 
-        // pipeline workflow — has goal-scope build step and final integrity gate
+        // pipeline workflow — has goal-scope build step and final integrity step
         const pipeline = list.find((w) => w.id === "pipeline")!
         expect(pipeline.goalLoopStepIDs).toContain("build")
         const buildStep = pipeline.steps.find((s) => s.id === "build")
@@ -153,13 +132,46 @@ describe("overlay contract", () => {
   })
 
   test("EngineConfig defaults workflow to pipeline (board default path)", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const ec = await EngineConfig.get()
-        expect(ec.default_workflow).toBe("pipeline")
-      },
+    expect(EngineConfig.getDefaults().default_workflow).toBe("pipeline")
+  })
+
+  test("TaskBoardGoalWorkflow schema includes overlay-consumed goal run and acceptance fields", () => {
+    const workflow = TaskBoardGoalWorkflow.parse({
+      goalID: "goal_schema_contract",
+      goalRunID: "goal_run_schema_contract",
+      orderKey: "v1:0000000000001000:0000000000000060:0000000000000000:board_goal:goal_schema_contract",
+      goalTitle: "Schema contract goal",
+      goalStatus: "pending",
+      orderIndex: 0,
+      retryCount: 0,
+      priority: "blocking",
+      steps: [
+        {
+          stepID: "build",
+          orderKey: "v1:0000000000001001:0000000000000061:0000000000000000:board_step:goal_schema_contract-build",
+          label: "Build",
+          status: "pending",
+        },
+      ],
+      acceptanceSpecs: [
+        {
+          id: "acc_schema_contract",
+          source_requirement_id: "REQ-1",
+          goal_id: "goal_schema_contract",
+          title: "Schema exposes acceptance specs",
+          scorers: [
+            {
+              type: "llm_judge",
+              name: "contract",
+              criteria: "Verify that overlay-visible acceptance specs remain available on the task board.",
+            },
+          ],
+          severity: "essential",
+        },
+      ],
     })
+
+    expect(workflow.goalRunID).toBe("goal_run_schema_contract")
+    expect(workflow.acceptanceSpecs?.[0]?.id).toBe("acc_schema_contract")
   })
 })

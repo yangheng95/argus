@@ -2296,6 +2296,12 @@ mod tests {
                 .any(|file| file.path == "browser-mcp-node/browser.mjs"),
             "embedded sidecar payload must include browser-mcp-node/browser.mjs"
         );
+        assert!(
+            EMBEDDED_SERVER_FILES
+                .iter()
+                .any(|file| file.path == "browser-mcp-node/package.json"),
+            "embedded sidecar payload must include browser-mcp-node/package.json"
+        );
         let node_entry = EMBEDDED_SERVER_FILES
             .iter()
             .find(|file| file.path == node)

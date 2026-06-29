@@ -101,9 +101,9 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
         timeline: [],
         events: [],
         eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-        view: { sessions: [] },
-        agentView: { sessions: [] },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
       })
     if (path === `/task/${TASK_ID}/board`)
       return send({

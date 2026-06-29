@@ -27,7 +27,7 @@ export async function cleanupGoalWorkspace(directory?: string) {
   // this, a "retry reused new worktree path" incident gives no signal about
   // WHICH step of cleanup failed (Instance.dispose / Worktree.remove / fs.rm /
   // removeSandbox). The summary log at the end lets ops correlate a cleanup
-  // failure with the subsequent Worktree.create candidate() fallback (random
+  // failure with the subsequent Worktree.create candidate() retry path (random
   // suffix) that breaks prompt-cache continuity.
   const started = Date.now()
   type StepOutcome = { step: string; ok: boolean; ms: number; error?: string }

@@ -78,6 +78,7 @@ const mcpStatus = {
   docs: {
     status: "connected",
     type: "remote",
+    transport: "streamable-http",
     url: "https://mcp.example.com",
   },
 }
@@ -135,7 +136,8 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
         managed_skills: "D:/skills/config/skills-market",
         remote_cache: "D:/skills/cache",
       })
-    if (path === "/skill/mounts") return send({ built_in: [], managed: [], project: [], config: [] })
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/market") return send(skillMarket)
     if (path === "/mcp") return send(mcpStatus)
     if (path === "/panel/knowledge/memory") return send([])

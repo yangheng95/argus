@@ -2,7 +2,9 @@ import { afterEach, expect, test } from "bun:test"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 const { __setHostTransportForTest } = await import("../src/services/host-transport")
-const { boardStore, loadMoreTasks, loadTasks, setBoardStore, TASK_LIST_PAGE_SIZE } = await import("../src/store/board")
+const { boardStore, loadMoreTasks, loadTasks, setBoardStore, setTasksData, TASK_LIST_PAGE_SIZE } = await import(
+  "../src/store/board"
+)
 
 function taskItem(index: number): any {
   const created = 20_000 - index
@@ -140,4 +142,45 @@ test("loadTasks refresh stays first-page sized after older pages were appended",
   expect(boardStore.tasks.map((item: any) => item.task.id)).toEqual(
     firstPage.slice(0, TASK_LIST_PAGE_SIZE).map((item) => item.task.id),
   )
+})
+
+test("local task list updates do not prevent an in-flight first-page load from completing", async () => {
+  let releaseFirst!: () => void
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+  const requests: TransportRequest[] = []
+  const firstPage = [taskItem(1), taskItem(2)]
+  __setHostTransportForTest({
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push(req)
+      await firstPending
+      return { status: 200, ok: true, headers: {}, body: { tasks: firstPage } as T }
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport)
+
+  const loading = loadTasks()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(requests).toHaveLength(1)
+
+  setTasksData([taskItem(99)])
+  expect(boardStore.tasks.map((item: any) => item.task.id)).toEqual(["tsk_99"])
+  expect(boardStore.tasksLoaded).toBe(false)
+
+  releaseFirst()
+  await loading
+
+  expect(boardStore.tasks.map((item: any) => item.task.id)).toEqual(["tsk_01", "tsk_02"])
+  expect(boardStore.tasksLoaded).toBe(true)
+  expect(boardStore.tasksError).toBe("")
 })

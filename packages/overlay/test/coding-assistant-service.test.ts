@@ -48,9 +48,9 @@ function conversationBody() {
     transcript: [],
     timeline: [],
     events: [],
-    view: { sessions: [] },
-    agentView: { sessions: [] },
-    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+    history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 160 },
     messageWatermark: 0,
   }
 }

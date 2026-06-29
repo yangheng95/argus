@@ -63,7 +63,7 @@ Supported triggers:
 - `schedule` - scheduled repository automation
 - `workflow_dispatch` - manually triggered repository automation
 
-Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body.
+Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body. The quickstart workflow below enables comment triggers only; use the repository event workflow when you want issue, PR, scheduled, or manual automation.
 
 1. Install the GitHub app https://github.com/apps/opencorvus-agent. Make sure it is installed on the target repository.
 2. Add the following workflow file to `.github/workflows/opencorvus.yml` in your repo. Set the appropriate `model` and required API keys in `env`.
@@ -103,6 +103,44 @@ Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment
              OPENCORVUS_PERMISSION: '{"bash": "deny"}'
            with:
              model: alibaba-coding-plan-cn/qwen3.5-plus
+   ```
+
+   Repository event workflow:
+
+   ```yml
+   name: opencorvus-repository
+
+   on:
+     issues:
+       types: [opened, reopened]
+     pull_request:
+       types: [opened, synchronize, reopened, ready_for_review]
+     schedule:
+       - cron: "0 9 * * 1"
+     workflow_dispatch: {}
+
+   jobs:
+     opencorvus:
+       runs-on: ubuntu-latest
+       permissions:
+         id-token: write
+         contents: read
+         pull-requests: read
+         issues: read
+       steps:
+         - name: Checkout repository
+           uses: actions/checkout@v7
+           with:
+             persist-credentials: false
+
+         - name: Run OpenCorvus
+           uses: yangheng95/opencorvus/github@latest
+           env:
+             ALIBABA_CODING_PLAN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_API_KEY }}
+             OPENCORVUS_PERMISSION: '{"bash": "deny"}'
+           with:
+             model: alibaba-coding-plan-cn/qwen3.5-plus
+             prompt: Maintain this repository from the triggering issue, pull request, schedule, or manual dispatch.
    ```
 
 3. Store the API keys in secrets. In your organization or project **settings**, expand **Secrets and variables** on the left and select **Actions**. Add the required API keys.

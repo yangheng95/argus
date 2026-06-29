@@ -2,6 +2,25 @@
 
 Date: 2026-06-29
 
+## Recall
+
+- User request: use several independent agents to update and calibrate all
+  docs until independent agents can no longer find new documentation issues.
+- Acceptance: confirmed doc drift is fixed, tests guard the repaired contracts,
+  fresh independent agents report no new issues, final validation passes, and
+  changes are committed/pushed.
+- Hard constraints: no fallback/compat/gate wording, specs only under the
+  consolidated `specs/` tree, no broad git reset, no new worktree, and every
+  new plan must preserve Recall.
+- Read before implementation: `AGENTS.md`, specs storage records,
+  document-health tests, historical docs links tests, product-doc single-source
+  tests, and current architecture README.
+- Repository sweep: markdown/doc inventories, retired path terms, stale
+  product-doc locations, public docs, SDK/API docs, MCP/GitHub docs, current
+  architecture chapters, and June records.
+- Independent feedback: read-only agents were split across public docs,
+  historical/current architecture, root/ops docs, and source-contract docs.
+
 ## Objective
 
 Use independent read-only agents to audit repository documentation, repair
@@ -24,16 +43,16 @@ the independent agents report no new document-health issues.
 
 ## Recalled Sources
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no compatibility path, no broad git reset, no new worktree without explicit authorization, and commit/push must use hooks. |
-| `specs/records/2026-06/2026-06-15-historical-docs-consolidation.md` | Human-facing product docs live only in `packages/web/src/content/docs/**`; do not recreate the removed product-docs tree. |
-| `specs/records/2026-06/2026-06-17-document-health-audit.md` | Existing document-health checks already reject stale public docs, missing historical indexes, retired paths, and fallback wording. |
-| `specs/README.md` | Specs use one root storage model: current architecture, monthly records, and artifacts. |
-| `specs/current/architecture/README.md` and `specs/records/2026-06/2026-06-29-spec-consolidation.md` | Core architecture chapters are indexed in the current architecture README; dated June records live in the June records bucket. |
-| `packages/opencorvus/test/script/historical-docs-links.test.ts` | Hard-disk documentation inventory is the test source, including untracked markdown files in the current worktree. |
-| `packages/opencorvus/test/script/product-docs-single-source.test.ts` | The deleted product docs tree must remain absent and public docs must remain in the web docs tree. |
-| `packages/opencorvus/test/script/document-health.test.ts` | Public docs, workflow docs, helper comments, and prompt/tool text must not publish retired contracts. |
+| Source                                                                                              | Constraint carried forward                                                                                                              |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                                                         | No fallback, no compatibility path, no broad git reset, no new worktree without explicit authorization, and commit/push must use hooks. |
+| `specs/records/2026-06/2026-06-15-historical-docs-consolidation.md`                                 | Human-facing product docs live only in `packages/web/src/content/docs/**`; do not recreate the removed product-docs tree.               |
+| `specs/records/2026-06/2026-06-17-document-health-audit.md`                                         | Existing document-health checks already reject stale public docs, missing historical indexes, retired paths, and fallback wording.      |
+| `specs/README.md`                                                                                   | Specs use one root storage model: current architecture, monthly records, and artifacts.                                                 |
+| `specs/current/architecture/README.md` and `specs/records/2026-06/2026-06-29-spec-consolidation.md` | Core architecture chapters are indexed in the current architecture README; dated June records live in the June records bucket.          |
+| `packages/opencorvus/test/script/historical-docs-links.test.ts`                                     | Hard-disk documentation inventory is the test source, including untracked markdown files in the current worktree.                       |
+| `packages/opencorvus/test/script/product-docs-single-source.test.ts`                                | The deleted product docs tree must remain absent and public docs must remain in the web docs tree.                                      |
+| `packages/opencorvus/test/script/document-health.test.ts`                                           | Public docs, workflow docs, helper comments, and prompt/tool text must not publish retired contracts.                                   |
 
 ## Current Worktree Boundary
 
@@ -58,20 +77,20 @@ rg -n "2026-06-29|side-by-side|layout-geometry|task-active-sse|scheduler-owned|s
 
 ## Independent Agent Split
 
-| Agent scope | Read-only question |
-| --- | --- |
-| Public product docs | Find stale, contradictory, unlinked, or source-drifted content in `packages/web/src/content/docs/**` and `packages/web/README.md`. |
+| Agent scope                  | Read-only question                                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public product docs          | Find stale, contradictory, unlinked, or source-drifted content in `packages/web/src/content/docs/**` and `packages/web/README.md`.                          |
 | Historical architecture docs | Find missing indexes, stale status banners, retired-reference issues, and contradictions in `specs/current/architecture/**` and `specs/records/2026-06/**`. |
-| Root and operational docs | Find stale repo names, commands, workflow/action versions, install instructions, fallback wording, and machine-specific paths in root and ops docs. |
-| Source-contract docs | Compare CLI, environment, SDK, API, provider/model, config, MCP, and mission/task docs against current source and generated-doc tooling. |
+| Root and operational docs    | Find stale repo names, commands, workflow/action versions, install instructions, fallback wording, and machine-specific paths in root and ops docs.         |
+| Source-contract docs         | Compare CLI, environment, SDK, API, provider/model, config, MCP, and mission/task docs against current source and generated-doc tooling.                    |
 
 Each agent is read-only, must not edit files, must not commit, and must not
 spawn another agent.
 
 ## Initial Confirmed Issue
 
-| Issue | Evidence | Repair |
-| --- | --- | --- |
+| Issue                                                        | Evidence                                                                                                                         | Repair                                                                                          |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Historical links test was deleted during spec consolidation. | `git status --short -- packages/opencorvus/test/script` shows `D packages/opencorvus/test/script/historical-docs-links.test.ts`. | Recreate the test so the consolidated spec tree is enforced instead of accepting test deletion. |
 
 ## Verification Loop

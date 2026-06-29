@@ -19,7 +19,7 @@ test("evaluation context exposes missing goal data instead of inventing a goal l
         },
       ],
     },
-    [{ title: "Existing goal" }],
+    [{ goalTitle: "Existing goal", goalStatus: "pending" }],
   )
 
   expect(text).toContain("Missing goal #2: no persisted goal row")

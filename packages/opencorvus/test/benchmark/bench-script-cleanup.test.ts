@@ -242,18 +242,39 @@ test("benchmark screenshot evidence is required and decoded", () => {
   expect(src).not.toContain("screenshot: null")
 })
 
-test("benchmark auto verification uses task-scoped HTML skeleton workflow thresholds", () => {
-  expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
-  expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")
+test("benchmark auto verification requires task-scoped HTML skeleton workflow thresholds", () => {
+  expect(src).toContain('requireVisualNumberFlag("--threshold")')
+  expect(src).toContain('requireVisualNumberFlag("--worst-threshold")')
+  expect(src).toContain('requireVisualNumberFlag("--browser-launch-timeout-ms")')
+  expect(src).toContain('requireVisualNumberFlag("--navigation-timeout-ms")')
+  expect(src).toContain('requireVisualNumberFlag("--settle-ms")')
   expect(src).toContain("html-skeleton-workflow-check.ts")
   expect(src).not.toContain(`".opencorvus", "runtime", "tasks"`)
   expect(src).not.toContain("--task-dir=${safe(taskFanoutRoot)}")
   expect(src).toContain("OPENCORVUS_TASK_ID")
   expect(src).toContain(".html-skeleton-workflow-out")
-  expect(src).toContain("--threshold=${WEB_CLONE_VISUAL_THRESHOLD}")
-  expect(src).toContain("--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}")
+  expect(src).toContain("--threshold=${threshold}")
+  expect(src).toContain("--worst-threshold=${worstThreshold}")
+  expect(src).toContain("--browser-launch-timeout-ms=${browserLaunchTimeoutMs}")
+  expect(src).toContain("--navigation-timeout-ms=${navigationTimeoutMs}")
+  expect(src).toContain("--settle-ms=${settleMs}")
   expect(src).not.toContain("--rendered-dir=${safe(temp.dir)}")
   expect(src).not.toContain("Fig2code SSIM thresholds (mean 0.85")
+})
+
+test("benchmark task brief input is explicit", () => {
+  expect(src).toContain("--request-file or --request-attachment is required")
+  expect(src).toContain("--request-file must not be empty")
+  expect(src).not.toContain("DEFAULT_TASK_REQUEST")
+  expect(src).not.toContain("ChatGPT / Claude.ai / Poe")
+})
+
+test("benchmark cannot invent replies for free-text interactions", () => {
+  expect(src).toContain("overlay benchmark cannot auto-answer free-text interaction")
+  expect(src).not.toContain(["AUTO", "_REPLY"].join(""))
+  expect(src).not.toContain(["reasonable", "defaults"].join(" "))
+  expect(src).not.toContain(["message: ", "AUTO", "_REPLY"].join(""))
+  expect(src).not.toContain(["answersFrom", "Message(message)"].join(""))
 })
 
 test("benchmark task metadata wires auto verification into acceptance checks", () => {

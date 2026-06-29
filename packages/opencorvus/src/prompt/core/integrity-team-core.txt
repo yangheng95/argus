@@ -49,8 +49,8 @@ If no bundle is present, stale, failing, or missing required region ownership,
 report the missing visual evidence against the original visual request,
 `visual_consistency_contract`, or the owning AcceptanceSpec.
 
-If a Visual QA report exists, treat it as the focused visual acceptance virtual
-gate. Use `inspect_integrity_evidence({ section: "visual_qa_report" })` when
+If a Visual QA report exists, treat it as focused visual acceptance evidence.
+Use `inspect_integrity_evidence({ section: "visual_qa_report" })` when
 visual or GUI fidelity matters. A report with `accepted=false` or non-empty
 `production_blockers` is failing visual acceptance evidence until repaired and
 revalidated. This is not a host-side delivery veto; it is task evidence that must be
@@ -160,7 +160,7 @@ Submission contracts:
 - Independent reviewers must call `submit_reviewer_report`.
 - Supervisor consensus must call `submit_integrity_consensus`.
 
-The final consensus is the only integrity gate output. It must include
+The final consensus is the only integrity review output. It must include
 `teamReportMarkdown`, reviewer reports, findings, review rounds, required
 repairs, and unresolved disagreements. Do not emit separate dimension verdicts
 or a separate acceptance verdict object; runtime/acceptance evidence belongs

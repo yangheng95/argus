@@ -20,18 +20,17 @@ export const TASK_ID = "tsk_fixture_goal_phase"
 export const ROOT_SID = "ses_root_orch"
 export const GOAL_ID = "goal_fixture_g1"
 /** Tip goal_run id emitted by the backend on goalWorkflows[].goalRunID.
- *  Drives the per-attempt step card scoping (2026-04-21). Held constant
- *  through this fixture — only a retry/rework event would produce a new
- *  value, which the fixture does not exercise. */
+ *  It is board/diff context only; step and phase card ids stay
+ *  attempt-invariant as `step:<goalID>:<stepID>` and
+ *  `step:<goalID>:<stepID>:phase:<phaseID>`. */
 export const GOAL_RUN_ID = "glr_fixture_attempt1"
 /** kind="executor" container session — empty parent that groups
- *  planner / build worker children. Does NOT render as a card; the
+ *  build worker children. Does NOT render as a card; the
  *  step card in the overlay represents it. (2026-04-20: the per-goal
  *  evaluator child session was retired.) */
 export const EXECUTOR_SID = "ses_goal_executor"
 /** kind="build" worker session — the LLM that actually writes code. */
 export const BUILD_SID = "ses_goal_build"
-export const PLANNER_SID = "ses_goal_planner"
 export const REQUIREMENTS_SID = "ses_requirements"
 export const DESIGN_SID = "ses_design"
 export const ARCHITECT_SID = "ses_architect"
@@ -79,6 +78,12 @@ function interactionOrderKey(id: string, time: number): string {
   return orderKey(70, time, id, 0, "interaction")
 }
 
+function requirePositiveTime(value: unknown, label: string): number {
+  const time = Number(value)
+  if (!Number.isFinite(time) || time <= 0) throw new Error(`${label} missing positive time`)
+  return time
+}
+
 const e = (type: string, properties: Record<string, any> = {}, dt = 0): FixtureEvent => {
   const payload = { taskID: TASK_ID, ...properties }
   const eventOrderKey =
@@ -98,33 +103,48 @@ const e = (type: string, properties: Record<string, any> = {}, dt = 0): FixtureE
 }
 
 function messageInfo(channel: string, info: Record<string, any>) {
-  const created = Number(info?.time?.created || 0)
+  requirePositiveTime(info?.time?.created, `goal phase message ${String(info?.id || "<unknown>")}`)
+  const explicitOrderKey = typeof info.orderKey === "string" && info.orderKey.length > 0 ? info.orderKey : ""
+  const explicitResolvedRole =
+    typeof info.resolvedRole === "string" && info.resolvedRole.length > 0 ? info.resolvedRole : ""
+  const explicitAgent = typeof info.agent === "string" && info.agent.length > 0 ? info.agent : ""
+  if (!explicitOrderKey) throw new Error(`goal phase message ${String(info.id || "<unknown>")} missing orderKey`)
+  if (!explicitResolvedRole) {
+    throw new Error(`goal phase message ${String(info.id || "<unknown>")} missing resolvedRole`)
+  }
+  if (!explicitAgent) throw new Error(`goal phase message ${String(info.id || "<unknown>")} missing agent`)
   return {
     info: {
       ...info,
-      orderKey: info.orderKey ?? messageOrderKey(String(info.id || ""), created),
-      resolvedRole: info.resolvedRole ?? channel,
-      agent: info.agent ?? channel,
+      orderKey: explicitOrderKey,
+      resolvedRole: explicitResolvedRole,
+      agent: explicitAgent,
       channel,
     },
   }
 }
 
 function messagePart(channel: string, part: Record<string, any>) {
-  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
-  const time = Number(part.time?.created || 0) || T0 + 1000
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, owningMessageOrderKey, ...cleanPart } = part
+  const time = requirePositiveTime(part.time?.created, `goal phase part ${String(part.id || "<unknown>")}`)
   const messageID = String(part.messageID || "")
   const partID = String(part.id || "")
   if (!messageID || !partID) throw new Error("goal phase fixture message part missing id/messageID")
-  const messageKey = messageOrderKey(messageID, time)
-  const partKey = partOrderKey(partID, time)
+  const messageKey =
+    typeof owningMessageOrderKey === "string" && owningMessageOrderKey.length > 0 ? owningMessageOrderKey : ""
+  const partKey = typeof part.orderKey === "string" && part.orderKey.length > 0 ? part.orderKey : ""
+  const explicitResolvedRole =
+    typeof resolvedRole === "string" && resolvedRole.length > 0 ? resolvedRole : ""
+  if (!messageKey) throw new Error(`goal phase part ${partID} missing owningMessageOrderKey`)
+  if (!partKey) throw new Error(`goal phase part ${partID} missing part orderKey`)
+  if (!explicitResolvedRole) throw new Error(`goal phase part ${partID} missing resolvedRole`)
   return {
     orderKey: messageKey,
     part: {
       ...cleanPart,
       orderKey: partKey,
     },
-    resolvedRole: resolvedRole ?? channel,
+    resolvedRole: explicitResolvedRole,
     channel,
     ...(parentSessionID ? { parentSessionID } : {}),
     ...(goalID ? { goalID } : {}),
@@ -156,6 +176,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_orch_1",
       sessionID: ROOT_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_orch_1", T0 + 1000),
       resolvedRole: "assistant",
       agent: "assistant",
       time: { created: T0 + 1000 },
@@ -172,6 +193,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: ROOT_SID,
       type: "reasoning",
       text: "",
+      owningMessageOrderKey: messageOrderKey("msg_orch_1", T0 + 1000),
+      orderKey: partOrderKey("part_orch_reason", T0 + 1100),
+      resolvedRole: "assistant",
+      time: { created: T0 + 1100 },
     }),
     1100,
   ),
@@ -207,6 +232,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: ROOT_SID,
       type: "text",
       text: "",
+      owningMessageOrderKey: messageOrderKey("msg_orch_1", T0 + 1000),
+      orderKey: partOrderKey("part_orch_text", T0 + 1400),
+      resolvedRole: "assistant",
+      time: { created: T0 + 1400 },
     }),
     1400,
   ),
@@ -269,12 +298,9 @@ export const EVENTS: FixtureEvent[] = [
   ),
 
   // ── Goal running (board.goalWorkflows updates via task.updated) ──
-  // Per-goal step payload ships `phases` as a record — per-phase status
-  // for the plan / build phases inside the `build` step.
-  // goal_run.status="running" maps to plan=completed, build=running via
-  // projectPhases() in the backend; here we bake the projection into the
-  // fixture directly. (The legacy `evaluate` phase was dropped on
-  // 2026-04-20 together with the per-goal evaluator.)
+  // Per-goal step payload ships `phases` as a record for the build phase
+  // inside the `build` step. The fixture bakes the backend projection into
+  // the stream directly.
   e(
     "task.updated",
     {
@@ -290,6 +316,7 @@ export const EVENTS: FixtureEvent[] = [
             goalTitle: "Scaffold project",
             goalStatus: "running",
             orderIndex: 0,
+            retryCount: 0,
             steps: [
               {
                 stepID: "build",
@@ -297,13 +324,9 @@ export const EVENTS: FixtureEvent[] = [
                 label: "Executor",
                 status: "running",
                 startedAt: T0 + 2500,
+                payload: { buildSessionID: BUILD_SID },
                 phases: {
-                  plan: {
-                    orderKey: boardOrderKey(`${GOAL_ID}-build-plan`, T0 + 2500, 62),
-                    status: "completed",
-                    startedAt: T0 + 2500,
-                    completedAt: T0 + 2800,
-                  },
+
                   build: {
                     orderKey: boardOrderKey(`${GOAL_ID}-build-build`, T0 + 2800, 62),
                     status: "running",
@@ -326,6 +349,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_requirements_1",
       sessionID: REQUIREMENTS_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_requirements_1", T0 + 2600),
       resolvedRole: "requirements",
       agent: "requirements",
       parentSessionID: ROOT_SID,
@@ -341,6 +365,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: REQUIREMENTS_SID,
       type: "text",
       text: "Collected product requirements.",
+      owningMessageOrderKey: messageOrderKey("msg_requirements_1", T0 + 2600),
+      orderKey: partOrderKey("part_requirements_text", T0 + 2650),
+      resolvedRole: "requirements",
+      time: { created: T0 + 2650 },
     }),
     2650,
   ),
@@ -350,6 +378,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_design_1",
       sessionID: DESIGN_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_design_1", T0 + 2700),
       resolvedRole: "frontend-design",
       agent: "frontend-design",
       parentSessionID: ROOT_SID,
@@ -365,6 +394,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: DESIGN_SID,
       type: "text",
       text: "Captured the visual system.",
+      owningMessageOrderKey: messageOrderKey("msg_design_1", T0 + 2700),
+      orderKey: partOrderKey("part_design_text", T0 + 2750),
+      resolvedRole: "frontend-design",
+      time: { created: T0 + 2750 },
     }),
     2750,
   ),
@@ -374,6 +407,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_architect_1",
       sessionID: ARCHITECT_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_architect_1", T0 + 2800),
       resolvedRole: "architect",
       agent: "architect",
       parentSessionID: ROOT_SID,
@@ -389,6 +423,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: ARCHITECT_SID,
       type: "text",
       text: "Defined the system contracts.",
+      owningMessageOrderKey: messageOrderKey("msg_architect_1", T0 + 2800),
+      orderKey: partOrderKey("part_architect_text", T0 + 2850),
+      resolvedRole: "architect",
+      time: { created: T0 + 2850 },
     }),
     2850,
   ),
@@ -402,6 +440,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_exec_1",
       sessionID: EXECUTOR_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_exec_1", T0 + 3000),
       resolvedRole: "executor",
       agent: "executor",
       parentSessionID: ROOT_SID,
@@ -472,33 +511,6 @@ export const EVENTS: FixtureEvent[] = [
     5200,
   ),
 
-  // ── Planner (plan phase) — first child of executor container ──
-  e(
-    "message.updated",
-    messageInfo("planner", {
-      id: "msg_planner_1",
-      sessionID: PLANNER_SID,
-      role: "assistant",
-      resolvedRole: "planner",
-      agent: "planner",
-      parentSessionID: EXECUTOR_SID,
-      goalID: GOAL_ID,
-      time: { created: T0 + 5800 },
-    }),
-    5800,
-  ),
-  e(
-    "message.part.updated",
-    messagePart("planner", {
-      id: "part_planner_text",
-      messageID: "msg_planner_1",
-      sessionID: PLANNER_SID,
-      type: "text",
-      text: "Planned the build sequence.",
-    }),
-    5850,
-  ),
-
   // ── Build worker (build phase) — writes code ──
   e(
     "message.updated",
@@ -506,6 +518,7 @@ export const EVENTS: FixtureEvent[] = [
       id: "msg_build_1",
       sessionID: BUILD_SID,
       role: "assistant",
+      orderKey: messageOrderKey("msg_build_1", T0 + 6000),
       resolvedRole: "build",
       agent: "build",
       parentSessionID: EXECUTOR_SID,
@@ -531,6 +544,10 @@ export const EVENTS: FixtureEvent[] = [
         output: "added 42 packages",
         time: { start: T0 + 6050, end: T0 + 6080 },
       },
+      owningMessageOrderKey: messageOrderKey("msg_build_1", T0 + 6000),
+      orderKey: partOrderKey("part_build_tool_1", T0 + 6080),
+      resolvedRole: "build",
+      time: { created: T0 + 6080 },
     }),
     6080,
   ),
@@ -543,6 +560,10 @@ export const EVENTS: FixtureEvent[] = [
       sessionID: BUILD_SID,
       type: "text",
       text: "Build passed.",
+      owningMessageOrderKey: messageOrderKey("msg_build_1", T0 + 6000),
+      orderKey: partOrderKey("part_build_text", T0 + 6100),
+      resolvedRole: "build",
+      time: { created: T0 + 6100 },
     }),
     6100,
   ),
@@ -563,6 +584,7 @@ export const EVENTS: FixtureEvent[] = [
             goalTitle: "Scaffold project",
             goalStatus: "passed",
             orderIndex: 0,
+            retryCount: 0,
             steps: [
               {
                 stepID: "build",
@@ -571,13 +593,8 @@ export const EVENTS: FixtureEvent[] = [
                 status: "completed",
                 startedAt: T0 + 2500,
                 completedAt: T0 + 7000,
+                payload: { buildSessionID: BUILD_SID },
                 phases: {
-                  plan: {
-                    orderKey: boardOrderKey(`${GOAL_ID}-build-plan`, T0 + 2500, 62),
-                    status: "completed",
-                    startedAt: T0 + 2500,
-                    completedAt: T0 + 2800,
-                  },
                   build: {
                     orderKey: boardOrderKey(`${GOAL_ID}-build-build`, T0 + 2800, 62),
                     status: "completed",
@@ -666,10 +683,7 @@ export const INITIAL_BOARD = {
         scope: "goal",
         skippable: false,
         status: "pending",
-        phases: [
-          { id: "plan", label: "Plan", sessionKind: "planner" },
-          { id: "build", label: "Build", sessionKind: "build" },
-        ],
+        phases: [{ id: "build", label: "Build", sessionKind: "build" }],
       },
       {
         id: "deliver",

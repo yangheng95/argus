@@ -25,7 +25,7 @@ import {
   parseBuildFlavor,
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
-import { copyRuntimeNodeModules } from "./build-runtime-node-modules"
+import { copyRuntimeNodeModules, writePackagedRuntimePackageJson } from "./build-runtime-node-modules"
 import { copyRipgrepRuntime, findExecutableOnPath } from "./build-runtime-binaries"
 import { cleanBuildDist } from "./build-clean"
 import { resolveModelsSnapshotData } from "./models-snapshot"
@@ -379,6 +379,12 @@ for (const item of targets) {
   }
   await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
+  await writePackagedRuntimePackageJson({
+    name: `${name}-browser-mcp-node`,
+    outdir: browserMcpRuntimeDir,
+    target: item,
+    version: Script.version,
+  })
   await copyRipgrepRuntime({
     target: item,
     host: await detectArtifactNodeRuntimeHost(),
@@ -400,18 +406,12 @@ for (const item of targets) {
         .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
     )
   }
-  await Bun.file(`dist/${name}/package.json`).write(
-    JSON.stringify(
-      {
-        name,
-        version: Script.version,
-        os: [item.os],
-        cpu: [item.arch],
-      },
-      null,
-      2,
-    ),
-  )
+  await writePackagedRuntimePackageJson({
+    name,
+    outdir: path.join(dir, "dist", name),
+    target: item,
+    version: Script.version,
+  })
   binaries[name] = Script.version
 }
 

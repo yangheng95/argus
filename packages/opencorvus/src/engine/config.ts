@@ -95,22 +95,6 @@ interface AcceptanceVisualConfig {
   }
 }
 
-/**
- * DebugConfig — operator-toggled debug behaviour.
- *
- * `fail_on_information_missing`: when true the host (a) appends the
- * INFORMATION MISSING diagnostic block to every agent's system prompt
- * (see `prompt/information-missing.ts`), and (b) runs detection on
- * each agent's final assistant message — if the agent emits the
- * `<INFORMATION MISSING>` XML block the host fails the current run with a
- * non-retryable AgentRunError so operators see upstream-context drops
- * immediately instead of a long log of guessed-default work. Toggle is
- * exposed via overlay GeneralPanel.
- */
-interface DebugConfig {
-  fail_on_information_missing: boolean
-}
-
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
@@ -119,7 +103,6 @@ export interface EngineConfigType {
   intent_analysis: IntentAnalysisConfig
   build: BuildConfig
   activity: ActivityConfig
-  debug: DebugConfig
   max_executor_groups: number
   /** Default workflow ID for new tasks. Default: "pipeline". */
   default_workflow: string
@@ -167,12 +150,6 @@ const DEFAULTS: EngineConfigType = {
   },
   build: {
     max_steps: 1000,
-  },
-  debug: {
-    // Default off — host detection + prompt fallback only activate when
-    // an operator flips this in opencorvus.jsonc (or the overlay
-    // GeneralPanel toggle that PATCHes config).
-    fail_on_information_missing: false,
   },
   activity: {
     // Reasoning models can stream reasoning deltas every few seconds;
@@ -265,10 +242,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       executor_events_idle_ms: user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
       task_queue_run_timeout_ms:
         user?.activity?.task_queue_run_timeout_ms ?? DEFAULTS.activity.task_queue_run_timeout_ms,
-    },
-    debug: {
-      fail_on_information_missing:
-        user?.debug?.fail_on_information_missing ?? DEFAULTS.debug.fail_on_information_missing,
     },
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
