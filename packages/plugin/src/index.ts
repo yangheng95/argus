@@ -5,8 +5,7 @@ import type {
   Model,
   Provider,
   PermissionRequest,
-  UserMessage,
-  Message,
+  VisibleMessage,
   Part,
   Auth,
   Config,
@@ -23,6 +22,8 @@ export type ProviderContext = {
   info: Provider
   options: Record<string, any>
 }
+
+type UserMessage = Extract<VisibleMessage, { role: "user" }>
 
 export type PluginInput = {
   client: ReturnType<typeof createOpenCorvusClient>
@@ -275,7 +276,7 @@ export interface Hooks {
     input: {},
     output: {
       messages: {
-        info: Message
+        info: VisibleMessage
         parts: Part[]
       }[]
     },

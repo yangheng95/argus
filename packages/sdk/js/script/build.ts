@@ -40,18 +40,22 @@ async function rmWithinPackage(target: string, options: { recursive?: boolean } 
 }
 
 async function writeFileWithRetry(file: string, contents: string) {
-  await fs.mkdir(path.dirname(file), { recursive: true })
+  const directory = path.dirname(file)
+  await fs.mkdir(directory, { recursive: true })
 
-  for (let attempt = 1; attempt <= 20; attempt++) {
+  for (let attempt = 1; attempt <= 60; attempt++) {
+    const tempFile = path.join(directory, `.${path.basename(file)}.${process.pid}.${attempt}.tmp`)
     try {
-      await fs.writeFile(file, contents)
+      await fs.writeFile(tempFile, contents)
+      await fs.rename(tempFile, file)
       return
     } catch (error) {
+      await fs.rm(tempFile, { force: true }).catch(() => undefined)
       const code =
         error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
-      if (!["EBUSY", "EUNKNOWN", "EPERM"].includes(code) || attempt === 20) throw error
+      if (!["EBUSY", "EUNKNOWN", "EPERM"].includes(code) || attempt === 60) throw error
       Bun.gc(true)
-      await Bun.sleep(100 * attempt)
+      await Bun.sleep(Math.min(250 * attempt, 2_000))
     }
   }
 }
@@ -98,13 +102,29 @@ type OpenApiSpec = {
   paths?: Record<string, Record<string, OpenApiOperation>>
 }
 
+function camelCaseIdentifier(value: string): string {
+  return value.replace(/_([a-zA-Z0-9])/g, (_match, character: string) => character.toUpperCase())
+}
+
 function methodNameFromOperationID(operationID: string): string {
   const parts = operationID.split(".")
-  return parts[parts.length - 1] || operationID
+  return camelCaseIdentifier(parts[parts.length - 1] || operationID)
 }
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function sdkBodyBindingKeys(block: string, field: string): string[] {
+  const keys: string[] = []
+  const bindingPattern = /\{\s*in:\s*"body",\s*key:\s*"([^"]+)"(?:,\s*map:\s*"([^"]+)")?\s*,?\s*\}/gs
+  let match: RegExpExecArray | null
+  while ((match = bindingPattern.exec(block))) {
+    const key = match[1]
+    const mapped = match[2]
+    if (key === field || mapped === field) keys.push(key)
+  }
+  return keys
 }
 
 async function requireFlatSdkBodyFieldsFromOpenApi() {
@@ -135,12 +155,23 @@ async function requireFlatSdkBodyFieldsFromOpenApi() {
         if (!block.includes(`url: "${routePath}"`)) continue
 
         let changed = false
+        let hasRequiredBodyBinding = false
         for (const field of requiredFields) {
-          if (!block.includes(`{ in: "body", key: "${field}" }`)) continue
-          const fieldPattern = new RegExp(`(\\n\\s*)(${escapeRegex(field)})(\\?:)`, "g")
-          block = block.replace(fieldPattern, (_match, indent: string, key: string) => {
+          const bodyBindingKeys = sdkBodyBindingKeys(block, field)
+          if (bodyBindingKeys.length === 0) continue
+          hasRequiredBodyBinding = true
+          for (const bodyBindingKey of bodyBindingKeys) {
+            const fieldPattern = new RegExp(`(\\n\\s*)(${escapeRegex(bodyBindingKey)})(\\?:)`, "g")
+            block = block.replace(fieldPattern, (_match, indent: string, key: string) => {
+              changed = true
+              return `${indent}${key}:`
+            })
+          }
+        }
+        if (hasRequiredBodyBinding) {
+          block = block.replace(/(\n\s*parameters)\?:\s*(\{)/, (_match, prefix: string, open: string) => {
             changed = true
-            return `${indent}${key}:`
+            return `${prefix}: ${open}`
           })
         }
         if (changed) {

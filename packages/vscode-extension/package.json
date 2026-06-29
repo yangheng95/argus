@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencorvus-ai/vscode-extension",
+  "name": "opencorvus-vscode",
   "displayName": "OpenCorvus",
   "description": "OpenCorvus AI coding agent for VS Code",
   "version": "0.0.1",

@@ -3,6 +3,7 @@
 import fs from "fs"
 import path from "path"
 import { artifactExecutableName, artifactRipgrepExecutableName } from "../packages/opencorvus/script/build-artifact"
+import { overlayBundlePatterns } from "./release-asset-contract"
 
 const args = process.argv.slice(2)
 const mode = args[0]
@@ -41,6 +42,12 @@ function requireMatchingFile(dir: string, pattern: RegExp, label: string) {
   if (!files.some((file) => pattern.test(file))) {
     throw new Error(`Missing ${label} in ${dir}. Found: ${files.join(", ") || "none"}`)
   }
+}
+
+function overlayExecutablePattern(platform: string): RegExp {
+  if (platform.startsWith("windows")) return /^opencorvus-overlay\.exe$/
+  if (platform.startsWith("darwin") || platform.startsWith("linux")) return /^opencorvus-overlay$/
+  throw new Error(`Unsupported overlay platform: ${platform}`)
 }
 
 // Walk dir recursively and return every file path relative to it, in
@@ -111,7 +118,7 @@ if (!dir || !platform || !current) {
   throw new Error("overlay mode requires --dir, --platform and --version")
 }
 
-requireMatchingFile(dir, /^opencorvus-overlay(\.exe)?$/, "overlay binary")
+requireMatchingFile(dir, overlayExecutablePattern(platform), `${platform} overlay binary`)
 
 // build-overlay.ts runs `tauri build --no-bundle`, so per-platform
 // installer bundles (deb/rpm/AppImage on Linux, dmg on macOS, msi/nsis on
@@ -119,20 +126,8 @@ requireMatchingFile(dir, /^opencorvus-overlay(\.exe)?$/, "overlay binary")
 // overlay/script/build.ts, which must keep producing bundles because it opts
 // in to this validator with `--require-bundle`.
 if (requireBundle) {
-  if (platform.startsWith("windows")) {
-    requireMatchingFile(dir, new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`), "Windows MSI bundle")
-    requireMatchingFile(
-      dir,
-      new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`),
-      "Windows NSIS bundle",
-    )
-  } else if (platform.startsWith("darwin")) {
-    requireMatchingFile(dir, /\.dmg$/, "macOS DMG bundle")
-    requireMatchingFile(dir, /\.app\.tar\.gz$/, "macOS app archive bundle")
-  } else if (platform.startsWith("linux")) {
-    requireMatchingFile(dir, /\.AppImage$/, "Linux AppImage bundle")
-    requireMatchingFile(dir, /\.deb$/, "Linux DEB bundle")
-    requireMatchingFile(dir, /\.rpm$/, "Linux RPM bundle")
+  for (const { pattern, label } of overlayBundlePatterns(platform, current)) {
+    requireMatchingFile(dir, pattern, label)
   }
 }
 

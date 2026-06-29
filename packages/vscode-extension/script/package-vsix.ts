@@ -109,11 +109,7 @@ export function readPackageMeta(extensionRoot: string): {
   if (!pkg.version || !pkg.publisher || !pkg.name) {
     throw new Error("vscode-extension package.json missing version/publisher/name")
   }
-  // pkg.name is `@opencorvus-ai/vscode-extension` in this workspace; vsce
-  // expects an unscoped name. Strip the scope so the .vsix filename is
-  // marketplace-friendly.
-  const bareName = pkg.name.startsWith("@") ? (pkg.name.split("/")[1] ?? pkg.name) : pkg.name
-  return { version: pkg.version, publisher: pkg.publisher, name: bareName }
+  return { version: pkg.version, publisher: pkg.publisher, name: pkg.name }
 }
 
 export function assertPackageOverlayUiAssets(extensionRoot: string): void {

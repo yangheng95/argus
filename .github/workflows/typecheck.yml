@@ -26,7 +26,11 @@ jobs:
           bun ./packages/sdk/js/script/build.ts
           bun --cwd packages/opencorvus dev generate > /tmp/openapi.generated.json
           diff -u /tmp/openapi.generated.json packages/sdk/openapi.json
-          git diff --exit-code -- packages/sdk/js/src/gen packages/sdk/openapi.json
+          mapfile -t GENERATED_ARTIFACTS < <(bun ./script/generated-artifacts.ts --print)
+          git diff --exit-code -- "${GENERATED_ARTIFACTS[@]}"
+
+      - name: Verify generated API docs
+        run: bun run ./packages/opencorvus/script/docs/render-api-md.ts --check
 
       - name: Run typecheck
         run: bunx turbo run typecheck

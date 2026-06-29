@@ -60,10 +60,14 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --generate-notes \
-            --repo "$GITHUB_REPOSITORY" || true
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists"
+          else
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY"
+          fi
 
   package-cli:
     name: cli (${{ matrix.platform }})
@@ -325,9 +329,15 @@ jobs:
           BUNDLE="$REL/bundle"
           if [[ -d "$BUNDLE" ]]; then
             if [[ "${{ matrix.platform }}" == darwin-* && -d "$BUNDLE/macos" ]]; then
+              case "${{ matrix.platform }}" in
+                darwin-arm64) APP_ARCH="aarch64" ;;
+                darwin-x64) APP_ARCH="x64" ;;
+                *) echo "Unsupported macOS overlay platform: ${{ matrix.platform }}" >&2; exit 1 ;;
+              esac
+              APP_ARCHIVE="OpenCorvus_${{ needs.prepare.outputs.version }}_${APP_ARCH}.app.tar.gz"
               for app in "$BUNDLE/macos"/*.app; do
                 [[ -d "$app" ]] || continue
-                tar -czf "$OUT/$(basename "$app").tar.gz" -C "$BUNDLE/macos" "$(basename "$app")"
+                tar -czf "$OUT/$APP_ARCHIVE" -C "$BUNDLE/macos" "$(basename "$app")"
               done
             fi
             find "$BUNDLE" -type f \
@@ -386,7 +396,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          mapfile -t FILES < <(find /tmp/release-assets -type f | sort)
+          UPLOAD_DIR="$(mktemp -d)"
+          bun ./script/stage-release-upload-assets.ts --source /tmp/release-assets --out "$UPLOAD_DIR" --version "$VERSION"
+          mapfile -t FILES < <(find "$UPLOAD_DIR" -type f | sort)
           printf '%s\n' "${FILES[@]}"
           gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
@@ -435,30 +447,61 @@ jobs:
           git init
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          if git fetch origin release --depth=1 2>/dev/null; then
+          if git fetch --depth=1 origin refs/heads/release:refs/remotes/origin/release 2>/dev/null; then
+            RELEASE_LEASE="$(git rev-parse refs/remotes/origin/release)"
             git checkout release
           else
+            RELEASE_LEASE=""
             git checkout --orphan release
           fi
 
-          git rm -rf . 2>/dev/null || true
+          mapfile -d '' TRACKED_FILES < <(git ls-files -z)
+          if (( ${#TRACKED_FILES[@]} > 0 )); then
+            git rm -f -- "${TRACKED_FILES[@]}"
+          fi
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
 
-          cp "$GITHUB_WORKSPACE/README.md" . 2>/dev/null || echo "# OpenCorvus v${VERSION}" > README.md
-          cp "$GITHUB_WORKSPACE/RELEASE.md" . 2>/dev/null || true
+          for required_doc in README.md RELEASE.md; do
+            if [[ ! -f "$GITHUB_WORKSPACE/$required_doc" ]]; then
+              echo "Missing release branch document: $required_doc" >&2
+              exit 1
+            fi
+            cp "$GITHUB_WORKSPACE/$required_doc" .
+          done
 
+          shopt -s nullglob
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
             src="/tmp/dist/opencorvus-${platform}"
             [[ -d "$src" ]] || continue
             mkdir -p "$platform"
             cp -R "$src"/. "$platform/"
             find "$platform" -type f -name '*.map' -delete
-            chmod +x "$platform"/opencorvus* 2>/dev/null || true
-            chmod +x "$platform"/bin/rg* 2>/dev/null || true
+            opencorvus_binaries=("$platform"/opencorvus*)
+            if (( ${#opencorvus_binaries[@]} == 0 )); then
+              echo "Missing OpenCorvus binary in release branch platform directory: $platform" >&2
+              exit 1
+            fi
+            chmod +x "${opencorvus_binaries[@]}"
+            rg_binaries=("$platform"/bin/rg*)
+            if (( ${#rg_binaries[@]} == 0 )); then
+              echo "Missing ripgrep binary in release branch platform directory: $platform" >&2
+              exit 1
+            fi
+            chmod +x "${rg_binaries[@]}"
           done
 
           mkdir -p overlay
-          cp -r /tmp/overlay/overlay-* overlay/ 2>/dev/null || true
+          overlay_dirs=(/tmp/overlay/overlay-*)
+          if (( ${#overlay_dirs[@]} == 0 )); then
+            echo "No overlay artifacts found under /tmp/overlay" >&2
+            exit 1
+          fi
+          cp -R "${overlay_dirs[@]}" overlay/
 
           git add -A
-          git commit -m "release: v${VERSION}"
-          git push origin release --force
+          if git diff --cached --quiet; then
+            echo "release branch already up to date for v${VERSION}"
+          else
+            git commit -m "release: v${VERSION}"
+          fi
+          git push origin release:release --force-with-lease=refs/heads/release:"${RELEASE_LEASE}"
