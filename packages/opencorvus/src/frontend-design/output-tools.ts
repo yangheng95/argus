@@ -39,6 +39,7 @@ import {
   ToolVisualValidationEvidenceSchema,
   TypographySchema,
   type FrontendTemplateFinal,
+  type VisualValidationEvidence,
   type VisualSpec,
   type VisualSpecCategory,
 } from "./schema"
@@ -49,6 +50,17 @@ export type { FrontendTemplateFinal } from "./schema"
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 type FrontendTemplateToolInput = z.infer<typeof FrontendTemplateToolInputSchema>
 type FrontendTemplateDraft = Partial<FrontendTemplateToolInput>
+type VisualEvidenceCaptureMode = VisualValidationEvidence["capture_mode"]
+type VisualEvidenceValidationDiagnostic = {
+  code: string
+  message: string
+}
+type VisualEvidenceValidationResult =
+  | { ok: true }
+  | {
+      ok: false
+      diagnostic: VisualEvidenceValidationDiagnostic
+    }
 
 const StaticHtmlScreenshotScript = String.raw`
 const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
@@ -189,7 +201,7 @@ function decodePayload() {
         throw error;
       });
       browserFailures.assertNoFailures("evidence capture");
-      bytes = await page.screenshot({ type: "png", fullPage: false });
+      bytes = await page.screenshot({ type: "png", fullPage: payload.captureMode === "full_page" });
       browserFailures.assertNoFailures("evidence capture");
     } finally {
       browserFailures.dispose();
@@ -346,6 +358,7 @@ function renderVisualValidationEvidence(
         `  - rendered_entrypoint: ${item.rendered_entrypoint}`,
         `  - renderer: ${item.renderer}`,
         `  - viewport: ${item.viewport}`,
+        `  - capture_mode: ${item.capture_mode}`,
         `  - rendered_skeleton_preview_artifact: ${item.screenshot_artifact}`,
         `  - source_reference_artifact: ${item.source_reference_artifact}`,
         `  - screenshot_sha256: ${item.screenshot_sha256}`,
@@ -623,23 +636,51 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector)
   actions.push(...requiredImplementationPhaseMissingActions(draft))
   if (draft.frontend_project?.role === "visual_baseline_input" && !hasItems(draft.visual_validation_evidence)) {
     actions.push(
-      "update_frontend_visual_evidence({ id, rendered_entrypoint, screenshot_artifact, source_reference_artifact, renderer, viewport, hashes, review_status, review_summary })",
+      "update_frontend_visual_evidence({ id, rendered_entrypoint, screenshot_artifact, source_reference_artifact, renderer, viewport, capture_mode, hashes, review_status, review_summary })",
     )
   }
   return actions
 }
 
-function frontendTemplateStatus(collector: FrontendTemplateOutputCollector): string {
+async function frontendTemplateStatus(
+  collector: FrontendTemplateOutputCollector,
+  options: { artifactRoot: string; artifactRootRelative?: string; workspaceRoot: string },
+): Promise<string> {
   if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
   const missing = frontendDraftMissingActions(collector)
   const draft = collector.draft
+  let status = missing.length > 0 ? "incomplete" : "ready_for_submit_validation"
+  const diagnostics: string[] = []
+  if (missing.length === 0 && draft.frontend_project?.role === "visual_baseline_input") {
+    try {
+      const parsed = FrontendTemplateToolInputSchema.parse(normalizeFrontendTemplateInput(draft))
+      const final = normalizeFrontendTemplateFinal(FrontendTemplateFinalSchema.parse(parsed))
+      const quality = await inspectVisualBaselineQualityForSubmit(final, {
+        artifactRoot: options.artifactRoot,
+        artifactRootRelative: options.artifactRootRelative,
+        requireArtifactVerification: true,
+      })
+      if (quality.status !== "high_fidelity_evidence_reported") {
+        status = "blocked_by_visual_evidence"
+        if (quality.diagnostic) diagnostics.push(formatVisualEvidenceDiagnostic(quality.diagnostic))
+      }
+    } catch (err) {
+      status = "blocked_by_validation"
+      diagnostics.push(err instanceof Error ? err.message : String(err))
+    }
+  }
   const lines = [
-    `FRONTEND_TEMPLATE_RESULT_STATUS: ${missing.length > 0 ? "incomplete" : "ready_for_submit_validation"}`,
+    `FRONTEND_TEMPLATE_RESULT_STATUS: ${status}`,
     `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
   ]
   if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
+  for (const diagnostic of diagnostics) lines.push(`visual_evidence_error: ${diagnostic}`)
   if (missing.length > 0) {
     lines.push("next_required_update_calls:", markdownList(missing))
+  } else if (status === "blocked_by_visual_evidence") {
+    lines.push("next: correct update_frontend_visual_evidence or repair the visual-html-skeleton evidence before submit_frontend_template.")
+  } else if (status === "blocked_by_validation") {
+    lines.push("next: correct the invalid frontend result fragment named above before submit_frontend_template.")
   } else {
     lines.push('next: call submit_frontend_template({ "final": true })')
   }
@@ -786,15 +827,19 @@ async function assertFrontendTemplateFinal(
       requireArtifactVerification: true,
     })
     if (quality.status === "evidence_missing") {
+      const diagnostic = quality.diagnostic ? ` ${formatVisualEvidenceDiagnostic(quality.diagnostic)}.` : ""
       throw new Error(
         "frontend_project.role=visual_baseline_input requires artifact-backed rendered screenshot review evidence for the visual-html-skeleton output; " +
-          "submit structured visual_validation_evidence whose rendered_entrypoint, screenshot_artifact, source_reference_artifact, optional diff_artifact, and sha256 digests match real files under the task artifact root, or report the visual baseline as blocked/incomplete source debt instead of submitting an unproven skeleton.",
+          "submit structured visual_validation_evidence whose rendered_entrypoint, screenshot_artifact, source_reference_artifact, optional diff_artifact, viewport, capture_mode, and sha256 digests match real files under the task artifact root, or report the visual baseline as blocked/incomplete source debt instead of submitting an unproven skeleton." +
+          diagnostic,
       )
     }
     if (quality.status === "incomplete_visual_fidelity") {
+      const diagnostic = quality.diagnostic ? ` ${formatVisualEvidenceDiagnostic(quality.diagnostic)}.` : ""
       throw new Error(
         "frontend_project.role=visual_baseline_input cannot be submitted with blocking visual debt; " +
-          "repair the visual-html-skeleton until structured screenshot review has no blocking debt, or report frontend_project.role=blocked/source_baseline_input with the named unfinished visual debt.",
+          "repair the visual-html-skeleton until structured screenshot review has no blocking debt, or report frontend_project.role=blocked/source_baseline_input with the named unfinished visual debt." +
+          diagnostic,
       )
     }
     const structureCoverage = await inspectVisualHtmlSkeletonStructureCoverage({
@@ -959,25 +1004,66 @@ function packageNameFromReuseSource(reuseSource: string): string | undefined {
   return bare ? bare[1] : undefined
 }
 
+function visualEvidenceDiagnostic(code: string, message: string): VisualEvidenceValidationDiagnostic {
+  return { code, message }
+}
+
+function visualEvidenceFailure(code: string, message: string): VisualEvidenceValidationResult {
+  return { ok: false, diagnostic: visualEvidenceDiagnostic(code, message) }
+}
+
+function formatVisualEvidenceDiagnostic(diagnostic: VisualEvidenceValidationDiagnostic): string {
+  return `${diagnostic.code}: ${diagnostic.message}`
+}
+
+function visualEvidenceLabel(item: VisualValidationEvidence): string {
+  return `visual_validation_evidence[${item.id}]`
+}
+
 async function inspectVisualBaselineQualityForSubmit(
   final: FrontendTemplateFinal,
   options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
 ): Promise<{
   status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
   hasRemainingDebt: boolean
+  diagnostic?: VisualEvidenceValidationDiagnostic
 }> {
   const text = collectVisualBaselineText(final)
   const hasRemainingDebt = hasBlockingVisualDebt(text)
-  const hasRenderedScreenshotEvidence = await hasStructuredRenderedScreenshotEvidenceForSubmit(final, options)
+  const renderedScreenshotEvidence = await inspectStructuredRenderedScreenshotEvidenceForSubmit(final, options)
   const hasStructuredDebt = final.visual_validation_evidence.some(
     (item) => item.review_status === "reviewed_with_blocking_debt",
   )
 
-  if (hasRemainingDebt || hasStructuredDebt) {
-    return { status: "incomplete_visual_fidelity", hasRemainingDebt: hasRemainingDebt || hasStructuredDebt }
+  if (hasRemainingDebt) {
+    return {
+      status: "incomplete_visual_fidelity",
+      hasRemainingDebt: true,
+      diagnostic: visualEvidenceDiagnostic(
+        "visual_debt_reported",
+        "submitted visual baseline text still names blocking, remaining, unresolved, open, or deferred visual debt",
+      ),
+    }
   }
-  if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
-  return { status: "evidence_missing", hasRemainingDebt }
+  if (hasStructuredDebt) {
+    const item = final.visual_validation_evidence.find(
+      (candidate) => candidate.review_status === "reviewed_with_blocking_debt",
+    )
+    return {
+      status: "incomplete_visual_fidelity",
+      hasRemainingDebt: true,
+      diagnostic: visualEvidenceDiagnostic(
+        "visual_review_blocking_debt",
+        `${item ? visualEvidenceLabel(item) : "visual_validation_evidence"} has review_status=reviewed_with_blocking_debt`,
+      ),
+    }
+  }
+  if (renderedScreenshotEvidence.ok) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
+  return {
+    status: "evidence_missing",
+    hasRemainingDebt,
+    diagnostic: renderedScreenshotEvidence.diagnostic,
+  }
 }
 
 function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
@@ -1044,11 +1130,13 @@ function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string
     requireArtifactVerification: !artifactValidatedVisualFinals.has(final),
   })
   if (evidence.status === "evidence_missing") {
-    return "- visual_quality_status: evidence_missing. No structured rendered screenshot review evidence was submitted for the visual HTML skeleton; treat the skeleton as unproven until `visual_validation_evidence` and visual review are recorded."
+    const diagnostic = evidence.diagnostic ? ` ${formatVisualEvidenceDiagnostic(evidence.diagnostic)}.` : ""
+    return `- visual_quality_status: evidence_missing.${diagnostic} No structured rendered screenshot review evidence was submitted for the visual HTML skeleton; treat the skeleton as unproven until \`visual_validation_evidence\` and visual review are recorded.`
   }
   if (evidence.status === "incomplete_visual_fidelity") {
     const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
-    return `- visual_quality_status: incomplete_visual_fidelity.${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
+    const diagnostic = evidence.diagnostic ? ` ${formatVisualEvidenceDiagnostic(evidence.diagnostic)}.` : ""
+    return `- visual_quality_status: incomplete_visual_fidelity.${debt}${diagnostic} This skeleton is unproven and must not be treated as ready for downstream transcription.`
   }
   return "- visual_quality_status: visual_evidence_reported. Structured rendered screenshot review evidence was submitted; source traceability, screenshot inspection, and placeholder review remain authoritative."
 }
@@ -1059,19 +1147,40 @@ function inspectVisualBaselineQuality(
 ): {
   status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
   hasRemainingDebt: boolean
+  diagnostic?: VisualEvidenceValidationDiagnostic
 } {
   const text = collectVisualBaselineText(final)
   const hasRemainingDebt = hasBlockingVisualDebt(text)
-  const hasRenderedScreenshotEvidence = hasStructuredRenderedScreenshotEvidence(final, options)
+  const renderedScreenshotEvidence = inspectStructuredRenderedScreenshotEvidence(final, options)
   const hasStructuredDebt = final.visual_validation_evidence.some(
     (item) => item.review_status === "reviewed_with_blocking_debt",
   )
 
-  if (hasRemainingDebt || hasStructuredDebt) {
-    return { status: "incomplete_visual_fidelity", hasRemainingDebt: hasRemainingDebt || hasStructuredDebt }
+  if (hasRemainingDebt) {
+    return {
+      status: "incomplete_visual_fidelity",
+      hasRemainingDebt: true,
+      diagnostic: visualEvidenceDiagnostic(
+        "visual_debt_reported",
+        "submitted visual baseline text still names blocking, remaining, unresolved, open, or deferred visual debt",
+      ),
+    }
   }
-  if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
-  return { status: "evidence_missing", hasRemainingDebt }
+  if (hasStructuredDebt) {
+    const item = final.visual_validation_evidence.find(
+      (candidate) => candidate.review_status === "reviewed_with_blocking_debt",
+    )
+    return {
+      status: "incomplete_visual_fidelity",
+      hasRemainingDebt: true,
+      diagnostic: visualEvidenceDiagnostic(
+        "visual_review_blocking_debt",
+        `${item ? visualEvidenceLabel(item) : "visual_validation_evidence"} has review_status=reviewed_with_blocking_debt`,
+      ),
+    }
+  }
+  if (renderedScreenshotEvidence.ok) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
+  return { status: "evidence_missing", hasRemainingDebt, diagnostic: renderedScreenshotEvidence.diagnostic }
 }
 
 function hasBlockingVisualDebt(text: string): boolean {
@@ -1103,30 +1212,65 @@ function hasBlockingVisualDebt(text: string): boolean {
   return labelDebt || reversedLabelDebt || sentenceDebt || reversedSentenceDebt
 }
 
-function hasStructuredRenderedScreenshotEvidence(
+function inspectStructuredRenderedScreenshotEvidence(
   final: FrontendTemplateFinal,
   options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
-): boolean {
-  return final.visual_validation_evidence.some((item) => isUsableRenderedScreenshotEvidence(item, options))
-}
-
-async function hasStructuredRenderedScreenshotEvidenceForSubmit(
-  final: FrontendTemplateFinal,
-  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
-): Promise<boolean> {
+): VisualEvidenceValidationResult {
+  let firstDiagnostic: VisualEvidenceValidationDiagnostic | undefined
   for (const item of final.visual_validation_evidence) {
-    if (await isUsableRenderedScreenshotEvidenceForSubmit(item, options)) return true
+    const result = validateRenderedScreenshotEvidenceMetadata(item, options)
+    if (result.ok) return result
+    firstDiagnostic ??= result.diagnostic
   }
-  return false
+  return firstDiagnostic
+    ? { ok: false, diagnostic: firstDiagnostic }
+    : visualEvidenceFailure(
+        "visual_validation_evidence_empty",
+        "no structured rendered screenshot evidence was submitted",
+      )
 }
 
-function isUsableRenderedScreenshotEvidence(
-  item: FrontendTemplateFinal["visual_validation_evidence"][number],
+async function inspectStructuredRenderedScreenshotEvidenceForSubmit(
+  final: FrontendTemplateFinal,
   options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
-): boolean {
-  if (item.render_target !== "visual-html-skeleton") return false
-  if (item.review_status !== "reviewed_no_blocking_debt") return false
-  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
+): Promise<VisualEvidenceValidationResult> {
+  let firstDiagnostic: VisualEvidenceValidationDiagnostic | undefined
+  for (const item of final.visual_validation_evidence) {
+    const result = await validateRenderedScreenshotEvidenceForSubmit(item, options)
+    if (result.ok) return result
+    firstDiagnostic ??= result.diagnostic
+  }
+  return firstDiagnostic
+    ? { ok: false, diagnostic: firstDiagnostic }
+    : visualEvidenceFailure(
+        "visual_validation_evidence_empty",
+        "no structured rendered screenshot evidence was submitted",
+      )
+}
+
+function validateRenderedScreenshotEvidenceMetadata(
+  item: VisualValidationEvidence,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): VisualEvidenceValidationResult {
+  const label = visualEvidenceLabel(item)
+  if (item.render_target !== "visual-html-skeleton") {
+    return visualEvidenceFailure(
+      "render_target_invalid",
+      `${label} render_target must be visual-html-skeleton`,
+    )
+  }
+  if (item.review_status !== "reviewed_no_blocking_debt") {
+    return visualEvidenceFailure(
+      "review_status_blocking",
+      `${label} review_status must be reviewed_no_blocking_debt before submit`,
+    )
+  }
+  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) {
+    return visualEvidenceFailure(
+      "screenshot_equals_source_reference",
+      `${label} screenshot_sha256 must not equal source_reference_sha256`,
+    )
+  }
 
   const entrypoint = resolveEvidenceArtifactPath(options, item.rendered_entrypoint, "visual-html-skeleton")
   const screenshot = resolveEvidenceArtifactPath(options, item.screenshot_artifact, "visual-html-skeleton")
@@ -1134,21 +1278,64 @@ function isUsableRenderedScreenshotEvidence(
   const diff = item.diff_artifact
     ? resolveEvidenceArtifactPath(options, item.diff_artifact, "visual-html-skeleton")
     : undefined
-  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) return false
-  if (!entrypoint.relativePath.endsWith(".html")) return false
-  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) return false
-  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) return false
-  if (options.requireArtifactVerification) return false
-  return true
+  if (!entrypoint) {
+    return visualEvidenceFailure(
+      "rendered_entrypoint_path_invalid",
+      `${label} rendered_entrypoint must resolve under visual-html-skeleton within the task artifact root`,
+    )
+  }
+  if (!screenshot) {
+    return visualEvidenceFailure(
+      "screenshot_artifact_path_invalid",
+      `${label} screenshot_artifact must resolve under visual-html-skeleton within the task artifact root`,
+    )
+  }
+  if (!sourceReference) {
+    return visualEvidenceFailure(
+      "source_reference_artifact_path_invalid",
+      `${label} source_reference_artifact must resolve under web-clone-source within the task artifact root`,
+    )
+  }
+  if (item.diff_artifact && !diff) {
+    return visualEvidenceFailure(
+      "diff_artifact_path_invalid",
+      `${label} diff_artifact must resolve under visual-html-skeleton within the task artifact root`,
+    )
+  }
+  if (!entrypoint.relativePath.endsWith(".html")) {
+    return visualEvidenceFailure(
+      "rendered_entrypoint_not_html",
+      `${label} rendered_entrypoint must name a source-editable HTML file`,
+    )
+  }
+  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) {
+    return visualEvidenceFailure(
+      "screenshot_artifact_not_rendered_preview",
+      `${label} screenshot_artifact must be a rendered screenshot/preview artifact, not source/reference evidence`,
+    )
+  }
+  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) {
+    return visualEvidenceFailure(
+      "diff_artifact_not_rendered_preview",
+      `${label} diff_artifact must be a rendered visual diff/comparison artifact`,
+    )
+  }
+  if (options.requireArtifactVerification) {
+    return visualEvidenceFailure(
+      "artifact_verification_required",
+      `${label} metadata is structurally valid, but artifact verification is required before treating the visual baseline as ready`,
+    )
+  }
+  return { ok: true }
 }
 
-async function isUsableRenderedScreenshotEvidenceForSubmit(
-  item: FrontendTemplateFinal["visual_validation_evidence"][number],
+async function validateRenderedScreenshotEvidenceForSubmit(
+  item: VisualValidationEvidence,
   options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
-): Promise<boolean> {
-  if (item.render_target !== "visual-html-skeleton") return false
-  if (item.review_status !== "reviewed_no_blocking_debt") return false
-  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
+): Promise<VisualEvidenceValidationResult> {
+  const label = visualEvidenceLabel(item)
+  const metadata = validateRenderedScreenshotEvidenceMetadata(item, { ...options, requireArtifactVerification: false })
+  if (!metadata.ok) return metadata
 
   const entrypoint = resolveEvidenceArtifactPath(options, item.rendered_entrypoint, "visual-html-skeleton")
   const screenshot = resolveEvidenceArtifactPath(options, item.screenshot_artifact, "visual-html-skeleton")
@@ -1156,33 +1343,88 @@ async function isUsableRenderedScreenshotEvidenceForSubmit(
   const diff = item.diff_artifact
     ? resolveEvidenceArtifactPath(options, item.diff_artifact, "visual-html-skeleton")
     : undefined
-  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) return false
-  if (!entrypoint.relativePath.endsWith(".html")) return false
-  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) return false
-  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) return false
-  if (!options.requireArtifactVerification) return true
+  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) {
+    return visualEvidenceFailure(
+      "visual_evidence_path_recheck_failed",
+      `${label} failed artifact path recheck during submit validation`,
+    )
+  }
+  if (!options.requireArtifactVerification) return { ok: true }
 
   const verifiedEntrypoint = verifyEvidenceFile(options.artifactRoot, entrypoint, "visual-html-skeleton")
   const verifiedScreenshot = verifyEvidenceFile(options.artifactRoot, screenshot, "visual-html-skeleton")
   const verifiedSourceReference = verifyEvidenceFile(options.artifactRoot, sourceReference, "web-clone-source")
-  if (!verifiedEntrypoint || !verifiedScreenshot || !verifiedSourceReference) return false
-  if (diff && !verifyEvidenceFile(options.artifactRoot, diff, "visual-html-skeleton")) return false
-  if (!(await isDecodedRasterImageFile(verifiedScreenshot))) return false
-  if (!(await isDecodedRasterImageFile(verifiedSourceReference))) return false
+  if (!verifiedEntrypoint) {
+    return visualEvidenceFailure(
+      "rendered_entrypoint_file_missing",
+      `${label} rendered_entrypoint is not a readable file under the real visual-html-skeleton artifact root`,
+    )
+  }
+  if (!verifiedScreenshot) {
+    return visualEvidenceFailure(
+      "screenshot_artifact_file_missing",
+      `${label} screenshot_artifact is not a readable file under the real visual-html-skeleton artifact root`,
+    )
+  }
+  if (!verifiedSourceReference) {
+    return visualEvidenceFailure(
+      "source_reference_artifact_file_missing",
+      `${label} source_reference_artifact is not a readable file under the real web-clone-source artifact root`,
+    )
+  }
+  if (diff && !verifyEvidenceFile(options.artifactRoot, diff, "visual-html-skeleton")) {
+    return visualEvidenceFailure(
+      "diff_artifact_file_missing",
+      `${label} diff_artifact is not a readable file under the real visual-html-skeleton artifact root`,
+    )
+  }
+  if (!(await isDecodedRasterImageFile(verifiedScreenshot))) {
+    return visualEvidenceFailure(
+      "screenshot_artifact_not_raster",
+      `${label} screenshot_artifact must decode as a PNG, JPEG, or WebP image`,
+    )
+  }
+  if (!(await isDecodedRasterImageFile(verifiedSourceReference))) {
+    return visualEvidenceFailure(
+      "source_reference_artifact_not_raster",
+      `${label} source_reference_artifact must decode as a PNG, JPEG, or WebP image`,
+    )
+  }
 
   const screenshotSha = sha256File(verifiedScreenshot)
   const sourceReferenceSha = sha256File(verifiedSourceReference)
-  return (
-    screenshotSha === item.screenshot_sha256.toLowerCase() &&
-    sourceReferenceSha === item.source_reference_sha256.toLowerCase() &&
-    screenshotSha !== sourceReferenceSha &&
-    (await renderedEntrypointMatchesScreenshot({
-      entrypointFile: verifiedEntrypoint,
-      expectedScreenshotSha256: screenshotSha,
-      viewportLabel: item.viewport,
-      fallbackScreenshotFile: verifiedScreenshot,
-    }))
-  )
+  if (screenshotSha !== item.screenshot_sha256.toLowerCase()) {
+    return visualEvidenceFailure(
+      "screenshot_sha256_mismatch",
+      `${label} screenshot_sha256=${item.screenshot_sha256.toLowerCase()} does not match file hash ${screenshotSha}`,
+    )
+  }
+  if (sourceReferenceSha !== item.source_reference_sha256.toLowerCase()) {
+    return visualEvidenceFailure(
+      "source_reference_sha256_mismatch",
+      `${label} source_reference_sha256=${item.source_reference_sha256.toLowerCase()} does not match file hash ${sourceReferenceSha}`,
+    )
+  }
+  if (screenshotSha === sourceReferenceSha) {
+    return visualEvidenceFailure(
+      "screenshot_equals_source_reference",
+      `${label} screenshot_artifact and source_reference_artifact have the same SHA-256 digest`,
+    )
+  }
+
+  const rendered = await renderedEntrypointScreenshotHash({
+    entrypointFile: verifiedEntrypoint,
+    viewportLabel: item.viewport,
+    captureMode: item.capture_mode,
+  })
+  if (!rendered.ok) return rendered
+  if (rendered.sha256 !== screenshotSha) {
+    return visualEvidenceFailure(
+      "rendered_entrypoint_hash_mismatch",
+      `${label} screenshot_artifact hash ${screenshotSha} does not match fresh ${item.capture_mode} render hash ${rendered.sha256} from ${item.rendered_entrypoint} at ${rendered.viewport.width}x${rendered.viewport.height}`,
+    )
+  }
+  return { ok: true }
 }
 
 function isRenderedVisualSkeletonArtifactRelativePath(relativePath: string): boolean {
@@ -1274,23 +1516,55 @@ async function isDecodedRasterImageFile(file: string): Promise<boolean> {
   }
 }
 
-async function renderedEntrypointMatchesScreenshot(input: {
+type RenderedEntrypointScreenshotHashResult =
+  | {
+      ok: true
+      sha256: string
+      viewport: { width: number; height: number }
+      captureMode: VisualEvidenceCaptureMode
+    }
+  | {
+      ok: false
+      diagnostic: VisualEvidenceValidationDiagnostic
+    }
+
+async function renderedEntrypointScreenshotHash(input: {
   entrypointFile: string
-  expectedScreenshotSha256: string
   viewportLabel: string
-  fallbackScreenshotFile: string
-}): Promise<boolean> {
+  captureMode: VisualEvidenceCaptureMode
+}): Promise<RenderedEntrypointScreenshotHashResult> {
   try {
-    const viewport =
-      viewportDimensionsFromLabel(input.viewportLabel) ?? (await rasterDimensions(input.fallbackScreenshotFile))
-    if (!viewport) return false
+    const viewport = viewportDimensionsFromLabel(input.viewportLabel)
+    if (!viewport) {
+      return {
+        ok: false,
+        diagnostic: visualEvidenceDiagnostic(
+          "viewport_dimensions_missing",
+          `visual_validation_evidence viewport "${input.viewportLabel}" must include explicit WIDTHxHEIGHT dimensions for ${input.captureMode} re-rendering`,
+        ),
+      }
+    }
     const rendered = await renderVisualHtmlSkeletonScreenshotForValidation({
       entrypointFile: input.entrypointFile,
       viewport,
+      captureMode: input.captureMode,
     })
-    return createHash("sha256").update(rendered).digest("hex") === input.expectedScreenshotSha256
-  } catch {
-    return false
+    return {
+      ok: true,
+      sha256: createHash("sha256").update(rendered).digest("hex"),
+      viewport,
+      captureMode: input.captureMode,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      diagnostic: visualEvidenceDiagnostic(
+        "rendered_entrypoint_render_failed",
+        `fresh ${input.captureMode} render failed for ${input.entrypointFile}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      ),
+    }
   }
 }
 
@@ -1303,24 +1577,10 @@ function viewportDimensionsFromLabel(label: string): { width: number; height: nu
   return { width, height }
 }
 
-async function rasterDimensions(file: string): Promise<{ width: number; height: number } | undefined> {
-  try {
-    const metadata = await sharp(file).metadata()
-    if (
-      typeof metadata.width === "number" &&
-      metadata.width > 0 &&
-      typeof metadata.height === "number" &&
-      metadata.height > 0
-    ) {
-      return { width: metadata.width, height: metadata.height }
-    }
-  } catch {}
-  return undefined
-}
-
 export async function renderVisualHtmlSkeletonScreenshotForValidation(input: {
   entrypointFile: string
   viewport: { width: number; height: number }
+  captureMode: VisualEvidenceCaptureMode
   timeoutMs?: number
 }): Promise<Buffer> {
   const timeoutMs = input.timeoutMs ?? 60_000
@@ -1333,6 +1593,7 @@ export async function renderVisualHtmlSkeletonScreenshotForValidation(input: {
       timeoutMs,
       url: pathToFileURL(input.entrypointFile).href,
       viewport: input.viewport,
+      captureMode: input.captureMode,
     },
     payloadEnvName: "OPENCORVUS_FRONTEND_RENDER_PAYLOAD",
     inactivityTimeoutMs: timeoutMs + 10_000,
@@ -1657,7 +1918,7 @@ export function createFrontendTemplateOutputTools(
 
     update_frontend_visual_evidence: tool({
       description:
-        "Update one structured rendered screenshot validation evidence row for a visual HTML skeleton. Items are keyed by id.",
+        "Update one structured rendered screenshot validation evidence row for a visual HTML skeleton. Include capture_mode=viewport for viewport crops or capture_mode=full_page for complete document screenshots. Items are keyed by id.",
       inputSchema: ToolVisualValidationEvidenceSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
@@ -1713,7 +1974,12 @@ export function createFrontendTemplateOutputTools(
       description:
         "Inspect frontend result collector status after update_* calls. Use when submit_frontend_template reports missing fragments or validation errors.",
       inputSchema: z.object({}).strict(),
-      execute: async () => frontendTemplateStatus(collector),
+      execute: async () =>
+        frontendTemplateStatus(collector, {
+          artifactRoot,
+          artifactRootRelative,
+          workspaceRoot,
+        }),
     }),
 
     submit_frontend_template: tool({
