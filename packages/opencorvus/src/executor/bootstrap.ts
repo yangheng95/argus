@@ -93,6 +93,7 @@ function codexProvider(command: string[]) {
       const cfg = await EngineConfig.get()
       const cwd = runtime?.cwd
       const mcp = MCPServe.command(cwd ?? Instance.directory)
+      const enabledTools = await MCPServe.toolDefinitions("executor").then(codexMcpEnabledTools)
       const runtimeEnv = codingRuntimeEnv(runtime ?? {})
       return CodexAppServerClientProcess.create({
         command: [
@@ -140,7 +141,9 @@ function codexProvider(command: string[]) {
           "-c",
           `mcp_servers.${MCPServe.ServerName}.args=${JSON.stringify(mcp.args)}`,
           "-c",
-          `mcp_servers.${MCPServe.ServerName}.env=${JSON.stringify(runtimeEnv)}`,
+          `mcp_servers.${MCPServe.ServerName}.env=${tomlInlineStringMap(runtimeEnv)}`,
+          "-c",
+          `mcp_servers.${MCPServe.ServerName}.enabled_tools=${tomlStringArray(enabledTools)}`,
           // The canonical codex-blessed way to silence per-tool approval
           // prompts on a trusted MCP server. Without this, codex 0.125 emits
           // `mcp_tool_call_approval_<callID>` elicitations for every memory /
@@ -166,4 +169,42 @@ function codexProvider(command: string[]) {
 
 function claudeProvider(command: string[]) {
   return ClaudeAgentExecutor.createSdk(command[0])
+}
+
+function codexMcpEnabledTools(tools: Awaited<ReturnType<typeof MCPServe.toolDefinitions>>) {
+  const names = tools.map((tool) => tool.name)
+  const seen = new Set<string>()
+  const duplicated = new Set<string>()
+  for (const name of names) {
+    if (seen.has(name)) duplicated.add(name)
+    seen.add(name)
+  }
+  if (duplicated.size > 0) {
+    throw new Error(`Duplicate Codex MCP enabled tool names: ${Array.from(duplicated).sort().join(", ")}`)
+  }
+  return names.sort((left, right) => left.localeCompare(right))
+}
+
+function tomlInlineStringMap(input: Record<string, string>) {
+  const entries = Object.entries(input)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`)
+  if (entries.length === 0) return "{}"
+  return `{ ${entries.join(", ")} }`
+}
+
+function tomlStringArray(input: string[]) {
+  return `[${input.map(tomlString).join(", ")}]`
+}
+
+function tomlString(input: string) {
+  return `"${input.replace(/[\b\t\n\f\r"\\]/g, (char) => {
+    if (char === "\b") return "\\b"
+    if (char === "\t") return "\\t"
+    if (char === "\n") return "\\n"
+    if (char === "\f") return "\\f"
+    if (char === "\r") return "\\r"
+    if (char === '"') return '\\"'
+    return "\\\\"
+  })}"`
 }

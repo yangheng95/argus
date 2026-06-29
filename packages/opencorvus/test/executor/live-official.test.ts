@@ -5,7 +5,9 @@ import { pathToFileURL } from "url"
 import { ExecutorBootstrap } from "../../src/executor/bootstrap"
 import { ExecutorDiscovery } from "../../src/executor/discovery"
 import { ExecutorRegistry } from "../../src/executor/registry"
+import { MCPServe } from "../../src/mcp/serve"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -103,13 +105,13 @@ async function runLiveSmoke(executorName: "codex" | "claude-code") {
     fn: async () => {
       await ExecutorBootstrap.autoRegister(true)
       const executor = ExecutorRegistry.require(executorName)
-      const sessionID = `live_${executorName.replace(/[^a-z]/g, "_")}`
+      const session = await Session.create({ kind: "assistant", title: `${executorName} live smoke` })
       const submitted = await executor.submit({
-        sessionID,
+        sessionID: session.id,
         prompt:
           executorName === "claude-code"
             ? "Use ToolSearch to find the MCP tool related to fixture_magic_lookup, then call that exact tool and reply with exactly its output. No extra text."
-            : "Use the MCP tool named fixture_magic_lookup and reply with exactly its output. No extra text.",
+            : `Call the exact MCP tool ${MCPServe.codingExecutorToolName("fixture_magic_lookup")}. Return exactly its output. Do not call Bash or shell_command.`,
       })
 
       const status = await waitForStatus(executor, submitted.queueTaskID)
@@ -117,7 +119,16 @@ async function runLiveSmoke(executorName: "codex" | "claude-code") {
         throw new Error(`executor ${executorName} failed: ${status.error ?? status.status}`)
       }
 
-      const acceptance = await executor.acceptance({ sessionID })
+      const events = await collectEvents(executor, submitted.queueTaskID)
+      const toolNames = events
+        .filter((event) => event.type === "tool.call")
+        .map((event) => String(event.payload?.name ?? ""))
+      if (executorName === "codex") {
+        expect(toolNames).toContain("fixture_magic_lookup")
+        expect(toolNames).not.toContain("Bash")
+      }
+
+      const acceptance = await executor.acceptance({ sessionID: session.id })
       expect(acceptance.summary).toContain(marker)
     },
   })
@@ -130,4 +141,12 @@ async function waitForStatus(executor: ReturnType<typeof ExecutorRegistry.requir
     status = await executor.status(queueTaskID)
   }
   return status
+}
+
+async function collectEvents(executor: ReturnType<typeof ExecutorRegistry.require>, queueTaskID: string) {
+  const events: Array<{ type: string; payload?: Record<string, unknown> }> = []
+  for await (const event of executor.events({ queueTaskID })) {
+    events.push(event)
+  }
+  return events
 }

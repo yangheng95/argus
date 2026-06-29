@@ -330,6 +330,30 @@ function* notification(
     return
   }
 
+  if (method === "mcpServer/startupStatus/updated") {
+    const serverName = typeof data.name === "string" ? data.name : "unknown"
+    const status = typeof data.status === "string" ? data.status : "unknown"
+    const error = typeof data.error === "string" ? data.error : undefined
+    log.info("codex mcp server startup status", {
+      threadID: currentThread,
+      turnID: currentTurn,
+      serverName,
+      status,
+      error,
+    })
+    yield {
+      type: "progress",
+      phase: "mcp_startup",
+      summary: `mcp.${serverName}.${status}`,
+      meta: {
+        thread_id: currentThread,
+        turn_id: currentTurn,
+        ...data,
+      },
+    }
+    return
+  }
+
   if (method === "turn/completed") {
     yield {
       type: "done",

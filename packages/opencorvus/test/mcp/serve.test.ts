@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { readFileSync } from "node:fs"
-import { resolve } from "node:path"
+import { writeFile } from "node:fs/promises"
+import { join, resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 import { Instance } from "../../src/project/instance"
 import { MCP } from "../../src/mcp"
 import { MCPServe } from "../../src/mcp/serve"
@@ -8,8 +12,9 @@ import { BrowserMCPBuiltin } from "../../src/mcp/browser/builtin"
 import { tmpdir } from "../fixture/fixture"
 
 describe("mcp.serve", () => {
-  afterEach(() => {
+  afterEach(async () => {
     mock.restore()
+    await Instance.disposeAll().catch(() => undefined)
   })
 
   test("builds a Bun source stdio command for the executor toolset", () => {
@@ -19,7 +24,11 @@ describe("mcp.serve", () => {
     })
     expect(config.name).toBe("opencorvus")
     expect(config.command).toBe("C:\\tools\\bun.exe")
-    expect(config.args[0]).toEndWith("stdio.ts")
+    expect(config.args.slice(0, 3)).toEqual([
+      "--cwd",
+      "D:\\repo\\packages\\opencorvus",
+      "D:\\repo\\packages\\opencorvus\\src\\mcp\\stdio.ts",
+    ])
     expect(config.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
     expect("env" in config).toBe(false)
   })
@@ -140,6 +149,60 @@ describe("mcp.serve", () => {
     })
   })
 
+  test("loads proxied external MCP tools from project config into executor definitions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const marker = `serve-proxy-${Date.now().toString(36)}`
+    await writeFixtureMcpServer(tmp.path, marker)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await MCP.serverTools()
+        expect(tools.map((item) => item.key)).toContain("fixture_magic_lookup")
+        const defs = await MCPServe.toolDefinitions("executor")
+        expect(defs.map((item) => item.name)).toContain("fixture_magic_lookup")
+        const result = await MCP.callTool({ key: "fixture_magic_lookup", args: {} })
+        expect(JSON.stringify(result)).toContain(marker)
+      },
+    })
+  })
+
+  test(
+    "serves executor tools over stdio using the generated command",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const marker = `stdio-proxy-${Date.now().toString(36)}`
+      await writeFixtureMcpServer(tmp.path, marker)
+
+      const command = MCPServe.command(tmp.path)
+      const transport = new StdioClientTransport({
+        command: command.command,
+        args: command.args,
+        cwd: tmp.path,
+        stderr: "pipe",
+        env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => !!entry[1])),
+      })
+      let stderr = ""
+      transport.stderr?.on("data", (chunk) => {
+        stderr += String(chunk)
+      })
+      const client = new Client({ name: "opencorvus-stdio-test", version: "0.0.0" })
+
+      try {
+        await client.connect(transport)
+        const tools = await client.listTools()
+        expect(tools.tools.map((tool) => tool.name)).toContain("fixture_magic_lookup")
+        const result = await client.callTool({ name: "fixture_magic_lookup", arguments: {} })
+        expect(JSON.stringify(result)).toContain(marker)
+      } catch (error) {
+        throw new Error(`executor stdio MCP failed: ${error instanceof Error ? error.message : String(error)}\n${stderr}`)
+      } finally {
+        await client.close().catch(() => undefined)
+      }
+    },
+    { timeout: 60_000 },
+  )
+
   test("filters webpage clone and webpage evidence tools from executor proxied definitions", async () => {
     await using tmp = await tmpdir({ git: true })
     const proxiedTools = [
@@ -223,3 +286,47 @@ describe("mcp.serve", () => {
     })
   })
 })
+
+async function writeFixtureMcpServer(directory: string, marker: string) {
+  const repoRoot = resolve(import.meta.dir, "../..")
+  const script = join(directory, "fixture-mcp.mjs")
+  const mcpServerModule = pathToFileURL(
+    join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "mcp.js"),
+  ).href
+  const mcpStdioModule = pathToFileURL(
+    join(repoRoot, "node_modules", "@modelcontextprotocol", "sdk", "dist", "esm", "server", "stdio.js"),
+  ).href
+  await writeFile(
+    script,
+    [
+      `import { McpServer } from ${JSON.stringify(mcpServerModule)}`,
+      `import { StdioServerTransport } from ${JSON.stringify(mcpStdioModule)}`,
+      `const server = new McpServer({ name: "fixture", version: "1.0.0" })`,
+      `server.registerTool("magic_lookup", { description: "Return the hidden marker", inputSchema: {} }, async () => ({ content: [{ type: "text", text: ${JSON.stringify(marker)} }] }))`,
+      `const transport = new StdioServerTransport()`,
+      `await server.connect(transport)`,
+      `process.stdin.resume()`,
+    ].join("\n"),
+    "utf8",
+  )
+  const bun = Bun.which("bun") ?? process.execPath
+  await writeFile(
+    join(directory, "opencorvus.json"),
+    JSON.stringify(
+      {
+        $schema: "https://opencorvus.ai/config.json",
+        mcp: {
+          fixture: {
+            type: "local",
+            command: [bun, script],
+            enabled: true,
+            timeout: 10_000,
+          },
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  )
+}

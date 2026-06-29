@@ -1,232 +1,49 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
-
-let promptError: Error | undefined
-let resourceError: Error | undefined
-let toolErrorDuringStartup: Error | undefined
-let toolErrorAfterStartup: Error | undefined
-let promptFetchError: Error | undefined
-let resourceFetchError: Error | undefined
-let listToolsCalls = 0
-let closeCalls = 0
-let transportCloseCalls = 0
-let resourceList: Array<{ uri: string; name: string; title?: string; description?: string; mimeType?: string }> = []
-
-mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
-  Client: class MockClient {
-    async connect() {}
-    async close() {
-      closeCalls += 1
-    }
-    setNotificationHandler() {}
-    async listTools() {
-      listToolsCalls += 1
-      if (toolErrorDuringStartup) throw toolErrorDuringStartup
-      if (toolErrorAfterStartup && listToolsCalls > 1) throw toolErrorAfterStartup
-      return { tools: [] }
-    }
-    async listPrompts() {
-      if (promptError) throw promptError
-      return { prompts: [] }
-    }
-    async listResources() {
-      if (resourceError) throw resourceError
-      return { resources: resourceList }
-    }
-    async getPrompt() {
-      if (promptFetchError) throw promptFetchError
-      return { messages: [] }
-    }
-    async readResource() {
-      if (resourceFetchError) throw resourceFetchError
-      return { contents: [] }
-    }
-  },
-}))
-
-mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
-  StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
-    constructor(_url: URL, _options?: unknown) {}
-    async close() {
-      transportCloseCalls += 1
-    }
-  },
-}))
-
-mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
-  SSEClientTransport: class MockSSEClientTransport {
-    constructor(_url: URL, _options?: unknown) {}
-    async close() {
-      transportCloseCalls += 1
-    }
-  },
-}))
-
-const { MCP } = await import("../../src/mcp")
-const { Instance } = await import("../../src/project/instance")
-const { resetDatabase } = await import("../fixture/db")
-const { tmpdir } = await import("../fixture/fixture")
-
-beforeEach(async () => {
-  promptError = undefined
-  resourceError = undefined
-  toolErrorDuringStartup = undefined
-  toolErrorAfterStartup = undefined
-  promptFetchError = undefined
-  resourceFetchError = undefined
-  resourceList = []
-  listToolsCalls = 0
-  closeCalls = 0
-  transportCloseCalls = 0
-  await Instance.disposeAll()
-  await resetDatabase()
-})
-
-async function withRemoteMcp(fn: () => Promise<void>) {
-  await using tmp = await tmpdir({
-    git: true,
-    config: {
-      mcp: {
-        remote: {
-          type: "remote",
-          url: "https://example.com/mcp",
-          transport: "streamable-http",
-          oauth: false,
-        },
-        browser: {
-          enabled: false,
-        },
-      },
-    },
-  })
-
-  await Instance.provide({
-    directory: tmp.path,
-    fn,
-  })
-}
+import { describe, expect, test } from "bun:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
 
 describe("MCP prompt and resource listing", () => {
-  test("startup tool list failures reject tools instead of returning an empty map", async () => {
-    toolErrorDuringStartup = new Error("startup tool list unavailable")
-
-    await withRemoteMcp(async () => {
-      await expect(MCP.tools()).rejects.toThrow("startup tool list unavailable")
-      const status = await MCP.status()
-      expect(status.remote).toEqual({ status: "failed", error: "startup tool list unavailable" })
-      expect(closeCalls).toBeGreaterThan(0)
-      expect(transportCloseCalls).toBeGreaterThan(0)
-    })
-  })
-
-  test("tool list failures mark and close the server instead of returning a partial map", async () => {
-    toolErrorAfterStartup = new Error("tool list unavailable")
-
-    await withRemoteMcp(async () => {
-      await expect(MCP.tools()).rejects.toThrow("tool list unavailable")
-      const status = await MCP.status()
-      expect(status.remote).toEqual({ status: "failed", error: "tool list unavailable" })
-      expect(closeCalls).toBeGreaterThan(0)
-      expect(transportCloseCalls).toBeGreaterThan(0)
-    })
-  })
-
-  test("prompt list failures mark and close the server instead of returning an empty map", async () => {
-    promptError = new Error("prompt list unavailable")
-
-    await withRemoteMcp(async () => {
-      await expect(MCP.prompts()).rejects.toThrow("prompt list unavailable")
-      const status = await MCP.status()
-      expect(status.remote).toEqual({ status: "failed", error: "prompt list unavailable" })
-      expect(closeCalls).toBeGreaterThan(0)
-      expect(transportCloseCalls).toBeGreaterThan(0)
-    })
-  })
-
-  test("resource list failures mark and close the server instead of returning an empty map", async () => {
-    resourceError = new Error("resource list unavailable")
-
-    await withRemoteMcp(async () => {
-      await expect(MCP.resources()).rejects.toThrow("resource list unavailable")
-      const status = await MCP.status()
-      expect(status.remote).toEqual({ status: "failed", error: "resource list unavailable" })
-      expect(closeCalls).toBeGreaterThan(0)
-      expect(transportCloseCalls).toBeGreaterThan(0)
-    })
-  })
-
-  test("resources use URI identity so same-name resources do not overwrite each other", async () => {
-    resourceList = [
-      { uri: "mcp://fixture/a.md", name: "README", mimeType: "text/markdown" },
-      { uri: "mcp://fixture/b.md", name: "README", mimeType: "text/markdown" },
-    ]
-
-    await withRemoteMcp(async () => {
-      const resources = await MCP.resources()
-      expect(Object.keys(resources).sort()).toEqual([
-        `client:${Buffer.from("remote", "utf8").toString("base64url")}:uri:${Buffer.from("mcp://fixture/a.md", "utf8").toString("base64url")}`,
-        `client:${Buffer.from("remote", "utf8").toString("base64url")}:uri:${Buffer.from("mcp://fixture/b.md", "utf8").toString("base64url")}`,
-      ])
-      expect(Object.values(resources).map((item) => item.uri).sort()).toEqual([
-        "mcp://fixture/a.md",
-        "mcp://fixture/b.md",
-      ])
-    })
-  })
-
-  test("resource keys encode client identity so sanitized client-name collisions cannot overwrite resources", async () => {
-    resourceList = [{ uri: "mcp://fixture/shared.md", name: "README", mimeType: "text/markdown" }]
-
-    await using tmp = await tmpdir({
-      git: true,
-      config: {
-        mcp: {
-          "remote/a": {
-            type: "remote",
-            url: "https://example.com/a",
-            transport: "streamable-http",
-            oauth: false,
-          },
-          remote_a: {
-            type: "remote",
-            url: "https://example.com/b",
-            transport: "streamable-http",
-            oauth: false,
-          },
-          browser: {
-            enabled: false,
-          },
-        },
-      },
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const resources = await MCP.resources()
-        expect(Object.keys(resources).sort()).toEqual([
-          `client:${Buffer.from("remote/a", "utf8").toString("base64url")}:uri:${Buffer.from("mcp://fixture/shared.md", "utf8").toString("base64url")}`,
-          `client:${Buffer.from("remote_a", "utf8").toString("base64url")}:uri:${Buffer.from("mcp://fixture/shared.md", "utf8").toString("base64url")}`,
+  test(
+    "runs the mocked MCP client fail-fast suite in an isolated process",
+    async () => {
+      const bun = Bun.which("bun") ?? process.execPath
+      const isolated = resolve(import.meta.dir, "prompt-resource-fail-fast.isolated.ts")
+      const home = await mkdtemp(join(tmpdir(), "opencorvus-mcp-isolated-"))
+      try {
+        const env = {
+          ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => !!entry[1])),
+          OPENCORVUS_HOME: join(home, "portable"),
+          OPENCORVUS_TEST_HOME: join(home, "home"),
+          OPENCORVUS_TEST_MANAGED_CONFIG_DIR: join(home, "managed"),
+          XDG_DATA_HOME: join(home, "share"),
+          XDG_CACHE_HOME: join(home, "cache"),
+          XDG_CONFIG_HOME: join(home, "config"),
+          XDG_STATE_HOME: join(home, "state"),
+        }
+        const proc = Bun.spawn([bun, "test", isolated], {
+          cwd: resolve(import.meta.dir, "../../.."),
+          env,
+          stdout: "pipe",
+          stderr: "pipe",
+        })
+        const [stdout, stderr, exitCode] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
         ])
-        expect(Object.values(resources).map((item) => item.client).sort()).toEqual(["remote/a", "remote_a"])
-      },
-    })
-  })
-
-  test("selected prompt fetch failures reject instead of returning undefined", async () => {
-    promptFetchError = new Error("prompt fetch unavailable")
-
-    await withRemoteMcp(async () => {
-      await MCP.prompts()
-      await expect(MCP.getPrompt("remote", "broken")).rejects.toThrow("prompt fetch unavailable")
-    })
-  })
-
-  test("selected resource fetch failures reject instead of returning undefined", async () => {
-    resourceFetchError = new Error("resource fetch unavailable")
-
-    await withRemoteMcp(async () => {
-      await MCP.resources()
-      await expect(MCP.readResource("remote", "mcp://broken")).rejects.toThrow("resource fetch unavailable")
-    })
-  })
+        if (exitCode !== 0) {
+          throw new Error(
+            [`isolated MCP prompt/resource suite failed with exit code ${exitCode}`, stdout, stderr].join("\n"),
+          )
+        }
+        const output = `${stdout}\n${stderr}`
+        expect(output).toContain("10 pass")
+        expect(output).toContain("0 fail")
+      } finally {
+        await rm(home, { recursive: true, force: true }).catch(() => undefined)
+      }
+    },
+    { timeout: 120_000 },
+  )
 })

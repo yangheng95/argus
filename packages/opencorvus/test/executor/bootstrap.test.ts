@@ -6,6 +6,7 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import { Instance } from "../../src/project/instance"
 import { MCPServe } from "../../src/mcp/serve"
 import { EngineConfig } from "../../src/engine/config"
+import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 
 describe("executor.bootstrap", () => {
@@ -52,6 +53,20 @@ describe("executor.bootstrap", () => {
       command: mcpCommand,
       args: ["mcp", "serve", "--cwd", "D:\\repo\\worktree", "--toolset", "executor"],
     })
+    spyOn(MCPServe, "toolDefinitions").mockResolvedValue([
+      {
+        name: "memory",
+        description: "Memory",
+        inputSchema: { type: "object", properties: {} },
+        metadata: { surface: "mcp" },
+      },
+      {
+        name: "fixture_magic_lookup",
+        description: "Fixture lookup",
+        inputSchema: { type: "object", properties: {} },
+        metadata: { surface: "mcp" },
+      },
+    ])
     spyOn(CodexAppServerClientProcess, "create").mockImplementation((input) => {
       seen.push({ command: input.command, requestIdleMs: input.requestIdleMs })
       return {
@@ -116,20 +131,37 @@ describe("executor.bootstrap", () => {
             },
           },
         })
+        const session = await Session.create({ kind: "assistant", title: "codex bootstrap runtime env" })
+        const submitted = await executor.submit({
+          sessionID: session.id,
+          prompt: "run",
+          taskID: "tsk_bootstrap",
+          runtimeDir: "C:\\runtime\\dir",
+          worktreeDir: "D:\\repo\\worktree",
+        })
+        await waitForCompleted(executor, submitted.queueTaskID)
       },
     })
 
     const cmd = seen[0]?.command ?? []
+    const runCmd = seen[1]?.command ?? []
     expect(cmd).toContain("app-server")
     expect(cmd).toContain("-c")
     expect(cmd).toContain(`mcp_servers.opencorvus.command=${JSON.stringify(mcpCommand)}`)
     expect(cmd.some((item) => item.includes("mcp_servers.opencorvus.args"))).toBe(true)
+    expect(cmd).toContain(`mcp_servers.opencorvus.env={}`)
+    const runEnv = runCmd.find((item) => item.startsWith("mcp_servers.opencorvus.env=")) ?? ""
+    expect(runEnv).toContain(`"OPENCORVUS_RUNTIME_DIR" = "C:\\\\runtime\\\\dir"`)
+    expect(runEnv).toContain(`"OPENCORVUS_SESSION_ID" = "ses_`)
+    expect(runEnv).toContain(`"OPENCORVUS_TASK_ID" = "tsk_bootstrap"`)
+    expect(runEnv).toContain(`"OPENCORVUS_WORKTREE_DIR" = "D:\\\\repo\\\\worktree"`)
     // Full-permission overrides — the app-server ignores
     // --dangerously-bypass-approvals-and-sandbox, so config keys are the
     // only authoritative path. Without these, sandbox stays workspace-write
     // and our own MCP server hits per-call approval popups.
     expect(cmd).toContain('sandbox_mode="danger-full-access"')
     expect(cmd).toContain('approval_policy="never"')
+    expect(cmd).toContain('mcp_servers.opencorvus.enabled_tools=["fixture_magic_lookup", "memory"]')
     expect(cmd).toContain('mcp_servers.opencorvus.default_tools_approval_mode="approve"')
     expect(cmd.includes("--dangerously-bypass-approvals-and-sandbox")).toBe(false)
     expect(seen[0]?.requestIdleMs).toBe(12_345)
@@ -220,3 +252,12 @@ describe("executor.bootstrap", () => {
     expect(create).not.toHaveBeenCalled()
   })
 })
+
+async function waitForCompleted(executor: ReturnType<typeof ExecutorRegistry.require>, queueTaskID: string) {
+  for (let index = 0; index < 50; index++) {
+    const status = await executor.status(queueTaskID)
+    if (status.status === "completed") return
+    await Bun.sleep(10)
+  }
+  expect(await executor.status(queueTaskID)).toMatchObject({ status: "completed" })
+}
