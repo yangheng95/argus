@@ -1,5 +1,5 @@
 export const DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT = {
-  width: 2560,
+  width: 1440,
   height: 1440,
 } as const
 
