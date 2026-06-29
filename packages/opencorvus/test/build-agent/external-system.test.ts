@@ -38,7 +38,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("On Windows, start Playwright only through Node Package Manager (`npm`)")
     expect(composed.system).toContain("never through `bun`")
     expect(composed.system).toContain("severe connection-timeout bug on Windows")
-    expect(composed.system).toContain("Convert the approved replica target into working code")
+    expect(composed.system).toContain("Build approved desktop replica without source drift")
     expect(composed.system).toContain("For any frontend project")
     expect(composed.system).toContain("each file-changing pass must open the task preview")
     expect(composed.system).toContain("task-scoped browser evidence route")
@@ -46,7 +46,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("parent container, adjacent components, spacing, typography, color")
     expect(composed.system).toContain("responsive framing, and local visual style")
     expect(composed.system).toContain("operator build append")
-    expect(composed.system!.indexOf("Convert the approved replica target")).toBeLessThan(
+    expect(composed.system!.indexOf("Build approved desktop replica")).toBeLessThan(
       composed.system!.indexOf("operator build append"),
     )
     expect(composed.system).not.toContain("skill prompt")

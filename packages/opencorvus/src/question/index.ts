@@ -91,8 +91,10 @@ export namespace Question {
         string,
         {
           info: Request
-          resolve: (answers: Answer[]) => void
-          reject: (e: any) => void
+          waiters: Array<{
+            resolve: (answers: Answer[]) => void
+            reject: (e: any) => void
+          }>
           timer: ReturnType<typeof setTimeout> | undefined
         }
       > = {}
@@ -120,15 +122,28 @@ export namespace Question {
     QUESTION_MIN_TIMEOUT_MS,
   )
 
+  function assertSameQuestionRequest(existing: Request, next: Request) {
+    if (existing.sessionID !== next.sessionID) {
+      throw new Error(`Question request ${next.id} belongs to session ${existing.sessionID}, not ${next.sessionID}`)
+    }
+    if (JSON.stringify(existing.questions) !== JSON.stringify(next.questions)) {
+      throw new Error(`Question request ${next.id} replay changed the question payload`)
+    }
+    if (JSON.stringify(existing.tool ?? null) !== JSON.stringify(next.tool ?? null)) {
+      throw new Error(`Question request ${next.id} replay changed the tool binding`)
+    }
+  }
+
   export async function ask(input: {
     sessionID: string
     questions: Info[]
+    requestID?: string
     tool?: { messageID: string; callID: string }
     /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (5min). */
     timeoutMs?: number
   }): Promise<Answer[]> {
     const s = await state()
-    const id = Identifier.ascending("question")
+    const id = input.requestID ? Identifier.ascending("question", input.requestID) : Identifier.ascending("question")
     const timeout = Math.max(input.timeoutMs ?? QUESTION_AUTO_REJECT_MS, QUESTION_MIN_TIMEOUT_MS)
     log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout })
 
@@ -139,10 +154,15 @@ export namespace Question {
         questions: input.questions,
         tool: input.tool,
       }
+      const existing = s.pending[id]
+      if (existing) {
+        assertSameQuestionRequest(existing.info, info)
+        existing.waiters.push({ resolve, reject })
+        return
+      }
       s.pending[id] = {
         info,
-        resolve,
-        reject,
+        waiters: [{ resolve, reject }],
         timer: undefined,
       }
       Bus.publish(Event.Asked, info)
@@ -152,21 +172,23 @@ export namespace Question {
           log.info("question timeout configured", { id, autoReject: autoRejectOnTimeout })
           if (!autoRejectOnTimeout || !s.pending[id]) return
           s.pending[id].timer = setTimeout(() => {
-            if (s.pending[id]) {
+            const entry = s.pending[id]
+            if (entry) {
               log.info("auto-reject timeout", { id, questions: input.questions.length })
               delete s.pending[id]
               Bus.publish(Event.Rejected, {
                 sessionID: input.sessionID,
                 requestID: id,
               })
-              reject(new RejectedError())
+              for (const waiter of entry.waiters) waiter.reject(new RejectedError())
             }
           }, timeout)
         })
         .catch((error) => {
-          if (!s.pending[id]) return
+          const entry = s.pending[id]
+          if (!entry) return
           delete s.pending[id]
-          reject(error)
+          for (const waiter of entry.waiters) waiter.reject(error)
         })
     })
   }
@@ -189,7 +211,7 @@ export namespace Question {
       answers: input.answers,
     })
 
-    existing.resolve(input.answers)
+    for (const waiter of existing.waiters) waiter.resolve(input.answers)
   }
 
   export async function reject(requestID: string): Promise<void> {
@@ -208,7 +230,7 @@ export namespace Question {
       requestID: existing.info.id,
     })
 
-    existing.reject(new RejectedError())
+    for (const waiter of existing.waiters) waiter.reject(new RejectedError())
   }
 
   export class RejectedError extends Error {
@@ -234,6 +256,7 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
+    requestID?: string
     timeoutMs?: number
   }): Promise<{ output: string; answers: Answer[] | null }> {
     try {

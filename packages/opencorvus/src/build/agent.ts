@@ -1787,11 +1787,7 @@ async function runWithExternalProviderImpl(args: {
   const userAppend = buildAgent?.promptAppend
   const baseSystem = resolveOption<string>(options.system)
   const projectInstructions = await InstructionPrompt.system()
-  const systemWithRepairDiscipline = [
-    baseSystem,
-    renderBuildRepairDiscipline(),
-    ...projectInstructions,
-  ]
+  const systemWithRepairDiscipline = [baseSystem, renderBuildRepairDiscipline(), ...projectInstructions]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join("\n\n")
   const composedSystem = BuildAgent.composeExternalCodingSystem({
@@ -2646,7 +2642,7 @@ function renderBuildTerminalReportContract(): string {
     "When you call `report_build_result`, include:",
     "- `contract_restatement`: a detailed restatement of the effective req/goal contract you handled, including the user request or goal objective, relevant acceptance specs, requirement ids, important source evidence, and scoped non-goals.",
     "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, and whether workload_analysis or Architect re-sizing should be revisited before more implementation.",
-    "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped `browser_preview_compare_regions` artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
+    "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped region comparison artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
     "",
     "Do not shrink the report to the files you happened to touch. Weak follow-up models must be able to recover the real work surface from your terminal report without re-underestimating it.",
   ].join("\n")

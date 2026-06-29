@@ -46,9 +46,7 @@ export namespace AutomaticCompaction {
       return { enabled: false, reason: "runtime_contract_required" }
     }
     if (
-      AgentRuntimeMetadata.ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(
-        input.sessionKind as SessionKind,
-      )
+      AgentRuntimeMetadata.ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(input.sessionKind as SessionKind)
     ) {
       if (input.runtimeContinuationReady === true) {
         return { enabled: true, reason: "orchestrator_wake_ready" }

@@ -2635,7 +2635,7 @@ Output: Creates directory 'foo'"
         "type": "string",
       },
       "query": {
-        "description": "Search terms for skill name, description, or required_tools. Omit to list compatible skills.",
+        "description": "Fuzzy search terms for mounted skill title, description, required_tools, agents, or SKILL.md content. Omit to list compatible skills.",
         "type": "string",
       },
     },
@@ -2697,7 +2697,7 @@ Output: Creates directory 'foo'"
         "type": "string",
       },
       "status": {
-        "description": "progress=more turns needed | need_input=waiting for user | done=complete | failed=error",
+        "description": "progress=more turns needed | need_input=waiting for user | done=session turn complete | failed=session error",
         "enum": [
           "progress",
           "need_input",

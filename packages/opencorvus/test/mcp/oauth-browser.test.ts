@@ -4,10 +4,21 @@ import { EventEmitter } from "events"
 // Track open() calls and control failure behavior
 let openShouldFail = false
 let openCalledWith: string | undefined
+let openWaiters: Array<() => void> = []
+
+function waitForOpenCall(): Promise<void> {
+  if (openCalledWith) return Promise.resolve()
+  return new Promise((resolve) => {
+    openWaiters.push(resolve)
+  })
+}
 
 mock.module("open", () => ({
   default: async (url: string) => {
     openCalledWith = url
+    const waiters = openWaiters
+    openWaiters = []
+    for (const resolve of waiters) resolve()
 
     // Return a mock subprocess that emits an error if openShouldFail is true
     const subprocess = new EventEmitter()
@@ -35,6 +46,18 @@ const transportCalls: Array<{
   url: string
   options: { authProvider?: unknown }
 }> = []
+
+async function expectSignalBeforeAuthSettles(
+  signal: Promise<void>,
+  authPromise: Promise<unknown>,
+  authError: () => unknown,
+): Promise<void> {
+  const outcome = await Promise.race([signal.then(() => "signal" as const), authPromise.then(() => "auth" as const)])
+  if (outcome === "auth") {
+    const error = authError()
+    throw error instanceof Error ? error : new Error(`OAuth authentication settled before the expected signal: ${error}`)
+  }
+}
 
 // Mock the transport constructors
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
@@ -95,6 +118,7 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
 beforeEach(() => {
   openShouldFail = false
   openCalledWith = undefined
+  openWaiters = []
   transportCalls.length = 0
 })
 
@@ -102,8 +126,24 @@ beforeEach(() => {
 const { MCP } = await import("../../src/mcp/index")
 const { Bus } = await import("../../src/bus")
 const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
+const { McpAuth } = await import("../../src/mcp/auth")
+const { OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORT } = await import("../../src/mcp/oauth-provider")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
+
+function currentAuthKey(mcpName: string): string {
+  return McpAuth.scopedKey({ projectID: Instance.project.id, mcpName })
+}
+
+async function completePendingOAuth(mcpName: string): Promise<void> {
+  const state = await McpAuth.getOAuthState(currentAuthKey(mcpName))
+  expect(state).toBeTruthy()
+  const url = new URL(`http://127.0.0.1:${OAUTH_CALLBACK_PORT}${OAUTH_CALLBACK_PATH}`)
+  url.searchParams.set("code", `${mcpName}-code`)
+  url.searchParams.set("state", state!)
+  const response = await fetch(url)
+  expect(response.status).toBe(200)
+}
 
 test("BrowserOpenFailed event is published when open() throws", async () => {
   await using tmp = await tmpdir({
@@ -115,6 +155,7 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
           mcp: {
             "test-oauth-server": {
               type: "remote",
+              transport: "streamable-http",
               url: "https://example.com/mcp",
             },
           },
@@ -129,22 +170,28 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
       openShouldFail = true
 
       const events: Array<{ mcpName: string; url: string }> = []
+      let resolveBrowserOpenFailed!: () => void
+      const browserOpenFailed = new Promise<void>((resolve) => {
+        resolveBrowserOpenFailed = resolve
+      })
       const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, (evt) => {
         events.push(evt.properties)
+        resolveBrowserOpenFailed()
       })
 
-      // Run authenticate with a timeout to avoid waiting forever for the callback
       // Attach a handler immediately so callback shutdown rejections
       // don't show up as unhandled between tests.
-      const authPromise = MCP.authenticate("test-oauth-server").catch(() => undefined)
+      let authError: unknown
+      const authPromise = MCP.authenticate("test-oauth-server").catch((error) => {
+        authError = error
+        return undefined
+      })
 
-      // Config.get() can be slow in tests, so give it plenty of time.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await expectSignalBeforeAuthSettles(browserOpenFailed, authPromise, () => authError)
 
-      // Stop the callback server and cancel any pending auth
-      await McpOAuthCallback.stop()
-
+      await completePendingOAuth("test-oauth-server")
       await authPromise
+      await McpOAuthCallback.stop()
 
       unsubscribe()
 
@@ -166,6 +213,7 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
           mcp: {
             "test-oauth-server-2": {
               type: "remote",
+              transport: "streamable-http",
               url: "https://example.com/mcp",
             },
           },
@@ -184,16 +232,18 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
         events.push(evt.properties)
       })
 
-      // Run authenticate with a timeout to avoid waiting forever for the callback
-      const authPromise = MCP.authenticate("test-oauth-server-2").catch(() => undefined)
+      let authError: unknown
+      const authPromise = MCP.authenticate("test-oauth-server-2").catch((error) => {
+        authError = error
+        return undefined
+      })
 
-      // Config.get() can be slow in tests; also covers the ~500ms open() error-detection window.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await expectSignalBeforeAuthSettles(waitForOpenCall(), authPromise, () => authError)
+      expect(openCalledWith).toBeDefined()
 
-      // Stop the callback server and cancel any pending auth
-      await McpOAuthCallback.stop()
-
+      await completePendingOAuth("test-oauth-server-2")
       await authPromise
+      await McpOAuthCallback.stop()
 
       unsubscribe()
 
@@ -215,6 +265,7 @@ test("open() is called with the authorization URL", async () => {
           mcp: {
             "test-oauth-server-3": {
               type: "remote",
+              transport: "streamable-http",
               url: "https://example.com/mcp",
             },
           },
@@ -229,16 +280,18 @@ test("open() is called with the authorization URL", async () => {
       openShouldFail = false
       openCalledWith = undefined
 
-      // Run authenticate with a timeout to avoid waiting forever for the callback
-      const authPromise = MCP.authenticate("test-oauth-server-3").catch(() => undefined)
+      let authError: unknown
+      const authPromise = MCP.authenticate("test-oauth-server-3").catch((error) => {
+        authError = error
+        return undefined
+      })
 
-      // Config.get() can be slow in tests; also covers the ~500ms open() error-detection window.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await expectSignalBeforeAuthSettles(waitForOpenCall(), authPromise, () => authError)
+      expect(openCalledWith).toBeDefined()
 
-      // Stop the callback server and cancel any pending auth
-      await McpOAuthCallback.stop()
-
+      await completePendingOAuth("test-oauth-server-3")
       await authPromise
+      await McpOAuthCallback.stop()
 
       // Verify open was called with a URL
       expect(openCalledWith).toBeDefined()

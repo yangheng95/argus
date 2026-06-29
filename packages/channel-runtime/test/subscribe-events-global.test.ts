@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 // Regression for the post-refactor /event scoping bug: ChannelRuntime
 // historically called `client.event.subscribe()` (project-scoped, requires
@@ -11,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 
 let globalEventCalls = 0
 let projectSubscribeCalls = 0
+let runtimeDirectory: string | undefined
 
 async function* eventStream(): AsyncGenerator<{
   directory: string
@@ -69,8 +73,18 @@ describe("ChannelRuntime.subscribeEvents routes through /global/event", () => {
     projectSubscribeCalls = 0
   })
 
+  afterEach(async () => {
+    if (!runtimeDirectory) return
+    await rm(runtimeDirectory, { recursive: true, force: true })
+    runtimeDirectory = undefined
+  })
+
   test("uses cross-instance global.event(), never project-scoped event.subscribe()", async () => {
-    const rt = new ChannelRuntime() as unknown as { start: () => Promise<void>; stop: () => Promise<void> }
+    runtimeDirectory = await mkdtemp(join(tmpdir(), "opencorvus-channel-global-event-"))
+    const rt = new ChannelRuntime({ directory: runtimeDirectory }) as unknown as {
+      start: () => Promise<void>
+      stop: () => Promise<void>
+    }
     await rt.start()
     // Yield once so the subscribe loop runs at least one iteration.
     await new Promise((r) => setTimeout(r, 20))

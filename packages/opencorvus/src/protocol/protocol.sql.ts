@@ -31,6 +31,7 @@ export const ProtocolEventTable = sqliteTable(
     correlation_id: text(),
     reply_to: text(),
     seq: integer().notNull(),
+    order_key: text().notNull(),
     deadline_ms: integer(),
     emitted_at: integer().notNull(),
     payload: text({ mode: "json" }).$type<ProtocolPayload>(),

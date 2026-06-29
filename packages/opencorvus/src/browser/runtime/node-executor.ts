@@ -62,7 +62,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   script: string
   payload: unknown
   payloadEnvName: string
-  hardTimeoutMs: number
+  inactivityTimeoutMs: number
   signal?: AbortSignal
   label: string
 }): Promise<BrowserNodeSidecarRunResult<TResult>> {
@@ -89,13 +89,16 @@ export async function runBrowserNodeSidecar<TResult>(input: {
 
   let stdout = ""
   let stderr = ""
+  let lastActivity = "start"
   child.stdout.setEncoding("utf8")
   child.stderr.setEncoding("utf8")
   child.stdout.on("data", (chunk) => {
     stdout += chunk
+    resetInactivityTimer("stdout")
   })
   child.stderr.on("data", (chunk) => {
     stderr += chunk
+    resetInactivityTimer("stderr")
   })
 
   let aborted = false
@@ -105,21 +108,32 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   }
   input.signal?.addEventListener("abort", abortHandler, { once: true })
   let timeoutError: BrowserNodeSidecarError | undefined
-  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    const timer = setTimeout(() => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const clearInactivityTimer = () => {
+    if (!timer) return
+    clearTimeout(timer)
+    timer = undefined
+  }
+  const resetInactivityTimer = (source: string) => {
+    lastActivity = source
+    clearInactivityTimer()
+    timer = setTimeout(() => {
       timeoutError = new BrowserNodeSidecarError(
         "timeout",
-        `${input.label} timed out after ${input.hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`,
-        { stderr },
+        `${input.label} inactive for ${input.inactivityTimeoutMs}ms after ${lastActivity}. stderr=${stderr.slice(-2000)}`,
+        { stderr, stdout },
       )
       void terminateChildTree(child)
-    }, input.hardTimeoutMs)
+    }, input.inactivityTimeoutMs)
+  }
+  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    resetInactivityTimer("start")
     child.once("error", (error) => {
-      clearTimeout(timer)
+      clearInactivityTimer()
       reject(error)
     })
     child.once("exit", (code, signal) => {
-      clearTimeout(timer)
+      clearInactivityTimer()
       resolve({ code, signal })
     })
   })
@@ -130,6 +144,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
     }))
     .finally(() => {
       input.signal?.removeEventListener("abort", abortHandler)
+      clearInactivityTimer()
     })
 
   if ("error" in exit) {

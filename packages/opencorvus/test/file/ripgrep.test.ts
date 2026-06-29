@@ -61,4 +61,34 @@ describe("file.ripgrep", () => {
     expect(matches[0]?.lines.text).toBe("needle; echo pwned > injected.txt\n")
     await expect(fs.stat(path.join(tmp.path, "injected.txt"))).rejects.toThrow()
   })
+
+  test("returns empty matches only for ripgrep no-match exit code", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "source.txt"), "haystack\n")
+      },
+    })
+
+    const matches = await Ripgrep.search({
+      cwd: tmp.path,
+      pattern: "missing-needle",
+    })
+
+    expect(matches).toEqual([])
+  })
+
+  test("throws on ripgrep search failures instead of returning empty matches", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "source.txt"), "haystack\n")
+      },
+    })
+
+    await expect(
+      Ripgrep.search({
+        cwd: tmp.path,
+        pattern: "[",
+      }),
+    ).rejects.toThrow(/ripgrep search failed with code/)
+  })
 })

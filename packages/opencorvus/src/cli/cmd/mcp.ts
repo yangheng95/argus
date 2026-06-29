@@ -40,6 +40,10 @@ function getAuthStatusText(status: MCP.AuthStatus): string {
   }
 }
 
+function currentMcpAuthKey(mcpName: string): string {
+  return McpAuth.scopedKey({ projectID: Instance.project.id, mcpName })
+}
+
 type McpEntry = NonNullable<Config.Info["mcp"]>[string]
 
 type McpConfigured = Config.Mcp
@@ -392,8 +396,13 @@ export const McpLogoutCommand = cmd({
         UI.empty()
         prompts.intro("MCP OAuth Logout")
 
+        const config = await Config.get()
+        const mcpServers = config.mcp ?? {}
         const credentials = await McpAuth.all()
-        const serverNames = Object.keys(credentials)
+        const serverNames = Object.entries(mcpServers)
+          .filter((entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false)
+          .map(([name]) => name)
+          .filter((name) => !!credentials[currentMcpAuthKey(name)])
 
         if (serverNames.length === 0) {
           prompts.log.warn("No MCP OAuth credentials stored")
@@ -406,7 +415,7 @@ export const McpLogoutCommand = cmd({
           const selected = await prompts.select({
             message: "Select MCP server to logout",
             options: serverNames.map((name) => {
-              const entry = credentials[name]
+              const entry = credentials[currentMcpAuthKey(name)]
               const hasTokens = !!entry.tokens
               const hasClient = !!entry.clientInfo
               let hint = ""
@@ -424,7 +433,7 @@ export const McpLogoutCommand = cmd({
           serverName = selected
         }
 
-        if (!credentials[serverName]) {
+        if (!credentials[currentMcpAuthKey(serverName)]) {
           prompts.log.error(`No credentials found for: ${serverName}`)
           prompts.outro("Done")
           return
@@ -704,7 +713,7 @@ export const McpDebugCommand = cmd({
         const authStatus = await MCP.getAuthStatus(serverName)
         prompts.log.info(`Auth status: ${getAuthStatusIcon(authStatus)} ${getAuthStatusText(authStatus)}`)
 
-        const entry = await McpAuth.get(serverName)
+        const entry = await McpAuth.get(currentMcpAuthKey(serverName))
         if (entry?.tokens) {
           prompts.log.info(`  Access token: ${entry.tokens.accessToken.substring(0, 20)}...`)
           if (entry.tokens.expiresAt) {
@@ -762,6 +771,7 @@ export const McpDebugCommand = cmd({
             const oauthConfig = typeof serverConfig.oauth === "object" ? serverConfig.oauth : undefined
             const authProvider = new McpOAuthProvider(
               serverName,
+              currentMcpAuthKey(serverName),
               serverConfig.url,
               {
                 clientId: oauthConfig?.clientId,

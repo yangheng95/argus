@@ -264,12 +264,22 @@ describe("BusEvent notification registry", () => {
     ).toEqual({ tier: 3 })
     expect(
       BusEvent.resolveNotify(SessionEvents.Error.type, {
+        sessionID: "ses_notify_actual",
+        orderKey: "v1:0000000000000001:0000000000000050:0000000000000000:session:ses_notify_actual",
         error: {
           name: "UnknownError",
           data: { message: "session failed" },
         },
       }),
     ).toEqual({ tier: 1 })
+    expect(() =>
+      BusEvent.resolveNotify(SessionEvents.Error.type, {
+        error: {
+          name: "UnknownError",
+          data: { message: "legacy global error" },
+        },
+      }),
+    ).toThrow()
     expect(() => BusEvent.resolveNotify(SessionEvents.Error.type, {})).toThrow()
     expect(BusEvent.resolveNotify(Workspace.Event.Failed.type, { message: "workspace failed" })).toBeUndefined()
   })

@@ -100,7 +100,8 @@ describe("orchestrator no-decision stop classifier", () => {
       taskTerminal: false,
       schedulerParkAllowed: true,
       finish: "stop",
-      finalText: "No dispatchable or failed goals remain; live build workers are still running, so I am parking this wake.",
+      finalText:
+        "No dispatchable or failed goals remain; live build workers are still running, so I am parking this wake.",
       providerVisiblePartCount: 1,
       wakeTools: [],
     })

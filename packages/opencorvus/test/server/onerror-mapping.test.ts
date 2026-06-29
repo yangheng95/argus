@@ -214,6 +214,23 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
     )
   })
 
+  test("ExternalChildTaskLineageError maps to 400", async () => {
+    const ExternalChildTaskLineageError = NamedError.create(
+      "ExternalChildTaskLineageError",
+      z.object({ message: z.string(), source: z.string().optional() }),
+    )
+    await expectMapping(
+      () => {
+        throw new ExternalChildTaskLineageError({
+          message: "metadata.parent_task_id is scheduler-owned",
+          source: "panel",
+        })
+      },
+      400,
+      "ExternalChildTaskLineageError",
+    )
+  })
+
   test("TaskGlobalProjectBindingError maps to 409", async () => {
     const TaskGlobalProjectBindingError = NamedError.create(
       "TaskGlobalProjectBindingError",

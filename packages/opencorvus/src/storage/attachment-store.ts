@@ -99,6 +99,40 @@ export namespace AttachmentStore {
     source?: string
   }
 
+  function metadataPath(abs: string): string {
+    return `${abs}.metadata.json`
+  }
+
+  function parseReferenceMetadata(value: unknown, input: { projectID: string; name: string; abs: string }): Reference {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`AttachmentStore.readReference: malformed metadata for ${input.projectID}/${input.name}`)
+    }
+    const record = value as Record<string, unknown>
+    const sha = typeof record.sha === "string" ? record.sha : ""
+    const url = typeof record.url === "string" ? record.url : ""
+    const mime = typeof record.mime === "string" ? record.mime : ""
+    const size = typeof record.size === "number" ? record.size : Number.NaN
+    const filename = typeof record.filename === "string" ? record.filename : undefined
+    const located = nameFromUrl(url)
+    if (
+      sha.length !== 64 ||
+      !mime ||
+      !Number.isFinite(size) ||
+      size < 0 ||
+      located?.projectID !== input.projectID ||
+      located.name !== input.name
+    ) {
+      throw new Error(`AttachmentStore.readReference: metadata does not match ${input.projectID}/${input.name}`)
+    }
+    return {
+      sha,
+      url,
+      mime,
+      size,
+      ...(filename ? { filename } : {}),
+    }
+  }
+
   /**
    * Persist an attachment under `<project.worktree>/.opencorvus/r/b/a/<sha>.<ext>`.
    * Content-addressed: identical payloads deduplicate to the same file. Returns
@@ -125,13 +159,15 @@ export namespace AttachmentStore {
     if (!existing) {
       await fs.writeFile(abs, data)
     }
-    return {
+    const reference = {
       sha,
       url: `${ROUTE_PREFIX}/${projectID}/${name}`,
       mime,
       size: data.byteLength,
       filename,
     }
+    await fs.writeFile(metadataPath(abs), JSON.stringify(reference, null, 2))
+    return reference
   }
 
   /**
@@ -168,6 +204,15 @@ export namespace AttachmentStore {
     const abs = resolveAbsolute(projectID, name)
     if (!abs) throw new Error(`attachment ${projectID}/${name} is not resolvable`)
     return await fs.readFile(abs)
+  }
+
+  /** Read the canonical metadata sidecar for a stored attachment reference. */
+  export async function readReference(projectID: string, name: string): Promise<Reference> {
+    const abs = resolveAbsolute(projectID, name)
+    if (!abs) throw new Error(`attachment ${projectID}/${name} is not resolvable`)
+    const text = await fs.readFile(metadataPath(abs), "utf8")
+    const parsed = JSON.parse(text) as unknown
+    return parseReferenceMetadata(parsed, { projectID, name, abs })
   }
 
   export interface DerivedAttachment {
@@ -726,7 +771,7 @@ export namespace AttachmentStore {
     })
     const out: { sha: string; name: string; abs: string; size: number; mtimeMs: number }[] = []
     for (const name of entries) {
-      const m = name.match(/^([0-9a-f]{64})\./i)
+      const m = name.match(/^([0-9a-f]{64})\.[0-9a-z]+$/i)
       if (!m) continue
       const abs = path.join(dir, name)
       const stat = await fs.stat(abs).catch(() => null)
@@ -848,6 +893,10 @@ export namespace AttachmentStore {
         // EBUSY / EPERM on Windows when another process holds the handle —
         // skip this round, next sweep will retry.
         if (err.code === "EBUSY" || err.code === "EPERM" || err.code === "ENOENT") return
+        throw err
+      })
+      await fs.unlink(metadataPath(f.abs)).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return
         throw err
       })
       deleted++

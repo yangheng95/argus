@@ -165,6 +165,154 @@ describe("document health audit regressions", () => {
     expect(generateWorkflow).toContain("token: ${{ github.token }}")
   })
 
+  test("beta release script does not use broad destructive git cleanup", () => {
+    const beta = read("script/beta.ts")
+
+    expect(beta).toContain("ensureCleanWorktree")
+    expect(beta).toContain("git status --porcelain=v1")
+    expect(beta).toContain("git merge --abort")
+    expect(beta).toContain("+refs/heads/dev:refs/remotes/origin/dev")
+    expect(beta).not.toContain("git fetch origin refs/heads/dev:refs/remotes/origin/dev")
+    expect(beta).toContain("git ls-remote --heads origin beta")
+    expect(beta).toContain("+refs/heads/beta:refs/remotes/origin/beta")
+    expect(beta).toContain("Remote beta branch does not exist; first publish will create it")
+    expect(beta).toContain("--force-with-lease=refs/heads/beta:")
+    expect(beta).toContain("+refs/pull/${pr.number}/head:refs/heads/pr/${pr.number}")
+    expect(beta).toContain('console.log("  Failed to stage changes")\n      await abortMerge()')
+    expect(beta).toContain("console.log(`  Failed to commit: ${err}`)\n      await abortMerge()")
+    expect(beta).not.toContain("git checkout -- .")
+    expect(beta).not.toContain("git clean -fd")
+    expect(beta).not.toContain("git fetch origin dev")
+    expect(beta).not.toContain("git fetch origin beta")
+  })
+
+  test("release scripts use lease-based force pushes", () => {
+    const files = ["script/beta.ts", "script/publish.ts", ".github/workflows/build.yml"]
+
+    for (const file of files) {
+      const text = read(file)
+      expect(text).not.toMatch(/git push[^\n]*--force(?:\s|$)/)
+    }
+
+    expect(read("script/beta.ts")).toContain("--force-with-lease=refs/heads/beta:")
+    expect(read(".github/workflows/build.yml")).toContain("--force-with-lease=refs/heads/release:")
+    expect(read(".github/workflows/build.yml")).toContain("refs/heads/release:refs/remotes/origin/release")
+    expect(read(".github/workflows/build.yml")).not.toContain("git fetch origin release")
+  })
+
+  test("release CLI publish surfaces exhausted AUR update retries", () => {
+    const source = read("packages/opencorvus/script/publish.ts")
+
+    expect(source).toContain("const maxAurUpdateAttempts = 30")
+    expect(source).toContain("for (let i = 0; i < maxAurUpdateAttempts; i++)")
+    expect(source).toContain("if (i === maxAurUpdateAttempts - 1)")
+    expect(source).toContain("AUR update failed after ${maxAurUpdateAttempts} attempts for ${pkg}")
+  })
+
+  test("release workflow does not hide creation, asset, or no-op branch failures", () => {
+    const workflow = read(".github/workflows/build.yml")
+
+    expect(workflow).toContain('gh release view "v${VERSION}"')
+    expect(workflow).toContain('gh release create "v${VERSION}"')
+    expect(workflow).not.toContain('--repo "$GITHUB_REPOSITORY" || true')
+    expect(workflow).toContain('UPLOAD_DIR="$(mktemp -d)"')
+    expect(workflow).toContain(
+      'bun ./script/stage-release-upload-assets.ts --source /tmp/release-assets --out "$UPLOAD_DIR" --version "$VERSION"',
+    )
+    expect(read("script/stage-release-upload-assets.ts")).toContain("Duplicate release asset name after staging")
+    expect(read("script/stage-release-upload-assets.ts")).toContain("cliArchiveName")
+    expect(read("script/stage-release-upload-assets.ts")).toContain("overlayBundlePatterns")
+    expect(workflow).not.toContain("find /tmp/release-assets -type f -print0")
+    expect(workflow).not.toContain('ASSET="${REL//\\//__}"')
+    expect(workflow).toContain("if git diff --cached --quiet; then")
+    expect(workflow).toContain("release branch already up to date for v${VERSION}")
+    expect(workflow).toContain("No overlay artifacts found under /tmp/overlay")
+    expect(workflow).toContain("Missing release branch document")
+    expect(workflow).toContain("Missing OpenCorvus binary in release branch platform directory")
+    expect(workflow).toContain("Missing ripgrep binary in release branch platform directory")
+    expect(workflow).not.toContain("git rm -rf . 2>/dev/null || true")
+    expect(workflow).not.toContain('cp "$GITHUB_WORKSPACE/README.md" . 2>/dev/null')
+    expect(workflow).not.toContain('cp "$GITHUB_WORKSPACE/RELEASE.md" . 2>/dev/null')
+    expect(workflow).not.toContain('chmod +x "$platform"/opencorvus* 2>/dev/null || true')
+    expect(workflow).not.toContain('chmod +x "$platform"/bin/rg* 2>/dev/null || true')
+    expect(workflow).not.toContain("cp -r /tmp/overlay/overlay-* overlay/ 2>/dev/null || true")
+  })
+
+  test("generate workflow fails on generated workflow drift instead of hiding it", () => {
+    const workflow = read(".github/workflows/generate.yml")
+    const generate = read("script/generate.ts")
+
+    const generatedArtifacts = read("script/generated-artifacts.ts")
+
+    expect(generate).toContain("GENERATED_ARTIFACT_PATHS")
+    expect(generatedArtifacts).toContain("packages/sdk/openapi.json")
+    expect(generatedArtifacts).toContain("packages/web/src/content/docs/zh-cn/reference/api.mdx")
+    expect(generate).not.toContain("bun ./script/format.ts")
+    expect(generate).not.toContain("--write .")
+    expect(workflow).toContain("bun ./script/generated-artifacts.ts --print")
+    expect(workflow).toContain("bun ./script/generated-artifacts.ts --check-worktree")
+    expect(workflow).not.toContain("generated_path()")
+    expect(generatedArtifacts).toContain("Generate changed non-generated file")
+    expect(workflow).toContain('git add -A -- "${GENERATED_PATHS[@]}"')
+    expect(workflow).not.toContain("git add -A\n")
+    expect(workflow).not.toContain("git diff --cached --quiet -- .github/workflows/")
+    expect(workflow).not.toContain("git restore --staged .github/workflows")
+
+    const typecheck = read(".github/workflows/typecheck.yml")
+    expect(typecheck).toContain("Verify generated API docs")
+    expect(typecheck).toContain("bun run ./packages/opencorvus/script/docs/render-api-md.ts --check")
+  })
+
+  test("new architecture docs do not retain stale gateway session kind or package paths", () => {
+    const files = ["specs/new-arch/README.md", "specs/new-arch/02-data.md", "specs/new-arch/03-control.md"]
+
+    expectFilesNotToContain(files, ["kind='gateway'", "src/gateway", "`assistant` · `gateway`"])
+    expect(read("specs/new-arch/02-data.md")).toContain("共 21 种")
+    expect(read("specs/new-arch/02-data.md")).toContain("gateway` 不再是 SessionKind")
+  })
+
+  test("new architecture data doc does not duplicate engine schema inventories", () => {
+    const engineSql = read("packages/opencorvus/src/engine/engine.sql.ts")
+    const dataDoc = read("specs/new-arch/02-data.md")
+    const engineTables = Array.from(engineSql.matchAll(/export const (Engine[A-Za-z0-9]+Table) = sqliteTable/g)).map(
+      (match) => match[1],
+    )
+    const artifactKinds = Array.from(
+      engineSql
+        .slice(
+          engineSql.indexOf("export type EngineArtifactKind ="),
+          engineSql.indexOf("export type EngineAcceptanceStatus"),
+        )
+        .matchAll(/"([^"]+)"/g),
+    ).map((match) => match[1])
+
+    expect(engineTables.length).toBeGreaterThan(0)
+    expect(artifactKinds.length).toBeGreaterThan(0)
+    expect(dataDoc).toContain("packages/opencorvus/src/engine/engine.sql.ts")
+    expect(dataDoc).toContain("唯一真源")
+    expect(dataDoc).not.toContain("EngineExecutorSessionTable")
+    expect(dataDoc).not.toMatch(/Engine[A-Za-z0-9]+Table、Engine[A-Za-z0-9]+Table/)
+    expect(dataDoc).not.toMatch(/sqliteTable.*共 \d+ 个/)
+    expect(dataDoc).not.toContain("完整 `EngineArtifactKind` 取值")
+    expect(dataDoc).not.toContain("prosecutor_attempt")
+  })
+
+  test("new architecture control doc does not duplicate capability or orchestrator route inventories", () => {
+    const capabilitySource = read("packages/opencorvus/src/panel/capability.ts")
+    const orchestratorRoutes = read("packages/opencorvus/src/server/routes/orchestrator.ts")
+    const controlDoc = read("specs/new-arch/03-control.md")
+    const actions = Array.from(capabilitySource.matchAll(/action: "([^"]+)"/g)).map((match) => match[1])
+    const routeCount = (orchestratorRoutes.match(/describeRoute\(/g) ?? []).length
+
+    expect(actions).toContain("query_task")
+    expect(routeCount).toBeGreaterThan(0)
+    expect(controlDoc).toContain("PanelCapabilityRegistry")
+    expect(controlDoc).toContain("源码为唯一真源")
+    expect(controlDoc).not.toMatch(/共 \d+ 个 action/)
+    expect(controlDoc).not.toMatch(/共 \d+ 个 describeRoute/)
+    expect(controlDoc).not.toContain("| 查询视图")
+  })
+
   test("public GitHub Action examples match the generated workflow contract", () => {
     const githubActionDocs = [
       "packages/web/src/content/docs/operations/github-action.mdx",
@@ -259,6 +407,16 @@ describe("document health audit regressions", () => {
 
     expect(parsedCommands).toContain("packages/web/README.md: bun run --cwd packages/web check")
     expect(missingScripts).toEqual([])
+  })
+
+  test("push automation runs hooks and web API docs name the live route source", () => {
+    expect(read(".github/workflows/generate.yml")).not.toContain("--no-verify")
+    expect(read("script/publish.ts")).not.toContain("--no-verify")
+    expect(read("script/beta.ts")).not.toContain("--no-verify")
+    expect(read("packages/web/README.md")).toContain(
+      "API reference pages are generated from live OpenAPI route metadata by `packages/opencorvus/script/docs/render-api-md.ts`.",
+    )
+    expect(read("packages/web/README.md")).not.toContain("generated from `packages/sdk/openapi.json`")
   })
 
   test("public website docs do not pin source references to brittle line numbers", () => {
@@ -563,7 +721,25 @@ describe("document health audit regressions", () => {
     expect(read("packages/opencorvus/script/replay-compaction-errors-validator.ts")).toContain(
       'requiredEnv("COMPACTION_MESSAGE_ID")',
     )
-    expect(read("packages/opencorvus/script/benchmark/review-deliverable.ts")).toContain("function requiredArg")
+    const reviewDeliverable = read("packages/opencorvus/script/benchmark/review-deliverable.ts")
+    expect(reviewDeliverable).toContain("function requiredArg")
+    expect(reviewDeliverable).toContain('page.on("response"')
+    expect(reviewDeliverable).toContain('page.on("requestfailed"')
+    expect(reviewDeliverable).toContain("runtime/network error(s)")
+    expect(reviewDeliverable).toContain("throw new Error(message)")
+  })
+
+  test("mission E2E script fails smoke verification instead of logging success", () => {
+    const source = read("packages/opencorvus/script/mission-e2e.ts")
+
+    expect(source).toContain('throw new Error("Mission E2E inactivity timeout")')
+    expect(source).toContain("MISSION_E2E_CANCEL_SETTLE_TIMEOUT_MS")
+    expect(source).toContain("Mission E2E loop did not settle after inactivity cancellation")
+    expect(source).toContain("if (loopErr) throw loopErr")
+    expect(source).toContain("Mission E2E verification failed")
+    expect(source).toContain('await fs.readFile(path.join(stateDir, f), "utf8")')
+    expect(source).not.toContain("LOOP ERROR:")
+    expect(source).not.toContain("<MISSING:")
   })
 
   test("maintenance sync and cache-probe scripts do not hide machine defaults", () => {
@@ -609,11 +785,13 @@ describe("document health audit regressions", () => {
     expect(
       fs.existsSync(path.join(repoRoot, "packages/opencorvus/src/web-clone/source-skeleton-consumption-audit.ts")),
     ).toBe(false)
+    expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/tool/web-clone-source-audit.test.ts"))).toBe(
+      false,
+    )
     expect(
-      fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/tool/web-clone-source-audit.test.ts")),
-    ).toBe(false)
-    expect(
-      fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/web-clone/source-skeleton-consumption-audit.test.ts")),
+      fs.existsSync(
+        path.join(repoRoot, "packages/opencorvus/test/web-clone/source-skeleton-consumption-audit.test.ts"),
+      ),
     ).toBe(false)
     const mcpSource = read("packages/opencorvus/src/mcp/index.ts")
     expect(mcpSource).toContain("function createRemoteTransport")

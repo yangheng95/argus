@@ -1,4 +1,3 @@
-import fs from "node:fs/promises"
 import z from "zod"
 import { Output } from "ai"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -30,7 +29,9 @@ import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
+import { decodeRawBase64Payload } from "@/session/text-mime"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -82,7 +83,13 @@ import {
 } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
 import { EngineRuntime } from "@/engine/runtime"
-import { hooks, updateRun, updateTask, upsertTaskCriteria as upsertTaskCriteriaImpl } from "@/engine/state"
+import {
+  hooks,
+  terminalTask,
+  updateRun,
+  updateTask,
+  upsertTaskCriteria as upsertTaskCriteriaImpl,
+} from "@/engine/state"
 import {
   deriveTaskStatus,
   isTaskActive,
@@ -100,13 +107,20 @@ import {
 } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { requestTaskAgentLifecycleCancellation } from "@/engine/task-agent-lifecycle"
-import { cancelPendingAgentCoordinationRequestsForTask } from "@/engine/agent-coordination"
+import {
+  cancelPendingAgentCoordinationRequestsForTask,
+  listPendingAgentCoordinationSessionControlRequests,
+} from "@/engine/agent-coordination"
 import { abortGoalRunExecution } from "@/engine/execution-abort"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
+import { DecisionLogBundle } from "@/decision-log/bundle"
+import { EngineEventLog } from "@/engine/event-log"
 import { Orchestrator } from "@/orchestrator/agent"
 import {
   DIRECT_REPLY_AGENT_KINDS,
+  AgentSessionAttachmentReferenceError,
+  AgentSessionPendingCoordinationError,
   BuildSessionDirectReplyError,
   InvalidReplyTargetKindError,
   ReplyTargetEnvelopeMissingError,
@@ -122,6 +136,7 @@ import {
   findLatestAcceptanceForRun,
   findActivePlanForTask,
   findActiveRunForTask,
+  findLatestRunForTask,
   findEvaluationByRun,
   findEvaluations,
   findInteractionByExternal,
@@ -171,6 +186,7 @@ import { Identifier } from "@/id/id"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { SessionWake } from "@/session/wake"
 import { withTaskCreationOwnerLock } from "@/engine/task-creation-owner"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 
 const log = Log.create({ service: "assistant" })
 
@@ -183,6 +199,31 @@ export const TaskEmptyMessageError = NamedError.create(
     taskID: z.string(),
   }),
 )
+
+export const ExternalChildTaskLineageError = NamedError.create(
+  "ExternalChildTaskLineageError",
+  z.object({
+    message: z.string(),
+    source: z.string().optional(),
+  }),
+)
+
+const SCHEDULER_CHILD_TASK_SOURCE = "orchestrator:propose_task"
+
+function hasCallerSuppliedChildTaskLineage(input: z.infer<typeof CreateTaskInput>) {
+  const metadata = input.metadata
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false
+  return Object.prototype.hasOwnProperty.call(metadata, "parent_task_id")
+}
+
+function assertNoCallerSuppliedChildTaskLineage(input: z.infer<typeof CreateTaskInput>) {
+  if (!hasCallerSuppliedChildTaskLineage(input)) return
+  throw new ExternalChildTaskLineageError({
+    message:
+      "metadata.parent_task_id is owned by the orchestrator scheduler. Other task creation tools must report the concrete problem instead of creating a child task directly.",
+    source: input.source,
+  })
+}
 
 function assertTaskProjectIsConcrete(task: TaskRow) {
   if (task.project_id !== "global") return
@@ -251,6 +292,37 @@ async function awaitTaskQueuePromptsIdle(input: {
       cause,
     })
   }
+}
+
+async function recordTaskPhysicalDeleteBreadcrumb(
+  task: TaskRow,
+  origin: "EngineService.deleteTask" | "EngineService.deleteSession.deleteTasks",
+  detail: Record<string, unknown> = {},
+) {
+  const status = deriveTaskStatus(task)
+  const value = {
+    taskID: task.id,
+    projectID: task.project_id,
+    sessionID: task.session_id,
+    origin,
+    statusBeforeDelete: status,
+    ...detail,
+  }
+  createDecisionLog(task.id).append({
+    phase: "delete",
+    key: "task_physical_delete_breadcrumb",
+    value: JSON.stringify(value),
+    reason:
+      "Task row is about to be physically deleted; this breadcrumb distinguishes explicit deletion from cancellation.",
+  })
+  EngineEventLog.appendPhysicalDeleteBreadcrumb(task.id, {
+    origin,
+    projectID: task.project_id,
+    sessionID: task.session_id ?? undefined,
+    status,
+    detail,
+  })
+  await DecisionLogBundle.write(taskPrimaryProjectRoot(task.id), task.id)
 }
 
 function requireGoalInCurrentProject(goalID: string): GoalRow {
@@ -371,6 +443,7 @@ export interface DeleteTaskOptions extends CancelTaskOptions {
 }
 
 async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
+  const task = requireTaskInCurrentProject(taskID)
   const owningTask = taskIDForSession(sessionID)
   if (owningTask !== taskID) {
     throw new NotFoundError({ message: `Session ${sessionID} does not belong to task ${taskID}` })
@@ -386,7 +459,7 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
       kind,
     })
   }
-  const session = await Session.get(sessionID)
+  const session = await Session.getInProject({ sessionID, projectID: task.project_id })
   const latest = await latestSessionPromptEnvelope(sessionID)
   if (!latest) {
     throw new ReplyTargetEnvelopeMissingError({
@@ -469,6 +542,22 @@ async function appendDirectAgentSessionReply(input: {
   const text = input.message.trim()
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
+  const pendingCoordination = listPendingAgentCoordinationSessionControlRequests({
+    taskID: input.taskID,
+    sessionID: target.session.id,
+  })
+  if (pendingCoordination.length > 0) {
+    const requestIDs = pendingCoordination.map((request) => request.payload.request_id)
+    throw new AgentSessionPendingCoordinationError({
+      message:
+        `replyAgentSession: session ${target.session.id} has pending A2A (Agent-to-Agent) coordination request(s) ` +
+        `${requestIDs.join(", ")}. Answer through respond_agent_coordination so direct guidance is bound to visible ` +
+        `request/response/action artifacts.`,
+      taskID: input.taskID,
+      sessionID: target.session.id,
+      requestIDs,
+    })
+  }
   const targetPrompt = SessionAgentIdentity.applyToPrompt(target.session.kind, target.prompt)
   // Both halves of the build check are load-bearing:
   //
@@ -519,6 +608,54 @@ async function appendDirectAgentSessionReply(input: {
       SessionPrompt.agentKindRequiresRuntimeContract(targetPrompt.agent) ||
       SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind),
   })
+  const attachmentRefs: AttachmentStore.Reference[] = []
+  for (const attachment of input.attachments ?? []) {
+    const located = AttachmentStore.nameFromUrl(attachment.url)
+    if (!located) {
+      throw new AgentSessionAttachmentReferenceError({
+        message: `Direct reply attachment URL must be a stored attachment reference: ${attachment.url}`,
+        taskID: input.taskID,
+        sessionID: target.session.id,
+        url: attachment.url,
+        reason: "invalid_url",
+      })
+    }
+    if (located.projectID !== target.session.projectID) {
+      throw new AgentSessionAttachmentReferenceError({
+        message: `Direct reply attachment belongs to project ${located.projectID}, expected ${target.session.projectID}`,
+        taskID: input.taskID,
+        sessionID: target.session.id,
+        url: attachment.url,
+        reason: "wrong_project",
+      })
+    }
+    let reference: AttachmentStore.Reference
+    let bytes: Buffer
+    try {
+      reference = await AttachmentStore.readReference(located.projectID, located.name)
+      bytes = await AttachmentStore.read(located.projectID, located.name)
+    } catch {
+      throw new AgentSessionAttachmentReferenceError({
+        message: `Direct reply attachment is not readable from AttachmentStore: ${attachment.url}`,
+        taskID: input.taskID,
+        sessionID: target.session.id,
+        url: attachment.url,
+        reason: "missing_attachment",
+      })
+    }
+    if (attachment.mime !== reference.mime || (attachment.filename ?? "") !== (reference.filename ?? "")) {
+      throw new AgentSessionAttachmentReferenceError({
+        message: `Direct reply attachment metadata must match stored AttachmentStore metadata: ${attachment.url}`,
+        taskID: input.taskID,
+        sessionID: target.session.id,
+        url: attachment.url,
+        reason: "metadata_mismatch",
+      })
+    }
+    attachmentRefs.push(
+      await AttachmentStore.write(target.session.projectID, bytes, reference.mime, reference.filename),
+    )
+  }
   const messageID = Identifier.ascending("message")
   // R5.1 item 6: the agent is the session's stable conversation role from the
   // envelope, but the MODEL is resolved fresh from the single resolver keyed
@@ -563,7 +700,7 @@ async function appendDirectAgentSessionReply(input: {
       },
     },
   ]
-  for (const attachment of input.attachments ?? []) {
+  for (const attachment of attachmentRefs) {
     parts.push({
       id: Identifier.ascending("part"),
       messageID,
@@ -581,6 +718,11 @@ async function appendDirectAgentSessionReply(input: {
   })
   void SessionContext.provide(target.session, () => SessionPrompt.loop({ sessionID: target.session.id })).catch(
     (error) => {
+      SessionStatus.set(target.session.id, {
+        type: "terminal",
+        reason: "error",
+        error: error instanceof Error ? error.message : String(error),
+      })
       log.error("direct agent session reply loop failed", {
         sessionID: target.session.id,
         taskID: input.taskID,
@@ -593,29 +735,6 @@ async function appendDirectAgentSessionReply(input: {
     session_id: target.session.id,
     message_id: messageID,
   }
-}
-
-function directReplyRouteToTaskWake(error: unknown): boolean {
-  const name = error instanceof Error ? error.name : ""
-  return new Set([
-    "InvalidReplyTargetKindError",
-    "BuildSessionDirectReplyError",
-    "ReplyTargetEnvelopeMissingError",
-    "SessionRuntimeContractMissingError",
-  ]).has(name)
-}
-
-function directReplyAttachmentSummary(input: {
-  attachments?: Array<{ mime: string; url: string; filename?: string }>
-}): string | undefined {
-  if (!input.attachments?.length) return undefined
-  return [
-    "Attachments:",
-    ...input.attachments.map((attachment, index) => {
-      const name = attachment.filename?.trim() || `attachment-${index + 1}`
-      return `- ${name} — ${attachment.mime} — url: ${attachment.url}`
-    }),
-  ].join("\n")
 }
 
 async function continueTaskMessage(
@@ -801,10 +920,6 @@ async function appendTaskSessionMessage(
     },
   } satisfies Message.User
   const meta = overlayMeta(task.session_id, task.session_id, info)
-  const enrichedInfo = {
-    ...info,
-    ...meta,
-  }
   const parts: Message.Part[] = []
   if (text.length > 0) {
     const textPart: Message.TextPart = {
@@ -829,12 +944,12 @@ async function appendTaskSessionMessage(
     }
     parts.push(filePart)
   }
-  await Session.persistMessage({
+  const persisted = await Session.persistMessage({
     info,
     parts,
     touchSessionID: task.session_id,
   })
-  return { info: enrichedInfo, parts }
+  return { info: { ...(persisted.info as Message.User), ...meta }, parts: persisted.parts }
 }
 
 /**
@@ -945,7 +1060,7 @@ function taskItems(rows: TaskListRow[]) {
   return rows.map((item) => {
     const task = item.task
     const plan = findActivePlanForTask(task.id)
-    const run = findActiveRunForTask(task.id)
+    const run = projectedRunForTask(task)
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending")
     const taskView = viewTask(task, { directory: item.directory })
@@ -964,6 +1079,10 @@ function taskItems(rows: TaskListRow[]) {
       updated_at: task.time_updated,
     }
   })
+}
+
+function projectedRunForTask(task: TaskRow) {
+  return findActiveRunForTask(task.id) ?? (isTaskTerminal(task) ? findLatestRunForTask(task.id) : undefined)
 }
 
 async function taskChecks(checks?: z.input<typeof CheckConfig>) {
@@ -1029,10 +1148,26 @@ type FileRef = {
 }
 type FileRefColumn = "attachments" | "system_artifacts"
 
+type ApiAttachmentInput = NonNullable<z.infer<typeof CreateTaskInput>["attachments"]>[number]
+type DecodedApiAttachment = {
+  attachment: ApiAttachmentInput
+  bytes: Buffer
+}
+
+function decodeApiAttachments(input: {
+  attachments: ApiAttachmentInput[] | undefined
+  label: string
+}): DecodedApiAttachment[] {
+  return (input.attachments ?? []).map((attachment) => ({
+    attachment,
+    bytes: decodeRawBase64Payload(attachment.data, `${input.label} ${attachment.filename ?? attachment.mime}`),
+  }))
+}
+
 export namespace EngineService {
-  const restartMessageState = lazyInstanceState(() => ({
-    restartMessagesChecked: false,
-    restartMessagesRunning: false,
+  const restartLifecycleState = lazyInstanceState(() => ({
+    restartLifecycleChecked: false,
+    restartLifecycleRunning: false,
   }))
 
   export function init() {
@@ -1049,7 +1184,7 @@ export namespace EngineService {
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
       scope: "instance",
       run: async () => {
-        await appendRestartMessagesForActiveTasks()
+        await wakeRestartLifecycleFactsForActiveTasks()
         await EngineRuntime.monitorRuns(hooks())
         await drainPendingQueuedOperatorWakes()
       },
@@ -1062,33 +1197,78 @@ export namespace EngineService {
     // function.
   }
 
-  async function appendRestartMessagesForActiveTasks(): Promise<void> {
-    const state = restartMessageState()
-    if (state.restartMessagesChecked || state.restartMessagesRunning) return
-    state.restartMessagesRunning = true
+  async function wakeRestartLifecycleFactsForActiveTasks(): Promise<void> {
+    const state = restartLifecycleState()
+    if (state.restartLifecycleChecked || state.restartLifecycleRunning) return
+    state.restartLifecycleRunning = true
     try {
       const tasks = listOrphanedActiveInProject(Instance.project.id)
-      state.restartMessagesChecked = true
+      state.restartLifecycleChecked = true
       const failures: string[] = []
       for (const task of tasks) {
-        await appendAndWakeTaskOperatorMessage({
-          taskID: task.id,
-          text: "请继续执行剩余任务",
-          source: "server_restart",
-        }).catch((error) => {
+        await (async () => {
+          const event = await EngineProtocol.emit(
+            Event.TaskLifecycleFact,
+            {
+              taskID: task.id,
+              fact: "server_restart_active_task_recovered",
+              status: deriveTaskStatus(task),
+              orphaned: true,
+              summary:
+                "Server restart found this active task without an in-process task loop; waking orchestrator from lifecycle fact.",
+            },
+            { source: "engine.liveness", target: "orchestrator" },
+          )
+          await dispatchTaskLoop({
+            taskID: task.id,
+            event: {
+              lifecycleFact: {
+                kind: "server_restart_active_task_recovered",
+                eventID: event.id,
+              },
+            },
+          })
+        })().catch((error) => {
           failures.push(`${task.id}: ${error instanceof Error ? error.message : String(error)}`)
         })
       }
       if (failures.length > 0) {
-        throw new Error(`Failed to append restart messages for active tasks: ${failures.join("; ")}`)
+        throw new Error(`Failed to wake restart lifecycle facts for active tasks: ${failures.join("; ")}`)
       }
     } finally {
-      state.restartMessagesRunning = false
+      state.restartLifecycleRunning = false
     }
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
     const input = CreateTaskInput.parse(raw)
+    assertNoCallerSuppliedChildTaskLineage(input)
+    return withTaskCreationOwnerLock(input, () => createTaskInner(input))
+  }
+
+  export async function createSchedulerChildTask(
+    raw: z.input<typeof CreateTaskInput> & {
+      parentTaskID: string
+    },
+  ) {
+    const { parentTaskID, ...taskRaw } = raw
+    const parsed = CreateTaskInput.parse(taskRaw)
+    assertNoCallerSuppliedChildTaskLineage(parsed)
+    const parentTaskIDValue = parentTaskID.trim()
+    if (!parentTaskIDValue) {
+      throw new ExternalChildTaskLineageError({
+        message: "Scheduler child task creation requires a non-empty parent task ID.",
+        source: SCHEDULER_CHILD_TASK_SOURCE,
+      })
+    }
+    const input = CreateTaskInput.parse({
+      ...parsed,
+      source: SCHEDULER_CHILD_TASK_SOURCE,
+      metadata: {
+        ...(parsed.metadata ?? {}),
+        parent_task_id: parentTaskIDValue,
+      },
+    })
     return withTaskCreationOwnerLock(input, () => createTaskInner(input))
   }
 
@@ -1112,6 +1292,12 @@ export namespace EngineService {
     if (!input.model) {
       await resolveConfiguredModelRef()
     }
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const decodedAttachments = decodeApiAttachments({
+      attachments: input.attachments,
+      label: `Task ${taskID} attachment`,
+    })
     // The task's root session: it holds the user's original request and the
     // pointer engine_task.session_id. Its children are the orchestrator's
     // own session and each sub-agent session (planner/executor/...).
@@ -1135,8 +1321,6 @@ export namespace EngineService {
       })
     }
     const resolvedChecks = await taskChecks(input.checks)
-    const now = Date.now()
-    const taskID = Identifier.ascending("task")
     const metadata = {
       ...(input.metadata ?? {}),
       ...(input.routing ? { routing: input.routing } : {}),
@@ -1178,10 +1362,9 @@ export namespace EngineService {
     // The overlay renders attachments directly from task.attachments via the
     // synthetic user-request bubble — no session message needed (was a dupe).
     const attachmentRefs: AttachmentStore.Reference[] = []
-    if (input.attachments?.length) {
+    if (decodedAttachments.length) {
       const projectID = Instance.project.id
-      for (const att of input.attachments) {
-        const bytes = Buffer.from(att.data, "base64")
+      for (const { attachment: att, bytes } of decodedAttachments) {
         const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
         // Default intent: image MIMEs are visual references (SSIM gate
         // consumes them). Anything else is generic spec material until a
@@ -1313,7 +1496,7 @@ export namespace EngineService {
     taskID: string,
     column: FileRefColumn,
     file: FileRef,
-    merge: (prev: FileRef[]) => { next: FileRef[]; reason: string } | null,
+    merge: (prev: FileRef[], canonical: FileRef) => { next: FileRef[]; reason: string } | null,
   ): Promise<FileRef[]> {
     const task = requireTaskInCurrentProject(taskID)
     const located = AttachmentStore.nameFromUrl(file.url)
@@ -1325,16 +1508,37 @@ export namespace EngineService {
         `${column}: file.url belongs to project ${located.projectID}, expected task project ${task.project_id}: ${file.url}`,
       )
     }
-    const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
-    if (!abs) {
-      throw new Error(`${column}: cannot resolve attachment path for project ${located.projectID}/${located.name}`)
+    let reference: AttachmentStore.Reference
+    try {
+      reference = await AttachmentStore.readReference(located.projectID, located.name)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `${column}: cannot read canonical attachment metadata for project ${located.projectID}/${located.name}: ${message}`,
+      )
     }
-    const stat = await fs.stat(abs).catch(() => null)
-    if (!stat || stat.size === 0) {
-      throw new Error(`${column}: file missing or empty on disk — refusing to register dangling reference: ${abs}`)
+    const metadataMismatches = [
+      file.sha !== reference.sha ? "sha" : "",
+      file.mime !== reference.mime ? "mime" : "",
+      file.size !== reference.size ? "size" : "",
+      (file.filename ?? "") !== (reference.filename ?? "") ? "filename" : "",
+    ].filter(Boolean)
+    if (metadataMismatches.length > 0) {
+      throw new Error(
+        `${column}: file metadata does not match canonical AttachmentStore metadata (${metadataMismatches.join(", ")}): ${file.url}`,
+      )
+    }
+    const canonical: FileRef = {
+      sha: reference.sha,
+      url: reference.url,
+      mime: reference.mime,
+      size: reference.size,
+      ...(reference.filename ? { filename: reference.filename } : {}),
+      ...(file.intent ? { intent: file.intent } : {}),
+      ...(file.source ? { source: file.source } : {}),
     }
     const prev = Array.isArray((task as any)[column]) ? ((task as any)[column] as FileRef[]) : []
-    const result = merge(prev)
+    const result = merge(prev, canonical)
     if (!result) return prev
     await updateTask(task, { [column]: result.next } as any, result.reason)
     return result.next
@@ -1354,11 +1558,11 @@ export namespace EngineService {
    * Idempotent on sha collision: same content → no-op.
    */
   export async function appendTaskAttachment(taskID: string, attachment: FileRef) {
-    return mergeTaskFileRef(taskID, "attachments", attachment, (prev) => {
-      if (prev.some((a) => a?.sha === attachment.sha)) return null
+    return mergeTaskFileRef(taskID, "attachments", attachment, (prev, canonical) => {
+      if (prev.some((a) => a?.sha === canonical.sha)) return null
       return {
-        next: [...prev, attachment],
-        reason: `attachments appended: ${attachment.filename ?? attachment.sha}`,
+        next: [...prev, canonical],
+        reason: `attachments appended: ${canonical.filename ?? canonical.sha}`,
       }
     })
   }
@@ -1371,11 +1575,11 @@ export namespace EngineService {
    * intent. Idempotent on sha collision.
    */
   export async function appendTaskSystemArtifact(taskID: string, artifact: FileRef) {
-    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev) => {
-      if (prev.some((a) => a?.sha === artifact.sha)) return null
+    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev, canonical) => {
+      if (prev.some((a) => a?.sha === canonical.sha)) return null
       return {
-        next: [...prev, artifact],
-        reason: `system_artifacts appended: ${artifact.filename ?? artifact.sha}`,
+        next: [...prev, canonical],
+        reason: `system_artifacts appended: ${canonical.filename ?? canonical.sha}`,
       }
     })
   }
@@ -1396,11 +1600,11 @@ export namespace EngineService {
         `replaceTaskSystemArtifactByIntent: intent mismatch — slot=${intent} artifact.intent=${artifact.intent}`,
       )
     }
-    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev) => {
+    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev, canonical) => {
       const purged = prev.filter((a) => a?.intent !== intent)
       return {
-        next: [...purged, artifact],
-        reason: `system_artifacts replaced [intent=${intent}]: ${artifact.filename ?? artifact.sha}`,
+        next: [...purged, canonical],
+        reason: `system_artifacts replaced [intent=${intent}]: ${canonical.filename ?? canonical.sha}`,
       }
     })
   }
@@ -1423,7 +1627,7 @@ export namespace EngineService {
     const task = requireTaskInCurrentProject(taskID)
     const item = listTaskRows([task])[0]
     const plan = findActivePlanForTask(task.id)
-    const run = findActiveRunForTask(task.id)
+    const run = projectedRunForTask(task)
     const acceptance = run ? findAcceptanceByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
@@ -1468,7 +1672,7 @@ export namespace EngineService {
     if (run && run.task_id !== task.id) throw new NotFoundError({ message: `Run not found for task: ${input.runID}` })
     return compileBrief({
       taskID: task.id,
-      runID: run?.id ?? findActiveRunForTask(task.id)?.id,
+      runID: run?.id ?? findLatestRunForTask(task.id)?.id,
       planVersionID: findActivePlanForTask(task.id)?.id,
       sessionID: task.session_id ?? undefined,
     })
@@ -1531,6 +1735,7 @@ export namespace EngineService {
   export async function reorderTaskQueue(input: { directory: string; orderedTaskIDs: string[]; revision?: string }) {
     const result = reorderQueuedTasksForCwd({
       cwd: input.directory,
+      projectID: Instance.project.id,
       orderedTaskIDs: input.orderedTaskIDs,
       revision: input.revision,
     })
@@ -1706,15 +1911,17 @@ export namespace EngineService {
   }
 
   export async function deleteTask(taskID: string, options?: DeleteTaskOptions) {
-    const task = requireTaskInCurrentProject(taskID)
+    let task = requireTaskInCurrentProject(taskID)
     discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
       await cancelTask(taskID, options)
+      task = requireTaskInCurrentProject(taskID)
     }
     // Wait for any in-progress pipeline stage to settle after abort
     await awaitPipelineSettled(taskID)
     await awaitTaskLoopIdleForDelete(taskID, options?.taskLoopIdleTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS)
+    await recordTaskPhysicalDeleteBreadcrumb(task, "EngineService.deleteTask")
     // Delete session tree (CASCADE handles plans, goals, runs, etc.)
     if (task.session_id) {
       await Session.removeInProject({ sessionID: task.session_id, projectID: task.project_id })
@@ -1818,31 +2025,12 @@ export namespace EngineService {
       attachments?: Array<{ mime: string; url: string; filename?: string }>
     },
   ) {
-    try {
-      return await appendDirectAgentSessionReply({
-        taskID,
-        sessionID,
-        message: input.message,
-        attachments: input.attachments,
-      })
-    } catch (error) {
-      if (!directReplyRouteToTaskWake(error)) throw error
-      const text = input.message.trim()
-      if (!text) throw new Error("message is required")
-      const attachmentSummary = directReplyAttachmentSummary(input)
-      const wake = await appendAndWakeTaskOperatorMessage({
-        taskID,
-        text,
-        attachmentSummary,
-        source: "overlay_agent_session_reply",
-        target: { kind: "agent_session", sessionID },
-      })
-      return {
-        task_id: taskID,
-        session_id: sessionID,
-        message_id: wake.userMessage.info.id,
-      }
-    }
+    return await appendDirectAgentSessionReply({
+      taskID,
+      sessionID,
+      message: input.message,
+      attachments: input.attachments,
+    })
   }
 
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
@@ -2038,7 +2226,7 @@ export namespace EngineService {
       taskID,
       inactivityTimeoutMs: options?.promptSettleInactivityMs,
     })
-    const secondPassCoordinationRequestsCancelled = cancelPendingAgentCoordinationRequestsForTask({
+    const secondPassCoordinationRequestsCancelled = await cancelPendingAgentCoordinationRequestsForTask({
       taskID,
       reason: "task cancelled",
     })
@@ -2062,7 +2250,7 @@ export namespace EngineService {
       reason:
         "Task cancellation collected and cancelled every task-owned agent lifecycle handle before terminal status.",
     })
-    await updateTask(
+    await terminalTask(
       task,
       {
         status: "cancelled",
@@ -2079,8 +2267,13 @@ export namespace EngineService {
     return true
   }
 
-  export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
-    const root = await Session.get(sessionID)
+  export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean; projectID?: string }) {
+    const current = Instance.current()
+    const root = input?.projectID
+      ? await Session.getInProject({ sessionID, projectID: input.projectID })
+      : current
+        ? await Session.getInProject({ sessionID, projectID: current.project.id })
+        : await Session.get(sessionID)
     const requested = await requestSessionPromptSubtreeCancellation({
       sessionID,
       projectID: root.projectID,
@@ -2127,9 +2320,24 @@ export namespace EngineService {
           .where(and(eq(EngineTaskTable.project_id, root.projectID), inArray(EngineTaskTable.session_id, ids)))
           .all(),
       )
+      const tasksForDelete: TaskRow[] = []
       for (const item of tasks) {
-        if (isTaskTerminal(item)) continue
+        if (isTaskTerminal(item)) {
+          tasksForDelete.push(item)
+          continue
+        }
         await cancelTask(item.id)
+        tasksForDelete.push(requireTaskInCurrentProject(item.id))
+      }
+      for (const item of tasksForDelete) {
+        await awaitPipelineSettled(item.id)
+        await awaitTaskLoopIdleForDelete(item.id, CANCEL_CLEANUP_TIMEOUT_MS)
+      }
+      for (const item of tasksForDelete) {
+        await recordTaskPhysicalDeleteBreadcrumb(item, "EngineService.deleteSession.deleteTasks", {
+          rootSessionID: sessionID,
+          sessionIDs: ids,
+        })
       }
       Database.use((db) => {
         db.delete(EngineTaskTable)
@@ -2138,7 +2346,7 @@ export namespace EngineService {
         Database.effect(() => Database.incrementalVacuum())
       })
     }
-    await Session.remove(sessionID)
+    await Session.removeInProject({ sessionID, projectID: root.projectID })
     return true
   }
 
@@ -2209,6 +2417,10 @@ export namespace EngineService {
     const input = TaskMessageInput.parse(raw)
     const task = requireTaskInCurrentProject(taskID)
     assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
+    const decodedAttachments = decodeApiAttachments({
+      attachments: input.attachments,
+      label: `Task ${taskID} operator attachment`,
+    })
     if (input.promptProfile) {
       if (!task.session_id) {
         throw new Error(`Task ${task.id} has no root session; cannot apply prompt profile ${input.promptProfile}.`)
@@ -2235,10 +2447,9 @@ export namespace EngineService {
     // a screenshot into a follow-up message gets fidelity 0 even though the
     // bytes were saved.
     const attachmentRefs: AttachmentStore.Reference[] = []
-    if (input.attachments?.length) {
+    if (decodedAttachments.length) {
       const projectID = Instance.project.id
-      for (const att of input.attachments) {
-        const bytes = Buffer.from(att.data, "base64")
+      for (const { attachment: att, bytes } of decodedAttachments) {
         const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
         const annotated = { ...ref, intent, source: "user-upload" }
@@ -2267,8 +2478,7 @@ export namespace EngineService {
   }
 
   export async function getTaskOperatorModelContext(taskID: string) {
-    const task = requireTask(taskID)
-    assertTaskProjectIsConcrete(task)
+    const task = requireTaskInCurrentProject(taskID)
     if (!task.session_id) {
       throw new Error(
         `Task ${task.id} has no root session — cannot resolve operator model context; recreate the task or repair task.session_id`,
@@ -2330,7 +2540,7 @@ export namespace EngineService {
       })
       .slice(-6)
 
-    const run = findActiveRunForTask(task.id)
+    const run = projectedRunForTask(task)
     const context = [
       `title: ${task.title}`,
       `request: ${(task.request ?? "").slice(0, 400)}`,
@@ -2420,6 +2630,8 @@ export namespace EngineService {
       }
       throw createTaskCancellationIncomplete({ taskID: run.task_id, runID, handle: "executor.abort run", cause: err })
     }
+    const taskBeforeAbort = requireTaskInCurrentProject(run.task_id)
+    const wasActiveRun = findActiveRunForTask(taskBeforeAbort.id)?.id === run.id
     const succeeded = await withTimeout(
       ExecutorRegistry.require(run.executor).abort({
         sessionID: run.session_id ?? undefined,
@@ -2440,8 +2652,8 @@ export namespace EngineService {
       "Run aborted",
     )
     const task = requireTaskInCurrentProject(run.task_id)
-    if (findActiveRunForTask(task.id)?.id === run.id) {
-      await updateTask(task, { status: "failed", error: "run aborted", time_completed: Date.now() }, "Run aborted")
+    if (wasActiveRun) {
+      await updateTask(task, { error: "run aborted" }, "Run aborted; scheduler decision required")
     }
     return true
   }

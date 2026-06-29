@@ -4,6 +4,7 @@ import { Config } from "../../src/config/config"
 import { EffectiveConfig } from "../../src/config/effective"
 import { EngineConfig } from "../../src/engine/config"
 import { PermissionNext } from "../../src/permission/next"
+import { Instance } from "../../src/project/instance"
 import type { Provider } from "../../src/provider/provider"
 import { Snapshot } from "../../src/snapshot"
 import { Session } from "../../src/session"
@@ -13,6 +14,8 @@ import { Message } from "../../src/session/message"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionSummary } from "../../src/session/summary"
 import { SessionStatus } from "../../src/session/status"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => {
   mock.restore()
@@ -282,6 +285,87 @@ test("session processor preserves invalid tool-call input and paired tool-error 
   expect(part?.state.status).toBe("error")
   expect(part?.state.status === "error" ? part.state.failure.message : "").toContain(parseError)
   expect(part?.state.status === "error" ? part.state.input : undefined).toEqual([])
+})
+
+test("session processor stamps pending tool parts with one preserved start time", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 500 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  const toolUpdates: Message.ToolPart[] = []
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    const snapshot = JSON.parse(JSON.stringify(part)) as Message.Part
+    store.set(part.id, snapshot)
+    if (snapshot.type === "tool") toolUpdates.push(snapshot)
+    return snapshot as never
+  })
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
+
+  const delayedToolStream: AsyncIterable<any> = {
+    async *[Symbol.asyncIterator]() {
+      yield { type: "start" }
+      yield { type: "tool-input-start", toolCallId: "call_pending_time", toolName: "update_research_evidence" }
+      await Bun.sleep(5)
+      yield {
+        type: "tool-call",
+        toolCallId: "call_pending_time",
+        toolName: "update_research_evidence",
+        input: { evidence_id: "ev_1" },
+      }
+      await Bun.sleep(5)
+      yield {
+        type: "tool-result",
+        toolCallId: "call_pending_time",
+        toolName: "update_research_evidence",
+        input: { evidence_id: "ev_1" },
+        output: {
+          output: "updated",
+          title: "Research Evidence",
+          metadata: {},
+        },
+      }
+      yield { type: "finish", finishReason: "tool-calls" }
+    },
+  }
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: delayedToolStream,
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const processor = SessionProcessor.create({
+    assistantMessage: {
+      id: "msg_pending_tool_time",
+      sessionID: "ses_pending_tool_time",
+      role: "assistant",
+      agent: "frontend-research",
+      parentID: "msg_parent",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    } as Message.Assistant,
+    sessionID: "ses_pending_tool_time",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await expect(processor.process({} as LLM.StreamInput)).resolves.toBe("continue")
+
+  const pending = toolUpdates.find((part) => part.state.status === "pending")
+  const running = toolUpdates.find((part) => part.state.status === "running")
+  const completed = toolUpdates.find((part) => part.state.status === "completed")
+  expect(pending?.state.status).toBe("pending")
+  const start = pending?.state.time.start
+  expect(typeof start).toBe("number")
+  expect(start).toBeGreaterThan(0)
+  expect(running?.state.status === "running" ? running.state.time.start : undefined).toBe(start)
+  expect(completed?.state.status === "completed" ? completed.state.time.start : undefined).toBe(start)
+  expect(completed?.state.status === "completed" ? completed.state.time.end : 0).toBeGreaterThan(start ?? 0)
 })
 
 test("session processor pauses terminal payload generation at tool-input-start for pre-submit reflection", async () => {
@@ -892,48 +976,60 @@ test("session processor stamps open tool parts with the real activity abort caus
   } as Awaited<ReturnType<typeof EngineConfig.get>>)
   spyOn(SessionStatus, "set").mockImplementation(() => {})
   spyOn(Bus, "publish").mockResolvedValue(undefined as never)
-  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
 
-  const store = new Map<string, Message.Part>()
-  spyOn(Session, "updatePart").mockImplementation(async (part) => {
-    store.set(part.id, part as Message.Part)
-    return part as never
-  })
-  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
-    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
-  spyOn(LLM, "stream").mockResolvedValue({
-    fullStream: stalledAfter([{ type: "tool-input-start", toolCallId: "call_abort", toolName: "register_goal" }]),
-  } as Awaited<ReturnType<typeof LLM.stream>>)
+  try {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "abort-cause-fixture" })
+        spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
 
-  const abort = new AbortController()
-  const processor = SessionProcessor.create({
-    assistantMessage: {
-      id: "msg_abort_tool_part",
-      sessionID: "ses_abort_tool_part",
-      role: "assistant",
-      agent: "architect",
-      parentID: "msg_parent",
-      cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      time: { created: Date.now() },
-    } as Message.Assistant,
-    sessionID: "ses_abort_tool_part",
-    model: {
-      providerID: "test-provider",
-      id: "test-model",
-      api: { npm: "@ai-sdk/openai" },
-    } as Provider.Model,
-    abort: abort.signal,
-  })
+        const store = new Map<string, Message.Part>()
+        spyOn(Session, "updatePart").mockImplementation(async (part) => {
+          store.set(part.id, part as Message.Part)
+          return part as never
+        })
+        spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+          [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
+        spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: stalledAfter([{ type: "tool-input-start", toolCallId: "call_abort", toolName: "register_goal" }]),
+        } as Awaited<ReturnType<typeof LLM.stream>>)
 
-  setTimeout(() => abort.abort(new Error("operator cancelled stalled stream")), 30)
-  const result = await Promise.race([
-    processor.process({} as LLM.StreamInput),
-    Bun.sleep(500).then(() => "timed-out" as const),
-  ])
+        const abort = new AbortController()
+        const processor = SessionProcessor.create({
+          assistantMessage: {
+            id: "msg_abort_tool_part",
+            sessionID: session.id,
+            role: "assistant",
+            agent: "architect",
+            parentID: "msg_parent",
+            cost: 0,
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            time: { created: Date.now() },
+          } as Message.Assistant,
+          sessionID: session.id,
+          model: {
+            providerID: "test-provider",
+            id: "test-model",
+            api: { npm: "@ai-sdk/openai" },
+          } as Provider.Model,
+          abort: abort.signal,
+        })
 
-  expect(result).toBe("stop")
-  const part = [...store.values()].find((p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_abort")
-  expect(part?.state.status).toBe("error")
-  expect(part?.state.status === "error" ? part.state.failure.message : "").toContain("external abort signal fired")
+        setTimeout(() => abort.abort(new Error("operator cancelled stalled stream")), 30)
+        const result = await Promise.race([
+          processor.process({} as LLM.StreamInput),
+          Bun.sleep(500).then(() => "timed-out" as const),
+        ])
+
+        expect(result).toBe("stop")
+        const part = [...store.values()].find((p): p is Message.ToolPart => p.type === "tool" && p.callID === "call_abort")
+        expect(part?.state.status).toBe("error")
+        expect(part?.state.status === "error" ? part.state.failure.message : "").toContain("external abort signal fired")
+      },
+    })
+  } finally {
+    await resetDatabase()
+  }
 })

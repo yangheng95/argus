@@ -170,7 +170,7 @@ const BuildResultBase = {
     .array(z.string().min(1))
     .optional()
     .describe(
-      "Optional task-scoped browser_preview_evidence refs produced by browser_preview_compare_regions when the build actually generated visual comparison evidence.",
+      "Optional task-scoped browser_preview_evidence refs when the build actually generated region comparison evidence.",
     ),
   contract_restatement: z
     .string()

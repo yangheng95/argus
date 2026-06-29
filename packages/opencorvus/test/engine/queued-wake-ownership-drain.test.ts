@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { beginBuildAttempt } from "../../src/engine/persist"
-import { dispatchTaskLoop, drainPendingQueuedOperatorWakes, queuedTaskEventStats } from "../../src/engine/queue"
+import {
+  advanceQueue,
+  dispatchTaskLoop,
+  drainPendingQueuedOperatorWakes,
+  queuedTaskEventStats,
+  taskCwd,
+} from "../../src/engine/queue"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import {
@@ -191,6 +197,122 @@ describe("queued wake ownership drain", () => {
     })
   })
 
+  test("non-operator wake behind live ownership is durable and drains after ownership clears", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_durable_note_wake_${now}`
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "durable note wake task",
+              request: "plain coordination wake must survive ownership wait",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const goalID = `goal_queue_durable_note_${now}`
+        Database.use((db) =>
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live goal",
+              slug: "live-goal",
+              objective: "Prove non-operator queued wake durability.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const ownership = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orch_${now}`,
+          orchestratorMessageID: `msg_orch_${now}`,
+          toolPartID: `part_durable_note_${now}`,
+          toolCallID: `call_durable_note_${now}`,
+          childSessionID: `ses_worker_${now}`,
+          toolName: "build",
+          scope: "goal",
+          goalID,
+          goalRunID: `grun_durable_note_${now}`,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          payload: ownership,
+          now,
+        })
+
+        const requestID = `req_queue_coordination_${now}`
+        const result = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "coordination request is waiting",
+            coordinationRequest: { requestID },
+          },
+        })
+        expect(result).toBe("queued")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 1 })
+        expect(queuedOperatorWakePayloads(taskID)).toEqual([
+          expect.objectContaining({
+            task_id: taskID,
+            source_kind: "coordination_request",
+            request_id: requestID,
+            queued_by_process_id: process.pid,
+            queued_by_instance_directory: Instance.directory,
+            queued_by_project_id: Instance.project.id,
+            event: {
+              note: "coordination request is waiting",
+              coordinationRequest: { requestID },
+            },
+          }),
+        ])
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownership.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        await waitForMockCalls(runTaskLoop, 1)
+        expect(await drainPendingQueuedOperatorWakes()).toBe(0)
+
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0, events: 0 })
+        expect(queuedOperatorWakeLabels(taskID)).toEqual(["drained"])
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: "coordination request is waiting",
+            coordinationRequest: { requestID },
+          },
+        })
+      },
+    })
+  })
+
   test("queued wake drains when live orchestrator tool ownership completes after loop exit", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
@@ -304,6 +426,99 @@ describe("queued wake ownership drain", () => {
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
           event: { note: "queued behind live ownership" },
+        })
+      },
+    })
+  })
+
+  test("advanceQueue keeps durable wake pending when claimed task loop is already in flight", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_inflight_claim_${now}`
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async (input) => {
+          if (!input.event) await holdLoop
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "in-flight queued wake task",
+              request: "durable wake must not drain before a loop accepts it",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        await dispatchTaskLoop({ taskID })
+        await waitForMockCalls(runTaskLoop, 1)
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ time_started: null, time_updated: now + 1 })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "queued_operator_wake",
+              label: "pending",
+              payload: {
+                wake_id: `req_inflight_claim_${now}`,
+                task_id: taskID,
+                request_id: `req_inflight_claim_${now}`,
+                source_kind: "coordination_request",
+                event: {
+                  note: "coordination wake accepted while prior loop is unwinding",
+                  coordinationRequest: { requestID: `req_inflight_claim_${now}` },
+                },
+                time_queued: now + 2,
+                queued_by_process_id: process.pid,
+                queued_by_instance_directory: Instance.directory,
+                queued_by_project_id: Instance.project.id,
+              },
+              time_created: now + 2,
+              time_updated: now + 2,
+            })
+            .run(),
+        )
+
+        const claimed = await advanceQueue(taskCwd(taskID))
+        expect(claimed?.id).toBe(taskID)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(queuedOperatorWakeLabels(taskID)).toEqual(["pending"])
+
+        release!()
+        await waitForMockCalls(runTaskLoop, 2)
+        expect(queuedOperatorWakeLabels(taskID)).toEqual(["drained"])
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: "coordination wake accepted while prior loop is unwinding",
+            coordinationRequest: { requestID: `req_inflight_claim_${now}` },
+          },
         })
       },
     })
@@ -589,7 +804,15 @@ function queuedOperatorWakeLabels(taskID: string): string[] {
   )
 }
 
-function queuedOperatorWakePayloads(taskID: string): Array<{ event: { operatorIntent?: { kind?: string } } }> {
+function queuedOperatorWakePayloads(taskID: string): Array<{
+  task_id?: string
+  source_kind?: string
+  request_id?: string
+  queued_by_process_id?: number
+  queued_by_instance_directory?: string
+  queued_by_project_id?: string
+  event: { note?: string; operatorIntent?: { kind?: string }; coordinationRequest?: { requestID?: string } }
+}> {
   return Database.use((db) =>
     db
       .select({ payload: EngineArtifactTable.payload })
@@ -597,6 +820,21 @@ function queuedOperatorWakePayloads(taskID: string): Array<{ event: { operatorIn
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "queued_operator_wake")))
       .orderBy(EngineArtifactTable.time_created, EngineArtifactTable.id)
       .all()
-      .map((row) => row.payload as { event: { operatorIntent?: { kind?: string } } }),
+      .map(
+        (row) =>
+          row.payload as {
+            task_id?: string
+            source_kind?: string
+            request_id?: string
+            queued_by_process_id?: number
+            queued_by_instance_directory?: string
+            queued_by_project_id?: string
+            event: {
+              note?: string
+              operatorIntent?: { kind?: string }
+              coordinationRequest?: { requestID?: string }
+            }
+          },
+      ),
   )
 }

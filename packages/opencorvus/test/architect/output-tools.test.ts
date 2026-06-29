@@ -168,8 +168,11 @@ test("register_goal rejects internal runtime owned paths before collector mutati
   expect(kit.getCollector().goals).toHaveLength(0)
 })
 
-async function registerTwoGoalGraph() {
-  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+async function registerTwoGoalGraph(input?: { uiDependsOn?: string[] }) {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+  })
   const { tools } = kit
   await tools.register_goal.execute!(
     {
@@ -192,7 +195,7 @@ async function registerTwoGoalGraph() {
       objective: "Render the UI using only the graph contract produced by the model goal.",
       acceptance_specs: [acceptance("goal_ui")],
       owned_paths: ["src/ui.tsx"],
-      depends_on: ["goal_model"],
+      depends_on: input?.uiDependsOn ?? ["goal_model"],
       priority: "blocking",
       kind: "feature",
       requirement_ids: ["REQ-1"],
@@ -241,6 +244,37 @@ test("architect registers graph contracts and finalizes without goal imports or 
   expect(kit.getCollector().fact_check_items).toEqual([])
   expect(kit.getCollector().goals[0]).not.toHaveProperty("exports")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("imports")
+})
+
+test("register_dependency_contract materializes the executable depends_on edge", async () => {
+  const kit = await registerTwoGoalGraph({ uiDependsOn: [] })
+  const { tools } = kit
+
+  await tools.register_contract.execute!(contractRef() as any, {} as any)
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.depends_on).toEqual([])
+
+  const edgeOut = await tools.register_dependency_contract.execute!(
+    {
+      from_goal_id: "goal_model",
+      to_goal_id: "goal_ui",
+      reason: "contract",
+      contract_ids: ["contract_order"],
+    } as any,
+    {} as any,
+  )
+
+  expect(edgeOut).toContain("OK")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.depends_on).toEqual(["goal_model"])
+
+  const out = await tools.submit_architect.execute!(
+    {
+      summary: "Dependency contracts materialize executable dependencies.",
+      decomposition_analysis:
+        "The model goal owns the data contract and the UI goal consumes it. The dependency contract is the single source that materializes the executable edge, keeping goal dispatch and graph evidence aligned.",
+    } as any,
+    {} as any,
+  )
+  expect(out).toContain("PASS")
 })
 
 test("register_contract component_json accepts comma-separated props string", async () => {
@@ -604,6 +638,62 @@ test("submit_architect blocks single large goal decomposition", async () => {
   expect(kit.getCollector().finalized).toBe(false)
 })
 
+test("explicit architect goal count contract blocks readiness below requested minimum", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    goalCountContract: {
+      minGoalCount: 20,
+      source: "requirements_decision",
+      evidence: "由 architect 分解出不少于 20 个可验收 goals",
+    },
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_prd",
+      title: "PRD",
+      objective: "Write the evidence-derived PRD with complete regional implementation requirements.",
+      acceptance_specs: [acceptance("goal_prd", [], "REQ-1")],
+      owned_paths: ["docs/prd.md"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_design",
+      title: "Design",
+      objective: "Write the module-level implementation design plan with verifiable work slices.",
+      acceptance_specs: [acceptance("goal_design", [], "REQ-2")],
+      owned_paths: ["docs/design.md"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-2"],
+    } as any,
+    {} as any,
+  )
+  expect(kit.isReadyToFinalize()).toBe(false)
+
+  const out = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Partial two-goal decomposition.",
+      decomposition_analysis:
+        "Only two prerequisite document goals are present, so this graph intentionally remains below the explicit user requested goal count and must not finalize.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("BLOCKERS")
+  expect(out).toContain("insufficient_goal_decomposition")
+  expect(out).toContain("at least 20")
+  expect(kit.getCollector().finalized).toBe(false)
+})
+
 test("submit_architect blocks contract_audit ids absent from graph contracts", async () => {
   const kit = await registerTwoGoalGraph()
   await kit.tools.register_contract.execute!(contractRef() as any, {} as any)
@@ -674,6 +764,7 @@ test("submit_architect reports zero graph contracts as a concern without blockin
     {} as any,
   )
 
+  expect(kit.isReadyToFinalize()).toBe(true)
   expect(out).toContain("PASS")
   expect(out).toContain("missing_contract_graph_contract")
   expect(kit.getCollector().finalized).toBe(true)
@@ -1266,6 +1357,229 @@ test("architect validation blocks unknown requirement ids in goals and acceptanc
       severity: "blocker",
     }),
   )
+})
+
+test("architect validation blocks known requirements without owning goals", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2", "REQ-3"],
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_req_one",
+      title: "Requirement one",
+      objective: "Implement the first independently verifiable requirement slice.",
+      acceptance_specs: [acceptance("goal_req_one", [], "REQ-1")],
+      owned_paths: ["src/req-one.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_req_two",
+      title: "Requirement two",
+      objective: "Implement the second independently verifiable requirement slice.",
+      acceptance_specs: [acceptance("goal_req_two", [], "REQ-2")],
+      owned_paths: ["src/req-two.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-2"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_traceability.execute!({ requirement_id: "REQ-1", goal_ids: ["goal_req_one"] }, {} as any)
+  await kit.tools.register_traceability.execute!({ requirement_id: "REQ-2", goal_ids: ["goal_req_two"] }, {} as any)
+
+  expect(kit.isReadyToFinalize()).toBe(false)
+
+  const findings = architectValidationFindings(kit.getCollector(), {
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2", "REQ-3"],
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "missing_requirement_owner",
+      severity: "blocker",
+      message: expect.stringContaining("REQ-3"),
+    }),
+  )
+
+  const out = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Partial requirement ownership graph.",
+      decomposition_analysis:
+        "The first two goals own two separate implementation slices, but the graph intentionally leaves one known requirement without an owning goal so finalization must stay blocked.",
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("BLOCKERS")
+  expect(out).toContain("missing_requirement_owner")
+  expect(out).toContain("REQ-3")
+  expect(kit.getCollector().finalized).toBe(false)
+})
+
+test("architect validation blocks known requirements without goal-local acceptance specs", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2"],
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_claims_two",
+      title: "Claims two requirements",
+      objective: "Implement two requirement slices while intentionally omitting one local acceptance spec.",
+      acceptance_specs: [acceptance("goal_claims_two", [], "REQ-1")],
+      owned_paths: ["src/claims-two.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1", "REQ-2"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_other",
+      title: "Other",
+      objective: "Provide a second independent goal so the regression isolates requirement acceptance coverage.",
+      acceptance_specs: [acceptance("goal_other", [], "REQ-1")],
+      owned_paths: ["src/other.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_claims_two", "goal_other"] },
+    {} as any,
+  )
+  await kit.tools.register_traceability.execute!({ requirement_id: "REQ-2", goal_ids: ["goal_claims_two"] }, {} as any)
+
+  const findings = architectValidationFindings(kit.getCollector(), {
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2"],
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "missing_requirement_acceptance",
+      severity: "blocker",
+      message: expect.stringContaining("REQ-2"),
+    }),
+  )
+  expect(kit.isReadyToFinalize()).toBe(false)
+})
+
+test("architect validation blocks missing traceability after every known requirement has owner and acceptance", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2"],
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_owned_one",
+      title: "Owned one",
+      objective: "Implement the first owned requirement slice with local acceptance.",
+      acceptance_specs: [acceptance("goal_owned_one", [], "REQ-1")],
+      owned_paths: ["src/owned-one.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_owned_two",
+      title: "Owned two",
+      objective: "Implement the second owned requirement slice with local acceptance.",
+      acceptance_specs: [acceptance("goal_owned_two", [], "REQ-2")],
+      owned_paths: ["src/owned-two.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-2"],
+    } as any,
+    {} as any,
+  )
+
+  const findings = architectValidationFindings(kit.getCollector(), {
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2"],
+  })
+
+  expect(findings.some((finding) => finding.code === "missing_requirement_owner")).toBe(false)
+  expect(findings.some((finding) => finding.code === "missing_requirement_acceptance")).toBe(false)
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "missing_traceability",
+      severity: "blocker",
+    }),
+  )
+  expect(kit.isReadyToFinalize()).toBe(false)
+
+  await kit.tools.register_traceability.execute!({ requirement_id: "REQ-1", goal_ids: ["goal_owned_one"] }, {} as any)
+  await kit.tools.register_traceability.execute!({ requirement_id: "REQ-2", goal_ids: ["goal_owned_two"] }, {} as any)
+
+  expect(kit.isReadyToFinalize()).toBe(true)
+})
+
+test("register_traceability rejects unknown requirements, unknown goals, and non-owner goals", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1", "REQ-2"],
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_trace_owner",
+      title: "Trace owner",
+      objective: "Own and verify the first traceable requirement slice.",
+      acceptance_specs: [acceptance("goal_trace_owner", [], "REQ-1")],
+      owned_paths: ["src/trace-owner.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  const unknownReq = await kit.tools.register_traceability.execute!(
+    { requirement_id: "REQ-404", goal_ids: ["goal_trace_owner"] },
+    {} as any,
+  )
+  expect(unknownReq).toContain("not a known Requirements-produced REQ-N")
+
+  const unknownGoal = await kit.tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_missing"] },
+    {} as any,
+  )
+  expect(unknownGoal).toContain("unregistered goal id")
+
+  const nonOwner = await kit.tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_trace_owner"] },
+    {} as any,
+  )
+  expect(nonOwner).toContain("do not claim the requirement")
+  expect(kit.getCollector().traceability).toEqual([])
 })
 
 test("register_dependency_contract rejects unknown contract id without mutating collector", async () => {

@@ -95,6 +95,31 @@ export namespace File {
   })
   export type UploadResult = z.infer<typeof UploadResult>
 
+  export const CreateRequest = z.object({
+    path: z.string(),
+    type: z.enum(["file", "directory"]),
+    content: z.string().optional(),
+  })
+  export type CreateRequest = z.infer<typeof CreateRequest>
+
+  export const MoveRequest = z.object({
+    path: z.string(),
+    newPath: z.string(),
+  })
+  export type MoveRequest = z.infer<typeof MoveRequest>
+
+  export const MoveResult = z.object({
+    previousPath: z.string(),
+    path: z.string(),
+    node: Node,
+  })
+  export type MoveResult = z.infer<typeof MoveResult>
+
+  export const DeleteResult = z.object({
+    path: z.string(),
+  })
+  export type DeleteResult = z.infer<typeof DeleteResult>
+
   export const UploadInvalidTargetError = NamedError.create(
     "FileUploadInvalidTargetError",
     z.object({
@@ -121,6 +146,30 @@ export namespace File {
 
   export const UploadConflictError = NamedError.create(
     "FileUploadConflictError",
+    z.object({
+      path: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const InvalidPathError = NamedError.create(
+    "FileInvalidPathError",
+    z.object({
+      path: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const EntryNotFoundError = NamedError.create(
+    "FileNotFoundError",
+    z.object({
+      path: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  export const ConflictError = NamedError.create(
+    "FileConflictError",
     z.object({
       path: z.string(),
       message: z.string(),
@@ -421,36 +470,39 @@ export namespace File {
   // COM (communications port), and LPT (line printer port) cannot be created as normal files.
   const windowsReservedDeviceNamePattern = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 
-  function uploadNameKey(name: string): string {
+  function entryNameKey(name: string): string {
     return process.platform === "win32" ? name.toLowerCase() : name
   }
 
-  function assertUploadFileName(name: string): string {
+  function assertEntryBasename(input: { name: string; label: string; error: "upload" | "file" }): string {
+    const { name, label, error } = input
+    const createError = (message: string) => {
+      if (error === "upload") {
+        return new UploadInvalidNameError({ name, message })
+      }
+      return new InvalidPathError({ path: name, message })
+    }
     if (!name || name === "." || name === "..") {
-      throw new UploadInvalidNameError({
-        name,
-        message: `Invalid uploaded file name: ${name || "(empty)"}`,
-      })
+      throw createError(`Invalid ${label} name: ${name || "(empty)"}`)
     }
     if (name.includes("/") || name.includes("\\") || path.isAbsolute(name) || name.includes("\0")) {
-      throw new UploadInvalidNameError({
-        name,
-        message: `Uploaded file name must be a basename: ${name}`,
-      })
+      throw createError(`${label} name must be a basename: ${name}`)
     }
     if (process.platform === "win32" && /[<>:"|?*\x00-\x1F]/.test(name)) {
-      throw new UploadInvalidNameError({
-        name,
-        message: `Uploaded file name is invalid on Windows: ${name}`,
-      })
+      throw createError(`${label} name is invalid on Windows: ${name}`)
     }
     if (process.platform === "win32" && (/[. ]$/.test(name) || windowsReservedDeviceNamePattern.test(name))) {
-      throw new UploadInvalidNameError({
-        name,
-        message: `Uploaded file name is reserved on Windows: ${name}`,
-      })
+      throw createError(`${label} name is reserved on Windows: ${name}`)
     }
     return name
+  }
+
+  function assertUploadFileName(name: string): string {
+    return assertEntryBasename({ name, label: "uploaded file", error: "upload" })
+  }
+
+  function assertFileEntryName(name: string): string {
+    return assertEntryBasename({ name, label: "file entry", error: "file" })
   }
 
   function decodeUploadedBase64(file: UploadFile): Buffer {
@@ -470,17 +522,87 @@ export namespace File {
     })
   }
 
+  function fileConflict(input: { path: string; message?: string }): InstanceType<typeof ConflictError> {
+    return new ConflictError({
+      path: input.path,
+      message: input.message ?? `File destination already exists: ${input.path}`,
+    })
+  }
+
+  function fileNotFound(input: { path: string; message?: string }): InstanceType<typeof EntryNotFoundError> {
+    return new EntryNotFoundError({
+      path: input.path,
+      message: input.message ?? `File entry not found: ${input.path}`,
+    })
+  }
+
+  function fileInvalidPath(input: { path: string; message?: string }): InstanceType<typeof InvalidPathError> {
+    return new InvalidPathError({
+      path: input.path,
+      message: input.message ?? `Invalid file path: ${input.path}`,
+    })
+  }
+
+  function isMissingFileError(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      ((error as { code?: unknown }).code === "ENOENT" || (error as { code?: unknown }).code === "ENOTDIR")
+    )
+  }
+
+  async function statReadableFile(file: string, full: string): Promise<fs.Stats> {
+    let stat: fs.Stats
+    try {
+      stat = await fs.promises.stat(full)
+    } catch (error) {
+      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      throw error
+    }
+    if (!stat.isFile()) {
+      throw fileNotFound({ path: file, message: `File entry is not a file: ${file}` })
+    }
+    return stat
+  }
+
+  async function assertReadableFile(file: string, full: string): Promise<void> {
+    try {
+      await fs.promises.access(full, fs.constants.R_OK)
+    } catch (error) {
+      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      throw error
+    }
+  }
+
+  async function readFileBytes(file: string, full: string): Promise<Buffer> {
+    try {
+      return await Filesystem.readBytes(full)
+    } catch (error) {
+      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      throw error
+    }
+  }
+
+  async function readFileText(file: string, full: string): Promise<string> {
+    try {
+      return await Filesystem.readText(full)
+    } catch (error) {
+      if (isMissingFileError(error)) throw fileNotFound({ path: file })
+      throw error
+    }
+  }
+
   const state = lazyInstanceState(async () => {
     type Entry = { files: string[]; dirs: string[] }
     let cache: Entry = { files: [], dirs: [] }
-    let fetching = false
+    let fetching: Promise<Entry> | undefined
 
     const isHomeDirectory = Filesystem.resolve(Instance.directory) === Filesystem.resolve(Global.Path.home)
 
-    const fn = async (result: Entry) => {
+    const scan = async (result: Entry): Promise<Entry> => {
       // Disable scanning if in root of file system
-      if (Instance.directory === path.parse(Instance.directory).root) return
-      fetching = true
+      if (Instance.directory === path.parse(Instance.directory).root) return cache
 
       if (isHomeDirectory) {
         const dirs = new Set<string>()
@@ -521,8 +643,7 @@ export namespace File {
 
         result.dirs = Array.from(dirs).toSorted()
         cache = result
-        fetching = false
-        return
+        return cache
       }
 
       const set = new Set<string>()
@@ -540,19 +661,26 @@ export namespace File {
         }
       }
       cache = result
-      fetching = false
+      return cache
     }
-    fn(cache)
+    const refresh = () => {
+      const request = scan({ files: [], dirs: [] })
+      let tracked: Promise<Entry>
+      tracked = request.finally(() => {
+        if (fetching === tracked) {
+          fetching = undefined
+        }
+      })
+      fetching = tracked
+      return tracked
+    }
+    void refresh().catch((error) => {
+      log.warn("file index scan failed", { error: error instanceof Error ? error.message : String(error) })
+    })
 
     return {
       async files() {
-        if (!fetching) {
-          fn({
-            files: [],
-            dirs: [],
-          })
-        }
-        return cache
+        return fetching ?? refresh()
       },
     }
   })
@@ -647,25 +775,21 @@ export namespace File {
       throw new Error(`Access denied: path escapes project directory`)
     }
 
+    await statReadableFile(file, full)
+    await assertReadableFile(file, full)
+
     // Fast path: check extension before any filesystem operations
     if (isImageByExtension(file)) {
-      if (await Filesystem.exists(full)) {
-        const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
-        const content = buffer.toString("base64")
-        const mimeType = getImageMimeType(file)
-        return { type: "text", content, mimeType, encoding: "base64" }
-      }
-      return { type: "text", content: "" }
+      const buffer = await readFileBytes(file, full)
+      const content = buffer.toString("base64")
+      const mimeType = getImageMimeType(file)
+      return { type: "text", content, mimeType, encoding: "base64" }
     }
 
     const text = isTextByExtension(file) || isTextByName(file)
 
     if (isBinaryByExtension(file) && !text) {
       return { type: "binary", content: "" }
-    }
-
-    if (!(await Filesystem.exists(full))) {
-      return { type: "text", content: "" }
     }
 
     const mimeType = Filesystem.mimeType(full)
@@ -676,12 +800,12 @@ export namespace File {
     }
 
     if (encode) {
-      const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
+      const buffer = await readFileBytes(file, full)
       const content = buffer.toString("base64")
       return { type: "text", content, mimeType, encoding: "base64" }
     }
 
-    const content = await Filesystem.readText(full).catch(() => "")
+    const content = await readFileText(file, full)
 
     if (Project.isGitRepo(Instance.directory)) {
       let diff = await $`git -c core.fsmonitor=false diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
@@ -708,23 +832,178 @@ export namespace File {
     using _ = log.time("writeText", { file })
     const full = path.join(Instance.directory, file)
 
-    if (!(await isPathAllowed(full))) {
-      throw new Error(`Access denied: path escapes project directory`)
-    }
+    await assertAllowedFilePath({ file, fullPath: full })
+    await statReadableFile(file, full)
 
     const text = isTextByExtension(file) || isTextByName(file)
     if (isBinaryByExtension(file) && !text) {
-      throw new Error(`Cannot edit binary file: ${file}`)
-    }
-
-    const stat = await fs.promises.stat(full).catch(() => undefined)
-    if (!stat?.isFile()) {
-      throw new Error(`Cannot edit missing file: ${file}`)
+      throw fileInvalidPath({ path: file, message: `Cannot edit binary file: ${file}` })
     }
 
     await Filesystem.write(full, content)
     await Bus.publish(Event.Edited, { file })
     return read(file)
+  }
+
+  function relativePathFor(fullPath: string): string {
+    return path.relative(Instance.directory, fullPath)
+  }
+
+  function basenameForEntry(file: string): string {
+    return assertFileEntryName(path.basename(file))
+  }
+
+  function parentRelativePath(file: string): string {
+    const parent = path.dirname(file)
+    return parent === "." ? "" : parent
+  }
+
+  async function assertAllowedFilePath(input: { file: string; fullPath: string }): Promise<void> {
+    if (!input.file.trim()) {
+      throw fileInvalidPath({ path: input.file, message: `File path cannot be empty` })
+    }
+    if (path.isAbsolute(input.file)) {
+      throw fileInvalidPath({ path: input.file, message: `File path must be project-relative: ${input.file}` })
+    }
+    if (input.file.includes("\0")) {
+      throw fileInvalidPath({ path: input.file, message: `File path contains a null byte: ${input.file}` })
+    }
+    if (!(await isPathAllowed(input.fullPath))) {
+      throw fileInvalidPath({ path: input.file, message: `Access denied: path escapes project directory` })
+    }
+  }
+
+  async function assertExistingParent(input: { file: string; fullPath: string }): Promise<void> {
+    const parent = path.dirname(input.fullPath)
+    if (!(await isPathAllowed(parent))) {
+      throw fileInvalidPath({ path: input.file, message: `Access denied: parent path escapes project directory` })
+    }
+    const parentStat = await fs.promises.stat(parent).catch(() => undefined)
+    if (!parentStat?.isDirectory()) {
+      throw fileInvalidPath({
+        path: input.file,
+        message: `Parent directory does not exist: ${parentRelativePath(input.file) || "."}`,
+      })
+    }
+  }
+
+  async function nodeForPath(fullPath: string): Promise<Node> {
+    const stat = await fs.promises.stat(fullPath).catch(() => undefined)
+    if (!stat) throw fileNotFound({ path: relativePathFor(fullPath) })
+    const relativePath = relativePathFor(fullPath)
+    return {
+      name: path.basename(fullPath),
+      path: relativePath,
+      absolute: fullPath,
+      type: stat.isDirectory() ? "directory" : "file",
+      ignored: await isIgnored(relativePath, stat.isDirectory()),
+    }
+  }
+
+  async function isIgnored(relativePath: string, directory: boolean): Promise<boolean> {
+    if (!Project.isGitRepo(Instance.directory)) return false
+    const ig = ignore()
+    const gitignorePath = path.join(Instance.worktree, ".gitignore")
+    if (await Filesystem.exists(gitignorePath)) {
+      ig.add(await Filesystem.readText(gitignorePath))
+    }
+    const ignorePath = path.join(Instance.worktree, ".ignore")
+    if (await Filesystem.exists(ignorePath)) {
+      ig.add(await Filesystem.readText(ignorePath))
+    }
+    return ig.ignores(directory ? relativePath + "/" : relativePath)
+  }
+
+  export async function create(input: CreateRequest): Promise<Node> {
+    using _ = log.time("create", { path: input.path, type: input.type })
+    const file = input.path
+    const full = path.join(Instance.directory, file)
+    basenameForEntry(file)
+    await assertAllowedFilePath({ file, fullPath: full })
+    await assertExistingParent({ file, fullPath: full })
+    if (await Filesystem.exists(full)) {
+      throw fileConflict({ path: file })
+    }
+
+    if (input.type === "directory") {
+      try {
+        await fs.promises.mkdir(full)
+      } catch (error) {
+        if (error && typeof error === "object" && (error as { code?: string }).code === "EEXIST") {
+          throw fileConflict({ path: file })
+        }
+        throw error
+      }
+    } else {
+      try {
+        await fs.promises.writeFile(full, input.content ?? "", { flag: "wx" })
+      } catch (error) {
+        if (error && typeof error === "object" && (error as { code?: string }).code === "EEXIST") {
+          throw fileConflict({ path: file })
+        }
+        throw error
+      }
+    }
+
+    await Bus.publish(Event.Edited, { file })
+    return nodeForPath(full)
+  }
+
+  export async function move(input: MoveRequest): Promise<MoveResult> {
+    using _ = log.time("move", { path: input.path, newPath: input.newPath })
+    const source = input.path
+    const target = input.newPath
+    if (!source.trim()) {
+      throw fileInvalidPath({ path: source, message: "Cannot move the project root from the file browser" })
+    }
+    const sourceFull = path.join(Instance.directory, source)
+    const targetFull = path.join(Instance.directory, target)
+    basenameForEntry(target)
+    await assertAllowedFilePath({ file: source, fullPath: sourceFull })
+    await assertAllowedFilePath({ file: target, fullPath: targetFull })
+    await assertExistingParent({ file: target, fullPath: targetFull })
+
+    const sourceStat = await fs.promises.stat(sourceFull).catch(() => undefined)
+    if (!sourceStat) throw fileNotFound({ path: source })
+    if (await Filesystem.exists(targetFull)) {
+      throw fileConflict({ path: target })
+    }
+
+    try {
+      await fs.promises.rename(sourceFull, targetFull)
+    } catch (error) {
+      if (error && typeof error === "object" && (error as { code?: string }).code === "EEXIST") {
+        throw fileConflict({ path: target })
+      }
+      throw error
+    }
+    await Bus.publish(Event.Edited, { file: source })
+    await Bus.publish(Event.Edited, { file: target })
+    return {
+      previousPath: source,
+      path: target,
+      node: await nodeForPath(targetFull),
+    }
+  }
+
+  export async function remove(input: { path: string }): Promise<DeleteResult> {
+    using _ = log.time("remove", { path: input.path })
+    const file = input.path
+    if (!file.trim()) {
+      throw fileInvalidPath({ path: file, message: "Cannot delete the project root from the file browser" })
+    }
+    const full = path.join(Instance.directory, file)
+    await assertAllowedFilePath({ file, fullPath: full })
+    const stat = await fs.promises.stat(full).catch(() => undefined)
+    if (!stat) throw fileNotFound({ path: file })
+
+    if (stat.isDirectory()) {
+      await fs.promises.rm(full, { recursive: true, force: false })
+    } else {
+      await fs.promises.unlink(full)
+    }
+    await Bus.publish(Event.Edited, { file })
+    return { path: file }
   }
 
   export async function upload(input: UploadRequest): Promise<UploadResult[]> {
@@ -751,7 +1030,7 @@ export namespace File {
     const writes: Array<{ name: string; relativePath: string; fullPath: string; bytes: Buffer }> = []
     for (const file of input.files) {
       const name = assertUploadFileName(file.name)
-      const key = uploadNameKey(name)
+      const key = entryNameKey(name)
       if (seenNames.has(key)) {
         throw new UploadConflictError({
           path: path.join(targetDir, name),

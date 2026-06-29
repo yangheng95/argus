@@ -5,6 +5,7 @@ import z from "zod"
 
 import { assessCaptureDiagnostics, captureReferenceManifest, summarizeCaptureDiagnostics } from "./capture-gate"
 import { resolveFrontendDesignBrowserProxy } from "./browser-proxy"
+import { DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT } from "@/browser/webpage/default-viewport"
 
 function screenshotFilename(inputUrl: string): string {
   try {
@@ -30,13 +31,13 @@ export function createUrlScreenshotTool() {
           .int()
           .positive()
           .optional()
-          .describe("Viewport width in logical pixels. Default 1440."),
+          .describe(`Viewport width in logical pixels. Default ${DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.width}.`),
         viewport_height: z
           .number()
           .int()
           .positive()
           .optional()
-          .describe("Viewport height in logical pixels. Default 900."),
+          .describe(`Viewport height in logical pixels. Default ${DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.height}.`),
       }),
       execute: async ({ url, viewport_width, viewport_height }) => {
         const browserProxy = await resolveFrontendDesignBrowserProxy()
@@ -49,8 +50,8 @@ export function createUrlScreenshotTool() {
           url,
           outDir,
           viewport: {
-            width: viewport_width ?? 1440,
-            height: viewport_height ?? 900,
+            width: viewport_width ?? DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.width,
+            height: viewport_height ?? DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.height,
           },
           browserProxy,
         })

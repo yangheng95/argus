@@ -26,7 +26,7 @@ test("MCP status starts local transports asynchronously and records startup fail
       const status = await MCP.status()
       expect(status.broken).toEqual({ status: "connecting" })
 
-      await expect(MCP.tools()).resolves.toEqual({})
+      await expect(MCP.tools()).rejects.toThrow()
       await waitFor(async () => (await MCP.status()).broken.status === "failed")
 
       const failed = (await MCP.status()).broken

@@ -5,6 +5,7 @@ import { SessionStatus } from "../../src/session/status"
 import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { SessionTable } from "../../src/session/session.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -73,20 +74,25 @@ describe("coding assistant routes", () => {
     let listedID = ""
     let otherDirectoryID = ""
     await Instance.provide({
+      directory: second.path,
+      fn: async () => {
+        otherDirectoryID = (
+          await Session.create({
+            kind: "assistant",
+            title: "other directory",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          })
+        ).id
+      },
+    })
+
+    await Instance.provide({
       directory: first.path,
       fn: async () => {
         listedID = (
           await Session.create({
             kind: "assistant",
             title: "listed",
-            metadata: { codingAssistant: { surface: "right-sidebar" } },
-          })
-        ).id
-        otherDirectoryID = (
-          await Session.createNext({
-            kind: "assistant",
-            directory: second.path,
-            title: "other directory",
             metadata: { codingAssistant: { surface: "right-sidebar" } },
           })
         ).id
@@ -104,6 +110,13 @@ describe("coding assistant routes", () => {
         expect(ids).toContain(listedID)
         expect(ids).not.toContain(otherDirectoryID)
         expect(body.sessions.every((session) => session.metadata?.codingAssistant)).toBe(true)
+
+        const queryScoped = await app.request(`/coding/sessions?directory=${encodeURIComponent(second.path)}`, {
+          method: "GET",
+        })
+        expect(queryScoped.status).toBe(200)
+        const queryBody = (await queryScoped.json()) as { sessions: Session.Info[] }
+        expect(queryBody.sessions.map((session) => session.id)).toEqual([otherDirectoryID])
       },
     })
   })
@@ -171,6 +184,88 @@ describe("coding assistant routes", () => {
         expect(secondPage.status).toBe(200)
         const secondBody = (await secondPage.json()) as { sessions: Session.Info[] }
         expect(secondBody.sessions.map((session) => session.id)).toEqual([expectedOrder[1].id])
+      },
+    })
+  })
+
+  test("rejects half coding session cursors and paginates same-timestamp sessions by sessionID", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const alpha = await Session.create({
+          kind: "assistant",
+          title: "Alpha assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const beta = await Session.create({
+          kind: "assistant",
+          title: "Beta assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const gamma = await Session.create({
+          kind: "assistant",
+          title: "Gamma assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+        const fixedUpdated = Date.now() + 10_000
+        Database.use((db) => {
+          for (const session of [alpha, beta, gamma]) {
+            db.update(SessionTable).set({ time_updated: fixedUpdated }).where(eq(SessionTable.id, session.id)).run()
+          }
+        })
+
+        const app = Server.App()
+        const onlyUpdated = await app.request(`/coding/sessions?cursorUpdated=${fixedUpdated}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(onlyUpdated.status).toBe(400)
+
+        const onlySession = await app.request(`/coding/sessions?cursorSessionID=${encodeURIComponent(beta.id)}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(onlySession.status).toBe(400)
+
+        const expectedOrder = [alpha.id, beta.id, gamma.id].sort((left, right) => right.localeCompare(left))
+        const firstPage = await app.request("/coding/sessions?limit=2", {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(firstPage.status).toBe(200)
+        const firstBody = (await firstPage.json()) as {
+          sessions: Session.Info[]
+          nextCursor?: { updated: number; sessionID: string }
+        }
+        expect(firstBody.sessions.map((session) => session.id)).toEqual(expectedOrder.slice(0, 2))
+        expect(firstBody.nextCursor).toEqual({
+          updated: fixedUpdated,
+          sessionID: expectedOrder[1],
+        })
+
+        const cursor = new URLSearchParams({
+          limit: "2",
+          cursorUpdated: String(firstBody.nextCursor!.updated),
+          cursorSessionID: firstBody.nextCursor!.sessionID,
+        })
+        const secondPage = await app.request(`/coding/sessions?${cursor.toString()}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(secondPage.status).toBe(200)
+        const secondBody = (await secondPage.json()) as { sessions: Session.Info[]; nextCursor?: unknown }
+        expect(secondBody.sessions.map((session) => session.id)).toEqual(expectedOrder.slice(2))
+        expect(secondBody.nextCursor).toBeUndefined()
       },
     })
   })

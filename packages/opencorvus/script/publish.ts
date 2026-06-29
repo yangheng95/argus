@@ -104,8 +104,9 @@ if (!Script.preview) {
     "",
   ].join("\n")
 
+  const maxAurUpdateAttempts = 30
   for (const [pkg, pkgbuild] of [["opencorvus-bin", binaryPkgbuild]]) {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < maxAurUpdateAttempts; i++) {
       try {
         await $`rm -rf ./dist/aur-${pkg}`
         await $`git clone ssh://aur@aur.archlinux.org/${pkg}.git ./dist/aur-${pkg}`
@@ -117,6 +118,9 @@ if (!Script.preview) {
         await $`cd ./dist/aur-${pkg} && git push`
         break
       } catch (e) {
+        if (i === maxAurUpdateAttempts - 1) {
+          throw new Error(`AUR update failed after ${maxAurUpdateAttempts} attempts for ${pkg}`, { cause: e })
+        }
         continue
       }
     }

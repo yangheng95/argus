@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { SessionTable } from "../../src/session/session.sql"
@@ -67,6 +67,15 @@ function insertStatus(
   ids: IDs,
   input: { seq: number; emittedAt: number; status: "streaming" | "retry" | "idle" | "terminal" },
 ) {
+  const session = Database.use((db) =>
+    db
+      .select({ timeCreated: SessionTable.time_created })
+      .from(SessionTable)
+      .where(eq(SessionTable.id, ids.sessionID))
+      .get(),
+  )
+  if (!session) throw new Error(`missing session ${ids.sessionID}`)
+  const orderKey = timelineOrderKey({ domain: "session", time: session.timeCreated, id: ids.sessionID })
   Database.use((db) => {
     db.insert(ProtocolEventTable)
       .values({
@@ -87,9 +96,11 @@ function insertStatus(
         correlation_id: null,
         reply_to: null,
         seq: input.seq,
+        order_key: orderKey,
         deadline_ms: null,
         emitted_at: input.emittedAt,
         payload: {
+          orderKey,
           sessionID: ids.sessionID,
           status: { type: input.status },
         },

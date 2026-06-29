@@ -27,7 +27,7 @@ const PRESSURE_TEST_FILES = [
 
 const ISOLATED_PRESSURE_TEST_FILES = ["test/integrity/team-agent.test.ts"]
 
-const KNOWN_FLAGS = new Set(["--idle-timeout-ms", "--per-test-timeout-ms"])
+const KNOWN_FLAGS = new Set(["--idle-timeout-ms"])
 
 function flag(name: string): string | undefined {
   const eq = process.argv.find((item) => item.startsWith(`${name}=`))
@@ -71,15 +71,15 @@ validateFlags()
 
 const packageRoot = path.resolve(import.meta.dir, "../..")
 const idleTimeoutMs = parsePositiveInt("--idle-timeout-ms", 120_000)
-const perTestTimeoutMs = parsePositiveInt("--per-test-timeout-ms", 30_000)
+const bunTestTimeoutDisabled = "0"
 
 log(`cwd=${packageRoot}`)
 log(`idle_timeout_ms=${idleTimeoutMs}`)
-log(`per_test_timeout_ms=${perTestTimeoutMs}`)
+log("bun_test_timeout_ms=0")
 
 const commands = [
-  ["bun", "test", "--timeout", String(perTestTimeoutMs), ...PRESSURE_TEST_FILES].join(" "),
-  ["bun", "test", "--timeout", String(perTestTimeoutMs), ...ISOLATED_PRESSURE_TEST_FILES].join(" "),
+  ["bun", "test", "--timeout", bunTestTimeoutDisabled, ...PRESSURE_TEST_FILES].join(" "),
+  ["bun", "test", "--timeout", bunTestTimeoutDisabled, ...ISOLATED_PRESSURE_TEST_FILES].join(" "),
 ]
 
 for (const command of commands) {

@@ -166,9 +166,7 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
 
     expect(text).toContain("## Expert Squad Scheduling")
-    expect(normalized).toContain(
-      "you own the expert-squad decision from the user request and current task evidence",
-    )
+    expect(normalized).toContain("you own the expert-squad decision from the user request and current task evidence")
     expect(normalized).toContain("Use the visible `skill` tool only to search or load mounted Orchestrator")
     expect(normalized).toContain("call `select_expert_squad` with the named `profile_id`")
     expect(normalized).toContain("before dispatching downstream specialists")
@@ -363,7 +361,9 @@ describe("core prompt hygiene", () => {
     expect(integrityFlat).toContain("Every finding MUST carry at least one of")
     expect(integrityFlat).toContain("requirementIDs")
     expect(integrityFlat).toContain("Do not retrofit a REQ-N tag")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("Integrity is the workflow acceptance gate")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain(
+      "Integrity is the final adversarial acceptance evidence producer",
+    )
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
     expect(tools).not.toContain("Diagnostic-only findings require upstream repair")
@@ -451,6 +451,7 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("consumer_goal_ids")
     expect(text).toContain("register_dependency_contract({")
     expect(text).toContain('reason: "contract" | "bootstrap_scaffold" | "integration_order"')
+    expect(text).toContain("Accepted dependency contracts materialize `from_goal_id` into `to_goal_id.depends_on`")
     expect(text).toContain("Use `contract_audit` only with")
   })
 
@@ -486,6 +487,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("default 5-30 high-granularity target")
     expect(normalized).toContain("why no goal is too large")
     expect(normalized).toContain("At least two goals exist")
+    expect(normalized).toContain("incomplete known REQ-N consumption")
+    expect(normalized).toContain("missing requirement owners")
+    expect(normalized).toContain("missing requirement acceptance specs")
   })
 
   test("architect prompt forbids simplifying away requirement scope", async () => {
@@ -507,6 +511,12 @@ describe("core prompt hygiene", () => {
     // Every requirement must land on a capable owning goal.
     expect(normalized).toContain("Map every requirement to a goal that can deliver it")
     expect(normalized).toContain("Every requirement (REQ-N) is claimed by at least one goal that can deliver it")
+    expect(normalized).toContain(
+      "Every requirement (REQ-N) has at least one goal-local acceptance spec whose `source_requirement_id` is that REQ-N",
+    )
+    expect(normalized).toContain(
+      "Every claimed requirement (REQ-N) has a `register_traceability` row mapping it to its owning goals",
+    )
     expect(normalized).toContain(
       "how the goal set covers every requirement with nothing simplified, deferred, or dropped",
     )
@@ -1010,8 +1020,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("coverage")
     expect(normalized).toContain("findings")
     expect(normalized).toContain("production_blockers")
-    expect(normalized).toContain("follow_up_task")
-    expect(normalized).toContain("complete new-round request tied to the blocker IDs")
+    expect(normalized).toContain("unresolved_code_module_problems")
+    expect(normalized).toContain("Do not submit a new-task request")
     expect(normalized).toContain("evidence")
   })
 
@@ -1055,7 +1065,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
     expect(normalized).toContain("Keep `integrity` as the final system-completeness acceptance gate")
-    expect(normalized).toContain("call `propose_task` from that evidence instead of ending passively")
+    expect(normalized).toContain("If it reports unresolved_code_module_problems")
+    expect(normalized).toContain("the scheduler must decide whether same-task repair, question, fail_task, or `propose_task`")
     expect(normalized).not.toContain("run `integrity` first")
     expect(normalized).not.toContain("call `visual_qa` after integrity")
     expect(normalized).not.toContain(["inspect", "only"].join("_"))
@@ -1080,9 +1091,13 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("After a successful `requirements` result, call `architect` next")
     expect(normalized).toContain("Do not call `requirements` again unless an operator message changed scope")
-    expect(normalized).toContain("concrete task evidence proves the active REQ snapshot is invalid before execution has begun")
+    expect(normalized).toContain(
+      "concrete task evidence proves the active REQ snapshot is invalid before execution has begun",
+    )
     expect(normalized).toContain("If execution has begun and the REQ snapshot is fundamentally wrong")
-    expect(normalized).toContain("use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place")
+    expect(normalized).toContain(
+      "use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place",
+    )
   })
 
   test("orchestrator prompt routes non-pass integrity fixes through explicit repair", async () => {
@@ -1090,9 +1105,9 @@ describe("core prompt hygiene", () => {
     const source = await readSource("orchestrator/agent.ts")
     const normalized = text.replace(/\s+/g, " ")
     const sourceNormalized = source.replace(/\s+/g, " ")
-    expect(normalized).toContain("Integrity is the workflow acceptance gate")
+    expect(normalized).toContain("Integrity is the final adversarial acceptance evidence producer")
     expect(normalized).toContain("no separate final acceptance object")
-    expect(normalized).toContain("The host no longer runs a host-owned final acceptance gate")
+    expect(normalized).toContain("The host no longer runs a host-owned final acceptance object")
     expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
     expect(normalized).toContain("After post-build non-pass integrity, do not end the wake with plain text")
     expect(normalized).toContain("do not passively report and leave the task active")
@@ -1148,9 +1163,13 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("default true creates directly")
     expect(normalized).toContain("inheriting follow-up task creation")
     expect(normalized).toContain("execution evidence, artifact state, integrity history, or the obvious product path")
-    expect(normalized).toContain("If visual QA returns a `follow_up_task`")
-    expect(normalized).toContain("supplemental features, deeper implementation detail")
+    expect(normalized).toContain("If visual QA reports unresolved_code_module_problems")
+    expect(normalized).toContain("the scheduler can name the concrete module/problem in `code_module_reference`")
+    expect(normalized).toContain("Supplemental features, deeper implementation detail")
     expect(normalized).toContain("project improvement suggestions")
+    expect(normalized).toContain("specific code-module problem")
+    expect(normalized).toContain("concrete code module reference entity")
+    expect(normalized).toContain("refuse to create a child task")
     expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
   })
 
@@ -1202,16 +1221,34 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("`read_context` exposes `workload_analyzed`")
   })
 
+  test("orchestrator prompt routes pending A2A cancellation through coordination response", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain(
+      "If a pending worker coordination request asks for cancellation, answer that request through `respond_agent_coordination` with decision `cancel_worker`",
+    )
+    expect(normalized).toContain("Do not use `cancel_subagent` to answer or bypass a pending A2A request")
+    expect(normalized).not.toContain(
+      "unless a target-scoped operator command or pending worker coordination request explicitly asks for cancellation",
+    )
+  })
+
   test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain(
-      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict",
+      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict",
     )
     expect(normalized).toContain("There is no `deliver` or `publish_acceptance` tool")
-    expect(normalized).toContain("A pass verdict completes the task")
+    expect(normalized).toContain("you call `complete_task` with the returned `integrity_attempt_id`")
+    expect(normalized).toContain(
+      "A post-build pass result is still not an engine terminal write until `complete_task` succeeds",
+    )
     expect(normalized).toContain("`completed`, `failed`, and `cancelled` are terminal for self-wakes")
-    expect(normalized).toContain("External operator messages, injected messages, retry, and replan are explicit wake requests")
+    expect(normalized).toContain(
+      "External operator messages, injected messages, retry, and replan are explicit wake requests",
+    )
     expect(normalized).toContain("scheduler activity becomes legal only after the task is active")
     expect(normalized).not.toContain("Only an accepted host-arbiter verdict completes the task")
     expect(normalized).not.toContain("acceptance has accepted and been published")
@@ -1324,9 +1361,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("evidence, not trusted truth")
     expect(normalized).toContain("If they contradict the original request or the repository baseline")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("final workflow gate")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("produces final completion evidence")
     expect(orchestrator.replace(/\s+/g, " ")).toContain(
-      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a pass verdict",
+      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict",
     )
     expect(architect).toContain(
       "final workflow gate to audit the original user request, requirements extraction, and built system",

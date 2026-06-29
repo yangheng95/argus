@@ -79,9 +79,7 @@ export const MAX_TEXT_DECODE_BYTES = 200_000
  * larger, so the model is explicitly aware of the truncation.
  */
 export function decodeDataUrlText(dataUrl: string): string {
-  const commaIndex = dataUrl.indexOf(",")
-  if (commaIndex === -1) return ""
-  const raw = Buffer.from(dataUrl.slice(commaIndex + 1), "base64")
+  const raw = decodeDataUrlBase64Bytes(dataUrl, "decodeDataUrlText")
   if (raw.length > MAX_TEXT_DECODE_BYTES) {
     const truncated = raw.subarray(0, MAX_TEXT_DECODE_BYTES).toString("utf-8")
     return `${truncated}\n\n[... truncated — file exceeds ${MAX_TEXT_DECODE_BYTES / 1024}KB limit ...]`
@@ -111,5 +109,26 @@ export function decodeDataUrlBase64(dataUrl: string, context: string): string {
       `${context}: expected data URL of form "data:<mime>;base64,<bytes>", got ${JSON.stringify(preview)}`,
     )
   }
-  return dataUrl.slice(dataUrl.indexOf(",") + 1)
+  const payload = dataUrl.slice(dataUrl.indexOf(",") + 1)
+  decodeRawBase64Payload(payload, context)
+  return payload
+}
+
+export function decodeDataUrlBase64Bytes(dataUrl: string, context: string): Buffer {
+  return decodeRawBase64Payload(decodeDataUrlBase64(dataUrl, context), context)
+}
+
+export function decodeRawBase64Payload(payload: string, context: string): Buffer {
+  if (typeof payload !== "string" || payload.length === 0) {
+    throw new Error(`${context}: expected non-empty base64 payload`)
+  }
+  if (payload.trim() !== payload || payload.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) {
+    throw new Error(`${context}: invalid base64 payload`)
+  }
+  const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4)
+  const bytes = Buffer.from(padded, "base64")
+  if (bytes.length === 0 || bytes.toString("base64").replace(/=+$/, "") !== payload.replace(/=+$/, "")) {
+    throw new Error(`${context}: invalid base64 payload`)
+  }
+  return bytes
 }

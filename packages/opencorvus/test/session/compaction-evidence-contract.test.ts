@@ -36,6 +36,30 @@ function handoffFixture(): CompactionHandoff.Info {
         extraKeys: [],
       },
     },
+    agentHandoff: {
+      kind: "build",
+      deliverables: [
+        {
+          fact: "Compaction evidence contract is the build deliverable under test",
+          evidence: "packages/opencorvus/test/session/compaction-evidence-contract.test.ts",
+        },
+      ],
+      codeChanges: [
+        {
+          path: "packages/opencorvus/src/session/compaction-handoff.ts",
+          fact: "Build handoff validation preserves exact evidence tokens",
+          evidence: "server/db/schema.ts",
+        },
+      ],
+      verification: [],
+      runtimeState: [
+        {
+          fact: "Runtime error context must become errorsAndBlockers evidence",
+          evidence: "StructuredOutput tool error",
+        },
+      ],
+      handoffArtifacts: [],
+    },
     decisions: [
       {
         decision: "Use worktree-relative patch paths as the evidence source",
@@ -68,6 +92,7 @@ describe("compaction evidence contract", () => {
   test("accepts worktree-relative required patch files and semantic error acknowledgments", () => {
     const result = CompactionHandoff.validateMinimumEvidence(handoffFixture(), {
       sourceUserMessageID: "msg-source",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["server/db/schema.ts"],
       errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
@@ -91,6 +116,7 @@ describe("compaction evidence contract", () => {
       },
       {
         sourceUserMessageID: "msg-source",
+        sourceAgent: "build",
         instructionPaths: [requiredInstruction],
         patchFiles: ["server/db/schema.ts"],
         errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
@@ -113,6 +139,7 @@ describe("compaction evidence contract", () => {
       },
       {
         sourceUserMessageID: "msg-source",
+        sourceAgent: "build",
         instructionPaths: ["D:\\myhexin-local\\demos\\economy\\AGENTS.md"],
         patchFiles: ["server/db/schema.ts"],
         errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
@@ -139,6 +166,7 @@ describe("compaction evidence contract", () => {
       },
       {
         sourceUserMessageID: "msg-source",
+        sourceAgent: "build",
         instructionPaths: ["/repo/AGENTS.md"],
         patchFiles: ["server/db/schema.ts"],
         errorNames: ["StructuredOutputPayloadError"],
@@ -178,6 +206,7 @@ describe("compaction evidence contract", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "msg-source",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["server/db/schema.ts"],
       errorNames: [
@@ -211,6 +240,7 @@ describe("compaction evidence contract", () => {
       } as CompactionHandoff.Info,
       {
         sourceUserMessageID: "msg-source",
+        sourceAgent: "build",
         instructionPaths: ["/repo/AGENTS.md"],
         patchFiles: ["server/db/schema.ts"],
         errorNames: ["StructuredOutputPayloadError"],
@@ -229,6 +259,7 @@ describe("compaction evidence contract", () => {
   test("rejects a handoff that genuinely omits a required patch file", () => {
     const result = CompactionHandoff.validateMinimumEvidence(handoffFixture(), {
       sourceUserMessageID: "msg-source",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["server/db/schema.ts", "server/db/connection.ts"],
       errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
@@ -246,6 +277,7 @@ describe("compaction evidence contract", () => {
   test("renders required file evidence and runtime error context blocks", () => {
     const requirements: CompactionHandoff.EvidenceRequirements = {
       sourceUserMessageID: "msg-source",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["server/db/schema.ts", "server/db/connection.ts"],
       errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
@@ -258,7 +290,7 @@ describe("compaction evidence contract", () => {
 
     const runtime = CompactionHandoff.renderRequiredEvidence(requirements)
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: undefined,
+      sourceAgent: "build",
       runtime,
       context: [],
     })
@@ -277,6 +309,7 @@ describe("compaction evidence contract", () => {
   test("renders previous handoff retention requirements into the compaction prompt", () => {
     const requirements: CompactionHandoff.EvidenceRequirements = {
       sourceUserMessageID: "msg-source",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -298,12 +331,13 @@ describe("compaction evidence contract", () => {
         userMessages: ["Prior user message sentinel must survive"],
         nextActions: ["Prior next action sentinel must survive"],
         openRisks: ["Prior risk sentinel must survive"],
+        agentHandoff: ["agentHandoff.deliverables.fact=Prior build deliverable sentinel must survive"],
       },
     }
 
     const runtime = CompactionHandoff.renderRequiredEvidence(requirements)
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: undefined,
+      sourceAgent: "build",
       runtime,
       context: [],
     })
@@ -320,6 +354,9 @@ describe("compaction evidence contract", () => {
     expect(prompt).toContain("<userMessages>\nPrior user message sentinel must survive\n</userMessages>")
     expect(prompt).toContain("<nextActions>\nPrior next action sentinel must survive\n</nextActions>")
     expect(prompt).toContain("<openRisks>\nPrior risk sentinel must survive\n</openRisks>")
+    expect(prompt).toContain(
+      "<agentHandoff>\nagentHandoff.deliverables.fact=Prior build deliverable sentinel must survive\n</agentHandoff>",
+    )
     expect(prompt).toContain("retain every listed value verbatim")
   })
 

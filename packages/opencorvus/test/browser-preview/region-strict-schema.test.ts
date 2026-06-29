@@ -3,7 +3,6 @@ import {
   BrowserPreviewRegionComparisonRequest,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import { BrowserPreviewCompareRegionsToolParameters } from "../../src/tool/browser-preview-compare-regions"
 
 describe("browser preview region strict schemas", () => {
   test("comparison request rejects direct target URL and output directory fields", () => {
@@ -55,32 +54,6 @@ describe("browser preview region strict schemas", () => {
     )
   })
 
-  test("compare regions tool parameters reject raw URL and output directory fields", () => {
-    const binding = regionBinding()
-
-    expectParseIssue(
-      BrowserPreviewCompareRegionsToolParameters.safeParse({
-        targetID: "art_previewtarget_1",
-        viewportIDs: ["desktop"],
-        inlineBindings: [binding],
-        url: "http://127.0.0.1:5173/",
-      }),
-      "url",
-    )
-    expectParseIssue(
-      BrowserPreviewCompareRegionsToolParameters.safeParse({
-        targetID: "art_previewtarget_1",
-        viewportIDs: ["desktop"],
-        inlineBindings: [
-          {
-            ...binding,
-            implementation: { ...binding.implementation, outDir: ".opencorvus/other" },
-          },
-        ],
-      }),
-      "outDir",
-    )
-  })
 })
 
 function regionBinding(): BrowserPreviewRegionBinding {

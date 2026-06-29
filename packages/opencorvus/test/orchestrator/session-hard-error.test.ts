@@ -9,6 +9,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
+import { sessionLifecycleOrderKey } from "../../src/session/status"
 import { Database, and, eq } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -207,6 +208,7 @@ describe("orchestrator session hard-error funnel", () => {
         prompt.mockImplementation((async (input) => {
           await Bus.publish(Session.Event.Error, {
             sessionID: input.sessionID,
+            orderKey: sessionLifecycleOrderKey(input.sessionID),
             error: duplicateError as never,
           })
           return finalAssistantMessage(input, duplicate.now, { error: duplicateError })

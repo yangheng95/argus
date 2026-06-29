@@ -50,7 +50,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
         evidence_refs: [imageRef],
       },
     ],
-    follow_up_task: null,
+    unresolved_code_module_problems: [],
     repairs: [],
     evidence: [
       {
@@ -90,14 +90,14 @@ describe("visual-qa negative product-grade fixtures", () => {
     }
   })
 
-  test("negative fixtures submitted as accepted reports are recorded with advisories", async () => {
+  test("negative fixtures submitted as accepted reports are recorded with blocker feedback", async () => {
     const manifest = await readManifest()
 
     for (const item of manifest.cases) {
       const result = await callSubmit(reportForFixture(item, true))
       expect(result, item.id).toContain("RECORDED")
       expect(result, item.id).toContain("effective_accepted=false")
-      expect(result, item.id).toContain("ADVISORIES")
+      expect(result, item.id).toContain("BLOCKERS")
       expect(result, item.id).toContain("accepted=true was submitted with production blockers")
       expect(result, item.id).toContain(item.blocker.id)
     }

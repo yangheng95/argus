@@ -26,58 +26,46 @@ import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { openTaskForOperatorWake } from "./task-message-open"
 import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "engine.queue" })
-const DEAD_OWNER_QUEUE_CONVERGENCE_REASON = "Directory queue: previous owner process died before terminalization"
+const DEAD_OWNER_QUEUE_CONVERGENCE_REASON = "Directory queue: previous owner process died before interruption"
 
 // Process-local loop accounting. The real queue lock is in the DB
 // (claimNextForCwd), but interrupt-driven replacement can briefly overlap an
 // old loop that is unwinding with the new wake that supersedes it.
 const loopInFlight = new Map<string, number>()
-type QueuedVolatileTaskEvent = {
-  event: OrchestratorEvent
-  timeQueued: number
-  sequence: number
-}
 
 type QueuedOperatorWakePayload = {
   wake_id: string
+  task_id: string
   message_id?: string
+  request_id?: string
+  lifecycle_event_id?: string
+  source_kind: "operator_message" | "operator_intent" | "coordination_request" | "task_lifecycle" | "orchestrator_event"
   event: OrchestratorEvent
   time_queued: number
+  queued_by_process_id: number
+  queued_by_instance_directory?: string
+  queued_by_project_id?: string
 }
 
-const queuedTaskEvents = new Map<string, QueuedVolatileTaskEvent[]>()
-let queuedTaskEventSequence = 0
-
 export function discardQueuedTaskEvent(taskID: string): void {
-  queuedTaskEvents.delete(taskID)
   discardPendingQueuedOperatorWakes(taskID)
 }
 
 export function queuedTaskEventStats(taskID?: string) {
   if (taskID) {
-    const events = queuedTaskEvents.get(taskID) ?? []
-    if (events.length === 0 || !findTask(taskID)) queuedTaskEvents.delete(taskID)
-    const volatileCount = queuedTaskEvents.get(taskID)?.length ?? 0
     const durableCount = pendingQueuedOperatorWakeTaskIDs().filter((id) => id === taskID).length
     return {
-      tasks: volatileCount + durableCount > 0 ? 1 : 0,
-      events: volatileCount + durableCount,
+      tasks: durableCount > 0 ? 1 : 0,
+      events: durableCount,
     }
   }
-  for (const [taskID, events] of queuedTaskEvents) {
-    if (events.length === 0 || !findTask(taskID)) queuedTaskEvents.delete(taskID)
-  }
-  const volatileTasks = [...queuedTaskEvents.values()].filter((events) => events.length > 0)
   const durableRows = pendingQueuedOperatorWakeTaskIDs()
-  const taskIDs = new Set<string>(durableRows)
-  for (const [taskID, events] of queuedTaskEvents) {
-    if (events.length > 0) taskIDs.add(taskID)
-  }
   return {
-    tasks: taskIDs.size,
-    events: volatileTasks.reduce((sum, events) => sum + events.length, 0) + durableRows.length,
+    tasks: new Set<string>(durableRows).size,
+    events: durableRows.length,
   }
 }
 
@@ -94,21 +82,20 @@ function pendingQueuedOperatorWakeTaskIDs(): string[] {
 
 function enqueueTaskEvent(taskID: string, event: OrchestratorEvent): void {
   const messageID = event.operatorMessage?.messageID?.trim()
-  if (messageID || event.operatorIntent) {
-    persistQueuedOperatorWake(taskID, event, messageID)
-    return
-  }
-  const events = queuedTaskEvents.get(taskID) ?? []
-  events.push({
-    event,
-    timeQueued: Date.now(),
-    sequence: (queuedTaskEventSequence += 1),
-  })
-  queuedTaskEvents.set(taskID, events)
+  const requestID = event.coordinationRequest?.requestID.trim()
+  const lifecycleEventID = event.lifecycleFact?.eventID.trim()
+  persistQueuedOperatorWake(taskID, event, { messageID, requestID, lifecycleEventID })
 }
 
-function persistQueuedOperatorWake(taskID: string, event: OrchestratorEvent, messageID: string | undefined): void {
-  if (messageID) {
+function persistQueuedOperatorWake(
+  taskID: string,
+  event: OrchestratorEvent,
+  identity: { messageID?: string; requestID?: string; lifecycleEventID?: string },
+): void {
+  const messageID = identity.messageID
+  const requestID = identity.requestID
+  const lifecycleEventID = identity.lifecycleEventID
+  if (messageID || requestID || lifecycleEventID) {
     const exists = Database.use((db) =>
       db
         .select({ id: EngineArtifactTable.id })
@@ -117,7 +104,11 @@ function persistQueuedOperatorWake(taskID: string, event: OrchestratorEvent, mes
           and(
             eq(EngineArtifactTable.task_id, taskID),
             eq(EngineArtifactTable.kind, "queued_operator_wake"),
-            sql`json_extract(${EngineArtifactTable.payload}, '$.message_id') = ${messageID}`,
+            messageID
+              ? sql`json_extract(${EngineArtifactTable.payload}, '$.message_id') = ${messageID}`
+              : requestID
+                ? sql`json_extract(${EngineArtifactTable.payload}, '$.request_id') = ${requestID}`
+                : sql`json_extract(${EngineArtifactTable.payload}, '$.lifecycle_event_id') = ${lifecycleEventID}`,
           ),
         )
         .get(),
@@ -125,11 +116,28 @@ function persistQueuedOperatorWake(taskID: string, event: OrchestratorEvent, mes
     if (exists) return
   }
   const now = Date.now()
+  const instance = Instance.current()
   const payload: QueuedOperatorWakePayload = {
-    wake_id: messageID ?? Identifier.ascending("artifact"),
+    wake_id: messageID ?? requestID ?? lifecycleEventID ?? Identifier.ascending("artifact"),
+    task_id: taskID,
     ...(messageID ? { message_id: messageID } : {}),
+    ...(requestID ? { request_id: requestID } : {}),
+    ...(lifecycleEventID ? { lifecycle_event_id: lifecycleEventID } : {}),
+    source_kind: messageID
+      ? "operator_message"
+      : requestID
+        ? "coordination_request"
+        : lifecycleEventID
+          ? "task_lifecycle"
+          : event.operatorIntent
+            ? "operator_intent"
+            : "orchestrator_event",
     event,
     time_queued: now,
+    queued_by_process_id: process.pid,
+    ...(instance
+      ? { queued_by_instance_directory: instance.directory, queued_by_project_id: instance.project.id }
+      : {}),
   }
   Database.use((db) =>
     db
@@ -168,28 +176,15 @@ function discardPendingQueuedOperatorWakes(taskID: string): void {
 }
 
 function takeQueuedTaskEvent(taskID: string): OrchestratorEvent | undefined {
-  const volatile = queuedTaskEvents.get(taskID)?.[0]
   const durable = findNextPendingQueuedOperatorWake(taskID)
-  if (durable && (!volatile || durable.timeCreated < volatile.timeQueued)) {
-    markQueuedOperatorWakeDrained(durable.id)
-    return durable.event
-  }
-  if (!volatile) return undefined
-  const events = queuedTaskEvents.get(taskID) ?? []
-  const [next, ...rest] = events
-  if (rest.length > 0) {
-    queuedTaskEvents.set(taskID, rest)
-  } else {
-    queuedTaskEvents.delete(taskID)
-  }
-  return next?.event
+  if (!durable) return undefined
+  markQueuedOperatorWakeDrained(durable.id)
+  return durable.event
 }
 
 function peekQueuedTaskEvent(taskID: string): OrchestratorEvent | undefined {
-  const volatile = queuedTaskEvents.get(taskID)?.[0]
   const durable = findNextPendingQueuedOperatorWake(taskID)
-  if (durable && (!volatile || durable.timeCreated < volatile.timeQueued)) return durable.event
-  return volatile?.event
+  return durable?.event
 }
 
 function findNextPendingQueuedOperatorWake(taskID: string):
@@ -237,7 +232,6 @@ function markQueuedOperatorWakeDrained(artifactID: string): void {
 }
 
 function hasQueuedTaskEvent(taskID: string): boolean {
-  if ((queuedTaskEvents.get(taskID)?.length ?? 0) > 0) return true
   return findNextPendingQueuedOperatorWake(taskID) !== undefined
 }
 
@@ -251,6 +245,7 @@ function isOperatorWakeEvent(event: OrchestratorEvent | undefined): boolean {
 
 function suppressPassiveStreamErrorWake(taskID: string, event: OrchestratorEvent | undefined): boolean {
   if (isOperatorWakeEvent(event)) return false
+  if (event?.lifecycleFact) return false
   const run = findActiveRunForTask(taskID)
   return run?.status === "blocked" && run.blocking_reason === "orchestrator_stream_error"
 }
@@ -290,10 +285,16 @@ function queueRevision(tasks: Array<Pick<QueuedTask, "id" | "queueOrder" | "time
   return tasks.map((task) => `${task.id}:${task.queueOrder}:${task.timeUpdated}`).join("|")
 }
 
-function queuedTasksForCwd(cwd: string): QueuedTask[] {
+function queuedTasksForCwd(cwd: string, input: { projectID?: string } = {}): QueuedTask[] {
   if (!cwd) return []
-  return Database.use((db) =>
-    db
+  return Database.use((db) => {
+    const where = [
+      sql`${EngineTaskTable.time_started} IS NULL`,
+      sql`${EngineTaskTable.time_completed} IS NULL`,
+      sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
+    ]
+    if (input.projectID) where.push(eq(EngineTaskTable.project_id, input.projectID))
+    return db
       .select({
         id: EngineTaskTable.id,
         priority: EngineTaskTable.priority,
@@ -304,21 +305,15 @@ function queuedTasksForCwd(cwd: string): QueuedTask[] {
       .from(EngineTaskTable)
       .leftJoin(SessionTable, eq(SessionTable.id, EngineTaskTable.session_id))
       .leftJoin(ProjectTable, eq(ProjectTable.id, EngineTaskTable.project_id))
-      .where(
-        and(
-          sql`${EngineTaskTable.time_started} IS NULL`,
-          sql`${EngineTaskTable.time_completed} IS NULL`,
-          sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
-        ),
-      )
+      .where(and(...where))
       .orderBy(
         sql`CASE ${EngineTaskTable.priority} WHEN 'critical' THEN 0 ELSE 1 END`,
         EngineTaskTable.queue_order,
         EngineTaskTable.time_created,
         EngineTaskTable.id,
       )
-      .all(),
-  )
+      .all()
+  })
 }
 
 export function directoryQueueSnapshot(cwd: string) {
@@ -332,6 +327,7 @@ export function directoryQueueSnapshot(cwd: string) {
 
 export function reorderQueuedTasksForCwd(input: {
   cwd: string
+  projectID: string
   orderedTaskIDs: string[]
   revision?: string
   now?: number
@@ -345,7 +341,7 @@ export function reorderQueuedTasksForCwd(input: {
 
   const now = input.now ?? Date.now()
   return Database.transaction((db) => {
-    const queued = queuedTasksForCwd(cwd)
+    const queued = queuedTasksForCwd(cwd, { projectID: input.projectID })
     const currentRevision = queueRevision(queued)
     if (input.revision !== undefined && input.revision !== currentRevision) {
       throw new TaskQueueReorderError("directory queue changed; reload before reordering", "conflict")
@@ -552,6 +548,7 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
               LEFT JOIN session s2 ON s2.id = t2.session_id
               LEFT JOIN project p2 ON p2.id = t2.project_id
               WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+                AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
                 AND COALESCE(s2.directory, p2.worktree) = ${cwd}
             )
           ORDER BY
@@ -606,6 +603,15 @@ export function claimQueuedTaskForCwd(taskID: string, cwd: string, now = Date.no
           WHERE t.id = ${taskID}
             AND t.time_started IS NULL AND t.time_completed IS NULL
             AND COALESCE(s.directory, p.worktree) = ${cwd}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM engine_task t2
+              LEFT JOIN session s2 ON s2.id = t2.session_id
+              LEFT JOIN project p2 ON p2.id = t2.project_id
+              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
+                AND COALESCE(json_extract(t2.metadata, '$.interrupted'), 0) != 1
+                AND COALESCE(s2.directory, p2.worktree) = ${cwd}
+            )
           LIMIT 1
         )`,
       )
@@ -726,9 +732,11 @@ export async function advanceQueue(
   await convergeDeadOwnerActiveTasksForCwd(cwd)
   const claimed = claimNextForCwd(cwd)
   if (!claimed) return undefined
-  const event = takeQueuedTaskEvent(claimed.id)
+  const queuedWake = findNextPendingQueuedOperatorWake(claimed.id)
+  const event = queuedWake?.event
   await options?.beforeStart?.({ task: claimed, event })
-  await startLoopForTask(claimed, event, cwd)
+  const started = await startLoopForTask(claimed, event, cwd)
+  if (started && queuedWake) markQueuedOperatorWakeDrained(queuedWake.id)
   return claimed
 }
 
@@ -842,10 +850,11 @@ async function consumePendingWaitCronForAcceptedWake(task: TaskRow, reason: stri
  * Dynamic import of task-loop avoids a circular dependency
  * (task-loop → queue → task-loop).
  */
-async function startLoopForTask(task: TaskRow, event: OrchestratorEvent | undefined, cwd: string): Promise<void> {
+async function startLoopForTask(task: TaskRow, event: OrchestratorEvent | undefined, cwd: string): Promise<boolean> {
   if (loopInFlightFor(task.id)) {
     log.info("loop already in flight, skipping", { taskID: task.id })
-    return
+    return false
   }
   attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, event))
+  return true
 }

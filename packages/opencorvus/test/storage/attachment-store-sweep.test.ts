@@ -103,13 +103,12 @@ describe("AttachmentStore.sweep", () => {
         const projectID = Instance.project.id
         const orphanA = await AttachmentStore.write(projectID, differentBytes(1), "image/png", "a.png")
         const orphanB = await AttachmentStore.write(projectID, differentBytes(2), "image/png", "b.png")
+        const orphanAAbs = AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanA.url)!.name)!
+        const orphanAMetadata = `${orphanAAbs}.metadata.json`
 
         // Backdate both files past the 60s skip-young gate so sweep
         // considers them deletable.
-        await ageFile(
-          AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanA.url)!.name)!,
-          120_000,
-        )
+        await ageFile(orphanAAbs, 120_000)
         await ageFile(
           AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanB.url)!.name)!,
           120_000,
@@ -117,6 +116,7 @@ describe("AttachmentStore.sweep", () => {
 
         const before = await AttachmentStore.listOnDisk(projectID)
         expect(before).toHaveLength(2)
+        await expect(fs.stat(orphanAMetadata)).resolves.toBeTruthy()
 
         const result = await AttachmentStore.sweep(projectID)
         expect(result.deleted).toBe(2)
@@ -126,6 +126,7 @@ describe("AttachmentStore.sweep", () => {
 
         const after = await AttachmentStore.listOnDisk(projectID)
         expect(after).toHaveLength(0)
+        await expect(fs.stat(orphanAMetadata)).rejects.toThrow()
       },
     })
   })

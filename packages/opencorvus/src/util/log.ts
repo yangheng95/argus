@@ -107,25 +107,41 @@ export namespace Log {
     return `${timestamp}-${process.pid}-${nextGeneration}.log`
   }
 
+  function isMissingFile(error: unknown): boolean {
+    return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "ENOENT")
+  }
+
   async function cleanup(dir: string) {
     const files = await Glob.scan("*.log", {
       cwd: dir,
       absolute: true,
       include: "file",
     })
-    const candidates = await Promise.all(
+    const stats = await Promise.all(
       files
         .filter((file) => path.basename(file) !== "dev.log")
         .map(async (file) => {
-          const stat = await fs.stat(file)
+          const stat = await fs.stat(file).catch((error) => {
+            if (isMissingFile(error)) return undefined
+            throw error
+          })
+          if (!stat) return undefined
           return { file, modified: stat.mtimeMs }
         }),
     )
+    const candidates = stats.filter((entry): entry is { file: string; modified: number } => Boolean(entry))
     if (candidates.length <= KEEP_RECENT) return
     const filesToDelete = candidates
       .sort((left, right) => left.modified - right.modified || left.file.localeCompare(right.file))
       .slice(0, -KEEP_RECENT)
-    await Promise.all(filesToDelete.map((entry) => fs.unlink(entry.file)))
+    await Promise.all(
+      filesToDelete.map((entry) =>
+        fs.unlink(entry.file).catch((error) => {
+          if (isMissingFile(error)) return
+          throw error
+        }),
+      ),
+    )
   }
 
   export async function files(): Promise<FileInfo[]> {

@@ -8,7 +8,8 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Server } from "../../src/server/server"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -141,9 +142,10 @@ describe("task project archive route", () => {
               time_updated: now + 4,
             })
             .run()
+          const protocolEventID = Identifier.ascending("protocol_event")
           db.insert(ProtocolEventTable)
             .values({
-              id: Identifier.ascending("protocol_event"),
+              id: protocolEventID,
               kind: "event",
               type: "workflow.step.updated",
               aggregate_type: "task",
@@ -153,6 +155,7 @@ describe("task project archive route", () => {
               interaction_id: interactionID,
               source: "archive-test",
               seq: 1,
+              order_key: timelineOrderKey({ domain: "protocol", time: now + 5, sequence: 1, id: protocolEventID }),
               emitted_at: now + 5,
               payload: {
                 stepID: "archive-step",
@@ -297,5 +300,94 @@ describe("task project archive route", () => {
         expect(body.message).toContain("not a Git worktree")
       },
     })
+  })
+
+  test("GET /task/:taskID/project-archive rejects a foreign active project", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+
+    let taskID = ""
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "Archive foreign task",
+              request: "must not export from another active project",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+      },
+    })
+
+    const response = await Server.App().request(`/task/${taskID}/project-archive`, {
+      headers: { "x-opencorvus-directory": projectB.path },
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  test("rewind routes reject a foreign active project before mutating the task cursor", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+
+    let taskID = ""
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "Rewind foreign task",
+              request: "must not rewind from another active project",
+              priority: "normal",
+              rewind_cursor_time: now - 1,
+              rewind_cursor_event_id: "evt_existing",
+              rewind_count: 1,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+      },
+    })
+
+    const rewindResponse = await Server.App().request(`/task/${taskID}/rewind`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": projectB.path,
+      },
+      body: JSON.stringify({
+        anchor: { kind: "cursorTime", cursorTime: 1 },
+        resetWorktree: false,
+      }),
+    })
+    const clearResponse = await Server.App().request(`/task/${taskID}/rewind/clear`, {
+      method: "POST",
+      headers: { "x-opencorvus-directory": projectB.path },
+    })
+
+    expect(rewindResponse.status).toBe(404)
+    expect(clearResponse.status).toBe(404)
+    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+    expect(task?.rewind_cursor_event_id).toBe("evt_existing")
+    expect(task?.rewind_count).toBe(1)
   })
 })

@@ -12,7 +12,7 @@ export interface GitResult {
  * hard-coding ms; the band rationalises Phase-1 of the systemic timeout
  * sweep (specs/git-timeout-systemic-fix-2026-05-06.md):
  *  - `fast`    — local read-only metadata: rev-parse, show-ref, log -1, status --short
- *  - `default` — local heavy: status, diff, add, commit, worktree remove
+ *  - `default` — local heavy: status, diff, add, commit, worktree prune
  *  - `network` — fetch / clone / push / submodule update
  *
  * Caller still wins via explicit `timeoutMs` (takes precedence over profile).

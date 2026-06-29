@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findRun, findTask } from "../../src/engine/store"
-import { updateTask } from "../../src/engine/state"
+import { terminalTask } from "../../src/engine/state"
 import { createDecisionLog } from "../../src/decision-log"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
@@ -96,7 +96,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
           value: "Bun",
           reason: "template pins Bun",
         })
-        await updateTask(findTask(taskID)!, { status: "completed", time_completed: now + 10 }, "done")
+        await terminalTask(findTask(taskID)!, { status: "completed", time_completed: now + 10 }, "done")
       },
     })
     // Run still finalized (terminal write did not disturb core state).
@@ -117,13 +117,13 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
       fn: async () => {
         const log = createDecisionLog(taskID)
         log.append({ phase: "acceptance", key: "first", value: "v1", reason: "r1" })
-        await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done")
+        await terminalTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done")
 
         // A LATER decision lands, then the SAME terminal write replays (row is
         // already terminal → updateTask no-op guard). The on-disk projection
         // must still refresh to include the new decision (codex Q-TERM).
         log.append({ phase: "agent_error", key: "late", value: "v2", reason: "r2" })
-        await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done again")
+        await terminalTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done again")
       },
     })
     const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(primary.path, taskID).absolute, "utf8")
@@ -143,7 +143,7 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
       fn: async () => {
         createDecisionLog(taskID).append({ phase: "requirements", key: "k", value: "v", reason: "r" })
         // Must NOT throw — best-effort + loud (refinement of codex D5).
-        await updateTask(findTask(taskID)!, { status: "failed", error: "boom", time_completed: now + 5 }, "failed")
+        await terminalTask(findTask(taskID)!, { status: "failed", error: "boom", time_completed: now + 5 }, "failed")
       },
     })
     // Core terminal state + run finalization unaffected by the audit-write failure.

@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test"
-import { conversationMessageHasDisplay, projectConversationAgentView, projectConversationView } from "../../src/conversation/view"
+import {
+  conversationMessageHasDisplay,
+  projectConversationAgentView,
+  projectConversationView,
+} from "../../src/conversation/view"
+import { timelineOrderKey } from "../../src/timeline/order"
+
+function sessionOrderKey(sessionID: string, timeCreated: number) {
+  return timelineOrderKey({ domain: "session", time: timeCreated, id: sessionID })
+}
 
 test("projectConversationView classifies top-level, hidden, and goal-phase sessions", () => {
   const board = {
@@ -172,6 +181,34 @@ test("projectConversationView preserves display message identity across shared-s
   ])
 })
 
+test("projectConversationView orders equal-time display messages by message id", () => {
+  const transcript = [
+    {
+      info: {
+        id: "msg_b",
+        sessionID: "ses_b",
+        channel: "assistant",
+        time: { created: 10 },
+      },
+      parts: [{ type: "text", text: "b" }],
+    },
+    {
+      info: {
+        id: "msg_a",
+        sessionID: "ses_a",
+        channel: "assistant",
+        time: { created: 10 },
+      },
+      parts: [{ type: "text", text: "a" }],
+    },
+  ]
+
+  const view = projectConversationView({}, transcript)
+
+  expect(view.messages.map((message) => message.messageID)).toEqual(["msg_a", "msg_b"])
+  expect(view.sessions.map((session) => session.sessionID)).toEqual(["ses_a", "ses_b"])
+})
+
 test("projectConversationView keeps lifecycle-only events out of display sessions", () => {
   const view = projectConversationView(
     {},
@@ -200,15 +237,21 @@ test("projectConversationView keeps lifecycle-only events out of display session
 })
 
 test("projectConversationAgentView includes ledger-only execution sessions", () => {
-  const view = projectConversationAgentView({}, [], [], [
-    {
-      sessionID: "ses_frontend_research_created",
-      stage: "frontend-research",
-      parentSessionID: "ses_orchestrator",
-      timeCreated: 1_776_000_009_000,
-      timeUpdated: 1_776_000_009_500,
-    },
-  ])
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [],
+    [
+      {
+        sessionID: "ses_frontend_research_created",
+        stage: "frontend-research",
+        parentSessionID: "ses_orchestrator",
+        timeCreated: 1_776_000_009_000,
+        timeUpdated: 1_776_000_009_500,
+        orderKey: sessionOrderKey("ses_frontend_research_created", 1_776_000_009_000),
+      },
+    ],
+  )
 
   expect(view.topLevelSessionIDs).toEqual([])
   expect(view.messages).toEqual([])
@@ -253,6 +296,7 @@ test("projectConversationAgentView uses lifecycle status only to update ledger s
         parentSessionID: "ses_orchestrator",
         timeCreated: 1_776_000_009_000,
         timeUpdated: 1_776_000_009_500,
+        orderKey: sessionOrderKey("ses_frontend_research_failed", 1_776_000_009_000),
       },
     ],
   )
@@ -274,20 +318,26 @@ test("projectConversationAgentView uses lifecycle status only to update ledger s
 })
 
 test("projectConversationAgentView applies latest ledger status without replay events", () => {
-  const view = projectConversationAgentView({}, [], [], [
-    {
-      sessionID: "ses_cancelled_build",
-      stage: "build",
-      parentSessionID: "ses_orchestrator",
-      timeCreated: 1_776_000_009_000,
-      timeUpdated: 1_776_000_009_500,
-      latestStatus: {
-        type: "terminal",
-        reason: "aborted",
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [],
+    [
+      {
+        sessionID: "ses_cancelled_build",
+        stage: "build",
+        parentSessionID: "ses_orchestrator",
+        timeCreated: 1_776_000_009_000,
+        timeUpdated: 1_776_000_009_500,
+        orderKey: sessionOrderKey("ses_cancelled_build", 1_776_000_009_000),
+        latestStatus: {
+          type: "terminal",
+          reason: "aborted",
+        },
+        latestStatusEmittedAt: 1_776_000_011_000,
       },
-      latestStatusEmittedAt: 1_776_000_011_000,
-    },
-  ])
+    ],
+  )
 
   expect(view.sessions).toEqual([
     expect.objectContaining({
@@ -353,6 +403,7 @@ test("projectConversationAgentView ignores non-status events for rail lifecycle 
         parentSessionID: "ses_orchestrator",
         timeCreated: 1_776_000_009_000,
         timeUpdated: 1_776_000_009_500,
+        orderKey: sessionOrderKey("ses_frontend_research_created", 1_776_000_009_000),
       },
     ],
   )

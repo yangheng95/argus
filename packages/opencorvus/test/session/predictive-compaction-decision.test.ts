@@ -105,6 +105,24 @@ function handoffFixture(sourceUserMessageID = "user"): CompactionHandoff.Info {
         extraKeys: [],
       },
     },
+    agentHandoff: {
+      kind: "build",
+      deliverables: [
+        {
+          fact: "Same-source compaction detection is the active build behavior under test",
+          evidence: "packages/opencorvus/src/session/loop.ts",
+        },
+      ],
+      codeChanges: [],
+      verification: [],
+      runtimeState: [
+        {
+          fact: "A structured compaction summary already exists for the source user",
+          evidence: sourceUserMessageID,
+        },
+      ],
+      handoffArtifacts: [],
+    },
     decisions: [
       {
         decision: "Expose already-compacted overflow as a visible error",

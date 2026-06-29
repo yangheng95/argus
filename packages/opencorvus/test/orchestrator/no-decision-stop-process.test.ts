@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { beginBuildAttempt, recordOrchestratorDecisionContractFailure } from "../../src/engine/persist"
 import * as EngineQueue from "../../src/engine/queue"
 import { findRun } from "../../src/engine/store"

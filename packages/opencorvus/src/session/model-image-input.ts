@@ -1,12 +1,33 @@
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
+import { requireRuntimePackage } from "@/runtime/package-require"
+
+const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 export const MAX_MODEL_IMAGE_INPUT_DIMENSION = 8000
+const BLANK_MARGIN_CROP_THRESHOLD = 10
 
 export interface ImageDimensions {
   width: number
   height: number
   format: "png" | "jpeg" | "webp"
+}
+
+export interface ModelImageBlankMarginCrop {
+  originalWidth: number
+  originalHeight: number
+  width: number
+  height: number
+  trimOffsetLeft?: number
+  trimOffsetTop?: number
+}
+
+export interface PreparedModelImageInput {
+  mime: string
+  bytes: Buffer
+  dimensions?: ImageDimensions
+  crop?: ModelImageBlankMarginCrop
+  note?: string
 }
 
 export const ModelImageInputTooLargeError = NamedError.create(
@@ -18,6 +39,18 @@ export const ModelImageInputTooLargeError = NamedError.create(
     width: z.number(),
     height: z.number(),
     maxDimension: z.number(),
+    originalWidth: z.number().optional(),
+    originalHeight: z.number().optional(),
+    blankMarginCrop: z
+      .object({
+        originalWidth: z.number(),
+        originalHeight: z.number(),
+        width: z.number(),
+        height: z.number(),
+        trimOffsetLeft: z.number().optional(),
+        trimOffsetTop: z.number().optional(),
+      })
+      .optional(),
   }),
 )
 
@@ -49,6 +82,106 @@ export function assertModelImageInputWithinLimits(input: {
       `(${input.mime}); max supported dimension is ${maxDimension}px. ` +
       "Use a viewport screenshot, scroll slice, region crop, or coordinate atlas instead of sending the full image.",
   })
+}
+
+export async function prepareModelImageInput(input: {
+  mime: string
+  bytes: Buffer
+  source: string
+  maxDimension?: number
+}): Promise<PreparedModelImageInput> {
+  if (!input.mime.toLowerCase().startsWith("image/")) {
+    return { mime: input.mime, bytes: input.bytes }
+  }
+
+  const originalDimensions = readModelImageDimensions(input.bytes)
+  if (!originalDimensions) {
+    assertModelImageInputWithinLimits(input)
+    return { mime: input.mime, bytes: input.bytes }
+  }
+
+  const cropped = await cropBlankMargins({
+    mime: input.mime,
+    bytes: input.bytes,
+    originalDimensions,
+  })
+  const bytes = cropped?.bytes ?? input.bytes
+  const dimensions = readModelImageDimensions(bytes) ?? originalDimensions
+  const crop = cropped?.crop
+  const maxDimension = input.maxDimension ?? MAX_MODEL_IMAGE_INPUT_DIMENSION
+  if (dimensions.width > maxDimension || dimensions.height > maxDimension) {
+    const afterCrop =
+      crop && (crop.originalWidth !== dimensions.width || crop.originalHeight !== dimensions.height)
+        ? ` after blank-margin crop from ${crop.originalWidth}x${crop.originalHeight}`
+        : ""
+    throw new ModelImageInputTooLargeError({
+      mime: input.mime,
+      source: input.source,
+      width: dimensions.width,
+      height: dimensions.height,
+      maxDimension,
+      originalWidth: crop?.originalWidth,
+      originalHeight: crop?.originalHeight,
+      blankMarginCrop: crop,
+      message:
+        `Model image input too large: ${input.source} is ${dimensions.width}x${dimensions.height}${afterCrop} ` +
+        `(${input.mime}); max supported dimension is ${maxDimension}px. ` +
+        "Use a viewport screenshot, scroll slice, region crop, or coordinate atlas instead of sending the full image.",
+    })
+  }
+
+  const note = crop
+    ? `[model-image-input] Cropped blank margins for ${input.source}: original ${crop.originalWidth}x${crop.originalHeight}, model input ${crop.width}x${crop.height}. Original attachment remains unchanged.`
+    : undefined
+  return {
+    mime: input.mime,
+    bytes,
+    dimensions,
+    ...(crop ? { crop } : {}),
+    ...(note ? { note } : {}),
+  }
+}
+
+async function cropBlankMargins(input: {
+  mime: string
+  bytes: Buffer
+  originalDimensions: ImageDimensions
+}): Promise<{ bytes: Buffer; crop: ModelImageBlankMarginCrop } | undefined> {
+  const encoder = encoderForMime(input.mime)
+  if (!encoder) return undefined
+  const { data, info } = await encoder(
+    sharp(input.bytes, { failOn: "error" }).trim({ threshold: BLANK_MARGIN_CROP_THRESHOLD }),
+  ).toBuffer({ resolveWithObject: true })
+  if (info.width <= 0 || info.height <= 0) return undefined
+  if (info.width === input.originalDimensions.width && info.height === input.originalDimensions.height) return undefined
+  return {
+    bytes: data,
+    crop: {
+      originalWidth: input.originalDimensions.width,
+      originalHeight: input.originalDimensions.height,
+      width: info.width,
+      height: info.height,
+      ...(typeof info.trimOffsetLeft === "number" ? { trimOffsetLeft: info.trimOffsetLeft } : {}),
+      ...(typeof info.trimOffsetTop === "number" ? { trimOffsetTop: info.trimOffsetTop } : {}),
+    },
+  }
+}
+
+type SharpPipeline = ReturnType<typeof sharp>
+
+function encoderForMime(mime: string): ((image: SharpPipeline) => SharpPipeline) | undefined {
+  const normalized = mime.toLowerCase().split(";")[0]?.trim()
+  switch (normalized) {
+    case "image/png":
+      return (image) => image.png()
+    case "image/jpeg":
+    case "image/jpg":
+      return (image) => image.jpeg()
+    case "image/webp":
+      return (image) => image.webp()
+    default:
+      return undefined
+  }
 }
 
 function readPngDimensions(bytes: Buffer): ImageDimensions | undefined {

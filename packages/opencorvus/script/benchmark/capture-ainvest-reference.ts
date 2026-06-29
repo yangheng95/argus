@@ -10,6 +10,7 @@
 import path from "node:path"
 import fs from "node:fs/promises"
 import { launchBrowser } from "../../../overlay/test/launch"
+import { gotoWithBrowserInactivity } from "./browser-inactivity"
 
 const TARGET_URL = process.argv[2] ?? "https://www.ainvest.com"
 const OUT = path.join(import.meta.dir, "assets", "ainvest.png")
@@ -19,7 +20,7 @@ try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: 1440, height: 900 })
   console.log(`[capture-ainvest] navigating ${TARGET_URL}`)
-  await page.goto(TARGET_URL, { waitUntil: "networkidle", timeout: 60_000 })
+  await gotoWithBrowserInactivity(page, TARGET_URL, "networkidle", 60_000)
   // Wait for any post-hydration paint settle.
   await new Promise((r) => setTimeout(r, 2_500))
   await fs.mkdir(path.dirname(OUT), { recursive: true })

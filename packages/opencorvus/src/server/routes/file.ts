@@ -5,6 +5,7 @@ import { File } from "../../file"
 import { Ripgrep } from "../../file/ripgrep"
 import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
+import { errors, namedErrorResponse } from "../error"
 import { lazy } from "../../util/lazy"
 
 export const FileRoutes = lazy(() =>
@@ -24,6 +25,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator(
@@ -57,6 +59,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator(
@@ -106,12 +109,9 @@ export const FileRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        /*
-      const query = c.req.valid("query").query
-      const result = await LSP.workspaceSymbol(query)
-      return c.json(result)
-      */
-        return c.json([])
+        const query = c.req.valid("query").query
+        const result = await LSP.workspaceSymbol(query)
+        return c.json(result)
       },
     )
     .get(
@@ -158,6 +158,8 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          404: namedErrorResponse("File not found", "FileNotFoundError"),
+          500: namedErrorResponse("File read failed", "UnknownError"),
         },
       }),
       validator(
@@ -187,6 +189,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(400, 404, 500),
         },
       }),
       validator(
@@ -200,6 +203,86 @@ export const FileRoutes = lazy(() =>
         const input = c.req.valid("json")
         const content = await File.writeText(input.path, input.content)
         return c.json(content)
+      },
+    )
+    .post(
+      "/file/item",
+      describeRoute({
+        summary: "Create file item",
+        description: "Create one file or directory under an existing project directory without overwriting.",
+        operationId: "file.create",
+        responses: {
+          200: {
+            description: "Created file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.Node),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.CreateRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const node = await File.create(input)
+        return c.json(node)
+      },
+    )
+    .patch(
+      "/file/item",
+      describeRoute({
+        summary: "Move file item",
+        description: "Move or rename one file or directory within the project directory without overwriting.",
+        operationId: "file.move",
+        responses: {
+          200: {
+            description: "Moved file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.MoveResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.MoveRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.move(input)
+        return c.json(result)
+      },
+    )
+    .delete(
+      "/file/item",
+      describeRoute({
+        summary: "Delete file item",
+        description: "Delete one project file or directory recursively. The project root cannot be deleted.",
+        operationId: "file.delete",
+        responses: {
+          200: {
+            description: "Deleted file path",
+            content: {
+              "application/json": {
+                schema: resolver(File.DeleteResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          path: z.string(),
+        }),
+      ),
+      async (c) => {
+        const path = c.req.valid("query").path
+        const result = await File.remove({ path })
+        return c.json(result)
       },
     )
     .post(
@@ -217,6 +300,7 @@ export const FileRoutes = lazy(() =>
               },
             },
           },
+          ...errors(400, 409),
         },
       }),
       validator("json", File.UploadRequest),

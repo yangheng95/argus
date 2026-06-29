@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { GlobalBus } from "../../src/bus/global"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
+import { Identifier } from "../../src/id/id"
 import { Message, Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
 import { Instance } from "../../src/project/instance"
@@ -22,6 +23,37 @@ async function waitFor(assertion: () => boolean, timeoutMs = 2_000): Promise<voi
     await Bun.sleep(10)
   }
   throw new Error("timed out waiting for session mirror events")
+}
+
+function assistantMessageFixture(input: {
+  id: string
+  sessionID: string
+  created: number
+  parentID: string
+  modelID: string
+  providerID: string
+  agent: string
+  cwd: string
+}): Message.Assistant {
+  return {
+    id: input.id,
+    sessionID: input.sessionID,
+    role: "assistant",
+    time: { created: input.created },
+    parentID: input.parentID,
+    modelID: input.modelID,
+    providerID: input.providerID,
+    agent: input.agent,
+    path: { cwd: input.cwd, root: input.cwd },
+    cost: 0,
+    tokens: {
+      total: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+  }
 }
 
 describe("session mirror", () => {
@@ -48,17 +80,48 @@ describe("session mirror", () => {
           },
           { aggregate: "session" },
         )
+        const sidebarInfo = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_sidebar",
+            sessionID: sidebar.id,
+            created: Date.now(),
+            parentID: "msg_sidebar_user",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "coding-assistant",
+            cwd: tmp.path,
+          }),
+        )
+        const plainAssistantInfo = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_plain_assistant",
+            sessionID: plainAssistant.id,
+            created: Date.now() + 1,
+            parentID: "msg_plain_user",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "coding-assistant",
+            cwd: tmp.path,
+          }),
+        )
+        const architectInfo = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_architect",
+            sessionID: architect.id,
+            created: Date.now() + 2,
+            parentID: "msg_architect_user",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "architect",
+            cwd: tmp.path,
+          }),
+        )
 
         await mirrorSessionBusEvent(
           {
             type: Message.Event.Updated.type,
             properties: {
-              info: {
-                id: "msg_sidebar",
-                sessionID: sidebar.id,
-                role: "assistant",
-                time: { created: Date.now() },
-              },
+              info: sidebarInfo,
             },
           },
           sidebar.id,
@@ -67,12 +130,7 @@ describe("session mirror", () => {
           {
             type: Message.Event.Updated.type,
             properties: {
-              info: {
-                id: "msg_plain_assistant",
-                sessionID: plainAssistant.id,
-                role: "assistant",
-                time: { created: Date.now() },
-              },
+              info: plainAssistantInfo,
             },
           },
           plainAssistant.id,
@@ -81,12 +139,7 @@ describe("session mirror", () => {
           {
             type: Message.Event.Updated.type,
             properties: {
-              info: {
-                id: "msg_architect",
-                sessionID: architect.id,
-                role: "assistant",
-                time: { created: Date.now() },
-              },
+              info: architectInfo,
             },
           },
           architect.id,
@@ -118,32 +171,24 @@ describe("session mirror", () => {
           },
           { aggregate: "session", sessionID: session.id },
         )
+        const info = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_cloud_assistant",
+            sessionID: session.id,
+            created: 1781241865042,
+            parentID: "msg_cloud_user",
+            modelID: "cy-claude-sonnet-4-6",
+            providerID: "hexin",
+            agent: "coding-assistant",
+            cwd: "/workspace/nova-vibecoding-template",
+          }),
+        )
 
         await mirrorSessionBusEvent(
           {
             type: Message.Event.Updated.type,
             properties: {
-              info: {
-                id: "msg_cloud_assistant",
-                sessionID: session.id,
-                role: "assistant",
-                time: { created: 1781241865042 },
-                parentID: "msg_cloud_user",
-                modelID: "cy-claude-sonnet-4-6",
-                providerID: "hexin",
-                agent: "coding-assistant",
-                path: {
-                  cwd: "/workspace/nova-vibecoding-template",
-                  root: "/workspace/nova-vibecoding-template",
-                },
-                cost: 0,
-                tokens: {
-                  input: 0,
-                  output: 0,
-                  reasoning: 0,
-                  cache: { read: 0, write: 0 },
-                },
-              },
+              info,
               summary: "Message updated: assistant",
             },
           },
@@ -171,26 +216,18 @@ describe("session mirror", () => {
           kind: "assistant",
           metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
-        const info: Message.Assistant = {
-          id: "msg_sidebar_assistant",
-          sessionID: sidebar.id,
-          role: "assistant",
-          time: { created: Date.now() },
-          parentID: "msg_sidebar_user",
-          modelID: "test-model",
-          providerID: "test-provider",
-          agent: "coding-assistant",
-          path: { cwd: tmp.path, root: tmp.path },
-          cost: 0,
-          tokens: {
-            total: 0,
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-        }
-        await Session.saveMessage(info)
+        const info = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_sidebar_assistant",
+            sessionID: sidebar.id,
+            created: Date.now(),
+            parentID: "msg_sidebar_user",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "coding-assistant",
+            cwd: tmp.path,
+          }),
+        )
 
         const mirrored: Array<{ type: string; payload: Record<string, any> }> = []
         const stop = ProtocolStore.subscribeEvents(
@@ -238,11 +275,12 @@ describe("session mirror", () => {
         const delta = mirrored.find((event) => event.type === "message.part.delta")
         expect(updated?.payload.info.channel).toBe("assistant")
         expect(updated?.payload.info.resolvedRole).toBe("assistant")
+        expect(updated?.payload.orderKey).toBe(updated?.payload.info.orderKey)
         expect(partUpdated?.payload.channel).toBe("assistant")
         expect(partUpdated?.payload.resolvedRole).toBe("assistant")
-        expect(partUpdated?.payload.orderKey).toContain(":part:")
-        expect(partUpdated?.payload.part.orderKey).toBe(partUpdated?.payload.orderKey)
-        expect(partUpdated?.payload.orderKey).not.toBe(updated?.payload.info.orderKey)
+        expect(partUpdated?.payload.orderKey).toBe(updated?.payload.info.orderKey)
+        expect(partUpdated?.payload.part.orderKey).toContain(":part:")
+        expect(partUpdated?.payload.part.orderKey).not.toBe(partUpdated?.payload.orderKey)
         expect(partUpdated?.payload.part.channel).toBeUndefined()
         expect(partUpdated?.payload.part.resolvedRole).toBeUndefined()
         expect(delta?.payload.channel).toBe("assistant")
@@ -310,11 +348,12 @@ describe("session mirror", () => {
         expect(mapped?.payload?.resolvedRole).toBe("assistant")
         expect(mapped?.payload?.sessionID).toBe(sidebar.id)
         expect(mapped?.payload?.status).toEqual({ type: "streaming" })
+        expect(mapped?.payload?.orderKey).toContain(":session:")
       },
     })
   })
 
-  test("subscription boundary records mirror failures without process-level rejection", async () => {
+  test("stamps standalone question events with a top-level interaction order key", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -324,7 +363,50 @@ describe("session mirror", () => {
           kind: "assistant",
           metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
-        const stop = subscribeSessionMirror(sidebar.id)
+        const requestID = Identifier.ascending("question")
+        const mapped = mapSessionBusEvent(
+          {
+            type: "question.asked",
+            properties: {
+              id: requestID,
+              sessionID: sidebar.id,
+              questions: [
+                {
+                  header: "Deploy",
+                  question: "Deploy now?",
+                  options: [{ label: "Yes", description: "Proceed" }],
+                },
+              ],
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(mapped?.type).toBe("question.asked")
+        expect(mapped?.payload?.orderKey).toContain(":interaction:")
+        expect(mapped?.payload?.id).toBe(requestID)
+        expect(mapped?.payload?.channel).toBe("assistant")
+        expect(mapped?.payload?.resolvedRole).toBe("assistant")
+      },
+    })
+  })
+
+  test("subscription boundary reports mirror failures through an explicit error handler", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const mirrorErrors: string[] = []
+        const mirrorEventTypes: string[] = []
+        const stop = subscribeSessionMirror(sidebar.id, (error, event) => {
+          mirrorErrors.push(error instanceof Error ? error.message : String(error))
+          mirrorEventTypes.push(event.type)
+        })
         try {
           await expectNoProcessErrors(async () => {
             GlobalBus.emit("event", {
@@ -342,7 +424,10 @@ describe("session mirror", () => {
                 },
               },
             })
+            await waitFor(() => mirrorErrors.length > 0)
           })
+          expect(mirrorErrors[0]).toContain("msg_missing")
+          expect(mirrorEventTypes[0]).toBe("message.part.updated")
         } finally {
           stop()
         }

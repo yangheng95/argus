@@ -3,6 +3,7 @@ import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { PanelTool } from "../../src/tool/panel"
 import { Log } from "../../src/util/log"
@@ -96,8 +97,96 @@ describe("panel tool", () => {
     })
   }, 15_000)
 
+  test("delete_session rejects a session owned by another active project", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+    let foreignSessionID = ""
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        foreignSessionID = (await Session.create({ kind: "assistant", title: "project A session" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        const tool = await PanelTool.init()
+        await expect(
+          tool.execute(
+            {
+              action: "delete_session",
+              sessionID: foreignSessionID,
+            },
+            {
+              sessionID: Identifier.ascending("session"),
+              messageID: Identifier.ascending("message"),
+              agent: "panel-test",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "panel" },
+            },
+          ),
+        ).rejects.toThrow(`Session not found: ${foreignSessionID}`)
+      },
+    })
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        expect((await Session.get(foreignSessionID)).id).toBe(foreignSessionID)
+      },
+    })
+  })
+
+  test("fork_session rejects a session owned by another active project", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+    let foreignSessionID = ""
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        foreignSessionID = (await Session.create({ kind: "assistant", title: "project A source" })).id
+      },
+    })
+
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        const tool = await PanelTool.init()
+        await expect(
+          tool.execute(
+            {
+              action: "fork_session",
+              sessionID: foreignSessionID,
+            },
+            {
+              sessionID: Identifier.ascending("session"),
+              messageID: Identifier.ascending("message"),
+              agent: "panel-test",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "panel" },
+            },
+          ),
+        ).rejects.toThrow(`Session not found: ${foreignSessionID}`)
+      },
+    })
+
+    const children = Database.use((db) =>
+      db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.parent_id, foreignSessionID)).all(),
+    )
+    expect(children).toEqual([])
+  })
+
   test("right sidebar assistant create_task writes server-derived provenance", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
 
     await Instance.provide({
       directory: tmp.path,
@@ -144,6 +233,42 @@ describe("panel tool", () => {
           keep: "value",
         })
         expect((task?.metadata as Record<string, unknown> | undefined)?.mission).toBeUndefined()
+      },
+    })
+  }, 15_000)
+
+  test("create_task cannot create child task lineage outside the scheduler", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "panel child lineage" })
+        const tool = await PanelTool.init()
+
+        await expect(
+          tool.execute(
+            {
+              action: "create_task",
+              request: "Try to create a child task through panel metadata.",
+              queue: true,
+              metadata: { parent_task_id: "tsk_parent" },
+            },
+            {
+              sessionID: session.id,
+              messageID: Identifier.ascending("message"),
+              agent: "control",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "panel" },
+            },
+          ),
+        ).rejects.toThrow("metadata.parent_task_id is owned by the orchestrator scheduler")
+
+        const tasks = Database.use((db) => db.select().from(EngineTaskTable).all())
+        expect(tasks).toHaveLength(0)
       },
     })
   }, 15_000)

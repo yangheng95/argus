@@ -61,13 +61,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "submit_frontend_template",
 ] as const
 
-export const FRONTEND_DESIGN_CONTEXT_TOOL_IDS = [
-  "read",
-  "glob",
-  "search_code",
-  "list",
-  "memory",
-] as const
+export const FRONTEND_DESIGN_CONTEXT_TOOL_IDS = ["read", "glob", "search_code", "list", "memory"] as const
 
 export const FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS = [
   "webpage_extract",
@@ -76,12 +70,7 @@ export const FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS = [
   "webpage_runtime_state",
 ] as const
 
-export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
-  "bash",
-  "edit",
-  "write",
-  "apply_patch",
-] as const
+export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = ["bash", "edit", "write", "apply_patch"] as const
 
 export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill", "request_orchestrator_decision"] as const
 

@@ -18,7 +18,7 @@ describe("Orchestrator startup error envelope", () => {
     await resetDatabase()
   })
 
-  test("preserves NamedError data inside engine_task.error while keeping startup fast-fail", async () => {
+  test("preserves NamedError data inside engine_task.error without terminal failure", async () => {
     await using tmp = await tmpdir({ config: { agent: {}, model: "missing-provider/missing-model" } })
     const prevHome = process.env.OPENCORVUS_HOME
     const prevGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
@@ -58,7 +58,8 @@ describe("Orchestrator startup error envelope", () => {
 
           const task = findTask(taskID)
           expect(task).toBeDefined()
-          expect(deriveTaskStatus(task!)).toBe("failed")
+          expect(deriveTaskStatus(task!)).toBe("active")
+          expect(task!.time_completed).toBeNull()
           expect(prompt).not.toHaveBeenCalled()
           expect(task!.error).toContain("missing-provider")
           const envelope = parseOrchestratorTaskErrorEnvelope(task!.error)

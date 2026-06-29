@@ -5,12 +5,13 @@ import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { Event } from "../../src/engine/model"
+import { Event, TaskBoard } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Instance } from "../../src/project/instance"
 import { Memory } from "../../src/memory"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Identifier } from "../../src/id/id"
+import { timelineOrderKey } from "../../src/timeline/order"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -104,6 +105,11 @@ test("compileBoard does not retain a mutable process board between hydrations", 
     fn: async () => {
       const before = compileBoard({ taskID }) as any
       const tag = boardTag({ taskID })
+      const expectedTaskOrderKey = timelineOrderKey({ domain: "task", time: now, id: taskID })
+      expect(() => TaskBoard.parse(before)).not.toThrow()
+      expect(before.task.orderKey).toBe(expectedTaskOrderKey)
+      expect(before.task.kind).toBe("workflow")
+      expect(before.task.queue).toEqual({ order: 0 })
       expect(before.task.request).toBe("initial request")
 
       before.task.request = "mutated in memory"
@@ -112,6 +118,7 @@ test("compileBoard does not retain a mutable process board between hydrations", 
       const after = compileBoard({ taskID }) as any
       expect(after.snapshotVersion).toBe(tag)
       expect(after.task).not.toBe(before.task)
+      expect(after.task.orderKey).toBe(expectedTaskOrderKey)
       expect(after.task.request).toBe("initial request")
     },
   })
@@ -267,11 +274,12 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
       expect(before.lastSequence).toBe(0)
 
       Database.use((db) => {
-        for (const [index, type] of ["session.status", "review.stream.chunk"].entries()) {
+        for (const [index, type] of ["test.session-status-noise", "review.stream.chunk"].entries()) {
           const seq = index + 1
+          const eventID = Identifier.ascending("protocol_event")
           db.insert(ProtocolEventTable)
             .values({
-              id: Identifier.ascending("protocol_event"),
+              id: eventID,
               kind: "event",
               type,
               aggregate_type: "task",
@@ -279,6 +287,7 @@ test("board snapshot tag ignores stream noise while lastSequence stays current",
               task_id: taskID,
               source: "test.board-noise",
               seq,
+              order_key: timelineOrderKey({ domain: "protocol", time: now + seq, sequence: seq, id: eventID }),
               emitted_at: now + seq,
               payload: { taskID, status: { type: "streaming" }, delta: "noise" },
               time_created: now + seq,

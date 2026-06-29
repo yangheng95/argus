@@ -127,11 +127,12 @@ describe("SessionLoop session runtime contract", () => {
   })
 
   test("SessionPrompt.cancel aborts a registered activity gate", async () => {
-    const sessionID = `ses_runtime_${Date.now()}_gate`
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const session = await Session.create({ kind: "assistant", title: "activity gate cancel" })
+        const sessionID = session.id
         const gate = withStreamActivity({ idleMs: 60_000, label: "session-cancel-test" })
         const unregister = SessionStatus.registerActivityGate(sessionID, gate)
         try {
@@ -174,26 +175,27 @@ describe("SessionLoop session runtime contract", () => {
     })
   })
 
-  test("cancellation scope seals stale active status when no prompt state exists", async () => {
+  test("cancellation scope reports stale active status when no prompt state exists", async () => {
     const sessionID = `ses_runtime_${Date.now()}_stale_cancel`
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
-        const result = cancelSessionPromptInScope({
-          session: {
-            id: sessionID,
-            directory: tmp.path,
-          },
-        })
 
-        expect(result).toBe(false)
-        expect(SessionStatus.get(sessionID)).toEqual({
-          type: "terminal",
-          reason: "aborted",
-          error: expect.stringContaining("Stale prompt status"),
-        })
+        try {
+          expect(() =>
+            cancelSessionPromptInScope({
+              session: {
+                id: sessionID,
+                directory: tmp.path,
+              },
+            }),
+          ).toThrow(TaskCancellationIncompleteError)
+          expect(SessionStatus.get(sessionID)).toEqual({ type: "streaming" })
+        } finally {
+          SessionStatus.set(sessionID, { type: "idle" }, { publish: false })
+        }
       },
     })
   })

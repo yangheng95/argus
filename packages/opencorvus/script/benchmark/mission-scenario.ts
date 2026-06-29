@@ -1,3 +1,5 @@
+import z from "zod"
+
 export const MISSION_BENCHMARK_TITLE = "Mission Mode Triple Loop Benchmark"
 
 export const MISSION_BENCHMARK_STAGES = [
@@ -54,6 +56,24 @@ export type MissionBenchmarkTask = {
   }
 }
 
+const MissionBenchmarkTaskSchema = z
+  .object({
+    task: z
+      .object({
+        id: z.string().optional(),
+        source: z.string().optional(),
+        status: z.string().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      })
+      .optional(),
+    evaluation: z.object({ verdict: z.string().optional(), summary: z.string().optional() }).optional(),
+  })
+  .passthrough()
+
+const MissionBenchmarkBoardSchema = z.object({
+  tasks: z.array(MissionBenchmarkTaskSchema),
+})
+
 export type MissionBenchmarkReportInput = {
   missionID: string
   sessionID: string
@@ -73,10 +93,7 @@ export type MissionBenchmarkVerdict = {
 }
 
 export function missionTaskRows(board: unknown, missionID: string): MissionBenchmarkTask[] {
-  const tasks = Array.isArray((board as { tasks?: unknown[] } | null)?.tasks)
-    ? (board as { tasks: MissionBenchmarkTask[] }).tasks
-    : []
-  return tasks.filter((item) => missionTaskMatches(item, missionID))
+  return MissionBenchmarkBoardSchema.parse(board).tasks.filter((item) => missionTaskMatches(item, missionID))
 }
 
 export function missionTaskMatches(item: MissionBenchmarkTask, missionID: string): boolean {
@@ -98,6 +115,18 @@ export function terminalMissionTasks(tasks: MissionBenchmarkTask[]): MissionBenc
     const status = item.task?.status
     return status === "completed" || status === "failed" || status === "cancelled"
   })
+}
+
+export function completedMissionTaskEvaluationVerdict(item: MissionBenchmarkTask): string | undefined {
+  if (item.task?.status !== "completed") return undefined
+  const verdict = item.evaluation?.verdict
+  return typeof verdict === "string" && verdict.trim() ? verdict.trim() : undefined
+}
+
+export function missionTasksReadyForBenchmarkEvaluation(tasks: MissionBenchmarkTask[]): boolean {
+  const terminal = terminalMissionTasks(tasks)
+  if (tasks.length === 0 || terminal.length !== tasks.length) return false
+  return terminal.every((item) => item.task?.status !== "completed" || Boolean(completedMissionTaskEvaluationVerdict(item)))
 }
 
 export function missionStateMentionsTerminalTasks(
@@ -142,7 +171,14 @@ export function evaluateMissionBenchmarkReport(input: MissionBenchmarkReportInpu
   if (terminal.some((item) => item.task?.status !== "completed")) {
     failures.push("at least one terminal mission task failed or was cancelled")
   }
-  if (terminal.some((item) => item.evaluation?.verdict && item.evaluation.verdict !== "accepted")) {
+  if (terminal.some((item) => item.task?.status === "completed" && !completedMissionTaskEvaluationVerdict(item))) {
+    failures.push("at least one completed mission task is missing an evaluation verdict")
+  }
+  if (
+    terminal.some(
+      (item) => completedMissionTaskEvaluationVerdict(item) && completedMissionTaskEvaluationVerdict(item) !== "accepted",
+    )
+  ) {
     failures.push("at least one completed mission task was not accepted by evaluation")
   }
   if (!missionStateMentionsTerminalTasks(input.missionState, input.missionTasks)) {

@@ -1,5 +1,6 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect, spyOn } from "bun:test"
 import path from "path"
+import nodeFs from "fs"
 import fs from "fs/promises"
 import { File } from "../../src/file"
 import { Instance } from "../../src/project/instance"
@@ -23,16 +24,13 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
-    test("reads with Filesystem.exists() check", async () => {
+    test("rejects missing text files", async () => {
       await using tmp = await tmpdir()
 
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          // Non-existent file should return empty content
-          const result = await File.read("nonexistent.txt")
-          expect(result.type).toBe("text")
-          expect(result.content).toBe("")
+          await expect(File.read("nonexistent.txt")).rejects.toMatchObject({ name: "FileNotFoundError" })
         },
       })
     })
@@ -114,6 +112,28 @@ describe("file/index Filesystem patterns", () => {
         },
       })
     })
+
+    test("propagates read access failures for binary non-image files", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "binary.so")
+      await fs.writeFile(filepath, Buffer.from([0x7f, 0x45, 0x4c, 0x46]), "binary")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const access = spyOn(nodeFs.promises, "access").mockImplementation(async (target) => {
+            if (String(target).endsWith("binary.so")) {
+              throw Object.assign(new Error("binary read denied"), { code: "EACCES" })
+            }
+          })
+          try {
+            await expect(File.read("binary.so")).rejects.toThrow("binary read denied")
+          } finally {
+            access.mockRestore()
+          }
+        },
+      })
+    })
   })
 
   describe("File.writeText()", () => {
@@ -152,6 +172,150 @@ describe("file/index Filesystem patterns", () => {
         directory: tmp.path,
         fn: async () => {
           await expect(File.writeText("binary.so", "nope")).rejects.toThrow("Cannot edit binary file")
+        },
+      })
+    })
+  })
+
+  describe("File.create(), File.move(), and File.remove()", () => {
+    test("creates one file and one directory under existing parents", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const file = await File.create({
+            path: path.join("docs", "notes.md"),
+            type: "file",
+            content: "hello\n",
+          })
+          const directory = await File.create({
+            path: path.join("docs", "drafts"),
+            type: "directory",
+          })
+
+          expect(file).toMatchObject({
+            name: "notes.md",
+            path: path.join("docs", "notes.md"),
+            type: "file",
+          })
+          expect(directory).toMatchObject({
+            name: "drafts",
+            path: path.join("docs", "drafts"),
+            type: "directory",
+          })
+          expect(await fs.readFile(path.join(tmp.path, "docs", "notes.md"), "utf-8")).toBe("hello\n")
+          expect((await fs.stat(path.join(tmp.path, "docs", "drafts"))).isDirectory()).toBe(true)
+        },
+      })
+    })
+
+    test("rejects missing parents without creating intermediate directories", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.create({
+              path: path.join("missing", "notes.md"),
+              type: "file",
+            }),
+          ).rejects.toThrow("FileInvalidPathError")
+          await expect(fs.stat(path.join(tmp.path, "missing"))).rejects.toThrow()
+        },
+      })
+    })
+
+    test("rejects create and move conflicts without overwriting destinations", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "existing.md"), "existing", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "source.md"), "source", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.create({
+              path: "existing.md",
+              type: "file",
+              content: "new",
+            }),
+          ).rejects.toThrow("FileConflictError")
+          await expect(File.move({ path: "source.md", newPath: "existing.md" })).rejects.toThrow("FileConflictError")
+          expect(await fs.readFile(path.join(tmp.path, "existing.md"), "utf-8")).toBe("existing")
+          expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("source")
+        },
+      })
+    })
+
+    test("moves and renames files without overwriting", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, "old.md"), "content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.move({
+            path: "old.md",
+            newPath: path.join("docs", "new.md"),
+          })
+
+          expect(result).toMatchObject({
+            previousPath: "old.md",
+            path: path.join("docs", "new.md"),
+            node: {
+              name: "new.md",
+              path: path.join("docs", "new.md"),
+              type: "file",
+            },
+          })
+          await expect(fs.stat(path.join(tmp.path, "old.md"))).rejects.toThrow()
+          expect(await fs.readFile(path.join(tmp.path, "docs", "new.md"), "utf-8")).toBe("content")
+        },
+      })
+    })
+
+    test("deletes files and directories recursively", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "docs", "nested"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, "scratch.txt"), "delete me", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "docs", "nested", "draft.md"), "delete me too", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.remove({ path: "scratch.txt" })).resolves.toEqual({ path: "scratch.txt" })
+          await expect(File.remove({ path: "docs" })).resolves.toEqual({ path: "docs" })
+          await expect(fs.stat(path.join(tmp.path, "scratch.txt"))).rejects.toThrow()
+          await expect(fs.stat(path.join(tmp.path, "docs"))).rejects.toThrow()
+        },
+      })
+    })
+
+    test("rejects root delete and traversal mutations", async () => {
+      await using tmp = await tmpdir()
+      const outside = path.join(tmp.path, "..", "outside-file-browser.txt")
+      await fs.rm(outside, { force: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.remove({ path: "" })).rejects.toThrow("FileInvalidPathError")
+          await expect(
+            File.create({
+              path: "../outside-file-browser.txt",
+              type: "file",
+              content: "nope",
+            }),
+          ).rejects.toThrow("FileInvalidPathError")
+          await expect(File.move({ path: "missing.md", newPath: "../outside-file-browser.txt" })).rejects.toThrow(
+            "FileInvalidPathError",
+          )
+          await expect(File.remove({ path: "../outside-file-browser.txt" })).rejects.toThrow("FileInvalidPathError")
+          await expect(fs.stat(outside)).rejects.toThrow()
         },
       })
     })
@@ -415,7 +579,7 @@ describe("file/index Filesystem patterns", () => {
   })
 
   describe("Error handling", () => {
-    test("handles errors gracefully in Filesystem.readText()", async () => {
+    test("propagates Filesystem.readText() errors", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "readonly.txt")
       await fs.writeFile(filepath, "content", "utf-8")
@@ -427,9 +591,9 @@ describe("file/index Filesystem patterns", () => {
           // Filesystem.readText() on non-existent file throws
           await expect(Filesystem.readText(nonExistentPath)).rejects.toThrow()
 
-          // But File.read() handles this gracefully
-          const result = await File.read("does-not-exist.txt")
-          expect(result.content).toBe("")
+          const readText = spyOn(Filesystem, "readText").mockRejectedValue(new Error("read denied"))
+          await expect(File.read("readonly.txt")).rejects.toThrow("read denied")
+          readText.mockRestore()
         },
       })
     })
@@ -447,17 +611,13 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
-    test("returns empty array buffer on error for images", async () => {
+    test("rejects missing images", async () => {
       await using tmp = await tmpdir()
-      // Don't create the file
 
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          // File.read() handles missing images gracefully
-          const result = await File.read("broken.png")
-          expect(result.type).toBe("text")
-          expect(result.content).toBe("")
+          await expect(File.read("broken.png")).rejects.toMatchObject({ name: "FileNotFoundError" })
         },
       })
     })

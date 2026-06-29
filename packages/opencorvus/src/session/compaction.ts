@@ -426,7 +426,9 @@ export namespace SessionCompaction {
     messages: Message.WithParts[]
     instructionPaths: string[]
     sourceUserMessageID: string
+    sourceAgent: string
     todos?: Todo.Info[]
+    activeBuildContracts?: CompactionHandoff.Info["activeBuildContracts"]
     previousHandoff?: CompactionHandoff.Info
     summarizePatchEvidence?: typeof Snapshot.patchEvidenceSummary
   }): CompactionHandoff.EvidenceRequirements {
@@ -460,6 +462,7 @@ export namespace SessionCompaction {
     }
     return {
       sourceUserMessageID: input.sourceUserMessageID,
+      sourceAgent: input.sourceAgent,
       instructionPaths: input.instructionPaths,
       patchFiles: [...patchFiles],
       errorNames: [...errorNames],
@@ -469,6 +472,7 @@ export namespace SessionCompaction {
       fileEvidence: patchFiles.size > 0,
       errorsAndBlockers: errorNames.size > 0,
       acceptanceCriteria: userMessages || (input.previousHandoff?.acceptanceCriteria.length ?? 0) > 0,
+      activeBuildContracts: input.activeBuildContracts,
       previousHandoff: input.previousHandoff
         ? {
             acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
@@ -482,6 +486,7 @@ export namespace SessionCompaction {
             userMessages: input.previousHandoff.userMessages,
             nextActions: input.previousHandoff.nextActions,
             openRisks: input.previousHandoff.openRisks,
+            agentHandoff: CompactionHandoff.agentHandoffRetentionFacts(input.previousHandoff.agentHandoff),
           }
         : undefined,
     }
@@ -536,7 +541,9 @@ export namespace SessionCompaction {
       messages: input.selectedHead,
       instructionPaths,
       sourceUserMessageID: input.userMessage.id,
+      sourceAgent: input.userMessage.agent,
       todos,
+      activeBuildContracts,
       previousHandoff: input.previousHandoff,
     })
     const requiredEvidence = CompactionHandoff.renderRequiredEvidence(evidenceRequirements)
@@ -574,7 +581,7 @@ export namespace SessionCompaction {
   }
 
   export function buildPrompt(input: {
-    previousSummary?: string
+    sourceAgent: string
     previousHandoff?: CompactionHandoff.Info
     context: string[]
     runtime: string
@@ -591,21 +598,13 @@ export namespace SessionCompaction {
           previousHandoff,
           "</previous-structured-handoff>",
         ].join("\n")
-      : input.previousSummary
-        ? [
-            "Update the anchored summary below using the conversation history above.",
-            "Preserve still-true details, remove stale details, and merge in the new facts.",
-            "<previous-summary>",
-            input.previousSummary,
-            "</previous-summary>",
-          ].join("\n")
-        : "Create a new anchored summary from the conversation history above."
+      : "Create a new anchored structured handoff from the conversation history above."
     return [
       dispatchAnchorBlock,
       anchor,
       CompactionHandoff.MODEL_OUTPUT_INSTRUCTIONS,
       "CompactionHandoff schema:",
-      CompactionHandoff.JSON_SCHEMA_DESCRIPTION,
+      CompactionHandoff.jsonSchemaDescriptionForAgent(input.sourceAgent),
       input.runtime,
       ...input.context,
     ]
@@ -623,10 +622,10 @@ export namespace SessionCompaction {
     }
   }
 
-  export function handoffOutputFormat() {
+  export function handoffOutputFormat(input: { agent: string }) {
     return {
       type: "json_schema" as const,
-      schema: z.toJSONSchema(CompactionHandoff.Schema) as Record<string, any>,
+      schema: z.toJSONSchema(CompactionHandoff.schemaForAgent(input.agent)) as Record<string, any>,
       retryCount: 2,
     }
   }
@@ -643,7 +642,7 @@ export namespace SessionCompaction {
     output: unknown,
     requirements: CompactionHandoff.EvidenceRequirements,
   ): { success: true; data: CompactionHandoff.Info } | { success: false; error: string } {
-    const parsed = CompactionHandoff.Schema.safeParse(output)
+    const parsed = CompactionHandoff.schemaForAgent(requirements.sourceAgent).safeParse(output)
     if (!parsed.success) {
       return { success: false, error: z.prettifyError(parsed.error) }
     }
@@ -925,6 +924,7 @@ export namespace SessionCompaction {
       focus: input.focus ?? compactionPart?.focus,
     })
     const promptText = buildPrompt({
+      sourceAgent: userMessage.agent,
       previousHandoff: prior.at(-1)?.handoff,
       context: compacting.context,
       runtime: runtime.text,
@@ -942,7 +942,7 @@ export namespace SessionCompaction {
         ],
       },
     ]
-    const format = handoffOutputFormat()
+    const format = handoffOutputFormat({ agent: userMessage.agent })
     const budget = requestBudget({ messages: providerMessages, config, model })
     if (budget.exceeds) {
       processor.message.error = new Message.ContextOverflowError({

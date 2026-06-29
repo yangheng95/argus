@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { Instance } from "../../src/project/instance"
 import { MCP } from "../../src/mcp"
 import { MCPServe } from "../../src/mcp/serve"
@@ -66,6 +68,14 @@ describe("mcp.serve", () => {
 
   test("exposes the executor MCP toolset", async () => {
     expect(MCPServe.executorToolNames().sort()).toEqual(["skill", "memory", "task_report"].sort())
+  })
+
+  test("serve prewarms proxied MCP surfaces without swallowing failures", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../src/mcp/serve.ts"), "utf8")
+
+    expect(source).toContain("await Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()])")
+    expect(source).not.toContain("mcp serve prewarm failed")
+    expect(source).not.toContain("Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()]).catch")
   })
 
   test("exports Claude-compatible object input schemas", async () => {
@@ -190,7 +200,7 @@ describe("mcp.serve", () => {
     ])
     spyOn(MCP, "serverResources").mockResolvedValue([
       {
-        key: "docs_readme",
+        key: `client:${Buffer.from("docs", "utf8").toString("base64url")}:uri:${Buffer.from("docs://README", "utf8").toString("base64url")}`,
         client: "docs",
         uri: "docs://README",
         name: "README",
@@ -206,7 +216,9 @@ describe("mcp.serve", () => {
         const prompts = await MCP.serverPrompts()
         const resources = await MCP.serverResources()
         expect(prompts[0]?.key).toBe("docs:review")
-        expect(resources[0]?.key).toBe("docs_readme")
+        expect(resources[0]?.key).toBe(
+          `client:${Buffer.from("docs", "utf8").toString("base64url")}:uri:${Buffer.from("docs://README", "utf8").toString("base64url")}`,
+        )
       },
     })
   })

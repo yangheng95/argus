@@ -215,8 +215,8 @@ describe("deleteTask running task settlement", () => {
       expect(taskRow(taskID)?.id).toBe(taskID)
       expect(sessionRow(sessionID)?.id).toBe(sessionID)
       expect(queueRow(queueTaskID)).toMatchObject({
-        status: "failed",
-        error_message: "task cancelled",
+        status: "running",
+        error_message: null,
       })
 
       releaseQueue.resolve()
@@ -227,6 +227,66 @@ describe("deleteTask running task settlement", () => {
     expect(loop).toHaveBeenCalledTimes(1)
     expect(taskRow(taskID)).toBeUndefined()
     expect(sessionRow(sessionID)).toBeUndefined()
+  })
+
+  test("cancelTask waits for running queue prompt before marking queue row failed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const releaseQueue = deferred()
+    const { taskID, sessionID } = await createActiveTask(tmp.path, "cancel while queue wake is still active")
+    const queueTaskID = Identifier.ascending("task")
+    const now = Date.now()
+    let queueWakeStarted = false
+
+    spyOn(SessionPrompt, "loop").mockImplementation((async () => {
+      queueWakeStarted = true
+      await releaseQueue.promise
+      return { info: {} as never, parts: [] } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+    }) as never)
+
+    Database.use((db) =>
+      db
+        .insert(TaskQueueTable)
+        .values({
+          id: queueTaskID,
+          session_id: sessionID,
+          prompt: "running queued wake",
+          priority: "normal",
+          status: "queued",
+          source: "test",
+          metadata: {
+            kind: "session_wake",
+            messageID: Identifier.ascending("message"),
+            input: { parts: [{ type: "text", text: "running queued wake" }] },
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+
+    let queueRun!: Promise<void>
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        queueRun = TaskQueueService.runNow()
+        await waitUntil(() => queueWakeStarted, "queued wake start")
+      },
+    })
+
+    const cancelPromise = EngineService.cancelTask(taskID, { cleanupTimeoutMs: 2_000 })
+    await Bun.sleep(50)
+    expect(queueRow(queueTaskID)).toMatchObject({
+      status: "running",
+      error_message: null,
+    })
+
+    releaseQueue.resolve()
+    await queueRun
+    await cancelPromise
+    expect(queueRow(queueTaskID)).toMatchObject({
+      status: "failed",
+      error_message: "task cancelled",
+    })
   })
 
   test("cancelTask marks task-owned queued prompts failed", async () => {
@@ -263,7 +323,7 @@ describe("deleteTask running task settlement", () => {
     })
   })
 
-  test("deletes active task whose session tree has stale streaming status but no prompt state", async () => {
+  test("preserves active task whose session tree has stale streaming status but no prompt state", async () => {
     await using tmp = await tmpdir({ git: true })
     const { taskID, sessionID } = await createActiveTask(tmp.path, "delete stale streaming task")
     let orchestratorSessionID = ""
@@ -282,16 +342,19 @@ describe("deleteTask running task settlement", () => {
       },
     })
 
-    await EngineService.deleteTask(taskID, {
-      taskLoopIdleTimeoutMs: 2_000,
-    })
+    try {
+      await expect(
+        EngineService.deleteTask(taskID, {
+          taskLoopIdleTimeoutMs: 2_000,
+        }),
+      ).rejects.toBeInstanceOf(TaskCancellationIncompleteError)
 
-    expect(taskRow(taskID)).toBeUndefined()
-    expect(sessionRow(sessionID)).toBeUndefined()
-    expect(SessionStatus.get(orchestratorSessionID)).toMatchObject({
-      type: "terminal",
-      reason: "aborted",
-    })
+      expect(taskRow(taskID)?.id).toBe(taskID)
+      expect(sessionRow(sessionID)?.id).toBe(sessionID)
+      expect(SessionStatus.get(orchestratorSessionID)).toEqual({ type: "streaming" })
+    } finally {
+      SessionStatus.set(orchestratorSessionID, { type: "idle" }, { publish: false })
+    }
   })
 
   test("deleteTask survives prompt finish after instance context is gone", async () => {

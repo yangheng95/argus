@@ -48,6 +48,72 @@ describe("mission routes", () => {
     })
   })
 
+  test("POST /mission/wake documents and returns bad request for unknown prompt profile", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/mission/wake", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "start mission",
+            promptProfile: "missing-profile",
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { success?: boolean; errors?: Array<{ message?: string }> }
+        expect(body.success).toBe(false)
+        expect(body.errors?.[0]?.message).toContain("Unknown prompt profile")
+        const spec = await Server.openapi()
+        expect(spec.paths?.["/mission/wake"]?.post?.responses?.[400]).toBeDefined()
+      },
+    })
+  })
+
+  test("Mission detail routes return named NotFoundError for missing Mission sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const requests: Array<{ method: string; path: string; headers?: Record<string, string>; body?: string }> = [
+          { method: "GET", path: "/mission/m-missing/status" },
+          { method: "GET", path: "/mission/m-missing/project-archive" },
+          {
+            method: "PATCH",
+            path: "/mission/m-missing/title",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: "Missing Mission" }),
+          },
+          { method: "POST", path: "/mission/m-missing/abort" },
+          { method: "DELETE", path: "/mission/m-missing" },
+        ]
+
+        for (const request of requests) {
+          const response = await app.request(request.path, {
+            method: request.method,
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+              ...request.headers,
+            },
+            body: request.body,
+          })
+
+          expect(response.status).toBe(404)
+          expect((await response.json()) as { name?: string }).toMatchObject({ name: "NotFoundError" })
+        }
+      },
+    })
+  })
+
   test("GET /mission projects mission-created tasks and scoped stats", async () => {
     await using tmp = await tmpdir({ git: true })
 

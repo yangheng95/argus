@@ -1206,7 +1206,7 @@ export class ChannelRuntime {
 
     if (event.type === "session.error") {
       const props = (event as EventSessionError).properties
-      const sessionId = props.sessionID
+      const sessionId = "sessionID" in props ? props.sessionID : undefined
       if (!sessionId) return
       this.releaseSession(sessionId)
       const sessions = this.findSessions(sessionId)

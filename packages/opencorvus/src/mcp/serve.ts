@@ -183,9 +183,7 @@ export namespace MCPServe {
           name: DEFAULT_SERVER_NAME,
           version: Installation.VERSION,
         })
-        await Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()]).catch((error) => {
-          log.warn("mcp serve prewarm failed", { error: String(error) })
-        })
+        await Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()])
         server.server.registerCapabilities({
           tools: { listChanged: true },
           prompts: { listChanged: true },

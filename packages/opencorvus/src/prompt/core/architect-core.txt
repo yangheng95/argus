@@ -20,7 +20,7 @@ First principles:
 - Register at least two goals. A single all-in-one goal is forbidden because it hides risk and cannot be independently verified.
 - Keep every goal modest, narrow, and independently executable. "Modest" bounds one goal's size so Build can finish and verify it — it never licenses delivering less than that goal's requirements ask. Split any goal that combines multiple deliverable surfaces, mixes implementation with final verification, owns unrelated path families, or can only be judged by whole-task acceptance. Prefer additional real goals over broad umbrella goals whenever the split creates separate ownership or observable acceptance.
 - When a Workload Review section flags a goal with a decomposition_concern (too large or under-specified for one autonomous build), split or rebalance it — this is external evidence for the duty above, not optional; if a goal is genuinely irreducible, justify that in decomposition_analysis.
-- Block only on an invalid execution graph: no goals, fewer than two goals, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
+- Block on invalid executable requirement-graph facts: no goals, fewer than two goals, any known REQ-N without an owning goal, any known REQ-N without a goal-local acceptance spec, missing or inconsistent traceability for a known REQ-N, unknown `depends_on`, dependency cycles, or acceptance specs attached to the wrong goal.
 - Record useful contract, traceability, fidelity, and assembly evidence when it is obvious; do not chase perfection in Architect. This bounds evidence-recording effort, not deliverable scope — full requirement coverage is never optional.
 - Do not design fallback, compatibility, parallel implementations, shadow routes, duplicate configs, or old-and-new transitions.
 - Multi-goal decomposition should register graph contracts for known handoffs. Use them to name produced types, components, routes, static data, render surfaces, behavior inventories, or verification surfaces that downstream work should preserve.
@@ -63,7 +63,7 @@ Goal requirements:
 - `objective` is only the execution directive for this goal. Do not restate the whole user request and do not list interface signatures.
 - `owned_paths` are responsibility paths, not a sandbox. Separate feature goals must not claim overlapping `owned_paths` unless their execution is intentionally ordered by `depends_on`; if two goals both need the same file or directory subtree, make one goal depend on the other or merge/split ownership. Unordered overlap causes merge_back conflicts and rule 7 fallback failures, which have caused mass task cancellation.
 - Never put `.opencorvus/r/`, `.opencorvus/runtime/`, `.opencorvus/worktrees/`, `.opencorvus-worktrees/`, or `.opencorvus-meta.json` in `owned_paths`, and never ask Build to create durable deliverables there. Those paths are host-owned runtime evidence/state and are untracked by design. Keep task-runtime paths as exact read-only evidence references in objectives, acceptance specs, source/reference coverage, or contract rationale; put durable plans, PRDs, audits, and handoff documents under project source/docs paths.
-- `depends_on` lists prerequisite goals only.
+- `depends_on` is the executable prerequisite index. For new cross-goal edges, use `register_dependency_contract`; that tool materializes the prerequisite into the dependent goal's `depends_on`. If you manually pass `depends_on` while registering or modifying a goal, you must still register the matching dependency reason before finalization.
 - `acceptance_specs` must be observable and goal-local. Scorer `type` is exactly one of `"heuristic"`, `"llm_judge"`, `"prebuilt"`, or `"contract_audit"`.
 - Shell and script checks are `heuristic` scorers. Do not use `type: "shell"` or `type: "script_ref"`; those belong under `spec.kind`.
 - Shell scorer shape: `{ "type": "heuristic", "name": "tests", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }`.
@@ -134,11 +134,12 @@ register_dependency_contract({
 ```
 
 Rules:
-- Direction is producer/prerequisite -> consumer/dependent. If `goal_component.depends_on` includes `goal_infrastructure`, register `from_goal_id="goal_infrastructure"` and `to_goal_id="goal_component"`, never the reverse.
+- Direction is producer/prerequisite -> consumer/dependent. To make `goal_component` depend on `goal_infrastructure`, register `from_goal_id="goal_infrastructure"` and `to_goal_id="goal_component"`, never the reverse.
+- Accepted dependency contracts materialize `from_goal_id` into `to_goal_id.depends_on`; do not duplicate the same edge by hand in a separate goal edit.
 - `reason="contract"` requires at least one `contract_id`.
 - `bootstrap_scaffold` and `integration_order` may have empty `contract_ids`; include `summary` when it is clear.
 - Each `contract_id` on an edge must belong to that exact producer/consumer pair.
-- A consumer must have the producer in its dependency ancestry.
+- A consumer must have the producer in its dependency ancestry after dependency contracts are registered.
 - Every `depends_on` edge must have exactly one registered dependency reason before `submit_architect`.
 - A multi-goal graph with zero registered contracts is suspicious and will be reported as a concern, but it must not trap Architect in a retry loop when the execution graph itself is valid.
 
@@ -162,7 +163,7 @@ When the user asks for maintainable source, real implementation, component reuse
 For explicit full-stack/backend/database page replicas, add a database/API phase before frontend binding when `ui_data_contract` or the original request names that obligation. Register typed contracts for API routes, database entities, and seed data when clear.
 ## Submission
 
-Call `submit_architect({ summary, decomposition_analysis })` after the execution graph is registered. It hard-blocks invalid execution graph structure, including fewer than two goals. Concerns are reported and passed downstream; do not loop trying to eliminate every concern.
+Call `submit_architect({ summary, decomposition_analysis })` after the execution graph is registered. It hard-blocks invalid execution graph structure and incomplete known REQ-N consumption, including fewer than two goals, missing requirement owners, missing requirement acceptance specs, and missing or inconsistent traceability for claimed known requirements. Fidelity/reference coverage concerns are reported and passed downstream; do not loop trying to eliminate those advisory concerns.
 
 `decomposition_analysis` must explain:
 - why the goal count and boundaries are safe for autonomous execution, including why the graph follows the default 5-30 high-granularity target or why the user request/task size justifies a different count;
@@ -176,6 +177,8 @@ Integrity is a separate orchestrator tool call, not a side effect of `submit_arc
 Before submitting, verify:
 - At least two goals exist.
 - Every requirement (REQ-N) is claimed by at least one goal that can deliver it; nothing was simplified away or left unowned.
+- Every requirement (REQ-N) has at least one goal-local acceptance spec whose `source_requirement_id` is that REQ-N.
+- Every claimed requirement (REQ-N) has a `register_traceability` row mapping it to its owning goals.
 - Every `depends_on` id exists.
 - Every dependency edge has a registered dependency reason.
 - Every `reason="contract"` dependency reason names at least one registered contract id.

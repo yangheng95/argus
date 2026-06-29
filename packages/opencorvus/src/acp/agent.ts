@@ -31,7 +31,7 @@ import { Log } from "../util/log"
 import { pathToFileURL } from "bun"
 import { Filesystem } from "../util/filesystem"
 import { ACPSessionManager } from "./session"
-import type { ACPConfig } from "./types"
+import type { ACPConfig, ACPSessionState } from "./types"
 import { Provider } from "../provider/provider"
 import { Agent as AgentModule } from "../agent/agent"
 import { Installation } from "@/installation"
@@ -40,15 +40,79 @@ import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
-import type { AssistantMessage, Event, OpenCorvusClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
+import type { Event, OpenCorvusClient, SessionMessageResponse, ToolPart, VisibleMessage } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
 import { renderToolFailureCause } from "@/session/tool-failure-cause"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { decodeDataUrlBase64, decodeRawBase64Payload } from "@/session/text-mime"
 
 type ModeOption = { id: string; name: string; description?: string }
 type ModelOption = { modelId: string; name: string }
+type AssistantMessage = Extract<VisibleMessage, { role: "assistant" }>
 
 const DEFAULT_VARIANT_VALUE = "default"
+
+type AcpSessionListCursor = {
+  updated: number
+  sessionID: string
+}
+
+type AcpSessionListItem = {
+  id: string
+  time: {
+    updated: number
+  }
+}
+
+function invalidAcpSessionListCursor(cursor: string): RequestError {
+  return RequestError.invalidParams(
+    { cursor },
+    "ACP session list cursor must be the nextCursor token returned by unstable_listSessions",
+  )
+}
+
+function decodeAcpSessionListCursor(cursor: string): AcpSessionListCursor {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cursor)
+  } catch {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+
+  const record = parsed as Record<string, unknown>
+  const updated = record.updated
+  const sessionID = record.sessionID
+  if (
+    typeof updated !== "number" ||
+    !Number.isFinite(updated) ||
+    typeof sessionID !== "string" ||
+    sessionID.trim() !== sessionID ||
+    sessionID.length === 0
+  ) {
+    throw invalidAcpSessionListCursor(cursor)
+  }
+  return { updated, sessionID }
+}
+
+function encodeAcpSessionListCursor(session: AcpSessionListItem): string {
+  return JSON.stringify({
+    updated: session.time.updated,
+    sessionID: session.id,
+  })
+}
+
+function compareAcpSessionListItems(left: AcpSessionListItem, right: AcpSessionListItem): number {
+  const updated = right.time.updated - left.time.updated
+  if (updated !== 0) return updated
+  return right.id.localeCompare(left.id)
+}
+
+function acpSessionListItemAfterCursor(session: AcpSessionListItem, cursor: AcpSessionListCursor): boolean {
+  return session.time.updated < cursor.updated || (session.time.updated === cursor.updated && session.id < cursor.sessionID)
+}
 
 async function toolImageAttachmentContent(attachments: Message.FilePart[] | undefined): Promise<ToolCallContent[]> {
   if (!attachments?.length) return []
@@ -56,16 +120,23 @@ async function toolImageAttachmentContent(attachments: Message.FilePart[] | unde
   for (const attachment of attachments) {
     if (!attachment.mime.startsWith("image/")) continue
     const dataUrl =
-      (await AttachmentStore.dataUrlFromReference(attachment.url, attachment.mime).catch(() => undefined)) ??
+      (await AttachmentStore.dataUrlFromReference(attachment.url, attachment.mime)) ??
       (attachment.url.startsWith("data:") ? attachment.url : undefined)
-    const match = dataUrl?.match(/^data:([^;]+);base64,(.*)$/)
-    if (!match) continue
+    if (!dataUrl) {
+      throw new Error(`ACP tool image attachment ${attachment.filename ?? attachment.url} is not a stored attachment or data URL`)
+    }
+    const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/)
+    if (!match) {
+      throw new Error(`ACP tool image attachment ${attachment.filename ?? attachment.url} is not a valid base64 data URL`)
+    }
+    const payload = decodeDataUrlBase64(dataUrl, `ACP tool image attachment ${attachment.filename ?? attachment.url}`)
+    decodeRawBase64Payload(payload, `ACP tool image attachment ${attachment.filename ?? attachment.url}`)
     content.push({
       type: "content",
       content: {
         type: "image",
         mimeType: match[1] || attachment.mime,
-        data: match[2],
+        data: payload,
         uri: pathToFileURL(attachment.filename ?? "tool-result-image.png").href,
       },
     })
@@ -441,9 +512,6 @@ export namespace ACP {
                       },
                     },
                   })
-                  .catch((error) => {
-                    log.error("failed to send tool completed to ACP", { error })
-                  })
                 return
               }
               case "error":
@@ -600,12 +668,13 @@ export namespace ACP {
 
     async newSession(params: NewSessionRequest) {
       const directory = params.cwd
+      let sessionId: string | undefined
       try {
         const model = await defaultModel(this.config, directory)
 
         // Store ACP session state
         const state = await this.sessionManager.create(params.cwd, params.mcpServers, model)
-        const sessionId = state.id
+        sessionId = state.id
 
         log.info("creating_session", { sessionId, mcpServers: params.mcpServers.length })
 
@@ -622,19 +691,20 @@ export namespace ACP {
           _meta: load._meta,
         }
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState: undefined,
+          deletePersistent: sessionId !== undefined,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
     async loadSession(params: LoadSessionRequest) {
       const directory = params.cwd
       const sessionId = params.sessionId
+      const previousState = this.sessionManager.snapshot(sessionId)
 
       try {
         const model = await defaultModel(this.config, directory)
@@ -659,13 +729,12 @@ export namespace ACP {
             },
             { throwOnError: true },
           )
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
+          .then((x) => {
+            if (!Array.isArray(x.data)) throw new Error(`Session ${sessionId} history response missing messages`)
+            return x.data
           })
 
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info as
+        const lastUser = messages.findLast((m) => m.info.role === "user")?.info as
           | (Record<string, unknown> & {
               id: string
               role: string
@@ -679,7 +748,7 @@ export namespace ACP {
           }
         }
 
-        for (const msg of messages ?? []) {
+        for (const msg of messages) {
           log.debug("replay message", msg)
           await this.processMessage(msg)
         }
@@ -688,19 +757,20 @@ export namespace ACP {
 
         return result
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: false,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
     async unstable_listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
       try {
-        const cursor = params.cursor ? Number(params.cursor) : undefined
+        const cursor =
+          params.cursor === undefined || params.cursor === null ? undefined : decodeAcpSessionListCursor(params.cursor)
         const limit = 100
 
         const sessions = await this.sdk.session
@@ -713,8 +783,8 @@ export namespace ACP {
           )
           .then((x) => x.data ?? [])
 
-        const sorted = sessions.toSorted((a, b) => b.time.updated - a.time.updated)
-        const filtered = cursor ? sorted.filter((s) => s.time.updated < cursor) : sorted
+        const sorted = sessions.toSorted(compareAcpSessionListItems)
+        const filtered = cursor ? sorted.filter((session) => acpSessionListItemAfterCursor(session, cursor)) : sorted
         const page = filtered.slice(0, limit)
 
         const entries: SessionInfo[] = page.map((session) => ({
@@ -725,7 +795,7 @@ export namespace ACP {
         }))
 
         const last = page[page.length - 1]
-        const next = filtered.length > limit && last ? String(last.time.updated) : undefined
+        const next = filtered.length > limit && last ? encodeAcpSessionListCursor(last) : undefined
 
         const response: ListSessionsResponse = {
           sessions: entries,
@@ -746,6 +816,8 @@ export namespace ACP {
     async unstable_forkSession(params: ForkSessionRequest): Promise<ForkSessionResponse> {
       const directory = params.cwd
       const mcpServers = params.mcpServers ?? []
+      let sessionId: string | undefined
+      let previousState: ACPSessionState | undefined
 
       try {
         const model = await defaultModel(this.config, directory)
@@ -764,7 +836,8 @@ export namespace ACP {
           throw new Error("Fork session returned no data")
         }
 
-        const sessionId = forked.id
+        sessionId = forked.id
+        previousState = this.sessionManager.snapshot(sessionId)
         await this.sessionManager.load(sessionId, directory, mcpServers, model)
 
         log.info("fork_session", { sessionId, mcpServers: mcpServers.length })
@@ -783,13 +856,12 @@ export namespace ACP {
             },
             { throwOnError: true },
           )
-          .then((x) => x.data)
-          .catch((err) => {
-            log.error("unexpected error when fetching message", { error: err })
-            return undefined
+          .then((x) => {
+            if (!Array.isArray(x.data)) throw new Error(`Session ${sessionId} history response missing messages`)
+            return x.data
           })
 
-        for (const msg of messages ?? []) {
+        for (const msg of messages) {
           log.debug("replay message", msg)
           await this.processMessage(msg)
         }
@@ -798,13 +870,13 @@ export namespace ACP {
 
         return mode
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: sessionId !== undefined,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
@@ -812,6 +884,7 @@ export namespace ACP {
       const directory = params.cwd
       const sessionId = params.sessionId
       const mcpServers = params.mcpServers ?? []
+      const previousState = this.sessionManager.snapshot(sessionId)
 
       try {
         const model = await defaultModel(this.config, directory)
@@ -829,13 +902,13 @@ export namespace ACP {
 
         return result
       } catch (e) {
-        const error = Message.fromError(e, {
-          providerID: "unknown",
+        return await this.cleanupRejectedSessionInitializationAndThrow({
+          errorValue: e,
+          sessionId,
+          directory,
+          previousState,
+          deletePersistent: false,
         })
-        if (LoadAPIKeyError.isInstance(error)) {
-          throw RequestError.authRequired()
-        }
-        throw e
       }
     }
 
@@ -966,9 +1039,6 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
-                  log.error("failed to send tool completed to ACP", { error: err })
-                })
               break
             case "error":
               this.toolStarts.delete(toolPart.callID)
@@ -1034,25 +1104,42 @@ export namespace ACP {
           const mime = (part["mime"] as string | undefined) || "application/octet-stream"
           const messageChunk = message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk"
 
-          if (url && url.startsWith("file://")) {
+          const storedAttachment = url ? AttachmentStore.nameFromUrl(url) : undefined
+          const replayUrl = storedAttachment ? await AttachmentStore.dataUrlFromReference(url!, mime) : url
+          if (storedAttachment && !replayUrl) {
+            throw new Error(`ACP replay attachment ${url} is not resolvable`)
+          }
+
+          if (replayUrl && (replayUrl.startsWith("http://") || replayUrl.startsWith("https://"))) {
+            await this.connection
+              .sessionUpdate({
+                sessionId,
+                update: {
+                  sessionUpdate: messageChunk,
+                  content: { type: "resource_link", uri: replayUrl, name: filename, mimeType: mime },
+                },
+              })
+              .catch((err) => {
+                log.error("failed to send remote resource_link to ACP", { error: err })
+              })
+          } else if (replayUrl && replayUrl.startsWith("file://")) {
             // Local file reference - send as resource_link
             await this.connection
               .sessionUpdate({
                 sessionId,
                 update: {
                   sessionUpdate: messageChunk,
-                  content: { type: "resource_link", uri: url, name: filename, mimeType: mime },
+                  content: { type: "resource_link", uri: replayUrl, name: filename, mimeType: mime },
                 },
               })
               .catch((err) => {
                 log.error("failed to send resource_link to ACP", { error: err })
               })
-          } else if (url && url.startsWith("data:")) {
+          } else if (replayUrl && replayUrl.startsWith("data:")) {
             // Embedded content - parse data URL and send as appropriate block type
-            const base64Match = url.match(/^data:([^;]+);base64,(.*)$/)
-            const dataMime = base64Match?.[1]
-            const base64Data = base64Match?.[2] ?? ""
-
+            const base64Data = decodeDataUrlBase64(replayUrl, `ACP replay file URL ${filename}`)
+            const dataMime = replayUrl.slice("data:".length, replayUrl.indexOf(",")).split(";")[0]
+            const decodedBytes = decodeRawBase64Payload(base64Data, `ACP replay file URL ${filename}`)
             const effectiveMime = dataMime || mime
 
             if (effectiveMime.startsWith("image/")) {
@@ -1070,9 +1157,6 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
-                  log.error("failed to send image to ACP", { error: err })
-                })
             } else {
               // Non-image: text types get decoded, binary types stay as blob
               const isText = effectiveMime.startsWith("text/") || effectiveMime === "application/json"
@@ -1081,7 +1165,7 @@ export namespace ACP {
                 ? {
                     uri: fileUri,
                     mimeType: effectiveMime,
-                    text: Buffer.from(base64Data, "base64").toString("utf-8"),
+                    text: decodedBytes.toString("utf-8"),
                   }
                 : { uri: fileUri, mimeType: effectiveMime, blob: base64Data }
 
@@ -1098,7 +1182,9 @@ export namespace ACP {
                 })
             }
           }
-          // URLs that don't match file:// or data: are skipped (unsupported)
+          if (!replayUrl || !/^data:|^file:\/\/|^https?:\/\//.test(replayUrl)) {
+            throw new Error(`ACP replay file URL ${url ?? "<missing>"} is not supported`)
+          }
         } else if (part["type"] === "reasoning") {
           const textStr = part["text"] as string | undefined
           if (textStr) {
@@ -1256,18 +1342,15 @@ export namespace ACP {
 
       await Promise.all(
         Object.entries(mcpServers).map(async ([key, mcp]) => {
-          await this.sdk.mcp
-            .add(
-              {
-                directory,
-                name: key,
-                config: mcp,
-              },
-              { throwOnError: true },
-            )
-            .catch((error) => {
-              log.error("failed to add mcp server", { name: key, error })
-            })
+          const response = await this.sdk.mcp.add(
+            {
+              directory,
+              name: key,
+              config: mcp,
+            },
+            { throwOnError: true },
+          )
+          assertMcpServerAttached(key, response)
         }),
       )
 
@@ -1294,6 +1377,52 @@ export namespace ACP {
           availableVariants,
         }),
       }
+    }
+
+    private async cleanupRejectedSessionInitialization(params: {
+      sessionId: string | undefined
+      directory: string
+      previousState: ACPSessionState | undefined
+      deletePersistent: boolean
+    }) {
+      if (!params.sessionId) return
+      this.sessionManager.restore(params.sessionId, params.previousState)
+      if (!params.deletePersistent) return
+      await this.sdk.session.delete(
+        {
+          sessionID: params.sessionId,
+          directory: params.directory,
+        },
+        { throwOnError: true },
+      )
+    }
+
+    private async cleanupRejectedSessionInitializationAndThrow(params: {
+      errorValue: unknown
+      sessionId: string | undefined
+      directory: string
+      previousState: ACPSessionState | undefined
+      deletePersistent: boolean
+    }): Promise<never> {
+      try {
+        await this.cleanupRejectedSessionInitialization(params)
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [params.errorValue, cleanupError],
+          `ACP session initialization cleanup failed for ${params.sessionId ?? "uncreated session"}`,
+        )
+      }
+      this.throwACPRequestError(params.errorValue)
+    }
+
+    private throwACPRequestError(errorValue: unknown): never {
+      const error = Message.fromError(errorValue, {
+        providerID: "unknown",
+      })
+      if (LoadAPIKeyError.isInstance(error)) {
+        throw RequestError.authRequired()
+      }
+      throw errorValue
     }
 
     async unstable_setSessionModel(params: SetSessionModelRequest) {
@@ -1358,18 +1487,27 @@ export namespace ACP {
                 type: "file",
                 url: `data:${part.mimeType};base64,${part.data}`,
                 filename,
-                mime: part.mimeType,
-              })
-            } else if (part.uri && isHttpUri(part.uri)) {
-              parts.push({
-                type: "file",
-                url: part.uri,
-                filename,
-                mime: part.mimeType,
-              })
+                  mime: part.mimeType,
+                })
+              } else if (part.uri && isHttpUri(part.uri)) {
+                parts.push({
+                  type: "file",
+                  url: part.uri,
+                  filename,
+                  mime: part.mimeType,
+                })
+              } else if (parsed.type === "file") {
+                parts.push({
+                  type: "file",
+                  url: parsed.url,
+                  filename: parsed.filename,
+                  mime: part.mimeType,
+                })
+              } else {
+                throw new Error(`Unsupported ACP image URI: ${part.uri ?? "<missing>"}`)
+              }
+              break
             }
-            break
-          }
 
           case "resource_link":
             const parsed = parseUri(part.uri)
@@ -1740,5 +1878,23 @@ export namespace ACP {
     }
 
     return { model: parsed, variant: undefined }
+  }
+}
+
+function assertMcpServerAttached(name: string, response: unknown): void {
+  const data =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: unknown }).data
+      : undefined
+  const status =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, { status?: unknown; error?: unknown }>)[name]
+      : undefined
+  if (!status || typeof status !== "object") {
+    throw new Error(`MCP server ${name} did not return an attachment status`)
+  }
+  if (status.status !== "connected") {
+    const reason = typeof status.error === "string" && status.error.trim() ? `: ${status.error.trim()}` : ""
+    throw new Error(`MCP server ${name} failed to attach with status ${String(status.status)}${reason}`)
   }
 }

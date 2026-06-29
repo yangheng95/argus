@@ -20,6 +20,7 @@ import { Agent } from "@/agent/agent"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
+import { sessionLifecycleOrderKey } from "./status"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -263,6 +264,7 @@ export namespace LLM {
         const error = Message.fromError(event.error, { providerID: input.model.providerID })
         Bus.publish(SessionEvents.Error, {
           sessionID: input.sessionID,
+          orderKey: sessionLifecycleOrderKey(input.sessionID),
           error,
         })
         l.error("stream error", {

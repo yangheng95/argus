@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 import fs from "node:fs"
 import { collectInventoryViolations, compareOpenApiSpecs } from "../../script/check/routes"
+import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..", "..")
 
@@ -107,6 +108,8 @@ describe("api routes check OpenAPI drift", () => {
   test("route and docs checks use the generated OpenAPI spec source", () => {
     const routeCheck = readRepoFile("packages", "opencorvus", "script", "check", "routes.ts")
     const docsRenderer = readRepoFile("packages", "opencorvus", "script", "docs", "render-api-md.ts")
+    const generateScript = readRepoFile("script", "generate.ts")
+    const generateWorkflow = readRepoFile(".github", "workflows", "generate.yml")
 
     expect(routeCheck).toContain('import { generateOpenApiSpec } from "../../src/cli/cmd/generate"')
     expect(routeCheck).toContain("const generated = await generateOpenApiSpec()")
@@ -118,7 +121,41 @@ describe("api routes check OpenAPI drift", () => {
 
     expect(docsRenderer).toContain('import { generateOpenApiSpec } from "../../src/cli/cmd/generate"')
     expect(docsRenderer).toContain("const spec = await generateOpenApiSpec()")
+    expect(docsRenderer).toContain("API docs i18n missing route group")
+    expect(docsRenderer).toContain("merges into missing group")
+    expect(docsRenderer).toContain("is missing operationId")
     expect(docsRenderer).not.toContain("const spec = loadJson<any>(OPENAPI_PATH)")
     expect(docsRenderer).not.toContain("const spec = await Server.openapi()")
+    expect(docsRenderer).not.toContain("order: 9999")
+    expect(docsRenderer).not.toContain("capitalize(seg)")
+    expect(docsRenderer).not.toContain("if (!op.operationId) continue")
+
+    expect(generateWorkflow).toContain("run: ./script/generate.ts")
+    expect(generateWorkflow).toContain("bun ./script/generated-artifacts.ts --print")
+    expect(generateWorkflow).toContain("bun ./script/generated-artifacts.ts --check-worktree")
+    expect(generateScript).toContain('import { GENERATED_ARTIFACT_PATHS } from "./generated-artifacts"')
+    expect(generateScript).toContain("bun ./packages/sdk/js/script/build.ts")
+    expect(generateScript).toContain("bun ./packages/opencorvus/script/docs/render-api-md.ts")
+    expect(generateScript).toContain('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write", ...GENERATED_ARTIFACT_PATHS]')
+    expect(generateScript.indexOf("bun ./packages/opencorvus/script/docs/render-api-md.ts")).toBeLessThan(
+      generateScript.indexOf('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write"'),
+    )
+    expect(generateScript).not.toContain("bun ./script/format.ts")
+    expect(generateScript).not.toContain("--write .")
+    expect(generateScript).not.toContain("generate-openapi.ts >")
+  })
+
+  test("DB reset request requires the current database path in generated OpenAPI", async () => {
+    const spec = await generateOpenApiSpec()
+    const requestBody = spec.paths["/global/db/reset"].post.requestBody
+    const schema = requestBody.content["application/json"].schema
+
+    expect(requestBody.required).toBe(true)
+    expect(schema).toMatchObject({
+      type: "object",
+      required: ["database"],
+      properties: { database: { type: "string", minLength: 1 } },
+      additionalProperties: false,
+    })
   })
 })

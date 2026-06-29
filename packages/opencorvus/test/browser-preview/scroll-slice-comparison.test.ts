@@ -63,7 +63,7 @@ describe("browser preview scroll-slice comparison", () => {
         expect(result.implementation.actualScrollY).toBe(300)
         expect(result.implementation.viewport).toEqual({ width: 360, height: 180 })
         expect(result.diagnostics.join("\n")).toContain("supporting Visual QA evidence only")
-        expect(result.diagnostics.join("\n")).toContain("not browser_preview_compare_regions")
+        expect(result.diagnostics.join("\n")).toContain("not reference-comparison proof")
         const sourceCrop = resolveRuntimeRelativePath(tmp.path, result.artifacts.source_crop)
         const implementationCrop = resolveRuntimeRelativePath(tmp.path, result.artifacts.implementation_crop)
         const sideBySide = resolveRuntimeRelativePath(tmp.path, result.artifacts.side_by_side)
@@ -204,6 +204,49 @@ describe("browser preview scroll-slice comparison", () => {
       },
     })
   })
+
+  test(
+    "rejects late browser page errors before writing completed comparison artifacts",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await makeReferencePng(path.join(paths.sourcePackageAbsolute, "reference.png"), {
+        width: 360,
+        height: 900,
+        firstColor: "#dbeafe",
+        secondColor: "#dcfce7",
+      })
+      const server = await startScrollPreviewServer("late-pageerror")
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(
+              compareBrowserPreviewScrollSlice({
+                projectRoot: tmp.path,
+                taskID,
+                targetID: target.id,
+                viewportID: "desktop",
+                sourceReferenceArtifactID: "reference.png",
+                route: "/scroll",
+                scrollY: 300,
+                sliceHeight: 180,
+              }),
+            ).rejects.toThrow("late scroll-slice pageerror")
+          },
+        })
+      } finally {
+        await server.close()
+      }
+    },
+    SCROLL_SLICE_TEST_TIMEOUT_MILLISECONDS,
+  )
 })
 
 async function seedTask(directory: string) {
@@ -261,7 +304,9 @@ async function makeReferencePng(
     .toFile(outputPath)
 }
 
-async function startScrollPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+async function startScrollPreviewServer(
+  mode: "ok" | "late-pageerror" = "ok",
+): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
     if (req.url !== "/scroll") {
@@ -281,6 +326,11 @@ async function startScrollPreviewServer(): Promise<{ url: string; close: () => P
             .bottom { height: 320px; background: #fee2e2; color: #111827; box-sizing: border-box; padding: 48px 24px; }
             h1 { margin: 0; font-size: 32px; line-height: 1.2; }
           </style>
+          ${
+            mode === "late-pageerror"
+              ? '<script>setTimeout(() => { throw new Error("late scroll-slice pageerror") }, 100)</script>'
+              : ""
+          }
         </head>
         <body>
           <section class="top"><h1>Implementation top</h1></section>

@@ -226,10 +226,7 @@ describe("orchestrator analyze_intent dynamic follow-up questions", () => {
             .select()
             .from(EngineArtifactTable)
             .all()
-            .find(
-              (artifact) =>
-                artifact.task_id === taskID && artifact.kind === "stage_continuation_request",
-            ),
+            .find((artifact) => artifact.task_id === taskID && artifact.kind === "stage_continuation_request"),
         )
         expect(row).toBeTruthy()
         expect(row!.payload).toMatchObject({

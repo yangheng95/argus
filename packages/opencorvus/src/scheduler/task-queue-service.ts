@@ -5,6 +5,7 @@ import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
 import { Session } from "@/session"
+import { sessionLifecycleOrderKey } from "@/session/status"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionContext } from "@/session/context"
 import { SessionTable } from "@/session/session.sql"
@@ -13,6 +14,7 @@ import { Database, and, eq, inArray, sql, type SQL } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { EngineConfig } from "@/engine/config"
+import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { TaskQueueTable } from "./task-queue.sql"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 import { SessionWake } from "@/session/wake"
@@ -77,6 +79,7 @@ export namespace TaskQueueService {
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
+  type QueueTaskRow = typeof TaskQueueTable.$inferSelect
   type InFlightTask = {
     promise: Promise<void>
     cleanup: () => void
@@ -85,14 +88,26 @@ export namespace TaskQueueService {
     cancellationReason?: string
   }
 
-  const state = lazyInstanceState(() => ({
-    draining: false,
-    drainRequested: false,
-    activeDrain: undefined as Promise<Promise<void>[]> | undefined,
-    inFlight: new Map<string, InFlightTask>(),
-  }))
+  const state = lazyInstanceState(
+    () => ({
+      draining: false,
+      drainRequested: false,
+      activeDrain: undefined as Promise<Promise<void>[]> | undefined,
+      inFlight: new Map<string, InFlightTask>(),
+      recoveryTimers: new Map<string, ReturnType<typeof setTimeout>>(),
+      recoveryTimerTokens: new Map<string, number>(),
+      recoveryTimerSequence: 0,
+    }),
+    async (current) => {
+      for (const timer of current.recoveryTimers.values()) clearTimeout(timer)
+      current.recoveryTimers.clear()
+      current.recoveryTimerTokens.clear()
+      current.inFlight.clear()
+    },
+  )
 
   export function init() {
+    scheduleRunningRecoveryTimers("init")
     log.info("task queue service initialized")
   }
 
@@ -308,13 +323,13 @@ export namespace TaskQueueService {
     if (sessionIDs.length === 0) return 0
     const now = Date.now()
     const reason = input.reason || "task cancelled"
-    const cancelled = Database.use((db) => {
+    const cancelledRows = Database.use((db) => {
       const where: SQL[] = [
         inArray(TaskQueueTable.session_id, sessionIDs),
-        inArray(TaskQueueTable.status, ["queued", "running"]),
+        eq(TaskQueueTable.status, "queued"),
       ]
       if (input.source) where.push(eq(TaskQueueTable.source, input.source))
-      const rows = db
+      return db
         .update(TaskQueueTable)
         .set({
           status: "failed",
@@ -325,10 +340,12 @@ export namespace TaskQueueService {
         .where(and(...where))
         .returning({ id: TaskQueueTable.id })
         .all()
-      return rows.length
     })
-    requestInFlightCancellation({ sessionIDs, reason, source: input.source })
-    return cancelled
+    if (Instance.current()) {
+      for (const row of cancelledRows) clearRecoveryTimer(row.id)
+    }
+    const inFlightCancellations = requestInFlightCancellation({ sessionIDs, reason, source: input.source })
+    return cancelledRows.length + inFlightCancellations
   }
 
   export async function awaitSessionPromptsIdle(input: { sessionIDs: string[]; source?: string }) {
@@ -341,7 +358,17 @@ export namespace TaskQueueService {
         .filter((task) => sessions.has(task.sessionID))
         .filter((task) => !input.source || task.source === input.source)
         .map((task) => task.promise)
-      if (running.length === 0) return
+      if (running.length === 0) {
+        const stillRunning = Database.use((db) => {
+          const where: SQL[] = [inArray(TaskQueueTable.session_id, sessionIDs), eq(TaskQueueTable.status, "running")]
+          if (input.source) where.push(eq(TaskQueueTable.source, input.source))
+          return db.select({ id: TaskQueueTable.id }).from(TaskQueueTable).where(and(...where)).all()
+        })
+        if (stillRunning.length === 0) return
+        throw new Error(
+          `queue task(s) still running without an in-flight prompt: ${stillRunning.map((row) => row.id).join(", ")}`,
+        )
+      }
       await Promise.all(running)
     }
   }
@@ -351,7 +378,7 @@ export namespace TaskQueueService {
   }
 
   function requestInFlightCancellation(input: { sessionIDs: string[]; reason: string; source?: string }) {
-    if (!Instance.current()) return
+    if (!Instance.current()) return 0
     const sessions = new Set(input.sessionIDs)
     const liveSessions = Database.use((db) =>
       db
@@ -364,14 +391,17 @@ export namespace TaskQueueService {
         .all(),
     )
     const directoryBySession = new Map(liveSessions.map((session) => [session.id, session.directory]))
+    let cancelled = 0
     for (const task of state().inFlight.values()) {
       if (!sessions.has(task.sessionID)) continue
       if (input.source && task.source !== input.source) continue
       task.cancellationReason = input.reason
       task.cleanup()
+      cancelled += 1
       const directory = directoryBySession.get(task.sessionID)
       if (directory) SessionPrompt.cancel(task.sessionID, directory)
     }
+    return cancelled
   }
 
   function assertInFlightNotCancelled(task: typeof TaskQueueTable.$inferSelect, inFlight: InFlightTask) {
@@ -556,7 +586,7 @@ export namespace TaskQueueService {
 
   function claim(id: string, sessionID: string) {
     const now = Date.now()
-    return Database.use((db) =>
+    const task = Database.use((db) =>
       db
         .update(TaskQueueTable)
         .set({
@@ -586,6 +616,8 @@ export namespace TaskQueueService {
         .returning()
         .get(),
     )
+    if (task) scheduleRunningRecoveryTimer(task, "claim")
+    return task
   }
 
   async function execute(task: typeof TaskQueueTable.$inferSelect, inFlight: InFlightTask) {
@@ -661,6 +693,7 @@ export namespace TaskQueueService {
     } finally {
       cleanup()
     }
+    assertInFlightNotCancelled(task, inFlight)
     const now = Date.now()
     const completed = Database.use((db) =>
       db
@@ -680,6 +713,7 @@ export namespace TaskQueueService {
       requestDrain("task finished after queue row changed")
       return
     }
+    clearRecoveryTimer(task.id)
     log.info("task completed", { id: task.id, sessionID: task.session_id })
     publishTaskQueueCompleted(task.id, task.session_id)
     requestDrain("task completed")
@@ -722,9 +756,20 @@ export namespace TaskQueueService {
         )
         .all(),
     )
-    if (stale.length === 0) return
+    if (stale.length === 0) return 0
+    let recovered = 0
     for (const task of stale) {
       const session = await Session.get(task.session_id)
+      const promptCancelled = cancelSessionPromptInScope({
+        session,
+        handle: "TaskQueueService.recover",
+      })
+      if (promptCancelled) {
+        await awaitSessionPromptFinishedInScope({
+          session,
+          handle: "TaskQueueService.recover",
+        })
+      }
       const failed = Database.use((db) =>
         db
           .update(TaskQueueTable)
@@ -740,11 +785,12 @@ export namespace TaskQueueService {
           .get(),
       )
       if (!failed) continue
+      recovered += 1
+      clearRecoveryTimer(task.id)
       log.warn("marked stale running task failed after inactivity", {
         id: task.id,
         sessionID: task.session_id,
       })
-      const promptCancelled = SessionPrompt.cancel(session.id, session.directory)
       log.warn("cancelled stale running session prompt after inactivity", {
         id: task.id,
         sessionID: task.session_id,
@@ -757,9 +803,10 @@ export namespace TaskQueueService {
       }
       publishTerminalTaskError(task.session_id, "task timed out while running")
     }
+    return recovered
   }
 
-  function fail(task: typeof TaskQueueTable.$inferSelect, error: unknown) {
+  function fail(task: QueueTaskRow, error: unknown) {
     const now = Date.now()
     const failed = Database.use((db) =>
       db
@@ -784,6 +831,7 @@ export namespace TaskQueueService {
       requestDrain("task failed after queue row changed")
       return
     }
+    clearRecoveryTimer(task.id)
     log.error("task failed", {
       id: task.id,
       sessionID: task.session_id,
@@ -796,6 +844,7 @@ export namespace TaskQueueService {
   function publishTerminalTaskError(sessionID: string, text: string) {
     void Bus.publish(Session.Event.Error, {
       sessionID,
+      orderKey: sessionLifecycleOrderKey(sessionID),
       error: new NamedError.Unknown({ message: text }).toObject(),
     }).catch((error) => {
       log.warn("terminal task error publish failed", {
@@ -816,15 +865,106 @@ export namespace TaskQueueService {
   }
 
   function touch(id: string) {
-    Database.use((db) =>
+    const updated = Database.use((db) =>
       db
         .update(TaskQueueTable)
         .set({
           time_updated: Date.now(),
         })
         .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.status, "running")))
-        .run(),
+        .returning()
+        .get(),
     )
+    if (updated) scheduleRunningRecoveryTimer(updated, "progress")
+  }
+
+  function scheduleRunningRecoveryTimers(reason: string) {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          sql`${TaskQueueTable.status} = 'running'
+            AND ${TaskQueueTable.session_id} IN (
+              SELECT ${SessionTable.id}
+              FROM ${SessionTable}
+              WHERE ${SessionTable.project_id} = ${Instance.project.id}
+            )`,
+        )
+        .all(),
+    )
+    for (const row of rows) scheduleRunningRecoveryTimer(row, reason)
+  }
+
+  function scheduleRunningRecoveryTimer(task: QueueTaskRow, reason: string) {
+    const current = state()
+    const token = current.recoveryTimerSequence + 1
+    current.recoveryTimerSequence = token
+    current.recoveryTimerTokens.set(task.id, token)
+    const existing = current.recoveryTimers.get(task.id)
+    if (existing) {
+      clearTimeout(existing)
+      current.recoveryTimers.delete(task.id)
+    }
+    void (async () => {
+      const timeout = await runTimeout()
+      if (state().recoveryTimerTokens.get(task.id) !== token) return
+      const anchor = task.time_updated ?? task.time_started ?? Date.now()
+      const delay = Math.max(0, anchor + timeout - Date.now())
+      const timer = setTimeout(() => {
+        const latest = state()
+        if (latest.recoveryTimerTokens.get(task.id) !== token) return
+        latest.recoveryTimers.delete(task.id)
+        latest.recoveryTimerTokens.delete(task.id)
+        void recover(Date.now())
+          .then((recovered) => {
+            if (recovered > 0) requestDrain("task inactivity timeout")
+            scheduleRunningRecoveryTimers(
+              recovered > 0
+                ? "task inactivity timeout recovered running rows"
+                : "task inactivity timeout not yet stale",
+            )
+          })
+          .catch((error) => {
+            log.error("task inactivity recovery failed", {
+              id: task.id,
+              reason,
+              error: message(error),
+            })
+            publishTerminalTaskError(task.session_id, `task inactivity recovery failed: ${message(error)}`)
+            scheduleRunningRecoveryRetry(task, "task inactivity recovery failed")
+          })
+      }, delay)
+      timer.unref()
+      const latest = state()
+      if (latest.recoveryTimerTokens.get(task.id) !== token) {
+        clearTimeout(timer)
+        return
+      }
+      latest.recoveryTimers.set(task.id, timer)
+    })().catch((error) => {
+      log.error("task inactivity timer scheduling failed", {
+        id: task.id,
+        reason,
+        error: message(error),
+      })
+    })
+  }
+
+  function scheduleRunningRecoveryRetry(task: QueueTaskRow, reason: string) {
+    const retryAnchor = Date.now()
+    scheduleRunningRecoveryTimer(
+      { ...task, time_updated: retryAnchor, time_started: task.time_started ?? retryAnchor },
+      reason,
+    )
+  }
+
+  function clearRecoveryTimer(taskID: string) {
+    const current = state()
+    const timer = current.recoveryTimers.get(taskID)
+    if (timer) clearTimeout(timer)
+    current.recoveryTimers.delete(taskID)
+    current.recoveryTimerTokens.delete(taskID)
   }
 
   async function runTimeout() {

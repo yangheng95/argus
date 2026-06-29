@@ -9,17 +9,24 @@ import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
+import { Bus } from "@/bus"
 import { Session } from "@/session"
+import { SessionTable } from "@/session/session.sql"
 import { SessionContext } from "@/session/context"
 import type { AgentReport } from "@/agent/report"
-import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
+import {
+  FactCheckAttemptArtifactSchema,
+  FactCheckItemListSchema,
+  type FactCheckAttemptArtifact,
+  type FactCheckReport,
+} from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { PromptProfile, PromptProfileIDSchema } from "@/agent/prompt-profile"
 import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
+import { SessionStatus, sessionLifecycleOrderKey } from "@/session/status"
 import { Message } from "@/session/message"
 import { SessionControl } from "@/session/control"
-import { Database, NotFoundError, eq, and, inArray, sql } from "@/storage/db"
+import { Database, NotFoundError, desc, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { EffectiveConfig } from "@/config/effective"
@@ -28,6 +35,7 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
+import { DecisionLogTable } from "@/decision-log/schema"
 import { EngineService } from "@/task-api"
 import { canReceiveDirectAgentSessionControl } from "./direct-reply"
 import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
@@ -54,8 +62,10 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { ExploreAgent } from "@/explore/agent"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import { timelineOrderKey } from "@/timeline/order"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
+import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import {
   findNonStaleFrontendResearchBriefs,
@@ -76,6 +86,7 @@ import {
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
 import { visualQaReportAcceptanceSemantics } from "@/visual-qa/acceptance-semantics"
+import { VisualQaReportSchema } from "@/visual-qa/schema"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -109,11 +120,13 @@ import {
   findEvaluationByRun,
   findGoal,
   findGoalRun,
+  findInteractionByExternal,
   findRequirements,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestIntegrityAttemptArtifact,
+  integrityAttemptVerdict,
   findLatestAcceptanceVerdictArtifact,
   findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
@@ -133,24 +146,36 @@ import {
 import { goalStatusByID } from "@/engine/describe"
 import { isLiveGoalRunStatus, isLiveRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
-import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
+import { blockActiveRunForTask, terminalTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
+  findLatestOwnershipByID,
   findLiveBuildOwnershipByGoal,
   findLiveBuildOwnershipByGoalRun,
   findLiveBuildOwnershipBySession,
   insertOrchestratorToolOwnershipArtifact,
+  type OrchestratorToolOwnershipOutcome,
   type OrchestratorToolOwnershipPayload,
   type OrchestratorToolOwnershipRow,
 } from "@/engine/tool-ownership"
 import { Ownership } from "@/engine/ownership"
 import {
+  completeAgentCoordinationAction,
   createAgentCoordinationResponse,
+  failAgentCoordinationAction,
+  findAgentCoordinationAction,
   findAgentCoordinationRequest,
+  findAgentCoordinationResponse,
+  listPendingAgentCoordinationSessionControlRequests,
+  recordAgentCoordinationActionProgress,
+  resolveAgentCoordinationSessionOwnership,
+  type AgentCoordinationRedispatchBinding,
+  type AgentCoordinationSessionOwnershipSource,
   type AgentCoordinationRequestRow,
 } from "@/engine/agent-coordination"
+import { ProtocolEventTable } from "@/protocol/protocol.sql"
 
 import {
   createWorkflowState,
@@ -203,6 +228,7 @@ import {
   findStageContinuationRequest,
   type AgentSessionContinuation,
   type StageContinuationFailureName,
+  type StageContinuationRequestRow,
   type StageContinuationStage,
 } from "@/engine/stage-continuation"
 
@@ -217,6 +243,28 @@ export const ORCHESTRATOR_WAIT_RECOMMENDED_MS = WAIT_RECOMMENDED_MS
 export const ORCHESTRATOR_WAIT_MAX_MS = WAIT_MAX_MS
 
 const log = Log.create({ service: "task-tools" })
+
+const ProposedTaskCodeModuleReferenceSchema = z.object({
+  entity: z
+    .string()
+    .min(1)
+    .describe("Concrete code module reference entity: file path, component, tool, service, route, schema, table, class, or function."),
+  problem: z
+    .string()
+    .min(1)
+    .describe("Observed problem tied to that entity. Generic project improvement text is not a valid problem."),
+})
+
+function hasConcreteProposedTaskCodeModuleReference(value: unknown): value is z.infer<typeof ProposedTaskCodeModuleReferenceSchema> {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as { entity?: unknown; problem?: unknown }
+  return (
+    typeof candidate.entity === "string" &&
+    candidate.entity.trim().length > 0 &&
+    typeof candidate.problem === "string" &&
+    candidate.problem.trim().length > 0
+  )
+}
 
 const StageContinuationArtifactIDField = z
   .string()
@@ -378,9 +426,7 @@ async function hostPreparedFrontendProjectEvidenceSnapshot(taskID: string) {
     fs.stat(paths.skeletonProjectAbsolute).catch(() => undefined),
   ])
   if (!sourcePackageStat?.isDirectory() || !skeletonProjectStat?.isDirectory()) return null
-  const { readHostPreparedCompactEvidence } = await import(
-    "@/frontend-design/host-prepared-source-project"
-  )
+  const { readHostPreparedCompactEvidence } = await import("@/frontend-design/host-prepared-source-project")
   const compactEvidence = await readHostPreparedCompactEvidence({
     sourcePackage: paths.sourcePackageAbsolute,
     projectRoot: paths.skeletonProjectAbsolute,
@@ -882,6 +928,11 @@ type OrchestratorToolExecutionContext = {
   toolPartID: string
 }
 
+type TaskOrchestratorToolExecutionExpectation = {
+  taskID: string
+  agentSessionID: string
+}
+
 function requireOrchestratorToolExecutionContext(options: unknown, toolName: string): OrchestratorToolExecutionContext {
   const meta = (options as { opencorvus?: Record<string, unknown> } | undefined)?.opencorvus
   const orchestratorSessionID = typeof meta?.sessionID === "string" ? meta.sessionID : ""
@@ -894,6 +945,64 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
     )
   }
   return { orchestratorSessionID, orchestratorMessageID, toolCallID, toolPartID }
+}
+
+async function requireTaskOrchestratorToolExecutionContext(
+  options: unknown,
+  toolName: string,
+  expected: TaskOrchestratorToolExecutionExpectation,
+): Promise<OrchestratorToolExecutionContext> {
+  const toolExecution = requireOrchestratorToolExecutionContext(options, toolName)
+  const sdkToolCallID =
+    typeof (options as { toolCallId?: unknown } | undefined)?.toolCallId === "string"
+      ? (options as { toolCallId: string }).toolCallId
+      : ""
+  if (!sdkToolCallID || sdkToolCallID !== toolExecution.toolCallID) {
+    throw new Error(
+      `${toolName}: tool execution identity callID does not match the AI SDK tool call identity; refusing to write an unauditable A2A response.`,
+    )
+  }
+  if (toolExecution.orchestratorSessionID !== expected.agentSessionID) {
+    throw new Error(
+      `${toolName}: tool execution identity session ${toolExecution.orchestratorSessionID} does not match current orchestrator session ${expected.agentSessionID}.`,
+    )
+  }
+  const owningTaskID = taskIDForSession(toolExecution.orchestratorSessionID)
+  if (owningTaskID !== expected.taskID) {
+    throw new Error(
+      `${toolName}: tool execution identity session ${toolExecution.orchestratorSessionID} belongs to task ${owningTaskID ?? "unknown"}, not ${expected.taskID}.`,
+    )
+  }
+
+  let message: Message.WithParts
+  try {
+    message = await Message.get({
+      sessionID: toolExecution.orchestratorSessionID,
+      messageID: toolExecution.orchestratorMessageID,
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `${toolName}: persisted orchestrator message ${toolExecution.orchestratorMessageID} was not found in session ${toolExecution.orchestratorSessionID}; ${detail}`,
+    )
+  }
+  if (message.info.role !== "assistant") {
+    throw new Error(
+      `${toolName}: persisted orchestrator message ${toolExecution.orchestratorMessageID} is ${message.info.role}, not assistant.`,
+    )
+  }
+  const part = message.parts.find((candidate) => candidate.id === toolExecution.toolPartID)
+  if (!part) {
+    throw new Error(
+      `${toolName}: persisted tool part ${toolExecution.toolPartID} was not found on orchestrator message ${toolExecution.orchestratorMessageID}.`,
+    )
+  }
+  if (part.type !== "tool" || part.callID !== toolExecution.toolCallID || part.tool !== toolName) {
+    throw new Error(
+      `${toolName}: persisted tool part ${toolExecution.toolPartID} does not match tool=${toolName} callID=${toolExecution.toolCallID}.`,
+    )
+  }
+  return toolExecution
 }
 
 /**
@@ -1049,6 +1158,7 @@ type IntegrityReviewOutcome =
       findings: IntegrityFinding[]
       requiredRepairs: IntegrityRequiredRepair[]
       unresolvedDisagreements: IntegrityUnresolvedDisagreement[]
+      integrityAttemptID?: string
       artifactMissing?: {
         sessionID: string
         error: string
@@ -1618,6 +1728,13 @@ const IntegrityInputSchema = z
 
 type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
 
+const CompleteTaskInputSchema = z
+  .object({
+    integrity_attempt_id: z.string().min(1).describe("Latest post-build pass integrity_attempt artifact id"),
+    summary: z.string().optional().describe("Short terminal summary for the task lifecycle event"),
+  })
+  .strict()
+
 const IntegrityStageInputSchema = z
   .object({
     reason: z.string().optional(),
@@ -1674,7 +1791,145 @@ function factCheckContinuationFromArtifact(input: { taskID: string; artifactID: 
   return { continuation, normalizedStageInput: parsed.data }
 }
 
-function resolveSubagentControlTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
+function factCheckContinuationFromDurableRow(input: {
+  taskID: string
+  artifactID: string
+  sourceSessionID: string
+}): { row: StageContinuationRequestRow; normalizedStageInput: FactCheckStageInput } | undefined {
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) return undefined
+  if (row.payload.stage !== "fact-check") {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery continuation ${input.artifactID} targets stage ${row.payload.stage}, not fact-check`,
+    )
+  }
+  if (row.payload.session_id !== input.sourceSessionID) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery continuation ${input.artifactID} targets session ${row.payload.session_id}, not ${input.sourceSessionID}`,
+    )
+  }
+  if (row.payload.finalizer_name !== "report_fact_check_result") {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery continuation ${input.artifactID} targets finalizer ${row.payload.finalizer_name}, not report_fact_check_result`,
+    )
+  }
+  const parsed = FactCheckStageInputSchema.safeParse(row.payload.normalized_stage_input)
+  if (!parsed.success) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery continuation ${input.artifactID} has invalid normalized_stage_input: ${parsed.error.message}`,
+    )
+  }
+  const digest = stageInputDigest(parsed.data)
+  if (row.payload.input_digest !== digest) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery continuation ${input.artifactID} input_digest ${row.payload.input_digest} != normalized digest ${digest}`,
+    )
+  }
+  return { row, normalizedStageInput: parsed.data }
+}
+
+function findPendingFactCheckContinuationForSourceSession(input: {
+  taskID: string
+  sessionID: string
+}): { row: StageContinuationRequestRow; normalizedStageInput: FactCheckStageInput } | undefined {
+  const rows = Database.use((db) =>
+    db
+      .select({ id: EngineArtifactTable.id })
+      .from(EngineArtifactTable)
+      .where(
+        and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "stage_continuation_request")),
+      )
+      .all(),
+  )
+    .map((row) => findStageContinuationRequest({ taskID: input.taskID, artifactID: row.id }))
+    .filter((row): row is StageContinuationRequestRow => Boolean(row))
+    .filter(
+      (row) =>
+        row.payload.stage === "fact-check" &&
+        row.payload.session_id === input.sessionID &&
+        row.payload.finalizer_name === "report_fact_check_result" &&
+        !row.payload.claimed_at &&
+        !row.payload.claim_failed_at &&
+        !row.payload.consumed_at,
+    )
+    .sort((left, right) => {
+      if (left.timeUpdated !== right.timeUpdated) return right.timeUpdated - left.timeUpdated
+      return right.artifactID.localeCompare(left.artifactID)
+    })
+
+  const invalid: string[] = []
+  for (const row of rows) {
+    const parsed = FactCheckStageInputSchema.safeParse(row.payload.normalized_stage_input)
+    if (!parsed.success) {
+      invalid.push(`${row.artifactID}: ${parsed.error.message}`)
+      continue
+    }
+    const digest = stageInputDigest(parsed.data)
+    if (row.payload.input_digest !== digest) {
+      invalid.push(`${row.artifactID}: input_digest ${row.payload.input_digest} != normalized digest ${digest}`)
+      continue
+    }
+    return { row, normalizedStageInput: parsed.data }
+  }
+
+  if (invalid.length > 0) {
+    throw new Error(
+      `agent coordination fact_check redispatch found pending fact-check continuation artifacts with invalid normalized_stage_input: ${invalid.join("; ")}`,
+    )
+  }
+  return undefined
+}
+
+function findRecoverableFactCheckContinuationForRespondedRequest(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}): { row: StageContinuationRequestRow; normalizedStageInput: FactCheckStageInput } | undefined {
+  if (input.request.payload.status !== "responded" || !input.request.payload.response_id) return undefined
+  const response = findAgentCoordinationResponse({
+    taskID: input.taskID,
+    responseID: input.request.payload.response_id,
+  })
+  if (!response) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery request ${input.request.payload.request_id} points to missing response ${input.request.payload.response_id}`,
+    )
+  }
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery response ${response.payload.response_id} points to missing action ${response.payload.action_id}`,
+    )
+  }
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "fact_check_stage") return undefined
+  if (action.payload.status !== "pending" && action.payload.status !== "completed") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const continuationArtifactID =
+    typeof priorResult.continuation_artifact_id === "string" ? priorResult.continuation_artifact_id : undefined
+  if (!continuationArtifactID) {
+    throw new Error(
+      `agent coordination fact_check redispatch recovery action ${action.payload.action_id} has no continuation_artifact_id`,
+    )
+  }
+  return factCheckContinuationFromDurableRow({
+    taskID: input.taskID,
+    artifactID: continuationArtifactID,
+    sourceSessionID: input.request.payload.session_id,
+  })
+}
+
+function resolveSubagentControlTarget(input: {
+  taskID: string
+  sessionID?: string
+  goalID?: string
+  goalRunID?: string
+}): {
   sessionID: string
   source: string
   goalRunID?: string
@@ -1728,11 +1983,7 @@ function resolveSubagentControlTarget(input: { taskID: string; sessionID?: strin
   }
 }
 
-function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: string }): { kind: string } {
-  const owningTask = taskIDForSession(input.sessionID)
-  if (owningTask !== input.taskID) {
-    throw new Error(`Session ${input.sessionID} does not belong to task ${input.taskID}`)
-  }
+function assertDirectReplySessionKind(input: { sessionID: string }): { kind: string } {
   const kind = sessionRole(input.sessionID)
   if (!kind) {
     throw new Error(`Session ${input.sessionID} has no task agent kind`)
@@ -1743,7 +1994,29 @@ function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: s
   return { kind }
 }
 
-function requirePendingAgentCoordinationRequest(input: {
+function assertDirectReplySessionOwnership(input: {
+  taskID: string
+  sessionID: string
+  goalID?: string
+  goalRunID?: string
+}): { kind: string; ownershipSource: AgentCoordinationSessionOwnershipSource } {
+  const ownership = resolveAgentCoordinationSessionOwnership(input)
+  const { kind } = assertDirectReplySessionKind(input)
+  return { kind, ownershipSource: ownership.source }
+}
+
+function directReplyModelResolutionContext(input: {
+  taskID: string
+  sessionID: string
+  ownershipSource: AgentCoordinationSessionOwnershipSource
+}): { taskID?: string; sessionID: string } {
+  if (input.ownershipSource === "task_session_tree") {
+    return { taskID: input.taskID, sessionID: input.sessionID }
+  }
+  return { sessionID: input.sessionID }
+}
+
+function requireAgentCoordinationRequestForResponse(input: {
   taskID: string
   requestID: string
 }): AgentCoordinationRequestRow {
@@ -1754,10 +2027,53 @@ function requirePendingAgentCoordinationRequest(input: {
   if (!request) {
     throw new Error(`agent coordination request ${input.requestID} does not belong to task ${input.taskID}`)
   }
-  if (request.payload.status !== "pending") {
+  if (request.payload.status !== "pending" && request.payload.status !== "responded") {
     throw new Error(`agent coordination request ${input.requestID} is ${request.payload.status}`)
   }
   return request
+}
+
+const AGENT_COORDINATION_REDISPATCH_REPLAY_BINDINGS = {
+  build: { dispatcher: "build_stage", stage: "build", target_kind: "build" },
+  "intent-analysis": {
+    dispatcher: "intent_analysis_stage",
+    stage: "intent-analysis",
+    target_kind: "intent-analysis",
+  },
+  explore: { dispatcher: "explore_stage", stage: "explore", target_kind: "explore" },
+  "goal-workload-analyst": {
+    dispatcher: "workload_analysis_stage",
+    stage: "goal-workload-analyst",
+    target_kind: "goal-workload-analyst",
+  },
+  "fact-check": { dispatcher: "fact_check_stage", stage: "fact-check", target_kind: "fact-check" },
+  architect: { dispatcher: "architect_stage", stage: "architect", target_kind: "architect" },
+  requirements: { dispatcher: "requirements_stage", stage: "requirements", target_kind: "requirements" },
+  "frontend-design": {
+    dispatcher: "frontend_design_stage",
+    stage: "frontend-design",
+    target_kind: "frontend-design",
+  },
+  "frontend-research": {
+    dispatcher: "frontend_research_stage",
+    stage: "frontend-research",
+    target_kind: "frontend-research",
+  },
+  "deep-research": { dispatcher: "deep_research_stage", stage: "deep-research", target_kind: "deep-research" },
+  "visual-qa": { dispatcher: "visual_qa_stage", stage: "visual-qa", target_kind: "visual-qa" },
+  integrity: { dispatcher: "integrity_stage", stage: "integrity", target_kind: "integrity" },
+} satisfies Record<string, AgentCoordinationRedispatchBinding>
+
+function redispatchBindingForAgentCoordinationReplay(input: {
+  request: AgentCoordinationRequestRow
+}): AgentCoordinationRedispatchBinding {
+  const binding = AGENT_COORDINATION_REDISPATCH_REPLAY_BINDINGS[input.request.payload.agent]
+  if (!binding) {
+    throw new Error(
+      `agent coordination redispatch replay for ${input.request.payload.agent} has no concrete dispatcher binding`,
+    )
+  }
+  return binding
 }
 
 async function validateAgentCoordinationContinueTarget(input: {
@@ -1765,9 +2081,11 @@ async function validateAgentCoordinationContinueTarget(input: {
   request: AgentCoordinationRequestRow
 }) {
   const session = await Session.get(input.request.payload.session_id)
-  const { kind } = assertDirectReplySessionOwnership({
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
     taskID: input.taskID,
     sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
   })
   const status = SessionStatus.get(input.request.payload.session_id)
   if (status.type === "streaming" || status.type === "retry") {
@@ -1780,10 +2098,14 @@ async function validateAgentCoordinationContinueTarget(input: {
       `agent coordination continue refused because session ${input.request.payload.session_id} is terminal (${status.reason}); redispatch the worker under a visible tool call if more work is needed.`,
     )
   }
-  const model = await resolveAgentModelRef(input.request.payload.agent, {
-    taskID: input.taskID,
-    sessionID: input.request.payload.session_id,
-  })
+  const model = await resolveAgentModelRef(
+    input.request.payload.agent,
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
   const requiresRuntimeContract =
     SessionPrompt.agentKindRequiresRuntimeContract(input.request.payload.agent) ||
     SessionPrompt.agentKindRequiresRuntimeContract(kind)
@@ -1824,6 +2146,2240 @@ async function startAgentCoordinationContinuation(input: {
   ])
   if (immediate.type === "failed") throw immediate.error
   return { loopPromise }
+}
+
+async function validateAgentCoordinationBuildRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "build" || input.request.payload.agent !== "build") {
+    throw new Error(`agent coordination build redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  const goalID = input.request.payload.goal_id
+  if (!goalID) {
+    throw new Error(
+      "agent coordination build redispatch requires goal_id; task-level direct build redispatch is not bound",
+    )
+  }
+  const sourceGoalRunID = input.request.payload.goal_run_id
+  if (!sourceGoalRunID) {
+    throw new Error("agent coordination build redispatch requires source goal_run_id")
+  }
+  const goal = findGoal(goalID)
+  if (!goal || goal.task_id !== input.taskID) {
+    throw new Error(`agent coordination build redispatch goal ${goalID} does not belong to task ${input.taskID}`)
+  }
+  const sourceGoalRun = findGoalRun(sourceGoalRunID)
+  if (!sourceGoalRun || sourceGoalRun.task_id !== input.taskID || sourceGoalRun.goal_id !== goalID) {
+    throw new Error(
+      `agent coordination build redispatch source goal_run ${sourceGoalRunID} does not belong to goal ${goalID}`,
+    )
+  }
+  await resolveAgentModelRef(
+    "build",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "build",
+    expectedGoalID: goalID,
+    expectedGoalRunID: sourceGoalRunID,
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind, goalID, sourceGoalRunID, sourceGoalRun }
+}
+
+async function validateAgentCoordinationIntentAnalysisRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "intent-analysis" || input.request.payload.agent !== "intent-analysis") {
+    throw new Error(`agent coordination intent_analysis redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "intent-analysis",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "intent-analysis",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+async function validateAgentCoordinationExploreRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "explore" || input.request.payload.agent !== "explore") {
+    throw new Error(`agent coordination explore redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "explore",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "explore",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+async function validateAgentCoordinationGoalWorkloadRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "goal-workload-analyst" || input.request.payload.agent !== "goal-workload-analyst") {
+    throw new Error(
+      `agent coordination workload_analysis redispatch refused for ${kind}/${input.request.payload.agent}`,
+    )
+  }
+  const activeSpec = findActiveSpecForTask(input.taskID)
+  if (!activeSpec) {
+    throw new Error("agent coordination workload_analysis redispatch requires an active spec snapshot")
+  }
+  const goals = listGoals(input.taskID)
+  if (goals.length === 0) {
+    throw new Error("agent coordination workload_analysis redispatch requires architect goal rows")
+  }
+  await resolveAgentModelRef(
+    "goal-workload-analyst",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "goal-workload-analyst",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind, activeSpecID: activeSpec.id, goalsCount: goals.length }
+}
+
+async function validateAgentCoordinationFactCheckRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "fact-check" || input.request.payload.agent !== "fact-check") {
+    throw new Error(`agent coordination fact_check redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "fact-check",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "fact-check",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  const continuation =
+    findPendingFactCheckContinuationForSourceSession({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+    }) ?? findRecoverableFactCheckContinuationForRespondedRequest(input)
+  if (!continuation) {
+    throw new Error(
+      "agent coordination fact_check redispatch requires a pending fact-check stage_continuation_request for the source session",
+    )
+  }
+  return { task, source, kind, continuation }
+}
+
+async function validateAgentCoordinationFrontendResearchRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "frontend-research" || input.request.payload.agent !== "frontend-research") {
+    throw new Error(
+      `agent coordination frontend_research redispatch refused for ${kind}/${input.request.payload.agent}`,
+    )
+  }
+  const sourceUrls = (input.request.payload.evidence_refs ?? []).filter(isHttpWebpageUrl)
+  if (sourceUrls.length !== 1) {
+    throw new Error(
+      `agent coordination frontend_research redispatch requires exactly one HTTP(S) source URL in evidence_refs; found ${sourceUrls.length}`,
+    )
+  }
+  await resolveAgentModelRef(
+    "frontend-research",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "frontend-research",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind, sourceUrls }
+}
+
+async function validateAgentCoordinationFrontendDesignRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "frontend-design" || input.request.payload.agent !== "frontend-design") {
+    throw new Error(`agent coordination frontend_design redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "frontend-design",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "frontend-design",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind, sourceUrls: (input.request.payload.evidence_refs ?? []).filter(isHttpWebpageUrl) }
+}
+
+async function validateAgentCoordinationDeepResearchRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "deep-research" || input.request.payload.agent !== "deep-research") {
+    throw new Error(`agent coordination deep_research redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "deep-research",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "deep-research",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind, sourceUrls: input.request.payload.evidence_refs ?? [] }
+}
+
+async function validateAgentCoordinationRequirementsRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "requirements" || input.request.payload.agent !== "requirements") {
+    throw new Error(`agent coordination requirements redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "requirements",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "requirements",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+async function validateAgentCoordinationArchitectRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "architect" || input.request.payload.agent !== "architect") {
+    throw new Error(`agent coordination architect redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  const activeSpec = findActiveSpecForTask(input.taskID)
+  if (!activeSpec) {
+    throw new Error("agent coordination architect redispatch requires an active requirements spec snapshot")
+  }
+  await resolveAgentModelRef(
+    "architect",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "architect",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+async function validateAgentCoordinationVisualQaRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "visual-qa" || input.request.payload.agent !== "visual-qa") {
+    throw new Error(`agent coordination visual_qa redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "visual-qa",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "visual-qa",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+async function validateAgentCoordinationIntegrityRedispatch(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const task = requireTask(input.taskID)
+  const source = await Session.get(input.request.payload.session_id)
+  const { kind, ownershipSource } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+    goalID: input.request.payload.goal_id,
+    goalRunID: input.request.payload.goal_run_id,
+  })
+  if (kind !== "integrity" || input.request.payload.agent !== "integrity") {
+    throw new Error(`agent coordination integrity redispatch refused for ${kind}/${input.request.payload.agent}`)
+  }
+  await resolveAgentModelRef(
+    "integrity",
+    directReplyModelResolutionContext({
+      taskID: input.taskID,
+      sessionID: input.request.payload.session_id,
+      ownershipSource,
+    }),
+  )
+  SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: "integrity",
+    requireWorkerTurnDescriptor: true,
+    requireRuntimeContract: true,
+    expectedResultMode: "reply",
+  })
+  return { task, source, kind }
+}
+
+function markAgentCoordinationContinuationFailure(input: { sessionID: string; error: unknown }) {
+  SessionStatus.set(input.sessionID, {
+    type: "terminal",
+    reason: "error",
+    error: input.error instanceof Error ? input.error.message : String(input.error),
+  })
+}
+
+function replayedAgentCoordinationActionResult(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+}): string | undefined {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination replay response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status === "completed") {
+    return (
+      `Replayed coordination response ${input.response.payload.response_id}; ` +
+      `action=${action.payload.action_id} already completed as ${action.payload.action}.`
+    )
+  }
+  if (action.payload.status === "failed") {
+    return (
+      `Replayed coordination response ${input.response.payload.response_id}; ` +
+      `action=${action.payload.action_id} already failed and the request remains pending for a new response.`
+    )
+  }
+  return undefined
+}
+
+function listBuildSessionContractArtifactsForGoal(input: { taskID: string; goalID: string }) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "build_session_contract"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.goal_id') = ${input.goalID}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+}
+
+async function recoverPendingBuildRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  sourceSessionID: string
+  sourceGoalRunID: string
+  goalID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      goalRunID: string
+      goalRunStatus: string
+      contractID: string
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "build_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  if (priorResult.goal_id !== input.goalID) {
+    throw new Error(
+      `build_stage redispatch recovery goal_id mismatch: action=${String(priorResult.goal_id)} request=${input.goalID}`,
+    )
+  }
+  if (priorResult.source_goal_run_id !== input.sourceGoalRunID) {
+    throw new Error(
+      `build_stage redispatch recovery source_goal_run_id mismatch: action=${String(priorResult.source_goal_run_id)} request=${input.sourceGoalRunID}`,
+    )
+  }
+  const existingGoalRunIDs = new Set(
+    Array.isArray(priorResult.preexisting_build_goal_run_ids)
+      ? priorResult.preexisting_build_goal_run_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingContractIDs = new Set(
+    Array.isArray(priorResult.preexisting_build_session_contract_ids)
+      ? priorResult.preexisting_build_session_contract_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+
+  const newGoalRuns = listGoalRunsByGoal(input.goalID)
+    .filter((goalRun) => !existingGoalRunIDs.has(goalRun.id))
+    .sort((left, right) => {
+      if (left.time_created !== right.time_created) return right.time_created - left.time_created
+      return right.id.localeCompare(left.id)
+    })
+  if (newGoalRuns.length > 1) {
+    throw new Error(
+      `build_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new goal_runs ${newGoalRuns
+        .map((goalRun) => goalRun.id)
+        .join(", ")}`,
+    )
+  }
+
+  const contracts = listBuildSessionContractArtifactsForGoal({ taskID: input.taskID, goalID: input.goalID })
+    .filter((row) => row.time_created >= action.payload.created_at)
+    .filter((row) => !existingContractIDs.has(row.id))
+  if (contracts.length > 1) {
+    throw new Error(
+      `build_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new build_session_contract artifacts ${contracts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+
+  const goalRun = newGoalRuns[0]
+  const contract = contracts[0]
+  if (!goalRun && !contract) return undefined
+  if (!goalRun || !contract) {
+    throw new Error(
+      `build_stage redispatch recovery for action ${action.payload.action_id} found incomplete durable build start: goal_run=${goalRun?.id ?? "missing"} contract=${contract?.id ?? "missing"}`,
+    )
+  }
+  if (!goalRun.session_id) {
+    throw new Error(`build_stage redispatch recovery goal_run ${goalRun.id} has no session_id`)
+  }
+  const payload = contract.payload as
+    | {
+        session_id?: unknown
+        task_id?: unknown
+        goal_id?: unknown
+        goal_run_id?: unknown
+      }
+    | undefined
+  if (payload?.task_id !== input.taskID) {
+    throw new Error(`build_stage redispatch recovery contract ${contract.id} task_id mismatch`)
+  }
+  if (payload.goal_id !== input.goalID) {
+    throw new Error(`build_stage redispatch recovery contract ${contract.id} goal_id mismatch`)
+  }
+  if (payload.goal_run_id !== goalRun.id) {
+    throw new Error(
+      `build_stage redispatch recovery contract ${contract.id} goal_run_id ${String(payload.goal_run_id)} does not match recovered goal_run ${goalRun.id}`,
+    )
+  }
+  if (payload.session_id !== goalRun.session_id) {
+    throw new Error(
+      `build_stage redispatch recovery contract ${contract.id} session_id ${String(payload.session_id)} does not match recovered build session ${goalRun.session_id}`,
+    )
+  }
+  const sourceAfter = findGoalRun(input.sourceGoalRunID)
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "build_stage",
+      stage: "build",
+      source_session_id: input.sourceSessionID,
+      source_goal_run_id: input.sourceGoalRunID,
+      source_goal_run_status: sourceAfter?.status ?? "unknown",
+      source_cancel_summary:
+        typeof priorResult.source_cancel_summary === "string" ? priorResult.source_cancel_summary : "",
+      redispatch_session_id: goalRun.session_id,
+      redispatch_goal_run_id: goalRun.id,
+      redispatch_goal_run_status: goalRun.status,
+      build_session_contract_id: contract.id,
+      worktree_dir: goalRun.workspace_dir,
+      worktree_branch: goalRun.workspace_branch,
+      goal_id: input.goalID,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker build stage recovered persisted goal_run",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: goalRun.session_id,
+    goalRunID: goalRun.id,
+    goalRunStatus: goalRun.status,
+    contractID: contract.id,
+  }
+}
+
+function listDecisionLogEntriesForPhase(input: { taskID: string; phase: string }) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(DecisionLogTable)
+      .where(and(eq(DecisionLogTable.task_id, input.taskID), eq(DecisionLogTable.phase, input.phase)))
+      .orderBy(desc(DecisionLogTable.time_created), desc(DecisionLogTable.id))
+      .all(),
+  )
+}
+
+async function recoverPendingIntentAnalysisRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      decisionEntriesCount: number
+      intentSummary: string
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "intent_analysis_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_intent_analysis_session_ids)
+      ? priorResult.preexisting_intent_analysis_session_ids.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+  )
+  const existingDecisionIDs = new Set(
+    Array.isArray(priorResult.preexisting_intent_analysis_decision_ids)
+      ? priorResult.preexisting_intent_analysis_decision_ids.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "intent-analysis" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `intent_analysis_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const decisionEntries = listDecisionLogEntriesForPhase({ taskID: input.taskID, phase: "intent_analysis" })
+    .filter((entry) => entry.time_created >= action.payload.created_at)
+    .filter((entry) => !existingDecisionIDs.has(entry.id))
+  const summaryEntries = decisionEntries.filter((entry) => entry.key === "intent_summary")
+  if (summaryEntries.length > 1) {
+    throw new Error(
+      `intent_analysis_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: intent_summary entries ${summaryEntries
+        .map((entry) => entry.id)
+        .join(", ")}`,
+    )
+  }
+
+  const session = newSessions[0]
+  const summaryEntry = summaryEntries[0]
+  if (!session && !summaryEntry) return undefined
+  if (!session || !summaryEntry) {
+    throw new Error(
+      `intent_analysis_stage redispatch recovery for action ${action.payload.action_id} found incomplete durable intent evidence: session=${session?.id ?? "missing"} intent_summary=${summaryEntry?.id ?? "missing"}`,
+    )
+  }
+  if (summaryEntry.value.trim().length === 0) {
+    throw new Error(`intent_analysis_stage redispatch recovery intent_summary ${summaryEntry.id} is empty`)
+  }
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "intent_analysis_stage",
+      stage: "intent-analysis",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      decision_entries_count: decisionEntries.length,
+      intent_summary: summaryEntry.value,
+      intent_summary_decision_id: summaryEntry.id,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker intent_analysis stage recovered persisted intent",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    decisionEntriesCount: decisionEntries.length,
+    intentSummary: summaryEntry.value,
+  }
+}
+
+function listExplorationArtifacts(input: { taskID: string }) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "exploration")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+}
+
+function listGoalWorkloadArtifacts(input: { taskID: string }) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "goal_workload")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+}
+
+function listFactCheckAttemptArtifacts(input: { taskID: string }) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "fact_check_attempt")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+}
+
+async function recoverPendingExploreRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  question: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      decisionEntryID: string
+      artifactID: string
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "explore_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  if (priorResult.question !== input.question) {
+    throw new Error(
+      `explore_stage redispatch recovery question mismatch: action=${String(priorResult.question)} request=${input.question}`,
+    )
+  }
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_explore_session_ids)
+      ? priorResult.preexisting_explore_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingDecisionIDs = new Set(
+    Array.isArray(priorResult.preexisting_explore_decision_ids)
+      ? priorResult.preexisting_explore_decision_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingArtifactIDs = new Set(
+    Array.isArray(priorResult.preexisting_exploration_artifact_ids)
+      ? priorResult.preexisting_exploration_artifact_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "explore" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `explore_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const decisionEntries = listDecisionLogEntriesForPhase({ taskID: input.taskID, phase: "explore" })
+    .filter((entry) => entry.time_created >= action.payload.created_at)
+    .filter((entry) => !existingDecisionIDs.has(entry.id))
+  if (decisionEntries.length > 1) {
+    throw new Error(
+      `explore_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: decision entries ${decisionEntries
+        .map((entry) => entry.id)
+        .join(", ")}`,
+    )
+  }
+  const artifacts = listExplorationArtifacts({ taskID: input.taskID })
+    .filter((row) => row.time_created >= action.payload.created_at)
+    .filter((row) => !existingArtifactIDs.has(row.id))
+  if (artifacts.length > 1) {
+    throw new Error(
+      `explore_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: exploration artifacts ${artifacts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+
+  const session = newSessions[0]
+  const decisionEntry = decisionEntries[0]
+  const artifact = artifacts[0]
+  if (!session && !decisionEntry && !artifact) return undefined
+  if (!session || !decisionEntry || !artifact) {
+    throw new Error(
+      `explore_stage redispatch recovery for action ${action.payload.action_id} found incomplete durable explore evidence: session=${session?.id ?? "missing"} decision=${decisionEntry?.id ?? "missing"} artifact=${artifact?.id ?? "missing"}`,
+    )
+  }
+  const payload = artifact.payload as
+    | {
+        question?: unknown
+        session_id?: unknown
+        result?: unknown
+      }
+    | undefined
+  if (payload?.session_id !== session.id) {
+    throw new Error(
+      `explore_stage redispatch recovery exploration artifact ${artifact.id} session_id ${String(payload?.session_id)} does not match recovered session ${session.id}`,
+    )
+  }
+  if (payload.question !== input.question) {
+    throw new Error(`explore_stage redispatch recovery exploration artifact ${artifact.id} question mismatch`)
+  }
+  if (typeof payload.result !== "string" || payload.result.trim().length === 0) {
+    throw new Error(`explore_stage redispatch recovery exploration artifact ${artifact.id} has empty result`)
+  }
+  if (decisionEntry.key !== `repo_investigation_${session.id}`) {
+    throw new Error(
+      `explore_stage redispatch recovery decision ${decisionEntry.id} key ${decisionEntry.key} is not bound to recovered session ${session.id}`,
+    )
+  }
+  if (decisionEntry.value !== payload.result) {
+    throw new Error(
+      `explore_stage redispatch recovery decision ${decisionEntry.id} value does not match exploration artifact ${artifact.id}`,
+    )
+  }
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "explore_stage",
+      stage: "explore",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      decision_entries_count: decisionEntries.length,
+      exploration_artifacts_count: artifacts.length,
+      explore_decision_id: decisionEntry.id,
+      exploration_artifact_id: artifact.id,
+      question: input.question,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker explore stage recovered persisted investigation",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    decisionEntryID: decisionEntry.id,
+    artifactID: artifact.id,
+  }
+}
+
+async function recoverPendingGoalWorkloadRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  activeSpecID: string
+  expectedGoalsCount: number
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      artifactID: string
+      briefsCount: number
+      flaggedGoalsCount: number
+      summary?: string
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "workload_analysis_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  if (priorResult.spec_snapshot_id !== input.activeSpecID) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery spec_snapshot_id mismatch: action=${String(priorResult.spec_snapshot_id)} request=${input.activeSpecID}`,
+    )
+  }
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_goal_workload_session_ids)
+      ? priorResult.preexisting_goal_workload_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingArtifactIDs = new Set(
+    Array.isArray(priorResult.preexisting_goal_workload_artifact_ids)
+      ? priorResult.preexisting_goal_workload_artifact_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "goal-workload-analyst" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const artifacts = listGoalWorkloadArtifacts({ taskID: input.taskID })
+    .filter((row) => row.time_created >= action.payload.created_at)
+    .filter((row) => !existingArtifactIDs.has(row.id))
+  if (artifacts.length > 1) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: goal_workload artifacts ${artifacts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+  const session = newSessions[0]
+  const artifact = artifacts[0]
+  if (!session && !artifact) return undefined
+  if (!session || !artifact) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery for action ${action.payload.action_id} found incomplete durable workload evidence: session=${session?.id ?? "missing"} artifact=${artifact?.id ?? "missing"}`,
+    )
+  }
+  const payload = artifact.payload as
+    | {
+        briefs?: Array<{ decomposition_concern?: unknown }>
+        spec_snapshot_id?: unknown
+        summary?: unknown
+      }
+    | undefined
+  if (payload?.spec_snapshot_id !== input.activeSpecID) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery goal_workload ${artifact.id} spec_snapshot_id mismatch`,
+    )
+  }
+  const briefs = Array.isArray(payload.briefs) ? payload.briefs : []
+  if (briefs.length < input.expectedGoalsCount) {
+    throw new Error(
+      `workload_analysis_stage redispatch recovery goal_workload ${artifact.id} has ${briefs.length} briefs for ${input.expectedGoalsCount} goals`,
+    )
+  }
+  const flaggedGoalsCount = briefs.filter(
+    (brief) => typeof brief.decomposition_concern === "string" && brief.decomposition_concern.trim().length > 0,
+  ).length
+  const summary = typeof payload.summary === "string" ? payload.summary : undefined
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "workload_analysis_stage",
+      stage: "goal-workload-analyst",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      goal_workload_artifact_id: artifact.id,
+      spec_snapshot_id: input.activeSpecID,
+      briefs_count: briefs.length,
+      flagged_goals_count: flaggedGoalsCount,
+      expected_goals_count: input.expectedGoalsCount,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker workload_analysis stage recovered persisted workload",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    artifactID: artifact.id,
+    briefsCount: briefs.length,
+    flaggedGoalsCount,
+    summary,
+  }
+}
+
+async function recoverPendingFactCheckRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  sourceSessionID: string
+  continuationArtifactID: string
+  normalizedStageInput: FactCheckStageInput
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      artifactID: string
+      verdict: FactCheckReport["overall_verdict"]
+      outcome: FactCheckAttemptArtifact["outcome"]
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "fact_check_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  if (priorResult.continuation_artifact_id !== input.continuationArtifactID) {
+    throw new Error(
+      `fact_check_stage redispatch recovery continuation_artifact_id mismatch: action=${String(priorResult.continuation_artifact_id)} request=${input.continuationArtifactID}`,
+    )
+  }
+  const existingAttemptIDs = new Set(
+    Array.isArray(priorResult.preexisting_fact_check_attempt_ids)
+      ? priorResult.preexisting_fact_check_attempt_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const artifacts = listFactCheckAttemptArtifacts({ taskID: input.taskID })
+    .filter((row) => row.time_created >= action.payload.created_at)
+    .filter((row) => !existingAttemptIDs.has(row.id))
+  if (artifacts.length > 1) {
+    throw new Error(
+      `fact_check_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: fact_check_attempt artifacts ${artifacts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+  const artifact = artifacts[0]
+  if (!artifact) return undefined
+  const parsed = FactCheckAttemptArtifactSchema.safeParse(artifact.payload)
+  if (!parsed.success) {
+    throw new Error(
+      `fact_check_stage redispatch recovery fact_check_attempt ${artifact.id} has invalid payload: ${parsed.error.message}`,
+    )
+  }
+  const payload = parsed.data
+  const expected = input.normalizedStageInput
+  if (payload.fact_check_session_id !== input.sourceSessionID) {
+    throw new Error(
+      `fact_check_stage redispatch recovery fact_check_attempt ${artifact.id} session ${payload.fact_check_session_id} does not match source ${input.sourceSessionID}`,
+    )
+  }
+  if (payload.invoked_by_orchestrator_session_id !== action.payload.orchestrator_session_id) {
+    throw new Error(
+      `fact_check_stage redispatch recovery fact_check_attempt ${artifact.id} invoked_by_orchestrator_session_id mismatch`,
+    )
+  }
+  const mismatches: string[] = []
+  if (payload.target_session_id !== expected.target_session_id) mismatches.push("target_session_id")
+  if (payload.target_agent !== expected.target_agent) mismatches.push("target_agent")
+  if (payload.target_message_id !== expected.target_message_id) mismatches.push("target_message_id")
+  if (payload.target_message_content_hash !== expected.target_message_content_hash) {
+    mismatches.push("target_message_content_hash")
+  }
+  if (payload.report.scope.target_session_id !== expected.target_session_id) {
+    mismatches.push("report.scope.target_session_id")
+  }
+  if (payload.report.scope.target_agent !== expected.target_agent) mismatches.push("report.scope.target_agent")
+  if (payload.report.scope.target_message_id !== expected.target_message_id) {
+    mismatches.push("report.scope.target_message_id")
+  }
+  if (payload.report.scope.target_message_content_hash !== expected.target_message_content_hash) {
+    mismatches.push("report.scope.target_message_content_hash")
+  }
+  if (payload.report.scope.items_total !== expected.fact_check_items.length) mismatches.push("report.scope.items_total")
+  if (payload.report.scope.items_inspected > payload.report.scope.items_total) {
+    mismatches.push("report.scope.items_inspected")
+  }
+  if (mismatches.length > 0) {
+    throw new Error(
+      `fact_check_stage redispatch recovery fact_check_attempt ${artifact.id} scope mismatch: ${mismatches.join(", ")}`,
+    )
+  }
+
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "fact_check_stage",
+      stage: "fact-check",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: payload.fact_check_session_id,
+      continuation_artifact_id: input.continuationArtifactID,
+      fact_check_attempt_id: artifact.id,
+      target_session_id: payload.target_session_id,
+      target_agent: payload.target_agent,
+      target_message_id: payload.target_message_id,
+      target_message_content_hash: payload.target_message_content_hash,
+      verdict: payload.report.overall_verdict,
+      outcome: payload.outcome,
+      items_total: payload.report.scope.items_total,
+      items_inspected: payload.report.scope.items_inspected,
+      verified_count: payload.report.verified.length,
+      corrected_count: payload.report.corrected.length,
+      unresolved_count: payload.report.unresolved.length,
+      same_session_continuation: payload.fact_check_session_id === input.sourceSessionID,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker fact_check stage recovered persisted attempt",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: payload.fact_check_session_id,
+    artifactID: artifact.id,
+    verdict: payload.report.overall_verdict,
+    outcome: payload.outcome,
+  }
+}
+
+async function recoverPendingFrontendResearchRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  sourceURL: string
+  targetKind: string
+}): Promise<{ actionID: string; sessionID: string; artifactID: string } | undefined> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "frontend_research_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const recordedSourceURL = typeof priorResult.source_url === "string" ? priorResult.source_url : undefined
+  if (recordedSourceURL !== input.sourceURL) {
+    throw new Error(
+      `frontend_research_stage redispatch recovery source_url mismatch: action=${recordedSourceURL ?? "missing"} request=${input.sourceURL}`,
+    )
+  }
+
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "frontend_research_brief"),
+          sql`${EngineArtifactTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+  const matches: Array<{ artifactID: string; sessionID: string }> = []
+  for (const row of rows) {
+    const payload = row.payload as
+      | {
+          metadata?: { research_session_id?: unknown }
+          webpage_contract?: { source_url?: unknown }
+        }
+      | undefined
+    const sessionID = payload?.metadata?.research_session_id
+    const sourceURL = payload?.webpage_contract?.source_url
+    if (typeof sessionID !== "string" || typeof sourceURL !== "string") continue
+    if (sourceURL !== input.sourceURL) continue
+    const session = await Session.get(sessionID)
+    if (session.kind !== "frontend-research") continue
+    if (session.parentID !== input.orchestratorSessionID) continue
+    matches.push({ artifactID: row.id, sessionID })
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `frontend_research_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: ${matches
+        .map((match) => `${match.sessionID}/${match.artifactID}`)
+        .join(", ")}`,
+    )
+  }
+  const match = matches[0]
+  if (!match) return undefined
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "frontend_research_stage",
+      stage: "frontend-research",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: match.sessionID,
+      frontend_research_brief_artifact_id: match.artifactID,
+      source_url: input.sourceURL,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker frontend_research stage recovered persisted brief",
+  })
+  return { actionID: action.payload.action_id, sessionID: match.sessionID, artifactID: match.artifactID }
+}
+
+async function recoverPendingDeepResearchRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  sourceURLs: string[]
+  targetKind: string
+}): Promise<{ actionID: string; sessionID: string; artifactID: string } | undefined> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "deep_research_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const recordedSourceURLs = Array.isArray(priorResult.source_urls)
+    ? priorResult.source_urls.filter((value): value is string => typeof value === "string")
+    : []
+  if (JSON.stringify(recordedSourceURLs) !== JSON.stringify(input.sourceURLs)) {
+    throw new Error(
+      `deep_research_stage redispatch recovery source_urls mismatch: action=${JSON.stringify(recordedSourceURLs)} request=${JSON.stringify(input.sourceURLs)}`,
+    )
+  }
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_deep_research_session_ids)
+      ? priorResult.preexisting_deep_research_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingArtifactIDs = new Set(
+    Array.isArray(priorResult.preexisting_research_brief_artifact_ids)
+      ? priorResult.preexisting_research_brief_artifact_ids.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+  )
+
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "research_brief"),
+          sql`${EngineArtifactTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+  const matches: Array<{ artifactID: string; sessionID: string }> = []
+  for (const row of rows) {
+    if (existingArtifactIDs.has(row.id)) continue
+    const payload = row.payload as { metadata?: { research_session_id?: unknown } } | undefined
+    const sessionID = payload?.metadata?.research_session_id
+    if (typeof sessionID !== "string") continue
+    if (existingSessionIDs.has(sessionID)) continue
+    const session = await Session.get(sessionID)
+    if (session.kind !== "deep-research") continue
+    if (session.parentID !== input.orchestratorSessionID) continue
+    matches.push({ artifactID: row.id, sessionID })
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `deep_research_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: ${matches
+        .map((match) => `${match.sessionID}/${match.artifactID}`)
+        .join(", ")}`,
+    )
+  }
+  const match = matches[0]
+  if (!match) return undefined
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "deep_research_stage",
+      stage: "deep-research",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: match.sessionID,
+      research_brief_artifact_id: match.artifactID,
+      source_urls: input.sourceURLs,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker deep_research stage recovered persisted brief",
+  })
+  return { actionID: action.payload.action_id, sessionID: match.sessionID, artifactID: match.artifactID }
+}
+
+async function recoverPendingRequirementsRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      specSnapshotID: string
+      requirementsCount: number
+      decisionsCount: number
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "requirements_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_requirements_session_ids)
+      ? priorResult.preexisting_requirements_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingSpecSnapshotIDs = new Set(
+    Array.isArray(priorResult.preexisting_spec_snapshot_ids)
+      ? priorResult.preexisting_spec_snapshot_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "requirements" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `requirements_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineSpecSnapshotTable)
+      .where(
+        and(
+          eq(EngineSpecSnapshotTable.task_id, input.taskID),
+          sql`${EngineSpecSnapshotTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineSpecSnapshotTable.time_created), desc(EngineSpecSnapshotTable.id))
+      .all(),
+  ).filter((row) => !existingSpecSnapshotIDs.has(row.id))
+  if (rows.length > 1) {
+    throw new Error(
+      `requirements_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new specs ${rows
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+  const session = newSessions[0]
+  const spec = rows[0]
+  if (!session || !spec) return undefined
+  const requirementsCount = findRequirements(spec.id).length
+  if (requirementsCount < 1) return undefined
+  const decisionsSection = spec.content.split(/\r?\n## Decisions\r?\n/)[1] ?? ""
+  const decisionsCount = decisionsSection
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- **")).length
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "requirements_stage",
+      stage: "requirements",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      spec_snapshot_id: spec.id,
+      requirements_count: requirementsCount,
+      decisions_count: decisionsCount,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker requirements stage recovered persisted spec",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    specSnapshotID: spec.id,
+    requirementsCount,
+    decisionsCount,
+  }
+}
+
+async function recoverPendingArchitectRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      specSnapshotID: string
+      contractGraphArtifactID: string
+      goalsCount: number
+      contractsCount: number
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "architect_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_architect_session_ids)
+      ? priorResult.preexisting_architect_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingSpecSnapshotIDs = new Set(
+    Array.isArray(priorResult.preexisting_spec_snapshot_ids)
+      ? priorResult.preexisting_spec_snapshot_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingContractGraphArtifactIDs = new Set(
+    Array.isArray(priorResult.preexisting_architect_contract_graph_artifact_ids)
+      ? priorResult.preexisting_architect_contract_graph_artifact_ids.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "architect" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `architect_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+
+  const specs = Database.use((db) =>
+    db
+      .select()
+      .from(EngineSpecSnapshotTable)
+      .where(
+        and(
+          eq(EngineSpecSnapshotTable.task_id, input.taskID),
+          eq(EngineSpecSnapshotTable.version, 2),
+          sql`${EngineSpecSnapshotTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineSpecSnapshotTable.time_created), desc(EngineSpecSnapshotTable.id))
+      .all(),
+  ).filter((row) => !existingSpecSnapshotIDs.has(row.id))
+  if (specs.length > 1) {
+    throw new Error(
+      `architect_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new specs ${specs
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+
+  const contractGraphArtifacts = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "architect_contract_graph"),
+          sql`${EngineArtifactTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  ).filter((row) => !existingContractGraphArtifactIDs.has(row.id))
+  if (contractGraphArtifacts.length > 1) {
+    throw new Error(
+      `architect_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new contract graphs ${contractGraphArtifacts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+
+  const session = newSessions[0]
+  const spec = specs[0]
+  const contractGraphArtifact = contractGraphArtifacts[0]
+  if (!session || !spec || !contractGraphArtifact) return undefined
+  const goalsCount = Database.use((db) =>
+    db
+      .select({ id: EngineGoalTable.id })
+      .from(EngineGoalTable)
+      .where(and(eq(EngineGoalTable.task_id, input.taskID), eq(EngineGoalTable.spec_snapshot_id, spec.id)))
+      .all(),
+  ).length
+  if (goalsCount < 1) return undefined
+  const contracts = (contractGraphArtifact.payload as { contracts?: unknown } | undefined)?.contracts
+  const contractsCount = Array.isArray(contracts) ? contracts.length : 0
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "architect_stage",
+      stage: "architect",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      spec_snapshot_id: spec.id,
+      architect_contract_graph_artifact_id: contractGraphArtifact.id,
+      goals_count: goalsCount,
+      contracts_count: contractsCount,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker architect stage recovered persisted spec",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    specSnapshotID: spec.id,
+    contractGraphArtifactID: contractGraphArtifact.id,
+    goalsCount,
+    contractsCount,
+  }
+}
+
+async function recoverPendingVisualQaRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      accepted: boolean
+      submittedAccepted: boolean
+      findingsCount: number
+      productionBlockersCount: number
+      evidenceCount: number
+      repairsCount: number
+      changedFilesCount: number
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "visual_qa_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_visual_qa_session_ids)
+      ? priorResult.preexisting_visual_qa_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingDecisionIDs = new Set(
+    Array.isArray(priorResult.preexisting_visual_qa_decision_ids)
+      ? priorResult.preexisting_visual_qa_decision_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "visual-qa" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `visual_qa_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const entries = Database.use((db) =>
+    db
+      .select()
+      .from(DecisionLogTable)
+      .where(
+        and(
+          eq(DecisionLogTable.task_id, input.taskID),
+          eq(DecisionLogTable.phase, "visual_qa"),
+          sql`${DecisionLogTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(DecisionLogTable.time_created), desc(DecisionLogTable.id))
+      .all(),
+  ).filter((row) => !existingDecisionIDs.has(row.id))
+  const reportEntries = entries.filter((entry) => entry.key.startsWith("report_"))
+  const summaryEntries = entries.filter((entry) => entry.key === "latest_summary")
+  if (reportEntries.length > 1) {
+    throw new Error(
+      `visual_qa_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: report entries ${reportEntries
+        .map((entry) => entry.id)
+        .join(", ")}`,
+    )
+  }
+  if (summaryEntries.length > 1) {
+    throw new Error(
+      `visual_qa_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: latest_summary entries ${summaryEntries
+        .map((entry) => entry.id)
+        .join(", ")}`,
+    )
+  }
+  const session = newSessions[0]
+  const reportEntry = reportEntries[0]
+  const summaryEntry = summaryEntries[0]
+  if (!session || !reportEntry || !summaryEntry) return undefined
+  if (!reportEntry.reason.includes(`session ${session.id}`)) {
+    throw new Error(
+      `visual_qa_stage redispatch recovery for action ${action.payload.action_id} found report ${reportEntry.id} not bound to recovered session ${session.id}`,
+    )
+  }
+  let reportPayload: unknown
+  try {
+    reportPayload = JSON.parse(reportEntry.value)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`visual_qa_stage redispatch recovery report ${reportEntry.id} is not JSON: ${detail}`)
+  }
+  const parsed = VisualQaReportSchema.safeParse(reportPayload)
+  if (!parsed.success) {
+    throw new Error(
+      `visual_qa_stage redispatch recovery report ${reportEntry.id} is malformed: ${parsed.error.message}`,
+    )
+  }
+  const semantics = visualQaReportAcceptanceSemantics(parsed.data)
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "visual_qa_stage",
+      stage: "visual-qa",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      visual_qa_report_decision_id: reportEntry.id,
+      visual_qa_summary_decision_id: summaryEntry.id,
+      accepted: semantics.effectiveAccepted,
+      submitted_accepted: semantics.submittedAccepted,
+      findings_count: parsed.data.findings.length,
+      production_blockers_count: parsed.data.production_blockers.length,
+      evidence_count: parsed.data.evidence.length,
+      repairs_count: parsed.data.repairs.length,
+      changed_files_count: parsed.data.changed_files.length,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker visual_qa stage recovered persisted report",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    accepted: semantics.effectiveAccepted,
+    submittedAccepted: semantics.submittedAccepted,
+    findingsCount: parsed.data.findings.length,
+    productionBlockersCount: parsed.data.production_blockers.length,
+    evidenceCount: parsed.data.evidence.length,
+    repairsCount: parsed.data.repairs.length,
+    changedFilesCount: parsed.data.changed_files.length,
+  }
+}
+
+async function recoverPendingIntegrityRedispatchAction(input: {
+  taskID: string
+  response: Awaited<ReturnType<typeof createAgentCoordinationResponse>>
+  orchestratorSessionID: string
+  sourceSessionID: string
+  targetKind: string
+}): Promise<
+  | {
+      actionID: string
+      sessionID: string
+      artifactID: string
+      specSnapshotID: string
+      phase: "pre_build" | "post_build"
+      verdict: "pass" | "concerns" | "needs_correction"
+      reviewerCount: number
+      findingsCount: number
+      requiredRepairsCount: number
+      unresolvedDisagreementsCount: number
+    }
+  | undefined
+> {
+  if (input.response.createdNow !== false) return undefined
+  const action = findAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: input.response.payload.action_id,
+  })
+  if (!action) {
+    throw new Error(
+      `agent coordination redispatch response ${input.response.payload.response_id} points to missing action ${input.response.payload.action_id}`,
+    )
+  }
+  if (action.payload.status !== "pending") return undefined
+  if (action.payload.action !== "redispatch_worker") return undefined
+  const priorResult = action.payload.result ?? {}
+  const binding = priorResult.redispatch_binding as Partial<AgentCoordinationRedispatchBinding> | undefined
+  const dispatcher = typeof priorResult.dispatcher === "string" ? priorResult.dispatcher : binding?.dispatcher
+  if (dispatcher !== "integrity_stage") return undefined
+  if (priorResult.redispatch_started !== true) return undefined
+  const existingSessionIDs = new Set(
+    Array.isArray(priorResult.preexisting_integrity_session_ids)
+      ? priorResult.preexisting_integrity_session_ids.filter((value): value is string => typeof value === "string")
+      : [],
+  )
+  const existingArtifactIDs = new Set(
+    Array.isArray(priorResult.preexisting_integrity_attempt_artifact_ids)
+      ? priorResult.preexisting_integrity_attempt_artifact_ids.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+  )
+
+  const newSessions = (await Session.children(input.orchestratorSessionID))
+    .filter((session) => session.kind === "integrity" && !existingSessionIDs.has(session.id))
+    .sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })
+  if (newSessions.length > 1) {
+    throw new Error(
+      `integrity_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new sessions ${newSessions
+        .map((session) => session.id)
+        .join(", ")}`,
+    )
+  }
+  const artifacts = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "integrity_attempt"),
+          sql`${EngineArtifactTable.time_created} >= ${action.payload.created_at}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  ).filter((row) => !existingArtifactIDs.has(row.id))
+  if (artifacts.length > 1) {
+    throw new Error(
+      `integrity_stage redispatch recovery for action ${action.payload.action_id} is ambiguous: new integrity_attempt artifacts ${artifacts
+        .map((row) => row.id)
+        .join(", ")}`,
+    )
+  }
+
+  const session = newSessions[0]
+  const artifact = artifacts[0]
+  if (!session || !artifact) return undefined
+  const payload = artifact.payload as
+    | {
+        session_id?: unknown
+        spec_snapshot_id?: unknown
+        phase?: unknown
+        verdict?: unknown
+        reviewers?: unknown
+        findings_count?: unknown
+        required_repairs_count?: unknown
+        unresolved_disagreements_count?: unknown
+      }
+    | undefined
+  if (payload?.session_id !== session.id) {
+    throw new Error(
+      `integrity_stage redispatch recovery for action ${action.payload.action_id} found integrity_attempt ${artifact.id} not bound to recovered session ${session.id}`,
+    )
+  }
+  if (typeof payload.spec_snapshot_id !== "string") {
+    throw new Error(`integrity_stage redispatch recovery integrity_attempt ${artifact.id} has no spec_snapshot_id`)
+  }
+  const phase = payload.phase
+  if (phase !== "pre_build" && phase !== "post_build") {
+    throw new Error(`integrity_stage redispatch recovery integrity_attempt ${artifact.id} has invalid phase`)
+  }
+  const verdict = payload.verdict
+  if (verdict !== "pass" && verdict !== "concerns" && verdict !== "needs_correction") {
+    throw new Error(`integrity_stage redispatch recovery integrity_attempt ${artifact.id} has invalid verdict`)
+  }
+  const reviewers = Array.isArray(payload.reviewers) ? payload.reviewers : []
+  const findingsCount = typeof payload.findings_count === "number" ? payload.findings_count : 0
+  const requiredRepairsCount = typeof payload.required_repairs_count === "number" ? payload.required_repairs_count : 0
+  const unresolvedDisagreementsCount =
+    typeof payload.unresolved_disagreements_count === "number" ? payload.unresolved_disagreements_count : 0
+  await completeAgentCoordinationAction({
+    taskID: input.taskID,
+    actionID: action.payload.action_id,
+    result: {
+      dispatcher: "integrity_stage",
+      stage: "integrity",
+      source_session_id: input.sourceSessionID,
+      redispatch_session_id: session.id,
+      spec_snapshot_id: payload.spec_snapshot_id,
+      phase,
+      verdict,
+      reviewer_count: reviewers.length,
+      findings_count: findingsCount,
+      required_repairs_count: requiredRepairsCount,
+      unresolved_disagreements_count: unresolvedDisagreementsCount,
+      integrity_attempt_id: artifact.id,
+      target_kind: input.targetKind,
+      started: true,
+      recovered_redispatch: true,
+    },
+    summary: "redispatch_worker integrity stage recovered persisted attempt",
+  })
+  return {
+    actionID: action.payload.action_id,
+    sessionID: session.id,
+    artifactID: artifact.id,
+    specSnapshotID: payload.spec_snapshot_id,
+    phase,
+    verdict,
+    reviewerCount: reviewers.length,
+    findingsCount,
+    requiredRepairsCount,
+    unresolvedDisagreementsCount,
+  }
+}
+
+function agentCoordinationWorkerMessageID(actionID: string): string {
+  return Identifier.ascending("message", `msg_agent_coordination_${actionID}`)
+}
+
+function agentCoordinationWorkerMessagePartID(actionID: string): string {
+  return Identifier.ascending("part", `prt_agent_coordination_${actionID}`)
+}
+
+function agentCoordinationQuestionID(actionID: string): string {
+  return Identifier.ascending("question", `que_agent_coordination_${actionID}`)
+}
+
+function recordedAgentCoordinationWorkerMessageID(
+  action: NonNullable<ReturnType<typeof findAgentCoordinationAction>>,
+): string | undefined {
+  const value = action.payload.result?.worker_message_id
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function recordedAgentCoordinationQuestionID(
+  action: NonNullable<ReturnType<typeof findAgentCoordinationAction>>,
+): string | undefined {
+  const value = action.payload.result?.question_id
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function answersFromInteraction(
+  interaction: NonNullable<ReturnType<typeof findInteractionByExternal>>,
+): Question.Answer[] {
+  const answers = interaction.response?.answers
+  return Array.isArray(answers) ? (answers as Question.Answer[]) : []
+}
+
+async function findAgentCoordinationWorkerMessage(input: {
+  sessionID: string
+  messageID: string
+}): Promise<Awaited<ReturnType<typeof Message.get>> | undefined> {
+  try {
+    return await Message.get({ sessionID: input.sessionID, messageID: input.messageID })
+  } catch (error) {
+    if (!NotFoundError.isInstance(error as Error)) throw error
+    return undefined
+  }
+}
+
+async function requireAgentCoordinationWorkerMessage(input: {
+  sessionID: string
+  messageID: string
+  actionID: string
+}): Promise<Awaited<ReturnType<typeof Message.get>>> {
+  const message = await findAgentCoordinationWorkerMessage({
+    sessionID: input.sessionID,
+    messageID: input.messageID,
+  })
+  if (!message) {
+    throw new Error(
+      `A2A continue action ${input.actionID} records worker message ${input.messageID}, but the message is missing`,
+    )
+  }
+  return message
+}
+
+async function waitForQuestionInteraction(input: { questionID: string; taskID: string; resolved?: boolean }) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const interaction = findInteractionByExternal(input.questionID)
+    if (interaction) {
+      if (interaction.task_id !== input.taskID) {
+        throw new Error(
+          `A2A ask_user question ${input.questionID} projected to task ${interaction.task_id}, not ${input.taskID}`,
+        )
+      }
+      if (input.resolved !== true || interaction.status !== "pending") return interaction
+    }
+    await Bun.sleep(25)
+  }
+  throw new Error(
+    input.resolved === true
+      ? `A2A ask_user question ${input.questionID} interaction did not resolve`
+      : `A2A ask_user question ${input.questionID} did not project to an engine interaction`,
+  )
+}
+
+type AgentCoordinationCancelStatusEvent = {
+  eventID: string
+  emittedAt: number
+  seq: number
+  status: { type: "terminal"; reason: "aborted"; error?: string }
+}
+
+type AgentCoordinationSessionStatusEvent = {
+  eventID: string
+  emittedAt: number
+  seq: number
+  status: SessionStatus.Info
+}
+
+type AgentCoordinationTerminalToolOwnership = {
+  ownershipID: string
+  artifactID: string
+  outcome: OrchestratorToolOwnershipOutcome
+  timeCompleted: number
+}
+
+function sessionStatusFromPayload(payload: unknown): SessionStatus.Info | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined
+  const status = (payload as Record<string, unknown>).status
+  if (!status || typeof status !== "object" || Array.isArray(status)) return undefined
+  const parsed = SessionStatus.Info.safeParse(status)
+  if (!parsed.success) return undefined
+  return parsed.data
+}
+
+function cancelledWorkerStatusFromPayload(payload: unknown): AgentCoordinationCancelStatusEvent["status"] | undefined {
+  const status = sessionStatusFromPayload(payload)
+  if (status?.type !== "terminal" || status.reason !== "aborted") return undefined
+  return {
+    type: "terminal",
+    reason: "aborted",
+    ...(typeof status.error === "string" ? { error: status.error } : {}),
+  }
+}
+
+function findLatestAgentCoordinationSessionStatusEvent(input: {
+  taskID: string
+  sessionID: string
+}): AgentCoordinationSessionStatusEvent | undefined {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        id: ProtocolEventTable.id,
+        payload: ProtocolEventTable.payload,
+        emittedAt: ProtocolEventTable.emitted_at,
+        seq: ProtocolEventTable.seq,
+      })
+      .from(ProtocolEventTable)
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, input.taskID),
+          eq(ProtocolEventTable.session_id, input.sessionID),
+          eq(ProtocolEventTable.type, "session.status"),
+        ),
+      )
+      .orderBy(desc(ProtocolEventTable.emitted_at), desc(ProtocolEventTable.seq))
+      .all(),
+  )
+  for (const row of rows) {
+    const status = sessionStatusFromPayload(row.payload)
+    if (status) return { eventID: row.id, emittedAt: row.emittedAt, seq: row.seq, status }
+  }
+  return undefined
+}
+
+function findRequestTerminalToolOwnership(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}): AgentCoordinationTerminalToolOwnership | undefined {
+  if (input.request.payload.session_ownership_source !== "live_tool_ownership") return undefined
+  const ownershipID = input.request.payload.tool_ownership_id
+  if (!ownershipID) {
+    throw new Error(
+      `A2A request ${input.request.payload.request_id} records live_tool_ownership without tool_ownership_id`,
+    )
+  }
+  const ownership = findLatestOwnershipByID(input.taskID, ownershipID)
+  if (!ownership) {
+    throw new Error(`A2A request ${input.request.payload.request_id} references missing ownership ${ownershipID}`)
+  }
+  if (ownership.payload.child_session_id !== input.request.payload.session_id) {
+    throw new Error(
+      `A2A request ${input.request.payload.request_id} ownership ${ownershipID} belongs to session ${ownership.payload.child_session_id}, not ${input.request.payload.session_id}`,
+    )
+  }
+  if (!ownership.payload.time_completed || !ownership.payload.outcome) return undefined
+  return {
+    ownershipID,
+    artifactID: ownership.artifactID,
+    outcome: ownership.payload.outcome,
+    timeCompleted: ownership.payload.time_completed,
+  }
+}
+
+function findAgentCoordinationCancelStatusEvent(input: {
+  taskID: string
+  sessionID: string
+  afterMs: number
+}): AgentCoordinationCancelStatusEvent | undefined {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        id: ProtocolEventTable.id,
+        payload: ProtocolEventTable.payload,
+        emittedAt: ProtocolEventTable.emitted_at,
+        seq: ProtocolEventTable.seq,
+      })
+      .from(ProtocolEventTable)
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, input.taskID),
+          eq(ProtocolEventTable.session_id, input.sessionID),
+          eq(ProtocolEventTable.type, "session.status"),
+        ),
+      )
+      .orderBy(desc(ProtocolEventTable.emitted_at), desc(ProtocolEventTable.seq))
+      .all(),
+  )
+  for (const row of rows) {
+    if (row.emittedAt < input.afterMs) continue
+    const status = cancelledWorkerStatusFromPayload(row.payload)
+    if (status) return { eventID: row.id, emittedAt: row.emittedAt, seq: row.seq, status }
+  }
+  return undefined
+}
+
+async function waitForAgentCoordinationCancelStatusEvent(input: {
+  taskID: string
+  sessionID: string
+  afterMs: number
+  reason: string
+}): Promise<AgentCoordinationCancelStatusEvent> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const event = findAgentCoordinationCancelStatusEvent(input)
+    if (event) return event
+    await Bun.sleep(25)
+  }
+  throw new Error(
+    `A2A cancel_worker for session ${input.sessionID} did not project a durable terminal aborted session.status event: ${input.reason}`,
+  )
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -1934,10 +4490,9 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
     ? rejectionDetails.filter((detail) => detail.goal_id === input.goalID)
     : rejectionDetails
 
-  const {
-    findLatestAcceptanceEvidenceManifest,
-    formatAcceptanceManifestFailureDetails,
-  } = await import("@/acceptance/manifest")
+  const { findLatestAcceptanceEvidenceManifest, formatAcceptanceManifestFailureDetails } = await import(
+    "@/acceptance/manifest"
+  )
   const acceptanceID = verdictArtifact.acceptance_id ?? undefined
   const manifest = acceptanceID ? findLatestAcceptanceEvidenceManifest({ acceptanceID }) : undefined
   const manifestFailureDetails = manifest ? formatAcceptanceManifestFailureDetails(manifest) : []
@@ -2357,6 +4912,30 @@ export function createOrchestratorTools(input: {
       throw new Error(message)
     }
     return cleaned
+  }
+
+  async function failCurrentTask(input: {
+    error: string
+    cleanupReason: string
+    a2aRequestID?: string
+  }): Promise<{ cleaned: number; recoveredTerminalFailure: boolean }> {
+    const task = requireTask(taskID)
+    const recoveredTerminalFailure =
+      input.a2aRequestID !== undefined &&
+      deriveTaskStatus(task) === "failed" &&
+      input.error.startsWith(`A2A request ${input.a2aRequestID}:`) &&
+      task.error === input.error
+    if (!recoveredTerminalFailure) {
+      await terminalTask(
+        task,
+        { status: "failed", error: input.error, time_completed: Date.now() },
+        `Failed: ${input.error}`,
+      )
+    }
+    const cleaned = await cleanupTerminalGoalWorkspaces(input.cleanupReason)
+    const { interruptTaskLoop } = await import("@/orchestrator/loop")
+    interruptTaskLoop(taskID, "task failed")
+    return { cleaned, recoveredTerminalFailure }
   }
 
   function goalDependencyDispatchState(goalID: string): string {
@@ -2783,10 +5362,10 @@ export function createOrchestratorTools(input: {
           `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
         : outcome.verdict === "pass" && outcome.phase === "post_build"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Integrity is the workflow gate; task completed.`
+            `Pass evidence persisted; call complete_task with integrity_attempt_id=${outcome.integrityAttemptID ?? "(missing)"} to complete the task.`
           : outcome.verdict === "pass"
             ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-              `Pre-build integrity passed, but task is not complete until post-build integrity passes after terminal build evidence exists.`
+              `Pre-build integrity passed, but task is not complete until post-build pass evidence exists and complete_task records the terminal decision.`
             : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
               `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
               `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
@@ -2804,6 +5383,9 @@ export function createOrchestratorTools(input: {
             ? ([["artifact_persistence_status", `artifact_missing: ${outcome.artifactMissing.error}`]] as Array<
                 [string, string]
               >)
+            : []),
+          ...(outcome.integrityAttemptID
+            ? ([["integrity_attempt_id", outcome.integrityAttemptID]] as Array<[string, string]>)
             : []),
           ["summary", outcome.summary],
           // Full review text — every issue, every correction proposal,
@@ -3164,10 +5746,11 @@ export function createOrchestratorTools(input: {
 
     const markdown = renderIntegrityMarkdown({ verdict, sessionID: verdict.sessionID })
     let artifactMissing: { sessionID: string; error: string } | undefined
+    let integrityAttemptID: string | undefined
     let persistentRootsValue = "persistent_roots=[]"
     let artifactPersisted = false
     try {
-      recordIntegrityAttempt({
+      integrityAttemptID = recordIntegrityAttempt({
         taskID,
         sessionID: verdict.sessionID,
         lineage,
@@ -3266,6 +5849,7 @@ export function createOrchestratorTools(input: {
       findings: verdict.findings,
       requiredRepairs: verdict.requiredRepairs,
       unresolvedDisagreements: verdict.unresolvedDisagreements,
+      integrityAttemptID,
       artifactMissing,
     }
   }
@@ -3278,6 +5862,19 @@ export function createOrchestratorTools(input: {
   }) {
     try {
       const { ProtocolStore } = await import("@/protocol/store")
+      const sessionRow = Database.use((db) =>
+        db
+          .select({ timeCreated: SessionTable.time_created })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, input.sessionID))
+          .get(),
+      )
+      if (!sessionRow) throw new Error(`integrity session ${input.sessionID} missing persisted row`)
+      const orderKey = timelineOrderKey({
+        domain: "session",
+        time: sessionRow.timeCreated,
+        id: input.sessionID,
+      })
       await ProtocolStore.appendEvent({
         kind: "event",
         type: "session.status",
@@ -3295,7 +5892,9 @@ export function createOrchestratorTools(input: {
         causation_id: null,
         reply_to: null,
         emitted_at: Date.now(),
+        order_key: orderKey,
         payload: {
+          orderKey,
           sessionID: input.sessionID,
           status: {
             type: "terminal",
@@ -3331,6 +5930,7 @@ export function createOrchestratorTools(input: {
   const decisionControlTools = new Set([
     "question",
     "propose_task",
+    "complete_task",
     "inject_operator_message",
     "respond_agent_coordination",
     "cancel_subagent",
@@ -3412,6 +6012,35 @@ export function createOrchestratorTools(input: {
     }
   }
 
+  function isTerminalAgentCoordinationFailTaskReplay(name: string, args: unknown, task: TaskRow): boolean {
+    if (name !== "respond_agent_coordination") return false
+    if (deriveTaskStatus(task) !== "failed") return false
+    if (!args || typeof args !== "object" || Array.isArray(args)) return false
+    const record = args as Record<string, unknown>
+    if (record.decision !== "fail_task") return false
+    if (typeof record.request_id !== "string" || record.request_id.length === 0) return false
+    if (typeof record.reason !== "string" || record.reason.length === 0) return false
+    const guidance = typeof record.message === "string" ? record.message.trim() : undefined
+    const expectedError = `A2A request ${record.request_id}: ${
+      guidance && guidance.length > 0 ? guidance : record.reason
+    }`
+    if (task.error !== expectedError) return false
+    const request = findAgentCoordinationRequest({ taskID, requestID: record.request_id })
+    if (!request || request.payload.status !== "responded" || !request.payload.response_id) return false
+    const response = findAgentCoordinationResponse({ taskID, responseID: request.payload.response_id })
+    if (!response) return false
+    if (response.payload.decision !== "fail_task") return false
+    if (response.payload.reason !== record.reason) return false
+    if ((response.payload.message ?? undefined) !== (guidance && guidance.length > 0 ? guidance : undefined)) {
+      return false
+    }
+    const action = findAgentCoordinationAction({ taskID, actionID: response.payload.action_id })
+    if (!action) return false
+    if (action.payload.request_id !== record.request_id) return false
+    if (action.payload.action !== "fail_task") return false
+    return action.payload.status === "pending" || action.payload.status === "completed"
+  }
+
   function withDecisionEffectMetadata(name: string, raw: unknown): unknown {
     const toolDef = raw as { execute?: (args: unknown, options: unknown) => Promise<unknown> }
     if (typeof toolDef.execute !== "function") return raw
@@ -3420,7 +6049,9 @@ export function createOrchestratorTools(input: {
       ...(raw as object),
       execute: async (args: unknown, options: unknown) => {
         const currentTask = requireTask(taskID)
-        if (isTaskTerminal(currentTask)) return terminalTaskToolRefusal(name, currentTask)
+        if (isTaskTerminal(currentTask) && !isTerminalAgentCoordinationFailTaskReplay(name, args, currentTask)) {
+          return terminalTaskToolRefusal(name, currentTask)
+        }
         const before = taskDecisionSignature()
         const result = await execute(args, options)
         const after = taskDecisionSignature()
@@ -3434,6 +6065,1057 @@ export function createOrchestratorTools(input: {
           },
         }
       },
+    }
+  }
+
+  async function dispatchArchitectStage(dispatch: {
+    task: TaskRow
+    reason?: string
+    continuationArtifactID?: string
+  }): Promise<{
+    result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    status: "persisted" | "continuation" | "missing_requirements"
+    sessionID?: string
+    specSnapshotID?: string
+    contractGraphArtifactID?: string
+    goalsCount?: number
+    contractsCount?: number
+  }> {
+    const task = dispatch.task
+    const activeSpec = findActiveSpecForTask(task.id)
+    if (!activeSpec) {
+      return {
+        status: "missing_requirements",
+        result: SubAgentProtocol.yieldResult({
+          headline: "architect: no active requirements spec snapshot — call `requirements` first.",
+          summary:
+            "Architect decomposition requires the durable REQ-N requirements snapshot. " +
+            "No architect session was started because the prior spec has been cleared or has not been created.",
+          fields: [["next_action", "requirements"]],
+          pointer: "read_context scope=decisions",
+        }),
+      }
+    }
+    const existingGoals = listGoals(taskID)
+    const decisionLog = createDecisionLog(taskID)
+    const reqRows = findRequirements(activeSpec.id)
+    const requirements = reqRows.map(parsedRequirementFromRow)
+    const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+      key: d.key,
+      value: d.value,
+      reason: d.reason,
+    }))
+    const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+    const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
+    const decisionLogPrompt = decisionLog.toPromptSection()
+
+    await trackStepStart("architect")
+
+    let runnerSessionID: string | undefined
+    const normalizedStageInput = {
+      task: taskContinuationScope(task),
+      active_spec: specContinuationScope(activeSpec),
+      existing_goals: goalsContinuationScope(existingGoals),
+      evidence_snapshot: architectPromptEvidenceSnapshot({
+        taskID,
+        task,
+        requirements,
+        requirementDecisions,
+        frontendDesign,
+        workloadBriefs: workloadArtifact?.briefs,
+        decisionLogPrompt,
+      }),
+    }
+    let continuation: AgentSessionContinuation | undefined
+    try {
+      if (dispatch.continuationArtifactID) {
+        const resolvedContinuation = continuationFromArtifactOrResult({
+          taskID,
+          stage: "architect",
+          artifactID: dispatch.continuationArtifactID,
+          finalizerName: "submit_architect",
+          expectedNormalizedStageInput: normalizedStageInput,
+        })
+        if ("result" in resolvedContinuation) {
+          await trackStepComplete("architect")
+          return { result: resolvedContinuation.result, status: "continuation" }
+        }
+        continuation = resolvedContinuation.continuation
+      }
+      runnerSessionID = continuation?.sessionID
+
+      const { ArchitectAgent } = await import("@/architect/agent")
+      const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } = await import(
+        "@/engine/persist"
+      )
+      const {
+        assertArchitectContractGraphMatchesExecutableGoals,
+        remapArchitectContractGraphGoalIDs,
+        renderContractGraphForPrompt,
+      } = await import("@/architect/contract-graph")
+      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+
+      const result = await ArchitectAgent.coordinate({
+        goals: existingGoals.map((g) => ({
+          id: g.id,
+          title: g.title,
+          objective: g.objective,
+          acceptance_specs: (typeof g.acceptance_specs === "string"
+            ? JSON.parse(g.acceptance_specs)
+            : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
+          owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
+          depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
+          priority: g.priority as "blocking" | "advisory",
+          kind: g.kind,
+          requirement_ids:
+            typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
+          order_index: g.order_index,
+          retry_count: getGoalRetryCount(g.id),
+        })),
+        taskRequest: task.request,
+        taskTitle: task.title,
+        taskID,
+        decisionLog,
+        requirements,
+        requirementDecisions,
+        designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
+        frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
+        workloadBriefs: workloadArtifact?.briefs,
+        attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
+        signal: input.signal,
+        parentSessionID: input.agentSessionID,
+        continuation,
+        onStatus: () => {},
+        onSessionCreated: (id) => {
+          runnerSessionID = id
+        },
+      })
+
+      const newSpecSnapshotID = Identifier.ascending("spec")
+      const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
+      const reqLines = requirements.map(
+        (r) =>
+          `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
+      )
+      const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
+      let persisted: Array<{
+        id: string
+        title: string
+        llmID: string
+        depends_on: string[]
+        acceptance_specs: AcceptanceSpec[]
+      }> = []
+      let llmToDBID = new Map<string, string>()
+      let deletedIDs: string[] = []
+      let contractGraphArtifactID: string | undefined
+      try {
+        Database.transaction((db) => {
+          const now = Date.now()
+          db.insert(EngineSpecSnapshotTable)
+            .values({
+              id: newSpecSnapshotID,
+              task_id: taskID,
+              version: 2,
+              status: "ready",
+              summary: result.summary,
+              content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
+              scope: requirements.map((r) => r.description).join("; "),
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+
+          if (priorSpecSnapshotID) {
+            copyRequirementsToSpecSnapshot(db, {
+              taskID,
+              fromSpecSnapshotID: priorSpecSnapshotID,
+              toSpecSnapshotID: newSpecSnapshotID,
+              now,
+            })
+
+            db.update(EngineSpecSnapshotTable)
+              .set({ status: "superseded", time_updated: now })
+              .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
+              .run()
+          }
+
+          const out = upsertGoalsFromArchitect(db, {
+            taskID,
+            specSnapshotID: newSpecSnapshotID,
+            architectGoals: result.goals.map((g) => ({
+              llmID: g.id,
+              title: g.title,
+              objective: g.objective,
+              acceptance_specs: g.acceptance_specs,
+              owned_paths: g.owned_paths,
+              depends_on: g.depends_on,
+              kind: g.kind,
+              requirement_ids: g.requirement_ids,
+              priority: g.priority,
+              source: g.requirement_ids.length > 0 ? ("spec" as const) : ("system" as const),
+            })),
+            removedLLMIDs: result.removedGoalIDs,
+            now,
+          })
+          persisted = out.persisted
+          llmToDBID = out.llmToDBID
+          deletedIDs = out.deletedIDs
+
+          const mappedContractGraph = remapArchitectContractGraphGoalIDs(
+            result.contractGraph,
+            (goalID) =>
+              llmToDBID.get(goalID) ?? (existingGoals.some((goal) => goal.id === goalID) ? goalID : undefined),
+          )
+          assertArchitectContractGraphMatchesExecutableGoals({
+            graph: mappedContractGraph,
+            goals: out.persisted.map((goal) => ({
+              id: goal.id,
+              depends_on: goal.depends_on,
+              acceptance_specs: goal.acceptance_specs,
+            })),
+          })
+          contractGraphArtifactID = persistArchitectContractGraph(db, {
+            taskID,
+            graph: mappedContractGraph,
+            now,
+          })
+
+          const mappedArchitectFidelity = {
+            sourceCoverage: result.fidelity.sourceCoverage.map((row) => ({
+              ...row,
+              goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+            })),
+            referenceCoverage: result.fidelity.referenceCoverage.map((row) => ({
+              ...row,
+              goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+            })),
+            assemblyOwners: result.fidelity.assemblyOwners.map((row) => ({
+              ...row,
+              goal_id: llmToDBID.get(row.goal_id) ?? row.goal_id,
+            })),
+          }
+
+          const mappedGoalLines = result.goals.map((g) => {
+            const goalID = llmToDBID.get(g.id) ?? g.id
+            return `- **${goalID}** (${g.kind}, ${g.priority}): ${g.title}`
+          })
+          const mappedTraceLines = result.traceability.map(
+            (t) => `- ${t.requirementID} → ${t.goalIDs.map((goalID) => llmToDBID.get(goalID) ?? goalID).join(", ")}`,
+          )
+          const mappedSourceCoverageLines = mappedArchitectFidelity.sourceCoverage.map(
+            (row) =>
+              `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
+          )
+          const mappedReferenceCoverageLines = mappedArchitectFidelity.referenceCoverage.map((row) => {
+            const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
+            return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
+          })
+          const mappedAssemblyOwnerLines = mappedArchitectFidelity.assemblyOwners.map(
+            (row) => `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
+          )
+          const mappedContractLines = renderContractGraphForPrompt(mappedContractGraph).split("\n")
+          const mappedSpecContent = [
+            `# ${task.title}`,
+            "",
+            result.summary,
+            "",
+            "## Decomposition Analysis",
+            result.decompositionAnalysis,
+            "",
+            "## Requirements",
+            ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
+            "",
+            "## Decisions",
+            ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
+            "",
+            "## Goals",
+            ...(mappedGoalLines.length > 0 ? mappedGoalLines : ["_(none)_"]),
+            "",
+            "## Traceability",
+            ...(mappedTraceLines.length > 0 ? mappedTraceLines : ["_(none)_"]),
+            "",
+            "## Source Coverage",
+            ...(mappedSourceCoverageLines.length > 0 ? mappedSourceCoverageLines : ["_(none)_"]),
+            "",
+            "## Reference Coverage",
+            ...(mappedReferenceCoverageLines.length > 0 ? mappedReferenceCoverageLines : ["_(none)_"]),
+            "",
+            "## Assembly Ownership",
+            ...(mappedAssemblyOwnerLines.length > 0 ? mappedAssemblyOwnerLines : ["_(none)_"]),
+            "",
+            "## Architect Contracts",
+            ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
+          ].join("\n")
+          db.update(EngineSpecSnapshotTable)
+            .set({ content: mappedSpecContent, time_updated: now })
+            .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
+            .run()
+          const taskMetadata =
+            task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+              ? (task.metadata as Record<string, unknown>)
+              : {}
+
+          db.update(EngineTaskTable)
+            .set({
+              metadata: {
+                ...taskMetadata,
+                architect_fidelity: mappedArchitectFidelity,
+              },
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+
+          Database.effect(() =>
+            EngineProtocol.emit(
+              EngineEvent.TaskUpdated,
+              { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
+              { source: "orchestrator.architect" },
+            ),
+          )
+        })
+      } catch (dbErr) {
+        log.error("architect: failed to persist goals to DB", {
+          taskID,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          stack: dbErr instanceof Error ? dbErr.stack : undefined,
+        })
+        throw dbErr
+      }
+
+      for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
+
+      await trackStepComplete("architect")
+
+      return {
+        status: "persisted",
+        sessionID: (result as { sessionID?: string }).sessionID ?? runnerSessionID,
+        specSnapshotID: newSpecSnapshotID,
+        contractGraphArtifactID,
+        goalsCount: persisted.length,
+        contractsCount: result.contractGraph.contracts.length,
+        result: SubAgentProtocol.yieldResult({
+          headline:
+            `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
+            (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
+            ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly from current evidence.`,
+          summary: result.summary,
+          fields: [
+            ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
+            [
+              "contract_graph",
+              `${result.contractGraph.contracts.length} contracts / ${result.contractGraph.dependency_contracts.length} dependency reasons`,
+            ],
+            ["spec_snapshot_id", newSpecSnapshotID],
+          ],
+          pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
+        }),
+      }
+    } catch (err) {
+      try {
+        await trackStepComplete("architect", undefined, true)
+      } catch (trackErr) {
+        log.warn("architect: trackStepComplete(failed) emit failed", {
+          taskID,
+          error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+        })
+      }
+      const { createDecisionLog } = await import("@/decision-log")
+      const failureReason = err instanceof Error ? err.message : String(err)
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
+        err,
+        taskID,
+        stage: "architect",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_architect",
+        normalizedStageInput,
+        pointerReason: failureReason,
+      })
+      if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
+      createDecisionLog(taskID).append({
+        phase: "architect",
+        key: "abort_architect_failed",
+        value: `Architect stage aborted: ${failureReason.slice(0, 400)}`,
+        reason: "architect_threw",
+      })
+      throw err
+    }
+  }
+
+  async function dispatchRequirementsStage(dispatch: {
+    task: TaskRow
+    reason?: string
+    continuationArtifactID?: string
+  }): Promise<{
+    result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    status: "persisted" | "continuation" | "clarification"
+    sessionID?: string
+    specSnapshotID?: string
+    requirementsCount?: number
+    decisionsCount?: number
+  }> {
+    let task = dispatch.task
+    log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
+    await trackStepStart("requirements")
+    task = await updateTask(task, { status: "active" }, "Requirements analysis started")
+    let runnerSessionID: string | undefined
+    const decisionLog = createDecisionLog(taskID)
+    const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
+    const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+    const normalizedStageInput = {
+      task: taskContinuationScope(task),
+      evidence_snapshot: requirementsPromptEvidenceSnapshot(taskID, task, frontendDesign),
+    }
+    let continuation: AgentSessionContinuation | undefined
+    try {
+      if (dispatch.continuationArtifactID) {
+        const resolvedContinuation = continuationFromArtifactOrResult({
+          taskID,
+          stage: "requirements",
+          artifactID: dispatch.continuationArtifactID,
+          finalizerName: "submit_requirements",
+          expectedNormalizedStageInput: normalizedStageInput,
+        })
+        if ("result" in resolvedContinuation) {
+          await trackStepComplete("requirements")
+          return { result: resolvedContinuation.result, status: "continuation" }
+        }
+        continuation = resolvedContinuation.continuation
+      }
+      runnerSessionID = continuation?.sessionID
+      const { RequirementsAgent } = await import("@/requirements")
+      const result = await RequirementsAgent.run({
+        title: task.title,
+        request: task.request,
+        attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
+        designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
+        frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
+        taskID,
+        parentSessionID: input.agentSessionID,
+        signal: input.signal,
+        decisionLog,
+        continuation,
+        onStatus: () => {},
+        onSessionCreated: (id) => {
+          runnerSessionID = id
+        },
+      })
+      if (result.requirements.length === 0) {
+        throw new Error("requirements agent produced no REQ-N entries")
+      }
+
+      const { insertRequirements } = await import("@/engine/persist")
+      const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+      const now = Date.now()
+      const specSnapshotID = Identifier.ascending("spec")
+      const specContent = [
+        `# ${task.title}`,
+        "",
+        result.summary,
+        "",
+        "## Requirements",
+        ...result.requirements.map(
+          (r) =>
+            `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
+        ),
+        "",
+        "## Decisions",
+        ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
+      ].join("\n")
+
+      try {
+        Database.transaction((db) => {
+          db.update(EngineSpecSnapshotTable)
+            .set({ status: "superseded", time_updated: now })
+            .where(
+              and(eq(EngineSpecSnapshotTable.task_id, taskID), sql`${EngineSpecSnapshotTable.status} != 'superseded'`),
+            )
+            .run()
+          db.insert(EngineSpecSnapshotTable)
+            .values({
+              id: specSnapshotID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: result.summary,
+              content: specContent,
+              scope: result.requirements.map((r) => r.description).join("; "),
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+
+          if (result.requirements.length > 0) {
+            insertRequirements(db, {
+              taskID,
+              specSnapshotID,
+              requirements: result.requirements.map((r) => ({
+                id: r.id,
+                title: r.description,
+                description: r.description,
+                acceptance: [r.acceptance],
+                evidence_refs: r.evidence_refs,
+                non_goals: [r.non_goals],
+                priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
+              })),
+              now,
+            })
+          }
+
+          db.update(EngineTaskTable)
+            .set({
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+          Database.effect(() =>
+            EngineProtocol.emit(
+              EngineEvent.TaskUpdated,
+              { taskID, status: deriveTaskStatus(task), summary: "Requirements parsed" },
+              { source: "orchestrator.requirements" },
+            ),
+          )
+        })
+      } catch (dbErr) {
+        log.error("requirements: failed to persist to DB", {
+          taskID,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          stack: dbErr instanceof Error ? dbErr.stack : undefined,
+        })
+        throw dbErr
+      }
+      await trackStepComplete("requirements")
+
+      return {
+        status: "persisted",
+        sessionID: result.sessionID,
+        specSnapshotID,
+        requirementsCount: result.requirements.length,
+        decisionsCount: result.decisions.length,
+        result: SubAgentProtocol.yieldResult({
+          headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. Architect decomposition is now available if the full task context still needs a goal graph.`,
+          summary: result.summary,
+          fields: [
+            ["decisions", result.decisions.map((d) => `${d.key}=${d.value}`)],
+            ["requirements", String(result.requirements.length)],
+          ],
+          pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
+        }),
+      }
+    } catch (err) {
+      const maturityScopeDecision = decisionLog.readByKey("maturity_scope_pending")
+      if (maturityScopeDecision && maturityScopeDecision.id !== maturityScopePendingBeforeID) {
+        const { output } = await Question.askAndFormat({
+          sessionID: input.agentSessionID,
+          questions: [
+            {
+              header: "Maturity scope",
+              question: [
+                "The Requirements agent found an ambiguous maturity / quality word and stopped before finalizing requirements.",
+                `Recorded assumption: ${maturityScopeDecision.value}`,
+                `Reason: ${maturityScopeDecision.reason}`,
+                "Please define the maturity boundary so the requirements can be finalized without leaving later integrity review open-ended.",
+              ].join("\n\n"),
+              options: [
+                {
+                  label: "Use assumption",
+                  description: "Proceed with the recorded bounded interpretation.",
+                },
+                {
+                  label: "Narrow scope",
+                  description: "Limit maturity expectations to the explicitly requested behavior.",
+                },
+              ],
+              multiple: false,
+              custom: true,
+            },
+          ],
+        })
+        return {
+          status: "clarification",
+          sessionID: runnerSessionID,
+          result: SubAgentProtocol.yieldResult({
+            headline: "requirements: maturity scope clarification requested.",
+            summary: output,
+            fields: [
+              ["decision", "maturity_scope_pending"],
+              ["recorded_assumption", maturityScopeDecision.value],
+              ["reason", maturityScopeDecision.reason],
+            ],
+            pointer: "question lane; answered clarification will be included in the next requirements prompt",
+          }),
+        }
+      }
+      try {
+        await trackStepComplete("requirements", undefined, true)
+      } catch (trackErr) {
+        log.warn("requirements: trackStepComplete(failed) emit failed", {
+          taskID,
+          error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+        })
+      }
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
+        err,
+        taskID,
+        stage: "requirements",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_requirements",
+        normalizedStageInput,
+        pointerReason: dispatch.reason ?? null,
+      })
+      if (continuationResult) {
+        return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
+      }
+      const { createDecisionLog } = await import("@/decision-log")
+      const failureReason = err instanceof Error ? err.message : String(err)
+      createDecisionLog(taskID).append({
+        phase: "requirements",
+        key: "abort_requirements_failed",
+        value: `Requirements stage aborted: ${failureReason.slice(0, 400)}`,
+        reason: "requirements_threw",
+      })
+      throw err
+    }
+  }
+
+  async function dispatchFrontendResearchStage(dispatch: {
+    task: TaskRow
+    reason: string
+    sourceUrls?: string[]
+    focus?: string
+    continuationArtifactID?: string
+  }): Promise<{
+    result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    status: "persisted" | "continuation" | "failed"
+    sessionID?: string
+    artifactID?: string
+  }> {
+    await trackStepStart("frontend_research")
+    const continuationRow = dispatch.continuationArtifactID
+      ? findStageContinuationRequest({ taskID, artifactID: dispatch.continuationArtifactID })
+      : undefined
+    const storedContinuationSourceUrl = frontendResearchSourceUrlFromStageInput(
+      continuationRow?.payload.normalized_stage_input,
+    )
+    const storedContinuationFocus = frontendResearchFocusFromStageInput(continuationRow?.payload.normalized_stage_input)
+    const sourceUrl = dispatch.continuationArtifactID
+      ? storedContinuationSourceUrl
+      : dispatch.sourceUrls?.find(isHttpWebpageUrl)
+    const normalizedStageInput = {
+      task: taskContinuationScope(dispatch.task),
+      source_url: sourceUrl ?? null,
+      focus: dispatch.continuationArtifactID ? (storedContinuationFocus ?? null) : dispatch.focus?.trim() || null,
+    }
+    let continuation: AgentSessionContinuation | undefined
+    let runnerSessionID: string | undefined
+    try {
+      if (dispatch.continuationArtifactID) {
+        const resolvedContinuation = continuationFromArtifactOrResult({
+          taskID,
+          stage: "frontend-research",
+          artifactID: dispatch.continuationArtifactID,
+          finalizerName: "submit_research_brief",
+          expectedNormalizedStageInput: normalizedStageInput,
+        })
+        if ("result" in resolvedContinuation) {
+          await trackStepComplete("frontend_research")
+          return { result: resolvedContinuation.result, status: "continuation" }
+        }
+        continuation = resolvedContinuation.continuation
+      }
+      runnerSessionID = continuation?.sessionID
+      const { FrontendResearchAgent } = await import("@/frontend-research")
+      const result = await FrontendResearchAgent.run({
+        title: dispatch.task.title,
+        request: dispatch.task.request,
+        targetDeliverable: "implementation_input",
+        sourceUrls: sourceUrl ? [sourceUrl] : undefined,
+        focus: continuation ? undefined : dispatch.focus,
+        reason: dispatch.reason,
+        taskID,
+        parentSessionID: input.agentSessionID,
+        signal: input.signal,
+        continuation,
+        onStatus: () => {},
+        onSessionCreated: (id) => {
+          runnerSessionID = id
+        },
+      })
+      const artifactID = persistTaskFrontendResearchBrief({
+        taskID,
+        brief: result.brief,
+      })
+      await trackStepComplete("frontend_research")
+      const blocking = result.brief.open_questions.filter((item) => item.blocking)
+      const subpageTasks = result.brief.subpage_research_tasks
+      const contract = result.brief.webpage_contract
+      return {
+        status: "persisted",
+        sessionID: result.sessionID,
+        artifactID,
+        result: SubAgentProtocol.yieldResult({
+          headline: "Frontend research brief persisted as webpage investigation division.",
+          summary: result.brief.summary,
+          fields: [
+            ["session", result.sessionID],
+            ["artifact_id", artifactID],
+            ["sources", String(result.brief.evidence_index.length)],
+            ["facts", String(result.brief.facts.length)],
+            ["webpage_contract", contract ? contract.source_url : "missing"],
+            ["functional_surfaces", String(contract?.functional_surfaces.length ?? 0)],
+            ["visual_layout", String(contract?.visual_layout.length ?? 0)],
+            ["style_requirements", String(contract?.style_requirements.length ?? 0)],
+            ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
+            ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
+            ["bundle_paths", Object.values(result.brief.bundle)],
+          ],
+          pointer:
+            `frontend_research_brief artifact ${artifactID}; downstream agents read it as webpage investigation work packets. ` +
+            "This result is evidence only; choose the next tool from full task context.",
+        }),
+      }
+    } catch (err) {
+      try {
+        await trackStepComplete("frontend_research", undefined, true)
+      } catch (trackErr) {
+        log.warn("frontend_research: trackStepComplete(failed) emit failed", {
+          taskID,
+          error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+        })
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
+        err,
+        taskID,
+        stage: "frontend-research",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_research_brief",
+        normalizedStageInput,
+        pointerReason: dispatch.reason,
+      })
+      if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
+      if (runnerSessionID) {
+        SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
+      }
+      log.error("frontend_research tool failed", { taskID, error: msg })
+      return {
+        status: "failed",
+        sessionID: runnerSessionID,
+        result: SubAgentProtocol.yieldResult({
+          headline: "Frontend research failed before producing an artifact.",
+          summary: msg,
+          fields: [
+            ["session", runnerSessionID ?? "not-created"],
+            ["status", "failed"],
+            ["source_urls", dispatch.sourceUrls ?? []],
+            ["focus", dispatch.focus?.trim() ? dispatch.focus : "none"],
+            ["artifact_id", "none"],
+          ],
+          pointer: runnerSessionID
+            ? `frontend-research session ${runnerSessionID}; inspect session error status for details`
+            : "frontend_research failed before child session creation; inspect orchestrator logs and workflow step failure",
+        }),
+      }
+    }
+  }
+
+  async function dispatchDeepResearchStage(dispatch: {
+    task: TaskRow
+    reason: string
+    targetDeliverable?: "prd" | "spec" | "research_report" | "implementation_input" | "mixed"
+    sourceUrls?: string[]
+    focus?: string
+    continuationArtifactID?: string
+  }): Promise<{
+    result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    status: "persisted" | "continuation"
+    sessionID?: string
+    artifactID?: string
+  }> {
+    let runnerSessionID: string | undefined
+    const normalizedStageInput = {
+      task: taskContinuationScope(dispatch.task),
+    }
+    try {
+      let continuation: AgentSessionContinuation | undefined
+      if (dispatch.continuationArtifactID) {
+        const resolvedContinuation = continuationFromArtifactOrResult({
+          taskID,
+          stage: "deep-research",
+          artifactID: dispatch.continuationArtifactID,
+          finalizerName: "submit_research_brief",
+          expectedNormalizedStageInput: normalizedStageInput,
+        })
+        if ("result" in resolvedContinuation) return { result: resolvedContinuation.result, status: "continuation" }
+        continuation = resolvedContinuation.continuation
+      }
+      runnerSessionID = continuation?.sessionID
+      const { DeepResearchAgent } = await import("@/research")
+      const result = await DeepResearchAgent.run({
+        title: dispatch.task.title,
+        request: dispatch.task.request,
+        targetDeliverable: dispatch.targetDeliverable,
+        sourceUrls: continuation ? undefined : dispatch.sourceUrls,
+        focus: dispatch.focus,
+        reason: dispatch.reason,
+        taskID,
+        parentSessionID: input.agentSessionID,
+        signal: input.signal,
+        continuation,
+        onStatus: () => {},
+        onSessionCreated: (id) => {
+          runnerSessionID = id
+        },
+      })
+      const artifactID = persistTaskResearchBrief({
+        taskID,
+        brief: result.brief,
+      })
+      const blocking = result.brief.open_questions.filter((item) => item.blocking)
+      const subpageTasks = result.brief.subpage_research_tasks
+      return {
+        status: "persisted",
+        sessionID: result.sessionID,
+        artifactID,
+        result: SubAgentProtocol.yieldResult({
+          headline: "Deep research brief persisted as advisory evidence.",
+          summary: result.brief.summary,
+          fields: [
+            ["session", result.sessionID],
+            ["artifact_id", artifactID],
+            ["sources", String(result.brief.evidence_index.length)],
+            ["facts", String(result.brief.facts.length)],
+            ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
+            ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
+            ["bundle_paths", Object.values(result.brief.bundle)],
+          ],
+          pointer:
+            `research_brief artifact ${artifactID}; task snapshot surfaces stale status and bundle paths. ` +
+            "This result is evidence only; choose the next tool from full task context.",
+        }),
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
+        err,
+        taskID,
+        stage: "deep-research",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_research_brief",
+        normalizedStageInput,
+        pointerReason: dispatch.reason,
+      })
+      if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
+      if (runnerSessionID) {
+        SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
+      }
+      log.error("deep_research tool failed", { taskID, error: msg })
+      throw err
+    }
+  }
+
+  async function dispatchVisualQaStage(dispatch: {
+    task: TaskRow
+    reason: string
+    focus?: string
+    appUrl?: string
+    previewCommand?: string
+    continuationArtifactID?: string
+  }): Promise<{
+    result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    status: "reviewed" | "continuation"
+    sessionID?: string
+    accepted?: boolean
+    submittedAccepted?: boolean
+    findingsCount?: number
+    productionBlockersCount?: number
+    evidenceCount?: number
+    repairsCount?: number
+    changedFilesCount?: number
+  }> {
+    const task = dispatch.task
+    await trackStepStart("visual_qa")
+    let closed = false
+    let runnerSessionID: string | undefined
+    const close = async (failed = false) => {
+      if (closed) return
+      closed = true
+      await trackStepComplete("visual_qa", undefined, failed)
+    }
+
+    const decisionLog = createDecisionLog(taskID)
+    const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
+    const frontendResearchBriefs = findNonStaleFrontendResearchBriefs({
+      taskID,
+      request: task.request,
+    })
+    const buildDeliveries = findDeliveriesForTask(taskID)
+    const priorVisualQaEntries = decisionLog.readByPhase("visual_qa")
+    const frontendDesign = renderVisualQaFrontendDesignContext(frontendDesignEntries)
+    const frontendResearch = renderVisualQaFrontendResearchContext(frontendResearchBriefs)
+    const buildEvidence = renderVisualQaBuildEvidenceContext(buildDeliveries)
+    const priorVisualQa = renderVisualQaPriorReportContext(priorVisualQaEntries)
+    const activeSpec = findActiveSpecForTask(taskID)
+    const activeGoals = listGoals(taskID)
+    const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+    const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
+    const latestIntegrityAttempt = activeSpec
+      ? findLatestIntegrityAttemptArtifact({
+          taskID,
+          specSnapshotID: activeSpec.id,
+          phase: "post_build",
+        })
+      : undefined
+    const integrityContext = renderVisualQaIntegrityContext(latestIntegrityAttempt)
+    const referenceParity = deriveVisualQaReferenceParityContext({
+      taskID,
+      specSnapshotID: activeSpec?.id,
+      goals: activeGoals,
+      frontendDesignEntries,
+      visualEvidence,
+    })
+    const normalizedStageInput = {
+      task: taskContinuationScope(task),
+      active_spec: specContinuationScope(activeSpec),
+      goals: goalsContinuationScope(activeGoals),
+      evidence_snapshot: continuationEvidenceSnapshot({
+        frontend_design_decisions: frontendDesignEntries,
+        frontend_research_briefs: frontendResearchBriefs,
+        build_deliveries: buildDeliveries,
+        prior_visual_qa_decisions: priorVisualQaEntries,
+        latest_visual_evidence_bundle: visualEvidence,
+        latest_integrity_attempt: latestIntegrityAttempt,
+      }),
+    }
+
+    try {
+      let continuation: AgentSessionContinuation | undefined
+      if (dispatch.continuationArtifactID) {
+        const resolvedContinuation = continuationFromArtifactOrResult({
+          taskID,
+          stage: "visual-qa",
+          artifactID: dispatch.continuationArtifactID,
+          finalizerName: "submit_visual_qa_report",
+          expectedNormalizedStageInput: normalizedStageInput,
+        })
+        if ("result" in resolvedContinuation) {
+          await close(false)
+          return { result: resolvedContinuation.result, status: "continuation", sessionID: runnerSessionID }
+        }
+        continuation = resolvedContinuation.continuation
+      }
+      runnerSessionID = continuation?.sessionID
+      const { VisualQaAgent } = await import("@/visual-qa")
+      const result = await VisualQaAgent.analyze({
+        taskTitle: task.title,
+        taskRequest: task.request,
+        reason: dispatch.reason,
+        focus: dispatch.focus,
+        appUrl: dispatch.appUrl,
+        previewCommand: dispatch.previewCommand,
+        frontendDesign,
+        frontendResearch,
+        integrityContext,
+        buildEvidence,
+        priorVisualQa,
+        projectRoot,
+        referenceParityRequired: referenceParity.required,
+        requiredReferenceRegions: referenceParity.regions,
+        taskID,
+        parentSessionID: input.agentSessionID,
+        signal: input.signal,
+        continuation,
+        onSessionCreated: (id) => {
+          runnerSessionID = id
+        },
+      })
+      const visualQaSemantics = visualQaReportAcceptanceSemantics(result.report)
+
+      decisionLog.append({
+        phase: "visual_qa",
+        key: `report_${Date.now()}`,
+        value: JSON.stringify(result.report, null, 2),
+        reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
+      })
+      decisionLog.append({
+        phase: "visual_qa",
+        key: "latest_summary",
+        value: [
+          `accepted=${visualQaSemantics.effectiveAccepted}`,
+          `submitted_accepted=${visualQaSemantics.submittedAccepted}`,
+          `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
+          `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
+          `summary=${result.report.summary}`,
+          `coverage=${result.report.coverage.length}`,
+          `findings=${result.report.findings.length}`,
+          `production_blockers=${result.report.production_blockers.length}`,
+          `unresolved_code_module_problems=${result.report.unresolved_code_module_problems.length}`,
+          `evidence=${result.report.evidence.length}`,
+          `reference_parity_required=${result.report.reference_parity.required}`,
+          `reference_comparison_evidence=${result.report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
+          `reference_missing_regions=${result.report.reference_parity.missing_regions.join(", ") || "(none)"}`,
+          `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
+        ].join("\n"),
+        reason: "Latest structured visual QA summary for read_context and integrity review.",
+      })
+
+      await close()
+      return {
+        status: "reviewed",
+        sessionID: result.sessionID,
+        accepted: visualQaSemantics.effectiveAccepted,
+        submittedAccepted: visualQaSemantics.submittedAccepted,
+        findingsCount: result.report.findings.length,
+        productionBlockersCount: result.report.production_blockers.length,
+        evidenceCount: result.report.evidence.length,
+        repairsCount: result.report.repairs.length,
+        changedFilesCount: result.report.changed_files.length,
+        result: SubAgentProtocol.yieldResult({
+          headline: `visual_qa complete: effective_accepted=${visualQaSemantics.effectiveAccepted}`,
+          summary: result.report.summary,
+          fields: [
+            ["session", result.sessionID],
+            ["accepted", String(visualQaSemantics.effectiveAccepted)],
+            ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
+            ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
+            ["coverage", String(result.report.coverage.length)],
+            ["findings", String(result.report.findings.length)],
+            ["production_blockers", String(result.report.production_blockers.length)],
+            ["unresolved_code_module_problems", String(result.report.unresolved_code_module_problems.length)],
+            ["evidence", String(result.report.evidence.length)],
+            ["repairs", String(result.report.repairs.length)],
+            ["changed_files", result.report.changed_files.join(", ") || "(none)"],
+            ["open_questions", String(result.report.open_questions.length)],
+          ],
+          pointer: "decision_log phase=visual_qa",
+        }),
+      }
+    } catch (err) {
+      await close(true)
+      const msg = err instanceof Error ? err.message : String(err)
+      const continuationResult = continuationResultForProtocolFinalizerMiss({
+        err,
+        taskID,
+        stage: "visual-qa",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_visual_qa_report",
+        normalizedStageInput,
+        pointerReason: dispatch.reason,
+      })
+      if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
+      log.error("visual_qa: failed", { taskID, error: msg })
+      decisionLog.append({
+        phase: "visual_qa",
+        key: "abort_visual_qa_failed",
+        value: `Visual QA stage aborted: ${msg.slice(0, 400)}`,
+        reason: "visual_qa_threw",
+      })
+      throw err instanceof Error ? err : new Error(msg)
     }
   }
 
@@ -3521,271 +7203,13 @@ export function createOrchestratorTools(input: {
         })
         .strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
-        let task = requireTask(taskID)
-        log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
-        // Rule 23: no host-side status gate. Tool selection is governed by
-        // the orchestrator prompt/tool contract; reruns supersede the prior
-        // spec and insert a new v1 snapshot only when task evidence justifies it.
-
-        await trackStepStart("requirements")
-        task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // Single session per sub-agent (rule 22). RequirementsAgent.run
-        // creates the runner session internally; the orchestrator captures
-        // its id via onSessionCreated so SSE completion events attribute
-        // to the same session the overlay already shows. The previous
-        // wrapper session here was a second card with no content, just to
-        // give the catch block an id to emit on — replaced by `runnerSessionID`
-        // captured below.
-        let runnerSessionID: string | undefined
-        const decisionLog = createDecisionLog(taskID)
-        const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
-        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
-        const normalizedStageInput = {
-          task: taskContinuationScope(task),
-          evidence_snapshot: requirementsPromptEvidenceSnapshot(taskID, task, frontendDesign),
-        }
-        let continuation: AgentSessionContinuation | undefined
-        try {
-          if (continuation_artifact_id) {
-            const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "requirements",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_requirements",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
-            if ("result" in resolvedContinuation) {
-              await trackStepComplete("requirements")
-              return resolvedContinuation.result
-            }
-            continuation = resolvedContinuation.continuation
-          }
-          runnerSessionID = continuation?.sessionID
-          const { RequirementsAgent } = await import("@/requirements")
-
-          // Stage-level retry was removed in step 5/7 (rule 8 — single
-          // source). Transient LLM-call failures are now retried inside
-          // withLLMActivity per the LLMActivityPolicy on the processor's
-          // session. A stage-level "rerun the whole agent from scratch"
-          // wrapper on top duplicated the responsibility and silently
-          // turned activity-level retry budgets into multiplied attempts
-          // (a 5-retry policy under a 2-retry stage wrapper meant up to
-          // 18 actual provider hits per logical requirements run).
-          const result = await RequirementsAgent.run({
-            title: task.title,
-            request: task.request,
-            attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
-            designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-            frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
-            taskID,
-            parentSessionID: input.agentSessionID,
-            signal: input.signal,
-            decisionLog,
-            continuation,
-            onStatus: () => {},
-            onSessionCreated: (id) => {
-              runnerSessionID = id
-            },
-          })
-          if (result.requirements.length === 0) {
-            // Same contract the old RequirementsService enforced: an empty
-            // REQ-N list means requirements did not converge. Surface it as
-            // a hard error so the orchestrator can re-run / fail the task.
-            throw new Error("requirements agent produced no REQ-N entries")
-          }
-
-          // Persist spec snapshot v1 (requirements + decisions only; the
-          // Architect produces v2 with goals/traceability/contracts).
-          const { insertRequirements } = await import("@/engine/persist")
-          const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-          const now = Date.now()
-          const specSnapshotID = Identifier.ascending("spec")
-
-          const specContent = [
-            `# ${task.title}`,
-            "",
-            result.summary,
-            "",
-            "## Requirements",
-            ...result.requirements.map(
-              (r) =>
-                `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
-            ),
-            "",
-            "## Decisions",
-            ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
-          ].join("\n")
-
-          try {
-            Database.transaction((db) => {
-              // Phase-6-f-5: maintain the "at most one non-superseded spec per
-              // task" invariant explicitly. Previously this was tracked via
-              // task.active_spec_version_id; now findActiveSpecForTask derives
-              // from spec.status != 'superseded', so writers must supersede
-              // prior specs before inserting a new one.
-              db.update(EngineSpecSnapshotTable)
-                .set({ status: "superseded", time_updated: now })
-                .where(
-                  and(
-                    eq(EngineSpecSnapshotTable.task_id, taskID),
-                    sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
-                  ),
-                )
-                .run()
-              db.insert(EngineSpecSnapshotTable)
-                .values({
-                  id: specSnapshotID,
-                  task_id: taskID,
-                  version: 1,
-                  status: "ready",
-                  summary: result.summary,
-                  content: specContent,
-                  scope: result.requirements.map((r) => r.description).join("; "),
-                  time_created: now,
-                  time_updated: now,
-                })
-                .run()
-
-              if (result.requirements.length > 0) {
-                insertRequirements(db, {
-                  taskID,
-                  specSnapshotID,
-                  requirements: result.requirements.map((r) => ({
-                    id: r.id,
-                    title: r.description,
-                    description: r.description,
-                    acceptance: [r.acceptance],
-                    evidence_refs: r.evidence_refs,
-                    non_goals: [r.non_goals],
-                    priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
-                  })),
-                  now,
-                })
-              }
-
-              db.update(EngineTaskTable)
-                .set({
-                  time_updated: now,
-                })
-                .where(eq(EngineTaskTable.id, taskID))
-                .run()
-              Database.effect(() =>
-                EngineProtocol.emit(
-                  EngineEvent.TaskUpdated,
-                  { taskID, status: deriveTaskStatus(task), summary: "Requirements parsed" },
-                  { source: "orchestrator.requirements" },
-                ),
-              )
-            })
-          } catch (dbErr) {
-            log.error("requirements: failed to persist to DB", {
-              taskID,
-              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              stack: dbErr instanceof Error ? dbErr.stack : undefined,
-            })
-            throw dbErr
-          }
-          await trackStepComplete("requirements")
-
-          // Card terminal status flows through session.status from
-          // session/prompt.ts; counts on the Panel are derived from
-          // boardStore. No phase-completed bus event needed.
-
-          return SubAgentProtocol.yieldResult({
-            headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. Architect decomposition is now available if the full task context still needs a goal graph.`,
-            summary: result.summary,
-            fields: [
-              ["decisions", result.decisions.map((d) => `${d.key}=${d.value}`)],
-              ["requirements", String(result.requirements.length)],
-            ],
-            pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
-          })
-        } catch (err) {
-          const maturityScopeDecision = decisionLog.readByKey("maturity_scope_pending")
-          if (maturityScopeDecision && maturityScopeDecision.id !== maturityScopePendingBeforeID) {
-            const { output } = await Question.askAndFormat({
-              sessionID: input.agentSessionID,
-              questions: [
-                {
-                  header: "Maturity scope",
-                  question: [
-                    "The Requirements agent found an ambiguous maturity / quality word and stopped before finalizing requirements.",
-                    `Recorded assumption: ${maturityScopeDecision.value}`,
-                    `Reason: ${maturityScopeDecision.reason}`,
-                    "Please define the maturity boundary so the requirements can be finalized without leaving later integrity review open-ended.",
-                  ].join("\n\n"),
-                  options: [
-                    {
-                      label: "Use assumption",
-                      description: "Proceed with the recorded bounded interpretation.",
-                    },
-                    {
-                      label: "Narrow scope",
-                      description: "Limit maturity expectations to the explicitly requested behavior.",
-                    },
-                  ],
-                  multiple: false,
-                  custom: true,
-                },
-              ],
-            })
-            return SubAgentProtocol.yieldResult({
-              headline: "requirements: maturity scope clarification requested.",
-              summary: output,
-              fields: [
-                ["decision", "maturity_scope_pending"],
-                ["recorded_assumption", maturityScopeDecision.value],
-                ["reason", maturityScopeDecision.reason],
-              ],
-              pointer: "question lane; answered clarification will be included in the next requirements prompt",
-            })
-          }
-          // Card terminal flows through session.status (the runner session's
-          // actor close path emits {type:"terminal", reason:"error"}); the
-          // error message itself surfaces via the thrown error in the
-          // orchestrator's tool result. No phase-completed bus event needed.
-          //
-          // Workflow.step.requirements must flip to `failed` (not stay
-          // `running` forever) so the overlay shows the failure and the
-          // operator can see WHICH stage broke. trackStepComplete is best-
-          // effort (it swallows its own errors) so wrapping it in try/catch
-          // here is intentional belt-and-braces (rule 1 / rule 7).
-          try {
-            await trackStepComplete("requirements", undefined, true)
-          } catch (trackErr) {
-            log.warn("requirements: trackStepComplete(failed) emit failed", {
-              taskID,
-              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
-            })
-          }
-          const continuationResult = continuationResultForProtocolFinalizerMiss({
-            err,
-            taskID,
-            stage: "requirements",
-            sessionID: runnerSessionID,
-            parentSessionID: input.agentSessionID,
-            finalizerName: "submit_requirements",
-            normalizedStageInput,
-            pointerReason: reason ?? null,
-          })
-          if (continuationResult) return continuationResult
-          // P4 (rule 4 — same systemic shape as analyze_intent / frontend_design
-          // catch paths): write decision_log so downstream agents see WHY
-          // requirements failed instead of silently inheriting an empty
-          // requirements set. Without this the abort surfaces only as a
-          // thrown tool result the orchestrator may swallow during recovery.
-          const { createDecisionLog } = await import("@/decision-log")
-          const failureReason = err instanceof Error ? err.message : String(err)
-          createDecisionLog(taskID).append({
-            phase: "requirements",
-            key: "abort_requirements_failed",
-            value: `Requirements stage aborted: ${failureReason.slice(0, 400)}`,
-            reason: "requirements_threw",
-          })
-          throw err
-        } finally {
-          // No caller-level guard: the pre-migration runtime enforces progress/absolute timeouts.
-        }
+        const task = requireTask(taskID)
+        const dispatch = await dispatchRequirementsStage({
+          task,
+          reason,
+          continuationArtifactID: continuation_artifact_id,
+        })
+        return dispatch.result
       },
     }),
 
@@ -4520,373 +7944,12 @@ export function createOrchestratorTools(input: {
         .strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        const activeSpec = findActiveSpecForTask(task.id)
-        if (!activeSpec) {
-          return SubAgentProtocol.yieldResult({
-            headline: "architect: no active requirements spec snapshot — call `requirements` first.",
-            summary:
-              "Architect decomposition requires the durable REQ-N requirements snapshot. " +
-              "No architect session was started because the prior spec has been cleared or has not been created.",
-            fields: [["next_action", "requirements"]],
-            pointer: "read_context scope=decisions",
-          })
-        }
-        const existingGoals = listGoals(taskID)
-        const decisionLog = createDecisionLog(taskID)
-        const reqRows = findRequirements(activeSpec.id)
-        const requirements = reqRows.map(parsedRequirementFromRow)
-        const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
-          key: d.key,
-          value: d.value,
-          reason: d.reason,
-        }))
-        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
-        const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
-        const decisionLogPrompt = decisionLog.toPromptSection()
-
-        await trackStepStart("architect")
-
-        // Single session per sub-agent (rule 22). ArchitectAgent.coordinate
-        // creates the runner session internally.
-        let runnerSessionID: string | undefined
-        const normalizedStageInput = {
-          task: taskContinuationScope(task),
-          active_spec: specContinuationScope(activeSpec),
-          existing_goals: goalsContinuationScope(existingGoals),
-          evidence_snapshot: architectPromptEvidenceSnapshot({
-            taskID,
-            task,
-            requirements,
-            requirementDecisions,
-            frontendDesign,
-            workloadBriefs: workloadArtifact?.briefs,
-            decisionLogPrompt,
-          }),
-        }
-        let continuation: AgentSessionContinuation | undefined
-        try {
-          if (continuation_artifact_id) {
-            const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "architect",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_architect",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
-            if ("result" in resolvedContinuation) {
-              await trackStepComplete("architect")
-              return resolvedContinuation.result
-            }
-            continuation = resolvedContinuation.continuation
-          }
-          runnerSessionID = continuation?.sessionID
-
-          // Load Requirements output straight from the DB so the Architect
-          // sees the same REQ-N list the overlay does. Decisions come from
-          // the decision log phase=requirements section the Requirements
-          // agent already seeded.
-          // Goal Workload Analyst sizing feedback (advisory). On the first
-          // architect pass this is undefined (no analyst has run yet); on a
-          // re-dispatch it carries the analyst's per-goal briefs so architect
-          // can act on decomposition_concern. Architect re-decomposes, so all
-          // briefs are acceptable input — no snapshot filter here.
-
-          const { ArchitectAgent } = await import("@/architect/agent")
-          const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } =
-            await import("@/engine/persist")
-          const { remapArchitectContractGraphGoalIDs, renderContractGraphForPrompt } = await import(
-            "@/architect/contract-graph"
-          )
-          const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-
-          const result = await ArchitectAgent.coordinate({
-            goals: existingGoals.map((g) => ({
-              id: g.id,
-              title: g.title,
-              objective: g.objective,
-              acceptance_specs: (typeof g.acceptance_specs === "string"
-                ? JSON.parse(g.acceptance_specs)
-                : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
-              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
-              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
-              priority: g.priority as "blocking" | "advisory",
-              kind: g.kind,
-              requirement_ids:
-                typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
-              order_index: g.order_index,
-              // Phase E (2026-05-05): retry_count derived from artifact tip.
-              retry_count: getGoalRetryCount(g.id),
-            })),
-            taskRequest: task.request,
-            taskTitle: task.title,
-            taskID,
-            decisionLog,
-            requirements,
-            requirementDecisions,
-            designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
-            frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
-            workloadBriefs: workloadArtifact?.briefs,
-            attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
-            signal: input.signal,
-            parentSessionID: input.agentSessionID,
-            continuation,
-            onStatus: () => {},
-            onSessionCreated: (id) => {
-              runnerSessionID = id
-            },
-          })
-
-          // Single-pass persist. Architect's goal set is the authoritative
-          // planning contract. Architecture review is feedback for the next
-          // build prompt, not a second writer that mutates this graph.
-          const newSpecSnapshotID = Identifier.ascending("spec")
-          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
-          const reqLines = requirements.map(
-            (r) =>
-              `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
-          )
-          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
-          const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
-          const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
-          const sourceCoverageLines = result.fidelity.sourceCoverage.map(
-            (row) =>
-              `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
-          )
-          const referenceCoverageLines = result.fidelity.referenceCoverage.map((row) => {
-            const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
-            return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
-          })
-          const assemblyOwnerLines = result.fidelity.assemblyOwners.map(
-            (row) => `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
-          )
-          let persisted: Array<{ id: string; title: string; llmID: string }> = []
-          let llmToDBID = new Map<string, string>()
-          let deletedIDs: string[] = []
-          try {
-            Database.transaction((db) => {
-              const now = Date.now()
-              db.insert(EngineSpecSnapshotTable)
-                .values({
-                  id: newSpecSnapshotID,
-                  task_id: taskID,
-                  version: 2,
-                  status: "ready",
-                  summary: result.summary,
-                  content: `${task.title}\n\n${result.summary}\n\n${result.decompositionAnalysis}`,
-                  scope: requirements.map((r) => r.description).join("; "),
-                  time_created: now,
-                  time_updated: now,
-                })
-                .run()
-
-              if (priorSpecSnapshotID) {
-                copyRequirementsToSpecSnapshot(db, {
-                  taskID,
-                  fromSpecSnapshotID: priorSpecSnapshotID,
-                  toSpecSnapshotID: newSpecSnapshotID,
-                  now,
-                })
-
-                db.update(EngineSpecSnapshotTable)
-                  .set({ status: "superseded", time_updated: now })
-                  .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-                  .run()
-              }
-
-              const out = upsertGoalsFromArchitect(db, {
-                taskID,
-                specSnapshotID: newSpecSnapshotID,
-                architectGoals: result.goals.map((g) => ({
-                  llmID: g.id,
-                  title: g.title,
-                  objective: g.objective,
-                  acceptance_specs: g.acceptance_specs,
-                  owned_paths: g.owned_paths,
-                  depends_on: g.depends_on,
-                  kind: g.kind,
-                  requirement_ids: g.requirement_ids,
-                  priority: g.priority,
-                  source: g.requirement_ids.length > 0 ? ("spec" as const) : ("system" as const),
-                })),
-                removedLLMIDs: result.removedGoalIDs,
-                now,
-              })
-              persisted = out.persisted
-              llmToDBID = out.llmToDBID
-              deletedIDs = out.deletedIDs
-
-              const mappedContractGraph = remapArchitectContractGraphGoalIDs(
-                result.contractGraph,
-                (goalID) =>
-                  llmToDBID.get(goalID) ?? (existingGoals.some((goal) => goal.id === goalID) ? goalID : undefined),
-              )
-              persistArchitectContractGraph(db, {
-                taskID,
-                graph: mappedContractGraph,
-                now,
-              })
-
-              const mappedArchitectFidelity = {
-                sourceCoverage: result.fidelity.sourceCoverage.map((row) => ({
-                  ...row,
-                  goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
-                })),
-                referenceCoverage: result.fidelity.referenceCoverage.map((row) => ({
-                  ...row,
-                  goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
-                })),
-                assemblyOwners: result.fidelity.assemblyOwners.map((row) => ({
-                  ...row,
-                  goal_id: llmToDBID.get(row.goal_id) ?? row.goal_id,
-                })),
-              }
-
-              const mappedGoalLines = result.goals.map((g) => {
-                const goalID = llmToDBID.get(g.id) ?? g.id
-                return `- **${goalID}** (${g.kind}, ${g.priority}): ${g.title}`
-              })
-              const mappedTraceLines = result.traceability.map(
-                (t) =>
-                  `- ${t.requirementID} → ${t.goalIDs.map((goalID) => llmToDBID.get(goalID) ?? goalID).join(", ")}`,
-              )
-              const mappedSourceCoverageLines = mappedArchitectFidelity.sourceCoverage.map(
-                (row) =>
-                  `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
-              )
-              const mappedReferenceCoverageLines = mappedArchitectFidelity.referenceCoverage.map((row) => {
-                const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
-                return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
-              })
-              const mappedAssemblyOwnerLines = mappedArchitectFidelity.assemblyOwners.map(
-                (row) => `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
-              )
-              const mappedContractLines = renderContractGraphForPrompt(mappedContractGraph).split("\n")
-              const mappedSpecContent = [
-                `# ${task.title}`,
-                "",
-                result.summary,
-                "",
-                "## Decomposition Analysis",
-                result.decompositionAnalysis,
-                "",
-                "## Requirements",
-                ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
-                "",
-                "## Decisions",
-                ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
-                "",
-                "## Goals",
-                ...(mappedGoalLines.length > 0 ? mappedGoalLines : ["_(none)_"]),
-                "",
-                "## Traceability",
-                ...(mappedTraceLines.length > 0 ? mappedTraceLines : ["_(none)_"]),
-                "",
-                "## Source Coverage",
-                ...(mappedSourceCoverageLines.length > 0 ? mappedSourceCoverageLines : ["_(none)_"]),
-                "",
-                "## Reference Coverage",
-                ...(mappedReferenceCoverageLines.length > 0 ? mappedReferenceCoverageLines : ["_(none)_"]),
-                "",
-                "## Assembly Ownership",
-                ...(mappedAssemblyOwnerLines.length > 0 ? mappedAssemblyOwnerLines : ["_(none)_"]),
-                "",
-                "## Architect Contracts",
-                ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
-              ].join("\n")
-              db.update(EngineSpecSnapshotTable)
-                .set({ content: mappedSpecContent, time_updated: now })
-                .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
-                .run()
-              const taskMetadata =
-                task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-                  ? (task.metadata as Record<string, unknown>)
-                  : {}
-
-              db.update(EngineTaskTable)
-                .set({
-                  metadata: {
-                    ...taskMetadata,
-                    architect_fidelity: mappedArchitectFidelity,
-                  },
-                  time_updated: now,
-                })
-                .where(eq(EngineTaskTable.id, taskID))
-                .run()
-
-              Database.effect(() =>
-                EngineProtocol.emit(
-                  EngineEvent.TaskUpdated,
-                  { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
-                  { source: "orchestrator.architect" },
-                ),
-              )
-            })
-          } catch (dbErr) {
-            log.error("architect: failed to persist goals to DB", {
-              taskID,
-              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              stack: dbErr instanceof Error ? dbErr.stack : undefined,
-            })
-            throw dbErr
-          }
-
-          for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
-
-          await trackStepComplete("architect")
-
-          const summary = SubAgentProtocol.yieldResult({
-            headline:
-              `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
-              (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` Eligible per-goal builds are now visible; read each build report and worktree facts, then decide modify_goal / build / architect / integrity / fail_task explicitly from current evidence.`,
-            summary: result.summary,
-            fields: [
-              ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
-              [
-                "contract_graph",
-                `${result.contractGraph.contracts.length} contracts / ${result.contractGraph.dependency_contracts.length} dependency reasons`,
-              ],
-              ["spec_snapshot_id", newSpecSnapshotID],
-            ],
-            pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
-          })
-
-          return summary
-        } catch (err) {
-          // Same shape as requirements catch above (rule 4 — failure
-          // surfacing is uniform across stage agents). Without this the
-          // workflow.step.architect stays "running" forever in the overlay
-          // when ArchitectAgent.coordinate throws (LLM hard error,
-          // structured-output miss, persistence error).
-          try {
-            await trackStepComplete("architect", undefined, true)
-          } catch (trackErr) {
-            log.warn("architect: trackStepComplete(failed) emit failed", {
-              taskID,
-              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
-            })
-          }
-          const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForProtocolFinalizerMiss({
-            err,
-            taskID,
-            stage: "architect",
-            sessionID: runnerSessionID,
-            parentSessionID: input.agentSessionID,
-            finalizerName: "submit_architect",
-            normalizedStageInput,
-            pointerReason: reason ?? null,
-          })
-          if (continuationResult) return continuationResult
-          createDecisionLog(taskID).append({
-            phase: "architect",
-            key: "abort_architect_failed",
-            value: `Architect stage aborted: ${reason.slice(0, 400)}`,
-            reason: "architect_threw",
-          })
-          throw err
-        }
+        const dispatch = await dispatchArchitectStage({
+          task,
+          reason,
+          continuationArtifactID: continuation_artifact_id,
+        })
+        return dispatch.result
       },
     }),
 
@@ -5124,180 +8187,21 @@ export function createOrchestratorTools(input: {
         "interaction-state checks, console/network review, or direct repair of visual or functional defects. " +
         "It consumes task-scoped frontend_design/build evidence plus any prior integrity evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
         "It reviews from a picky professional design QA perspective, lists production_blockers when the product cannot generate or ship, and does not use visual scores, one-shot whole-page screenshots, or judge verdicts as the verdict. " +
-        "If it returns accepted=false with follow_up_task, call propose_task from that evidence instead of ending passively. " +
+        "If it returns accepted=false with unresolved_code_module_problems, the scheduler must decide whether to repair in the current task or call propose_task from that evidence. " +
         "It may use skills, bash/edit/write/apply_patch, and task-scoped browser_preview evidence. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
       execute: async ({ reason, focus, app_url, preview_command, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        await trackStepStart("visual_qa")
-        let closed = false
-        let runnerSessionID: string | undefined
-        const close = async (failed = false) => {
-          if (closed) return
-          closed = true
-          await trackStepComplete("visual_qa", undefined, failed)
-        }
-
-        const decisionLog = createDecisionLog(taskID)
-        const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
-        const frontendResearchBriefs = findNonStaleFrontendResearchBriefs({
-          taskID,
-          request: task.request,
+        const dispatch = await dispatchVisualQaStage({
+          task,
+          reason,
+          focus,
+          appUrl: app_url,
+          previewCommand: preview_command,
+          continuationArtifactID: continuation_artifact_id,
         })
-        const buildDeliveries = findDeliveriesForTask(taskID)
-        const priorVisualQaEntries = decisionLog.readByPhase("visual_qa")
-        const frontendDesign = renderVisualQaFrontendDesignContext(frontendDesignEntries)
-        const frontendResearch = renderVisualQaFrontendResearchContext(frontendResearchBriefs)
-        const buildEvidence = renderVisualQaBuildEvidenceContext(buildDeliveries)
-        const priorVisualQa = renderVisualQaPriorReportContext(priorVisualQaEntries)
-        const activeSpec = findActiveSpecForTask(taskID)
-        const activeGoals = listGoals(taskID)
-        const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
-        const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
-        const latestIntegrityAttempt = activeSpec
-          ? findLatestIntegrityAttemptArtifact({
-              taskID,
-              specSnapshotID: activeSpec.id,
-              phase: "post_build",
-            })
-          : undefined
-        const integrityContext = renderVisualQaIntegrityContext(latestIntegrityAttempt)
-        const referenceParity = deriveVisualQaReferenceParityContext({
-          taskID,
-          specSnapshotID: activeSpec?.id,
-          goals: activeGoals,
-          frontendDesignEntries,
-          visualEvidence,
-        })
-        const normalizedStageInput = {
-          task: taskContinuationScope(task),
-          active_spec: specContinuationScope(activeSpec),
-          goals: goalsContinuationScope(activeGoals),
-          evidence_snapshot: continuationEvidenceSnapshot({
-            frontend_design_decisions: frontendDesignEntries,
-            frontend_research_briefs: frontendResearchBriefs,
-            build_deliveries: buildDeliveries,
-            prior_visual_qa_decisions: priorVisualQaEntries,
-            latest_visual_evidence_bundle: visualEvidence,
-            latest_integrity_attempt: latestIntegrityAttempt,
-          }),
-        }
-
-        try {
-          let continuation: AgentSessionContinuation | undefined
-          if (continuation_artifact_id) {
-            const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "visual-qa",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_visual_qa_report",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
-            if ("result" in resolvedContinuation) {
-              await close(false)
-              return resolvedContinuation.result
-            }
-            continuation = resolvedContinuation.continuation
-          }
-          runnerSessionID = continuation?.sessionID
-          const { VisualQaAgent } = await import("@/visual-qa")
-          const result = await VisualQaAgent.analyze({
-            taskTitle: task.title,
-            taskRequest: task.request,
-            reason,
-            focus,
-            appUrl: app_url,
-            previewCommand: preview_command,
-            frontendDesign,
-            frontendResearch,
-            integrityContext,
-            buildEvidence,
-            priorVisualQa,
-            projectRoot,
-            referenceParityRequired: referenceParity.required,
-            requiredReferenceRegions: referenceParity.regions,
-            taskID,
-            parentSessionID: input.agentSessionID,
-            signal: input.signal,
-            continuation,
-            onSessionCreated: (id) => {
-              runnerSessionID = id
-            },
-          })
-          const visualQaSemantics = visualQaReportAcceptanceSemantics(result.report)
-
-          decisionLog.append({
-            phase: "visual_qa",
-            key: `report_${Date.now()}`,
-            value: JSON.stringify(result.report, null, 2),
-            reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
-          })
-          decisionLog.append({
-            phase: "visual_qa",
-            key: "latest_summary",
-            value: [
-              `accepted=${visualQaSemantics.effectiveAccepted}`,
-              `submitted_accepted=${visualQaSemantics.submittedAccepted}`,
-              `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
-              `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
-              `summary=${result.report.summary}`,
-              `coverage=${result.report.coverage.length}`,
-              `findings=${result.report.findings.length}`,
-              `production_blockers=${result.report.production_blockers.length}`,
-              `follow_up_task=${result.report.follow_up_task ? result.report.follow_up_task.title : "(none)"}`,
-              `evidence=${result.report.evidence.length}`,
-              `reference_parity_required=${result.report.reference_parity.required}`,
-              `reference_comparison_evidence=${result.report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
-              `reference_missing_regions=${result.report.reference_parity.missing_regions.join(", ") || "(none)"}`,
-              `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
-            ].join("\n"),
-            reason: "Latest structured visual QA summary for read_context and integrity review.",
-          })
-
-          await close()
-          return SubAgentProtocol.yieldResult({
-            headline: `visual_qa complete: effective_accepted=${visualQaSemantics.effectiveAccepted}`,
-            summary: result.report.summary,
-            fields: [
-              ["session", result.sessionID],
-              ["accepted", String(visualQaSemantics.effectiveAccepted)],
-              ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
-              ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
-              ["coverage", String(result.report.coverage.length)],
-              ["findings", String(result.report.findings.length)],
-              ["production_blockers", String(result.report.production_blockers.length)],
-              ["follow_up_task", result.report.follow_up_task ? result.report.follow_up_task.title : "(none)"],
-              ["evidence", String(result.report.evidence.length)],
-              ["repairs", String(result.report.repairs.length)],
-              ["changed_files", result.report.changed_files.join(", ") || "(none)"],
-              ["open_questions", String(result.report.open_questions.length)],
-            ],
-            pointer: "decision_log phase=visual_qa",
-          })
-        } catch (err) {
-          await close(true)
-          const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForProtocolFinalizerMiss({
-            err,
-            taskID,
-            stage: "visual-qa",
-            sessionID: runnerSessionID,
-            parentSessionID: input.agentSessionID,
-            finalizerName: "submit_visual_qa_report",
-            normalizedStageInput,
-            pointerReason: reason,
-          })
-          if (continuationResult) return continuationResult
-          log.error("visual_qa: failed", { taskID, error: msg })
-          decisionLog.append({
-            phase: "visual_qa",
-            key: "abort_visual_qa_failed",
-            value: `Visual QA stage aborted: ${msg.slice(0, 400)}`,
-            reason: "visual_qa_threw",
-          })
-          throw err instanceof Error ? err : new Error(msg)
-        }
+        return dispatch.result
       },
     }),
 
@@ -5317,11 +8221,11 @@ export function createOrchestratorTools(input: {
 
     integrity: tool({
       description:
-        "FINAL workflow gate. Independent adversarial integrity supervisor review of the active " +
+        "Final adversarial integrity evidence review of the active " +
         "architect graph and delivered system. The supervisor creates task-specific reviewer " +
         "sessions, reviewers freely inspect/test within read-only evidence tools, and the final " +
         "output is a consensus team report with findings, evidence, required repairs, and unresolved " +
-        "disagreements. A post-build pass verdict completes the task. Non-pass findings " +
+        "disagreements. A post-build pass verdict records completion evidence; call complete_task with the returned integrity_attempt_id to record task completion. Non-pass findings " +
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +
         "auto-routes findings — you read the markdown and choose modify_goal / " +
@@ -5353,32 +8257,11 @@ export function createOrchestratorTools(input: {
               error: outcome.artifactMissing.error,
               summary: "Run blocked by missing integrity attempt artifact",
             })
-          } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
-            const task = requireTask(taskID)
-            const completed = Date.now()
-            const activeRun = findActiveRunForTask(taskID)
-            if (activeRun) {
-              await updateRun(
-                activeRun,
-                {
-                  status: "completed",
-                  blocking_reason: null,
-                  error: null,
-                  time_completed: completed,
-                },
-                "Run completed by passing integrity gate",
-              )
-            }
-            await updateTask(
-              task,
-              { status: "completed", error: null, time_completed: completed },
-              "Task completed by passing integrity gate",
-            )
           } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
             await blockActiveRunForTask(taskID, {
               blockingReason: `integrity verdict ${outcome.verdict}`,
               error: outcome.summary,
-              summary: "Run blocked by non-pass integrity gate",
+              summary: "Run blocked by non-pass integrity verdict",
             })
           }
           return renderIntegrityOutcome(outcome)
@@ -5881,128 +8764,14 @@ export function createOrchestratorTools(input: {
       inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        await trackStepStart("frontend_research")
-        const continuationRow = continuation_artifact_id
-          ? findStageContinuationRequest({ taskID, artifactID: continuation_artifact_id })
-          : undefined
-        const storedContinuationSourceUrl = frontendResearchSourceUrlFromStageInput(
-          continuationRow?.payload.normalized_stage_input,
-        )
-        const storedContinuationFocus = frontendResearchFocusFromStageInput(
-          continuationRow?.payload.normalized_stage_input,
-        )
-        const sourceUrl = continuation_artifact_id ? storedContinuationSourceUrl : source_urls?.find(isHttpWebpageUrl)
-        const normalizedStageInput = {
-          task: taskContinuationScope(task),
-          source_url: sourceUrl ?? null,
-          focus: continuation_artifact_id ? (storedContinuationFocus ?? null) : focus?.trim() || null,
-        }
-        let continuation: AgentSessionContinuation | undefined
-        let runnerSessionID: string | undefined
-        try {
-          if (continuation_artifact_id) {
-            const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "frontend-research",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_research_brief",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
-            if ("result" in resolvedContinuation) {
-              await trackStepComplete("frontend_research")
-              return resolvedContinuation.result
-            }
-            continuation = resolvedContinuation.continuation
-          }
-          runnerSessionID = continuation?.sessionID
-          const { FrontendResearchAgent } = await import("@/frontend-research")
-          const result = await FrontendResearchAgent.run({
-            title: task.title,
-            request: task.request,
-            targetDeliverable: "implementation_input",
-            sourceUrls: sourceUrl ? [sourceUrl] : undefined,
-            focus: continuation ? undefined : focus,
-            reason,
-            taskID,
-            parentSessionID: input.agentSessionID,
-            signal: input.signal,
-            continuation,
-            onStatus: () => {},
-            onSessionCreated: (id) => {
-              runnerSessionID = id
-            },
-          })
-          const artifactID = persistTaskFrontendResearchBrief({
-            taskID,
-            brief: result.brief,
-          })
-          await trackStepComplete("frontend_research")
-          const blocking = result.brief.open_questions.filter((item) => item.blocking)
-          const subpageTasks = result.brief.subpage_research_tasks
-          const contract = result.brief.webpage_contract
-          return SubAgentProtocol.yieldResult({
-            headline: "Frontend research brief persisted as webpage investigation division.",
-            summary: result.brief.summary,
-            fields: [
-              ["session", result.sessionID],
-              ["artifact_id", artifactID],
-              ["sources", String(result.brief.evidence_index.length)],
-              ["facts", String(result.brief.facts.length)],
-              ["webpage_contract", contract ? contract.source_url : "missing"],
-              ["functional_surfaces", String(contract?.functional_surfaces.length ?? 0)],
-              ["visual_layout", String(contract?.visual_layout.length ?? 0)],
-              ["style_requirements", String(contract?.style_requirements.length ?? 0)],
-              [
-                "subpage_research_tasks",
-                subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`),
-              ],
-              ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
-              ["bundle_paths", Object.values(result.brief.bundle)],
-            ],
-            pointer:
-              `frontend_research_brief artifact ${artifactID}; downstream agents read it as webpage investigation work packets. ` +
-              "This result is evidence only; choose the next tool from full task context.",
-          })
-        } catch (err) {
-          try {
-            await trackStepComplete("frontend_research", undefined, true)
-          } catch (trackErr) {
-            log.warn("frontend_research: trackStepComplete(failed) emit failed", {
-              taskID,
-              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
-            })
-          }
-          const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForProtocolFinalizerMiss({
-            err,
-            taskID,
-            stage: "frontend-research",
-            sessionID: runnerSessionID,
-            parentSessionID: input.agentSessionID,
-            finalizerName: "submit_research_brief",
-            normalizedStageInput,
-            pointerReason: reason,
-          })
-          if (continuationResult) return continuationResult
-          if (runnerSessionID) {
-            SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
-          }
-          log.error("frontend_research tool failed", { taskID, error: msg })
-          return SubAgentProtocol.yieldResult({
-            headline: "Frontend research failed before producing an artifact.",
-            summary: msg,
-            fields: [
-              ["session", runnerSessionID ?? "not-created"],
-              ["status", "failed"],
-              ["source_urls", source_urls ?? []],
-              ["focus", focus?.trim() ? focus : "none"],
-              ["artifact_id", "none"],
-            ],
-            pointer: runnerSessionID
-              ? `frontend-research session ${runnerSessionID}; inspect session error status for details`
-              : "frontend_research failed before child session creation; inspect orchestrator logs and workflow step failure",
-          })
-        }
+        const dispatch = await dispatchFrontendResearchStage({
+          task,
+          reason,
+          sourceUrls: source_urls,
+          focus,
+          continuationArtifactID: continuation_artifact_id,
+        })
+        return dispatch.result
       },
     }),
 
@@ -6012,85 +8781,15 @@ export function createOrchestratorTools(input: {
       inputSchema: DeepResearchInputSchema,
       execute: async ({ reason, target_deliverable, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        let runnerSessionID: string | undefined
-        const normalizedStageInput = {
-          task: taskContinuationScope(task),
-        }
-        try {
-          let continuation: AgentSessionContinuation | undefined
-          if (continuation_artifact_id) {
-            const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "deep-research",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_research_brief",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
-            if ("result" in resolvedContinuation) return resolvedContinuation.result
-            continuation = resolvedContinuation.continuation
-          }
-          runnerSessionID = continuation?.sessionID
-          const { DeepResearchAgent } = await import("@/research")
-          const result = await DeepResearchAgent.run({
-            title: task.title,
-            request: task.request,
-            targetDeliverable: target_deliverable,
-            sourceUrls: continuation ? undefined : source_urls,
-            focus,
-            reason,
-            taskID,
-            parentSessionID: input.agentSessionID,
-            signal: input.signal,
-            continuation,
-            onStatus: () => {},
-            onSessionCreated: (id) => {
-              runnerSessionID = id
-            },
-          })
-          const artifactID = persistTaskResearchBrief({
-            taskID,
-            brief: result.brief,
-          })
-          const blocking = result.brief.open_questions.filter((item) => item.blocking)
-          const subpageTasks = result.brief.subpage_research_tasks
-          return SubAgentProtocol.yieldResult({
-            headline: "Deep research brief persisted as advisory evidence.",
-            summary: result.brief.summary,
-            fields: [
-              ["session", result.sessionID],
-              ["artifact_id", artifactID],
-              ["sources", String(result.brief.evidence_index.length)],
-              ["facts", String(result.brief.facts.length)],
-              [
-                "subpage_research_tasks",
-                subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`),
-              ],
-              ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
-              ["bundle_paths", Object.values(result.brief.bundle)],
-            ],
-            pointer:
-              `research_brief artifact ${artifactID}; task snapshot surfaces stale status and bundle paths. ` +
-              "This result is evidence only; choose the next tool from full task context.",
-          })
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          const continuationResult = continuationResultForProtocolFinalizerMiss({
-            err,
-            taskID,
-            stage: "deep-research",
-            sessionID: runnerSessionID,
-            parentSessionID: input.agentSessionID,
-            finalizerName: "submit_research_brief",
-            normalizedStageInput,
-            pointerReason: reason,
-          })
-          if (continuationResult) return continuationResult
-          if (runnerSessionID) {
-            SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
-          }
-          log.error("deep_research tool failed", { taskID, error: msg })
-          throw err
-        }
+        const dispatch = await dispatchDeepResearchStage({
+          task,
+          reason,
+          targetDeliverable: target_deliverable,
+          sourceUrls: source_urls,
+          focus,
+          continuationArtifactID: continuation_artifact_id,
+        })
+        return dispatch.result
       },
     }),
 
@@ -6400,19 +9099,10 @@ export function createOrchestratorTools(input: {
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
 
-        // When a contract change triggered status reset, the prior attempt's
-        // worktree is stale (built against the old contract). Cleanup so the
-        // next build starts from a fresh primary checkout and doesn't carry
-        // forward the old tree's state. Cleanup failure is surfaced so the
-        // DB pointer remains available for diagnosis.
-        let cleanupSuffix = ""
-        if (statusReset) {
-          const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-          const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
-          if (cleaned) cleanupSuffix = ", stale worktree cleaned"
-        }
-
-        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}${cleanupSuffix}`
+        // Contract edits preserve the durable workspace pointer. The next
+        // build reads the retry decision-log feedback and recovers the same
+        // verified directory per the 2026-06-25 worktree reuse contract.
+        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}`
       },
     }),
 
@@ -6630,6 +9320,64 @@ export function createOrchestratorTools(input: {
       },
     }),
 
+    complete_task: tool({
+      description:
+        "Terminal task lifecycle decision: mark the task completed from the latest post-build pass integrity_attempt evidence. " +
+        "Call this only after integrity returns verdict=pass, phase=post_build, and an integrity_attempt_id. " +
+        "The tool rejects missing, stale, wrong-phase, or non-pass evidence without mutating the task.",
+      inputSchema: CompleteTaskInputSchema,
+      execute: async ({ integrity_attempt_id, summary }, options) => {
+        requireOrchestratorToolExecutionContext(options, "complete_task")
+        const task = requireTask(taskID)
+        const taskStatus = deriveTaskStatus(task)
+        if (isTaskTerminal(task)) {
+          return `complete_task rejected: task ${taskID} is already terminal with status=${taskStatus}.`
+        }
+        const activeSpec = findActiveSpecForTask(taskID)
+        if (!activeSpec) {
+          return `complete_task rejected: task ${taskID} has no active spec snapshot. Run architect and integrity before completing.`
+        }
+        const latest = findLatestIntegrityAttemptArtifact({
+          taskID,
+          specSnapshotID: activeSpec.id,
+          phase: "post_build",
+        })
+        if (!latest) {
+          return (
+            `complete_task rejected: no post_build integrity_attempt exists for ` +
+            `task=${taskID} spec_snapshot_id=${activeSpec.id}.`
+          )
+        }
+        if (latest.artifactID !== integrity_attempt_id) {
+          return (
+            `complete_task rejected: integrity_attempt_id=${integrity_attempt_id} is not the latest ` +
+            `post_build integrity attempt for task=${taskID} spec_snapshot_id=${activeSpec.id}; latest=${latest.artifactID}.`
+          )
+        }
+        const verdict = integrityAttemptVerdict(latest)
+        if (verdict !== "pass") {
+          return (
+            `complete_task rejected: latest post_build integrity_attempt=${latest.artifactID} ` +
+            `has verdict=${verdict ?? "unknown"}, not pass.`
+          )
+        }
+
+        const cleanedSummary = summary?.trim()
+        const terminalSummary =
+          cleanedSummary && cleanedSummary.length > 0
+            ? cleanedSummary
+            : `Task completed from post-build integrity_attempt ${integrity_attempt_id}`
+        await terminalTask(task, { status: "completed", error: null, time_completed: Date.now() }, terminalSummary, {
+          projectDir: taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id }),
+        })
+
+        const cleaned = await cleanupTerminalGoalWorkspaces("complete_task")
+        const { interruptTaskLoop } = await import("@/orchestrator/loop")
+        interruptTaskLoop(taskID, "task completed")
+        return `Task ${taskID} completed from integrity_attempt ${integrity_attempt_id}.${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
+      },
+    }),
+
     fail_task: tool({
       description:
         "Terminal task lifecycle decision: mark the task as failed when no responsible same-task repair remains for evidence the orchestrator can see. " +
@@ -6640,17 +9388,9 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         error: z.string().describe("Why the task failed"),
       }),
-      execute: async ({ error }) => {
-        const task = requireTask(taskID)
-        await updateTask(task, { status: "failed", error, time_completed: Date.now() }, `Failed: ${error}`)
-
-        // Task is dead — every goal's worktree is now garbage. Clean
-        // proactively here rather than waiting for the engine/writer
-        // task-terminal sweep so disk usage drops at the moment of
-        // decision (rule 22: orchestrator owns worktree lifecycle).
-        const cleaned = await cleanupTerminalGoalWorkspaces("fail_task")
-        const { interruptTaskLoop } = await import("@/orchestrator/loop")
-        interruptTaskLoop(taskID, "task failed")
+      execute: async ({ error }, options) => {
+        requireOrchestratorToolExecutionContext(options, "fail_task")
+        const { cleaned } = await failCurrentTask({ error, cleanupReason: "fail_task" })
         return `Task ${taskID} failed: ${error}${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
       },
     }),
@@ -6714,26 +9454,75 @@ export function createOrchestratorTools(input: {
 
     respond_agent_coordination: tool({
       description:
-        "Answer one pending worker-to-orchestrator coordination request. This is the only orchestrator path for sending scheduler guidance back to a worker session; it requires request_id and writes visible request/response artifacts.",
+        "Answer one pending worker-to-orchestrator coordination request. This is the only orchestrator path for scheduler guidance that continues/cancels a worker, asks the user through a real interaction, or fails the task through a terminal lifecycle event; it requires request_id and writes visible request/response/action artifacts before executing the bound side effect.",
       inputSchema: z
         .object({
           request_id: z.string().min(1).describe("Pending agent_coordination_request artifact id."),
           decision: z
             .enum(["continue", "cancel_worker", "redispatch", "fail_task", "ask_user"])
             .describe(
-              "continue appends a visible message to the requesting worker session after runtime-contract validation; cancel_worker aborts the requesting worker; redispatch/fail_task/ask_user record the decision and require the matching visible orchestrator action next.",
+              "continue appends a visible message to the requesting worker session after runtime-contract validation; cancel_worker aborts the requesting worker; ask_user opens a real task interaction; fail_task marks the task failed through the terminal lifecycle helper; redispatch is valid only when the request's worker kind has a concrete stage/tool dispatcher binding that executes a visible action. Generic same-kind session redispatch is rejected and keeps the request pending.",
             ),
           message: z
             .string()
             .optional()
-            .describe("Visible guidance to append to the worker for decision=continue, or decision detail for audit."),
+            .describe(
+              "Visible guidance for continue, question text for ask_user when questions is omitted, or failure detail for fail_task.",
+            ),
+          questions: z
+            .array(
+              z.object({
+                question: z.string().min(1).describe("The complete question text to show the user."),
+                header: z.string().min(1).describe("Short label used as a chip/title."),
+                options: z
+                  .array(
+                    z.object({
+                      label: z.string().min(1).describe("Display text."),
+                      description: z.string().min(1).describe("Explanation of this choice."),
+                    }),
+                  )
+                  .default([]),
+                multiple: z.boolean().optional(),
+                custom: z.boolean().optional(),
+              }),
+            )
+            .min(1)
+            .max(4)
+            .optional()
+            .describe(
+              "Concrete user questions for decision=ask_user. Omit to ask one free-text question from message or reason.",
+            ),
           reason: z.string().min(1).describe("Why this is the correct scheduling decision."),
         })
         .strict(),
-      execute: async ({ request_id, decision, message, reason }, options) => {
-        const toolExecution = requireOrchestratorToolExecutionContext(options, "respond_agent_coordination")
-        const request = requirePendingAgentCoordinationRequest({ taskID, requestID: request_id })
+      execute: async ({ request_id, decision, message, questions, reason }, options) => {
+        const toolExecution = await requireTaskOrchestratorToolExecutionContext(options, "respond_agent_coordination", {
+          taskID,
+          agentSessionID: input.agentSessionID,
+        })
+        const responseAudit = {
+          orchestratorSessionID: toolExecution.orchestratorSessionID,
+          orchestratorMessageID: toolExecution.orchestratorMessageID,
+          orchestratorToolCallID: toolExecution.toolCallID,
+          orchestratorToolPartID: toolExecution.toolPartID,
+        }
+        const request = requireAgentCoordinationRequestForResponse({ taskID, requestID: request_id })
         const guidance = message?.trim()
+        if (request.payload.status === "responded") {
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...responseAudit,
+            decision,
+            reason,
+            ...(guidance ? { message: guidance } : {}),
+            ...(decision === "redispatch"
+              ? { redispatchBinding: redispatchBindingForAgentCoordinationReplay({ request }) }
+              : {}),
+          })
+          const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+          if (replayResult) return replayResult
+        }
 
         if (decision === "continue") {
           const target = await validateAgentCoordinationContinueTarget({ taskID, request })
@@ -6762,82 +9551,141 @@ export function createOrchestratorTools(input: {
                   hash: target.runtimeContract.identity.workerTurnDescriptorHash,
                 }
               : undefined
-          const workerMessage = await SessionPrompt.prompt({
-            sessionID: request.payload.session_id,
-            messageID: Identifier.ascending("message"),
-            model: {
-              providerID: target.model.providerID,
-              modelID: target.model.modelID,
-            },
-            agent: request.payload.agent,
-            noReply: true,
-            extra: {
-              taskID,
-              source: "agent_coordination_response",
-              agentCoordination: {
-                requestID: request.payload.request_id,
-                decision,
-                reason,
-                blocking: request.payload.blocking,
-                requestedDecision: request.payload.requested_decision,
-              },
-              ...(descriptor ? { workerTurnDescriptor: descriptor } : {}),
-            },
-            parts: [
-              {
-                type: "text",
-                text: workerMessageText,
-                id: Identifier.ascending("part"),
-              },
-            ],
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...responseAudit,
+            decision,
+            reason,
+            ...(guidance ? { message: guidance } : {}),
           })
-          let continuation: { loopPromise: ReturnType<typeof SessionPrompt.loop> }
+          const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+          if (replayResult) return replayResult
+          let workerMessage: Awaited<ReturnType<typeof SessionPrompt.prompt>>
+          let workerMessageIDForFailure: string | undefined
           try {
-            continuation = await startAgentCoordinationContinuation({ session: target.session })
-          } catch (error) {
-            await Session.removeMessage({
-              sessionID: request.payload.session_id,
-              messageID: workerMessage.info.id,
-            }).catch((removeError) => {
-              log.error("agent coordination failed-continuation rollback failed", {
-                taskID,
-                requestID: request.payload.request_id,
-                sessionID: request.payload.session_id,
-                messageID: workerMessage.info.id,
-                error: removeError,
-              })
-            })
-            throw error
-          }
-          let response
-          try {
-            response = createAgentCoordinationResponse({
+            const action = findAgentCoordinationAction({
               taskID,
-              requestID: request.payload.request_id,
-              orchestratorSessionID: toolExecution.orchestratorSessionID,
-              orchestratorMessageID: toolExecution.orchestratorMessageID,
-              decision,
-              reason,
-              ...(guidance ? { message: guidance } : {}),
-              workerMessageID: workerMessage.info.id,
+              actionID: response.payload.action_id,
             })
-          } catch (error) {
-            await Session.removeMessage({
-              sessionID: request.payload.session_id,
-              messageID: workerMessage.info.id,
-            }).catch((removeError) => {
-              log.error("agent coordination response rollback failed", {
-                taskID,
-                requestID: request.payload.request_id,
+            if (!action) {
+              throw new Error(`agent coordination response ${response.payload.response_id} has no action row`)
+            }
+            if (action.payload.status !== "pending") {
+              throw new Error(`agent coordination action ${response.payload.action_id} is ${action.payload.status}`)
+            }
+            const recordedWorkerMessageID = recordedAgentCoordinationWorkerMessageID(action)
+            if (recordedWorkerMessageID) {
+              workerMessageIDForFailure = recordedWorkerMessageID
+              workerMessage = await requireAgentCoordinationWorkerMessage({
                 sessionID: request.payload.session_id,
-                messageID: workerMessage.info.id,
-                error: removeError,
+                messageID: recordedWorkerMessageID,
+                actionID: response.payload.action_id,
               })
+            } else {
+              const workerMessageID = agentCoordinationWorkerMessageID(response.payload.action_id)
+              const workerMessagePartID = agentCoordinationWorkerMessagePartID(response.payload.action_id)
+              const existingWorkerMessage = await findAgentCoordinationWorkerMessage({
+                sessionID: request.payload.session_id,
+                messageID: workerMessageID,
+              })
+              if (existingWorkerMessage) {
+                workerMessage = existingWorkerMessage
+                workerMessageIDForFailure = existingWorkerMessage.info.id
+                await recordAgentCoordinationActionProgress({
+                  taskID,
+                  actionID: response.payload.action_id,
+                  result: {
+                    session_id: target.session.id,
+                    worker_message_id: existingWorkerMessage.info.id,
+                    worker_message_part_id: workerMessagePartID,
+                    message_recovered: true,
+                  },
+                  summary: "continue_worker message recovered after prior append",
+                })
+              } else {
+                workerMessage = await SessionPrompt.prompt({
+                  sessionID: request.payload.session_id,
+                  messageID: workerMessageID,
+                  model: {
+                    providerID: target.model.providerID,
+                    modelID: target.model.modelID,
+                  },
+                  agent: request.payload.agent,
+                  noReply: true,
+                  extra: {
+                    taskID,
+                    source: "agent_coordination_response",
+                    agentCoordination: {
+                      requestID: request.payload.request_id,
+                      responseID: response.payload.response_id,
+                      actionID: response.payload.action_id,
+                      decision,
+                      reason,
+                      blocking: request.payload.blocking,
+                      requestedDecision: request.payload.requested_decision,
+                    },
+                    ...(descriptor ? { workerTurnDescriptor: descriptor } : {}),
+                  },
+                  parts: [
+                    {
+                      type: "text",
+                      text: workerMessageText,
+                      id: workerMessagePartID,
+                    },
+                  ],
+                })
+                workerMessageIDForFailure = workerMessage.info.id
+                await recordAgentCoordinationActionProgress({
+                  taskID,
+                  actionID: response.payload.action_id,
+                  result: {
+                    session_id: target.session.id,
+                    worker_message_id: workerMessage.info.id,
+                    worker_message_part_id: workerMessagePartID,
+                    message_appended: true,
+                  },
+                  summary: "continue_worker message appended",
+                })
+              }
+            }
+          } catch (error) {
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              ...(workerMessageIDForFailure ? { workerMessageID: workerMessageIDForFailure } : {}),
+              error,
+              result: { session_id: target.session.id },
+              summary: "continue_worker message append or recovery failed",
             })
             throw error
           }
 
+          let continuation: { loopPromise: ReturnType<typeof SessionPrompt.loop> }
+          try {
+            continuation = await startAgentCoordinationContinuation({ session: target.session })
+          } catch (error) {
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              workerMessageID: workerMessage.info.id,
+              error,
+              result: { session_id: target.session.id },
+              summary: "continue_worker resume failed",
+            })
+            markAgentCoordinationContinuationFailure({ sessionID: target.session.id, error })
+            throw error
+          }
+          await completeAgentCoordinationAction({
+            taskID,
+            actionID: response.payload.action_id,
+            workerMessageID: workerMessage.info.id,
+            result: { session_id: target.session.id, resumed: true },
+            summary: "continue_worker message resolved and session resumed",
+          })
+
           void continuation.loopPromise.catch((error) => {
+            markAgentCoordinationContinuationFailure({ sessionID: target.session.id, error })
             log.error("agent coordination continue loop failed", {
               taskID,
               requestID: request.payload.request_id,
@@ -6848,84 +9696,2325 @@ export function createOrchestratorTools(input: {
           })
           return (
             `Responded to coordination request ${request.payload.request_id} with continue. ` +
-            `Appended worker message ${workerMessage.info.id} and resumed session ${request.payload.session_id}.`
+            `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+            `resolved worker message ${workerMessage.info.id} and resumed session ${request.payload.session_id}.`
+          )
+        }
+
+        if (decision === "redispatch") {
+          if (request.payload.agent === "build") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationBuildRedispatch>>
+            try {
+              target = await validateAgentCoordinationBuildRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "build_stage",
+                stage: "build",
+                target_kind: "build",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingBuildRedispatchAction({
+              taskID,
+              response,
+              sourceSessionID: target.source.id,
+              sourceGoalRunID: target.sourceGoalRunID,
+              goalID: target.goalID,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `build session ${recovered.sessionID} recovered persisted goal_run ${recovered.goalRunID}.`
+              )
+            }
+            let sourceCancelSummary = ""
+            let dispatch: Awaited<ReturnType<typeof executeBuildStageRedispatch>>
+            try {
+              const liveOwner =
+                findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.sourceGoalRunID }) ??
+                findLiveBuildOwnershipBySession({ taskID, sessionID: target.source.id })
+              if (liveOwner) {
+                sourceCancelSummary = await cancelLiveOwnedBuild({
+                  taskID,
+                  sessionID: target.source.id,
+                  goalRunID: target.sourceGoalRunID,
+                  owner: liveOwner,
+                  reason,
+                  reasonPrefix: "respond_agent_coordination",
+                  originSite: "orchestrator.tools.respond-agent-coordination-build-redispatch",
+                  metadata: {
+                    agent_coordination_request_id: request.payload.request_id,
+                    agent_coordination_action_id: response.payload.action_id,
+                    redispatch_build: true,
+                  },
+                })
+              } else {
+                const aborted = await abortGoalRunExecution({
+                  taskID,
+                  goalRunID: target.sourceGoalRunID,
+                  reason: `respond_agent_coordination redispatch: ${reason}`,
+                })
+                sourceCancelSummary =
+                  ` goal_run ${target.sourceGoalRunID} ${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
+                  `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
+              }
+              const existingGoalRunIDs = new Set(listGoalRunsByGoal(target.goalID).map((goalRun) => goalRun.id))
+              const existingBuildSessionContractIDs = new Set(
+                listBuildSessionContractArtifactsForGoal({ taskID, goalID: target.goalID }).map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "build_stage",
+                  stage: "build",
+                  source_session_id: target.source.id,
+                  source_goal_run_id: target.sourceGoalRunID,
+                  source_cancel_summary: sourceCancelSummary,
+                  goal_id: target.goalID,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: Date.now(),
+                  preexisting_build_goal_run_ids: [...existingGoalRunIDs],
+                  preexisting_build_session_contract_ids: [...existingBuildSessionContractIDs],
+                },
+                summary: "redispatch_worker build stage dispatch started",
+              })
+              dispatch = await executeBuildStageRedispatch({
+                goalID: target.goalID,
+                reason: [
+                  `A2A redispatch_worker for build request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Source session ${target.source.id} goal_run ${target.sourceGoalRunID} was stopped before redispatch.`,
+                  sourceCancelSummary.trim().length > 0 ? `Source stop result: ${sourceCancelSummary.trim()}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                request: [
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                options,
+                existingGoalRunIDs,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "build_stage",
+                  stage: "build",
+                  source_session_id: target.source.id,
+                  source_goal_run_id: target.sourceGoalRunID,
+                  goal_id: target.goalID,
+                  source_cancel_summary: sourceCancelSummary,
+                },
+                summary: "redispatch_worker build stage dispatch failed",
+              })
+              throw error
+            }
+            if (!dispatch.sessionID || !dispatch.goalRunID) {
+              const error = new Error("build_stage redispatch did not create a build session and goal_run")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "build_stage",
+                  stage: "build",
+                  source_session_id: target.source.id,
+                  source_goal_run_id: target.sourceGoalRunID,
+                  goal_id: target.goalID,
+                  source_cancel_summary: sourceCancelSummary,
+                  output: dispatch.outputText,
+                },
+                summary: "redispatch_worker build stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            const sourceAfter = findGoalRun(target.sourceGoalRunID)
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "build_stage",
+                stage: "build",
+                source_session_id: target.source.id,
+                source_goal_run_id: target.sourceGoalRunID,
+                source_goal_run_status: sourceAfter?.status ?? "unknown",
+                source_cancel_summary: sourceCancelSummary,
+                redispatch_session_id: dispatch.sessionID,
+                redispatch_goal_run_id: dispatch.goalRunID,
+                redispatch_goal_run_status: dispatch.goalRunStatus,
+                ...(dispatch.buildSessionContractID
+                  ? { build_session_contract_id: dispatch.buildSessionContractID }
+                  : {}),
+                ...(dispatch.worktreeDir ? { worktree_dir: dispatch.worktreeDir } : {}),
+                ...(dispatch.worktreeBranch ? { worktree_branch: dispatch.worktreeBranch } : {}),
+                goal_id: target.goalID,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker build stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `build session ${dispatch.sessionID} started goal_run ${dispatch.goalRunID}.`
+            )
+          }
+
+          if (request.payload.agent === "intent-analysis") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationIntentAnalysisRedispatch>>
+            try {
+              target = await validateAgentCoordinationIntentAnalysisRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "intent_analysis_stage",
+                stage: "intent-analysis",
+                target_kind: "intent-analysis",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingIntentAnalysisRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `intent_analysis session ${recovered.sessionID} recovered persisted intent_summary.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof executeIntentAnalysisStageRedispatch>>
+            try {
+              const existingIntentAnalysisSessions = new Set(
+                (await Session.children(input.agentSessionID))
+                  .filter((session) => session.kind === "intent-analysis")
+                  .map((session) => session.id),
+              )
+              const existingIntentAnalysisDecisionIDs = new Set(
+                listDecisionLogEntriesForPhase({ taskID, phase: "intent_analysis" }).map((entry) => entry.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "intent_analysis_stage",
+                  stage: "intent-analysis",
+                  source_session_id: target.source.id,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: Date.now(),
+                  preexisting_intent_analysis_session_ids: [...existingIntentAnalysisSessions],
+                  preexisting_intent_analysis_decision_ids: [...existingIntentAnalysisDecisionIDs],
+                },
+                summary: "redispatch_worker intent_analysis stage dispatch started",
+              })
+              dispatch = await executeIntentAnalysisStageRedispatch({
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                options,
+                existingIntentAnalysisSessions,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "intent_analysis_stage",
+                  stage: "intent-analysis",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker intent_analysis stage dispatch failed",
+              })
+              throw error
+            }
+            if (!dispatch.sessionID || dispatch.decisionEntriesCount < 1 || !dispatch.intentSummary) {
+              const error = new Error("intent_analysis_stage redispatch did not create intent analysis evidence")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "intent_analysis_stage",
+                  stage: "intent-analysis",
+                  source_session_id: target.source.id,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  decision_entries_count: dispatch.decisionEntriesCount,
+                  output: dispatch.outputText,
+                },
+                summary: "redispatch_worker intent_analysis stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "intent_analysis_stage",
+                stage: "intent-analysis",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                decision_entries_count: dispatch.decisionEntriesCount,
+                intent_summary: dispatch.intentSummary,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker intent_analysis stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `intent_analysis session ${dispatch.sessionID} recorded intent_summary.`
+            )
+          }
+
+          if (request.payload.agent === "explore") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationExploreRedispatch>>
+            try {
+              target = await validateAgentCoordinationExploreRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "explore_stage",
+                stage: "explore",
+                target_kind: "explore",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const exploreQuestion = [
+              request.payload.summary.trim(),
+              request.payload.details.trim().length > 0 ? request.payload.details.trim() : "",
+              guidance && guidance.length > 0 ? `Orchestrator guidance: ${guidance}` : "",
+            ]
+              .filter((line) => line.length > 0)
+              .join("\n\n")
+            const recovered = await recoverPendingExploreRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              question: exploreQuestion,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `explore session ${recovered.sessionID} recovered persisted repository investigation.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof executeExploreStageRedispatch>>
+            try {
+              const existingExploreSessions = new Set(
+                (await Session.children(input.agentSessionID))
+                  .filter((session) => session.kind === "explore")
+                  .map((session) => session.id),
+              )
+              const existingExploreDecisionIDs = new Set(
+                listDecisionLogEntriesForPhase({ taskID, phase: "explore" }).map((entry) => entry.id),
+              )
+              const existingExplorationArtifactIDs = new Set(listExplorationArtifacts({ taskID }).map((row) => row.id))
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "explore_stage",
+                  stage: "explore",
+                  source_session_id: target.source.id,
+                  question: exploreQuestion,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: Date.now(),
+                  preexisting_explore_session_ids: [...existingExploreSessions],
+                  preexisting_explore_decision_ids: [...existingExploreDecisionIDs],
+                  preexisting_exploration_artifact_ids: [...existingExplorationArtifactIDs],
+                },
+                summary: "redispatch_worker explore stage dispatch started",
+              })
+              dispatch = await executeExploreStageRedispatch({
+                question: exploreQuestion,
+                reason: [
+                  `A2A redispatch_worker for explore request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Source session: ${target.source.id}.`,
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                options,
+                existingExploreSessions,
+                existingExploreDecisionIDs,
+                existingExplorationArtifactIDs,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "explore_stage",
+                  stage: "explore",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker explore stage dispatch failed",
+              })
+              throw error
+            }
+            if (
+              !dispatch.sessionID ||
+              dispatch.decisionEntriesCount !== 1 ||
+              dispatch.explorationArtifactsCount !== 1 ||
+              !dispatch.decisionEntryID ||
+              !dispatch.artifactID
+            ) {
+              const error = new Error("explore_stage redispatch did not create explore evidence")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "explore_stage",
+                  stage: "explore",
+                  source_session_id: target.source.id,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  decision_entries_count: dispatch.decisionEntriesCount,
+                  exploration_artifacts_count: dispatch.explorationArtifactsCount,
+                  output: dispatch.outputText,
+                },
+                summary: "redispatch_worker explore stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "explore_stage",
+                stage: "explore",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                decision_entries_count: dispatch.decisionEntriesCount,
+                exploration_artifacts_count: dispatch.explorationArtifactsCount,
+                explore_decision_id: dispatch.decisionEntryID,
+                exploration_artifact_id: dispatch.artifactID,
+                question: dispatch.question,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker explore stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `explore session ${dispatch.sessionID} recorded repository investigation.`
+            )
+          }
+
+          if (request.payload.agent === "goal-workload-analyst") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationGoalWorkloadRedispatch>>
+            try {
+              target = await validateAgentCoordinationGoalWorkloadRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "workload_analysis_stage",
+                stage: "goal-workload-analyst",
+                target_kind: "goal-workload-analyst",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingGoalWorkloadRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              activeSpecID: target.activeSpecID,
+              expectedGoalsCount: target.goalsCount,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `workload_analysis session ${recovered.sessionID} recovered persisted workload artifact ${recovered.artifactID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof executeGoalWorkloadStageRedispatch>>
+            try {
+              const existingGoalWorkloadSessions = new Set(
+                (await Session.children(input.agentSessionID))
+                  .filter((session) => session.kind === "goal-workload-analyst")
+                  .map((session) => session.id),
+              )
+              const existingGoalWorkloadArtifactIDs = new Set(
+                listGoalWorkloadArtifacts({ taskID }).map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "workload_analysis_stage",
+                  stage: "goal-workload-analyst",
+                  source_session_id: target.source.id,
+                  spec_snapshot_id: target.activeSpecID,
+                  expected_goals_count: target.goalsCount,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: Date.now(),
+                  preexisting_goal_workload_session_ids: [...existingGoalWorkloadSessions],
+                  preexisting_goal_workload_artifact_ids: [...existingGoalWorkloadArtifactIDs],
+                },
+                summary: "redispatch_worker workload_analysis stage dispatch started",
+              })
+              dispatch = await executeGoalWorkloadStageRedispatch({
+                reason: [
+                  `A2A redispatch_worker for workload_analysis request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                options,
+                existingGoalWorkloadSessions,
+                existingGoalWorkloadArtifactIDs,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "workload_analysis_stage",
+                  stage: "goal-workload-analyst",
+                  source_session_id: target.source.id,
+                  spec_snapshot_id: target.activeSpecID,
+                },
+                summary: "redispatch_worker workload_analysis stage dispatch failed",
+              })
+              throw error
+            }
+            if (!dispatch.sessionID || !dispatch.artifactID || dispatch.briefsCount < target.goalsCount) {
+              const error = new Error("workload_analysis_stage redispatch did not create complete workload evidence")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "workload_analysis_stage",
+                  stage: "goal-workload-analyst",
+                  source_session_id: target.source.id,
+                  spec_snapshot_id: target.activeSpecID,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  ...(dispatch.artifactID ? { goal_workload_artifact_id: dispatch.artifactID } : {}),
+                  briefs_count: dispatch.briefsCount,
+                  expected_goals_count: target.goalsCount,
+                  output: dispatch.outputText,
+                },
+                summary: "redispatch_worker workload_analysis stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "workload_analysis_stage",
+                stage: "goal-workload-analyst",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                goal_workload_artifact_id: dispatch.artifactID,
+                spec_snapshot_id: dispatch.specSnapshotID,
+                briefs_count: dispatch.briefsCount,
+                flagged_goals_count: dispatch.flaggedGoalsCount,
+                expected_goals_count: target.goalsCount,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker workload_analysis stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `workload_analysis session ${dispatch.sessionID} persisted workload artifact ${dispatch.artifactID}.`
+            )
+          }
+
+          if (request.payload.agent === "fact-check") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationFactCheckRedispatch>>
+            try {
+              target = await validateAgentCoordinationFactCheckRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "fact_check_stage",
+                stage: "fact-check",
+                target_kind: "fact-check",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingFactCheckRedispatchAction({
+              taskID,
+              response,
+              sourceSessionID: target.source.id,
+              continuationArtifactID: target.continuation.row.artifactID,
+              normalizedStageInput: target.continuation.normalizedStageInput,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `fact_check session ${recovered.sessionID} recovered persisted fact_check_attempt ${recovered.artifactID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof executeFactCheckStageRedispatch>>
+            try {
+              const existingFactCheckAttemptIDs = new Set(
+                listFactCheckAttemptArtifacts({ taskID }).map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "fact_check_stage",
+                  stage: "fact-check",
+                  source_session_id: target.source.id,
+                  continuation_artifact_id: target.continuation.row.artifactID,
+                  target_session_id: target.continuation.normalizedStageInput.target_session_id,
+                  target_agent: target.continuation.normalizedStageInput.target_agent,
+                  target_message_id: target.continuation.normalizedStageInput.target_message_id,
+                  target_message_content_hash: target.continuation.normalizedStageInput.target_message_content_hash,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: Date.now(),
+                  preexisting_fact_check_attempt_ids: [...existingFactCheckAttemptIDs],
+                },
+                summary: "redispatch_worker fact_check stage dispatch started",
+              })
+              dispatch = await executeFactCheckStageRedispatch({
+                continuationArtifactID: target.continuation.row.artifactID,
+                sourceSessionID: target.source.id,
+                orchestratorSessionID: input.agentSessionID,
+                normalizedStageInput: target.continuation.normalizedStageInput,
+                reason: [
+                  `A2A redispatch_worker for fact_check request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Continuation artifact: ${target.continuation.row.artifactID}.`,
+                  `Target session: ${target.continuation.normalizedStageInput.target_session_id}.`,
+                  `Target message: ${target.continuation.normalizedStageInput.target_message_id}.`,
+                  request.payload.summary.trim().length > 0 ? `Worker summary: ${request.payload.summary}` : "",
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                options,
+                existingFactCheckAttemptIDs,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "fact_check_stage",
+                  stage: "fact-check",
+                  source_session_id: target.source.id,
+                  continuation_artifact_id: target.continuation.row.artifactID,
+                  target_session_id: target.continuation.normalizedStageInput.target_session_id,
+                  target_message_id: target.continuation.normalizedStageInput.target_message_id,
+                },
+                summary: "redispatch_worker fact_check stage continuation failed",
+              })
+              throw error
+            }
+            if (!dispatch.sessionID || !dispatch.artifactID || !dispatch.verdict || !dispatch.outcome) {
+              const error = new Error("fact_check_stage redispatch did not create fact_check_attempt evidence")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "fact_check_stage",
+                  stage: "fact-check",
+                  source_session_id: target.source.id,
+                  continuation_artifact_id: target.continuation.row.artifactID,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  ...(dispatch.artifactID ? { fact_check_attempt_id: dispatch.artifactID } : {}),
+                  output: dispatch.outputText,
+                },
+                summary: "redispatch_worker fact_check stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The coordination action is failed and visible for retry diagnosis.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "fact_check_stage",
+                stage: "fact-check",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                continuation_artifact_id: target.continuation.row.artifactID,
+                fact_check_attempt_id: dispatch.artifactID,
+                target_session_id: dispatch.targetSessionID,
+                target_agent: dispatch.targetAgent,
+                target_message_id: dispatch.targetMessageID,
+                target_message_content_hash: dispatch.targetMessageContentHash,
+                verdict: dispatch.verdict,
+                outcome: dispatch.outcome,
+                items_total: dispatch.itemsTotal,
+                items_inspected: dispatch.itemsInspected,
+                verified_count: dispatch.verifiedCount,
+                corrected_count: dispatch.correctedCount,
+                unresolved_count: dispatch.unresolvedCount,
+                same_session_continuation: dispatch.sessionID === target.source.id,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker fact_check stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `fact_check session ${dispatch.sessionID} resumed continuation ${target.continuation.row.artifactID} ` +
+              `and persisted fact_check_attempt ${dispatch.artifactID}.`
+            )
+          }
+
+          if (request.payload.agent === "architect") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationArchitectRedispatch>>
+            try {
+              target = await validateAgentCoordinationArchitectRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "architect_stage",
+                stage: "architect",
+                target_kind: "architect",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingArchitectRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `architect session ${recovered.sessionID} recovered persisted spec ${recovered.specSnapshotID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof dispatchArchitectStage>>
+            try {
+              const startedAt = Date.now()
+              const preexistingArchitectSessionIDs = (await Session.children(input.agentSessionID))
+                .filter((session) => session.kind === "architect")
+                .map((session) => session.id)
+              const preexistingSpecSnapshotIDs = Database.use((db) =>
+                db
+                  .select({ id: EngineSpecSnapshotTable.id })
+                  .from(EngineSpecSnapshotTable)
+                  .where(eq(EngineSpecSnapshotTable.task_id, taskID))
+                  .all()
+                  .map((row) => row.id),
+              )
+              const preexistingArchitectContractGraphArtifactIDs = Database.use((db) =>
+                db
+                  .select({ id: EngineArtifactTable.id })
+                  .from(EngineArtifactTable)
+                  .where(
+                    and(
+                      eq(EngineArtifactTable.task_id, taskID),
+                      eq(EngineArtifactTable.kind, "architect_contract_graph"),
+                    ),
+                  )
+                  .all()
+                  .map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "architect_stage",
+                  stage: "architect",
+                  source_session_id: target.source.id,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                  preexisting_architect_session_ids: preexistingArchitectSessionIDs,
+                  preexisting_spec_snapshot_ids: preexistingSpecSnapshotIDs,
+                  preexisting_architect_contract_graph_artifact_ids: preexistingArchitectContractGraphArtifactIDs,
+                },
+                summary: "redispatch_worker architect stage dispatch started",
+                now: startedAt,
+              })
+              dispatch = await dispatchArchitectStage({
+                task: target.task,
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "architect_stage",
+                  stage: "architect",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker architect stage dispatch failed",
+              })
+              throw error
+            }
+            if (dispatch.status !== "persisted" || !dispatch.sessionID || !dispatch.specSnapshotID) {
+              const error = new Error(
+                `architect_stage redispatch did not persist an architect spec; status=${dispatch.status}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "architect_stage",
+                  stage: "architect",
+                  source_session_id: target.source.id,
+                  dispatch_status: dispatch.status,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  ...(dispatch.specSnapshotID ? { spec_snapshot_id: dispatch.specSnapshotID } : {}),
+                },
+                summary: "redispatch_worker architect stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "architect_stage",
+                stage: "architect",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                spec_snapshot_id: dispatch.specSnapshotID,
+                ...(dispatch.contractGraphArtifactID
+                  ? { architect_contract_graph_artifact_id: dispatch.contractGraphArtifactID }
+                  : {}),
+                goals_count: dispatch.goalsCount ?? 0,
+                contracts_count: dispatch.contractsCount ?? 0,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker architect stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `architect session ${dispatch.sessionID} persisted spec ${dispatch.specSnapshotID}.`
+            )
+          }
+
+          if (request.payload.agent === "requirements") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationRequirementsRedispatch>>
+            try {
+              target = await validateAgentCoordinationRequirementsRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "requirements_stage",
+                stage: "requirements",
+                target_kind: "requirements",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingRequirementsRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `requirements session ${recovered.sessionID} recovered persisted spec ${recovered.specSnapshotID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof dispatchRequirementsStage>>
+            try {
+              const startedAt = Date.now()
+              const preexistingRequirementsSessionIDs = (await Session.children(input.agentSessionID))
+                .filter((session) => session.kind === "requirements")
+                .map((session) => session.id)
+              const preexistingSpecSnapshotIDs = Database.use((db) =>
+                db
+                  .select({ id: EngineSpecSnapshotTable.id })
+                  .from(EngineSpecSnapshotTable)
+                  .where(eq(EngineSpecSnapshotTable.task_id, taskID))
+                  .all()
+                  .map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "requirements_stage",
+                  stage: "requirements",
+                  source_session_id: target.source.id,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                  preexisting_requirements_session_ids: preexistingRequirementsSessionIDs,
+                  preexisting_spec_snapshot_ids: preexistingSpecSnapshotIDs,
+                },
+                summary: "redispatch_worker requirements stage dispatch started",
+                now: startedAt,
+              })
+              dispatch = await dispatchRequirementsStage({
+                task: target.task,
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "requirements_stage",
+                  stage: "requirements",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker requirements stage dispatch failed",
+              })
+              throw error
+            }
+            if (dispatch.status !== "persisted" || !dispatch.sessionID || !dispatch.specSnapshotID) {
+              const error = new Error(
+                `requirements_stage redispatch did not persist a requirements spec; status=${dispatch.status}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "requirements_stage",
+                  stage: "requirements",
+                  source_session_id: target.source.id,
+                  dispatch_status: dispatch.status,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                  ...(dispatch.specSnapshotID ? { spec_snapshot_id: dispatch.specSnapshotID } : {}),
+                },
+                summary: "redispatch_worker requirements stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "requirements_stage",
+                stage: "requirements",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                spec_snapshot_id: dispatch.specSnapshotID,
+                requirements_count: dispatch.requirementsCount ?? 0,
+                decisions_count: dispatch.decisionsCount ?? 0,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker requirements stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `requirements session ${dispatch.sessionID} persisted spec ${dispatch.specSnapshotID}.`
+            )
+          }
+
+          if (request.payload.agent === "frontend-design") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationFrontendDesignRedispatch>>
+            try {
+              target = await validateAgentCoordinationFrontendDesignRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "frontend_design_stage",
+                stage: "frontend-design",
+                target_kind: "frontend-design",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            let dispatch: Awaited<ReturnType<typeof executeFrontendDesignStageRedispatch>>
+            try {
+              const existingFrontendDesignSessions = new Set(
+                (await Session.children(input.agentSessionID))
+                  .filter((session) => session.kind === "frontend-design")
+                  .map((session) => session.id),
+              )
+              dispatch = await executeFrontendDesignStageRedispatch({
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+                sourceUrls: target.sourceUrls,
+                options,
+                existingFrontendDesignSessions,
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "frontend_design_stage",
+                  stage: "frontend-design",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker frontend_design stage dispatch failed",
+              })
+              throw error
+            }
+            if (!dispatch.sessionID) {
+              const error = new Error("frontend_design_stage redispatch did not create a frontend-design session")
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "frontend_design_stage",
+                  stage: "frontend-design",
+                  source_session_id: target.source.id,
+                  decision_entries_count: dispatch.decisionEntriesCount,
+                  design_specs_count: dispatch.designSpecsCount,
+                },
+                summary: "redispatch_worker frontend_design stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "frontend_design_stage",
+                stage: "frontend-design",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                design_specs_count: dispatch.designSpecsCount,
+                decision_entries_count: dispatch.decisionEntriesCount,
+                template_review_passes: dispatch.templateReviewPasses,
+                reference_artifacts_count: dispatch.referenceArtifactsCount,
+                frontend_project_status: dispatch.frontendProjectStatus,
+                source_url_count: target.sourceUrls.length,
+                target_kind: target.kind,
+                started: true,
+              },
+              summary: "redispatch_worker frontend_design stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `frontend_design session ${dispatch.sessionID} persisted ${dispatch.decisionEntriesCount} decision entries.`
+            )
+          }
+
+          if (request.payload.agent === "frontend-research") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationFrontendResearchRedispatch>>
+            try {
+              target = await validateAgentCoordinationFrontendResearchRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "frontend_research_stage",
+                stage: "frontend-research",
+                target_kind: "frontend-research",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingFrontendResearchRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              sourceURL: target.sourceUrls[0],
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `frontend_research session ${recovered.sessionID} recovered persisted brief ${recovered.artifactID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof dispatchFrontendResearchStage>>
+            try {
+              const startedAt = Date.now()
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "frontend_research_stage",
+                  stage: "frontend-research",
+                  source_session_id: target.source.id,
+                  source_url: target.sourceUrls[0],
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                },
+                summary: "redispatch_worker frontend_research stage dispatch started",
+                now: startedAt,
+              })
+              dispatch = await dispatchFrontendResearchStage({
+                task: target.task,
+                sourceUrls: target.sourceUrls,
+                focus: guidance,
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "frontend_research_stage",
+                  stage: "frontend-research",
+                  source_session_id: target.source.id,
+                  source_url: target.sourceUrls[0],
+                },
+                summary: "redispatch_worker frontend_research stage dispatch failed",
+              })
+              throw error
+            }
+            if (dispatch.status !== "persisted" || !dispatch.sessionID || !dispatch.artifactID) {
+              const error = new Error(
+                `frontend_research_stage redispatch did not persist a frontend_research_brief; status=${dispatch.status}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "frontend_research_stage",
+                  stage: "frontend-research",
+                  source_session_id: target.source.id,
+                  source_url: target.sourceUrls[0],
+                  dispatch_status: dispatch.status,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                },
+                summary: "redispatch_worker frontend_research stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "frontend_research_stage",
+                stage: "frontend-research",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                frontend_research_brief_artifact_id: dispatch.artifactID,
+                source_url: target.sourceUrls[0],
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker frontend_research stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `frontend_research session ${dispatch.sessionID} persisted brief ${dispatch.artifactID}.`
+            )
+          }
+
+          if (request.payload.agent === "deep-research") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationDeepResearchRedispatch>>
+            try {
+              target = await validateAgentCoordinationDeepResearchRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "deep_research_stage",
+                stage: "deep-research",
+                target_kind: "deep-research",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingDeepResearchRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              sourceURLs: target.sourceUrls,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `deep_research session ${recovered.sessionID} recovered persisted brief ${recovered.artifactID}.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof dispatchDeepResearchStage>>
+            try {
+              const startedAt = Date.now()
+              const preexistingDeepResearchSessionIDs = (await Session.children(input.agentSessionID))
+                .filter((session) => session.kind === "deep-research")
+                .map((session) => session.id)
+              const preexistingResearchBriefArtifactIDs = Database.use((db) =>
+                db
+                  .select({ id: EngineArtifactTable.id })
+                  .from(EngineArtifactTable)
+                  .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "research_brief")))
+                  .all()
+                  .map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "deep_research_stage",
+                  stage: "deep-research",
+                  source_session_id: target.source.id,
+                  source_urls: target.sourceUrls,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                  preexisting_deep_research_session_ids: preexistingDeepResearchSessionIDs,
+                  preexisting_research_brief_artifact_ids: preexistingResearchBriefArtifactIDs,
+                },
+                summary: "redispatch_worker deep_research stage dispatch started",
+                now: startedAt,
+              })
+              dispatch = await dispatchDeepResearchStage({
+                task: target.task,
+                targetDeliverable: "research_report",
+                sourceUrls: target.sourceUrls,
+                focus: guidance,
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "deep_research_stage",
+                  stage: "deep-research",
+                  source_session_id: target.source.id,
+                  source_urls: target.sourceUrls,
+                },
+                summary: "redispatch_worker deep_research stage dispatch failed",
+              })
+              throw error
+            }
+            if (dispatch.status !== "persisted" || !dispatch.sessionID || !dispatch.artifactID) {
+              const error = new Error(
+                `deep_research_stage redispatch did not persist a research_brief; status=${dispatch.status}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "deep_research_stage",
+                  stage: "deep-research",
+                  source_session_id: target.source.id,
+                  source_urls: target.sourceUrls,
+                  dispatch_status: dispatch.status,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                },
+                summary: "redispatch_worker deep_research stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "deep_research_stage",
+                stage: "deep-research",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                research_brief_artifact_id: dispatch.artifactID,
+                source_urls: target.sourceUrls,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker deep_research stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `deep_research session ${dispatch.sessionID} persisted brief ${dispatch.artifactID}.`
+            )
+          }
+
+          if (request.payload.agent === "visual-qa") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationVisualQaRedispatch>>
+            try {
+              target = await validateAgentCoordinationVisualQaRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "visual_qa_stage",
+                stage: "visual-qa",
+                target_kind: "visual-qa",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingVisualQaRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `visual_qa session ${recovered.sessionID} recovered persisted report.`
+              )
+            }
+            let dispatch: Awaited<ReturnType<typeof dispatchVisualQaStage>>
+            try {
+              const startedAt = Date.now()
+              const preexistingVisualQaSessionIDs = (await Session.children(input.agentSessionID))
+                .filter((session) => session.kind === "visual-qa")
+                .map((session) => session.id)
+              const preexistingVisualQaDecisionIDs = Database.use((db) =>
+                db
+                  .select({ id: DecisionLogTable.id })
+                  .from(DecisionLogTable)
+                  .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, "visual_qa")))
+                  .all()
+                  .map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "visual_qa_stage",
+                  stage: "visual-qa",
+                  source_session_id: target.source.id,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                  preexisting_visual_qa_session_ids: preexistingVisualQaSessionIDs,
+                  preexisting_visual_qa_decision_ids: preexistingVisualQaDecisionIDs,
+                },
+                summary: "redispatch_worker visual_qa stage dispatch started",
+                now: startedAt,
+              })
+              dispatch = await dispatchVisualQaStage({
+                task: target.task,
+                focus: guidance,
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "visual_qa_stage",
+                  stage: "visual-qa",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker visual_qa stage dispatch failed",
+              })
+              throw error
+            }
+            if (dispatch.status !== "reviewed" || !dispatch.sessionID) {
+              const error = new Error(
+                `visual_qa_stage redispatch did not produce a visual QA report; status=${dispatch.status}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "visual_qa_stage",
+                  stage: "visual-qa",
+                  source_session_id: target.source.id,
+                  dispatch_status: dispatch.status,
+                  ...(dispatch.sessionID ? { redispatch_session_id: dispatch.sessionID } : {}),
+                },
+                summary: "redispatch_worker visual_qa stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "visual_qa_stage",
+                stage: "visual-qa",
+                source_session_id: target.source.id,
+                redispatch_session_id: dispatch.sessionID,
+                accepted: dispatch.accepted ?? false,
+                submitted_accepted: dispatch.submittedAccepted ?? false,
+                findings_count: dispatch.findingsCount ?? 0,
+                production_blockers_count: dispatch.productionBlockersCount ?? 0,
+                evidence_count: dispatch.evidenceCount ?? 0,
+                repairs_count: dispatch.repairsCount ?? 0,
+                changed_files_count: dispatch.changedFilesCount ?? 0,
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker visual_qa stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `visual_qa session ${dispatch.sessionID} recorded report.`
+            )
+          }
+
+          if (request.payload.agent === "integrity") {
+            let target: Awaited<ReturnType<typeof validateAgentCoordinationIntegrityRedispatch>>
+            try {
+              target = await validateAgentCoordinationIntegrityRedispatch({ taskID, request })
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error)
+              return (
+                `respond_agent_coordination refused redispatch: ${detail}. ` +
+                `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
+              )
+            }
+            const response = await createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              ...responseAudit,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              redispatchBinding: {
+                dispatcher: "integrity_stage",
+                stage: "integrity",
+                target_kind: "integrity",
+              },
+            })
+            const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+            if (replayResult) return replayResult
+            const recovered = await recoverPendingIntegrityRedispatchAction({
+              taskID,
+              response,
+              orchestratorSessionID: input.agentSessionID,
+              sourceSessionID: target.source.id,
+              targetKind: target.kind,
+            })
+            if (recovered) {
+              return (
+                `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+                `response=${response.payload.response_id}; action=${recovered.actionID}; ` +
+                `integrity session ${recovered.sessionID} recovered persisted ${recovered.verdict} review.`
+              )
+            }
+            let outcome: Awaited<ReturnType<typeof runIntegrityReview>>
+            try {
+              const startedAt = Date.now()
+              const preexistingIntegritySessionIDs = (await Session.children(input.agentSessionID))
+                .filter((session) => session.kind === "integrity")
+                .map((session) => session.id)
+              const preexistingIntegrityAttemptArtifactIDs = Database.use((db) =>
+                db
+                  .select({ id: EngineArtifactTable.id })
+                  .from(EngineArtifactTable)
+                  .where(
+                    and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")),
+                  )
+                  .all()
+                  .map((row) => row.id),
+              )
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  dispatcher: "integrity_stage",
+                  stage: "integrity",
+                  source_session_id: target.source.id,
+                  target_kind: target.kind,
+                  redispatch_started: true,
+                  redispatch_started_at: startedAt,
+                  preexisting_integrity_session_ids: preexistingIntegritySessionIDs,
+                  preexisting_integrity_attempt_artifact_ids: preexistingIntegrityAttemptArtifactIDs,
+                },
+                summary: "redispatch_worker integrity stage dispatch started",
+                now: startedAt,
+              })
+              outcome = await runIntegrityReview(toolExecution, {
+                reason: [
+                  `A2A redispatch_worker for request ${request.payload.request_id}.`,
+                  reason.trim(),
+                  `Worker summary: ${request.payload.summary}`,
+                  request.payload.details.trim().length > 0 ? `Worker details: ${request.payload.details}` : "",
+                  guidance && guidance.length > 0 ? `Guidance: ${guidance}` : "",
+                ]
+                  .filter((line) => line.length > 0)
+                  .join("\n"),
+              })
+            } catch (error) {
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "integrity_stage",
+                  stage: "integrity",
+                  source_session_id: target.source.id,
+                },
+                summary: "redispatch_worker integrity stage dispatch failed",
+              })
+              throw error
+            }
+            if (outcome.status !== "reviewed") {
+              const blockedHeadline =
+                outcome.status === "blocked"
+                  ? outcome.headline
+                  : "integrity_stage redispatch produced a continuation recovery result instead of a fresh review"
+              const error = new Error(
+                `integrity_stage redispatch did not produce an integrity review; ${blockedHeadline}`,
+              )
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: {
+                  dispatcher: "integrity_stage",
+                  stage: "integrity",
+                  source_session_id: target.source.id,
+                  dispatch_status: outcome.status,
+                },
+                summary: "redispatch_worker integrity stage did not complete",
+              })
+              return (
+                `respond_agent_coordination redispatch failed for request ${request.payload.request_id}: ${error.message}. ` +
+                `The request remains pending.`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                dispatcher: "integrity_stage",
+                stage: "integrity",
+                source_session_id: target.source.id,
+                redispatch_session_id: outcome.sessionID,
+                spec_snapshot_id: outcome.specSnapshotID,
+                phase: outcome.phase,
+                verdict: outcome.verdict,
+                reviewer_count: outcome.reviewerCount,
+                findings_count: outcome.findingsCount,
+                required_repairs_count: outcome.requiredRepairsCount,
+                unresolved_disagreements_count: outcome.unresolvedDisagreementsCount,
+                ...(outcome.integrityAttemptID ? { integrity_attempt_id: outcome.integrityAttemptID } : {}),
+                ...(outcome.artifactMissing
+                  ? {
+                      artifact_persistence_status: "artifact_missing",
+                      artifact_missing_error: outcome.artifactMissing.error,
+                    }
+                  : {}),
+                target_kind: target.kind,
+                started: true,
+                recovered_redispatch: false,
+              },
+              summary: "redispatch_worker integrity stage completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with redispatch. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `integrity session ${outcome.sessionID} recorded ${outcome.verdict} review.`
+            )
+          }
+
+          return (
+            `respond_agent_coordination refused redispatch: agent coordination redispatch for ` +
+            `${sessionRole(request.payload.session_id) ?? "unknown"}/${request.payload.agent} requires a concrete ` +
+            `stage or tool dispatcher binding. same-kind session redispatch is not an accepted A2A action. ` +
+            `The request ${request.payload.request_id} remains pending until a concrete dispatcher action binding is available.`
           )
         }
 
         if (decision === "cancel_worker") {
-          const { kind } = assertDirectReplySessionOwnership({
-            taskID,
-            sessionID: request.payload.session_id,
-          })
-          const liveOwner =
-            (request.payload.goal_run_id
-              ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: request.payload.goal_run_id })
-              : undefined) ?? findLiveBuildOwnershipBySession({ taskID, sessionID: request.payload.session_id })
+          const { kind } = assertDirectReplySessionKind({ sessionID: request.payload.session_id })
           let cancelSummary = ""
-          if (kind === "build" && liveOwner) {
-            cancelSummary = await cancelLiveOwnedBuild({
-              taskID,
-              sessionID: request.payload.session_id,
-              goalRunID: request.payload.goal_run_id,
-              owner: liveOwner,
-              reason,
-              reasonPrefix: "respond_agent_coordination",
-              originSite: "orchestrator.tools.respond-agent-coordination-cancel-worker",
-              metadata: {
-                agent_coordination_request_id: request.payload.request_id,
-                cancelled_live_build: true,
-              },
-            })
-          } else if (request.payload.goal_run_id) {
-            const aborted = await abortGoalRunExecution({
-              taskID,
-              goalRunID: request.payload.goal_run_id,
-              reason: `respond_agent_coordination: ${reason}`,
-            })
-            cancelSummary = ` goal_run ${request.payload.goal_run_id} ${aborted.goalRunAborted ? "aborted" : "unchanged"}.`
-          } else {
-            const aborted = await abortChildExecutionForSession({
-              taskID,
-              sessionID: request.payload.session_id,
-              reason: `respond_agent_coordination: ${reason}`,
-            })
-            cancelSummary = ` prompt_cancelled=${aborted.promptCancelled}; executor_abort=${aborted.executorAbortAttempted ? (aborted.executorAbortSucceeded ? "ok" : "failed") : "not-applicable"}.`
-          }
-          const response = createAgentCoordinationResponse({
+          const response = await createAgentCoordinationResponse({
             taskID,
             requestID: request.payload.request_id,
-            orchestratorSessionID: toolExecution.orchestratorSessionID,
-            orchestratorMessageID: toolExecution.orchestratorMessageID,
+            ...responseAudit,
             decision,
             reason,
             ...(guidance ? { message: guidance } : {}),
           })
+          const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+          if (replayResult) return replayResult
+          const action = findAgentCoordinationAction({
+            taskID,
+            actionID: response.payload.action_id,
+          })
+          if (!action) {
+            throw new Error(`agent coordination response ${response.payload.response_id} has no action row`)
+          }
+          if (action.payload.status !== "pending") {
+            throw new Error(`agent coordination action ${response.payload.action_id} is ${action.payload.status}`)
+          }
+          const latestStatusEvent = findLatestAgentCoordinationSessionStatusEvent({
+            taskID,
+            sessionID: request.payload.session_id,
+          })
+          if (latestStatusEvent?.status.type === "terminal") {
+            if (latestStatusEvent.status.reason === "aborted") {
+              const existingCancelStatus: AgentCoordinationCancelStatusEvent["status"] = {
+                type: "terminal",
+                reason: "aborted",
+                ...(latestStatusEvent.status.error ? { error: latestStatusEvent.status.error } : {}),
+              }
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  session_id: request.payload.session_id,
+                  kind,
+                  cancel_status_event_id: latestStatusEvent.eventID,
+                  cancel_status: existingCancelStatus,
+                  recovered_cancel_status: true,
+                },
+                summary: "cancel_worker existing cancellation status preserved",
+              })
+              await completeAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  session_id: request.payload.session_id,
+                  kind,
+                  summary: " worker cancellation status was already durable.",
+                  cancel_status_event_id: latestStatusEvent.eventID,
+                  cancel_status: existingCancelStatus,
+                  recovered_cancel_status: true,
+                },
+                summary: "cancel_worker completed",
+              })
+              return (
+                `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; session=${request.payload.session_id}; kind=${kind}. ` +
+                `Recovered existing worker cancellation status ${latestStatusEvent.eventID}.`
+              )
+            }
+            await recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                terminal_status_event_id: latestStatusEvent.eventID,
+                terminal_status: latestStatusEvent.status,
+                stale_terminal_worker: true,
+              },
+              summary: "cancel_worker stale terminal status preserved",
+            })
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                summary: ` worker already terminal (${latestStatusEvent.status.reason}); stale coordination request closed.`,
+                terminal_status_event_id: latestStatusEvent.eventID,
+                terminal_status: latestStatusEvent.status,
+                stale_terminal_worker: true,
+              },
+              summary: "cancel_worker completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; session=${request.payload.session_id}; kind=${kind}. ` +
+              `Preserved existing worker terminal status ${latestStatusEvent.eventID} (${latestStatusEvent.status.reason}).`
+            )
+          }
+          let terminalOwnership: AgentCoordinationTerminalToolOwnership | undefined
+          try {
+            terminalOwnership = findRequestTerminalToolOwnership({ taskID, request })
+          } catch (error) {
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              error,
+              result: { session_id: request.payload.session_id, kind },
+              summary: "cancel_worker failed",
+            })
+            throw error
+          }
+          if (terminalOwnership) {
+            await recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                terminal_ownership_id: terminalOwnership.ownershipID,
+                terminal_ownership_artifact_id: terminalOwnership.artifactID,
+                terminal_ownership_outcome: terminalOwnership.outcome,
+                terminal_ownership_completed_at: terminalOwnership.timeCompleted,
+                stale_terminal_ownership: true,
+              },
+              summary: "cancel_worker stale terminal ownership preserved",
+            })
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                summary: ` worker ownership already terminal (${terminalOwnership.outcome}); stale coordination request closed.`,
+                terminal_ownership_id: terminalOwnership.ownershipID,
+                terminal_ownership_artifact_id: terminalOwnership.artifactID,
+                terminal_ownership_outcome: terminalOwnership.outcome,
+                terminal_ownership_completed_at: terminalOwnership.timeCompleted,
+                stale_terminal_ownership: true,
+              },
+              summary: "cancel_worker completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; session=${request.payload.session_id}; kind=${kind}. ` +
+              `Preserved terminal tool ownership ${terminalOwnership.ownershipID} (${terminalOwnership.outcome}).`
+            )
+          }
+          const recoveredCancelStatus = findAgentCoordinationCancelStatusEvent({
+            taskID,
+            sessionID: request.payload.session_id,
+            afterMs: response.timeCreated,
+          })
+          if (recoveredCancelStatus) {
+            await recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                cancel_status_event_id: recoveredCancelStatus.eventID,
+                cancel_status: recoveredCancelStatus.status,
+                recovered_cancel_status: true,
+              },
+              summary: "cancel_worker cancellation status recovered",
+            })
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                summary: " worker cancellation status was already durable.",
+                cancel_status_event_id: recoveredCancelStatus.eventID,
+                cancel_status: recoveredCancelStatus.status,
+                recovered_cancel_status: true,
+              },
+              summary: "cancel_worker completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; session=${request.payload.session_id}; kind=${kind}. ` +
+              `Recovered existing worker cancellation status ${recoveredCancelStatus.eventID}.`
+            )
+          }
+          try {
+            assertDirectReplySessionOwnership({
+              taskID,
+              sessionID: request.payload.session_id,
+              goalID: request.payload.goal_id,
+              goalRunID: request.payload.goal_run_id,
+            })
+            const liveOwner =
+              (request.payload.goal_run_id
+                ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: request.payload.goal_run_id })
+                : undefined) ?? findLiveBuildOwnershipBySession({ taskID, sessionID: request.payload.session_id })
+            ensureTaskMessageProtocolBridge()
+            if (kind === "build" && liveOwner) {
+              cancelSummary = await cancelLiveOwnedBuild({
+                taskID,
+                sessionID: request.payload.session_id,
+                goalRunID: request.payload.goal_run_id,
+                owner: liveOwner,
+                reason,
+                reasonPrefix: "respond_agent_coordination",
+                originSite: "orchestrator.tools.respond-agent-coordination-cancel-worker",
+                metadata: {
+                  agent_coordination_request_id: request.payload.request_id,
+                  agent_coordination_action_id: response.payload.action_id,
+                  cancelled_live_build: true,
+                },
+              })
+            } else if (request.payload.goal_run_id) {
+              const aborted = await abortGoalRunExecution({
+                taskID,
+                goalRunID: request.payload.goal_run_id,
+                reason: `respond_agent_coordination: ${reason}`,
+              })
+              cancelSummary = ` goal_run ${request.payload.goal_run_id} ${aborted.goalRunAborted ? "aborted" : "unchanged"}.`
+            } else {
+              const aborted = await abortChildExecutionForSession({
+                taskID,
+                sessionID: request.payload.session_id,
+                reason: `respond_agent_coordination: ${reason}`,
+              })
+              cancelSummary = ` prompt_cancelled=${aborted.promptCancelled}; executor_abort=${aborted.executorAbortAttempted ? (aborted.executorAbortSucceeded ? "ok" : "failed") : "not-applicable"}.`
+            }
+            let cancelStatusEvent = findAgentCoordinationCancelStatusEvent({
+              taskID,
+              sessionID: request.payload.session_id,
+              afterMs: response.timeCreated,
+            })
+            if (!cancelStatusEvent) {
+              const currentStatus = SessionStatus.get(request.payload.session_id)
+              if (currentStatus.type === "terminal" && currentStatus.reason === "aborted") {
+                await Bus.publish(SessionStatus.Event.Status, {
+                  sessionID: request.payload.session_id,
+                  orderKey: sessionLifecycleOrderKey(request.payload.session_id),
+                  status: currentStatus,
+                })
+              } else {
+                SessionStatus.set(request.payload.session_id, {
+                  type: "terminal",
+                  reason: "aborted",
+                  error: `respond_agent_coordination: ${reason}`,
+                })
+              }
+              cancelStatusEvent = await waitForAgentCoordinationCancelStatusEvent({
+                taskID,
+                sessionID: request.payload.session_id,
+                afterMs: response.timeCreated,
+                reason,
+              })
+            }
+            await recordAgentCoordinationActionProgress({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                session_id: request.payload.session_id,
+                kind,
+                cancel_status_event_id: cancelStatusEvent.eventID,
+                cancel_status: cancelStatusEvent.status,
+                recovered_cancel_status: false,
+              },
+              summary: "cancel_worker cancellation status projected",
+            })
+          } catch (error) {
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              error,
+              result: { session_id: request.payload.session_id, kind },
+              summary: "cancel_worker failed",
+            })
+            throw error
+          }
+          await completeAgentCoordinationAction({
+            taskID,
+            actionID: response.payload.action_id,
+            result: { session_id: request.payload.session_id, kind, summary: cancelSummary },
+            summary: "cancel_worker completed",
+          })
           return (
             `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
-            `response=${response.payload.response_id}; session=${request.payload.session_id}; kind=${kind}.` +
+            `response=${response.payload.response_id}; action=${response.payload.action_id}; session=${request.payload.session_id}; kind=${kind}.` +
             cancelSummary
           )
         }
 
-        const response = createAgentCoordinationResponse({
-          taskID,
-          requestID: request.payload.request_id,
-          orchestratorSessionID: toolExecution.orchestratorSessionID,
-          orchestratorMessageID: toolExecution.orchestratorMessageID,
-          decision,
-          reason,
-          ...(guidance ? { message: guidance } : {}),
-        })
-        const nextAction =
-          decision === "redispatch"
-            ? "Call the appropriate worker tool in this same visible orchestrator turn if work must continue."
-            : decision === "fail_task"
-              ? "Call fail_task in this same visible orchestrator turn if the task must end as failed."
-              : "Call question in this same visible orchestrator turn if operator input is required."
-        return (
-          `Responded to coordination request ${request.payload.request_id} with ${decision}. ` +
-          `response=${response.payload.response_id}. ${nextAction}`
-        )
+        if (decision === "ask_user") {
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...responseAudit,
+            decision,
+            reason,
+            ...(guidance ? { message: guidance } : {}),
+          })
+          const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+          if (replayResult) return replayResult
+          const action = findAgentCoordinationAction({
+            taskID,
+            actionID: response.payload.action_id,
+          })
+          if (!action) {
+            throw new Error(`agent coordination response ${response.payload.response_id} has no action row`)
+          }
+          if (action.payload.status !== "pending") {
+            throw new Error(`agent coordination action ${response.payload.action_id} is ${action.payload.status}`)
+          }
+          const questionItems = questions?.length
+            ? questions.map((question) => ({
+                question: question.question,
+                header: question.header,
+                options: question.options ?? [],
+                multiple: question.multiple,
+                custom: question.custom,
+              }))
+            : [
+                {
+                  question:
+                    guidance && guidance.length > 0
+                      ? guidance
+                      : `${reason.trim()}\n\nWorker request: ${request.payload.summary}\n${request.payload.details}`,
+                  header: "A2A question",
+                  options: [],
+                  custom: true,
+                },
+              ]
+          const questionID =
+            recordedAgentCoordinationQuestionID(action) ?? agentCoordinationQuestionID(response.payload.action_id)
+          let interaction = findInteractionByExternal(questionID)
+          if (interaction && interaction.task_id !== taskID) {
+            throw new Error(`A2A ask_user question ${questionID} belongs to task ${interaction.task_id}, not ${taskID}`)
+          }
+          if (interaction && interaction.status !== "pending") {
+            if (interaction.status === "answered") {
+              const answers = answersFromInteraction(interaction)
+              await completeAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  question_id: questionID,
+                  interaction_id: interaction.id,
+                  interaction_status: interaction.status,
+                  answers,
+                  recovered: true,
+                },
+                summary: "ask_user interaction recovered answered",
+              })
+              const renderedAnswers = questionItems
+                .map(
+                  (question, index) =>
+                    `"${question.question}" -> ${(answers[index] ?? []).join(", ") || "(no answer)"}`,
+                )
+                .join("\n")
+              return (
+                `Responded to coordination request ${request.payload.request_id} with ask_user. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `interaction=${interaction.id}; question=${questionID} recovered as answered.\nUser answered:\n${renderedAnswers}`
+              )
+            }
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                question_id: questionID,
+                interaction_id: interaction.id,
+                interaction_status: interaction.status,
+                rejected: true,
+                recovered: true,
+              },
+              summary: "ask_user interaction recovered rejected",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with ask_user. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+              `interaction=${interaction.id}; question=${questionID} recovered as ${interaction.status}.`
+            )
+          }
+          let questionPromise: Promise<Question.Answer[]> | undefined
+          let setupCompleted = false
+          try {
+            questionPromise = Question.ask({
+              sessionID: input.agentSessionID,
+              requestID: questionID,
+              questions: questionItems,
+              tool: {
+                messageID: toolExecution.orchestratorMessageID,
+                callID: toolExecution.toolCallID,
+              },
+            })
+            interaction = interaction ?? (await waitForQuestionInteraction({ questionID, taskID }))
+            if (recordedAgentCoordinationQuestionID(action) !== questionID) {
+              await recordAgentCoordinationActionProgress({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  question_id: questionID,
+                  interaction_id: interaction.id,
+                  interaction_status: interaction.status,
+                },
+                summary: "ask_user interaction opened",
+              })
+            }
+            setupCompleted = true
+            try {
+              const answers = await questionPromise
+              const resolvedInteraction = await waitForQuestionInteraction({ questionID, taskID, resolved: true })
+              await completeAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                result: {
+                  question_id: questionID,
+                  interaction_id: interaction!.id,
+                  interaction_status: resolvedInteraction.status,
+                  answers,
+                },
+                summary: "ask_user interaction answered",
+              })
+              const renderedAnswers = questionItems
+                .map(
+                  (question, index) =>
+                    `"${question.question}" -> ${(answers[index] ?? []).join(", ") || "(no answer)"}`,
+                )
+                .join("\n")
+              return (
+                `Responded to coordination request ${request.payload.request_id} with ask_user. ` +
+                `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                `interaction=${interaction!.id}; question=${questionID}.\nUser answered:\n${renderedAnswers}`
+              )
+            } catch (error) {
+              if (error instanceof Question.RejectedError) {
+                const resolvedInteraction = await waitForQuestionInteraction({ questionID, taskID, resolved: true })
+                await completeAgentCoordinationAction({
+                  taskID,
+                  actionID: response.payload.action_id,
+                  result: {
+                    question_id: questionID,
+                    interaction_id: interaction!.id,
+                    interaction_status: resolvedInteraction.status,
+                    rejected: true,
+                  },
+                  summary: "ask_user interaction rejected",
+                })
+                return (
+                  `Responded to coordination request ${request.payload.request_id} with ask_user. ` +
+                  `response=${response.payload.response_id}; action=${response.payload.action_id}; ` +
+                  `interaction=${interaction!.id}; question=${questionID}; user rejected the question.`
+                )
+              }
+              await failAgentCoordinationAction({
+                taskID,
+                actionID: response.payload.action_id,
+                error,
+                result: { question_id: questionID, ...(interaction ? { interaction_id: interaction.id } : {}) },
+                summary: "ask_user interaction failed",
+              })
+              throw error
+            }
+          } catch (error) {
+            if (setupCompleted) throw error
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              error,
+              result: { question_id: questionID },
+              summary: "ask_user setup failed",
+            })
+            if (!interaction) {
+              await Question.reject(questionID).catch((rejected) => {
+                if (NotFoundError.isInstance(rejected as Error)) return
+                throw rejected
+              })
+              if (questionPromise) {
+                await questionPromise.catch((rejected) => {
+                  if (rejected instanceof Question.RejectedError) return
+                  throw rejected
+                })
+              }
+            }
+            throw error
+          }
+        }
+
+        if (decision === "fail_task") {
+          const response = await createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            ...responseAudit,
+            decision,
+            reason,
+            ...(guidance ? { message: guidance } : {}),
+          })
+          const replayResult = replayedAgentCoordinationActionResult({ taskID, response })
+          if (replayResult) return replayResult
+          const errorText = guidance && guidance.length > 0 ? guidance : reason
+          const errorMessage = `A2A request ${request.payload.request_id}: ${errorText}`
+          try {
+            const { cleaned, recoveredTerminalFailure } = await failCurrentTask({
+              error: errorMessage,
+              cleanupReason: "respond_agent_coordination.fail_task",
+              a2aRequestID: request.payload.request_id,
+            })
+            await completeAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              result: {
+                task_id: taskID,
+                task_status: "failed",
+                cleaned_goal_worktrees: cleaned,
+                recovered_terminal_failure: recoveredTerminalFailure,
+              },
+              summary: "fail_task completed",
+            })
+            return (
+              `Responded to coordination request ${request.payload.request_id} with fail_task. ` +
+              `response=${response.payload.response_id}; action=${response.payload.action_id}; task=${taskID} failed.` +
+              `${recoveredTerminalFailure ? " Recovered existing terminal task failure." : ""}` +
+              `${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
+            )
+          } catch (error) {
+            await failAgentCoordinationAction({
+              taskID,
+              actionID: response.payload.action_id,
+              error,
+              result: { task_id: taskID },
+              summary: "fail_task failed",
+            })
+            throw error
+          }
+        }
       },
     }),
 
@@ -6933,7 +12022,8 @@ export function createOrchestratorTools(input: {
       description:
         "Abort a specific child agent session, or recover a stale live-owned build via mode='recover_stale'. " +
         "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal, architect, propose_task, fail_task, or question. " +
-        "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
+        "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly. " +
+        "Do not use this to answer a pending A2A coordination request; use respond_agent_coordination decision='cancel_worker' so the cancellation is bound to request/response/action artifacts.",
       inputSchema: z
         .object({
           session_id: z.string().min(1).optional().describe("Child agent session id to cancel."),
@@ -6971,7 +12061,21 @@ export function createOrchestratorTools(input: {
         const { kind } = assertDirectReplySessionOwnership({
           taskID,
           sessionID: target.sessionID,
+          goalID: goal_id,
+          goalRunID: target.goalRunID,
         })
+        const pendingCoordination = listPendingAgentCoordinationSessionControlRequests({
+          taskID,
+          sessionID: target.sessionID,
+          goalRunID: target.goalRunID,
+        })
+        if (pendingCoordination.length > 0) {
+          return (
+            `Error: cancel_subagent refused because ${target.source} has pending A2A coordination request(s) ` +
+            `${pendingCoordination.map((request) => request.payload.request_id).join(", ")}. ` +
+            `Answer the request through respond_agent_coordination with decision="cancel_worker" so the cancellation is bound to visible response/action artifacts.`
+          )
+        }
 
         const liveOwner =
           (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
@@ -7244,8 +12348,9 @@ export function createOrchestratorTools(input: {
         "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.auto_confirm_proposed_tasks`, " +
         "creating directly by default and asking the user first only when auto-confirm is disabled. Do not call generic `task` or control-plane `panel`. " +
         "Independent child tasks may run in parallel when their scopes do not depend on each other's output, artifact state, decisions, or owned files. Dependent follow-up work must queue or wait for its prerequisite instead of starting in parallel. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
+        "A proposed task must solve a very specific code-module problem: submit `code_module_reference` with one concrete code module reference entity such as a file path, component, tool, service, route, schema, table, class, or function, plus the observed problem for that entity. Refuse generic follow-up work that has no structured code module reference; it cannot be solved by creating a child task. " +
         "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by modify_goal, architect, or targeted build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
-        "Use it when failed visual_qa evidence includes follow_up_task for unrepairable production blockers; translate that request into the inheriting task instead of ending with the failed report. " +
+        "Use it when failed visual_qa evidence reports unresolved_code_module_problems for unrepairable production blockers and the scheduler decides the problem belongs in separate inheriting work. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({
         title: z.string().min(1).describe("Concise title for the proposed new task."),
@@ -7253,14 +12358,17 @@ export function createOrchestratorTools(input: {
           .string()
           .min(1)
           .describe(
-            "Complete, self-contained request for the proposed new task. Include the relation to the current task when relevant.",
+            "Complete, self-contained request for the proposed new task. Must name the concrete code module reference entity and describe the specific observed problem it must solve.",
           ),
         reason: z
           .string()
           .min(1)
           .describe(
-            "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task.",
+            "Evidence-backed reason this should inherit from the current task as separate follow-up work instead of changing the current task. Must include or point to the concrete code module reference entity.",
           ),
+        code_module_reference: ProposedTaskCodeModuleReferenceSchema.describe(
+          "Required concrete code module reference entity and observed problem. This is the scheduler-owned child-task admission contract; do not infer it from generic prose.",
+        ),
         priority: z
           .enum(["critical", "high", "normal", "low"])
           .describe("Priority for the proposed follow-up task. Defaults to normal when no urgency evidence exists.")
@@ -7278,8 +12386,23 @@ export function createOrchestratorTools(input: {
           )
           .default("workflow"),
       }),
-      execute: async ({ title, request, reason, priority, queue, kind }) => {
+      execute: async ({ title, request, reason, code_module_reference, priority, queue, kind }) => {
         const task = requireTask(taskID)
+        if (!hasConcreteProposedTaskCodeModuleReference(code_module_reference)) {
+          return SubAgentProtocol.yieldResult({
+            headline: "Follow-up task proposal rejected.",
+            summary:
+              "propose_task requires a very specific code-module problem before a child task can be created. " +
+              "The scheduler input must include code_module_reference.entity as the concrete code module reference entity and code_module_reference.problem as the observed problem. " +
+              "Generic follow-up work without a structured concrete code module reference cannot be solved by creating a child task; no new task was created.",
+            fields: [
+              ["proposal", title],
+              ["reason", reason],
+              ["required", "code_module_reference.entity plus code_module_reference.problem"],
+            ],
+            pointer: `current task ${taskID}; no new task was created`,
+          })
+        }
         const cfg = await EffectiveConfig.effective({ taskID, sessionID: input.agentSessionID })
         const autoConfirmProposedTasks = cfg.experimental?.auto_confirm_proposed_tasks === true
         log.info("propose_task requested", { taskID, title, priority, kind, autoConfirmProposedTasks })
@@ -7325,7 +12448,8 @@ export function createOrchestratorTools(input: {
           ":" +
           createHash("sha256").update(`${title}\0${request}`).digest("hex").slice(0, 16)
         const inheritedModel = await resolveConfiguredModelRef({ taskID, sessionID: input.agentSessionID })
-        const newTaskID = await EngineService.createTask({
+        const newTaskID = await EngineService.createSchedulerChildTask({
+          parentTaskID: taskID,
           requestID,
           title,
           request,
@@ -7337,9 +12461,9 @@ export function createOrchestratorTools(input: {
           source: "orchestrator:propose_task",
           metadata: {
             origin: "orchestrator_proposed_task",
-            parent_task_id: taskID,
             inheritance: "orchestrator_follow_up",
             proposal_reason: reason,
+            code_module_reference,
           },
         })
         createDecisionLog(taskID).append({
@@ -7389,8 +12513,8 @@ export function createOrchestratorTools(input: {
         "through build. " +
         "For `build({ goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
-        "workflow tasks. The final workflow gate is `integrity`, and it is valid only after all blocking builds " +
-        "are terminal. Non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
+        "workflow tasks. The final review is `integrity`, and it is valid only after all blocking builds " +
+        "are terminal. A post-build pass returns evidence for explicit complete_task; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
         'choose the next action from that evidence. If read_context({scope:"integrity_history"}) surfaces integrity status=artifact_missing, ' +
         "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
@@ -8460,8 +13584,8 @@ export function createOrchestratorTools(input: {
             // BuildAgent.run's underlying actor closes. The structured build
             // report below is the orchestrator-facing tool result.
 
-            // Build does NOT mark workflow tasks complete. The final gate is a
-            // post-build integrity session after all blocking build evidence is
+            // Build does NOT mark workflow tasks complete. The final review is
+            // post-build integrity after all blocking build evidence is
             // terminal. Return the structured payload so the orchestrator can
             // judge the next explicit action.
             const testLines =
@@ -8550,8 +13674,8 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
               `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
-              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with follow_up_task, call \`propose_task\` from that evidence only at terminal handoff instead of ending passively. ` +
-              `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
+              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call \`propose_task\` from that evidence only at terminal handoff. ` +
+              `Call \`integrity\` as the final review after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. On post-build pass, call \`complete_task\` with the returned integrity_attempt_id. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
             )
           }
 
@@ -8769,6 +13893,406 @@ export function createOrchestratorTools(input: {
         }
       },
     }),
+  }
+
+  async function executeFrontendDesignStageRedispatch(args: {
+    reason: string
+    sourceUrls: string[]
+    options: unknown
+    existingFrontendDesignSessions: Set<string>
+  }): Promise<{
+    output: unknown
+    sessionID?: string
+    designSpecsCount: number
+    decisionEntriesCount: number
+    templateReviewPasses: number
+    referenceArtifactsCount: number
+    frontendProjectStatus: string
+  }> {
+    const executeFrontendDesign = tools.frontend_design.execute
+    if (typeof executeFrontendDesign !== "function") {
+      throw new Error("frontend_design redispatch binding is missing the frontend_design execute handler")
+    }
+    const output = await (executeFrontendDesign as NonNullable<typeof executeFrontendDesign>)(
+      {
+        reason: args.reason,
+        ...(args.sourceUrls.length > 0 ? { urls: args.sourceUrls } : {}),
+      },
+      args.options as never,
+    )
+    const sessions = (await Session.children(input.agentSessionID)).filter(
+      (session) => session.kind === "frontend-design" && !args.existingFrontendDesignSessions.has(session.id),
+    )
+    const sessionID = sessions.sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })[0]?.id
+    const task = requireTask(taskID)
+    const designSpecsCount = Array.isArray(task.design_specs) ? task.design_specs.length : 0
+    const decisionLog = createDecisionLog(taskID)
+    const decisionEntries = decisionLog.readByPhase("frontend_design")
+    const templateIterationNotes = decisionLog.readByKey("template_iteration_notes")?.value ?? ""
+    const referenceArtifacts = decisionLog.readByKey("reference_artifacts")?.value ?? ""
+    const frontendProject = decisionLog.readByKey("frontend_project")?.value ?? ""
+    const frontendProjectStatus = frontendProject.match(/^status:\s*(.+)$/m)?.[1]?.trim() ?? "unknown"
+    return {
+      output,
+      sessionID,
+      designSpecsCount,
+      decisionEntriesCount: decisionEntries.length,
+      templateReviewPasses: templateIterationNotes
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0).length,
+      referenceArtifactsCount: referenceArtifacts
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0).length,
+      frontendProjectStatus,
+    }
+  }
+
+  async function executeIntentAnalysisStageRedispatch(args: {
+    reason: string
+    options: unknown
+    existingIntentAnalysisSessions: Set<string>
+  }): Promise<{
+    output: unknown
+    outputText: string
+    sessionID?: string
+    decisionEntriesCount: number
+    intentSummary?: string
+  }> {
+    const executeIntentAnalysis = tools.analyze_intent.execute
+    if (!executeIntentAnalysis) {
+      throw new Error("intent_analysis redispatch binding is missing the analyze_intent execute handler")
+    }
+    const output = await executeIntentAnalysis(
+      {
+        reason: args.reason,
+      },
+      args.options as never,
+    )
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const sessions = (await Session.children(input.agentSessionID)).filter(
+      (session) => session.kind === "intent-analysis" && !args.existingIntentAnalysisSessions.has(session.id),
+    )
+    const sessionID = sessions.sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })[0]?.id
+    const decisionLog = createDecisionLog(taskID)
+    const decisionEntries = decisionLog.readByPhase("intent_analysis")
+    const intentSummary = decisionEntries.find((entry) => entry.key === "intent_summary")?.value
+    return {
+      output,
+      outputText,
+      sessionID,
+      decisionEntriesCount: decisionEntries.length,
+      intentSummary,
+    }
+  }
+
+  async function executeExploreStageRedispatch(args: {
+    question: string
+    reason: string
+    options: unknown
+    existingExploreSessions: Set<string>
+    existingExploreDecisionIDs: Set<string>
+    existingExplorationArtifactIDs: Set<string>
+  }): Promise<{
+    output: unknown
+    outputText: string
+    sessionID?: string
+    decisionEntriesCount: number
+    explorationArtifactsCount: number
+    decisionEntryID?: string
+    artifactID?: string
+    question: string
+  }> {
+    const executeExplore = tools.explore.execute
+    if (!executeExplore) {
+      throw new Error("explore redispatch binding is missing the explore execute handler")
+    }
+    const question = args.question.trim()
+    if (!question) {
+      throw new Error("explore redispatch requires a non-empty question")
+    }
+    const output = await executeExplore(
+      {
+        question,
+        reason: args.reason,
+      },
+      args.options as never,
+    )
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const sessions = (await Session.children(input.agentSessionID)).filter(
+      (session) => session.kind === "explore" && !args.existingExploreSessions.has(session.id),
+    )
+    const sessionID = sessions.sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })[0]?.id
+    const decisionLog = createDecisionLog(taskID)
+    const decisionEntries = decisionLog
+      .readByPhase("explore")
+      .filter((entry) => !args.existingExploreDecisionIDs.has(entry.id))
+    const explorationArtifacts = listExplorationArtifacts({ taskID }).filter(
+      (row) => !args.existingExplorationArtifactIDs.has(row.id),
+    )
+    return {
+      output,
+      outputText,
+      sessionID,
+      decisionEntriesCount: decisionEntries.length,
+      explorationArtifactsCount: explorationArtifacts.length,
+      decisionEntryID: decisionEntries.length === 1 ? decisionEntries[0]?.id : undefined,
+      artifactID: explorationArtifacts.length === 1 ? explorationArtifacts[0]?.id : undefined,
+      question,
+    }
+  }
+
+  async function executeGoalWorkloadStageRedispatch(args: {
+    reason: string
+    options: unknown
+    existingGoalWorkloadSessions: Set<string>
+    existingGoalWorkloadArtifactIDs: Set<string>
+  }): Promise<{
+    output: unknown
+    outputText: string
+    sessionID?: string
+    artifactID?: string
+    specSnapshotID?: string
+    briefsCount: number
+    flaggedGoalsCount: number
+    summary?: string
+  }> {
+    const executeWorkloadAnalysis = tools.workload_analysis.execute
+    if (!executeWorkloadAnalysis) {
+      throw new Error("workload_analysis redispatch binding is missing the workload_analysis execute handler")
+    }
+    const output = await executeWorkloadAnalysis(
+      {
+        reason: args.reason,
+      },
+      args.options as never,
+    )
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const sessions = (await Session.children(input.agentSessionID)).filter(
+      (session) => session.kind === "goal-workload-analyst" && !args.existingGoalWorkloadSessions.has(session.id),
+    )
+    const sessionID = sessions.sort((left, right) => {
+      if (left.time.created !== right.time.created) return right.time.created - left.time.created
+      return right.id.localeCompare(left.id)
+    })[0]?.id
+    const artifacts = listGoalWorkloadArtifacts({ taskID })
+      .filter((row) => !args.existingGoalWorkloadArtifactIDs.has(row.id))
+      .sort((left, right) => {
+        if (left.time_created !== right.time_created) return right.time_created - left.time_created
+        return right.id.localeCompare(left.id)
+      })
+    if (artifacts.length > 1) {
+      throw new Error(
+        `workload_analysis redispatch created ambiguous goal_workload artifacts: ${artifacts
+          .map((row) => row.id)
+          .join(", ")}`,
+      )
+    }
+    const artifact = artifacts[0]
+    const payload = artifact?.payload as
+      | {
+          briefs?: Array<{ decomposition_concern?: unknown }>
+          spec_snapshot_id?: unknown
+          summary?: unknown
+        }
+      | undefined
+    const briefs = Array.isArray(payload?.briefs) ? payload.briefs : []
+    const flaggedGoalsCount = briefs.filter(
+      (brief) => typeof brief.decomposition_concern === "string" && brief.decomposition_concern.trim().length > 0,
+    ).length
+    return {
+      output,
+      outputText,
+      sessionID,
+      artifactID: artifact?.id,
+      specSnapshotID: typeof payload?.spec_snapshot_id === "string" ? payload.spec_snapshot_id : undefined,
+      briefsCount: briefs.length,
+      flaggedGoalsCount,
+      summary: typeof payload?.summary === "string" ? payload.summary : undefined,
+    }
+  }
+
+  async function executeFactCheckStageRedispatch(args: {
+    continuationArtifactID: string
+    sourceSessionID: string
+    orchestratorSessionID: string
+    normalizedStageInput: FactCheckStageInput
+    reason: string
+    options: unknown
+    existingFactCheckAttemptIDs: Set<string>
+  }): Promise<{
+    output: unknown
+    outputText: string
+    sessionID?: string
+    artifactID?: string
+    targetSessionID?: string
+    targetAgent?: string
+    targetMessageID?: string
+    targetMessageContentHash?: string
+    verdict?: FactCheckReport["overall_verdict"]
+    outcome?: FactCheckAttemptArtifact["outcome"]
+    itemsTotal?: number
+    itemsInspected?: number
+    verifiedCount?: number
+    correctedCount?: number
+    unresolvedCount?: number
+  }> {
+    const executeFactCheck = tools.fact_check.execute
+    if (!executeFactCheck) {
+      throw new Error("fact_check redispatch binding is missing the fact_check execute handler")
+    }
+    const output = await executeFactCheck(
+      {
+        continuation_artifact_id: args.continuationArtifactID,
+        reason: args.reason,
+      },
+      args.options as never,
+    )
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const artifacts = listFactCheckAttemptArtifacts({ taskID })
+      .filter((row) => !args.existingFactCheckAttemptIDs.has(row.id))
+      .sort((left, right) => {
+        if (left.time_created !== right.time_created) return right.time_created - left.time_created
+        return right.id.localeCompare(left.id)
+      })
+    if (artifacts.length > 1) {
+      throw new Error(
+        `fact_check redispatch created ambiguous fact_check_attempt artifacts: ${artifacts
+          .map((row) => row.id)
+          .join(", ")}`,
+      )
+    }
+    const artifact = artifacts[0]
+    const parsed = artifact ? FactCheckAttemptArtifactSchema.safeParse(artifact.payload) : undefined
+    if (parsed && !parsed.success) {
+      throw new Error(
+        `fact_check redispatch attempt ${artifact?.id ?? "unknown"} has invalid payload: ${parsed.error.message}`,
+      )
+    }
+    const payload = parsed?.data
+    if (artifact && payload) {
+      if (payload.fact_check_session_id !== args.sourceSessionID) {
+        throw new Error(
+          `fact_check redispatch attempt ${artifact.id} session ${payload.fact_check_session_id} does not match source ${args.sourceSessionID}`,
+        )
+      }
+      if (payload.invoked_by_orchestrator_session_id !== args.orchestratorSessionID) {
+        throw new Error(`fact_check redispatch attempt ${artifact.id} invoked_by_orchestrator_session_id mismatch`)
+      }
+      const expected = args.normalizedStageInput
+      const mismatches: string[] = []
+      if (payload.target_session_id !== expected.target_session_id) mismatches.push("target_session_id")
+      if (payload.target_agent !== expected.target_agent) mismatches.push("target_agent")
+      if (payload.target_message_id !== expected.target_message_id) mismatches.push("target_message_id")
+      if (payload.target_message_content_hash !== expected.target_message_content_hash) {
+        mismatches.push("target_message_content_hash")
+      }
+      if (payload.report.scope.target_session_id !== expected.target_session_id) {
+        mismatches.push("report.scope.target_session_id")
+      }
+      if (payload.report.scope.target_agent !== expected.target_agent) mismatches.push("report.scope.target_agent")
+      if (payload.report.scope.target_message_id !== expected.target_message_id) {
+        mismatches.push("report.scope.target_message_id")
+      }
+      if (payload.report.scope.target_message_content_hash !== expected.target_message_content_hash) {
+        mismatches.push("report.scope.target_message_content_hash")
+      }
+      if (payload.report.scope.items_total !== expected.fact_check_items.length) {
+        mismatches.push("report.scope.items_total")
+      }
+      if (payload.report.scope.items_inspected > payload.report.scope.items_total) {
+        mismatches.push("report.scope.items_inspected")
+      }
+      if (mismatches.length > 0) {
+        throw new Error(`fact_check redispatch attempt ${artifact.id} scope mismatch: ${mismatches.join(", ")}`)
+      }
+    }
+    return {
+      output,
+      outputText,
+      sessionID: payload?.fact_check_session_id,
+      artifactID: artifact?.id,
+      targetSessionID: payload?.target_session_id,
+      targetAgent: payload?.target_agent,
+      targetMessageID: payload?.target_message_id,
+      targetMessageContentHash: payload?.target_message_content_hash,
+      verdict: payload?.report.overall_verdict,
+      outcome: payload?.outcome,
+      itemsTotal: payload?.report.scope.items_total,
+      itemsInspected: payload?.report.scope.items_inspected,
+      verifiedCount: payload?.report.verified.length,
+      correctedCount: payload?.report.corrected.length,
+      unresolvedCount: payload?.report.unresolved.length,
+    }
+  }
+
+  function findBuildSessionContractForGoalRun(input: { goalRunID: string }) {
+    return Database.use((db) =>
+      db
+        .select()
+        .from(EngineArtifactTable)
+        .where(
+          and(
+            eq(EngineArtifactTable.task_id, taskID),
+            eq(EngineArtifactTable.kind, "build_session_contract"),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.goal_run_id') = ${input.goalRunID}`,
+          ),
+        )
+        .get(),
+    )
+  }
+
+  async function executeBuildStageRedispatch(args: {
+    goalID: string
+    reason: string
+    request: string
+    options: unknown
+    existingGoalRunIDs: Set<string>
+  }): Promise<{
+    output: unknown
+    outputText: string
+    sessionID?: string
+    goalRunID?: string
+    goalRunStatus?: string
+    buildSessionContractID?: string
+    worktreeDir?: string | null
+    worktreeBranch?: string | null
+  }> {
+    const executeBuild = tools.build.execute
+    if (!executeBuild) {
+      throw new Error("build redispatch binding is missing the build execute handler")
+    }
+    const output = await executeBuild(
+      {
+        goalID: args.goalID,
+        reason: args.reason,
+        ...(args.request.trim().length > 0 ? { request: args.request } : {}),
+      },
+      args.options as never,
+    )
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const newGoalRun = listGoalRunsByGoal(args.goalID).find((goalRun) => !args.existingGoalRunIDs.has(goalRun.id))
+    const contract = newGoalRun ? findBuildSessionContractForGoalRun({ goalRunID: newGoalRun.id }) : undefined
+    return {
+      output,
+      outputText,
+      sessionID: newGoalRun?.session_id ?? undefined,
+      goalRunID: newGoalRun?.id,
+      goalRunStatus: newGoalRun?.status,
+      buildSessionContractID: contract?.id,
+      worktreeDir: newGoalRun?.workspace_dir,
+      worktreeBranch: newGoalRun?.workspace_branch,
+    }
   }
 
   // Phase 5-g: the deprecated dispatch tools (dispatch_goal / exec_goal /

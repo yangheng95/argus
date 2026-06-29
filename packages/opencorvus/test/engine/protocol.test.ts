@@ -19,6 +19,7 @@ import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { protocolTaskEvent, taskListProtocolEvent, TaskListEvent } from "../../src/server/routes/orchestrator"
+import { timelineOrderKey } from "../../src/timeline/order"
 
 let projectID = ""
 let taskID = ""
@@ -55,6 +56,22 @@ function seedTask() {
       })
       .run(),
   )
+}
+
+function testMessageOrderKey(id: string, time: number): string {
+  return timelineOrderKey({ domain: "message", time, id })
+}
+
+function testPartOrderKey(id: string, time: number): string {
+  return timelineOrderKey({ domain: "part", time, id })
+}
+
+function testProtocolOrderKey(id: string, time: number, sequence: number): string {
+  return timelineOrderKey({ domain: "protocol", time, sequence, id })
+}
+
+function testSessionOrderKey(id: string, time: number): string {
+  return timelineOrderKey({ domain: "session", time, id })
 }
 
 beforeEach(async () => {
@@ -96,15 +113,17 @@ describe("orchestrator protocol", () => {
   })
 
   test("stamps notify metadata onto per-task and task-list protocol events", () => {
+    const emitted = Date.now()
     const event = {
       id: "pev_notify",
       type: "task.failed",
       taskID,
       runID: undefined,
       sequence: 7,
+      orderKey: testProtocolOrderKey("pev_notify", emitted, 7),
       summary: "Task failed",
       payload: { taskID, status: "failed", summary: "Task failed" },
-      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+      time: { emitted, created: emitted, updated: emitted },
     } as any
 
     const perTask = protocolTaskEvent(event)
@@ -138,14 +157,16 @@ describe("orchestrator protocol", () => {
   })
 
   test("omits notify metadata for NOOP protocol events", () => {
+    const emitted = Date.now()
     const event = {
       id: "pev_noop",
       type: "spec.approved",
       taskID,
       sequence: 8,
+      orderKey: testProtocolOrderKey("pev_noop", emitted, 8),
       summary: "Spec approved",
       payload: { taskID, specID: "spc_test", summary: "Spec approved" },
-      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+      time: { emitted, created: emitted, updated: emitted },
     } as any
 
     expect(protocolTaskEvent(event)).not.toHaveProperty("notify")
@@ -154,14 +175,16 @@ describe("orchestrator protocol", () => {
   })
 
   test("evaluation.completed notify tier is resolved from payload at the protocol stamp seam", () => {
+    const emitted = Date.now()
     const base = {
       id: "pev_eval",
       type: "evaluation.completed",
       taskID,
       runID: "run_eval",
       sequence: 9,
+      orderKey: testProtocolOrderKey("pev_eval", emitted, 9),
       summary: "Evaluation completed",
-      time: { emitted: Date.now(), created: Date.now(), updated: Date.now() },
+      time: { emitted, created: emitted, updated: emitted },
     }
 
     expect(
@@ -234,18 +257,22 @@ describe("orchestrator protocol", () => {
       { aggregate: "task", taskID },
     )
 
+    const liveMessageTime = Date.now()
+    const liveMessageOrderKey = testMessageOrderKey("msg_live", liveMessageTime)
     ProtocolStore.dispatchEphemeral({
       type: "message.updated",
       aggregate: "task",
       taskID,
       sessionID: "ses_live",
       source: "test.protocol",
+      orderKey: liveMessageOrderKey,
       payload: {
         info: {
           id: "msg_live",
           sessionID: "ses_live",
           role: "assistant",
-          time: { created: Date.now() },
+          orderKey: liveMessageOrderKey,
+          time: { created: liveMessageTime },
         },
       },
     })
@@ -255,11 +282,14 @@ describe("orchestrator protocol", () => {
       taskID,
       sessionID: "ses_live",
       source: "test.protocol",
+      orderKey: liveMessageOrderKey,
       payload: {
+        orderKey: liveMessageOrderKey,
         part: {
           id: "part_live",
           messageID: "msg_live",
           sessionID: "ses_live",
+          orderKey: testPartOrderKey("part_live", liveMessageTime),
           type: "text",
           text: "",
         },
@@ -271,7 +301,9 @@ describe("orchestrator protocol", () => {
       taskID,
       sessionID: "ses_live",
       source: "test.protocol",
+      orderKey: liveMessageOrderKey,
       payload: {
+        orderKey: liveMessageOrderKey,
         sessionID: "ses_live",
         messageID: "msg_live",
         partID: "part_live",
@@ -303,13 +335,17 @@ describe("orchestrator protocol", () => {
   })
 
   test("live replay prunes deltas once a text part reaches a durable boundary", () => {
+    const pruneMessageTime = Date.now()
+    const pruneMessageOrderKey = testMessageOrderKey("msg_prune", pruneMessageTime)
     ProtocolStore.dispatchEphemeral({
       type: "message.part.delta",
       aggregate: "task",
       taskID,
       sessionID: "ses_prune",
       source: "test.protocol",
+      orderKey: pruneMessageOrderKey,
       payload: {
+        orderKey: pruneMessageOrderKey,
         sessionID: "ses_prune",
         messageID: "msg_prune",
         partID: "part_prune",
@@ -323,11 +359,14 @@ describe("orchestrator protocol", () => {
       taskID,
       sessionID: "ses_prune",
       source: "test.protocol",
+      orderKey: pruneMessageOrderKey,
       payload: {
+        orderKey: pruneMessageOrderKey,
         part: {
           id: "part_prune",
           messageID: "msg_prune",
           sessionID: "ses_prune",
+          orderKey: testPartOrderKey("part_prune", pruneMessageTime),
           type: "text",
           text: "hello",
           time: { end: Date.now() },
@@ -348,17 +387,22 @@ describe("orchestrator protocol", () => {
     ProtocolStore.compactLiveReplay(Date.now() + 1_000_000)
     const before = ProtocolStore.liveReplayStats()
     expect(before).toMatchObject({ tasks: 0, events: 0 })
+    const idleMessageTime = Date.now()
+    const idleMessageOrderKey = testMessageOrderKey("msg_idle_release", idleMessageTime)
     ProtocolStore.dispatchEphemeral({
       type: "message.part.updated",
       aggregate: "task",
       taskID,
       sessionID: "ses_idle_release",
       source: "test.protocol",
+      orderKey: idleMessageOrderKey,
       payload: {
+        orderKey: idleMessageOrderKey,
         part: {
           id: "part_idle_release",
           messageID: "msg_idle_release",
           sessionID: "ses_idle_release",
+          orderKey: testPartOrderKey("part_idle_release", idleMessageTime),
           type: "text",
           text: "x".repeat(1_000_000),
         },
@@ -392,17 +436,22 @@ describe("orchestrator protocol", () => {
 
   test("task terminal protocol events release live replay sequence metadata", async () => {
     ProtocolStore.compactLiveReplay(Date.now() + 1_000_000)
+    const terminalMessageTime = Date.now()
+    const terminalMessageOrderKey = testMessageOrderKey("msg_terminal_release", terminalMessageTime)
     ProtocolStore.dispatchEphemeral({
       type: "message.part.updated",
       aggregate: "task",
       taskID,
       sessionID: "ses_terminal_release",
       source: "test.protocol",
+      orderKey: terminalMessageOrderKey,
       payload: {
+        orderKey: terminalMessageOrderKey,
         part: {
           id: "part_terminal_release",
           messageID: "msg_terminal_release",
           sessionID: "ses_terminal_release",
+          orderKey: testPartOrderKey("part_terminal_release", terminalMessageTime),
           type: "text",
           text: "done",
         },
@@ -480,10 +529,16 @@ describe("orchestrator protocol", () => {
         )
 
         const events = await EngineService.listProtocolEvents(taskID)
+        const stored = ProtocolStore.listTaskEventsAfter(taskID, 0)
         expect(events).toHaveLength(2)
         expect(events.map((item) => item.sequence)).toEqual([1, 2])
         expect(events.map((item) => item.type)).toEqual(["task.created", "task.updated"])
         expect(events.map((item) => item.source)).toEqual(["test.protocol", "test.protocol"])
+        expect(stored.map((item) => item.orderKey)).toEqual(
+          stored.map((item) => testProtocolOrderKey(item.id, item.time.emitted, item.sequence)),
+        )
+        expect(events.map((item) => item.orderKey)).toEqual(stored.map((item) => item.orderKey))
+        expect(events.every((item) => item.orderKey.includes(":protocol:"))).toBe(true)
         expect(events[1]?.payload).toMatchObject({
           taskID,
           status: "active",
@@ -491,6 +546,112 @@ describe("orchestrator protocol", () => {
         })
       },
     })
+  })
+
+  test("ephemeral task events require explicit envelope orderKey", () => {
+    expect(() =>
+      ProtocolStore.dispatchEphemeral({
+        type: "message.updated",
+        aggregate: "task",
+        taskID,
+        sessionID: "ses_missing_live_order_key",
+        source: "test.protocol",
+        orderKey: "",
+        payload: {
+          info: {
+            id: "msg_missing_live_order_key",
+            sessionID: "ses_missing_live_order_key",
+            role: "assistant",
+            time: { created: Date.now() },
+          },
+        },
+      }),
+    ).toThrow(/missing orderKey/)
+  })
+
+  test("persisted session lifecycle events require explicit matching payload orderKey", async () => {
+    const time = Date.now()
+    const orderKey = testSessionOrderKey("ses_protocol_lifecycle", time)
+    await expect(
+      ProtocolStore.appendEvent({
+        kind: "event",
+        type: "session.status",
+        aggregate: "task",
+        aggregate_id: taskID,
+        task_id: taskID,
+        source: "test.protocol",
+        emitted_at: time,
+        payload: {
+          sessionID: "ses_protocol_lifecycle",
+          status: { type: "streaming" },
+        },
+      }),
+    ).rejects.toThrow(/payload\.orderKey/)
+
+    await expect(
+      ProtocolStore.appendEvent({
+        kind: "event",
+        type: "session.status",
+        aggregate: "task",
+        aggregate_id: taskID,
+        task_id: taskID,
+        source: "test.protocol",
+        emitted_at: time,
+        order_key: testProtocolOrderKey("pev_wrong_lifecycle", time, 0),
+        payload: {
+          orderKey,
+          sessionID: "ses_protocol_lifecycle",
+          status: { type: "streaming" },
+        },
+      }),
+    ).rejects.toThrow(/expected session orderKey/)
+
+    const messageDomainOrderKey = testMessageOrderKey("msg_wrong_lifecycle", time)
+    await expect(
+      ProtocolStore.appendEvent({
+        kind: "event",
+        type: "session.status",
+        aggregate: "task",
+        aggregate_id: taskID,
+        task_id: taskID,
+        source: "test.protocol",
+        emitted_at: time,
+        order_key: messageDomainOrderKey,
+        payload: {
+          orderKey: messageDomainOrderKey,
+          sessionID: "ses_protocol_lifecycle",
+          status: { type: "streaming" },
+        },
+      }),
+    ).rejects.toThrow(/expected session orderKey/)
+  })
+
+  test("task protocol serializer rejects lifecycle events without session-domain orderKey", () => {
+    const messageDomainOrderKey = testMessageOrderKey("msg_wrong_task_lifecycle", 1_780_900_000_000)
+    expect(() =>
+      protocolTaskEvent({
+        id: "pev_wrong_task_lifecycle",
+        kind: "event",
+        type: "session.status",
+        aggregate: "task",
+        aggregateID: taskID,
+        taskID,
+        sessionID: "ses_wrong_task_lifecycle",
+        sequence: 14,
+        orderKey: messageDomainOrderKey,
+        summary: "session status: streaming",
+        payload: {
+          orderKey: messageDomainOrderKey,
+          sessionID: "ses_wrong_task_lifecycle",
+          status: { type: "streaming" },
+        },
+        time: {
+          emitted: 1_780_900_000_000,
+          created: 1_780_900_000_000,
+          updated: 1_780_900_000_000,
+        },
+      } as any),
+    ).toThrow(/expected session orderKey/)
   })
 
   test("records protocol messages for state-driven updates", async () => {
@@ -656,6 +817,7 @@ describe("orchestrator protocol", () => {
         const liveEvents: Array<{
           type: string
           sessionID?: string
+          orderKey?: string
           payload?: Record<string, unknown>
         }> = []
         const stop = ProtocolStore.subscribeEvents(
@@ -663,6 +825,7 @@ describe("orchestrator protocol", () => {
             liveEvents.push({
               type: event.type,
               sessionID: event.sessionID,
+              orderKey: event.orderKey,
               payload: event.payload,
             })
           },
@@ -720,9 +883,11 @@ describe("orchestrator protocol", () => {
         expect(rootPart).toBeTruthy()
         expect(rootMessage?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
         expect(rootPart?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
-        expect(rootPart?.payload?.orderKey).toBe((rootPart?.payload?.part as any)?.orderKey)
+        expect(rootMessage?.orderKey).toBe((rootMessage?.payload?.info as any)?.orderKey)
+        expect(rootPart?.orderKey).toBe(rootPart?.payload?.orderKey)
+        expect(rootPart?.payload?.orderKey).toBe((rootMessage?.payload?.info as any)?.orderKey)
         expect((rootPart?.payload?.part as any)?.orderKey).toContain(":part:")
-        expect(rootPart?.payload?.orderKey).not.toBe((rootMessage?.payload?.info as any)?.orderKey)
+        expect(rootPart?.payload?.orderKey).not.toBe((rootPart?.payload?.part as any)?.orderKey)
         const persisted = await EngineService.listProtocolEvents(taskID)
         expect(persisted.filter((item) => item.type.startsWith("message."))).toEqual([])
       },
@@ -764,7 +929,11 @@ describe("orchestrator protocol", () => {
 
         const statusEvent = events.find((item) => item.type === "session.status" && item.sessionID === requirements.id)
         expect(statusEvent).toBeTruthy()
+        const requirementsOrderKey = testSessionOrderKey(requirements.id, requirements.time.created)
+        expect(statusEvent?.orderKey).toBe(requirementsOrderKey)
+        expect(statusEvent?.payload?.orderKey).toBe(requirementsOrderKey)
         expect(statusEvent?.payload).toMatchObject({
+          orderKey: requirementsOrderKey,
           sessionID: requirements.id,
           channel: "requirements",
           resolvedRole: "requirements",
@@ -1056,6 +1225,7 @@ describe("orchestrator protocol", () => {
         const liveEvents: Array<{
           type: string
           sessionID?: string
+          orderKey?: string
           payload?: Record<string, any>
         }> = []
         const stop = ProtocolStore.subscribeEvents(
@@ -1063,6 +1233,7 @@ describe("orchestrator protocol", () => {
             liveEvents.push({
               type: event.type,
               sessionID: event.sessionID,
+              orderKey: event.orderKey,
               payload: event.payload as Record<string, any> | undefined,
             })
           },
@@ -1100,8 +1271,10 @@ describe("orchestrator protocol", () => {
             messageID: rootMessageID,
           },
         })
-        expect(partEvent?.payload?.orderKey).toBe(partEvent?.payload?.part?.orderKey)
+        expect(partEvent?.orderKey).toBe(partEvent?.payload?.orderKey)
+        expect(partEvent?.payload?.orderKey).toContain(":message:")
         expect(partEvent?.payload?.part?.orderKey).toContain(":part:")
+        expect(partEvent?.payload?.orderKey).not.toBe(partEvent?.payload?.part?.orderKey)
         expect(partEvent?.payload?.part?.resolvedRole).toBeUndefined()
         expect(partEvent?.payload?.part?.channel).toBeUndefined()
       },

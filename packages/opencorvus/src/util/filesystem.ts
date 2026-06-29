@@ -247,7 +247,7 @@ export namespace Filesystem {
         message: `Cannot resolve "${p}" on win32: this is a POSIX-style path that is not a recognized Git Bash / Cygwin / WSL mount. Set OPENCORVUS_WINDOWS_DRIVE_MOUNTS to add custom mount roots.`,
       })
     }
-    return normalizePath(pathResolve(windowsPath(p)))
+    return normalizeWindowsPath(pathResolve(windowsPath(p)))
   }
 
   export function windowsPath(p: string): string {

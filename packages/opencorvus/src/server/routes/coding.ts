@@ -8,6 +8,7 @@ import { HTTPException } from "hono/http-exception"
 import { Instance } from "@/project/instance"
 import { EngineService } from "@/task-api"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { NotFoundError } from "@/storage/db"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_DEFAULT_TITLE,
@@ -18,13 +19,24 @@ import {
 } from "@/coding-assistant/session"
 import { errors } from "../error"
 
-const CodingSessionQuery = z.object({
-  directory: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursorUpdated: z.coerce.number().int().positive().optional(),
-  cursorSessionID: z.string().optional(),
-  search: z.string().optional(),
-})
+const CodingSessionQuery = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    cursorUpdated: z.coerce.number().int().positive().optional(),
+    cursorSessionID: z.string().trim().min(1).optional(),
+    search: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasUpdated = value.cursorUpdated !== undefined
+    const hasSessionID = value.cursorSessionID !== undefined
+    if (hasUpdated !== hasSessionID) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasUpdated ? ["cursorSessionID"] : ["cursorUpdated"],
+        message: "cursorUpdated and cursorSessionID must be supplied together",
+      })
+    }
+  })
 
 const CodingSessionResponse = z.object({
   session: Session.Info,
@@ -51,10 +63,10 @@ const CodingSessionsResponse = z.object({
 async function assertRightSidebarCodingSession(sessionID: string) {
   const session = await Session.get(sessionID)
   if (session.projectID !== Instance.project.id || session.directory !== Instance.directory) {
-    throw new HTTPException(404, { message: `Coding assistant session not found: ${sessionID}` })
+    throw new NotFoundError({ message: `Coding assistant session not found: ${sessionID}` })
   }
   if (!isRightSidebarCodingAssistantSession(session)) {
-    throw new HTTPException(404, { message: `Coding assistant session not found: ${sessionID}` })
+    throw new NotFoundError({ message: `Coding assistant session not found: ${sessionID}` })
   }
   return session
 }
@@ -76,6 +88,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(400),
         },
       }),
       async (c) => {
@@ -103,6 +116,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(400),
         },
       }),
       validator("json", CodingCli.OpenInput),
@@ -159,6 +173,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(400),
         },
       }),
       validator("query", CodingSessionQuery),
@@ -182,6 +197,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ sessionID: z.string() })),
@@ -205,6 +221,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ sessionID: z.string() })),
@@ -235,6 +252,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ sessionID: z.string() })),
@@ -293,6 +311,7 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", z.object({ sessionID: z.string() })),
@@ -303,7 +322,7 @@ export function CodingRoutes() {
         if (taskID !== null) {
           const task = await EngineService.getTask(taskID)
           if (task.projectID !== session.projectID || task.directory !== session.directory) {
-            throw new HTTPException(404, { message: `Task not found: ${taskID}` })
+            throw new NotFoundError({ message: `Task not found: ${taskID}` })
           }
         }
         const updated = await setRightSidebarCodingAssistantSelectedTask({ session, taskID })

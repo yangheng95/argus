@@ -1,21 +1,11 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { Bus } from "@/bus"
-import { BusEvent } from "@/bus/bus-event"
+import { Event } from "@/engine/model"
+import { taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace TaskReport {
-  export const EventDef = BusEvent.define(
-    "task.report",
-    z.object({
-      sessionID: z.string(),
-      status: z.enum(["progress", "need_input", "done", "failed"]),
-      summary: z.string(),
-      question: z.string().optional(),
-      next_plan: z.string().optional(),
-      artifacts: z.array(z.string()).optional(),
-      error: z.string().optional(),
-    }),
-  )
+  export const EventDef = Event.TaskReport
 
   export type Report = z.infer<typeof EventDef.properties>
 }
@@ -26,12 +16,16 @@ export const TaskReportTool = Tool.define("task_report", {
 In managed channel mode you MUST call this tool at the end of every turn. Pick the right status:
 - **progress**: Made headway but need more turns. Describe what you did in summary and set next_plan for the next step.
 - **need_input**: Cannot proceed without user clarification. Set question clearly.
-- **done**: Task fully complete. Summarize the result and list modified files in artifacts.
-- **failed**: Unrecoverable error. Explain what went wrong in error.`,
+- **done**: This agent session's assigned turn is complete. Summarize the result and list modified files in artifacts.
+- **failed**: This agent session's assigned turn hit an unrecoverable error. Explain what went wrong in error.
+
+This reports worker-session progress only; it does not complete, fail, or cancel the engine task lifecycle.`,
   parameters: z.object({
     status: z
       .enum(["progress", "need_input", "done", "failed"])
-      .describe("progress=more turns needed | need_input=waiting for user | done=complete | failed=error"),
+      .describe(
+        "progress=more turns needed | need_input=waiting for user | done=session turn complete | failed=session error",
+      ),
     summary: z.string().describe("What happened this turn, or the final result"),
     question: z.string().optional().describe("Question for the user (required when status=need_input)"),
     next_plan: z.string().optional().describe("What to do in the next turn (when status=progress)"),
@@ -39,7 +33,21 @@ In managed channel mode you MUST call this tool at the end of every turn. Pick t
     error: z.string().optional().describe("Error details (when status=failed)"),
   }),
   async execute(params, ctx) {
+    const contextTaskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined
+    const resolvedTaskID = taskIDForSession(ctx.sessionID)
+    if (contextTaskID && resolvedTaskID && contextTaskID !== resolvedTaskID) {
+      throw new Error(
+        `task_report context task ${contextTaskID} does not own session ${ctx.sessionID}; expected ${resolvedTaskID}`,
+      )
+    }
+    const taskID = resolvedTaskID
+    if (!taskID) {
+      throw new Error(
+        `task_report requires task-owned session ${ctx.sessionID}; report cannot be projected to task conversation`,
+      )
+    }
     Bus.publish(TaskReport.EventDef, {
+      taskID,
       sessionID: ctx.sessionID,
       status: params.status,
       summary: params.summary,
@@ -54,7 +62,7 @@ In managed channel mode you MUST call this tool at the end of every turn. Pick t
         ? "Channel runtime will relay your question to the user. Your next turn will contain their answer — wait for it."
         : params.status === "progress"
           ? "Progress recorded. You will receive a continue signal in the next turn."
-          : `Task marked as ${params.status}. Session will close.`
+          : `Session report recorded as ${params.status}. Session will close.`
 
     return {
       title: `task_report: ${params.status}`,

@@ -77,4 +77,72 @@ describe("materializeMcpToolResult browser image content", () => {
       },
     })
   })
+
+  test("rejects malformed MCP image base64 before writing an attachment", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          materializeMcpToolResult({
+            projectID: Instance.project.id,
+            result: {
+              content: [{ type: "image", data: "not base64!*", mimeType: "image/png" }],
+            } as CallToolResult,
+          }),
+        ).rejects.toThrow(/invalid base64 payload/)
+      },
+    })
+  })
+
+  test("rejects malformed MCP resource blob base64 before writing an attachment", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          materializeMcpToolResult({
+            projectID: Instance.project.id,
+            result: {
+              content: [
+                {
+                  type: "resource",
+                  resource: {
+                    uri: "mcp://fixture/broken.png",
+                    blob: "not base64!*",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+            } as CallToolResult,
+          }),
+        ).rejects.toThrow(/invalid base64 payload/)
+      },
+    })
+  })
+
+  test("rejects MCP resource content without usable text or blob", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          materializeMcpToolResult({
+            projectID: Instance.project.id,
+            result: {
+              content: [
+                {
+                  type: "resource",
+                  resource: {
+                    uri: "mcp://fixture/empty",
+                    mimeType: "text/plain",
+                  },
+                },
+              ],
+            } as CallToolResult,
+          }),
+        ).rejects.toThrow(/did not return usable text or blob content/)
+      },
+    })
+  })
 })

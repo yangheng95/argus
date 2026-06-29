@@ -4,7 +4,7 @@ import { Instance } from "@/project/instance"
 import { ProtocolStore } from "@/protocol/store"
 import { SessionEvents } from "@/session/events"
 import { Message } from "@/session/message"
-import { SessionStatus } from "@/session/status"
+import { SessionStatus, sessionLifecycleOrderKey } from "@/session/status"
 import { TaskReport } from "@/tool/task-report"
 import { Log } from "@/util/log"
 import { Database, and, eq } from "@/storage/db"
@@ -158,12 +158,15 @@ function cacheMessageInfo(properties: Record<string, unknown>) {
   if (typeof info.role !== "string" || info.role.length === 0) {
     throw new Error(
       `cacheMessageInfo: message ${info.id} missing info.role — every emitter ` +
-        `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
+      `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
     )
+  }
+  if (typeof info.orderKey !== "string" || info.orderKey.length === 0) {
+    throw new Error(`cacheMessageInfo: message ${info.id} missing info.orderKey`)
   }
   rememberMessageInfo(info.id, {
     role: info.role,
-    orderKey: typeof info.orderKey === "string" && info.orderKey ? info.orderKey : timelineMessageOrderKey({ info }),
+    orderKey: info.orderKey,
     ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
   })
 }
@@ -210,7 +213,7 @@ function partRecord(properties: Record<string, unknown>): Record<string, unknown
   return part as Record<string, unknown>
 }
 
-function partOrderKeyForEvent(properties: Record<string, unknown>): string {
+function partOrderKeysForEvent(properties: Record<string, unknown>): { messageOrderKey: string; partOrderKey: string } {
   const part = partRecord(properties)
   const partID = typeof part.id === "string" ? part.id : ""
   const messageID = typeof part.messageID === "string" ? part.messageID : ""
@@ -218,20 +221,36 @@ function partOrderKeyForEvent(properties: Record<string, unknown>): string {
   if (!partID || !messageID || !sessionID) {
     throw new Error("bridge: part event missing part id/messageID/sessionID while enriching event")
   }
-  const row = Database.use((db) =>
-    db
+  const rows = Database.use((db) => ({
+    message: db
+      .select({ timeCreated: MessageTable.time_created })
+      .from(MessageTable)
+      .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, sessionID)))
+      .get(),
+    part: db
       .select({ timeCreated: PartTable.time_created })
       .from(PartTable)
       .where(and(eq(PartTable.id, partID), eq(PartTable.message_id, messageID), eq(PartTable.session_id, sessionID)))
       .get(),
-  )
-  if (!row) throw new Error(`bridge: part ${partID} missing persisted row while enriching event`)
-  const orderKey = timelinePartOrderKey({ id: partID, timeCreated: row.timeCreated })
+  }))
+  if (!rows.message) throw new Error(`bridge: message ${messageID} missing persisted row while enriching part event`)
+  if (!rows.part) throw new Error(`bridge: part ${partID} missing persisted row while enriching event`)
+  const messageOrderKey = timelineMessageOrderKey({
+    info: {
+      id: messageID,
+      time: { created: rows.message.timeCreated },
+    },
+  })
+  const partOrderKey = timelinePartOrderKey({ id: partID, timeCreated: rows.part.timeCreated })
   const provided = part.orderKey
-  if (typeof provided === "string" && provided.length > 0 && provided !== orderKey) {
+  if (typeof provided === "string" && provided.length > 0 && provided !== partOrderKey) {
     throw new Error(`bridge: part ${partID} orderKey drift between payload and persisted row`)
   }
-  return orderKey
+  const eventOrderKey = properties.orderKey
+  if (typeof eventOrderKey === "string" && eventOrderKey.length > 0 && eventOrderKey !== messageOrderKey) {
+    throw new Error(`bridge: part event ${partID} orderKey drift between payload and owning message`)
+  }
+  return { messageOrderKey, partOrderKey }
 }
 
 function infoForEvent(properties: Record<string, unknown>): {
@@ -241,9 +260,12 @@ function infoForEvent(properties: Record<string, unknown>): {
 } {
   const info = properties.info as any
   if (info && typeof info === "object" && info.role) {
+    if (typeof info.orderKey !== "string" || info.orderKey.length === 0) {
+      throw new Error(`bridge: message ${String(info.id || "<unknown>")} missing info.orderKey`)
+    }
     return {
       role: String(info.role),
-      orderKey: typeof info.orderKey === "string" && info.orderKey ? info.orderKey : timelineMessageOrderKey({ info }),
+      orderKey: info.orderKey,
       ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
     }
   }
@@ -284,9 +306,9 @@ function enrichProperties(
   const enriched = { ...properties }
 
   if (type === Message.Event.PartUpdated.type) {
-    const partOrderKey = partOrderKeyForEvent(properties)
+    const { messageOrderKey, partOrderKey } = partOrderKeysForEvent(properties)
     enriched.part = { ...partRecord(properties), orderKey: partOrderKey }
-    enriched.orderKey = partOrderKey
+    enriched.orderKey = messageOrderKey
   } else if (enriched.info && typeof enriched.info === "object") {
     const infoWithMeta = {
       ...(enriched.info as any),
@@ -295,12 +317,12 @@ function enrichProperties(
       ...(goalID ? { goalID } : {}),
       ...(parentSessionID ? { parentSessionID } : {}),
     }
+    if (typeof infoWithMeta.orderKey !== "string" || infoWithMeta.orderKey.length === 0) {
+      throw new Error(`bridge: message ${String((infoWithMeta as any).id || "<unknown>")} missing info.orderKey`)
+    }
     enriched.info = {
       ...infoWithMeta,
-      orderKey:
-        typeof infoWithMeta.orderKey === "string" && infoWithMeta.orderKey
-          ? infoWithMeta.orderKey
-          : timelineMessageOrderKey({ info: infoWithMeta }),
+      orderKey: infoWithMeta.orderKey,
     }
   } else {
     enriched.orderKey = info.orderKey
@@ -312,13 +334,29 @@ function enrichProperties(
   return enriched
 }
 
+function ephemeralEnvelopeOrderKey(type: string, payload: Record<string, unknown>): string {
+  if (type === Message.Event.Updated.type) {
+    const info = payload.info
+    const orderKey = info && typeof info === "object" ? (info as Record<string, unknown>).orderKey : undefined
+    if (typeof orderKey === "string" && orderKey.length > 0) return orderKey
+    throw new Error("bridge: message.updated missing envelope orderKey")
+  }
+  const orderKey = payload.orderKey
+  if (typeof orderKey === "string" && orderKey.length > 0) return orderKey
+  throw new Error(`bridge: ${type} missing envelope orderKey`)
+}
+
 /**
  * Stamp routing metadata onto lifecycle events without requiring a message
  * role. `session.status` and `session.idle` are about the session itself;
  * they do not have an authoring message and therefore must not enter
  * `infoForEvent()`.
  */
-function enrichLifecycleProperties(properties: Record<string, unknown>, sessionID: string): Record<string, unknown> {
+function enrichLifecycleProperties(
+  properties: Record<string, unknown>,
+  sessionID: string,
+  input?: { orderKey?: string },
+): Record<string, unknown> {
   const kind = sessionRole(sessionID)
   if (!kind) {
     throw new Error(
@@ -331,6 +369,13 @@ function enrichLifecycleProperties(properties: Record<string, unknown>, sessionI
   const enriched: Record<string, unknown> = {
     ...properties,
     channel: kind === "root" ? "main" : kind,
+  }
+  if (input?.orderKey) {
+    const provided = typeof properties.orderKey === "string" ? properties.orderKey.trim() : ""
+    if (provided && provided !== input.orderKey) {
+      throw new Error(`bridge: lifecycle event for session ${sessionID} orderKey drift between input and session row`)
+    }
+    enriched.orderKey = input.orderKey
   }
   if (kind !== "root") enriched.resolvedRole = kind
   if (goalID) enriched.goalID = goalID
@@ -382,6 +427,7 @@ function appendBridgeEvent(input: {
   type: string
   taskID: string
   sessionID: string
+  orderKey?: string
   payload: Record<string, unknown>
 }) {
   const now = Date.now()
@@ -402,6 +448,7 @@ function appendBridgeEvent(input: {
     causation_id: null,
     reply_to: null,
     emitted_at: now,
+    order_key: input.orderKey,
     payload: input.payload,
   }).catch((err) => {
     const detail = err instanceof Error ? err.message : String(err)
@@ -521,8 +568,9 @@ function bridgeSessionLifecycle(type: string, properties: Record<string, unknown
     if (!sessionID) return
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
-    const enriched = enrichLifecycleProperties(properties, sessionID)
-    appendBridgeEvent({ type, taskID, sessionID, payload: enriched })
+    const orderKey = sessionLifecycleOrderKey(sessionID)
+    const enriched = enrichLifecycleProperties(properties, sessionID, { orderKey })
+    appendBridgeEvent({ type, taskID, sessionID, orderKey, payload: enriched })
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
     appendBridgePreparationFailure({ type, properties, error })
@@ -554,11 +602,13 @@ function bridgeSessionError(type: string, properties: Record<string, unknown>) {
     if (!sessionID) return
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
-    const enriched = enrichLifecycleProperties(properties, sessionID)
+    const orderKey = sessionLifecycleOrderKey(sessionID)
+    const enriched = enrichLifecycleProperties(properties, sessionID, { orderKey })
     appendBridgeEvent({
       type,
       taskID,
       sessionID,
+      orderKey,
       payload: {
         ...enriched,
         summary: sessionErrorSummary(properties),
@@ -617,6 +667,7 @@ function bridgeEvent(type: string, properties: Record<string, unknown>) {
       taskID,
       sessionID,
       source: "session.bridge",
+      orderKey: ephemeralEnvelopeOrderKey(type, enriched),
       payload: enriched,
     })
   } catch (err) {

@@ -35,7 +35,12 @@ const LOGGED_TYPES = new Set([
   "evaluation.completed",
   "agent.coordination.requested",
   "agent.coordination.responded",
+  "agent.coordination.action",
   "agent.coordination.cancelled",
+  "task.report",
+  "session.status",
+  "session.error",
+  "session.bridge.persist_failed",
 ])
 
 /** run.progress type values that are pure noise */
@@ -85,6 +90,41 @@ export namespace EngineEventLog {
     const project = Project.get(task.project_id)
     if (!project) throw new Error(`Project not found for task ${taskID}: ${task.project_id}`)
     return ProjectRuntimePaths.eventLogPath(project.worktree, taskID)
+  }
+
+  export function appendPhysicalDeleteBreadcrumb(
+    taskID: string,
+    input: {
+      origin: string
+      projectID: string
+      sessionID?: string
+      status: string
+      detail?: Record<string, unknown>
+    },
+  ) {
+    const paths = eventLogPathsForTask(taskID)
+    mkdirSync(dirname(paths.ndjson), { recursive: true })
+    const now = new Date().toISOString()
+    const sessionPart = input.sessionID ? ` session=${input.sessionID}` : ""
+    appendFileSync(
+      paths.timeline,
+      `[delete] TASK physical_delete_pending task=${taskID} origin=${input.origin} status=${input.status}${sessionPart}\n`,
+      "utf-8",
+    )
+    appendFileSync(
+      paths.ndjson,
+      JSON.stringify({
+        at: now,
+        type: "task.physical_delete_pending",
+        taskID,
+        origin: input.origin,
+        projectID: input.projectID,
+        sessionID: input.sessionID ?? null,
+        status: input.status,
+        detail: input.detail ?? {},
+      }) + "\n",
+      "utf-8",
+    )
   }
 
   function elapsed(ctx: TaskCtx) {
@@ -270,10 +310,49 @@ export namespace EngineEventLog {
       }
       case "agent.coordination.requested":
       case "agent.coordination.responded":
+      case "agent.coordination.action":
       case "agent.coordination.cancelled":
         tl(ctx, `[${elapsed(ctx)}] A2A ${type.replace("agent.coordination.", "")}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
+      case "task.report": {
+        const sessionID = String(p.sessionID ?? p.session_id ?? "")
+        const reportStatus = String(p.status ?? "")
+        const question = typeof p.question === "string" ? p.question : undefined
+        const error = typeof p.error === "string" ? p.error : undefined
+        tl(ctx, `[${elapsed(ctx)}] REPORT ${reportStatus}  ${clip(summary)}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, sessionID, status: reportStatus, summary, question, error })
+        break
+      }
+      case "session.status": {
+        const sessionID = String(p.sessionID ?? p.session_id ?? "")
+        const value = p.status
+        const statusType =
+          value && typeof value === "object" && typeof (value as Record<string, unknown>).type === "string"
+            ? String((value as Record<string, unknown>).type)
+            : "unknown"
+        const reason =
+          value && typeof value === "object" && typeof (value as Record<string, unknown>).reason === "string"
+            ? String((value as Record<string, unknown>).reason)
+            : ""
+        tl(ctx, `[${elapsed(ctx)}] SESSION ${sessionID} status=${statusType}${reason ? ` reason=${reason}` : ""}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, sessionID, status: value ?? null, summary })
+        break
+      }
+      case "session.error": {
+        const sessionID = String(p.sessionID ?? p.session_id ?? "")
+        tl(ctx, `[${elapsed(ctx)}] SESSION ${sessionID} error  ${clip(summary)}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, sessionID, summary, error: p.error ?? null })
+        break
+      }
+      case "session.bridge.persist_failed": {
+        const sessionID = String(p.sessionID ?? p.session_id ?? "")
+        const failedType = String(p.failed_type ?? "")
+        const error = String(p.error ?? "")
+        tl(ctx, `[${elapsed(ctx)}] BRIDGE failed ${failedType}  ${clip(error || summary)}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, sessionID, failedType, error, summary })
+        break
+      }
     }
   }
 
@@ -286,7 +365,7 @@ export namespace EngineEventLog {
         const type = event?.type as string | undefined
         if (!type || !LOGGED_TYPES.has(type)) return
         const p = event.payload ?? {}
-        const taskID = String(p.taskID ?? p.task_id ?? "")
+        const taskID = event.taskID ?? String(p.taskID ?? p.task_id ?? "")
         if (!taskID) return
 
         if (!tasks.has(taskID)) {

@@ -12,6 +12,9 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
   if (report.evidence.length === 0) {
     issues.push("accepted=true was submitted without fresh visual or functional evidence items.")
   }
+  if (!hasScreenshotBearingEvidence(report)) {
+    issues.push("accepted=true was submitted without screenshot comparison or screen-by-screen screenshot evidence.")
+  }
   if (report.coverage.length === 0) {
     issues.push("accepted=true was submitted without coverage items naming checked regions/viewports/states.")
   }
@@ -26,8 +29,10 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
       `accepted=true was submitted with production blockers: ${report.production_blockers.map((blocker) => blocker.id).join(", ")}.`,
     )
   }
-  if (report.follow_up_task) {
-    issues.push("accepted=true was submitted with follow_up_task; that means visual QA did not fully accept.")
+  if (report.unresolved_code_module_problems.length > 0) {
+    issues.push(
+      "accepted=true was submitted with unresolved_code_module_problems; that means visual QA did not fully accept.",
+    )
   }
   if (report.reference_parity.required) {
     if (report.reference_parity.required_regions.length === 0) {
@@ -39,7 +44,7 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
     ])
     if (directComparisonRefs.size === 0) {
       issues.push(
-        "accepted=true was submitted for reference parity without browser_preview_compare_regions reference_comparison evidence refs.",
+        "accepted=true was submitted for reference parity without reference_comparison evidence refs.",
       )
     }
     if (report.reference_parity.missing_regions.length > 0) {
@@ -54,6 +59,12 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
     }
   }
   return issues
+}
+
+function hasScreenshotBearingEvidence(report: VisualQaReport): boolean {
+  return report.evidence.some(
+    (item) => item.type === "screenshot" || item.type === "reference_comparison" || item.type === "visual_diff",
+  )
 }
 
 export function visualQaReportAcceptanceSemantics(report: VisualQaReport): {

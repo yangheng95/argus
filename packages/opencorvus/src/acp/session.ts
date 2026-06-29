@@ -17,6 +17,16 @@ export class ACPSessionManager {
     return this.sessions.get(sessionId)
   }
 
+  snapshot(sessionId: string): ACPSessionState | undefined {
+    const state = this.sessions.get(sessionId)
+    return state ? cloneSessionState(state) : undefined
+  }
+
+  restore(sessionId: string, snapshot: ACPSessionState | undefined): void {
+    if (snapshot) this.sessions.set(sessionId, cloneSessionState(snapshot))
+    else this.sessions.delete(sessionId)
+  }
+
   async create(cwd: string, mcpServers: McpServer[], model?: ACPSessionState["model"]): Promise<ACPSessionState> {
     const session = await this.sdk.session
       .create(
@@ -113,5 +123,14 @@ export class ACPSessionManager {
     session.modeId = modeId
     this.sessions.set(sessionId, session)
     return session
+  }
+}
+
+function cloneSessionState(input: ACPSessionState): ACPSessionState {
+  return {
+    ...input,
+    mcpServers: input.mcpServers.map((server) => ({ ...server }) as McpServer),
+    createdAt: new Date(input.createdAt),
+    model: input.model ? { ...input.model } : undefined,
   }
 }

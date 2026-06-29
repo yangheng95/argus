@@ -3,6 +3,7 @@ import path from "node:path"
 
 import { WebpageAnalyzeTool, WebpageCompileTool, WebpageExtractTool } from "@/frontend-design/tools"
 import { captureWebpageRuntimeStateEvidence } from "@/browser/webpage/runtime-state"
+import { DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT } from "@/browser/webpage/default-viewport"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import type { Tool } from "@/tool/tool"
@@ -313,8 +314,8 @@ function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
         {
           url,
           outputDir,
-          viewport_width: 1440,
-          viewport_height: 900,
+          viewport_width: DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.width,
+          viewport_height: DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT.height,
           keep_images: true,
         },
         signal,
@@ -331,7 +332,7 @@ function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
       await captureWebpageRuntimeStateEvidence({
         url,
         outputDir,
-        viewport: { width: 1440, height: 900 },
+        viewport: DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT,
         signal,
       })
     },

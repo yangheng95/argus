@@ -19,6 +19,7 @@
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools, prefetchContext } from "@/agent/context-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
@@ -89,10 +90,19 @@ export namespace RequirementsAgent {
     // (`Instance.directory`), not something to keyword-regex out of the
     // user's free-form request. `createAgentContextTools()` resolves to the
     // correct root via Instance.directory by default.
-    const contextTools = await filterAgentTools(createAgentContextTools(), "requirements", {
+    const coordinationTools = await createAgentCoordinationRuntimeTools({
+      agent: "requirements",
       taskID: input.taskID,
-      sessionID: input.parentSessionID,
+      signal: input.signal,
     })
+    const contextTools = await filterAgentTools(
+      { ...createAgentContextTools(), ...coordinationTools },
+      "requirements",
+      {
+        taskID: input.taskID,
+        sessionID: input.parentSessionID,
+      },
+    )
     const outputToolKit = createRequirementsOutputTools({
       decisionLog: input.decisionLog,
       allowedResearchEvidenceRefs: allResearchEvidenceRefsForTask({

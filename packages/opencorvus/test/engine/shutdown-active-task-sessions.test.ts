@@ -21,7 +21,7 @@ describe("shutdown aborts active task-owned sessions", () => {
     await Instance.disposeAll()
   })
 
-  test("terminates a run-less direct build task and errors pending tool parts", async () => {
+  test("interrupts a run-less direct build task session and errors pending tool parts", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -76,6 +76,7 @@ describe("shutdown aborts active task-owned sessions", () => {
             status: "pending",
             input: {},
             raw: "",
+            time: { start: now },
           },
         })
 
@@ -114,9 +115,11 @@ describe("shutdown aborts active task-owned sessions", () => {
 
         const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(task).toBeDefined()
-        expect(deriveTaskStatus(task!)).toBe("failed")
-        expect(taskTerminalReason(task!)).toBe("interrupted")
+        expect(deriveTaskStatus(task!)).toBe("active")
+        expect(taskTerminalReason(task!)).toBeUndefined()
+        expect(task?.time_completed).toBeNull()
         expect(task?.error).toBe(reason)
+        expect(task?.metadata).toEqual(expect.objectContaining({ interrupted: true }))
 
         const part = (await Message.parts(messageID))[0]
         expect(part?.type).toBe("tool")
@@ -175,12 +178,14 @@ describe("shutdown aborts active task-owned sessions", () => {
     expect(SessionStatus.get(buildID)).toEqual({ type: "terminal", reason: "aborted", error: reason })
     const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(task).toBeDefined()
-    expect(deriveTaskStatus(task!)).toBe("failed")
-    expect(taskTerminalReason(task!)).toBe("interrupted")
+    expect(deriveTaskStatus(task!)).toBe("active")
+    expect(taskTerminalReason(task!)).toBeUndefined()
+    expect(task?.time_completed).toBeNull()
     expect(task?.error).toBe(reason)
+    expect(task?.metadata).toEqual(expect.objectContaining({ interrupted: true }))
   })
 
-  test("process shutdown terminalizes legacy global active task instead of skipping it", async () => {
+  test("process shutdown records legacy global active task interruption instead of skipping it", async () => {
     await using tmp = await tmpdir({ git: true })
     let taskID = ""
     let rootID = ""
@@ -228,6 +233,7 @@ describe("shutdown aborts active task-owned sessions", () => {
             status: "pending",
             input: {},
             raw: "",
+            time: { start: now },
           },
         })
         Database.use((db) => {
@@ -271,9 +277,11 @@ describe("shutdown aborts active task-owned sessions", () => {
     expect(SessionStatus.get(rootID)).toEqual({ type: "terminal", reason: "aborted", error: reason })
     const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(task).toBeDefined()
-    expect(deriveTaskStatus(task!)).toBe("failed")
-    expect(taskTerminalReason(task!)).toBe("interrupted")
+    expect(deriveTaskStatus(task!)).toBe("active")
+    expect(taskTerminalReason(task!)).toBeUndefined()
+    expect(task?.time_completed).toBeNull()
     expect(task?.error).toBe(reason)
+    expect(task?.metadata).toEqual(expect.objectContaining({ interrupted: true }))
     const part = (await Message.parts(messageID))[0]
     expect(part?.type).toBe("tool")
     if (part?.type !== "tool") throw new Error("expected tool part")

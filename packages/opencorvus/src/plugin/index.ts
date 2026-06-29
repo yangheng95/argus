@@ -15,7 +15,6 @@ import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Instance, lazyInstanceState } from "../project/instance"
-import { Session } from "../session"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
@@ -110,10 +109,18 @@ export namespace Plugin {
     }
   }
 
+  function requirePluginTask(taskID: string) {
+    const task = requireTask(taskID)
+    if (task.project_id !== Instance.project.id) {
+      throw new Error(`Plugin task artifact ${taskID} belongs to project ${task.project_id}, expected ${Instance.project.id}`)
+    }
+    return task
+  }
+
   function createTaskArtifacts(): PluginInput["taskArtifacts"] {
     return {
       async create(input: PluginTaskArtifactCreateInput): Promise<PluginTaskArtifact> {
-        requireTask(input.taskID)
+        requirePluginTask(input.taskID)
         const now = Date.now()
         const id = Identifier.ascending("artifact")
         Database.use((db) =>
@@ -144,7 +151,7 @@ export namespace Plugin {
         }
       },
       async latest(input: PluginTaskArtifactLookupInput): Promise<PluginTaskArtifact | undefined> {
-        requireTask(input.taskID)
+        requirePluginTask(input.taskID)
         const clauses = [
           eq(EngineArtifactTable.task_id, input.taskID),
           eq(EngineArtifactTable.kind, input.kind as EngineArtifactKind),
@@ -162,7 +169,7 @@ export namespace Plugin {
         return row ? pluginTaskArtifactFromRow(row) : undefined
       },
       async get(input: PluginTaskArtifactLookupInput & { id: string }): Promise<PluginTaskArtifact | undefined> {
-        requireTask(input.taskID)
+        requirePluginTask(input.taskID)
         const row = Database.use((db) =>
           db
             .select()
@@ -299,11 +306,6 @@ export namespace Plugin {
           const message = err instanceof Error ? err.message : String(err)
           diagnostics.push({ specifier: diagnosticSpecifier, serviceID, message })
           log.error("failed to load plugin", { path: diagnosticSpecifier, error: message })
-          Bus.publish(Session.Event.Error, {
-            error: new NamedError.Unknown({
-              message: `Failed to load plugin ${diagnosticSpecifier}: ${message}`,
-            }).toObject(),
-          })
         })
     }
 
@@ -349,11 +351,6 @@ export namespace Plugin {
           diagnostics.push({
             specifier: plugin,
             message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
-          })
-          Bus.publish(Session.Event.Error, {
-            error: new NamedError.Unknown({
-              message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
-            }).toObject(),
           })
           return ""
         })

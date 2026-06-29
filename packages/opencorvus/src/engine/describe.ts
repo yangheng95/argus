@@ -33,7 +33,7 @@ import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure
 import { SessionStatus } from "@/session/status"
 import { CronJobTable } from "@/scheduler/cron.sql"
 import { Database, and, desc, eq, isNotNull, or, sql } from "@/storage/db"
-import { listPendingAgentCoordinationRequests } from "./agent-coordination"
+import { listAgentCoordinationResponses, listPendingAgentCoordinationRequests } from "./agent-coordination"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -209,6 +209,10 @@ export interface AgentCoordinationRequestDesc {
   details: string
   requested_decision: string
   evidence_refs: string[]
+  last_failed_response_id?: string
+  last_failed_action_id?: string
+  last_action_error?: string
+  last_action_failed_at?: number
 }
 
 export interface OpenToolCallDesc {
@@ -277,7 +281,7 @@ export interface TaskDesc {
   frontend_design?: FrontendDesignHandoffDesc
   active_run_id?: string
   active_run_status?: string
-  /** True when `active_run_id` refers to a run that currently has no live
+  /** True when `active_run_id` refers to a live run that currently has no live
    *  executor (no live `engine_goal_run` attached) — i.e. this run has
    *  lost its OS-level execution context, typically because the owner
    *  process was restarted. Derived by `engine/recovery.ts#isRunOrphan`
@@ -791,8 +795,8 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   if (activeRunForTask) {
     activeRunStatus = activeRunForTask.status
     // Fact-only orphan probe from engine/orphan.ts. Phase-7 removed the
-    // abort-brake-on-startup path; the LLM reads `run_orphan` and
-    // decides whether to retry, re-dispatch, fail, or drop.
+    // abort-brake-on-startup path; the LLM reads `run_orphan` on live runs
+    // and decides whether to retry, re-dispatch, fail, or drop.
     runOrphan = isRunOrphan(task.project_id, activeRunForTask.id)
   }
 
@@ -896,7 +900,14 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       details: row.payload.details,
       requested_decision: row.payload.requested_decision,
       evidence_refs: row.payload.evidence_refs ?? [],
+      last_failed_response_id: row.payload.last_failed_response_id,
+      last_failed_action_id: row.payload.last_failed_action_id,
+      last_action_error: row.payload.last_action_error,
+      last_action_failed_at: row.payload.last_action_failed_at,
     }))
+  // Validate the full A2A mailbox while building the orchestrator view. Response rows are
+  // not prompt material, but malformed durable responses must fail loudly instead of hiding.
+  listAgentCoordinationResponses(task.id)
   const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
   const recentTerminalGoalRefills = describeTerminalGoalRefillNotifications(task.id)
   const taskCronWaits = describeTaskCronWaits(task.id, task.time_started ?? task.time_created)
@@ -1246,6 +1257,14 @@ export function renderTaskDescription(desc: TaskDesc): string {
       )
       lines.push(`  requested_decision: ${truncate(request.requested_decision, 240)}`)
       lines.push(`  details: ${truncate(request.details, 420)}${refs}`)
+      if (request.last_failed_action_id || request.last_action_error) {
+        const failedAt = request.last_action_failed_at
+          ? ` at=${new Date(request.last_action_failed_at).toISOString()}`
+          : ""
+        lines.push(
+          `  last_failed_action: response=${request.last_failed_response_id ?? "(unknown)"} action=${request.last_failed_action_id ?? "(unknown)"}${failedAt} error=${truncate(request.last_action_error ?? "(missing error)", 240)}`,
+        )
+      }
     }
     lines.push(
       `These requests are durable worker-to-orchestrator A2A messages. Answer a request with ` +

@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import path from "node:path"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
+import { AttachmentStore } from "../../src/storage/attachment-store"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -48,6 +52,32 @@ describe("task creation route", () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     expect(runTaskLoop).toHaveBeenCalledTimes(1)
+  }, 15_000)
+
+  test("POST /task rejects caller-supplied child task lineage", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    const app = Server.App()
+    const response = await app.request("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        request: "create a forged child task",
+        executor: "opencorvus",
+        requestID: "route-create-forged-child",
+        source: "panel",
+        metadata: { parent_task_id: "tsk_parent" },
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; data: { message: string } }
+    expect(body.name).toBe("ExternalChildTaskLineageError")
+    expect(body.data.message).toContain("metadata.parent_task_id is owned by the orchestrator scheduler")
+    expect(Database.use((db) => db.select().from(EngineTaskTable).all())).toHaveLength(0)
   }, 15_000)
 
   test("POST /task defaults init-git to true for missing directories", async () => {
@@ -213,5 +243,78 @@ describe("task creation route", () => {
     expect(session.metadata?.configOverlay).toMatchObject({
       prompt_profile: { active: "frontend-automation-debug" },
     })
+  }, 15_000)
+
+  test("POST /task rejects malformed attachment base64 before writing task attachments", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+    const writeAttachment = spyOn(AttachmentStore, "write")
+    const app = Server.App()
+    const response = await app.request("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        title: "malformed attachment orphan root",
+        request: "create with malformed upload",
+        executor: "opencorvus",
+        requestID: "route-create-malformed-attachment",
+        source: "panel",
+        promptProfile: "frontend-automation-debug",
+        attachments: [{ mime: "image/png", filename: "bad.png", data: "not base64!*" }],
+      }),
+    })
+
+    expect(response.status).not.toBe(202)
+    expect(writeAttachment).not.toHaveBeenCalled()
+    expect(runTaskLoop).not.toHaveBeenCalled()
+    const malformedTasks = Database.use((db) =>
+      db
+        .select()
+        .from(EngineTaskTable)
+        .all()
+        .filter((task) => task.request_id === "route-create-malformed-attachment"),
+    )
+    expect(malformedTasks).toHaveLength(0)
+    const orphanSessions = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .all()
+        .filter((session) => session.title === "malformed attachment orphan root"),
+    )
+    expect(orphanSessions).toHaveLength(0)
+  }, 15_000)
+
+  test("POST /task rejects malformed attachments before initializing a missing project directory", async () => {
+    await using tmp = await tmpdir()
+    const missingProject = path.join(tmp.path, "missing-project")
+
+    const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+    const writeAttachment = spyOn(AttachmentStore, "write")
+    const app = Server.App()
+    const response = await app.request("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": missingProject,
+      },
+      body: JSON.stringify({
+        title: "malformed attachment missing project",
+        request: "create missing project with malformed upload",
+        executor: "opencorvus",
+        requestID: "route-create-malformed-attachment-missing-project",
+        source: "panel",
+        attachments: [{ mime: "image/png", filename: "bad.png", data: "not base64!*" }],
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(writeAttachment).not.toHaveBeenCalled()
+    expect(runTaskLoop).not.toHaveBeenCalled()
+    expect(await fs.stat(missingProject).then(() => true, () => false)).toBe(false)
   }, 15_000)
 })

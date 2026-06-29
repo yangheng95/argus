@@ -45,6 +45,19 @@ test("runtime visual render uses the shared browser launch timeout resolver", as
   expect(source).not.toContain("OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000")
 })
 
+test("runtime visual render owns navigation by browser inactivity", async () => {
+  const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/runtime/visual-page.ts"), "utf8")
+
+  expect(source).toContain("withVisualBrowserInactivity")
+  expect(source).toContain("visual render browser inactive")
+  expect(source).toContain('() => page.goto(input.target, { waitUntil: "load", timeout: 0 })')
+  expect(source).toContain("() => page.waitForSelector(input.waitForSelector, { timeout: 0 })")
+  expect(source).not.toContain('page.goto(input.target, { waitUntil: "load", timeout: input.navigationTimeoutMs })')
+  expect(source).not.toContain(
+    "const inactivityTimeoutMs = launchTimeoutMs + navigationTimeoutMs + (input.settleMs ?? 2_500) + 30_000",
+  )
+})
+
 test("runtime visual render reports glyph coverage as a capture layer", async () => {
   const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/runtime/visual-page.ts"), "utf8")
 

@@ -209,7 +209,6 @@ export namespace Agent {
             webfetch: "allow",
             browser_preview: "allow",
             browser_preview_bind_local_module: "allow",
-            browser_preview_compare_regions: "allow",
             browser_preview_compare_scroll_slices: "allow",
           }),
         ),

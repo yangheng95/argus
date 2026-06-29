@@ -27,6 +27,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { ChannelIngress } from "../../src/channel/ingress"
+import { ChannelSupervisor } from "../../src/channel/supervisor"
 import { ControlMessage } from "../../src/control/message"
 import { EngineService } from "@/task-api"
 import { Question } from "../../src/question"
@@ -55,7 +56,7 @@ async function waitForTaskStatus(taskID: string, status: string) {
 
 describe("Gateway e2e — channel ingress routing (template §10)", () => {
   test("bound thread routes the message to the existing task without creating a new one", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -107,7 +108,7 @@ describe("Gateway e2e — channel ingress routing (template §10)", () => {
   })
 
   test("unbound thread with allow_create=false rejects without LLM hop", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -136,7 +137,7 @@ describe("Gateway e2e — channel ingress routing (template §10)", () => {
   test(
     "permission interaction reply skips the LLM hop entirely",
     async () => {
-      await using tmp = await tmpdir({ git: true })
+      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
@@ -189,7 +190,7 @@ describe("Gateway e2e — channel ingress routing (template §10)", () => {
   )
 
   test("question interaction passes the message text into the reply (no LLM)", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -242,7 +243,7 @@ describe("Gateway e2e — channel ingress routing (template §10)", () => {
 
 describe("Gateway e2e — task lifecycle through EngineService (template §9)", () => {
   test("create → message → cancel → delete writes match expected statuses", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -284,7 +285,7 @@ describe("Gateway e2e — task lifecycle through EngineService (template §9)", 
   })
 
   test("queue=true second same-directory task stays queued until the active task exits", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -320,7 +321,7 @@ describe("Gateway e2e — task lifecycle through EngineService (template §9)", 
   })
 
   test("retryTask flips a terminal task back to a non-terminal status", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -354,7 +355,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
   test(
     "bindThread + bindingsByTaskID round-trip returns the same rows",
     async () => {
-      await using tmp = await tmpdir({ git: true })
+      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
@@ -399,7 +400,7 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
   test(
     "HTTP GET /task/:taskID/bindings returns the bindings for the task only",
     async () => {
-      await using tmp = await tmpdir({ git: true })
+      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
@@ -438,13 +439,48 @@ describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)",
     },
     { timeout: 10_000 },
   )
+
+  test(
+    "HTTP GET /task/:taskID/bindings distinguishes a missing task from an existing task without bindings",
+    async () => {
+      await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+          const taskID = await EngineService.createTask({
+            request: "task with no bindings",
+            executor: "opencorvus",
+            kind: "workflow",
+            queue: false,
+            metadata: { source: "gateway:test" },
+          })
+
+          const emptyResponse = await Server.App().request(`/task/${encodeURIComponent(taskID)}/bindings`, {
+            headers: { "x-opencorvus-directory": tmp.path },
+          })
+          expect(emptyResponse.status).toBe(200)
+          expect(await emptyResponse.json()).toEqual([])
+
+          const missingResponse = await Server.App().request("/task/tsk_missing_bindings/bindings", {
+            headers: { "x-opencorvus-directory": tmp.path },
+          })
+          expect(missingResponse.status).toBe(404)
+
+          await EngineService.deleteTask(taskID).catch(() => undefined)
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 })
 
 // ── 4. HTTP transport coverage for gateway routes ───────────────────
 
 describe("Gateway e2e — HTTP routes via Server.App().request (template §11)", () => {
   test("POST /channel/message with bound thread reaches ControlMessage.handle through the route", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -493,7 +529,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
   })
 
   test("POST /gateway/channel/:platform/message bridges into ChannelIngress with the URL platform", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -530,7 +566,7 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
   })
 
   test("GET /gateway/stats returns project / task / capability summary", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -551,18 +587,42 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
         const body = (await response.json()) as {
           tasks: { total: number; recent: Array<{ id: string }>; status: Record<string, number> }
           capabilities: { total: number }
+          channelRuntime: { running: boolean; status: string; channels: string[] }
         }
         expect(body.tasks.total).toBeGreaterThanOrEqual(1)
         expect(body.tasks.recent.some((t) => t.id === taskID)).toBe(true)
         expect(typeof body.capabilities.total).toBe("number")
+        expect(typeof body.channelRuntime.running).toBe("boolean")
+        expect(typeof body.channelRuntime.status).toBe("string")
+        expect(Array.isArray(body.channelRuntime.channels)).toBe(true)
 
         await EngineService.deleteTask(taskID).catch(() => undefined)
       },
     })
   })
 
+  test("GET /gateway/stats propagates channel runtime status failures", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(ChannelSupervisor, "status").mockRejectedValue(new Error("channel runtime status unavailable"))
+
+        const response = await Server.App().request("/gateway/stats", {
+          headers: { "x-opencorvus-directory": tmp.path },
+        })
+
+        expect(response.status).toBe(500)
+        await expect(response.json()).resolves.toMatchObject({
+          name: "UnknownError",
+          data: { message: "channel runtime status unavailable" },
+        })
+      },
+    })
+  })
+
   test("GET /task/:taskID/bindings returns the documented row shape (id, task_id, platform, channel, thread)", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {

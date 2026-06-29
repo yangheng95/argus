@@ -475,8 +475,7 @@ export namespace LSP {
           textDocument: {
             uri,
           },
-        })
-        .catch(() => []),
+        }),
     )
       .then((result) => result.flat() as (LSP.DocumentSymbol | LSP.Symbol)[])
       .then((result) => result.filter(Boolean))

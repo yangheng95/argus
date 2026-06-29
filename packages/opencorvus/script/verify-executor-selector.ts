@@ -12,6 +12,7 @@
  */
 
 import { launchBrowser } from "../../overlay/test/launch"
+import { gotoWithBrowserInactivity } from "./benchmark/browser-inactivity"
 import path from "node:path"
 
 const url = process.argv[2] ?? "http://localhost:5173/"
@@ -29,7 +30,7 @@ try {
     if (msg.type() === "error") console.error(`[console.error] ${msg.text()}`)
   })
 
-  await page.goto(url, { waitUntil: "networkidle", timeout: 30000 })
+  await gotoWithBrowserInactivity(page, url, "networkidle", 30_000)
   await new Promise((r) => setTimeout(r, 3000))
 
   const chip = await page.$(".executor-selector .executor-chip")

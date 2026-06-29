@@ -69,7 +69,7 @@ async function firstGlobalInstructionFile(): Promise<string | undefined> {
 
 async function resolveRelative(instruction: string): Promise<string[]> {
   if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
-    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
+    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree)
   }
   if (!Flag.OPENCORVUS_CONFIG_DIR) {
     log.warn(
@@ -134,7 +134,7 @@ export namespace InstructionPrompt {
               cwd: path.dirname(instruction),
               absolute: true,
               include: "file",
-            }).catch(() => [])
+            })
           : await resolveRelative(instruction)
         matches.forEach((p) => {
           paths.add(path.resolve(p))
@@ -166,7 +166,14 @@ export namespace InstructionPrompt {
     if (visited.has(key)) return ""
     visited.add(key)
 
-    const content = await Filesystem.readText(filepath).catch(() => "")
+    const content = await Filesystem.readText(filepath).catch((error) => {
+      throw new Error(
+        `Failed to read instruction file ${filepath}: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          cause: error,
+        },
+      )
+    })
     if (!content) return ""
 
     const includes: string[] = []
@@ -207,8 +214,18 @@ export namespace InstructionPrompt {
     }
     const fetches = urls.map((url) =>
       fetch(url, { signal: AbortSignal.timeout(5000) })
-        .then((res) => (res.ok ? res.text() : ""))
-        .catch(() => "")
+        .then((res) => {
+          if (!res.ok) throw new Error(`Instruction URL ${url} returned HTTP ${res.status}`)
+          return res.text()
+        })
+        .catch((error) => {
+          throw new Error(
+            `Failed to load instruction URL ${url}: ${error instanceof Error ? error.message : String(error)}`,
+            {
+              cause: error,
+            },
+          )
+        })
         .then((x) => (x ? "Instructions from: " + url + "\n" + x : "")),
     )
 

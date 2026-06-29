@@ -17,11 +17,12 @@ import { Worktree } from "./index"
  * orphaned-worktree sweep (§2.1 / §6 of that doc, and the addendum
  * `specs/new-arch/2026-05-15-orphan-worktree-gc.md`).
  *
- * A directory under `<primary>/.opencorvus/r/w/` is removed ONLY when
+ * A managed path under `<primary>/.opencorvus/r/w/` is removed ONLY when
  * it is genuinely abandoned junk. "Older than N days" is necessary but NOT
- * sufficient: §2.3 of the lifecycle doc forbids deleting failed / aborted /
- * cancelled / restart worktrees because that in-transit state is the input
- * to the next retry. So a worktree is reclaimed only when ALL hold:
+ * sufficient for physical directories: §2.3 of the lifecycle doc forbids
+ * deleting failed / aborted / cancelled / restart worktrees because that
+ * in-transit state is the input to the next retry. So a physical worktree is
+ * reclaimed only when ALL hold:
  *
  *   1. NOT referenced by any live goal_run's workspace_dir.
  *   2. directory mtime older than `retentionDays` (default 3).
@@ -30,9 +31,12 @@ import { Worktree } from "./index"
  *      the project's primary branch (the no-remote analogue of Claude
  *      Code's "no unpushed commits" gate).
  *
- * OR it is a zombie: lives under the worktrees root, its `.git` linkage is
- * gone, it is old and not live — the Windows partial-rm residue described in
- * lifecycle §8.1.
+ * OR it is one of the non-physical residues proven by the 2026-06-27 audit:
+ * a registry-only prunable entry whose branch has no in-transit commits, or
+ * a database (DB) sandbox-only path that no longer has either a directory or git
+ * registry entry. Apply always goes through the project-managed remover so
+ * `project.sandboxes` converges only after the physical Git removal step
+ * succeeds.
  *
  * Any uncertainty (a git probe fails while `.git` is present) → PRESERVE.
  * We never trade a false delete of in-transit acceptance work for tidiness.
@@ -47,7 +51,12 @@ export namespace WorktreeGC {
   // flight rather than overlapping git operations on the same repos.
   let running = false
 
-  export type Candidate = { projectID: string; primaryDir: string; directory: string }
+  export type Candidate = {
+    projectID: string
+    primaryDir: string
+    directory: string
+    reason: "old-clean" | "old-zombie" | "registry-prunable" | "sandbox-missing"
+  }
   export type Plan = { candidates: Candidate[] }
   export type ApplyResult = { removed: number; failed: number }
 
@@ -104,6 +113,19 @@ export namespace WorktreeGC {
     return decode(revs.stdout).trim() === "0"
   }
 
+  async function branchHasNoInTransitCommits(
+    primaryDir: string,
+    primaryBranch: string,
+    branch: string,
+  ): Promise<boolean> {
+    const revs = await runGit(["rev-list", "--count", `${primaryBranch}..${branch}`], {
+      cwd: primaryDir,
+      timeoutProfile: "fast",
+    }).catch(() => undefined)
+    if (!revs || revs.exitCode !== 0) return false
+    return decode(revs.stdout).trim() === "0"
+  }
+
   function decode(input: Uint8Array | undefined): string {
     if (!input?.length) return ""
     return new TextDecoder().decode(input)
@@ -148,12 +170,26 @@ export namespace WorktreeGC {
     return branch
   }
 
+  async function addManagedPath(
+    input: {
+      primaryDir: string
+      directory: string
+      out: Map<string, string>
+    },
+  ) {
+    if (!(await Worktree.isManagedWorktreeDirectory(input.primaryDir, input.directory))) return
+    input.out.set(await realCanon(input.directory), input.directory)
+  }
+
   export async function inspect(opts?: { retentionDays?: number; now?: number }): Promise<Plan> {
     const days = opts?.retentionDays ?? DEFAULT_RETENTION_DAYS
     const cutoff = (opts?.now ?? Date.now()) - days * 24 * 60 * 60 * 1000
 
     const projects = Database.use((db) =>
-      db.select({ id: ProjectTable.id, worktree: ProjectTable.worktree }).from(ProjectTable).all(),
+      db
+        .select({ id: ProjectTable.id, worktree: ProjectTable.worktree, sandboxes: ProjectTable.sandboxes })
+        .from(ProjectTable)
+        .all(),
     )
 
     const candidates: Candidate[] = []
@@ -162,8 +198,33 @@ export namespace WorktreeGC {
       const primaryDir = project.worktree
       if (!primaryDir) continue
       const root = Worktree.worktreesRoot(primaryDir)
-      const directories = await worktreeDirectories(root)
-      if (directories.length === 0) continue
+      const directories = new Map<string, string>()
+      for (const directory of await worktreeDirectories(root)) {
+        await addManagedPath({ primaryDir, directory, out: directories })
+      }
+
+      const registeredByDirectory = new Map<string, Worktree.RegisteredWorktreeEntry>()
+      const sandboxKeys = new Set<string>()
+      const registered = await Worktree.listRegisteredWorktrees(primaryDir).catch((error) => {
+        log.warn("failed to read git worktree registry; preserving registry-only candidates", {
+          projectID: project.id,
+          primaryDir,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return [] as Worktree.RegisteredWorktreeEntry[]
+      })
+      for (const entry of registered) {
+        if (!(await Worktree.isManagedWorktreeDirectory(primaryDir, entry.path))) continue
+        const key = await realCanon(entry.path)
+        registeredByDirectory.set(key, entry)
+        directories.set(key, entry.path)
+      }
+      for (const sandbox of project.sandboxes ?? []) {
+        if (!(await Worktree.isManagedWorktreeDirectory(primaryDir, sandbox))) continue
+        const key = await realCanon(sandbox)
+        sandboxKeys.add(key)
+        directories.set(key, sandbox)
+      }
 
       const liveDirs = new Set<string>()
       for (const goalRun of listLiveGoalRunsForProject(project.id)) {
@@ -175,12 +236,39 @@ export namespace WorktreeGC {
       const primaryBranch = await primaryBranchOf(primaryDir)
 
       for (const directory of directories) {
-        if (liveDirs.has(await realCanon(directory))) continue
+        const [key, displayDirectory] = directory
+        if (liveDirs.has(key)) continue
 
-        const stat = await fs.stat(directory).catch(() => undefined)
-        if (!stat || !isOlderThan(stat, cutoff)) continue
+        const registeredEntry = registeredByDirectory.get(key)
+        const stat = await fs.stat(displayDirectory).catch(() => undefined)
+        if (!stat) {
+          if (
+            registeredEntry?.prunable === true &&
+            primaryBranch &&
+            registeredEntry.branch &&
+            (await branchHasNoInTransitCommits(primaryDir, primaryBranch, registeredEntry.branch))
+          ) {
+            candidates.push({
+              projectID: project.id,
+              primaryDir,
+              directory: displayDirectory,
+              reason: "registry-prunable",
+            })
+            continue
+          }
+          if (sandboxKeys.has(key) && !registeredEntry) {
+            candidates.push({
+              projectID: project.id,
+              primaryDir,
+              directory: displayDirectory,
+              reason: "sandbox-missing",
+            })
+          }
+          continue
+        }
+        if (!isOlderThan(stat, cutoff)) continue
 
-        const gitLink = path.join(directory, ".git")
+        const gitLink = path.join(displayDirectory, ".git")
         const hasGitLink = await fs
           .stat(gitLink)
           .then(() => true)
@@ -189,15 +277,15 @@ export namespace WorktreeGC {
         if (!hasGitLink) {
           // Zombie residue (lifecycle §8.1): old, under the worktrees root,
           // no git linkage, not live → reclaim.
-          candidates.push({ projectID: project.id, primaryDir, directory })
+          candidates.push({ projectID: project.id, primaryDir, directory: displayDirectory, reason: "old-zombie" })
           continue
         }
 
         if (!primaryBranch) continue
-        if (!(await gitClean(directory))) continue
-        if (!(await noInTransitCommits(directory, primaryBranch))) continue
+        if (!(await gitClean(displayDirectory))) continue
+        if (!(await noInTransitCommits(displayDirectory, primaryBranch))) continue
 
-        candidates.push({ projectID: project.id, primaryDir, directory })
+        candidates.push({ projectID: project.id, primaryDir, directory: displayDirectory, reason: "old-clean" })
       }
     }
 
@@ -211,12 +299,13 @@ export namespace WorktreeGC {
       try {
         await Instance.provide({
           directory: c.primaryDir,
-          fn: () => Worktree.remove({ directory: c.directory }),
+          fn: () => Worktree.removeManagedProjectWorktreeDirectory({ projectID: c.projectID, directory: c.directory }),
         })
         removed++
         log.info("orphan worktree removed", {
           projectID: c.projectID,
           directory: c.directory,
+          reason: c.reason,
         })
       } catch (err) {
         failed++

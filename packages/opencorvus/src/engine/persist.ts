@@ -90,9 +90,7 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
     typeof parsed.summary === "string" && parsed.summary.trim().length > 0
       ? `Report summary: ${parsed.summary.trim()}`
       : undefined,
-    typeof parsed.error === "string" && parsed.error.length > 0
-      ? `Report error: ${parsed.error.trim()}`
-      : undefined,
+    typeof parsed.error === "string" && parsed.error.length > 0 ? `Report error: ${parsed.error.trim()}` : undefined,
   ].filter((line): line is string => Boolean(line))
   if (lines.length === 0) {
     throw new Error(`latestBuildReportForGoal: malformed empty build report ${entry.id} for goal ${goalID}`)
@@ -109,7 +107,10 @@ function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; 
   if (report) {
     lines.push(report)
   }
-  if (lines.length === 0) lines.push(`Previous build attempt ${input.priorRun.id} recorded no terminal error; status=${input.priorRun.status}.`)
+  if (lines.length === 0)
+    lines.push(
+      `Previous build attempt ${input.priorRun.id} recorded no terminal error; status=${input.priorRun.status}.`,
+    )
   return lines.join("\n")
 }
 
@@ -583,7 +584,13 @@ export function upsertGoalsFromArchitect(
     now: number
   },
 ): {
-  persisted: Array<{ id: string; title: string; llmID: string }>
+  persisted: Array<{
+    id: string
+    title: string
+    llmID: string
+    depends_on: string[]
+    acceptance_specs: GoalRowInput["acceptance_specs"]
+  }>
   llmToDBID: Map<string, string>
   deletedIDs: string[]
 } {
@@ -638,7 +645,13 @@ export function upsertGoalsFromArchitect(
     })
   }
 
-  const persisted: Array<{ id: string; title: string; llmID: string }> = []
+  const persisted: Array<{
+    id: string
+    title: string
+    llmID: string
+    depends_on: string[]
+    acceptance_specs: GoalRowInput["acceptance_specs"]
+  }> = []
   for (let index = 0; index < plan.length; index++) {
     const { llmID, dbID, isNew, goal } = plan[index]
     const orderIndex = isNew ? nextNewOrderIndex++ : (existingByID.get(dbID)?.order_index ?? index)
@@ -702,7 +715,7 @@ export function upsertGoalsFromArchitect(
         .where(eq(EngineGoalTable.id, dbID))
         .run()
     }
-    persisted.push({ id: dbID, title: goal.title, llmID })
+    persisted.push({ id: dbID, title: goal.title, llmID, depends_on: deps, acceptance_specs: goal.acceptance_specs })
   }
 
   return { persisted, llmToDBID, deletedIDs }
@@ -2517,8 +2530,10 @@ export function recordToolExecuteError(input: {
  * and window are hardcoded constants — no config knob to drift.
  *
  * Returns `{ tripped: false, ... }` when the count stayed under threshold,
- * the task is already terminal, or it disappeared. Otherwise marks the task
- * `failed` and returns `{ tripped: true, consecutive, windowMs }`.
+ * the task is already terminal, or it disappeared. Otherwise records a
+ * visible task error and returns `{ tripped: true, consecutive, windowMs }`.
+ * It does not write terminal failure; the scheduler owns success/failure
+ * lifecycle decisions from the accumulated stream-error artifacts.
  */
 export const ORCHESTRATOR_STREAM_ERROR_FUSE_THRESHOLD = 3
 export const ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS = 60_000
@@ -2552,10 +2567,9 @@ export async function maybeTripOrchestratorStreamErrorFuse(input: {
   await updateTask(
     current,
     {
-      status: "failed",
       error: `Orchestrator stream failed ${recent.length} consecutive times within ${seconds}s — last error: ${input.lastReason}. Operator must retry or fail_task.`,
     },
-    `Stream-error fuse tripped after ${recent.length} consecutive failures`,
+    `Stream-error fuse tripped after ${recent.length} consecutive failures; scheduler decision required`,
   )
   return {
     tripped: true,

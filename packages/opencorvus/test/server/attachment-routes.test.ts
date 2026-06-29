@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import * as fs from "node:fs/promises"
 import sharp from "sharp"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -11,6 +12,7 @@ Log.init({ print: false })
 
 describe("attachment routes", () => {
   afterEach(async () => {
+    mock.restore()
     await resetDatabase()
   })
 
@@ -140,5 +142,114 @@ describe("attachment routes", () => {
 
     expect(response.status).toBe(404)
     expect(await response.text()).toBe("Not found")
+  })
+
+  test("missing stored attachment files return 404", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
+    let url = ""
+    let abs = ""
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ref = await AttachmentStore.write(Instance.project.id, png, "image/png", "shot.png")
+        url = ref.url
+        abs = AttachmentStore.resolveAbsolute(Instance.project.id, ref.url.slice(ref.url.lastIndexOf("/") + 1))!
+      },
+    })
+    await fs.unlink(abs)
+
+    const response = await Server.App().request(url, {
+      method: "GET",
+      headers: { "x-opencorvus-directory": tmp.path },
+    })
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toBe("Not found")
+  })
+
+  test("stored attachment stat access errors propagate instead of becoming 404", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
+    let url = ""
+    let abs = ""
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ref = await AttachmentStore.write(Instance.project.id, png, "image/png", "shot.png")
+        url = ref.url
+        abs = AttachmentStore.resolveAbsolute(Instance.project.id, ref.url.slice(ref.url.lastIndexOf("/") + 1))!
+      },
+    })
+
+    const originalStat = fs.stat
+    spyOn(fs, "stat").mockImplementation(async (target, ...rest) => {
+      if (String(target) === abs) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException
+        error.code = "EACCES"
+        throw error
+      }
+      return originalStat(target, ...rest)
+    })
+
+    const response = await Server.App().request(url, {
+      method: "GET",
+      headers: { "x-opencorvus-directory": tmp.path },
+    })
+    const body = (await response.json()) as { name?: string; data?: { message?: string } }
+
+    expect(response.status).toBe(500)
+    expect(body.name).toBe("UnknownError")
+    expect(body.data?.message).toContain("permission denied")
+  })
+
+  test("thumbnail source stat access errors propagate instead of becoming 404", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const png = await sharp({
+      create: {
+        width: 1440,
+        height: 900,
+        channels: 3,
+        background: "#4f46e5",
+      },
+    })
+      .png()
+      .toBuffer()
+
+    let url = ""
+    let abs = ""
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ref = await AttachmentStore.write(Instance.project.id, png, "image/png", "shot.png")
+        url = ref.url
+        abs = AttachmentStore.resolveAbsolute(Instance.project.id, ref.url.slice(ref.url.lastIndexOf("/") + 1))!
+      },
+    })
+
+    const originalStat = fs.stat
+    spyOn(fs, "stat").mockImplementation(async (target, ...rest) => {
+      if (String(target) === abs) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException
+        error.code = "EPERM"
+        throw error
+      }
+      return originalStat(target, ...rest)
+    })
+
+    const response = await Server.App().request(
+      `${url}?variant=${AttachmentStore.SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      {
+        method: "GET",
+        headers: { "x-opencorvus-directory": tmp.path },
+      },
+    )
+    const body = (await response.json()) as { name?: string; data?: { message?: string } }
+
+    expect(response.status).toBe(500)
+    expect(body.name).toBe("UnknownError")
+    expect(body.data?.message).toContain("permission denied")
   })
 })

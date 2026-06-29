@@ -1,15 +1,8 @@
-export const VISUAL_QA_CONTEXT_TOOL_IDS = [
-  "read",
-  "glob",
-  "search_code",
-  "list",
-  "memory",
-] as const
+export const VISUAL_QA_CONTEXT_TOOL_IDS = ["read", "glob", "search_code", "list", "memory"] as const
 
 export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
   "browser_preview",
   "browser_preview_bind_local_module",
-  "browser_preview_compare_regions",
   "browser_preview_compare_scroll_slices",
   "bash",
   "edit",

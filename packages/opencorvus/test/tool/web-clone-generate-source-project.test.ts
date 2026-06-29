@@ -172,7 +172,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceFullCss).toContain(".fade-test:dir(rtl):after")
         expect(sourceFullCss).not.toContain("&:dir")
         expect(sourceFullCss).not.toContain(":after:dir")
-
       },
     })
   }, 30_000)
@@ -415,7 +414,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"nextReplacement": null')
         expect(sourceProjectManifest.semanticReplacements.count).toBe(1)
-
       },
     })
   }, 30_000)
@@ -492,7 +490,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
-
       },
     })
   }, 30_000)
@@ -569,7 +566,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "event_or_news_list_component"')
-
       },
     })
   }, 30_000)
@@ -607,7 +603,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "card_collection_component"')
-
       },
     })
   }, 30_000)
@@ -714,7 +709,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
-
       },
     })
   }, 30_000)
@@ -766,7 +760,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
-
       },
     })
   }, 30_000)
@@ -843,7 +836,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
-
       },
     })
   }, 30_000)
@@ -880,7 +872,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
-
       },
     })
   }, 30_000)
@@ -925,7 +916,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(headerComponent).not.toContain("data-source-node-id")
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 1')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
-
       },
     })
   }, 30_000)
@@ -962,7 +952,6 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sectionComponent).not.toContain("data-source-node-id")
         expect(sourceDomIterationState).toContain('"semanticReplacementCount": 2')
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
-
       },
     })
   }, 30_000)

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
-import { stat, readFile } from "node:fs/promises"
+import * as fs from "node:fs/promises"
 import path from "node:path"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { lazy } from "../../util/lazy"
@@ -57,6 +57,21 @@ function thumbnailHeaders(size: number) {
   }
 }
 
+function isMissingPathError(error: unknown): boolean {
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined
+  return code === "ENOENT" || code === "ENOTDIR"
+}
+
+async function statFileOrMissing(abs: string) {
+  try {
+    const info = await fs.stat(abs)
+    return info.isFile() ? info : undefined
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined
+    throw error
+  }
+}
+
 /**
  * GET /attachment/:projectID/:name
  * Serves a content-addressed attachment previously written by AttachmentStore.
@@ -87,10 +102,10 @@ export const AttachmentRoutes = lazy(() =>
         if (variant !== AttachmentStore.SCREENSHOT_BROWSER_THUMBNAIL_VARIANT) return c.text("Not found", 404)
         const sourceAbs = AttachmentStore.resolveAbsolute(projectID, name)
         if (!sourceAbs) return c.text("Not found", 404)
-        const sourceInfo = await stat(sourceAbs).catch(() => undefined)
+        const sourceInfo = await statFileOrMissing(sourceAbs)
         if (!sourceInfo || !sourceInfo.isFile()) return c.text("Not found", 404)
         const thumbnail = await AttachmentStore.screenshotBrowserThumbnail(projectID, name)
-        const body = await readFile(thumbnail.abs)
+        const body = await fs.readFile(thumbnail.abs)
         return new Response(body as unknown as BodyInit, {
           status: 200,
           headers: thumbnailHeaders(thumbnail.size),
@@ -98,9 +113,9 @@ export const AttachmentRoutes = lazy(() =>
       }
       const abs = AttachmentStore.resolveAbsolute(projectID, name)
       if (!abs) return c.text("Not found", 404)
-      const info = await stat(abs).catch(() => undefined)
+      const info = await statFileOrMissing(abs)
       if (!info || !info.isFile()) return c.text("Not found", 404)
-      const body = await readFile(abs)
+      const body = await fs.readFile(abs)
       return new Response(body as unknown as BodyInit, {
         status: 200,
         headers: attachmentHeaders(name, info.size),

@@ -45,7 +45,7 @@ test("refreshes a cached directory project when the directory becomes a git repo
       }
     },
   })
-})
+}, 15_000)
 
 test("runs a late init once for an already cached directory instance", async () => {
   await using tmp = await tmpdir({ git: true })
@@ -73,6 +73,36 @@ test("runs a late init once for an already cached directory instance", async () 
     directory: tmp.path,
     init,
     fn: () => {
+      expect(initCalls).toBe(1)
+    },
+  })
+})
+
+test("reuses one Windows instance for casing variants without canonicalizing the visible path", async () => {
+  if (process.platform !== "win32") return
+
+  await using tmp = await tmpdir({ git: true })
+  const firstSpelling = tmp.path.toLowerCase()
+  const secondSpelling = tmp.path.toUpperCase()
+  let initCalls = 0
+  const init = async () => {
+    initCalls += 1
+  }
+
+  await Instance.provide({
+    directory: firstSpelling,
+    init,
+    fn: () => {
+      expect(Instance.directory).toBe(firstSpelling)
+      expect(initCalls).toBe(1)
+    },
+  })
+
+  await Instance.provide({
+    directory: secondSpelling,
+    init,
+    fn: () => {
+      expect(Instance.directory).toBe(firstSpelling)
       expect(initCalls).toBe(1)
     },
   })

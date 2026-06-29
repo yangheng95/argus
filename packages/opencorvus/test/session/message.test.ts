@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { APICallError } from "ai"
 import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
+import sharp from "sharp"
 import { Message } from "../../src/session/message"
 import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Instance } from "../../src/project/instance"
@@ -109,14 +110,17 @@ function basePart(messageID: string, id: string) {
   }
 }
 
-function pngHeader(width: number, height: number): Buffer {
-  const bytes = Buffer.alloc(24)
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0)
-  bytes.writeUInt32BE(13, 8)
-  bytes.write("IHDR", 12, "ascii")
-  bytes.writeUInt32BE(width, 16)
-  bytes.writeUInt32BE(height, 20)
-  return bytes
+async function pngImage(width: number, height: number): Promise<Buffer> {
+  const svg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+      `<rect width="${width}" height="${height}" fill="white"/>` +
+      `<rect x="0" y="0" width="1" height="1" fill="black"/>` +
+      `<rect x="${width - 1}" y="0" width="1" height="1" fill="black"/>` +
+      `<rect x="0" y="${height - 1}" width="1" height="1" fill="black"/>` +
+      `<rect x="${width - 1}" y="${height - 1}" width="1" height="1" fill="black"/>` +
+      `</svg>`,
+  )
+  return await sharp(svg).png().toBuffer()
 }
 
 function handoffFixture(): CompactionHandoff.Info {
@@ -147,6 +151,25 @@ function handoffFixture(): CompactionHandoff.Info {
         extraKeys: [],
       },
     },
+    agentHandoff: {
+      kind: "build",
+      deliverables: [
+        {
+          fact: "Structured compaction boundary validation is the build deliverable",
+          evidence: "packages/opencorvus/src/session/message.ts",
+        },
+      ],
+      codeChanges: [
+        {
+          path: "packages/opencorvus/src/session/message.ts",
+          fact: "Boundary replay accepts only structured compact handoffs",
+          evidence: "packages/opencorvus/src/session/message.ts",
+        },
+      ],
+      verification: [],
+      runtimeState: [],
+      handoffArtifacts: [],
+    },
     decisions: [],
     evidence: [
       {
@@ -171,6 +194,18 @@ function handoffFixture(): CompactionHandoff.Info {
 }
 
 describe("session.message.toModelMessage", () => {
+  test("tool pending state requires a lifecycle start time", () => {
+    expect(Message.ToolStatePending.safeParse({ status: "pending", input: {}, raw: "" }).success).toBe(false)
+    expect(
+      Message.ToolStatePending.safeParse({
+        status: "pending",
+        input: {},
+        raw: "",
+        time: { start: 1_782_000_001_000 },
+      }).success,
+    ).toBe(true)
+  })
+
   test("rejects text visibility split flags at the message boundary", () => {
     const base = {
       ...basePart("m-user", "p1"),
@@ -450,7 +485,7 @@ describe("session.message.toModelMessage", () => {
       directory: tmp.path,
       fn: async () => {
         const messageID = "m-user-ref"
-        const bytes = pngHeader(16, 16)
+        const bytes = await pngImage(16, 16)
         const ref = await AttachmentStore.write(Instance.project.id, bytes, "image/png", "ref.png")
 
         const input: Message.WithParts[] = [
@@ -491,7 +526,7 @@ describe("session.message.toModelMessage", () => {
       directory: tmp.path,
       fn: async () => {
         const messageID = "m-user-oversized-ref"
-        const ref = await AttachmentStore.write(Instance.project.id, pngHeader(1440, 19773), "image/png", "full.png")
+        const ref = await AttachmentStore.write(Instance.project.id, await pngImage(1440, 19773), "image/png", "full.png")
         const input: Message.WithParts[] = [
           {
             info: userInfo(messageID),
@@ -515,7 +550,9 @@ describe("session.message.toModelMessage", () => {
         }
 
         expect(ModelImageInputTooLargeError.isInstance(caught)).toBe(true)
-        expect((caught as { data: { width: number; height: number; maxDimension: number; source: string } }).data).toMatchObject({
+        expect(
+          (caught as { data: { width: number; height: number; maxDimension: number; source: string } }).data,
+        ).toMatchObject({
           width: 1440,
           height: 19773,
           maxDimension: 8000,
@@ -531,7 +568,7 @@ describe("session.message.toModelMessage", () => {
   test("rejects oversized tool result data URL images before image-data replay", async () => {
     const userID = "m-user-oversized-tool"
     const assistantID = "m-assistant-oversized-tool"
-    const payload = pngHeader(1440, 19773).toString("base64")
+    const payload = (await pngImage(1440, 19773)).toString("base64")
     const input: Message.WithParts[] = [
       {
         info: userInfo(userID),
@@ -587,6 +624,73 @@ describe("session.message.toModelMessage", () => {
       width: 1440,
       height: 19773,
     })
+  })
+
+  test("rejects malformed user image data URLs before provider conversion", async () => {
+    const userID = "m-user-malformed-data-url"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "file-malformed-user"),
+            type: "file",
+            mime: "image/png",
+            filename: "bad.png",
+            url: "data:image/png;base64,not base64!*",
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    await expect(Message.toModelMessages(input, model)).rejects.toThrow("invalid base64 payload")
+  })
+
+  test("rejects malformed tool result data URL attachments before image-data replay", async () => {
+    const userID = "m-user-malformed-tool-attachment"
+    const assistantID = "m-assistant-malformed-tool-attachment"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "inspect image",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-malformed-attachment",
+            tool: "browser_preview",
+            state: {
+              status: "completed",
+              input: { targetID: "target" },
+              output: "screenshot",
+              title: "Browser preview",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-malformed-tool"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "bad.png",
+                  url: "data:image/png;base64,not base64!*",
+                },
+              ],
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    await expect(Message.toModelMessages(input, model)).rejects.toThrow("invalid base64 payload")
   })
 
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
@@ -679,6 +783,55 @@ describe("session.message.toModelMessage", () => {
         ],
       },
     ])
+  })
+
+  test("rejects missing stored tool-result attachments instead of dropping evidence", async () => {
+    const userID = "m-user-missing-tool-attachment"
+    const assistantID = "m-assistant-missing-tool-attachment"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "inspect the screenshot",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-missing-attachment",
+            tool: "browser_preview",
+            state: {
+              status: "completed",
+              input: { targetID: "target" },
+              output: "screenshot",
+              title: "Browser preview",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-missing"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "missing.png",
+                  url: "/attachment/proj_missing/sha_missing.png",
+                },
+              ],
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    await expect(Message.toModelMessages(input, model)).rejects.toThrow(
+      "Failed to read tool-result attachment /attachment/proj_missing/sha_missing.png",
+    )
   })
 
   test("compaction projection strips media and truncates large tool outputs", async () => {
@@ -1600,6 +1753,80 @@ describe("session.message.filterCompacted", () => {
     const result = await Message.filterCompacted(stream(newestFirst))
 
     expect(result.map((message) => message.info.id)).toEqual([
+      compactionUser,
+      compactionSummary,
+      recentUser,
+      recentAssistant,
+    ])
+  })
+
+  test("does not compact around schema-valid summary with mismatched agent payload kind", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+    const mismatched = {
+      ...handoffFixture(),
+      agentHandoff: {
+        kind: "orchestrator",
+        workflowDecisions: [
+          {
+            fact: "Orchestrator payload cannot stand in for a build source message",
+            evidence: "message boundary regression test",
+          },
+        ],
+        delegatedSessions: [],
+        goalGraphState: [],
+        pendingDecisions: [],
+      },
+    } satisfies CompactionHandoff.Info
+    expect(CompactionHandoff.Schema.safeParse(mismatched).success).toBe(true)
+    expect(
+      CompactionHandoff.isValidSummaryMessage({
+        role: "assistant",
+        summary: true,
+        finish: "stop",
+        structured: mismatched,
+      }),
+    ).toBe(false)
+
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+          structured: mismatched,
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [{ ...basePart(compactionUser, "p-compaction"), type: "compaction", auto: true }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      "m-old-user",
+      "m-old-assistant",
       compactionUser,
       compactionSummary,
       recentUser,

@@ -2,6 +2,29 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import z from "zod"
 import type { StreamActivityGate } from "@/util/stream-activity"
+import { Database, eq } from "@/storage/db"
+import { SessionTable } from "./session.sql"
+import { timelineOrderKey, timelineOrderKeyDomain } from "@/timeline/order"
+
+export function sessionLifecycleOrderKey(sessionID: string): string {
+  const row = Database.use((db) =>
+    db.select({ timeCreated: SessionTable.time_created }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
+  )
+  if (!row) throw new Error(`session lifecycle ${sessionID} missing persisted row`)
+  return timelineOrderKey({
+    domain: "session",
+    time: row.timeCreated,
+    id: sessionID,
+  })
+}
+
+function isSessionOrderKey(value: string): boolean {
+  try {
+    return timelineOrderKeyDomain(value, "session lifecycle orderKey") === "session"
+  } catch {
+    return false
+  }
+}
 
 export namespace SessionStatus {
   /**
@@ -41,11 +64,16 @@ export namespace SessionStatus {
     })
   export type Info = z.infer<typeof Info>
 
+  export const LifecycleOrderKey = z.string().min(1).refine(isSessionOrderKey, {
+    message: "expected session orderKey",
+  })
+
   export const Event = {
     Status: BusEvent.define(
       "session.status",
       z.object({
         sessionID: z.string(),
+        orderKey: LifecycleOrderKey,
         status: Info,
       }),
     ),
@@ -53,6 +81,7 @@ export namespace SessionStatus {
       "session.idle",
       z.object({
         sessionID: z.string(),
+        orderKey: LifecycleOrderKey,
       }),
     ),
   }
@@ -142,13 +171,16 @@ export namespace SessionStatus {
       state[sessionID] = status
     }
     if (options?.publish !== false) {
+      const orderKey = sessionLifecycleOrderKey(sessionID)
       Bus.publish(Event.Status, {
         sessionID,
+        orderKey,
         status,
       })
       if (status.type === "idle") {
         Bus.publish(Event.Idle, {
           sessionID,
+          orderKey,
         })
       }
     }

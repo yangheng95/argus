@@ -278,8 +278,10 @@ describe("browser preview routes", () => {
         const target = await persistTestBrowserPreviewTarget({ taskID, url: preview.url.href })
         const desktopPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
         const mobilePath = await browserPreviewArtifactPath(tmp.path, taskID, "mobile.png")
+        const newerDesktopPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop-newer.png")
         await fs.writeFile(desktopPath, "desktop-evidence")
         await fs.writeFile(mobilePath, "mobile-evidence")
+        await fs.writeFile(newerDesktopPath, "desktop-newer-evidence")
         const desktopEvidenceID = persistBrowserPreviewEvidence({
           projectRoot: tmp.path,
           taskID,
@@ -304,20 +306,21 @@ describe("browser preview routes", () => {
           diagnostics: ["mobile persisted evidence"],
           now: 2000,
         })
-        persistBrowserPreviewEvidence({
+        const newerDesktopEvidenceID = persistBrowserPreviewEvidence({
           projectRoot: tmp.path,
           taskID,
           targetID: target.id,
           viewportID: "desktop",
           operationKind: "preview-capture",
           status: "passed",
-          summary: "newer unreadable desktop evidence",
+          summary: "newer readable desktop evidence",
           capture: {
             captured: true,
             passed: true,
-            path: await browserPreviewArtifactPath(tmp.path, taskID, "desktop-missing.png"),
+            path: newerDesktopPath,
+            sha: sha16("desktop-newer-evidence"),
           },
-          diagnostics: ["newer unreadable desktop evidence"],
+          diagnostics: ["newer readable desktop evidence"],
           now: 3000,
         })
         const app = Server.App()
@@ -334,7 +337,8 @@ describe("browser preview routes", () => {
           latestEvidenceIDs?: { desktop?: string; mobile?: string }
         }
         expect(body.latestEvidenceID).toBeUndefined()
-        expect(body.latestEvidenceIDs?.desktop).toBe(desktopEvidenceID)
+        expect(body.latestEvidenceIDs?.desktop).toBe(newerDesktopEvidenceID)
+        expect(body.latestEvidenceIDs?.desktop).not.toBe(desktopEvidenceID)
         expect(body.latestEvidenceIDs?.mobile).toBe(mobileEvidenceID)
       } finally {
         preview.stop(true)
@@ -512,7 +516,8 @@ describe("browser preview routes", () => {
           },
         },
       )
-      expect(evidence.status).toBe(404)
+      expect(evidence.status).toBe(500)
+      expect(((await evidence.json()) as { name?: string }).name).toBe("BrowserPreviewEvidenceCorruptionError")
 
       const artifact = await app.request(
         `/task/${taskID}/browser-preview/evidence/art_incomplete_reference_comparison/artifact/side-by-side`,
@@ -522,7 +527,8 @@ describe("browser preview routes", () => {
           },
         },
       )
-      expect(artifact.status).toBe(404)
+      expect(artifact.status).toBe(500)
+      expect(((await artifact.json()) as { name?: string }).name).toBe("BrowserPreviewEvidenceCorruptionError")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -685,7 +691,8 @@ describe("browser preview routes", () => {
           "x-opencorvus-directory": tmp.path,
         },
       })
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(500)
+      expect(((await response.json()) as { name?: string }).name).toBe("BrowserPreviewEvidenceCorruptionError")
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -824,14 +831,21 @@ describe("browser preview routes", () => {
           "x-opencorvus-directory": tmp.path,
         },
       })
-      expect(missing.status).toBe(404)
+      expect(missing.status).toBe(500)
+      const missingBody = (await missing.json()) as { name?: string; data?: { artifactPath?: string } }
+      expect(missingBody.name).toBe("BrowserPreviewEvidenceCorruptionError")
+      expect(missingBody.data?.artifactPath).toContain("missing.png")
 
       const mismatch = await app.request(`/task/${taskID}/browser-preview/evidence/${mismatchEvidenceID}`, {
         headers: {
           "x-opencorvus-directory": tmp.path,
         },
       })
-      expect(mismatch.status).toBe(404)
+      expect(mismatch.status).toBe(500)
+      const mismatchBody = (await mismatch.json()) as { name?: string; data?: { expectedSha?: string; actualSha?: string } }
+      expect(mismatchBody.name).toBe("BrowserPreviewEvidenceCorruptionError")
+      expect(mismatchBody.data?.expectedSha).toBe(sha16("different-screenshot"))
+      expect(mismatchBody.data?.actualSha).toBe(sha16("actual-screenshot"))
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )

@@ -175,8 +175,9 @@ describe("engine queue", () => {
 
         expect(result).toBe("started")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()))
-          .toBeUndefined()
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()),
+        ).toBeUndefined()
       },
     })
   })
@@ -601,7 +602,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("advanceQueue terminalizes dead-owner active tasks before claiming same-cwd queued work", async () => {
+  test("advanceQueue interrupts dead-owner active tasks before claiming same-cwd queued work", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -614,7 +615,7 @@ describe("engine queue", () => {
         const runID = `run_queue_dead_owner_${now}`
         const goalID = `goal_queue_dead_owner_${now}`
         const goalRunID = `grun_queue_dead_owner_${now}`
-        const reason = "Directory queue: previous owner process died before terminalization"
+        const reason = "Directory queue: previous owner process died before interruption"
 
         Database.transaction((db) => {
           db.insert(EngineTaskTable)
@@ -636,7 +637,7 @@ describe("engine queue", () => {
               project_id: Instance.project.id,
               source: "test",
               title: "queued sibling",
-              request: "must start after the dead owner is terminalized",
+              request: "must start after the dead owner is interrupted",
               priority: "normal",
               time_created: now + 1,
               time_updated: now + 1,
@@ -719,8 +720,10 @@ describe("engine queue", () => {
         await advanceQueue(taskCwd(queuedID))
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(taskStatus(activeID)).toBe("failed")
+        expect(taskStatus(activeID)).toBe("active")
+        expect(findTask(activeID)?.time_completed).toBeNull()
         expect(findTask(activeID)?.error).toBe(reason)
+        expect(findTask(activeID)?.metadata).toEqual(expect.objectContaining({ interrupted: true }))
         expect(findRun(runID)?.status).toBe("aborted")
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
         expect(taskStatus(queuedID)).toBe("active")
@@ -1731,6 +1734,7 @@ describe("engine queue", () => {
         const cwd = taskCwd(firstID)
         const result = reorderQueuedTasksForCwd({
           cwd,
+          projectID: Instance.project.id,
           orderedTaskIDs: [thirdID, firstID, secondID],
           now: now + 10,
         })
@@ -1842,7 +1846,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("startQueuedTaskNow starts the clicked task even when another same-cwd task is active", async () => {
+  test("startQueuedTaskNow preserves same-cwd serialization when another task is active", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -1889,13 +1893,67 @@ describe("engine queue", () => {
 
         await new Promise((resolve) => setTimeout(resolve, 0))
 
+        expect(result.started).toBe(false)
+        expect(result.status).toBe("queued")
+        expect(taskStatus(activeID)).toBe("active")
+        expect(taskStatus(secondID)).toBe("queued")
+        expect(directoryQueueSnapshot(taskCwd(secondID)).queuedTaskIDs).toEqual([firstID, secondID])
+        expect(runTaskLoop).toHaveBeenCalledTimes(0)
+      },
+    })
+  })
+
+  test("startQueuedTaskNow can claim when the only same-cwd active sibling is already interrupted", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const interruptedID = `task_queue_interrupted_${now}`
+        const queuedID = `task_queue_after_interrupted_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: interruptedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "interrupted task",
+              request: "interrupted task should not hold the cwd queue slot",
+              priority: "normal",
+              error: "previous owner died",
+              metadata: { interrupted: true },
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: queuedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued after interrupted",
+              request: "explicit operator start after interrupted sibling",
+              priority: "normal",
+              queue_order: 0,
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+        })
+
+        const result = await EngineService.startQueuedTaskNow(queuedID)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
         expect(result.started).toBe(true)
         expect(result.status).toBe("active")
-        expect(taskStatus(activeID)).toBe("active")
-        expect(taskStatus(secondID)).toBe("active")
-        expect(directoryQueueSnapshot(taskCwd(secondID)).queuedTaskIDs).toEqual([firstID])
+        expect(taskStatus(interruptedID)).toBe("active")
+        expect(taskStatus(queuedID)).toBe("active")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: secondID })
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: queuedID })
       },
     })
   })
@@ -1943,6 +2001,7 @@ describe("engine queue", () => {
         expect(() =>
           reorderQueuedTasksForCwd({
             cwd: taskCwd(activeID),
+            projectID: Instance.project.id,
             orderedTaskIDs: [activeID, queuedID],
           }),
         ).toThrow("orderedTaskIDs must contain every queued task")

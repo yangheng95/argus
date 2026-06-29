@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test"
 import { asSchema } from "ai"
-import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
+import { readFileSync } from "node:fs"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import {
+  createFrontendTemplateOutputTools,
+  renderVisualHtmlSkeletonScreenshotForValidation,
+} from "../../src/frontend-design/output-tools"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
@@ -104,6 +111,50 @@ test("submit_frontend_template exposes a small finalizer schema", () => {
   expect(schema.properties).not.toHaveProperty("component_reuse_plan")
 })
 
+test("static HTML screenshot helper owns navigation by browser inactivity", () => {
+  const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/output-tools.ts"), "utf8")
+
+  expect(source).toContain("opencorvusWithBrowserInactivity")
+  expect(source).toContain('() => page.goto(payload.url, { waitUntil: "domcontentloaded", timeout: 0 })')
+  expect(source).toContain('() => page.waitForLoadState("networkidle", { timeout: 0 })')
+  expect(source).toContain("browser failure before evidence capture")
+  expect(source).toContain("installOpencorvusBrowserFailureTracker")
+  expect(source).toContain("opencorvusIsBrowserInactivityError")
+  expect(source).toContain('on("requestfailed", (payload) => fail(opencorvusActivityLabel("requestfailed", payload)))')
+  expect(source).toContain('on("pageerror", (payload) => fail(opencorvusActivityLabel("pageerror", payload)))')
+  expect(source).not.toContain('page.goto(payload.url, { waitUntil: "networkidle", timeout: payload.timeoutMs })')
+  expect(source).not.toContain(").catch(() => undefined);")
+})
+
+test(
+  "static HTML screenshot rejects page errors during optional networkidle stabilization",
+  async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-static-html-late-pageerror-"))
+    const entrypoint = path.join(tmp, "index.html")
+    await fs.writeFile(
+      entrypoint,
+      `<!doctype html>
+        <html>
+          <head><title>Late static pageerror</title></head>
+          <body>
+            <main style="width:320px;height:200px;background:#f8fafc">Static preview</main>
+            <script>setTimeout(() => { throw new Error("late static pageerror") }, 100)</script>
+          </body>
+        </html>`,
+      "utf8",
+    )
+
+    await expect(
+      renderVisualHtmlSkeletonScreenshotForValidation({
+        entrypointFile: entrypoint,
+        viewport: { width: 320, height: 200 },
+        timeoutMs: 10_000,
+      }),
+    ).rejects.toThrow("late static pageerror")
+  },
+  30_000,
+)
+
 test("submit_frontend_template reports missing update calls without closing the collector", async () => {
   const kit = createFrontendTemplateOutputTools()
   await callTool(kit.tools, "update_frontend_basics", {
@@ -120,6 +171,223 @@ test("submit_frontend_template reports missing update calls without closing the 
   expect(result).toContain("update_frontend_phase")
   expect(status).toContain("FRONTEND_TEMPLATE_RESULT_STATUS: incomplete")
   expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("update_frontend_visual_evidence rejects source references outside web-clone-source", async () => {
+  const kit = createFrontendTemplateOutputTools()
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: "visual-html-skeleton/screenshots/desktop.png",
+      source_reference_artifact: "webpage-evidence/reference.png",
+      renderer: "node_playwright_static_file",
+      viewport: "desktop-320x180",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "visual-html-skeleton/visual-diff.json",
+      review_status: "reviewed_no_blocking_debt",
+      review_summary: "Rendered screenshot was reviewed against the source reference.",
+    }),
+  ).rejects.toThrow("source_reference_artifact")
+})
+
+test("update_frontend reference and source refs reject rendered local preview captures", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const localPreview = "/tmp/opencorvus-capture/1782540923070-jbqnrq/screenshot.png"
+  const durablePreview = "visual-html-skeleton/screenshots/desktop.png"
+  const durableDiff = "visual-html-skeleton/visual-diffs/desktop.json"
+  const localhostPreview = "http://127.0.0.1:4177/index.html"
+  const bareLocalhostPreview = "http://localhost"
+  const schemelessLocalhostPreview = "localhost:4177/index.html"
+
+  await expect(callTool(kit.tools, "update_frontend_reference", { value: localPreview })).rejects.toThrow(
+    "source/reference artifacts",
+  )
+  await expect(callTool(kit.tools, "update_frontend_reference", { value: durablePreview })).rejects.toThrow(
+    "source/reference artifacts",
+  )
+  await expect(callTool(kit.tools, "update_frontend_reference", { value: durableDiff })).rejects.toThrow(
+    "source/reference artifacts",
+  )
+  await expect(callTool(kit.tools, "update_frontend_reference", { value: bareLocalhostPreview })).rejects.toThrow(
+    "source/reference artifacts",
+  )
+
+  await expect(
+    callTool(kit.tools, "update_frontend_material", {
+      title: "Rendered skeleton preview",
+      detail: "Rendered skeleton previews belong in visual validation evidence, not material source refs.",
+      source_refs: [localPreview],
+    }),
+  ).rejects.toThrow("source/reference artifacts")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_material", {
+      title: "Rendered skeleton preview",
+      detail: "Task-scoped rendered previews and diffs belong in visual validation evidence, not material source refs.",
+      source_refs: [durablePreview, durableDiff],
+    }),
+  ).rejects.toThrow("source/reference artifacts")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_material", {
+      title: "Local preview URL",
+      detail: "Local preview URLs are rendered output, not source refs.",
+      source_refs: [localhostPreview],
+    }),
+  ).rejects.toThrow("source/reference artifacts")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_material", {
+      title: "Bare local preview URL",
+      detail: "Bare localhost URLs are rendered output, not source refs.",
+      source_refs: [bareLocalhostPreview],
+    }),
+  ).rejects.toThrow("source/reference artifacts")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_material", {
+      title: "Schemeless local preview URL",
+      detail: "Schemeless localhost URLs are rendered output, not source refs.",
+      source_refs: [schemelessLocalhostPreview],
+    }),
+  ).rejects.toThrow("source/reference artifacts")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_project", {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [localPreview],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: ["visual baseline"],
+    }),
+  ).rejects.toThrow("frontend_project.entrypoints")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_project", {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [schemelessLocalhostPreview],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: ["visual baseline"],
+    }),
+  ).rejects.toThrow("frontend_project.entrypoints")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_project", {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [localhostPreview],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: ["visual baseline"],
+    }),
+  ).rejects.toThrow("frontend_project.entrypoints")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_project", {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [bareLocalhostPreview],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: ["visual baseline"],
+    }),
+  ).rejects.toThrow("frontend_project.entrypoints")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: "screenshots/desktop.png",
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "task_scoped_backend_browser",
+      viewport: "1440x900",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "",
+      review_status: "reviewed_with_blocking_debt",
+      review_summary: "Rendered skeleton preview was compared against the source reference.",
+    }),
+  ).rejects.toThrow("screenshot_artifact")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: durablePreview,
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "task_scoped_backend_browser",
+      viewport: "1440x900",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "diffs/desktop.json",
+      review_status: "reviewed_with_blocking_debt",
+      review_summary: "Rendered skeleton preview was compared against the source reference.",
+    }),
+  ).rejects.toThrow("diff_artifact")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: localPreview,
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "task_scoped_backend_browser",
+      viewport: "1440x900",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "/tmp/opencorvus-capture/1782540923070-jbqnrq/manifest.json",
+      review_status: "reviewed_with_blocking_debt",
+      review_summary: "Rendered skeleton preview was compared against the source reference.",
+    }),
+  ).rejects.toThrow("screenshot_artifact")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: durablePreview,
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "task_scoped_backend_browser",
+      viewport: "1440x900",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "/tmp/opencorvus-capture/1782540923070-jbqnrq/manifest.json",
+      review_status: "reviewed_with_blocking_debt",
+      review_summary: "Rendered skeleton preview was compared against the source reference.",
+    }),
+  ).rejects.toThrow("diff_artifact")
+
+  await expect(
+    callTool(kit.tools, "update_frontend_visual_evidence", {
+      id: "desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: durablePreview,
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "task_scoped_backend_browser",
+      viewport: "1440x900",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: "b".repeat(64),
+      diff_artifact: "visual-html-skeleton/visual-diffs/desktop.json",
+      review_status: "reviewed_with_blocking_debt",
+      review_summary: "Rendered skeleton preview was compared against the source reference.",
+    }),
+  ).resolves.toContain("OK")
 })
 
 test("update_frontend tools assemble and finalize the canonical frontend template", async () => {

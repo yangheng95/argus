@@ -1,8 +1,10 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { Database, eq } from "@/storage/db"
-import { ProtocolStore } from "@/protocol/store"
+import { ProtocolStore, protocolEventRequiresPayloadOrderKey, type EventInput } from "@/protocol/store"
 import { EngineTaskTable } from "./engine.sql"
+import { SessionTable } from "@/session/session.sql"
+import { timelineOrderKey } from "@/timeline/order"
 
 type Meta = {
   kind?: "event" | "command" | "reply"
@@ -27,8 +29,22 @@ function payload<Definition extends BusEvent.Definition>(properties: z.output<De
   return structuredClone(properties) as Record<string, unknown>
 }
 
+function sessionOrderKeyForProtocolEvent(type: string, sessionID: string | undefined): string | undefined {
+  if (!protocolEventRequiresPayloadOrderKey(type)) return undefined
+  if (!sessionID) throw new Error(`protocol event ${type} is missing sessionID for orderKey`)
+  const row = Database.use((db) =>
+    db.select({ timeCreated: SessionTable.time_created }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
+  )
+  if (!row) throw new Error(`protocol event ${type} references missing session ${sessionID}`)
+  return timelineOrderKey({
+    domain: "session",
+    time: row.timeCreated,
+    id: sessionID,
+  })
+}
+
 export namespace EngineProtocol {
-  export async function emit<Definition extends BusEvent.Definition>(
+  function eventInput<Definition extends BusEvent.Definition>(
     def: Definition,
     properties: z.output<Definition["properties"]>,
     meta: Meta = {},
@@ -39,10 +55,12 @@ export namespace EngineProtocol {
     const task = Database.use((db) =>
       db.select({ id: EngineTaskTable.id }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
     )
-    if (!task) return
+    if (!task) throw new Error(`protocol event ${def.type} references missing task ${taskID}`)
     const now = Date.now()
-
-    return ProtocolStore.appendEvent({
+    const sessionID = meta.sessionID ?? text(data, "sessionID") ?? undefined
+    const orderKey = sessionOrderKeyForProtocolEvent(def.type, sessionID)
+    if (orderKey) data.orderKey = orderKey
+    return {
       kind: meta.kind ?? "event",
       type: def.type,
       aggregate: "task",
@@ -50,7 +68,7 @@ export namespace EngineProtocol {
       task_id: taskID,
       run_id: meta.runID ?? text(data, "runID") ?? null,
       goal_run_id: meta.goalRunID ?? text(data, "goalRunID") ?? null,
-      session_id: meta.sessionID ?? text(data, "sessionID") ?? null,
+      session_id: sessionID ?? null,
       interaction_id: meta.interactionID ?? text(data, "interactionID") ?? null,
       stream_id: null,
       source: meta.source ?? "assistant",
@@ -59,10 +77,24 @@ export namespace EngineProtocol {
       causation_id: meta.causationID ?? null,
       reply_to: null,
       emitted_at: now,
+      order_key: orderKey,
       payload: data,
-    }).catch((error) => {
-      const detail = error instanceof Error ? error.message : String(error)
-      if (!detail.includes("FOREIGN KEY constraint failed")) throw error
-    })
+    } satisfies EventInput
+  }
+
+  export async function emit<Definition extends BusEvent.Definition>(
+    def: Definition,
+    properties: z.output<Definition["properties"]>,
+    meta: Meta = {},
+  ) {
+    return ProtocolStore.appendEvent(eventInput(def, properties, meta))
+  }
+
+  export function emitInTransaction<Definition extends BusEvent.Definition>(
+    def: Definition,
+    properties: z.output<Definition["properties"]>,
+    meta: Meta = {},
+  ) {
+    return ProtocolStore.appendEventInTransaction(eventInput(def, properties, meta))
   }
 }

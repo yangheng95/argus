@@ -93,7 +93,17 @@ describe("project-scope middleware: directory required", () => {
     })
 
     const app = Server.App()
-    for (const suffix of ["", "/status", "/board", "/progress", "/brief", "/transcript", "/runs", "/interactions", "/bindings"]) {
+    for (const suffix of [
+      "",
+      "/status",
+      "/board",
+      "/progress",
+      "/brief",
+      "/transcript",
+      "/runs",
+      "/interactions",
+      "/bindings",
+    ]) {
       const response = await app.request(`/task/${taskID}${suffix}`, { method: "GET" })
       expect(response.status, `GET /task/:taskID${suffix}`).toBe(200)
       await response.text()
@@ -118,7 +128,9 @@ describe("project-scope middleware: directory required", () => {
     })
     expect(configResponse.status).toBe(200)
 
-    const project = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.worktree, tmp.path)).get())
+    const project = Database.use((db) =>
+      db.select().from(ProjectTable).where(eq(ProjectTable.worktree, tmp.path)).get(),
+    )
     expect(project).toBeDefined()
 
     const now = Date.now()

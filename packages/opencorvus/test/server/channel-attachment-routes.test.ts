@@ -79,15 +79,19 @@ describe("channel attachment routes", () => {
 
     const missingSignature = await Server.App().request(`${basePath}?e=${created.expires_at}`)
     expect(missingSignature.status).toBe(404)
+    await expect(missingSignature.json()).resolves.toMatchObject({ name: "NotFoundError" })
 
     const invalidSignature = await Server.App().request(`${basePath}?e=${created.expires_at}&s=invalid`)
     expect(invalidSignature.status).toBe(404)
+    await expect(invalidSignature.json()).resolves.toMatchObject({ name: "NotFoundError" })
 
     const expired = await Server.App().request(`${basePath}?e=1&s=${signature}`)
     expect(expired.status).toBe(404)
+    await expect(expired.json()).resolves.toMatchObject({ name: "NotFoundError" })
 
     await rm(path.join(attachmentRoot, `${created.id}.json`), { force: true })
     const orphaned = await Server.App().request(localPathFromPublicUrl(created.url))
     expect(orphaned.status).toBe(404)
+    await expect(orphaned.json()).resolves.toMatchObject({ name: "NotFoundError" })
   })
 })

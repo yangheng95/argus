@@ -9,6 +9,8 @@ import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { sessionIDsForTask } from "@/engine/store"
 import { Log } from "@/util/log"
+import { NotFoundError } from "@/storage/db"
+import { errors } from "../error"
 
 const log = Log.create({ service: "server.routes.panel" })
 
@@ -165,12 +167,13 @@ export function PanelRoutes() {
                 },
               },
             },
+            ...errors(404),
           },
         }),
         async (c) => {
           const id = c.req.param("id")
           const file = Memory.getFileInProject({ fileId: id, projectId: projectId() })
-          if (!file) return c.json({ error: "not found" }, 404)
+          if (!file) throw new NotFoundError({ message: `Memory file not found: ${id}` })
           const chunks = Memory.getChunksInProject({ fileId: id, projectId: projectId() })
           const content = chunks.map((ch) => ch.content).join("\n\n")
           return c.json({ file, content })
@@ -234,12 +237,13 @@ export function PanelRoutes() {
               description: "Deleted",
               content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
             },
+            ...errors(404),
           },
         }),
         async (c) => {
           const id = c.req.param("id")
           const file = Memory.deleteFileInProject({ fileId: id, projectId: projectId() })
-          if (!file) return c.json({ error: "not found" }, 404)
+          if (!file) throw new NotFoundError({ message: `Memory file not found: ${id}` })
           return c.json({ ok: true })
         },
       )

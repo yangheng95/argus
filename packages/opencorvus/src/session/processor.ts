@@ -6,7 +6,7 @@ import { Agent } from "@/agent/agent"
 import { Snapshot } from "@/snapshot"
 import { SessionSummary } from "./summary"
 import { Bus } from "@/bus"
-import { SessionStatus } from "./status"
+import { SessionStatus, sessionLifecycleOrderKey } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
@@ -91,18 +91,21 @@ export namespace SessionProcessor {
       )
     }
 
+    const toolStartTime = (part: Message.ToolPart): number => part.state.time.start
+    const terminalToolTime = (start: number) => ({
+      start,
+      end: Math.max(Date.now(), start + 1),
+    })
+
     const failToolPart = async (part: Message.ToolPart, failure: ToolFailureCause): Promise<void> => {
-      const start = part.state.status === "running" ? part.state.time.start : Date.now()
+      const start = toolStartTime(part)
       await Session.updatePart({
         ...part,
         state: {
           status: "error",
           input: part.state.input,
           failure,
-          time: {
-            start,
-            end: Date.now(),
-          },
+          time: terminalToolTime(start),
         },
       })
       delete toolcalls[part.callID]
@@ -137,10 +140,7 @@ export namespace SessionProcessor {
               title: input.title,
               metadata: input.metadata,
               attachments: input.attachments,
-              time: {
-                start: latest.state.status === "running" ? latest.state.time.start : Date.now(),
-                end: Date.now(),
-              },
+              time: terminalToolTime(toolStartTime(latest)),
             },
           })
           delete toolcalls[part.callID]
@@ -165,8 +165,7 @@ export namespace SessionProcessor {
       async ensureToolPart(toolCallID: string, toolName: string, toolInput: Record<string, unknown>) {
         return withToolPartLock(toolCallID, async () => {
           const existing = await priorToolPart(toolCallID)
-          const start =
-            existing?.type === "tool" && existing.state.status === "running" ? existing.state.time.start : Date.now()
+          const start = existing ? toolStartTime(existing) : Date.now()
           const part = await Session.updatePart({
             ...(existing ?? {
               id: Identifier.ascending("part"),
@@ -342,8 +341,10 @@ export namespace SessionProcessor {
                       })
                       if (preTerminalReflection) {
                         await withToolPartLock(toolCallID, async () => {
+                          const existing = await priorToolPart(toolCallID)
+                          const start = existing ? toolStartTime(existing) : Date.now()
                           await Session.updatePart({
-                            id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
+                            id: existing?.id ?? Identifier.ascending("part"),
                             messageID: input.assistantMessage.id,
                             sessionID: input.assistantMessage.sessionID,
                             type: "tool",
@@ -355,10 +356,7 @@ export namespace SessionProcessor {
                               output: preTerminalReflection.output,
                               title: preTerminalReflection.title,
                               metadata: preTerminalReflection.metadata,
-                              time: {
-                                start: Date.now(),
-                                end: Date.now(),
-                              },
+                              time: terminalToolTime(start),
                             },
                           })
                         })
@@ -367,8 +365,10 @@ export namespace SessionProcessor {
                         return
                       }
                       const part = await withToolPartLock(toolCallID, async () => {
+                        const existing = await priorToolPart(toolCallID)
+                        const start = existing ? toolStartTime(existing) : Date.now()
                         return await Session.updatePart({
-                          id: (await priorToolPart(toolCallID))?.id ?? Identifier.ascending("part"),
+                          id: existing?.id ?? Identifier.ascending("part"),
                           messageID: input.assistantMessage.id,
                           sessionID: input.assistantMessage.sessionID,
                           type: "tool",
@@ -378,6 +378,7 @@ export namespace SessionProcessor {
                             status: "pending",
                             input: {},
                             raw: "",
+                            time: { start },
                           },
                         })
                       })
@@ -441,7 +442,7 @@ export namespace SessionProcessor {
                             status: "running",
                             input: value.input,
                             time: {
-                              start: match?.state.status === "running" ? match.state.time.start : Date.now(),
+                              start: match ? toolStartTime(match) : Date.now(),
                             },
                           },
                           metadata: value.providerMetadata,
@@ -498,10 +499,7 @@ export namespace SessionProcessor {
                               output: value.output.output,
                               metadata,
                               title: value.output.title,
-                              time: {
-                                start: match.state.status === "running" ? match.state.time.start : Date.now(),
-                                end: Date.now(),
-                              },
+                              time: terminalToolTime(toolStartTime(match)),
                               attachments: value.output.attachments,
                             },
                           })
@@ -549,10 +547,7 @@ export namespace SessionProcessor {
                               status: "error",
                               input: resolvedInput,
                               failure,
-                              time: {
-                                start: match.state.status === "running" ? match.state.time.start : Date.now(),
-                                end: Date.now(),
-                              },
+                              time: terminalToolTime(toolStartTime(match)),
                             },
                           })
 
@@ -765,6 +760,7 @@ export namespace SessionProcessor {
               input.assistantMessage.error = error
               Bus.publish(Session.Event.Error, {
                 sessionID: input.assistantMessage.sessionID,
+                orderKey: sessionLifecycleOrderKey(input.assistantMessage.sessionID),
                 error: input.assistantMessage.error,
               })
               SessionStatus.set(input.sessionID, { type: "idle" })
@@ -788,6 +784,7 @@ export namespace SessionProcessor {
               input.assistantMessage.error = Message.fromError(e, { providerID: input.model.providerID })
               Bus.publish(Session.Event.Error, {
                 sessionID: input.assistantMessage.sessionID,
+                orderKey: sessionLifecycleOrderKey(input.assistantMessage.sessionID),
                 error: input.assistantMessage.error,
               })
             }

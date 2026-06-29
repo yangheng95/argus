@@ -5,6 +5,7 @@ import path from "node:path"
 import { z } from "zod"
 import {
   adoptPage,
+  clearSuccessfulDownloadRequestDiagnostic,
   createTab,
   createSession,
   destroySession,
@@ -26,9 +27,11 @@ import {
   snapshotPerf,
   updateToolCall,
   withSessionOperationLock,
+  type BrowserDiagnostics,
 } from "./sessions.js"
 import { formatPerfText } from "./perf.js"
 import { clickGuardProfile, doubleClickGuardProfile, runPointGuard, type GuardResult } from "./guard.js"
+import { captureBrowserMcpViewportScreenshot, pngDimensionsStrict } from "./screenshot.js"
 
 type Download = any
 
@@ -248,11 +251,6 @@ const storageStateSchema = z.object({
   ),
 })
 
-const pngDimensions = (buf: Buffer): { width: number; height: number } => ({
-  width: buf.readUInt32BE(16),
-  height: buf.readUInt32BE(20),
-})
-
 // 用坐标获取命中元素的 DOM 信息，辅助模型将坐标转换为稳定 selector
 const elementInfoAt = async (page: Awaited<ReturnType<typeof getSession>>["page"], x: number, y: number) =>
   page.evaluate(
@@ -378,6 +376,117 @@ const translateError = (e: unknown, selector?: string) => {
   return { isError: true as const, content: [{ type: "text" as const, text: detail }] }
 }
 
+const BROWSER_MCP_DEFAULT_INACTIVITY_TIMEOUT_MS = 30_000
+
+const isBrowserMcpImplicitAssetUrl = (rawUrl: string | undefined): boolean => {
+  if (!rawUrl) return false
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico"
+  } catch {
+    return false
+  }
+}
+
+const isBrowserMcpResourceLoadConsoleError = (text: string): boolean => /^Failed to load resource:/i.test(text)
+
+const browserDiagnosticsIssues = (diagnostics: BrowserDiagnostics): string[] => [
+  ...diagnostics.consoleErrors
+    .filter((item) => !isBrowserMcpResourceLoadConsoleError(item.text))
+    .map((item) => `console ${item.type}: ${item.text}`),
+  ...diagnostics.pageErrors.map((item) => `pageerror: ${item.message}`),
+  ...diagnostics.failedRequests
+    .filter((item) => !isBrowserMcpImplicitAssetUrl(item.url))
+    .map((item) => `requestfailed ${item.method} ${item.url}: ${item.reason}`),
+  ...diagnostics.httpErrors
+    .filter((item) => !isBrowserMcpImplicitAssetUrl(item.url))
+    .map((item) => `http ${item.status} ${item.url}: ${item.statusText}`),
+]
+
+export const browserDiagnosticsIssueCount = (diagnostics: BrowserDiagnostics): number =>
+  browserDiagnosticsIssues(diagnostics).length
+
+const formatBrowserDiagnostics = (diagnostics: BrowserDiagnostics): string => {
+  return browserDiagnosticsIssues(diagnostics).slice(0, 5).join("; ")
+}
+
+const assertNoBrowserDiagnostics = (sessionId: string, action: string) => {
+  const diagnostics = getDiagnostics(sessionId)
+  const count = browserDiagnosticsIssueCount(diagnostics)
+  if (count === 0) return
+  throw new Error(`Browser MCP ${action} blocked by ${count} page diagnostic(s): ${formatBrowserDiagnostics(diagnostics)}`)
+}
+
+const browserMcpActivityLabel = (event: string, payload: unknown): string => {
+  const candidate = payload as {
+    url?: () => string
+    message?: () => string
+    text?: () => string
+    status?: () => number
+    statusText?: () => string
+    failure?: () => { errorText?: string } | null
+  }
+  if (typeof candidate?.url === "function") {
+    const status = typeof candidate.status === "function" ? ` ${candidate.status()}` : ""
+    const statusText = typeof candidate.statusText === "function" ? ` ${candidate.statusText()}` : ""
+    const failure = typeof candidate.failure === "function" ? ` ${candidate.failure()?.errorText ?? ""}` : ""
+    return `${event} ${candidate.url()}${status}${statusText}${failure}`.trim()
+  }
+  if (typeof candidate?.message === "function") return `${event} ${candidate.message()}`
+  if (typeof candidate?.text === "function") return `${event} ${candidate.text()}`
+  return event
+}
+
+const withBrowserMcpInactivity = async <T>(
+  page: ReturnType<typeof getSession>["page"],
+  label: string,
+  inactivityTimeoutMs: number,
+  action: () => Promise<T>,
+): Promise<T> => {
+  let settled = false
+  let lastActivity = "start"
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let rejectInactive: ((error: Error) => void) | undefined
+  const listeners: Array<[string, (...args: unknown[]) => void]> = []
+  const inactive = new Promise<never>((_, reject) => {
+    rejectInactive = reject
+  })
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+  }
+  const reset = (source: string) => {
+    if (settled) return
+    lastActivity = source
+    clearTimer()
+    timer = setTimeout(() => {
+      rejectInactive?.(new Error(`${label} inactive for ${inactivityTimeoutMs}ms after ${lastActivity}`))
+    }, inactivityTimeoutMs)
+  }
+  const fail = (source: string) => {
+    if (settled) return
+    clearTimer()
+    rejectInactive?.(new Error(`${label} browser failure before completion: ${source}`))
+  }
+  const on = (event: string, handler: (...args: unknown[]) => void) => {
+    page.on(event, handler)
+    listeners.push([event, handler])
+  }
+  on("console", (payload) => reset(browserMcpActivityLabel("console", payload)))
+  on("response", (payload) => reset(browserMcpActivityLabel("response", payload)))
+  on("request", (payload) => reset(browserMcpActivityLabel("request", payload)))
+  on("framenavigated", (payload) => reset(browserMcpActivityLabel("framenavigated", payload)))
+  on("requestfailed", (payload) => fail(browserMcpActivityLabel("requestfailed", payload)))
+  on("pageerror", (payload) => fail(browserMcpActivityLabel("pageerror", payload)))
+  reset("start")
+  try {
+    return await Promise.race([action(), inactive])
+  } finally {
+    settled = true
+    clearTimer()
+    for (const [event, handler] of listeners) page.off(event, handler)
+  }
+}
+
 // ─── 工具注册 ──────────────────────────────────────────────────────────────
 
 const detectOpenedPage = async <T>(
@@ -420,12 +529,14 @@ const saveDownload = async (sessionId: string, download: Download) => {
   const filename = `${Date.now()}-${safeDownloadFilename(item.suggestedFilename())}`
   const filePath = path.join(dir, filename)
   await item.saveAs(filePath)
-  return recordDownload(sessionId, {
+  const entry = recordDownload(sessionId, {
     at: Date.now(),
     suggestedFilename: item.suggestedFilename(),
     path: filePath,
     url: item.url(),
   })
+  clearSuccessfulDownloadRequestDiagnostic(sessionId, entry.url)
+  return entry
 }
 
 const frameTarget = (page: ReturnType<typeof getSession>["page"], frameSelector: string) =>
@@ -580,7 +691,21 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId, action, index, url }) => {
       if (action === "list") return ok({ ok: true, tabs: await listTabs(sessionId) })
-      if (action === "new") return ok({ ok: true, tab: await createTab(sessionId, url) })
+      if (action === "new") {
+        const tab = await createTab(sessionId)
+        if (url) {
+          const created = getSession(tab.sessionId)
+          await withBrowserMcpInactivity(
+            created.page,
+            `tabs new ${url}`,
+            BROWSER_MCP_DEFAULT_INACTIVITY_TIMEOUT_MS,
+            () => created.page.goto(url, { waitUntil: "domcontentloaded", timeout: 0 }),
+          )
+          assertNoBrowserDiagnostics(tab.sessionId, "tabs new")
+          return ok({ ok: true, tab: await getTabInfo(tab.sessionId, tab.sessionId) })
+        }
+        return ok({ ok: true, tab })
+      }
       if (action === "select") {
         if (index === undefined)
           return failJson({ ok: false, error: { code: "INDEX_REQUIRED", message: "tabs select requires index" } })
@@ -761,7 +886,7 @@ export const registerTools = (server: McpServer) => {
     "navigate",
     {
       description:
-        "导航到指定 URL。返回实际 URL、页面标题和加载状态（full=完全加载、partial=部分加载/超时但有内容、failed=加载失败）。超时或部分加载时不抛出异常，返回当前页面状态供调用方决策。",
+        "导航到指定 URL。返回实际 URL、页面标题和加载状态。浏览器无活动超时、请求失败、pageerror 或累积页面诊断会使工具失败。",
       inputSchema: {
         sessionId: z.string(),
         url: z.string().describe("目标 URL（可为相对路径，若设置了 baseURL）"),
@@ -777,25 +902,17 @@ export const registerTools = (server: McpServer) => {
       outputSchema: {
         url: z.string().describe("导航后的实际页面 URL"),
         title: z.string().describe("页面标题"),
-        loadStatus: z.enum(["full", "partial", "failed"]).describe("加载状态"),
+        loadStatus: z.literal("full").describe("加载状态；返回成功时页面已完成请求的等待阶段"),
       },
     },
     async ({ sessionId, url, timeout, waitUntil }) => {
       const { page } = getSession(sessionId)
-      let loadStatus: "full" | "partial" | "failed" = "full"
-      try {
-        await page.goto(url, { timeout: timeout ?? 20_000, waitUntil: waitUntil ?? "domcontentloaded" })
-      } catch {
-        const currentUrl = page.url()
-        if (!currentUrl || currentUrl === "about:blank") {
-          loadStatus = "failed"
-        } else {
-          const readyState = await page.evaluate(() => document.readyState).catch(() => null)
-          loadStatus = readyState === "complete" ? "full" : readyState ? "partial" : "failed"
-        }
-      }
-      const title = await page.title().catch(() => "")
-      return ok({ url: page.url(), title, loadStatus })
+      await withBrowserMcpInactivity(page, `navigate ${url}`, timeout ?? 20_000, () =>
+        page.goto(url, { timeout: 0, waitUntil: waitUntil ?? "domcontentloaded" }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "navigate")
+      const title = await page.title()
+      return ok({ url: page.url(), title, loadStatus: "full" })
     },
   )
 
@@ -821,7 +938,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId }) => {
       const { page } = getSession(sessionId)
-      await page.reload()
+      await withBrowserMcpInactivity(page, "reload", BROWSER_MCP_DEFAULT_INACTIVITY_TIMEOUT_MS, () =>
+        page.reload({ timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "reload")
       return ok({ ok: true })
     },
   )
@@ -835,7 +955,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId }) => {
       const { page } = getSession(sessionId)
-      await page.goBack()
+      await withBrowserMcpInactivity(page, "go_back", BROWSER_MCP_DEFAULT_INACTIVITY_TIMEOUT_MS, () =>
+        page.goBack({ timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "go_back")
       return ok({ ok: true })
     },
   )
@@ -849,7 +972,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId }) => {
       const { page } = getSession(sessionId)
-      await page.goForward()
+      await withBrowserMcpInactivity(page, "go_forward", BROWSER_MCP_DEFAULT_INACTIVITY_TIMEOUT_MS, () =>
+        page.goForward({ timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "go_forward")
       return ok({ ok: true })
     },
   )
@@ -889,6 +1015,7 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId, selector, clip, hideCursor, fullPage }) => {
       const session = getSession(sessionId)
+      assertNoBrowserDiagnostics(sessionId, "screenshot")
       const { page } = session
       const shouldHide = hideCursor && session.virtualCursor
       if (shouldHide) {
@@ -900,28 +1027,24 @@ export const registerTools = (server: McpServer) => {
       try {
         if (selector) {
           const buf = await page.locator(selector).screenshot({ timeout: 10_000 })
-          const { width, height } = pngDimensions(buf)
+          const { width, height } = pngDimensionsStrict(buf)
+          assertNoBrowserDiagnostics(sessionId, "screenshot")
           return okImage(buf.toString("base64"), width, height)
         }
         if (clip) {
           const buf = await page.screenshot({ clip })
-          const { width, height } = pngDimensions(buf)
+          const { width, height } = pngDimensionsStrict(buf)
+          assertNoBrowserDiagnostics(sessionId, "screenshot")
           return okImage(buf.toString("base64"), width, height)
         }
         if (fullPage) {
           const buf = await page.screenshot({ fullPage: true })
-          const { width, height } = pngDimensions(buf)
+          const { width, height } = pngDimensionsStrict(buf)
+          assertNoBrowserDiagnostics(sessionId, "screenshot")
           return okImage(buf.toString("base64"), width, height)
         }
-        const cdp = await page.context().newCDPSession(page)
-        let data!: string
-        try {
-          ;({ data } = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string })
-        } finally {
-          await cdp.detach().catch(() => undefined)
-        }
-        const cdpBuf = Buffer.from(data, "base64")
-        const { width, height } = pngDimensions(cdpBuf)
+        const { data, width, height } = await captureBrowserMcpViewportScreenshot(page)
+        assertNoBrowserDiagnostics(sessionId, "screenshot")
         return okImage(data, width, height)
       } finally {
         if (shouldHide) {
@@ -974,33 +1097,31 @@ export const registerTools = (server: McpServer) => {
     async ({ sessionId, includeScreenshot, includeDom, includeDiagnostics }) => {
       const session = getSession(sessionId)
       const { page } = session
+      assertNoBrowserDiagnostics(sessionId, "observe")
       const screenshot =
         includeScreenshot === false
           ? undefined
           : await (async () => {
-              const cdp = await page.context().newCDPSession(page)
-              try {
-                const { data } = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string }
-                const { width, height } = pngDimensions(Buffer.from(data, "base64"))
-                return {
-                  data,
-                  mimeType: "image/png" as const,
-                  width,
-                  height,
-                  pixelSummary: screenshotPixelSummary(width, height),
-                }
-              } finally {
-                await cdp.detach().catch(() => {})
+              const capture = await captureBrowserMcpViewportScreenshot(page)
+              assertNoBrowserDiagnostics(sessionId, "observe")
+              return {
+                data: capture.data,
+                mimeType: "image/png" as const,
+                width: capture.width,
+                height: capture.height,
+                pixelSummary: screenshotPixelSummary(capture.width, capture.height),
               }
             })()
+      assertNoBrowserDiagnostics(sessionId, "observe")
       const result = {
         url: page.url(),
-        title: await page.title().catch(() => ""),
+        title: await page.title(),
         viewport: session.viewport,
         screenshot,
         dom: includeDom === false ? undefined : await summarizeDom(page),
         diagnostics: includeDiagnostics === false ? undefined : getDiagnostics(sessionId),
       }
+      assertNoBrowserDiagnostics(sessionId, "observe")
       const content: Array<{ type: "image"; data: string; mimeType: "image/png" } | { type: "text"; text: string }> = []
       if (screenshot) content.push({ type: "image", data: screenshot.data, mimeType: "image/png" })
       content.push({
@@ -1696,7 +1817,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId, selector, state, timeout }) => {
       const { page } = getSession(sessionId)
-      await page.locator(selector).waitFor({ state: state ?? "visible", timeout: timeout ?? 30_000 })
+      await withBrowserMcpInactivity(page, `wait_for_selector ${selector}`, timeout ?? 30_000, () =>
+        page.locator(selector).waitFor({ state: state ?? "visible", timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "wait_for_selector")
       return ok({ ok: true })
     },
   )
@@ -1714,7 +1838,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId, pattern, timeout }) => {
       const { page } = getSession(sessionId)
-      await page.waitForURL((url) => url.href.includes(pattern), { timeout: timeout ?? 30_000 })
+      await withBrowserMcpInactivity(page, `wait_for_url ${pattern}`, timeout ?? 30_000, () =>
+        page.waitForURL((url) => url.href.includes(pattern), { timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "wait_for_url")
       return ok({ url: page.url() })
     },
   )
@@ -1732,7 +1859,10 @@ export const registerTools = (server: McpServer) => {
     },
     async ({ sessionId, state, timeout }) => {
       const { page } = getSession(sessionId)
-      await page.waitForLoadState(state ?? "load", { timeout: timeout ?? 30_000 })
+      await withBrowserMcpInactivity(page, `wait_for_load ${state ?? "load"}`, timeout ?? 30_000, () =>
+        page.waitForLoadState(state ?? "load", { timeout: 0 }),
+      )
+      assertNoBrowserDiagnostics(sessionId, "wait_for_load")
       return ok({ ok: true })
     },
   )

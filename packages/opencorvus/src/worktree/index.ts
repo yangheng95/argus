@@ -27,6 +27,8 @@ import { taskIDForSession } from "@/orchestrator/task-event"
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
   const caseInsensitiveCache = new Map<string, boolean>()
+  const DIRECTORY_REMOVE_MAX_RETRIES = 1200
+  const DIRECTORY_REMOVE_RETRY_DELAY_MS = 250
 
   // Per-project git mutex: serializes worktree add/remove/reset operations
   // across both this process and sibling OpenCorvus processes.
@@ -979,10 +981,17 @@ export namespace Worktree {
   }
 
   type PrimaryWorktreeInfo = { directory: string; branch: string }
-  type WorktreeEntry = { path: string; branch?: string }
+  export type RegisteredWorktreeEntry = {
+    path: string
+    branch?: string
+    locked?: boolean
+    lockReason?: string
+    prunable?: boolean
+    prunableReason?: string
+  }
 
-  function parseWorktreeList(stdout: Uint8Array | Buffer | undefined): WorktreeEntry[] {
-    const entries: WorktreeEntry[] = []
+  function parseWorktreeList(stdout: Uint8Array | Buffer | undefined): RegisteredWorktreeEntry[] {
+    const entries: RegisteredWorktreeEntry[] = []
     for (const line of outputText(stdout)
       .split("\n")
       .map((item) => item.trim())) {
@@ -999,9 +1008,38 @@ export namespace Worktree {
           .slice("branch ".length)
           .trim()
           .replace(/^refs\/heads\//, "")
+        continue
+      }
+      if (line.startsWith("locked")) {
+        current.locked = true
+        const reason = line.slice("locked".length).trim()
+        if (reason) current.lockReason = reason
+        continue
+      }
+      if (line.startsWith("prunable")) {
+        current.prunable = true
+        const reason = line.slice("prunable".length).trim()
+        if (reason) current.prunableReason = reason
       }
     }
     return entries
+  }
+
+  export async function listRegisteredWorktrees(primaryDir = Instance.worktree): Promise<RegisteredWorktreeEntry[]> {
+    const list = await runGit(["worktree", "list", "--porcelain"], {
+      cwd: primaryDir,
+      timeoutProfile: "default",
+    })
+    if (list.exitCode !== 0) {
+      throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
+    }
+    return parseWorktreeList(list.stdout)
+  }
+
+  export async function isManagedWorktreeDirectory(primaryDir: string, directory: string): Promise<boolean> {
+    const root = await canonical(worktreesRoot(primaryDir))
+    const target = await canonical(directory)
+    return target.startsWith(`${root}${path.sep}`)
   }
 
   async function findWorktreeEntry(stdout: Uint8Array | Buffer | undefined, directory: string) {
@@ -1047,14 +1085,6 @@ export namespace Worktree {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
-    const list = await runGit(["worktree", "list", "--porcelain"], {
-      cwd: Instance.worktree,
-      timeoutProfile: "default",
-    })
-    if (list.exitCode !== 0) {
-      throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
-    }
-
     const goalByDirectory = new Map<string, { goalID: string; active: boolean }>()
     for (const entry of listGoalWorkspacesForProject(projectID)) {
       const key = await canonical(entry.workspaceDir)
@@ -1064,25 +1094,29 @@ export namespace Worktree {
       })
     }
 
-    const parsed = parseWorktreeList(list.stdout)
+    const parsed = await listRegisteredWorktrees(Instance.worktree)
     const primaryEntry = parsed[0]
     if (!primaryEntry?.path) {
       throw new RemoveFailedError({ message: "Primary worktree not found" })
     }
     const primaryKey = await canonical(primaryEntry.path)
+    const managedRoot = await canonical(worktreesRoot(primaryEntry.path))
     const out: ProjectWorktreeInfo[] = []
     for (const entry of parsed) {
       const key = await canonical(entry.path)
       const binding = goalByDirectory.get(key)
       const isPrimary = key === primaryKey
+      const owned = key.startsWith(`${managedRoot}${path.sep}`)
+      if (!isPrimary && !owned) continue
+      const status = isPrimary ? "primary" : binding?.active ? "active" : "expired"
       out.push(
         ProjectWorktreeInfo.parse({
           name: path.basename(entry.path),
           branch: entry.branch,
           directory: entry.path,
           goalID: binding?.active ? binding.goalID : undefined,
-          status: isPrimary ? "primary" : binding?.active ? "active" : "expired",
-          removable: !isPrimary,
+          status,
+          removable: owned && status === "expired" && entry.locked !== true,
         }),
       )
     }
@@ -1102,9 +1136,41 @@ export namespace Worktree {
     if (!target) {
       throw new NotFoundError({ message: `Project worktree not found: ${input.directory}` })
     }
-    await remove({ directory: target.directory })
+    await removeManagedProjectWorktreeDirectory({ projectID: Instance.project.id, directory: target.directory })
     return target
   })
+
+  export const resetProjectWorktree = fn(ResetInput, async (input) => {
+    const directory = await canonical(input.directory)
+    let target: ProjectWorktreeInfo | undefined
+    for (const entry of await listProjectWorktrees(Instance.project.id)) {
+      if (!entry.removable) continue
+      if ((await canonical(entry.directory)) === directory) {
+        target = entry
+        break
+      }
+    }
+    if (!target) {
+      throw new NotFoundError({ message: `Project worktree not found: ${input.directory}` })
+    }
+    await reset({ directory: target.directory, baseRef: input.baseRef })
+    return target
+  })
+
+  export async function removeManagedProjectWorktreeDirectory(input: {
+    projectID?: string
+    directory: string
+  }): Promise<{ directory: string }> {
+    const directory = await canonical(input.directory)
+    const primaryEntry = (await listRegisteredWorktrees(Instance.worktree))[0]
+    const primary = primaryEntry?.path ?? Instance.worktree
+    if (!(await isManagedWorktreeDirectory(primary, directory))) {
+      throw new RemoveFailedError({ message: `Refusing to remove unmanaged project worktree: ${input.directory}` })
+    }
+    await remove({ directory: input.directory })
+    await Project.removeSandbox(input.projectID ?? Instance.project.id, input.directory)
+    return { directory: input.directory }
+  }
 
   async function isCaseInsensitiveFilesystem(target: string) {
     if (process.platform === "win32") return true
@@ -1850,8 +1916,8 @@ export namespace Worktree {
         .rm(target, {
           recursive: true,
           force: true,
-          maxRetries: 50,
-          retryDelay: 100,
+          maxRetries: DIRECTORY_REMOVE_MAX_RETRIES,
+          retryDelay: DIRECTORY_REMOVE_RETRY_DELAY_MS,
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error)
@@ -1891,58 +1957,32 @@ export namespace Worktree {
       }
 
       await stop(entry.path)
-      const gitLinkExists = await exists(path.join(entry.path, ".git"))
-      if (gitLinkExists) {
-        const removed = await runGit(["worktree", "remove", "--force", entry.path], {
-          cwd: Instance.worktree,
-          timeoutProfile: "default",
-        })
-        if (removed.exitCode !== 0) {
-          const next = await runGit(["worktree", "list", "--porcelain"], {
-            cwd: Instance.worktree,
-            timeoutProfile: "default",
-          })
-          if (next.exitCode !== 0) {
-            throw new RemoveFailedError({
-              message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
-            })
-          }
-
-          const stale = await findWorktreeEntry(next.stdout, directory)
-          if (stale?.path) {
-            throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
-          }
-        }
-      } else {
-        const pruned = await runGit(["worktree", "prune"], {
-          cwd: Instance.worktree,
-          timeoutProfile: "default",
-        })
-        if (pruned.exitCode !== 0) {
-          throw new RemoveFailedError({
-            message:
-              `Failed to prune broken git worktree registry for ${entry.path}: ` +
-              (errorText(pruned) || "unknown error"),
-          })
-        }
-        const next = await runGit(["worktree", "list", "--porcelain"], {
-          cwd: Instance.worktree,
-          timeoutProfile: "default",
-        })
-        if (next.exitCode !== 0) {
-          throw new RemoveFailedError({
-            message: errorText(next) || "Failed to read git worktrees after prune",
-          })
-        }
-        const stale = await findWorktreeEntry(next.stdout, directory)
-        if (stale?.path) {
-          throw new RemoveFailedError({
-            message: `Broken git worktree registry still lists ${entry.path} after prune`,
-          })
-        }
-      }
-
       await clean(entry.path)
+
+      const pruned = await runGit(["worktree", "prune"], {
+        cwd: Instance.worktree,
+        timeoutProfile: "default",
+      })
+      if (pruned.exitCode !== 0) {
+        throw new RemoveFailedError({
+          message: `Failed to prune git worktree registry for ${entry.path}: ` + (errorText(pruned) || "unknown error"),
+        })
+      }
+      const next = await runGit(["worktree", "list", "--porcelain"], {
+        cwd: Instance.worktree,
+        timeoutProfile: "default",
+      })
+      if (next.exitCode !== 0) {
+        throw new RemoveFailedError({
+          message: errorText(next) || "Failed to read git worktrees after prune",
+        })
+      }
+      const stale = await findWorktreeEntry(next.stdout, directory)
+      if (stale?.path) {
+        throw new RemoveFailedError({
+          message: `Git worktree registry still lists ${entry.path} after prune`,
+        })
+      }
 
       const branch = entry.branch?.replace(/^refs\/heads\//, "")
       if (branch) {

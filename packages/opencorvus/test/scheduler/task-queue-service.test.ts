@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
+import { GlobalBus } from "../../src/bus/global"
 import { Identifier } from "../../src/id/id"
 import { Session } from "../../src/session"
 import { SessionControl } from "../../src/session/control"
+import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionPromptState } from "../../src/session/prompt/state"
+import { SessionStatus } from "../../src/session/status"
 import { Scheduler } from "../../src/scheduler"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
@@ -57,6 +61,17 @@ async function waitForQueueStatus(id: string, status: string) {
   throw new Error(`queue task ${id} did not reach ${status}; current=${row?.status ?? "missing"}`)
 }
 
+async function waitForQueueStatusWithin(id: string, status: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() <= deadline) {
+    const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+    if (row?.status === status) return row
+    await Bun.sleep(25)
+  }
+  const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+  throw new Error(`queue task ${id} did not reach ${status}; current=${row?.status ?? "missing"}`)
+}
+
 async function waitUntil(fn: () => boolean, label: string) {
   for (let i = 0; i < 50; i += 1) {
     if (fn()) return
@@ -85,6 +100,164 @@ describe("scheduler.task-queue-service", () => {
 
     expect(register).not.toHaveBeenCalled()
   })
+
+  test("init schedules running task inactivity recovery without manual runNow", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
+    const register = spyOn(Scheduler, "register")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const now = Date.now()
+        const staleAt = now - 1500
+        const id = "task_init_inactivity_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: session.id,
+              prompt: "running without activity",
+              status: "running",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "running without activity" }],
+                },
+              },
+              time_created: staleAt,
+              time_updated: staleAt,
+              time_started: staleAt,
+            })
+            .run(),
+        )
+
+        TaskQueueService.init()
+        const row = await waitForQueueStatus(id, "failed")
+
+        expect(row?.error_message).toBe("task timed out while running")
+        expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
+      },
+    })
+
+    expect(register).not.toHaveBeenCalled()
+  })
+
+  test("fresh running task times out from inactivity timer without manual runNow", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const now = Date.now()
+        const id = "task_fresh_timer_inactivity_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: session.id,
+              prompt: "fresh running row",
+              status: "running",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "fresh running row" }],
+                },
+              },
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        TaskQueueService.init()
+        await Bun.sleep(500)
+        expect(
+          Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())?.status,
+        ).toBe("running")
+        const row = await waitForQueueStatusWithin(id, "failed", 2_000)
+
+        expect(row?.error_message).toBe("task timed out while running")
+        expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
+      },
+    })
+  }, 10_000)
+
+  test("timer recovery publishes cancellation failure and re-arms the running row", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const errors: Array<{ sessionID?: string; message?: string }> = []
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stop = Bus.subscribe(Session.Event.Error, (event) => {
+          errors.push({
+            sessionID: event.properties.sessionID,
+            message: event.properties.error?.data?.message,
+          })
+        })
+        try {
+          const session = await Session.create({ kind: "assistant" })
+          SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+          const now = Date.now()
+          const id = "task_timer_rearm_uncancellable_" + Math.random().toString(36).slice(2)
+          Database.use((db) =>
+            db
+              .insert(TaskQueueTable)
+              .values({
+                id,
+                session_id: session.id,
+                prompt: "timer rearm uncancellable",
+                status: "running",
+                source: "test",
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "timer rearm uncancellable" }],
+                  },
+                },
+                time_created: now - 1000,
+                time_updated: now - 1000,
+                time_started: now - 1000,
+              })
+              .run(),
+          )
+
+          TaskQueueService.init()
+          await waitUntil(
+            () => errors.some((error) => error.message?.includes("task inactivity recovery failed")),
+            "visible timer recovery failure",
+          )
+          expect(
+            Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())?.status,
+          ).toBe("running")
+
+          SessionStatus.set(session.id, { type: "idle" }, { publish: false })
+          const row = await waitForQueueStatusWithin(id, "failed", 2_000)
+          expect(row?.error_message).toBe("task timed out while running")
+        } finally {
+          stop()
+        }
+      },
+    })
+  }, 10_000)
 
   test("enqueue explicitly starts prompt execution without caller-side runNow", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -913,6 +1086,13 @@ describe("scheduler.task-queue-service", () => {
           sessionIDs: [sessionID],
           reason: "task cancelled",
         })
+        const cancelledRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get(),
+        )
+        expect(cancelledRow).toMatchObject({
+          status: "running",
+          error_message: null,
+        })
         releaseGet.resolve()
         await run
 
@@ -1093,6 +1273,164 @@ describe("scheduler.task-queue-service", () => {
 
     expect(prompt).toHaveBeenCalledTimes(0)
   })
+
+  test("stale running recovery fails fast when active session status has no cancellable prompt", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        SessionStatus.set(session.id, { type: "streaming" })
+        const now = Date.now()
+        const id = "task_stale_uncancellable_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: session.id,
+              prompt: "stale uncancellable",
+              status: "running",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "stale uncancellable" }],
+                },
+              },
+              time_created: now - 5000,
+              time_updated: now - 5000,
+              time_started: now - 5000,
+            })
+            .run(),
+        )
+
+        await expect(TaskQueueService.runNow()).rejects.toThrow(
+          /Cancellation did not complete for TaskQueueService\.recover/,
+        )
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("running")
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error_message).toBeNull()
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("stale running recovery waits for prompt state to finish before terminal failure", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const abort = SessionPromptState.start(session.id, tmp.path)
+        SessionStatus.set(session.id, { type: "streaming" })
+        const now = Date.now()
+        const id = "task_stale_unfinished_prompt_" + Math.random().toString(36).slice(2)
+        try {
+          Database.use((db) =>
+            db
+              .insert(TaskQueueTable)
+              .values({
+                id,
+                session_id: session.id,
+                prompt: "stale unfinished prompt",
+                status: "running",
+                source: "test",
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "stale unfinished prompt" }],
+                  },
+                },
+                time_created: now - 5000,
+                time_updated: now - 5000,
+                time_started: now - 5000,
+              })
+              .run(),
+          )
+
+          await expect(TaskQueueService.runNow()).rejects.toThrow(
+            /Cancellation did not complete for TaskQueueService\.recover/,
+          )
+          const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+          expect(row?.status).toBe("running")
+          expect(row?.time_completed).toBeNull()
+          expect(row?.error_message).toBeNull()
+          expect(SessionPromptState.isActive(session.id, tmp.path)).toBe(true)
+        } finally {
+          SessionPromptState.finish(session.id, abort, tmp.path)
+        }
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("message part delta heartbeat refreshes running task inactivity timer", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+      await new Promise<never>(() => {})
+    }) as never)
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [{ type: "text", text: "heartbeat keeps running" }],
+          },
+          source: "test",
+        })
+        const running = await waitForQueueStatusWithin(id, "running", 2_000)
+        await Bun.sleep(600)
+        GlobalBus.emit("event", {
+          directory: Instance.directory,
+          payload: {
+            type: Message.Event.PartDelta.type,
+            properties: {
+              sessionID: session.id,
+              field: "text",
+              delta: "still active",
+            },
+          },
+        })
+        await waitUntil(() => {
+          const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+          return (row?.time_updated ?? 0) > (running?.time_updated ?? 0)
+        }, "message part delta heartbeat touch")
+
+        await Bun.sleep(500)
+        const afterOriginalDeadline = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get(),
+        )
+        expect(afterOriginalDeadline?.status).toBe("running")
+
+        const failed = await waitForQueueStatusWithin(id, "failed", 3_000)
+        expect(failed?.error_message).toBe("task timed out while running")
+        expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  }, 10_000)
 
   test("recovery releases stale in-flight prompt promises that stop producing activity", async () => {
     await using tmp = await tmpdir({

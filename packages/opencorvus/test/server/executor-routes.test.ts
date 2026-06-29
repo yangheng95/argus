@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { ExecutorBootstrap } from "../../src/executor/bootstrap"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -51,6 +52,28 @@ describe("executor routes", () => {
         expect(
           body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output"),
         ).toBe(false)
+      },
+    })
+  })
+
+  test("GET /executor propagates executor bootstrap registration failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(ExecutorBootstrap, "autoRegister").mockRejectedValue(new Error("executor bootstrap unavailable"))
+        const response = await Server.App().request("/executor", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(500)
+        await expect(response.json()).resolves.toMatchObject({
+          name: "UnknownError",
+          data: { message: "executor bootstrap unavailable" },
+        })
       },
     })
   })
@@ -131,17 +154,21 @@ describe("executor routes", () => {
           body: JSON.stringify({ model: "gpt-5.4" }),
         })
         expect(unsupported.status).toBe(404)
+        await expect(unsupported.json()).resolves.toMatchObject({ name: "NotFoundError" })
       },
     })
   })
 
-  test("Server.openapi documents executor model PATCH body as required string model", async () => {
+  test("Server.openapi documents executor model PATCH body and named 404 response", async () => {
     const spec = await Server.openapi()
-    const requestBody = spec.paths?.["/executor/{executorID}/model"]?.patch?.requestBody
+    const patch = spec.paths?.["/executor/{executorID}/model"]?.patch
+    const requestBody = patch?.requestBody
     const schema = requestBody?.content?.["application/json"]?.schema
+    const notFoundSchema = patch?.responses?.["404"]?.content?.["application/json"]?.schema
 
     expect(requestBody?.required).toBe(true)
     expect(schema?.properties?.model?.type).toBe("string")
     expect(schema?.required).toContain("model")
+    expect(JSON.stringify(notFoundSchema)).toContain("NotFoundError")
   })
 })

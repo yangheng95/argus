@@ -31,6 +31,11 @@ type PartRow = {
   data: string
 }
 
+type ArtifactRow = {
+  id: string
+  payload: string
+}
+
 function messageFromRow(row: MessageRow, parts: Message.Part[]): Message.WithParts {
   return {
     info: {
@@ -68,6 +73,11 @@ const parentMessage = db
   .query<MessageRow, [string]>("SELECT id, session_id, time_created, data FROM message WHERE id = ?")
   .get(parentID)
 if (!parentMessage) throw new Error(`Missing compaction parent message ${parentID}`)
+const parentInfo = JSON.parse(parentMessage.data)
+const sourceAgent = parentInfo.agent
+if (typeof sourceAgent !== "string" || sourceAgent.trim().length === 0) {
+  throw new Error(`Compaction parent message ${parentID} has no source agent`)
+}
 
 const toolPart = db
   .query<
@@ -100,10 +110,32 @@ for (const row of partRows) {
 }
 
 const selectedHead = messageRows.map((row) => messageFromRow(row, partsByMessage.get(row.id) ?? []))
+const activeBuildContracts = db
+  .query<ArtifactRow, [string]>(
+    "SELECT id, payload FROM engine_artifact WHERE kind = 'build_session_contract' AND json_extract(payload, '$.session_id') = ? ORDER BY time_created DESC, id DESC LIMIT 8",
+  )
+  .all(SESSION_ID)
+  .map((row) => {
+    const payload = JSON.parse(row.payload) as Record<string, unknown>
+    return {
+      sessionID: String(payload.session_id ?? SESSION_ID),
+      goalID: String(payload.goal_id),
+      goalRunID: String(payload.goal_run_id),
+      artifactID: row.id,
+      sourceArtifactIDs: Array.isArray(payload.source_artifact_ids)
+        ? payload.source_artifact_ids.filter(
+            (item: unknown): item is string => typeof item === "string" && item.length > 0,
+          )
+        : [],
+      digest: String(payload.digest),
+    }
+  })
 const requirements = SessionCompaction.TestHooks.selectedHeadEvidenceRequirements({
   messages: selectedHead,
   instructionPaths: [],
   sourceUserMessageID: parentID,
+  sourceAgent,
+  activeBuildContracts,
   summarizePatchEvidence: patchEvidenceSummary,
 })
 const verdict = CompactionHandoff.validateMinimumEvidence(handoff, requirements)

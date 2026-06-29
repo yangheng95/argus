@@ -11,9 +11,10 @@ import {
   DEFAULT_MISSION_VERIFY_CMD,
   MISSION_BENCHMARK_TITLE,
   evaluateMissionBenchmarkReport,
+  missionTasksReadyForBenchmarkEvaluation,
+  missionStateMentionsTerminalTasks,
   missionTaskRows,
   terminalMissionTasks,
-  missionStateMentionsTerminalTasks,
   type MissionBenchmarkTask,
 } from "./mission-scenario"
 
@@ -316,7 +317,7 @@ async function waitForMissionTerminalTasks(id: string): Promise<MissionBenchmark
     const terminal = terminalMissionTasks(rows)
     const activityKey = missionRowsActivityKey(rows)
     return {
-      result: rows.length > 0 && terminal.length === rows.length ? terminal : undefined,
+      result: missionTasksReadyForBenchmarkEvaluation(rows) ? terminal : undefined,
       activityKey,
       activity: `mission task rows: ${activityKey}`,
     }
@@ -413,7 +414,11 @@ function missionStateActivityKey(state: Record<string, string>): string {
 }
 
 async function readMissionFile(id: string, file: string): Promise<string> {
-  return fs.readFile(path.join(ProjectRuntimePaths.missionRoot(temp.dir, id), file), "utf8").catch(() => "")
+  try {
+    return await fs.readFile(path.join(ProjectRuntimePaths.missionRoot(temp.dir, id), file), "utf8")
+  } catch (error) {
+    throw new Error(`mission state ${file} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 async function api(pathname: string, init: RequestInit = {}) {

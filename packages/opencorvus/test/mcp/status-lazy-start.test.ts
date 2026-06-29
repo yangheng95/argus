@@ -81,7 +81,7 @@ describe("MCP status auto startup", () => {
       fn: async () => {
         expect(await exists(marker)).toBe(false)
 
-        await MCP.tools()
+        await expect(MCP.tools()).rejects.toThrow()
 
         expect(await exists(marker)).toBe(true)
         const status = await MCP.status()

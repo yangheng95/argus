@@ -12,6 +12,7 @@ import { deleteCurrentProject, ProjectDeleteResult } from "../../project/delete"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { NotFoundError } from "../../storage/db"
 
 const OwnershipMarker = z.object({
   taskID: z.string(),
@@ -229,7 +230,13 @@ export const ProjectRoutes = lazy(() =>
         return c.json({
           worktreeOrphans,
           processOrphans,
-          worktreeGCCandidates: gcPlan.candidates.filter((candidate) => path.resolve(candidate.primaryDir) === current),
+          worktreeGCCandidates: gcPlan.candidates
+            .filter((candidate) => path.resolve(candidate.primaryDir) === current)
+            .map((candidate) => ({
+              projectID: candidate.projectID,
+              primaryDir: candidate.primaryDir,
+              directory: candidate.directory,
+            })),
         })
       },
     )
@@ -254,8 +261,7 @@ export const ProjectRoutes = lazy(() =>
       validator("json", Worktree.RemoveInput),
       async (c) => {
         const body = c.req.valid("json")
-        const removed = await Worktree.removeProjectWorktree(body)
-        await Project.removeSandbox(Instance.project.id, removed.directory)
+        await Worktree.removeProjectWorktree(body)
         return c.json({ ok: true })
       },
     )
@@ -282,7 +288,11 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const projectID = c.req.valid("param").projectID
         const body = c.req.valid("json")
+        if (projectID !== Instance.project.id) {
+          throw new NotFoundError({ message: `Project not found: ${projectID}` })
+        }
         const project = await Project.update({ ...body, projectID })
+        await Instance.refresh()
         return c.json(project)
       },
     ),

@@ -243,6 +243,7 @@ export function MissionRoutes() {
             description: "Mission status snapshot",
             content: { "application/json": { schema: resolver(MissionStatusSnapshot) } },
           },
+          ...errors(404),
         },
       }),
       validator("param", MissionParam),
@@ -275,6 +276,7 @@ export function MissionRoutes() {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", MissionParam),
@@ -322,6 +324,7 @@ export function MissionRoutes() {
             description: "Renamed Mission record",
             content: { "application/json": { schema: resolver(MissionRecord) } },
           },
+          ...errors(404),
         },
       }),
       validator("param", MissionParam),
@@ -344,7 +347,7 @@ export function MissionRoutes() {
             description: "Mission abort accepted",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
-          ...errors(409),
+          ...errors(404, 409),
         },
       }),
       validator("param", MissionParam),
@@ -398,12 +401,13 @@ export function MissionRoutes() {
             description: "Mission deleted",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
+          ...errors(404),
         },
       }),
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
-        await EngineService.deleteSession(session.id)
+        await EngineService.deleteSession(session.id, { projectID: session.projectID })
         return c.json(true)
       },
     )
@@ -422,6 +426,7 @@ export function MissionRoutes() {
             description: "Mission wake accepted",
             content: { "application/json": { schema: resolver(MissionWakeResult) } },
           },
+          ...errors(400),
         },
       }),
       validator("json", MissionWakeInput),
@@ -431,7 +436,8 @@ export function MissionRoutes() {
           try {
             PromptProfile.assertKnownProfileID(input.promptProfile, await Config.get())
           } catch (error) {
-            return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+            const message = error instanceof Error ? error.message : String(error)
+            return c.json({ data: { message }, errors: [{ message }], success: false }, 400)
           }
         }
         const missionID = input.missionID ?? newMissionID()

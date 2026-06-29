@@ -28,6 +28,7 @@
 import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
+import { createAgentCoordinationRuntimeTools } from "@/agent/coordination-runtime-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { VisualSpec } from "@/frontend-design/types"
@@ -43,7 +44,7 @@ import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, RequirementsDecision } from "./types"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
-import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
+import { createArchitectOutputTools, type ArchitectGoalCountContract, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 
@@ -112,6 +113,7 @@ export namespace ArchitectAgent {
       kind: (g.kind as RegisteredGoal["kind"]) ?? "feature",
       requirement_ids: g.requirement_ids,
     }))
+    const goalCountContract = resolveArchitectGoalCountContract(input)
     const outputToolKit = createArchitectOutputTools({
       existingGoals: seedGoals,
       designSpecs: input.designSpecs,
@@ -125,8 +127,14 @@ export namespace ArchitectAgent {
         taskID: input.taskID,
         request: input.taskRequest,
       }),
+      goalCountContract,
     })
-    const contextTools = await filterAgentTools(createAgentContextTools(), "architect", {
+    const coordinationTools = await createAgentCoordinationRuntimeTools({
+      agent: "architect",
+      taskID: input.taskID,
+      signal: input.signal,
+    })
+    const contextTools = await filterAgentTools({ ...createAgentContextTools(), ...coordinationTools }, "architect", {
       taskID: input.taskID,
       sessionID: input.parentSessionID,
     })
@@ -136,6 +144,7 @@ export namespace ArchitectAgent {
       requirements: input.requirements?.length ?? 0,
       decisions: input.requirementDecisions?.length ?? 0,
       retry: Boolean(input.retryContext),
+      minGoalCount: goalCountContract?.minGoalCount,
     })
 
     const out = await runAgentSession({
@@ -257,6 +266,7 @@ export namespace ArchitectAgent {
 
 function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   const sections: string[] = []
+  const goalCountContract = resolveArchitectGoalCountContract(input)
 
   sections.push("# Delegation\n\nOrchestrator is asking architect to decompose this task into executable goals.")
   sections.push(
@@ -276,6 +286,20 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
       "When the excerpt is not enough, read or grep the exact request bundle path named above instead of relying on upstream summaries.",
     ].join("\n"),
   )
+
+  if (goalCountContract) {
+    sections.push(
+      [
+        "# Architect Execution Contract",
+        "",
+        `Minimum goals: ${goalCountContract.minGoalCount}`,
+        `Source: ${goalCountContract.source}`,
+        `Evidence: ${goalCountContract.evidence}`,
+        "",
+        "This explicit graph-size contract is used by submit_architect and terminal-tool readiness. Do not call submit_architect until the registered goal graph satisfies it.",
+      ].join("\n"),
+    )
+  }
 
   if (input.designSpecs && input.designSpecs.length > 0) {
     sections.push(
@@ -400,4 +424,44 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   )
 
   return sections.join("\n\n")
+}
+
+const ARCHITECT_GOAL_COUNT_DECISION_KEYS = new Set([
+  "architect_goal_min_count",
+  "architect_min_goal_count",
+  "architect_goal_count_minimum",
+  "architect_goal_count_contract",
+])
+
+function resolveArchitectGoalCountContract(
+  input: ArchitectAgent.CoordinateInput,
+): ArchitectGoalCountContract | undefined {
+  return goalCountContractFromRequirementDecisions(input.requirementDecisions ?? [])
+}
+
+function goalCountContractFromRequirementDecisions(
+  decisions: RequirementsDecision[],
+): ArchitectGoalCountContract | undefined {
+  const candidates: ArchitectGoalCountContract[] = []
+  for (const decision of decisions) {
+    if (!ARCHITECT_GOAL_COUNT_DECISION_KEYS.has(decision.key)) continue
+    const minGoalCount = parsePositiveInteger(decision.value)
+    if (!minGoalCount) continue
+    candidates.push({
+      minGoalCount,
+      source: "requirements_decision",
+      evidence: `${decision.key}=${decision.value}; ${decision.reason}`,
+    })
+  }
+  return candidates.reduce<ArchitectGoalCountContract | undefined>(
+    (best, next) => (!best || next.minGoalCount > best.minGoalCount ? next : best),
+    undefined,
+  )
+}
+
+function parsePositiveInteger(value: string): number | undefined {
+  const match = value.match(/\d+/)
+  if (!match) return undefined
+  const parsed = Number.parseInt(match[0], 10)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }

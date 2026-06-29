@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { eq } from "drizzle-orm"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { upsertGoalsFromArchitect } from "../../src/engine/persist"
-import { findGoal } from "../../src/engine/store"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
+import { persistArchitectContractGraph, upsertGoalsFromArchitect } from "../../src/engine/persist"
+import { findGoal, listGoals } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { Identifier } from "../../src/id/id"
+import { assertArchitectContractGraphMatchesExecutableGoals } from "../../src/architect/contract-graph"
 
 type SeededTask = {
   projectID: string
@@ -169,5 +176,176 @@ describe("goal versioning labels", () => {
     expect(newGoalID).toBeTruthy()
     expect(findGoal(goalIDs[0])?.order_index).toBe(0)
     expect(findGoal(newGoalID!)?.order_index).toBe(5)
+  })
+
+  test.serial(
+    "architect persist rejects remapped contract graph that does not match executable depends_on",
+    async () => {
+      await resetDatabase()
+      const seed = seedTask()
+
+      expect(() =>
+        Database.transaction((db) => {
+          const out = upsertGoalsFromArchitect(db, {
+            taskID: seed.taskID,
+            specSnapshotID: seed.specID,
+            removedLLMIDs: [],
+            now: Date.now(),
+            architectGoals: [
+              {
+                llmID: "goal_model",
+                title: "Model",
+                objective: "Produce the shared model contract for downstream UI work.",
+                acceptance_specs: [],
+                owned_paths: ["src/model.ts"],
+                depends_on: [],
+                exports: [],
+                imports: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+              },
+              {
+                llmID: "goal_ui",
+                title: "UI",
+                objective: "Consume the shared model contract in the UI.",
+                acceptance_specs: [],
+                owned_paths: ["src/App.tsx"],
+                depends_on: [],
+                exports: [],
+                imports: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+              },
+            ],
+          })
+          const modelGoalID = out.llmToDBID.get("goal_model")!
+          const uiGoalID = out.llmToDBID.get("goal_ui")!
+          const graph = {
+            version: 1 as const,
+            contracts: [
+              {
+                id: "contract_model",
+                kind: "static_data" as const,
+                name: "SharedModel",
+                producer_goal_id: modelGoalID,
+                consumer_goal_ids: [uiGoalID],
+                summary: "Shared model surface consumed by the UI goal.",
+                artifact_paths: ["src/model.ts"],
+                evidence_refs: [],
+              },
+            ],
+            dependency_contracts: [
+              {
+                from_goal_id: modelGoalID,
+                to_goal_id: uiGoalID,
+                reason: "contract" as const,
+                contract_ids: ["contract_model"],
+              },
+            ],
+          }
+
+          assertArchitectContractGraphMatchesExecutableGoals({
+            graph,
+            goals: out.persisted.map((goal) => ({
+              id: goal.id,
+              depends_on: goal.depends_on,
+              acceptance_specs: goal.acceptance_specs,
+            })),
+          })
+          persistArchitectContractGraph(db, { taskID: seed.taskID, graph, now: Date.now() })
+        }),
+      ).toThrow(/does not match executable goal dependencies/)
+
+      expect(listGoals(seed.taskID)).toHaveLength(0)
+      const artifacts = Database.use((db) =>
+        db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, seed.taskID)).all(),
+      )
+      expect(artifacts).toHaveLength(0)
+    },
+  )
+
+  test.serial("architect persist accepts remapped contract graph matching executable depends_on", async () => {
+    await resetDatabase()
+    const seed = seedTask()
+
+    Database.transaction((db) => {
+      const out = upsertGoalsFromArchitect(db, {
+        taskID: seed.taskID,
+        specSnapshotID: seed.specID,
+        removedLLMIDs: [],
+        now: Date.now(),
+        architectGoals: [
+          {
+            llmID: "goal_model",
+            title: "Model",
+            objective: "Produce the shared model contract for downstream UI work.",
+            acceptance_specs: [],
+            owned_paths: ["src/model.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+          },
+          {
+            llmID: "goal_ui",
+            title: "UI",
+            objective: "Consume the shared model contract in the UI.",
+            acceptance_specs: [],
+            owned_paths: ["src/App.tsx"],
+            depends_on: ["goal_model"],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+          },
+        ],
+      })
+      const modelGoalID = out.llmToDBID.get("goal_model")!
+      const uiGoalID = out.llmToDBID.get("goal_ui")!
+      const graph = {
+        version: 1 as const,
+        contracts: [
+          {
+            id: "contract_model",
+            kind: "static_data" as const,
+            name: "SharedModel",
+            producer_goal_id: modelGoalID,
+            consumer_goal_ids: [uiGoalID],
+            summary: "Shared model surface consumed by the UI goal.",
+            artifact_paths: ["src/model.ts"],
+            evidence_refs: [],
+          },
+        ],
+        dependency_contracts: [
+          {
+            from_goal_id: modelGoalID,
+            to_goal_id: uiGoalID,
+            reason: "contract" as const,
+            contract_ids: ["contract_model"],
+          },
+        ],
+      }
+
+      assertArchitectContractGraphMatchesExecutableGoals({
+        graph,
+        goals: out.persisted.map((goal) => ({
+          id: goal.id,
+          depends_on: goal.depends_on,
+          acceptance_specs: goal.acceptance_specs,
+        })),
+      })
+      persistArchitectContractGraph(db, { taskID: seed.taskID, graph, now: Date.now() })
+    })
+
+    expect(listGoals(seed.taskID)).toHaveLength(2)
+    const artifacts = Database.use((db) =>
+      db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, seed.taskID)).all(),
+    )
+    expect(artifacts).toHaveLength(1)
   })
 })

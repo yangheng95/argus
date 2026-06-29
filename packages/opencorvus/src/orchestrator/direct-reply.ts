@@ -20,6 +20,7 @@ const A2A_WORKER_CONTROL_AGENT_KIND_VALUES = [
   "build",
   "fact-check",
   "deep-research",
+  "explore",
   "frontend-research",
   "visual-qa",
   "goal-workload-analyst",
@@ -89,6 +90,17 @@ export const BuildSessionDirectReplyError = NamedError.create(
      *  generic "kind not allowed" copy. */
     sessionKind: z.string(),
     envelopeAgent: z.string(),
+  }),
+)
+
+export const AgentSessionAttachmentReferenceError = NamedError.create(
+  "AgentSessionAttachmentReferenceError",
+  z.object({
+    message: z.string(),
+    taskID: z.string(),
+    sessionID: z.string(),
+    url: z.string(),
+    reason: z.enum(["invalid_url", "wrong_project", "missing_attachment", "metadata_mismatch"]),
   }),
 )
 

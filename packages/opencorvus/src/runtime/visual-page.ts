@@ -221,7 +221,7 @@ async function renderPageViaNode(input: {
   const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.browserLaunchTimeoutMs)
   const navigationTimeoutMs = input.navigationTimeoutMs ?? 90_000
-  const hardTimeoutMs = launchTimeoutMs + navigationTimeoutMs + (input.settleMs ?? 2_500) + 30_000
+  const sidecarSafetyTimeoutMs = Math.max(launchTimeoutMs + 30 * 60_000, 30 * 60_000)
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const run = await runBrowserNodeSidecar<
     | {
@@ -249,7 +249,7 @@ async function renderPageViaNode(input: {
       requiredDomDescendants: input.minDomDescendants ?? 1,
     },
     payloadEnvName: "OPENCORVUS_VISUAL_RENDER_INPUT",
-    hardTimeoutMs,
+    inactivityTimeoutMs: sidecarSafetyTimeoutMs,
     label: "Node visual render",
     signal: input.signal,
   }).catch((error) => {
@@ -279,6 +279,53 @@ function isBrowserImplicitAssetRequest(rawUrl) {
 
 function isResourceLoadConsoleError(text) {
   return String(text || "").trimStart().startsWith("Failed to load resource:");
+}
+
+function visualActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return event + " " + payload.url();
+  if (payload && typeof payload.message === "function") return event + " " + payload.message();
+  if (payload && typeof payload.text === "function") return event + " " + payload.text();
+  if (payload && typeof payload.errorText === "string") return event + " " + payload.errorText;
+  return event;
+}
+
+async function withVisualBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false;
+  let lastActivity = "start";
+  let timer;
+  let rejectInactive;
+  const listeners = [];
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject;
+  });
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const reset = (source) => {
+    if (settled) return;
+    lastActivity = source;
+    clearTimer();
+    timer = setTimeout(() => {
+      rejectInactive(new Error(label + " visual render browser inactive for " + inactivityTimeoutMs + "ms after " + lastActivity));
+    }, inactivityTimeoutMs);
+  };
+  const on = (event, handler) => {
+    page.on(event, handler);
+    listeners.push([event, handler]);
+  };
+  on("console", (payload) => reset(visualActivityLabel("console", payload)));
+  on("response", (payload) => reset(visualActivityLabel("response", payload)));
+  on("requestfailed", (payload) => reset(visualActivityLabel("requestfailed", payload)));
+  on("pageerror", (payload) => reset(visualActivityLabel("pageerror", payload)));
+  reset("start");
+  try {
+    return await Promise.race([action(), inactive]);
+  } finally {
+    settled = true;
+    clearTimer();
+    for (const [event, handler] of listeners) page.off(event, handler);
+  }
 }
 
 async function collectDom(page) {
@@ -552,7 +599,12 @@ async function main() {
         window.__opencorvusCaptureUnhandledRejection?.(message);
       });
     });
-    const response = await page.goto(input.target, { waitUntil: "load", timeout: input.navigationTimeoutMs });
+    const response = await withVisualBrowserInactivity(
+      page,
+      "navigate " + input.target,
+      input.navigationTimeoutMs,
+      () => page.goto(input.target, { waitUntil: "load", timeout: 0 }),
+    );
     const status = response?.status() || 0;
     const contentType = String(response?.headers()["content-type"] || "").toLowerCase();
     const bodyBuf = response ? await response.body().catch(() => Buffer.alloc(0)) : Buffer.alloc(0);
@@ -562,8 +614,14 @@ async function main() {
     else if (bodyBuf.length < 200) httpReason = "body=" + bodyBuf.length + "B - too small to be an app shell";
     let missingWaitSelector;
     if (input.waitForSelector) {
-      await page.waitForSelector(input.waitForSelector, { timeout: input.navigationTimeoutMs }).catch(() => {
+      await withVisualBrowserInactivity(
+        page,
+        "waitForSelector " + input.waitForSelector,
+        input.navigationTimeoutMs,
+        () => page.waitForSelector(input.waitForSelector, { timeout: 0 }),
+      ).catch((error) => {
         missingWaitSelector = input.waitForSelector;
+        pageErrors.push(("waitForSelector: " + (error && error.message ? error.message : String(error))).slice(0, 400));
       });
     }
     await new Promise((resolve) => setTimeout(resolve, input.settleMs ?? 2_500));

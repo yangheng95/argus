@@ -3,6 +3,15 @@ import { Global } from "../global"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 
+function isEnoent(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    String((error as { code?: unknown }).code) === "ENOENT"
+  )
+}
+
 export const OAUTH_DUMMY_KEY = "opencorvus-oauth-dummy-key"
 
 export namespace Auth {
@@ -42,11 +51,24 @@ export namespace Auth {
   }
 
   export async function all(): Promise<Record<string, Info>> {
-    const data = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
+    let data: Record<string, unknown>
+    try {
+      data = await Filesystem.readJson<Record<string, unknown>>(filepath)
+    } catch (error) {
+      if (isEnoent(error)) data = {}
+      else {
+        throw new Error(
+          `Failed to read auth file ${filepath}: ${error instanceof Error ? error.message : String(error)}`,
+          {
+            cause: error,
+          },
+        )
+      }
+    }
     return Object.entries(data).reduce(
       (acc, [key, value]) => {
         const parsed = Info.safeParse(value)
-        if (!parsed.success) return acc
+        if (!parsed.success) throw new Error(`Invalid auth entry "${key}" in ${filepath}: ${parsed.error.message}`)
         acc[key] = parsed.data
         return acc
       },

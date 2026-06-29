@@ -16,6 +16,7 @@ import { Message } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
 import type { Config } from "../../src/config/config"
 import { Todo } from "../../src/session/todo"
+import { AgentRoleContract, type AgentRoleID } from "../../src/agent/role-contract"
 
 Log.init({ print: false })
 
@@ -58,6 +59,42 @@ function handoffFixture(): CompactionHandoff.Info {
         extraKeys: ["task"],
       },
     },
+    agentHandoff: {
+      kind: "build",
+      deliverables: [
+        {
+          fact: "Structured compaction handoff implementation is the active build deliverable",
+          evidence: "packages/opencorvus/src/session/compaction-handoff.ts",
+        },
+      ],
+      codeChanges: [
+        {
+          path: "packages/opencorvus/src/session/compaction-handoff.ts",
+          fact: "Build agent changed the compact handoff schema and renderer",
+          evidence: "git diff -- packages/opencorvus/src/session/compaction-handoff.ts",
+        },
+      ],
+      verification: [
+        {
+          command: "bun test packages/opencorvus/test/session/compaction.test.ts",
+          result: "targeted compact contract verification",
+          evidence: "testsAndCommands",
+        },
+      ],
+      runtimeState: [
+        {
+          fact: "Continuation uses assistant.structured as the resumable source",
+          evidence: "packages/opencorvus/src/session/compaction.ts",
+        },
+      ],
+      handoffArtifacts: [
+        {
+          artifact: "assistant.structured",
+          role: "validated compact handoff payload",
+          evidence: "packages/opencorvus/src/session/message.ts",
+        },
+      ],
+    },
     decisions: [
       {
         decision: "Store validated handoff data in assistant.structured",
@@ -90,6 +127,242 @@ function handoffFixture(): CompactionHandoff.Info {
     userMessages: ["Fix compaction so it preserves resumable task state."],
     nextActions: ["run the targeted compaction contract test"],
     openRisks: ["full typecheck may expose unrelated dirty workspace issues"],
+  }
+}
+
+function fact(label: string) {
+  return {
+    fact: `${label} preserved compact fact`,
+    evidence: `test evidence for ${label}`,
+  }
+}
+
+function pathFact(label: string) {
+  return {
+    path: `packages/opencorvus/${label}.ts`,
+    fact: `${label} path-specific compact fact`,
+    evidence: `test path evidence for ${label}`,
+  }
+}
+
+function commandFact(label: string) {
+  return {
+    command: `node verify-${label}.js`,
+    result: `${label} verification completed`,
+    evidence: `test command evidence for ${label}`,
+  }
+}
+
+function artifactFact(label: string) {
+  return {
+    artifact: `artifact-${label}`,
+    role: `${label} handoff artifact role`,
+    evidence: `test artifact evidence for ${label}`,
+  }
+}
+
+function sessionFact(label: string) {
+  return {
+    sessionID: `session-${label}`,
+    agent: label,
+    status: `${label} delegated session status`,
+    evidence: `test session evidence for ${label}`,
+  }
+}
+
+function goalFact(label: string) {
+  return {
+    goalID: `goal-${label}`,
+    status: `${label} goal status`,
+    evidence: `test goal evidence for ${label}`,
+  }
+}
+
+function claimFact(label: string) {
+  return {
+    claim: `${label} claim text`,
+    status: `${label} claim verification status`,
+    evidence: `test claim evidence for ${label}`,
+  }
+}
+
+function agentHandoffFixture(agent: AgentRoleID | "custom-reviewer"): CompactionHandoff.AgentHandoff {
+  switch (agent) {
+    case "coding":
+      return {
+        kind: "coding",
+        editScope: [fact("coding edit scope")],
+        codeChanges: [pathFact("coding-change")],
+        commands: [commandFact("coding-command")],
+        nextEdits: [fact("coding next edit")],
+      }
+    case "coding-assistant":
+      return {
+        kind: "coding-assistant",
+        editScope: [fact("coding assistant edit scope")],
+        codeChanges: [pathFact("coding-assistant-change")],
+        commands: [commandFact("coding-assistant-command")],
+        nextEdits: [fact("coding assistant next edit")],
+      }
+    case "build":
+      return handoffFixture().agentHandoff
+    case "visual-qa":
+      return {
+        kind: "visual-qa",
+        screenshots: [artifactFact("visual-qa-screenshot")],
+        findings: [fact("visual qa finding")],
+        interactionChecks: [fact("visual qa interaction")],
+        repairState: [fact("visual qa repair state")],
+        acceptanceVerdict: [fact("visual qa verdict")],
+      }
+    case "general":
+      return {
+        kind: "general",
+        findings: [fact("general finding")],
+        workProducts: [artifactFact("general-work-product")],
+        toolEvidence: [fact("general tool evidence")],
+        nextActions: [fact("general next action")],
+      }
+    case "explore":
+      return {
+        kind: "explore",
+        filesRead: [pathFact("explore-file")],
+        symbols: [fact("explore symbol")],
+        findings: [fact("explore finding")],
+        openQuestions: [fact("explore question")],
+      }
+    case "compaction":
+    case "title":
+    case "summary":
+      return {
+        kind: agent,
+        maintenanceActions: [fact(`${agent} maintenance`)],
+        generatedOutputs: [fact(`${agent} output`)],
+        sourceRequests: [fact(`${agent} source request`)],
+      }
+    case "control":
+      return {
+        kind: "control",
+        panelActions: [fact("control panel action")],
+        visibleState: [fact("control visible state")],
+        pendingUserFollowUp: [fact("control follow up")],
+      }
+    case "orchestrator":
+      return {
+        kind: "orchestrator",
+        workflowDecisions: [fact("orchestrator workflow decision")],
+        delegatedSessions: [sessionFact("orchestrator-build")],
+        goalGraphState: [goalFact("orchestrator-goal")],
+        pendingDecisions: [fact("orchestrator pending decision")],
+      }
+    case "mission":
+      return {
+        kind: "mission",
+        missionContract: [fact("mission contract")],
+        roadmap: [fact("mission roadmap")],
+        delegatedTasks: [fact("mission delegated task")],
+        userCommitments: [fact("mission user commitment")],
+        externalEvents: [fact("mission external event")],
+      }
+    case "requirements":
+      return {
+        kind: "requirements",
+        requirementInventory: [fact("requirements inventory")],
+        constraints: [fact("requirements constraint")],
+        clarifications: [fact("requirements clarification")],
+        rejectedNonRequirements: [fact("requirements rejected item")],
+      }
+    case "architect":
+      return {
+        kind: "architect",
+        goals: [goalFact("architect-goal")],
+        graphContracts: [artifactFact("architect-contract")],
+        ownershipBoundaries: [fact("architect ownership")],
+        verificationPlan: [fact("architect verification plan")],
+      }
+    case "frontend-design":
+      return {
+        kind: "frontend-design",
+        referenceSurfaces: [artifactFact("frontend-design-reference")],
+        visualSystem: [fact("frontend design visual system")],
+        componentContracts: [fact("frontend design component contract")],
+        implementationTemplate: [artifactFact("frontend-design-template")],
+        fidelityRisks: [fact("frontend design fidelity risk")],
+      }
+    case "intent-analysis":
+      return {
+        kind: "intent-analysis",
+        detectedIntents: [fact("intent analysis detected intent")],
+        slots: [fact("intent analysis slot")],
+        clarifications: [fact("intent analysis clarification")],
+        routingAdvice: [fact("intent analysis routing advice")],
+      }
+    case "integrity":
+      return {
+        kind: "integrity",
+        acceptanceFindings: [fact("integrity acceptance finding")],
+        requirementCoverage: [fact("integrity requirement coverage")],
+        runtimeEvidence: [fact("integrity runtime evidence")],
+        verdict: [fact("integrity verdict")],
+        rejectionDetails: [fact("integrity rejection detail")],
+      }
+    case "fact-check":
+      return {
+        kind: "fact-check",
+        claims: [claimFact("fact-check")],
+        sourceEvidence: [artifactFact("fact-check-source")],
+        unresolvedClaims: [fact("fact check unresolved")],
+      }
+    case "deep-research":
+      return {
+        kind: "deep-research",
+        researchQuestions: [fact("deep research question")],
+        sources: [artifactFact("deep-research-source")],
+        findings: [fact("deep research finding")],
+        uncertainties: [fact("deep research uncertainty")],
+        handoffArtifacts: [artifactFact("deep-research-handoff")],
+      }
+    case "frontend-research":
+      return {
+        kind: "frontend-research",
+        sourcePages: [fact("frontend research source page")],
+        regionEvidence: [fact("frontend research region evidence")],
+        interactionEvidence: [fact("frontend research interaction evidence")],
+        dataContracts: [fact("frontend research data contract")],
+        handoffArtifacts: [artifactFact("frontend-research-handoff")],
+      }
+    case "goal-workload-analyst":
+      return {
+        kind: "goal-workload-analyst",
+        goalInventories: [goalFact("goal-workload")],
+        decompositionConcerns: [fact("goal workload decomposition")],
+        executionRisks: [fact("goal workload execution risk")],
+        recommendedSplits: [fact("goal workload split")],
+      }
+    case "custom-reviewer":
+      return {
+        kind: "custom-agent",
+        agentName: "custom-reviewer",
+        roleContract: "Custom reviewer preserves its declared review contract",
+        toolSurface: ["read", "rg"],
+        workProducts: [fact("custom reviewer work product")],
+        toolEvidence: [fact("custom reviewer tool evidence")],
+        continuationState: [fact("custom reviewer continuation state")],
+      }
+  }
+}
+
+function handoffFixtureForAgent(agent: AgentRoleID | "custom-reviewer"): CompactionHandoff.Info {
+  return {
+    ...handoffFixture(),
+    currentState: {
+      ...handoffFixture().currentState,
+      sourceUserMessage: {
+        ...handoffFixture().currentState.sourceUserMessage,
+        agent,
+      },
+    },
+    agentHandoff: agentHandoffFixture(agent),
   }
 }
 
@@ -184,6 +457,7 @@ function previousRetention(
     userMessages: handoff.userMessages,
     nextActions: handoff.nextActions,
     openRisks: handoff.openRisks,
+    agentHandoff: CompactionHandoff.agentHandoffRetentionFacts(handoff.agentHandoff),
   }
 }
 
@@ -210,8 +484,11 @@ describe("CompactionHandoff", () => {
     expect(first).toContain("Summary:")
     expect(first).toContain("1. Primary Request and Intent:")
     expect(first).toContain("7. Todo List (verbatim):")
+    expect(first).toContain("7a. Agent-Specific Handoff (verbatim):")
     expect(first).toContain("9. Current Work:")
     expect(first).toContain("10. Optional Next Step:")
+    expect(first).toContain("Agent-specific compact payload kind: build")
+    expect(first).toContain("Structured compaction handoff implementation is the active build deliverable")
     expect(first).toContain("Working context: Compaction must preserve requirements")
     expect(first).toContain("Chronology: Identified generic summaries as insufficient")
     expect(first).toContain("Acceptance: The handoff must preserve exact acceptance criteria and command evidence")
@@ -229,6 +506,8 @@ describe("CompactionHandoff", () => {
     expect(memory).toContain("# Compaction Handoff Memory")
     expect(memory).toContain("## Working Context")
     expect(memory).toContain("Rendered Markdown is display-only; assistant.structured is the resumable handoff source.")
+    expect(memory).toContain("## Agent-Specific Handoff")
+    expect(memory).toContain("Structured compaction handoff implementation is the active build deliverable")
     expect(memory).toContain("## Chronology")
     expect(memory).toContain("Identified generic summaries as insufficient for resuming session work")
     expect(memory).not.toContain("This session is being continued from a previous conversation")
@@ -314,6 +593,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["packages/opencorvus/src/session/compaction-handoff.ts"],
       errorNames: [],
@@ -333,6 +613,112 @@ describe("CompactionHandoff", () => {
     }
   })
 
+  test("rejects rich build handoff with empty build-specific payload", () => {
+    const handoff = {
+      ...handoffFixture(),
+      agentHandoff: {
+        kind: "build",
+        deliverables: [],
+        codeChanges: [],
+        verification: [],
+        runtimeState: [],
+        handoffArtifacts: [],
+      },
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      sourceAgent: "build",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      richContext: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoff.todos,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("agentHandoff.build")
+  })
+
+  test("agent handoff schema registry exactly covers built-in agent roles", () => {
+    expect(Object.keys(CompactionHandoff.AgentHandoffSchemaByAgent).sort()).toEqual([...AgentRoleContract.ids].sort())
+  })
+
+  for (const agent of AgentRoleContract.ids) {
+    test(`accepts only ${agent} handoff payload for ${agent} source agent`, () => {
+      const handoff = handoffFixtureForAgent(agent)
+      const requirements: CompactionHandoff.EvidenceRequirements = {
+        sourceUserMessageID: "m-user",
+        sourceAgent: agent,
+        instructionPaths: ["/repo/AGENTS.md"],
+        patchFiles: [],
+        errorNames: [],
+        userMessages: true,
+        fileEvidence: false,
+        errorsAndBlockers: false,
+        acceptanceCriteria: true,
+        todos: handoff.todos,
+      }
+
+      expect(SessionCompaction.validateHandoffPayload(handoff, requirements).success).toBe(true)
+      const wrongPayload = agent === "build" ? agentHandoffFixture("orchestrator") : agentHandoffFixture("build")
+      const wrongHandoff = { ...handoff, agentHandoff: wrongPayload }
+      expect(CompactionHandoff.schemaForAgent(agent).safeParse(wrongHandoff).success).toBe(false)
+    })
+  }
+
+  test("custom agent payload requires exact source agent name", () => {
+    const handoff = handoffFixtureForAgent("custom-reviewer")
+    const requirements: CompactionHandoff.EvidenceRequirements = {
+      sourceUserMessageID: "m-user",
+      sourceAgent: "custom-reviewer",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoff.todos,
+    }
+
+    expect(SessionCompaction.validateHandoffPayload(handoff, requirements).success).toBe(true)
+    const customPayload = handoff.agentHandoff as Extract<CompactionHandoff.AgentHandoff, { kind: "custom-agent" }>
+    const mismatched = {
+      ...handoff,
+      agentHandoff: {
+        ...customPayload,
+        agentName: "other-custom-agent",
+      },
+    } satisfies CompactionHandoff.Info
+
+    expect(CompactionHandoff.schemaForAgent("custom-reviewer").safeParse(mismatched).success).toBe(true)
+    expect(SessionCompaction.validateHandoffPayload(mismatched, requirements).success).toBe(false)
+    expect(CompactionHandoff.isValidStructured(mismatched)).toBe(false)
+  })
+
+  test("rejects persisted summary whose payload kind does not match source agent", () => {
+    const mismatched = {
+      ...handoffFixture(),
+      agentHandoff: agentHandoffFixture("orchestrator"),
+    } satisfies CompactionHandoff.Info
+
+    expect(CompactionHandoff.Schema.safeParse(mismatched).success).toBe(true)
+    expect(CompactionHandoff.isValidStructured(mismatched)).toBe(false)
+    expect(
+      CompactionHandoff.isValidSummaryMessage({
+        role: "assistant",
+        summary: true,
+        finish: "stop",
+        structured: mismatched,
+      }),
+    ).toBe(false)
+  })
+
   test("accepts explicit empty arrays only when input facts prove those fields absent", () => {
     const handoff = {
       ...handoffFixture(),
@@ -344,6 +730,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -355,6 +742,57 @@ describe("CompactionHandoff", () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  test("requires active build contracts to preserve exact artifact ids and source artifacts", () => {
+    const activeBuildContracts: CompactionHandoff.Info["activeBuildContracts"] = [
+      {
+        sessionID: "ses-build",
+        goalID: "goal-alpha",
+        goalRunID: "goal-run-alpha",
+        artifactID: "artifact-contract-alpha",
+        sourceArtifactIDs: ["artifact-source-a", "artifact-source-b"],
+        digest: "digest-alpha",
+      },
+    ]
+    const requirements: CompactionHandoff.EvidenceRequirements = {
+      sourceUserMessageID: "m-user",
+      sourceAgent: "build",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoffFixture().todos,
+      activeBuildContracts,
+    }
+
+    expect(
+      CompactionHandoff.validateMinimumEvidence(
+        {
+          ...handoffFixture(),
+          activeBuildContracts,
+        },
+        requirements,
+      ).success,
+    ).toBe(true)
+
+    const changed = CompactionHandoff.validateMinimumEvidence(
+      {
+        ...handoffFixture(),
+        activeBuildContracts: [
+          {
+            ...activeBuildContracts[0],
+            sourceArtifactIDs: ["artifact-source-a"],
+          },
+        ],
+      },
+      requirements,
+    )
+    expect(changed.success).toBe(false)
+    if (!changed.success) expect(changed.error).toContain("activeBuildContracts")
   })
 
   test("requires working context and chronology for assistant-only compacted history", () => {
@@ -394,6 +832,7 @@ describe("CompactionHandoff", () => {
       messages: assistantOnlyHead,
       instructionPaths: ["/repo/AGENTS.md"],
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       todos: handoffFixture().todos,
     })
     const handoff = {
@@ -429,6 +868,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -459,6 +899,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["packages/opencorvus/src/session/compaction-handoff.ts"],
       errorNames: [],
@@ -493,6 +934,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: ["a.ts", "b.ts"],
       errorNames: ["APIError", "ToolSchemaBudgetError"],
@@ -570,10 +1012,19 @@ describe("CompactionHandoff", () => {
       userMessages: ["New compacted-history user message only"],
       nextActions: ["new-only next action"],
       openRisks: ["new-only risk"],
+      agentHandoff: {
+        kind: "build",
+        deliverables: [{ fact: "New build deliverable only", evidence: "new-only evidence" }],
+        codeChanges: [],
+        verification: [],
+        runtimeState: [],
+        handoffArtifacts: [],
+      },
     } satisfies CompactionHandoff.Info
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -599,7 +1050,48 @@ describe("CompactionHandoff", () => {
       expect(result.error).toContain("previousHandoff.userMessages")
       expect(result.error).toContain("previousHandoff.nextActions")
       expect(result.error).toContain("previousHandoff.openRisks")
+      expect(result.error).toContain("previousHandoff.agentHandoff")
     }
+  })
+
+  test("rejects follow-up handoff that moves prior agent facts into a different handoff field", () => {
+    const previous = handoffFixture()
+    const previousBuild = previous.agentHandoff as Extract<CompactionHandoff.AgentHandoff, { kind: "build" }>
+    const moved = {
+      ...previous,
+      agentHandoff: {
+        kind: "build",
+        deliverables: previousBuild.deliverables,
+        codeChanges: previousBuild.codeChanges,
+        verification: [],
+        runtimeState: [
+          ...previousBuild.runtimeState,
+          {
+            fact: previousBuild.verification[0].command,
+            evidence: previousBuild.verification[0].evidence,
+          },
+        ],
+        handoffArtifacts: previousBuild.handoffArtifacts,
+      },
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(moved, {
+      sourceUserMessageID: "m-user",
+      sourceAgent: "build",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: false,
+      richContext: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: previous.todos,
+      previousHandoff: previousRetention(previous),
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("previousHandoff.agentHandoff")
   })
 
   test("accepts follow-up handoff that retains previous structured handoff facts", () => {
@@ -672,6 +1164,7 @@ describe("CompactionHandoff", () => {
 
     const result = CompactionHandoff.validateMinimumEvidence(handoff, {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -689,12 +1182,14 @@ describe("CompactionHandoff", () => {
 
   test("host prompt always includes the structured handoff schema", () => {
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: undefined,
+      sourceAgent: "build",
       runtime: "<handoff-runtime-state></handoff-runtime-state>",
       context: ["plugin context"],
     })
 
     expect(prompt).toContain("CompactionHandoff schema")
+    expect(prompt).toContain('Agent-specific compact payload for source agent "build"')
+    expect(prompt).toContain('"deliverables"')
     expect(prompt).toContain('"durableInstructionSources"')
     expect(prompt).toContain('"todos"')
     expect(prompt).toContain('"userMessages"')
@@ -704,9 +1199,8 @@ describe("CompactionHandoff", () => {
 
   test("host prompt merges prior structured handoff instead of rendered Markdown", () => {
     const handoff = handoffFixture()
-    const rendered = CompactionHandoff.renderMarkdown(handoff)
     const prompt = SessionCompaction.buildPrompt({
-      previousSummary: rendered,
+      sourceAgent: "build",
       previousHandoff: handoff,
       runtime: "<handoff-runtime-state></handoff-runtime-state>",
       context: [],
@@ -722,13 +1216,14 @@ describe("CompactionHandoff", () => {
   })
 
   test("handoff output format exposes the CompactionHandoff schema for StructuredOutput", () => {
-    const format = SessionCompaction.handoffOutputFormat()
+    const format = SessionCompaction.handoffOutputFormat({ agent: "build" })
 
     expect(format.type).toBe("json_schema")
     expect(format.schema).toMatchObject({
       type: "object",
       required: expect.arrayContaining([
         "objective",
+        "agentHandoff",
         "currentState",
         "todos",
         "workingContext",
@@ -738,8 +1233,40 @@ describe("CompactionHandoff", () => {
     })
     expect(format.retryCount).toBe(2)
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")
+    expect(JSON.stringify(format.schema)).toContain("deliverables")
+    expect(JSON.stringify(format.schema)).not.toContain("workflowDecisions")
     expect(JSON.stringify(format.schema)).toContain("workingContext")
     expect(JSON.stringify(format.schema)).toContain("chronology")
+  })
+
+  test("rejects source-agent payload kind mismatch", () => {
+    const handoff = {
+      ...handoffFixture(),
+      agentHandoff: {
+        kind: "orchestrator",
+        workflowDecisions: [{ fact: "scheduler decision cannot stand in for build work", evidence: "test" }],
+        delegatedSessions: [],
+        goalGraphState: [],
+        pendingDecisions: [],
+      },
+    }
+    const requirements: CompactionHandoff.EvidenceRequirements = {
+      sourceUserMessageID: "m-user",
+      sourceAgent: "build",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+      todos: handoffFixture().todos,
+    }
+
+    const result = SessionCompaction.validateHandoffPayload(handoff, requirements)
+
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toContain("agentHandoff")
   })
 
   test("compaction stop condition waits for captured handoff instead of first tool call", async () => {
@@ -764,6 +1291,7 @@ describe("CompactionHandoff", () => {
     const handoff = handoffFixture()
     const requirements: CompactionHandoff.EvidenceRequirements = {
       sourceUserMessageID: "m-user",
+      sourceAgent: "build",
       instructionPaths: ["/repo/AGENTS.md"],
       patchFiles: [],
       errorNames: [],
@@ -861,7 +1389,11 @@ describe("CompactionHandoff", () => {
         expect(runtime.evidenceRequirements.previousHandoff?.chronology).toEqual(
           previous.chronology.map((item) => item.event),
         )
+        expect(runtime.evidenceRequirements.previousHandoff?.agentHandoff).toContain(
+          "agentHandoff.deliverables.fact=Structured compaction handoff implementation is the active build deliverable",
+        )
         expect(runtime.text).toContain("<previous-handoff-required-retention>")
+        expect(runtime.text).toContain("<agentHandoff>")
       },
     })
   })

@@ -12,12 +12,26 @@ import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
 import { BrowserPreviewViewport, normalizeBrowserPreviewViewports } from "./viewport"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export const BROWSER_PREVIEW_TARGET_KIND = "browser_preview_target" as const
 export const BROWSER_PREVIEW_EVIDENCE_KIND = "browser_preview_evidence" as const
 const BrowserPreviewEvidenceOperationKind = z.enum(["preview-capture", "reference-comparison", "source-binding"])
 const BrowserPreviewEvidenceStatus = z.enum(["passed", "failed"])
 const REQUIRED_REFERENCE_COMPARISON_ARTIFACTS = ["source_crop", "implementation_crop", "side_by_side"] as const
+
+export const BrowserPreviewEvidenceCorruptionError = NamedError.create(
+  "BrowserPreviewEvidenceCorruptionError",
+  z.object({
+    message: z.string(),
+    taskID: z.string(),
+    evidenceID: z.string(),
+    reason: z.string(),
+    artifactPath: z.string().optional(),
+    expectedSha: z.string().optional(),
+    actualSha: z.string().optional(),
+  }),
+)
 
 export const PersistedBrowserPreviewTarget = z.object({
   id: z.string(),
@@ -54,6 +68,23 @@ const PersistedBrowserPreviewTargetPayload = z.object({
   source: z.literal("task-artifact"),
   viewports: BrowserPreviewViewport.array().min(1),
 })
+
+const PersistedBrowserPreviewEvidencePayload = z
+  .object({
+    target_id: z.string().min(1),
+    viewport_id: z.string().min(1),
+    operation_kind: BrowserPreviewEvidenceOperationKind,
+    region_id: z.string().optional(),
+    state_id: z.string().optional(),
+    manifest_path: z.string().optional(),
+    artifact_paths: z.record(z.string(), z.string()).optional(),
+    status: BrowserPreviewEvidenceStatus,
+    summary: z.string().min(1),
+    capture: z.unknown().optional().nullable(),
+    diagnostics: z.string().array(),
+    time_completed: z.number(),
+  })
+  .passthrough()
 
 export function persistBrowserPreviewTarget(input: {
   taskID: string
@@ -275,6 +306,28 @@ function findBrowserPreviewTargetByUrl(input: {
   return undefined
 }
 
+function browserPreviewEvidenceCorruption(
+  input: { taskID: string; evidenceID?: string; id?: string },
+  detail: {
+    reason: string
+    artifactPath?: string
+    expectedSha?: string
+    actualSha?: string
+  },
+): InstanceType<typeof BrowserPreviewEvidenceCorruptionError> {
+  const evidenceID = input.evidenceID ?? input.id
+  if (!evidenceID) throw new Error("browserPreviewEvidenceCorruption requires evidenceID or id")
+  return new BrowserPreviewEvidenceCorruptionError({
+    taskID: input.taskID,
+    evidenceID,
+    reason: detail.reason,
+    message: `Browser preview evidence corrupt: ${evidenceID} (${detail.reason})`,
+    ...(detail.artifactPath ? { artifactPath: detail.artifactPath } : {}),
+    ...(detail.expectedSha ? { expectedSha: detail.expectedSha } : {}),
+    ...(detail.actualSha ? { actualSha: detail.actualSha } : {}),
+  })
+}
+
 function findBrowserPreviewEvidenceByID(input: {
   taskID: string
   evidenceID: string
@@ -293,49 +346,31 @@ function findBrowserPreviewEvidenceByID(input: {
       .limit(1)
       .get(),
   )
-  if (!row || !row.payload || typeof row.payload !== "object") return undefined
-  const payload = row.payload as Record<string, unknown>
-  const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
-  const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
-  const operationKind =
-    payload.operation_kind === "reference-comparison" ||
-    payload.operation_kind === "preview-capture" ||
-    payload.operation_kind === "source-binding"
-      ? payload.operation_kind
-      : undefined
-  const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
-  const stateID = typeof payload.state_id === "string" ? payload.state_id : undefined
-  const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
-  const artifactPaths =
-    payload.artifact_paths && typeof payload.artifact_paths === "object" && !Array.isArray(payload.artifact_paths)
-      ? Object.fromEntries(
-          Object.entries(payload.artifact_paths as Record<string, unknown>).filter(
-            (entry): entry is [string, string] => typeof entry[1] === "string",
-          ),
-        )
-      : undefined
-  const status = payload.status === "passed" || payload.status === "failed" ? payload.status : undefined
-  const summary = typeof payload.summary === "string" ? payload.summary : undefined
-  const diagnostics = Array.isArray(payload.diagnostics)
-    ? payload.diagnostics.filter((item): item is string => typeof item === "string")
-    : []
-  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
-  if (!targetID || !viewportID || !operationKind || !status || !summary) return undefined
+  if (!row) return undefined
+  const parsed = PersistedBrowserPreviewEvidencePayload.safeParse(row.payload)
+  if (!parsed.success) {
+    throw browserPreviewEvidenceCorruption(input, {
+      reason: `payload schema invalid: ${parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "payload"} ${issue.message}`)
+        .join("; ")}`,
+    })
+  }
+  const payload = parsed.data
   return {
     id: row.id,
     taskID: row.task_id,
-    targetID,
-    viewportID,
-    operationKind,
-    regionID,
-    stateID,
-    manifestPath,
-    artifactPaths,
-    status,
-    summary,
+    targetID: payload.target_id,
+    viewportID: payload.viewport_id,
+    operationKind: payload.operation_kind,
+    regionID: payload.region_id,
+    stateID: payload.state_id,
+    manifestPath: payload.manifest_path,
+    artifactPaths: payload.artifact_paths,
+    status: payload.status,
+    summary: payload.summary,
     capture: payload.capture === null ? undefined : payload.capture,
-    diagnostics,
-    timeCompleted,
+    diagnostics: payload.diagnostics,
+    timeCompleted: payload.time_completed,
     timeCreated: row.time_created,
   }
 }
@@ -347,7 +382,7 @@ export async function findReadableBrowserPreviewEvidenceByID(input: {
 }): Promise<PersistedBrowserPreviewEvidence | undefined> {
   const evidence = findBrowserPreviewEvidenceByID(input)
   if (!evidence) return undefined
-  if (!(await browserPreviewEvidenceArtifactsReadable(input.projectRoot, evidence))) return undefined
+  await assertBrowserPreviewEvidenceArtifactsReadable(input.projectRoot, evidence)
   return evidence
 }
 
@@ -452,10 +487,10 @@ export function persistBrowserPreviewEvidence(input: {
   return id
 }
 
-async function browserPreviewEvidenceArtifactsReadable(
+async function assertBrowserPreviewEvidenceArtifactsReadable(
   projectRoot: string,
   evidence: PersistedBrowserPreviewEvidence,
-): Promise<boolean> {
+): Promise<void> {
   const artifacts: Array<{ path: string; sha?: string }> = [
     ...browserPreviewCaptureArtifacts(evidence.capture),
     ...Object.values(evidence.artifactPaths ?? {}).map((artifactPath) => ({ path: artifactPath })),
@@ -463,25 +498,42 @@ async function browserPreviewEvidenceArtifactsReadable(
   if (evidence.status === "passed" && evidence.operationKind === "reference-comparison") {
     for (const key of REQUIRED_REFERENCE_COMPARISON_ARTIFACTS) {
       const artifactPath = evidence.artifactPaths?.[key]
-      if (!artifactPath) return false
+      if (!artifactPath) {
+        throw browserPreviewEvidenceCorruption(evidence, {
+          reason: `passed reference-comparison missing required artifact path: ${key}`,
+        })
+      }
       artifacts.push({ path: artifactPath })
     }
   }
-  if (evidence.status === "passed" && artifacts.length === 0) return false
+  if (evidence.status === "passed" && artifacts.length === 0) {
+    throw browserPreviewEvidenceCorruption(evidence, {
+      reason: "passed evidence has no artifact paths",
+    })
+  }
   for (const artifact of artifacts) {
     let bytes: Buffer
     try {
       const filePath = resolveBrowserPreviewRuntimeRelativePath(projectRoot, evidence.taskID, artifact.path)
       bytes = await fs.readFile(filePath)
-    } catch {
-      return false
+    } catch (error) {
+      throw browserPreviewEvidenceCorruption(evidence, {
+        reason: error instanceof Error ? error.message : String(error),
+        artifactPath: artifact.path,
+      })
     }
     if (artifact.sha) {
       const actual = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16)
-      if (actual !== artifact.sha) return false
+      if (actual !== artifact.sha) {
+        throw browserPreviewEvidenceCorruption(evidence, {
+          reason: "artifact sha mismatch",
+          artifactPath: artifact.path,
+          expectedSha: artifact.sha,
+          actualSha: actual,
+        })
+      }
     }
   }
-  return true
 }
 
 function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string; sha?: string }> {

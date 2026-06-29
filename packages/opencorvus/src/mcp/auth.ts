@@ -30,18 +30,36 @@ export namespace McpAuth {
   export type Entry = z.infer<typeof Entry>
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
+  const Store = z.record(z.string(), Entry)
 
-  export async function get(mcpName: string): Promise<Entry | undefined> {
+  export function scopedKey(input: { projectID: string; mcpName: string }): string {
+    const projectID = input.projectID.trim()
+    const mcpName = input.mcpName.trim()
+    if (!projectID) throw new Error("MCP auth scoped key requires a projectID")
+    if (!mcpName) throw new Error("MCP auth scoped key requires an mcpName")
+    return `${projectID}:${mcpName}`
+  }
+
+  function isMissingAuthFileError(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      ((error as { code?: unknown }).code === "ENOENT" || (error as { code?: unknown }).code === "ENOTDIR")
+    )
+  }
+
+  export async function get(authKey: string): Promise<Entry | undefined> {
     const data = await all()
-    return data[mcpName]
+    return data[authKey]
   }
 
   /**
    * Get auth entry and validate it's for the correct URL.
    * Returns undefined if URL has changed (credentials are invalid).
    */
-  export async function getForUrl(mcpName: string, serverUrl: string): Promise<Entry | undefined> {
-    const entry = await get(mcpName)
+  export async function getForUrl(authKey: string, serverUrl: string): Promise<Entry | undefined> {
+    const entry = await get(authKey)
     if (!entry) return undefined
 
     // If no serverUrl is stored, this is from an old version - consider it invalid
@@ -54,66 +72,71 @@ export namespace McpAuth {
   }
 
   export async function all(): Promise<Record<string, Entry>> {
-    return Filesystem.readJson<Record<string, Entry>>(filepath).catch(() => ({}))
+    try {
+      return Store.parse(await Filesystem.readJson<unknown>(filepath))
+    } catch (error) {
+      if (isMissingAuthFileError(error)) return {}
+      throw error
+    }
   }
 
-  export async function set(mcpName: string, entry: Entry, serverUrl?: string): Promise<void> {
+  export async function set(authKey: string, entry: Entry, serverUrl?: string): Promise<void> {
     const data = await all()
     // Always update serverUrl if provided
     if (serverUrl) {
       entry.serverUrl = serverUrl
     }
-    await Filesystem.writeJson(filepath, { ...data, [mcpName]: entry }, 0o600)
+    await Filesystem.writeJson(filepath, { ...data, [authKey]: entry }, 0o600)
   }
 
-  export async function remove(mcpName: string): Promise<void> {
+  export async function remove(authKey: string): Promise<void> {
     const data = await all()
-    delete data[mcpName]
+    delete data[authKey]
     await Filesystem.writeJson(filepath, data, 0o600)
   }
 
-  export async function updateTokens(mcpName: string, tokens: Tokens, serverUrl?: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
+  export async function updateTokens(authKey: string, tokens: Tokens, serverUrl?: string): Promise<void> {
+    const entry = (await get(authKey)) ?? {}
     entry.tokens = tokens
-    await set(mcpName, entry, serverUrl)
+    await set(authKey, entry, serverUrl)
   }
 
-  export async function updateClientInfo(mcpName: string, clientInfo: ClientInfo, serverUrl?: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
+  export async function updateClientInfo(authKey: string, clientInfo: ClientInfo, serverUrl?: string): Promise<void> {
+    const entry = (await get(authKey)) ?? {}
     entry.clientInfo = clientInfo
-    await set(mcpName, entry, serverUrl)
+    await set(authKey, entry, serverUrl)
   }
 
-  export async function updateCodeVerifier(mcpName: string, codeVerifier: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
+  export async function updateCodeVerifier(authKey: string, codeVerifier: string): Promise<void> {
+    const entry = (await get(authKey)) ?? {}
     entry.codeVerifier = codeVerifier
-    await set(mcpName, entry)
+    await set(authKey, entry)
   }
 
-  export async function clearCodeVerifier(mcpName: string): Promise<void> {
-    const entry = await get(mcpName)
+  export async function clearCodeVerifier(authKey: string): Promise<void> {
+    const entry = await get(authKey)
     if (entry) {
       delete entry.codeVerifier
-      await set(mcpName, entry)
+      await set(authKey, entry)
     }
   }
 
-  export async function updateOAuthState(mcpName: string, oauthState: string): Promise<void> {
-    const entry = (await get(mcpName)) ?? {}
+  export async function updateOAuthState(authKey: string, oauthState: string): Promise<void> {
+    const entry = (await get(authKey)) ?? {}
     entry.oauthState = oauthState
-    await set(mcpName, entry)
+    await set(authKey, entry)
   }
 
-  export async function getOAuthState(mcpName: string): Promise<string | undefined> {
-    const entry = await get(mcpName)
+  export async function getOAuthState(authKey: string): Promise<string | undefined> {
+    const entry = await get(authKey)
     return entry?.oauthState
   }
 
-  export async function clearOAuthState(mcpName: string): Promise<void> {
-    const entry = await get(mcpName)
+  export async function clearOAuthState(authKey: string): Promise<void> {
+    const entry = await get(authKey)
     if (entry) {
       delete entry.oauthState
-      await set(mcpName, entry)
+      await set(authKey, entry)
     }
   }
 
@@ -121,8 +144,8 @@ export namespace McpAuth {
    * Check if stored tokens are expired.
    * Returns null if no tokens exist, false if no expiry or not expired, true if expired.
    */
-  export async function isTokenExpired(mcpName: string): Promise<boolean | null> {
-    const entry = await get(mcpName)
+  export async function isTokenExpired(authKey: string): Promise<boolean | null> {
+    const entry = await get(authKey)
     if (!entry?.tokens) return null
     if (!entry.tokens.expiresAt) return false
     return entry.tokens.expiresAt < Date.now() / 1000

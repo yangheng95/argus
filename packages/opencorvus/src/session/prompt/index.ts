@@ -18,6 +18,7 @@ export namespace SessionPrompt {
   export const isActive = SessionPromptState.isActive
   export const isActiveInAnyDirectory = SessionPromptState.isActiveInAnyDirectory
   export const waitForFinish = SessionPromptState.waitForFinish
+  export const ownerActivity = SessionPromptState.activity
 
   export const {
     LoopInput,

@@ -1,5 +1,5 @@
 import type { Argv } from "yargs"
-import type { Message, Part } from "@opencorvus-ai/sdk"
+import type { Part, VisibleMessage } from "@opencorvus-ai/sdk"
 import { Session } from "../../session"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
@@ -25,7 +25,7 @@ export class ImportFileInvalidJsonError extends Error {
 type SessionImportData = {
   info: Session.Info
   messages: Array<{
-    info: Message
+    info: VisibleMessage
     parts: Part[]
   }>
 }

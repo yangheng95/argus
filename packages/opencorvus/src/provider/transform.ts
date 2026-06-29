@@ -7,6 +7,8 @@ import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { prepareModelImageInput } from "@/session/model-image-input"
+import { decodeDataUrlBase64Bytes, decodeRawBase64Payload } from "@/session/text-mime"
 import { normalizeVendorMessages } from "./vendor-messages"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "./sampling"
 
@@ -144,17 +146,10 @@ export namespace ProviderTransform {
       const filtered = msg.content.map((part) => {
         if (part.type !== "file" && part.type !== "image") return part
 
-        // Check for empty base64 image data
         if (part.type === "image") {
           const imageStr = part.image.toString()
           if (imageStr.startsWith("data:")) {
-            const match = imageStr.match(/^data:([^;]+);base64,(.*)$/)
-            if (match && (!match[2] || match[2].length === 0)) {
-              return {
-                type: "text" as const,
-                text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
-              }
-            }
+            decodeDataUrlBase64Bytes(imageStr, "ProviderTransform image input")
           }
         }
 
@@ -185,12 +180,13 @@ export namespace ProviderTransform {
     return undefined
   }
 
-  async function inlineLocalFilePart(part: unknown): Promise<unknown> {
-    if (!part || typeof part !== "object" || Array.isArray(part)) return part
+  async function inlineLocalFilePart(part: unknown): Promise<{ part: unknown; note?: string }> {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return { part }
     const record = part as Record<string, unknown>
-    if (record.type !== "file") return part
+    if (record.type !== "file") return { part }
     const mime = filePartMime(record)
-    if (!mime) return part
+    if (!mime) return { part }
+    const mediaType = mime
 
     // AI SDK v6 `file` part shape contract diverges by field:
     //   - `data`: openai-compatible adapter ALWAYS prepends `data:<mediaType>;base64,`
@@ -201,17 +197,98 @@ export namespace ProviderTransform {
     const ref = (value: unknown): string | undefined =>
       typeof value === "string" && value.length > 0 && !value.startsWith("data:") ? value : undefined
 
+    async function modelDataUrlFromReference(
+      localRef: string,
+    ): Promise<{ dataUrl: string; note?: string } | undefined> {
+      const located = AttachmentStore.nameFromUrl(localRef)
+      if (!located) return undefined
+      const bytes = await AttachmentStore.read(located.projectID, located.name)
+      const prepared = await prepareModelImageInput({
+        mime: mediaType,
+        bytes,
+        source: typeof record.filename === "string" ? record.filename : localRef,
+      })
+      return {
+        dataUrl: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
+    const source = typeof record.filename === "string" ? record.filename : "inline file data URL"
+    const dataUrlFromBytes = async (bytes: Buffer): Promise<{ dataUrl: string; note?: string }> => {
+      if (!mediaType.startsWith("image/")) return { dataUrl: `data:${mediaType};base64,${bytes.toString("base64")}` }
+      const prepared = await prepareModelImageInput({
+        mime: mediaType,
+        bytes,
+        source,
+      })
+      return {
+        dataUrl: `data:${prepared.mime};base64,${prepared.bytes.toString("base64")}`,
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
+    if (typeof record.data === "string" && record.data.startsWith("data:")) {
+      const prepared = await dataUrlFromBytes(
+        decodeDataUrlBase64Bytes(record.data, `ProviderTransform file.data ${source}`),
+      )
+      return {
+        part: {
+          ...record,
+          data: prepared.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+          mediaType: prepared.dataUrl.slice("data:".length, prepared.dataUrl.indexOf(";base64,")),
+        },
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+    if (typeof record.url === "string" && record.url.startsWith("data:")) {
+      const prepared = await dataUrlFromBytes(
+        decodeDataUrlBase64Bytes(record.url, `ProviderTransform file.url ${source}`),
+      )
+      return {
+        part: {
+          ...record,
+          url: prepared.dataUrl,
+          mediaType: prepared.dataUrl.slice("data:".length, prepared.dataUrl.indexOf(";base64,")),
+        },
+        ...(prepared.note ? { note: prepared.note } : {}),
+      }
+    }
+
     const dataRef = ref(record.data)
     if (dataRef) {
-      const dataUrl = await AttachmentStore.dataUrlFromReference(dataRef, mime).catch(() => undefined)
-      if (dataUrl) return { ...record, data: dataUrl.replace(/^data:[^;]+;base64,/, "") }
+      const prepared = await modelDataUrlFromReference(dataRef)
+      if (prepared) {
+        return {
+          part: { ...record, data: prepared.dataUrl.replace(/^data:[^;]+;base64,/, "") },
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
+      }
+      if (!/^https?:\/\//i.test(dataRef)) {
+        const raw = await dataUrlFromBytes(
+          decodeRawBase64Payload(dataRef, `ProviderTransform file.data ${source}`),
+        )
+        return {
+          part: {
+            ...record,
+            data: raw.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+            mediaType: raw.dataUrl.slice("data:".length, raw.dataUrl.indexOf(";base64,")),
+          },
+          ...(raw.note ? { note: raw.note } : {}),
+        }
+      }
     }
     const urlRef = ref(record.url)
     if (urlRef) {
-      const dataUrl = await AttachmentStore.dataUrlFromReference(urlRef, mime).catch(() => undefined)
-      if (dataUrl) return { ...record, url: dataUrl }
+      const prepared = await modelDataUrlFromReference(urlRef)
+      if (prepared) {
+        return {
+          part: { ...record, url: prepared.dataUrl },
+          ...(prepared.note ? { note: prepared.note } : {}),
+        }
+      }
     }
-    return part
+    return { part }
   }
 
   async function inlineLocalAttachments(msgs: ModelMessage[]): Promise<ModelMessage[]> {
@@ -225,8 +302,9 @@ export namespace ProviderTransform {
       let changed = false
       for (const part of msg.content) {
         const next = await inlineLocalFilePart(part)
-        changed ||= next !== part
-        content.push(next)
+        changed ||= next.part !== part || typeof next.note === "string"
+        content.push(next.part)
+        if (next.note) content.push({ type: "text", text: next.note })
       }
       out.push(changed ? ({ ...msg, content } as ModelMessage) : msg)
     }

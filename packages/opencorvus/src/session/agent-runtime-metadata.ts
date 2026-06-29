@@ -32,9 +32,7 @@ export namespace AgentRuntimeMetadata {
     (_kind, contract) => contract?.liveRuntimeContinuation === true,
   )
 
-  export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS = [
-    "acceptance",
-  ] as const satisfies readonly SessionKind[]
+  export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS = ["acceptance"] as const satisfies readonly SessionKind[]
 
   export const ORCHESTRATOR_WAKE_AUTOMATIC_COMPACTION_SESSION_KINDS = [
     "orchestrator",
