@@ -144,13 +144,13 @@ export namespace PromptProfile {
         "frontend-research":
           "Produce a desktop source-backed replica brief that separates confirmed facts from assumptions and defines target surfaces, key interactions, and evidence gaps. Do not publish tablet/mobile work packets for default replica tasks.",
         build:
-          "Build approved desktop replica without source drift. If a goal asks tablet/mobile/non-desktop work without multi-end migration, report the scope defect instead of executing it. For deps, inspect manifest/lockfile and rerun original checks.",
+          "Build replica without drift; use browser_preview_reference_regions for proof and browser_preview_compare_scroll_slices for visual_diff slices. Treat non-desktop goals as scope defects; inspect manifest/lockfile; rerun original checks.",
         "visual-qa":
-          "Audit rendered desktop replica surfaces for structure, spacing, interaction, and state mismatches. Do not require tablet/mobile screenshots for default replica tasks. Name concrete defects and tie review to visible evidence.",
+          "Audit desktop structure, spacing, interactions, states. Own final region proof with browser_preview_reference_regions; use browser_preview_compare_scroll_slices only for page-slice visual_diff. Do not require mobile/tablet evidence.",
         integrity:
           "Treat replica delivery as incomplete unless desktop source structure, requested surface, interactions, and visual acceptance are shown. Treat unrequested tablet/mobile expectations as out of scope.",
         orchestrator:
-          "Keep replica decisions grounded in exact reference surface, source evidence, goal state, and acceptance. Do not route template-derived tablet/mobile text into requirements, goals, Build, or Visual QA unless separate migration is requested.",
+          "Keep replica decisions grounded in exact reference surface, source evidence, goals, acceptance. Assign build/visual-qa to reference-region proof and scroll-slice supporting evidence; keep template mobile text out of goals.",
       },
     },
     backend: {

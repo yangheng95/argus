@@ -13,6 +13,7 @@ The 2026-06-29 consolidation moved June records here from scattered spec locatio
 - [2026-06-29-codex-app-server-mcp-env-toml.md](2026-06-29-codex-app-server-mcp-env-toml.md) records Codex app server MCP environment TOML calibration.
 - [2026-06-29-database-ioerr-runtime-boundary.md](2026-06-29-database-ioerr-runtime-boundary.md) records the SQLite `SQLITE_IOERR_READ` backend crash root cause and runtime-boundary fix plan.
 - [2026-06-29-document-calibration-agent-audit.md](2026-06-29-document-calibration-agent-audit.md) records the document calibration agent audit.
+- [2026-06-29-frontend-replica-tool-ownership-prompt.md](2026-06-29-frontend-replica-tool-ownership-prompt.md) records the frontend replica expert-squad browser preview tool ownership prompt update.
 - [2026-06-29-model-image-input-auto-resize.md](2026-06-29-model-image-input-auto-resize.md) records the model-bound image auto-resize plan for oversized screenshot and attachment inputs.
 - [2026-06-29-operator-steer-single-source.md](2026-06-29-operator-steer-single-source.md) records the single-source operator steer plan that replaces overlay direct-reply/build-message/A2A split routing.
 - [2026-06-29-orchestrator-goal-complete-delete-tools.md](2026-06-29-orchestrator-goal-complete-delete-tools.md) records the orchestrator goal completion and deletion tool plan.
