@@ -28,6 +28,12 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 - Treat `visual_qa` as rendered evidence review after implementation reaches a visible surface.
 - Do not use generic implementation work to invent a new page structure when source evidence exists.
 
+## Browser preview evidence ownership
+
+- Build owns changed-region parity proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and cite fresh `reference-comparison` evidence.
+- Visual QA owns independent final rendered parity proof: it must call `browser_preview_reference_regions` for formal bound-region proof and may call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or generic review text.
+
 ## Desktop-only replica scope
 
 - Frontend replica, clone, visual parity, and source-page recreation tasks are desktop-only generation tasks by default.

@@ -105,6 +105,14 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("manifest/lockfile")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("rerun original checks")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_compare_scroll_slices")
+    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
+      "browser_preview_reference_regions",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
+      "browser_preview_compare_scroll_slices",
+    )
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("repair local deps")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("rerun original command")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
