@@ -16,7 +16,12 @@ import { NamedError } from "@opencorvus-ai/util/error"
 
 export const BROWSER_PREVIEW_TARGET_KIND = "browser_preview_target" as const
 export const BROWSER_PREVIEW_EVIDENCE_KIND = "browser_preview_evidence" as const
-const BrowserPreviewEvidenceOperationKind = z.enum(["preview-capture", "reference-comparison", "source-binding"])
+const BrowserPreviewEvidenceOperationKind = z.enum([
+  "preview-capture",
+  "reference-comparison",
+  "source-binding",
+  "layout-geometry",
+])
 const BrowserPreviewEvidenceStatus = z.enum(["passed", "failed"])
 const REQUIRED_REFERENCE_COMPARISON_ARTIFACTS = ["source_crop", "implementation_crop", "side_by_side"] as const
 
@@ -420,7 +425,7 @@ export function persistBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
   viewportID: string
-  operationKind: "preview-capture" | "reference-comparison" | "source-binding"
+  operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
   regionID?: string
   stateID?: string
   manifestPath?: string
@@ -726,7 +731,7 @@ export async function latestBrowserPreviewEvidenceIDs(input: {
 function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
   const record = payload as Record<string, unknown>
-  if (record.operation_kind === "reference-comparison" || record.operation_kind === "source-binding") return undefined
+  if (record.operation_kind !== "preview-capture") return undefined
   const targetID = typeof record.target_id === "string" ? record.target_id : undefined
   const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
   if (!targetID || !viewportID) return undefined

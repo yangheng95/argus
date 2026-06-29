@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import z from "zod"
-import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
+import { BrowserPreviewEvidenceCorruptionError, findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export const VisualRegionEvidenceSchema = z
@@ -146,11 +146,18 @@ export async function validateVisualEvidenceBundleReferenceComparisons(input: {
     }
     let matched = false
     for (const evidenceID of comparisonIDs) {
-      const evidence = await findReadableBrowserPreviewEvidenceByID({
-        projectRoot: input.projectRoot,
-        taskID: input.bundle.taskID,
-        evidenceID,
-      })
+      let evidence
+      try {
+        evidence = await findReadableBrowserPreviewEvidenceByID({
+          projectRoot: input.projectRoot,
+          taskID: input.bundle.taskID,
+          evidenceID,
+        })
+      } catch (error) {
+        if (!BrowserPreviewEvidenceCorruptionError.isInstance(error)) throw error
+        issues.push(`${region.id}: evidence ${evidenceID} was not found or has unreadable artifacts`)
+        continue
+      }
       if (!evidence) {
         issues.push(`${region.id}: evidence ${evidenceID} was not found or has unreadable artifacts`)
         continue

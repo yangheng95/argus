@@ -11190,7 +11190,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind: "preview-capture" | "reference-comparison" | "source-binding"
+    operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
     regionID?: string
     stateID?: string
     manifestPath?: string

@@ -20,6 +20,9 @@ const SCROLL_SLICE_SETTLE_AFTER_SCROLL_MS = 250
 const SIDE_BY_SIDE_TITLE_HEIGHT_PX = 44
 const SIDE_BY_SIDE_LABEL_HEIGHT_PX = 32
 const SIDE_BY_SIDE_GAP_PX = 16
+// SSIM means Structural Similarity Index Measure. Low structural similarity usually means the
+// compared slices are not the same page area, or the whole page layout drifted before this slice.
+const LOW_SSIM_LAYOUT_WARNING_THRESHOLD = 0.8
 
 const BrowserPreviewScrollSliceRoute = z
   .string()
@@ -156,13 +159,17 @@ export async function compareBrowserPreviewScrollSlice(
     )
   }
 
+  const visual = await evaluateSliceVisual(sourceCrop, implementationCrop)
+  const lowSsimWarning = buildLowSsimLayoutWarning(visual.ssimScore)
   await makeScrollSliceSideBySide({
     leftPath: sourceCrop,
     rightPath: implementationCrop,
     outputPath: sideBySide,
     title: `${input.viewportID} scrollY=${input.scrollY} height=${input.sliceHeight}`,
+    warning: lowSsimWarning
+      ? "Low SSIM: screenshots may not match; calibrate whole page layout first."
+      : undefined,
   })
-  const visual = await evaluateSliceVisual(sourceCrop, implementationCrop)
   const artifacts: BrowserPreviewScrollSliceComparisonResult["artifacts"] = {
     source_crop: sourceCrop,
     implementation_crop: implementationCrop,
@@ -201,6 +208,7 @@ export async function compareBrowserPreviewScrollSlice(
     diagnostics: [
       "Scroll-slice comparison is supporting Visual QA evidence only.",
       "It is not reference-comparison proof.",
+      ...(lowSsimWarning ? [lowSsimWarning] : []),
     ],
   }
   const publicResult = normalizeRuntimePathRefs(projectRoot, result) as BrowserPreviewScrollSliceComparisonResult
@@ -295,22 +303,30 @@ async function makeScrollSliceSideBySide(input: {
   rightPath: string
   outputPath: string
   title: string
+  warning?: string
 }): Promise<void> {
   const [leftMeta, rightMeta] = await Promise.all([sharp(input.leftPath).metadata(), sharp(input.rightPath).metadata()])
   if (!leftMeta.width || !leftMeta.height || !rightMeta.width || !rightMeta.height) {
     throw new Error("Cannot compose scroll-slice comparison without image dimensions.")
   }
   const titleHeight = SIDE_BY_SIDE_TITLE_HEIGHT_PX
+  const warningHeight = input.warning ? 32 : 0
   const labelHeight = SIDE_BY_SIDE_LABEL_HEIGHT_PX
   const gap = SIDE_BY_SIDE_GAP_PX
   const width = leftMeta.width + rightMeta.width + gap
-  const height = titleHeight + labelHeight + Math.max(leftMeta.height, rightMeta.height)
+  const headerHeight = titleHeight + warningHeight + labelHeight
+  const height = headerHeight + Math.max(leftMeta.height, rightMeta.height)
   const labels = Buffer.from(`
-    <svg width="${width}" height="${titleHeight + labelHeight}" xmlns="http://www.w3.org/2000/svg">
+    <svg width="${width}" height="${headerHeight}" xmlns="http://www.w3.org/2000/svg">
       <rect width="100%" height="100%" fill="#f6f7f9"/>
       <text x="12" y="28" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">${escapeXml(input.title)}</text>
-      <text x="12" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference slice</text>
-      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Implementation slice</text>
+      ${
+        input.warning
+          ? `<text x="12" y="${titleHeight + 20}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#b45309">${escapeXml(input.warning)}</text>`
+          : ""
+      }
+      <text x="12" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference slice</text>
+      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Implementation slice</text>
     </svg>
   `)
   await sharp({
@@ -323,11 +339,19 @@ async function makeScrollSliceSideBySide(input: {
   })
     .composite([
       { input: labels, left: 0, top: 0 },
-      { input: input.leftPath, left: 0, top: titleHeight + labelHeight },
-      { input: input.rightPath, left: leftMeta.width + gap, top: titleHeight + labelHeight },
+      { input: input.leftPath, left: 0, top: headerHeight },
+      { input: input.rightPath, left: leftMeta.width + gap, top: headerHeight },
     ])
     .png()
     .toFile(input.outputPath)
+}
+
+function buildLowSsimLayoutWarning(ssimScore: number): string | undefined {
+  if (ssimScore >= LOW_SSIM_LAYOUT_WARNING_THRESHOLD) return undefined
+  return (
+    `Low SSIM precheck (${ssimScore.toFixed(3)} < ${LOW_SSIM_LAYOUT_WARNING_THRESHOLD.toFixed(2)}): ` +
+    "screenshots may not match, the page's overall layout may be misaligned, and the page should be calibrated as a whole before local component tuning."
+  )
 }
 
 async function writeDataUrlPng(input: string, outputPath: string): Promise<void> {

@@ -5,6 +5,7 @@ import { VisualQaTestHooks } from "../../src/visual-qa"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
 import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
+import { BrowserPreviewLayoutGeometryTool } from "../../src/tool/browser-preview-layout-geometry"
 
 describe("visual-qa agent", () => {
   test("runtime tool surface matches the dedicated static contract", async () => {
@@ -26,6 +27,7 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).toContain("browser_preview")
         expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
+        expect(Object.keys(tools)).toContain("browser_preview_layout_geometry")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
         expect(Object.keys(tools)).not.toContain("webpage_vision_judge")
@@ -34,6 +36,7 @@ describe("visual-qa agent", () => {
         for (const info of [
           BrowserPreviewTool,
           BrowserPreviewCompareScrollSlicesTool,
+          BrowserPreviewLayoutGeometryTool,
         ]) {
           const initialized = await info.init()
           const runtimeTool = tools[info.id] as unknown as { description?: string; inputSchema?: unknown }
@@ -75,6 +78,8 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("prioritize screenshot comparison")
     expect(prompt).toContain("browser_preview_compare_scroll_slices")
+    expect(prompt).toContain("browser_preview_layout_geometry")
+    expect(prompt).toContain("supporting geometry evidence")
     expect(prompt).toContain("inspect the page screen by screen")
     expect(prompt).toContain("Do not judge the whole webpage from one full-page screenshot")
     expect(prompt).toContain("supporting visual_diff evidence")
