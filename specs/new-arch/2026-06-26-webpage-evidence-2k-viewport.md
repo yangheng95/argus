@@ -1,13 +1,12 @@
-# Webpage Evidence 1440 Width
+# Webpage Evidence 1440x900 Viewport
 
 Date: 2026-06-26
 Updated: 2026-06-29
 
 ## Goal
 
-Default frontend-design live webpage evidence capture to a 1440px-wide desktop
-viewport. Keep the current 1440px capture height because the 2026-06-29 operator
-request changed the collection width only.
+Default frontend-design live webpage evidence capture to a `1440x900` desktop
+viewport.
 
 ## Recall
 
@@ -22,9 +21,9 @@ request changed the collection width only.
 
 ## Decision
 
-Use `1440x1440` as the default live webpage evidence viewport. This replaces the
-previous `2560x1440` decision and restores a 1440 logical pixel horizontal
-capture width.
+Use `1440x900` as the default live webpage evidence viewport. This replaces the
+previous `2560x1440` and `1440x1440` decisions and restores the standard
+desktop capture surface.
 
 Create one shared `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT` source and consume it in
 host-prepared webpage evidence, frontend-design webpage tools, URL screenshot
@@ -40,18 +39,18 @@ existing typed failure remains correct.
 
 | Surface                                          | Current source                                         | Change                                                |
 | ------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------- |
-| `browser/webpage/default-viewport.ts`            | `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT` is `2560x1440`    | Change the shared default to `1440x1440`.             |
-| `browser/webpage/extract.ts`                     | Consumes `defaultWebpageEvidenceViewport()`           | No local viewport literal; inherits `1440x1440`.      |
+| `browser/webpage/default-viewport.ts`            | `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT` is `1440x1440`    | Change the shared default to `1440x900`.              |
+| `browser/webpage/extract.ts`                     | Consumes `defaultWebpageEvidenceViewport()`           | No local viewport literal; inherits `1440x900`.       |
 | `frontend-design/tools/webpage-extract.ts`       | Consumes `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT`          | No local viewport literal; descriptions inherit width. |
 | `frontend-design/tools/webpage-runtime-state.ts` | Consumes `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT`          | No local viewport literal; descriptions inherit width. |
 | `orchestrator/webpage-evidence.ts`               | Passes `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT` dimensions | No local viewport literal; host evidence inherits it. |
 | `frontend-design/url-screenshot-tool.ts`         | Consumes `DEFAULT_WEBPAGE_EVIDENCE_VIEWPORT`          | No local viewport literal; tool default inherits it.  |
 | `frontend-design/capture-gate.ts`                | Consumes `defaultWebpageEvidenceViewport()`           | No local viewport literal; capture manifests inherit it. |
-| Tests                                            | Focused tests assert `2560x1440` strings              | Update them to assert `1440x1440`.                    |
+| Tests                                            | Focused tests assert `1440x1440` strings              | Update them to assert `1440x900`.                     |
 
 ## Acceptance
 
-- Default live webpage evidence captures at `1440x1440`.
+- Default live webpage evidence captures at `1440x900`.
 - Runtime-state evidence uses the same viewport as reference capture.
 - Source package manifests report the captured viewport instead of inferring it
   from PNG dimensions.
