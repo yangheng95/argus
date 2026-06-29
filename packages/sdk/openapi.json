@@ -45420,7 +45420,7 @@
             "type": "boolean"
           },
           "timeout": {
-            "description": "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
+            "description": "Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.",
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -45497,7 +45497,7 @@
             ]
           },
           "timeout": {
-            "description": "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
+            "description": "Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.",
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
