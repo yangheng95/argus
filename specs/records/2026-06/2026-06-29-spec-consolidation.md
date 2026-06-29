@@ -109,3 +109,16 @@ compatibility ledger.
 
 The guard was extended so bare deleted pre-June spec filenames are rejected
 outside this migration evidence record and the historical document-health guard.
+
+## 2026-06-29 Second Final Review Addendum
+
+Independent review after the first final addendum found active overlay script,
+test, and dev-error comments still cited deleted overlay flat-redesign and
+implementation-progress spec paths. Those references were rewritten to current
+contract descriptions (`flat redesign migration contract` and `historical
+implementation progress repair note`) without restoring the deleted specs.
+
+Validation after this addendum:
+
+- `git grep -n -E "specs/new-arch|spec/new-arch|packages/opencorvus/specs|retired-reference-ledger|docs/superpowers/specs/2026-0[1-5]|specs/overlay-flat-redesign|specs/fact-check-agent|specs/实施进度|实施进度对照" HEAD -- . ...`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
