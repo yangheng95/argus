@@ -15,6 +15,7 @@ import { Glob } from "../util/glob"
 import { SkillRequiredTools } from "./required-tools"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
 import frontendReplicaExpertSquadMd from "./builtin/frontend-replica-expert-squad.md" with { type: "text" }
+import frontendInnovateExpertSquadMd from "./builtin/frontend-innovate-expert-squad.md" with { type: "text" }
 import frontendAutomationDebugExpertSquadMd from "./builtin/frontend-automation-debug-expert-squad.md" with { type: "text" }
 
 export namespace Skill {
@@ -134,6 +135,7 @@ export namespace Skill {
   const builtins = [
     { skill: researchReportMd, files: {} },
     { skill: frontendReplicaExpertSquadMd, files: {} },
+    { skill: frontendInnovateExpertSquadMd, files: {} },
     { skill: frontendAutomationDebugExpertSquadMd, files: {} },
   ] as const
 

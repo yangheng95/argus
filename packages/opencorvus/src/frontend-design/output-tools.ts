@@ -32,8 +32,11 @@ import {
   LayoutSchema,
   ResponsiveSchema,
   SpacingSchema,
+  ToolAntiSlopReviewItemSchema,
   ToolBaselineReplacementPlanItemSchema,
   ToolComponentReusePlanItemSchema,
+  ToolDesignDirectionSchema,
+  ToolDesignDirectionSelectionSchema,
   ToolImplementationPhaseOutcomeSchema,
   ToolMaterialInventoryItemSchema,
   ToolVisualValidationEvidenceSchema,
@@ -346,6 +349,36 @@ function renderNamedItems(
   return lines.join("\n")
 }
 
+function renderDesignDirections(items: readonly FrontendTemplateFinal["design_directions"][number][]): string {
+  if (items.length === 0) return "- no competing design directions submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id} — ${item.name}`,
+        `  - concept: ${item.concept}`,
+        `  - tradeoffs: ${item.tradeoffs}`,
+        `  - implementation_notes: ${item.implementation_notes}`,
+        item.evidence_refs.length > 0 ? `  - evidence_refs: ${item.evidence_refs.join(", ")}` : undefined,
+      ]
+        .filter((line): line is string => typeof line === "string")
+        .join("\n"),
+    )
+    .join("\n")
+}
+
+function renderAntiSlopReview(items: readonly FrontendTemplateFinal["anti_slop_review"][number][]): string {
+  if (items.length === 0) return "- no anti-slop review rows submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id}: ${item.rejected_trait}`,
+        `  - evidence: ${item.evidence}`,
+        `  - correction: ${item.correction}`,
+      ].join("\n"),
+    )
+    .join("\n")
+}
+
 function renderVisualValidationEvidence(
   items: readonly FrontendTemplateFinal["visual_validation_evidence"][number][],
 ): string {
@@ -604,6 +637,9 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector)
       'update_frontend_text({ section: "frontend_template", content }) or update_frontend_item({ target: "frontend_template_sections", item })',
     )
   }
+  if (hasItems(draft.design_directions) && !hasText(draft.selected_design_direction_id)) {
+    actions.push("select_frontend_design_direction({ id })")
+  }
   if (!hasText(draft.fillable_modules) && !hasItems(draft.fillable_module_items)) {
     actions.push(
       'update_frontend_text({ section: "fillable_modules", content }) or update_frontend_item({ target: "fillable_module_items", item })',
@@ -644,7 +680,12 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector)
 
 async function frontendTemplateStatus(
   collector: FrontendTemplateOutputCollector,
-  options: { artifactRoot: string; artifactRootRelative?: string; workspaceRoot: string },
+  options: {
+    artifactRoot: string
+    artifactRootRelative?: string
+    workspaceRoot: string
+    requireFrontendInnovateContract?: boolean
+  },
 ): Promise<string> {
   if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
   const missing = frontendDraftMissingActions(collector)
@@ -671,7 +712,7 @@ async function frontendTemplateStatus(
   }
   const lines = [
     `FRONTEND_TEMPLATE_RESULT_STATUS: ${status}`,
-    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
+    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, design_directions=${draft.design_directions?.length ?? 0}, selected_direction=${draft.selected_design_direction_id || ""}, anti_slop_review=${draft.anti_slop_review?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
   ]
   if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
   for (const diagnostic of diagnostics) lines.push(`visual_evidence_error: ${diagnostic}`)
@@ -693,6 +734,7 @@ async function submitFrontendTemplateDraft(input: {
   artifactRoot: string
   artifactRootRelative?: string
   workspaceRoot: string
+  requireFrontendInnovateContract: boolean
 }): Promise<string> {
   if (input.collector.final)
     return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
@@ -720,6 +762,7 @@ async function submitFrontendTemplateDraft(input: {
       artifactRoot: input.artifactRoot,
       artifactRootRelative: input.artifactRootRelative,
       workspaceRoot: input.workspaceRoot,
+      requireFrontendInnovateContract: input.requireFrontendInnovateContract,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -758,6 +801,9 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Recommended Stack\n${collector.final.tech_stack.length ? markdownList(collector.final.tech_stack) : "- not specified"}`,
       `## Frontend Template\n${requireReportString(collector.final.frontend_template, "frontend_template")}`,
       `## Final Acceptance Mode\n${collector.final.final_acceptance_mode}`,
+      `## Design Directions\n${renderDesignDirections(collector.final.design_directions)}`,
+      `## Selected Design Direction\n${collector.final.selected_design_direction_id || "- none"}`,
+      `## Anti-Slop Review\n${renderAntiSlopReview(collector.final.anti_slop_review)}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
       `## Implementation Phase Outcomes\n${renderImplementationPhaseOutcomes(collector.final.implementation_phase_outcomes)}`,
@@ -779,7 +825,12 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
 
 async function assertFrontendTemplateFinal(
   final: FrontendTemplateFinal,
-  options: { artifactRoot: string; artifactRootRelative?: string; workspaceRoot: string },
+  options: {
+    artifactRoot: string
+    artifactRootRelative?: string
+    workspaceRoot: string
+    requireFrontendInnovateContract?: boolean
+  },
 ): Promise<void> {
   const requiredRenderedFields = [
     ["frontend_template", final.frontend_template],
@@ -792,6 +843,36 @@ async function assertFrontendTemplateFinal(
   for (const [key, value] of requiredRenderedFields) {
     if (!value.trim())
       throw new Error(`${key} is required; provide concise markdown or the matching structured *_items field`)
+  }
+  if (final.design_directions.length > 0 && !final.selected_design_direction_id.trim()) {
+    throw new Error(
+      "selected_design_direction_id is required when design_directions are submitted; select the direction Build should implement.",
+    )
+  }
+  if (final.selected_design_direction_id.trim()) {
+    const ids = new Set(final.design_directions.map((item) => item.id))
+    if (!ids.has(final.selected_design_direction_id)) {
+      throw new Error(
+        `selected_design_direction_id "${final.selected_design_direction_id}" does not match any submitted design_directions id.`,
+      )
+    }
+  }
+  if (options.requireFrontendInnovateContract) {
+    if (final.design_directions.length < 2) {
+      throw new Error(
+        "frontend-innovate handoff requires at least two resource-backed design_directions before downstream Build work.",
+      )
+    }
+    if (!final.selected_design_direction_id.trim()) {
+      throw new Error(
+        "frontend-innovate handoff requires selected_design_direction_id so Build has one selected direction to implement.",
+      )
+    }
+    if (final.anti_slop_review.length < 1) {
+      throw new Error(
+        "frontend-innovate handoff requires anti_slop_review naming rejected shallow or generic design traits.",
+      )
+    }
   }
   if (
     final.final_acceptance_mode === "maintainable_replacement_required" &&
@@ -1615,6 +1696,12 @@ function collectVisualBaselineText(final: FrontendTemplateFinal): string {
     final.visual_consistency_contract,
     final.ui_data_contract,
     final.completeness_review,
+    ...final.design_directions.map(
+      (item) =>
+        `${item.id}: ${item.name}\n${item.concept}\n${item.tradeoffs}\n${item.implementation_notes}\n${item.evidence_refs.join("\n")}`,
+    ),
+    final.selected_design_direction_id,
+    ...final.anti_slop_review.map((item) => `${item.id}: ${item.rejected_trait}\n${item.evidence}\n${item.correction}`),
     ...final.frontend_project.entrypoints,
     ...final.frontend_project.notes,
     ...final.visual_validation_evidence.map((item) => `${item.review_status}: ${item.review_summary}`),
@@ -1666,11 +1753,13 @@ export function createFrontendTemplateOutputTools(
     artifactRoot?: string
     artifactRootRelative?: string
     workspaceRoot?: string
+    requireFrontendInnovateContract?: boolean
   } = {},
 ) {
   const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
   const artifactRootRelative = options.artifactRootRelative
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
+  const requireFrontendInnovateContract = options.requireFrontendInnovateContract === true
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -1850,6 +1939,51 @@ export function createFrontendTemplateOutputTools(
       },
     }),
 
+    update_frontend_design_direction: tool({
+      description:
+        "Update one resource-backed product/enterprise design direction considered before handoff. Frontend Innovate tasks should register multiple directions, then choose exactly one with select_frontend_design_direction.",
+      inputSchema: ToolDesignDirectionSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolDesignDirectionSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "design_directions")
+        const mode = upsertByStringKey(items, input, "id")
+        collector.semantic_error = undefined
+        return `OK: frontend design direction "${input.id}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    select_frontend_design_direction: tool({
+      description:
+        "Select the registered design direction downstream Build should implement. The id must match a direction registered with update_frontend_design_direction.",
+      inputSchema: ToolDesignDirectionSelectionSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolDesignDirectionSelectionSchema.parse(rawInput)
+        const directions = arrayField<z.infer<typeof ToolDesignDirectionSchema>>(collector.draft, "design_directions")
+        if (!directions.some((item) => item.id === input.id)) {
+          return `Error: selected design direction "${input.id}" is not registered. Call update_frontend_design_direction first.`
+        }
+        collector.draft.selected_design_direction_id = input.id
+        collector.semantic_error = undefined
+        return `OK: frontend design direction selected (${input.id})`
+      },
+    }),
+
+    update_frontend_anti_slop_review: tool({
+      description:
+        "Update one anti-slop review row naming a shallow/generic design trait rejected from the final direction and the resource-backed correction.",
+      inputSchema: ToolAntiSlopReviewItemSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolAntiSlopReviewItemSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "anti_slop_review")
+        const mode = upsertByStringKey(items, input, "id")
+        collector.semantic_error = undefined
+        return `OK: anti-slop review "${input.id}" ${mode} (${items.length} total)`
+      },
+    }),
+
     update_frontend_material: tool({
       description:
         "Update one material/asset inventory item. Include CSS/tokens, assets, data fixtures, text samples, icons, fonts, or dense resources needed for reproduction.",
@@ -1979,6 +2113,7 @@ export function createFrontendTemplateOutputTools(
           artifactRoot,
           artifactRootRelative,
           workspaceRoot,
+          requireFrontendInnovateContract,
         }),
     }),
 
@@ -1993,6 +2128,7 @@ export function createFrontendTemplateOutputTools(
           artifactRoot,
           artifactRootRelative,
           workspaceRoot,
+          requireFrontendInnovateContract,
         }),
     }),
   }

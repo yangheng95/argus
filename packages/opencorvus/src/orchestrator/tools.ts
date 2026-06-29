@@ -69,6 +69,12 @@ import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import {
+  createDesignResourceManifest,
+  designResourceManifestFileRefs,
+  frontendDesignMaterialMime,
+  recordDesignResourceManifest,
+} from "@/frontend-design/design-resource-manifest"
+import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
@@ -1483,7 +1489,7 @@ const FrontendDesignMaterialsField = z
   .array(z.string())
   .optional()
   .describe(
-    "Fresh frontend_design local visual-material paths, relative to the project root or absolute under it. Supported: images, PDFs, markdown/text style guides, design-tokens JSON, and CSS. Each path is read from disk and materialized as a visual_reference. Do not use this field for generated build output or for webpage source URLs; use `urls` for HTTP(S) visual references.",
+    "Fresh frontend_design local visual-material paths, relative to the project root or absolute under it. Supported: images, PDFs, HTML, markdown/text style guides, design-tokens JSON, and CSS. Unsupported extensions fail explicitly; do not pass unknown design blobs. Each path is read from disk and materialized as a visual_reference. Do not use this field for generated build output or for webpage source URLs; use `urls` for HTTP(S) visual references.",
   )
 
 const FrontendDesignInputSchema = z
@@ -4587,49 +4593,6 @@ async function loadLatestRenderedRetryAttachment(input: {
   }
 }
 
-/**
- * Lightweight MIME guess from filename extension. Covers the design-material
- * spectrum: images (inlined multimodal), PDFs (multimodal), text / markdown /
- * JSON / CSS / YAML (reference-only, read via read_attachment). Falls back to
- * `application/octet-stream` so AttachmentStore.write still accepts the file
- * — the multimodal-vs-reference partition then decides how it's surfaced.
- */
-function guessMimeFromFilename(filename: string): string {
-  const ext = (filename.split(".").pop() || "").toLowerCase()
-  const table: Record<string, string> = {
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    webp: "image/webp",
-    gif: "image/gif",
-    bmp: "image/bmp",
-    svg: "image/svg+xml",
-    avif: "image/avif",
-    heic: "image/heic",
-    heif: "image/heif",
-    pdf: "application/pdf",
-    md: "text/markdown",
-    markdown: "text/markdown",
-    txt: "text/plain",
-    log: "text/plain",
-    json: "application/json",
-    jsonc: "application/json",
-    yaml: "text/yaml",
-    yml: "text/yaml",
-    css: "text/css",
-    scss: "text/css",
-    less: "text/css",
-    html: "text/html",
-    htm: "text/html",
-    mp4: "video/mp4",
-    mov: "video/quicktime",
-    webm: "video/webm",
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-  }
-  return table[ext] ?? "application/octet-stream"
-}
-
 const FIGMA_URL_PATTERN = /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\/[^\s)]+/i
 
 function isFigmaUrl(value: string): boolean {
@@ -7134,7 +7097,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z
         .object({
           profile_id: PromptProfileIDSchema.describe(
-            "Exact prompt profile id from the backend prompt-profile catalog, for example `frontend-replica` or `frontend-automation-debug`.",
+            "Exact prompt profile id from the backend prompt-profile catalog, for example `frontend-replica`, `frontend-innovate`, or `frontend-automation-debug`.",
           ),
           reason: z
             .string()
@@ -7339,30 +7302,25 @@ export function createOrchestratorTools(input: {
         //     intent — keeping them out of attachments prevents requirements
         //     from treating system-generated PNGs as user input).
         //
-        // frontend-design combines both columns when assembling its visual
-        // input. Downstream visual/integrity review also reads both. Requirements
-        // reads only attachments — it must see user intent, not internal
-        // captures.
+        // A design-resource manifest below indexes both columns before
+        // frontend-design sees file refs. Downstream review reads the persisted
+        // handoff/evidence; Requirements reads only attachments because it must
+        // see user intent, not internal captures.
         const { AttachmentStore } = await import("@/storage/attachment-store")
         const fsMod = await import("node:fs/promises")
         const pathMod = await import("node:path")
 
-        // Track how many external sources actually produced visual bytes. If
-        // every URL screenshot and local material fails to
-        // materialize AND the task had no pre-existing attachments, we must
-        // abort before calling frontend-design — otherwise the agent runs
-        // blind, registers nothing, and the orchestrator hangs waiting for
-        // a frontend template that cannot exist. See benchmark run on
-        // usage-replica-vague: assistant hallucinated ./image-N.png paths,
-        // all 3 ENOENT'd, frontend-design still ran for 45s producing
-        // nothing, and the pipeline stalled on the empty verdict.
+        // Track materialized sources for explicit "no input" diagnostics.
+        // Individual explicit sources fail immediately below; continuing with
+        // only the surviving subset would make the final design untraceable.
         let materializedCount = 0
-        const materializationFailures: Array<{
+        const formatFrontendDesignMaterializationError = (failure: {
           source: "url" | "material"
           target: string
           stage: string
           error: string
-        }> = []
+        }) =>
+          `frontend_design aborted: explicit ${failure.source} source ${failure.target} failed during ${failure.stage}: ${failure.error}`
 
         // --- Figma MCP references --------------------------------------------
         for (const figmaUrl of figmaUrls) {
@@ -7445,18 +7403,27 @@ export function createOrchestratorTools(input: {
             const { CaptureReferenceError } = await import("@/frontend-design/capture-gate")
             const stage = shotErr instanceof CaptureReferenceError ? shotErr.stage : "unknown"
             const error = shotErr instanceof Error ? shotErr.message : String(shotErr)
-            materializationFailures.push({
+            const failure = {
               source: "url",
               target: liveUrl,
               stage,
               error,
-            })
+            } as const
             log.warn("frontend_design: url screenshot capture failed", {
               taskID,
               url: liveUrl,
               stage,
               error,
             })
+            createDecisionLog(taskID).append({
+              phase: "frontend_design",
+              key: "abort_materialization_failed",
+              value: formatFrontendDesignMaterializationError(failure),
+              reason:
+                "Every explicit frontend_design URL/material source is part of the requested design-resource contract; partial continuation would hide missing evidence.",
+            })
+            await closeFrontendDesignStep(true)
+            throw new Error(formatFrontendDesignMaterializationError(failure))
           }
         }
 
@@ -7465,31 +7432,37 @@ export function createOrchestratorTools(input: {
         // it — refusing traversal matches the codebase-tools boundary rule.
         const projectRoot = Instance.project.worktree
         for (const rawPath of materialPaths) {
+          await trackStepProgress("frontend_design", `frontend_design dispatch: materializing local material ${rawPath}`)
+          const abs = pathMod.isAbsolute(rawPath)
+            ? pathMod.normalize(rawPath)
+            : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
+          const relativeToProject = pathMod.relative(pathMod.resolve(projectRoot), abs)
+          if (relativeToProject.startsWith("..") || pathMod.isAbsolute(relativeToProject)) {
+            const failure = {
+              source: "material",
+              target: rawPath,
+              stage: "path",
+              error: `resolved path escapes project root: ${abs}`,
+            } as const
+            log.warn("frontend_design: material path escapes project root", {
+              taskID,
+              rawPath,
+              projectRoot,
+            })
+            createDecisionLog(taskID).append({
+              phase: "frontend_design",
+              key: "abort_materialization_failed",
+              value: formatFrontendDesignMaterializationError(failure),
+              reason:
+                "Every explicit frontend_design URL/material source is part of the requested design-resource contract; partial continuation would hide missing evidence.",
+            })
+            await closeFrontendDesignStep(true)
+            throw new Error(formatFrontendDesignMaterializationError(failure))
+          }
           try {
-            await trackStepProgress(
-              "frontend_design",
-              `frontend_design dispatch: materializing local material ${rawPath}`,
-            )
-            const abs = pathMod.isAbsolute(rawPath)
-              ? pathMod.normalize(rawPath)
-              : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
-            if (!abs.startsWith(pathMod.normalize(projectRoot))) {
-              materializationFailures.push({
-                source: "material",
-                target: rawPath,
-                stage: "path",
-                error: `resolved path escapes project root: ${abs}`,
-              })
-              log.warn("frontend_design: material path escapes project root — skipped", {
-                taskID,
-                rawPath,
-                projectRoot,
-              })
-              continue
-            }
             const bytes = await fsMod.readFile(abs)
             const filename = pathMod.basename(abs)
-            const mime = guessMimeFromFilename(filename)
+            const mime = frontendDesignMaterialMime(filename)
             const ref = await AttachmentStore.write(task.project_id, bytes, mime, filename)
             await EngineService.appendTaskSystemArtifact(taskID, {
               ...ref,
@@ -7505,17 +7478,26 @@ export function createOrchestratorTools(input: {
             })
             materializedCount++
           } catch (matErr) {
-            materializationFailures.push({
+            const failure = {
               source: "material",
               target: rawPath,
               stage: "read",
               error: matErr instanceof Error ? matErr.message : String(matErr),
-            })
+            } as const
             log.warn("frontend_design: material materialization failed", {
               taskID,
               path: rawPath,
               error: matErr instanceof Error ? matErr.message : String(matErr),
             })
+            createDecisionLog(taskID).append({
+              phase: "frontend_design",
+              key: "abort_materialization_failed",
+              value: formatFrontendDesignMaterializationError(failure),
+              reason:
+                "Every explicit frontend_design URL/material source is part of the requested design-resource contract; partial continuation would hide missing evidence.",
+            })
+            await closeFrontendDesignStep(true)
+            throw new Error(formatFrontendDesignMaterializationError(failure))
           }
         }
 
@@ -7569,49 +7551,75 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Refresh task to pick up any newly-attached references. frontend-design
-        // sees the union of user attachments (figma + user uploads) and
-        // system_artifacts (URL screenshots + materials we just captured).
+        // Refresh once to build the canonical design-resource manifest from
+        // the materialized resources. The manifest is an index; AttachmentStore
+        // remains the byte store.
+        const taskBeforeManifest = requireTask(taskID)
+        const designResourcesBeforeManifest = [
+          ...(Array.isArray(taskBeforeManifest.attachments) ? (taskBeforeManifest.attachments as any[]) : []),
+          ...(Array.isArray(taskBeforeManifest.system_artifacts) ? (taskBeforeManifest.system_artifacts as any[]) : []),
+        ].filter((item) => item?.intent !== "design_resource_manifest")
+        let designResourceManifest: ReturnType<typeof createDesignResourceManifest> | undefined
+        if (designResourcesBeforeManifest.length > 0) {
+          const manifest = createDesignResourceManifest({
+            taskID,
+            resources: designResourcesBeforeManifest,
+            webpageEvidenceArtifacts: preparedWebpageEvidenceArtifacts,
+          })
+          designResourceManifest = manifest
+          const manifestArtifactID = recordDesignResourceManifest({ taskID, manifest })
+          const manifestRef = await AttachmentStore.write(
+            task.project_id,
+            Buffer.from(JSON.stringify(manifest, null, 2), "utf8"),
+            "application/json",
+            `frontend-design-resource-manifest-${Identifier.shortPath(manifestArtifactID)}.json`,
+          )
+          await EngineService.replaceTaskSystemArtifactByIntent(taskID, "design_resource_manifest", {
+            ...manifestRef,
+            intent: "design_resource_manifest",
+            source: "frontend-design",
+          })
+          createDecisionLog(taskID).append({
+            phase: "frontend_design",
+            key: "design_resource_manifest",
+            value:
+              `Design resource manifest artifact ${manifestArtifactID} records ${manifest.entries.length} resource(s).\n` +
+              `Attachment: ${manifestRef.url}`,
+            reason:
+              "frontend_design consumes design resources through one manifest index instead of deriving semantics separately from attachments, system_artifacts, Figma materialization, and webpage evidence.",
+          })
+        }
+
+        // Refresh task to pick up the persisted manifest. Frontend-design
+        // consumes file refs derived from the manifest only; attachments and
+        // system_artifacts are byte storage/provenance inputs to the manifest,
+        // not a second semantic resource source.
         const enrichedTask = requireTask(taskID)
-        const designVisuals = [
-          ...(Array.isArray(enrichedTask.attachments) ? (enrichedTask.attachments as any[]) : []),
-          ...(Array.isArray(enrichedTask.system_artifacts) ? (enrichedTask.system_artifacts as any[]) : []),
-        ]
+        const designVisuals = designResourceManifest ? designResourceManifestFileRefs(designResourceManifest) : []
         const enrichedHasAttachments = designVisuals.length > 0
         normalizedStageInput = {
           task: taskContinuationScope(enrichedTask),
           evidence_snapshot: await frontendDesignPromptEvidenceSnapshot(taskID, enrichedTask),
         }
 
-        // Fail-fast if frontend_design was invoked on the strength of URLs /
-        // materials but every source failed to materialize. Running
-        // frontend-design blind produces zero output tools, which the caller
-        // turns into "frontend_design failed" — we surface the real root
-        // cause (no usable visual input) back to the orchestrator instead
-        // of letting the downstream agent run for 45s and emit nothing.
+        // Fail-fast if frontend_design was invoked with syntactic visual
+        // sources but none produced manifest entries. Individual explicit
+        // source failures already throw above; this catches malformed no-entry
+        // cases before a blind frontend-design session starts.
         if (!enrichedHasAttachments && materializedCount === 0 && preparedWebpageEvidenceArtifacts.length === 0) {
           await closeFrontendDesignStep(true)
           const providedCount = liveUrls.length + figmaUrls.length + materialPaths.length
-          const failureDetail =
-            materializationFailures.length > 0
-              ? " Materialization errors: " +
-                materializationFailures
-                  .map((failure) => `${failure.source}:${failure.target} [${failure.stage}] ${failure.error}`)
-                  .join("; ")
-              : ""
           const message =
             `frontend_design aborted: all ${providedCount} provided visual source(s) ` +
             `failed to materialize (URLs unreachable, Figma fetch failed, or local material ` +
             `paths did not exist). Check that the paths/URLs in the 'materials' / 'url' / ` +
             `'urls' / 'figma_url' arguments actually exist, then retry frontend_design ` +
-            `with real visual evidence or ask the user for usable reference material.` +
-            failureDetail
+            `with real visual evidence or ask the user for usable reference material.`
           log.warn("frontend_design: no visual input materialized — aborting before agent call", {
             taskID,
             liveUrlCount: liveUrls.length,
             figmaUrlCount: figmaUrls.length,
             materialCount: materialPaths.length,
-            materializationFailures,
           })
           // P4: write decision_log so downstream agents see "frontend design
           // was attempted but produced no visual context" rather than
@@ -7624,7 +7632,7 @@ export function createOrchestratorTools(input: {
             value:
               `frontend_design aborted before agent call: all ${providedCount} provided visual ` +
               `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
-              `failed to materialize.${failureDetail}`,
+              `failed to materialize.`,
             reason: "materialization_failed_all_sources",
           })
           await closeFrontendDesignStep(true)
@@ -7647,11 +7655,15 @@ export function createOrchestratorTools(input: {
             title: task.title,
             request: task.request,
             // Single-source visual input: every URL / Figma frame / local
-            // material the orchestrator resolved has already been turned
-            // into a PNG in `designVisuals`. Prefer those pixels; frontend-design
-            // does not use webfetch, though it may capture an additional live
-            // webpage screenshot with its dedicated `url_screenshot` tool.
+            // material the orchestrator resolved has already been indexed in
+            // designResourceManifest. File refs are derived from that manifest
+            // so frontend-design does not infer semantics from a raw
+            // attachments/system_artifacts union.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
+            designResourceManifest,
+            requireFrontendInnovateContract:
+              ((await Session.get(input.agentSessionID)).metadata?.configOverlay as any)?.prompt_profile?.active ===
+              "frontend-innovate",
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,

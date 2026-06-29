@@ -22,6 +22,13 @@ const catalog = {
   profiles: [
     { id: "frontend-replica", label: "Frontend Replica", built_in: true, editable: false, agents: {} },
     {
+      id: "frontend-innovate",
+      label: "Frontend Innovate",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+    {
       id: "frontend-automation-debug",
       label: "Frontend Automation Debug",
       built_in: true,

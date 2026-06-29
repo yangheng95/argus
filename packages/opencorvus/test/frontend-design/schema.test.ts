@@ -59,6 +59,8 @@ test("frontend-design schema module owns compact submit schema and visual spec s
 
   expect(providerSchema.required).toContain("final_acceptance_mode")
   expect(providerSchema.required).toContain("material_inventory_items")
+  expect(providerSchema.properties?.design_directions?.items?.properties?.id?.pattern).toContain("direction-")
+  expect(providerSchema.properties?.anti_slop_review?.items?.properties?.id?.pattern).toContain("anti-slop-")
   expect(providerSchema.properties?.material_inventory_items).toHaveProperty("minItems", 1)
   expect(providerSchema.properties?.component_reuse_plan?.items?.properties?.reuse_source?.description).toContain(
     "Concrete reuse target",
@@ -90,6 +92,9 @@ test("frontend-design schema module owns compact submit schema and visual spec s
   const final = FrontendTemplateFinalSchema.parse(minimalFrontendTemplateInput())
 
   expect(final.fact_check_items).toEqual([])
+  expect(final.design_directions).toEqual([])
+  expect(final.selected_design_direction_id).toBe("")
+  expect(final.anti_slop_review).toEqual([])
   expect(final.frontend_project.role).toBe("source_baseline_input")
 })
 

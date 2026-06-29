@@ -492,7 +492,11 @@ test("registers builtin orchestrator expert-squad skills without stage routing m
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        for (const name of ["frontend-replica-expert-squad", "frontend-automation-debug-expert-squad"] as const) {
+        for (const name of [
+          "frontend-replica-expert-squad",
+          "frontend-innovate-expert-squad",
+          "frontend-automation-debug-expert-squad",
+        ] as const) {
           const skill = await Skill.get(name)
           expect(skill).toBeDefined()
           expect(skill!.builtin).toBe(true)

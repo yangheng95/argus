@@ -363,6 +363,15 @@ Use this skill.
           expect(loaded.output).toContain('<skill_content name="frontend-replica-expert-squad">')
           expect(loaded.output).toContain("select_expert_squad")
           expect(loaded.output).toContain('profile_id: "frontend-replica"')
+
+          const innovateSearch = await tool.execute({ query: "frontend innovate expert squad" }, ctx)
+          expect(innovateSearch.output).toContain("<name>frontend-innovate-expert-squad</name>")
+          const innovate = await tool.execute({ name: "frontend-innovate-expert-squad" }, ctx)
+          expect(innovate.output).toContain('<skill_content name="frontend-innovate-expert-squad">')
+          expect(innovate.output).toContain('profile_id: "frontend-innovate"')
+          expect(innovate.output).toContain("multiple Build brainstorm drafts")
+          expect(innovate.output).toContain("not a competing source of final truth")
+          expect(innovate.output).toContain("Anti-Slop Review")
         },
       })
     } finally {

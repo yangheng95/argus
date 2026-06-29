@@ -309,6 +309,34 @@ export const MaterialInventoryItemSchema = z
   })
   .strict()
 
+export const DesignDirectionSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .regex(/^direction-[a-z0-9][a-z0-9-]*$/, "id must start with 'direction-' and contain only [a-z0-9-]"),
+    name: z.string().min(1).describe("Short name for the design direction."),
+    concept: z.string().min(1).describe("Product/enterprise design concept and audience fit."),
+    evidence_refs: SourceReferenceListSchema.default([]).describe("Screenshots, HTML, Figma, or manifest refs inspected."),
+    tradeoffs: z.string().min(1).describe("Why this direction is strong or weak against product-grade criteria."),
+    implementation_notes: z.string().min(1).describe("What Build would need to implement this direction."),
+  })
+  .strict()
+export type DesignDirection = z.infer<typeof DesignDirectionSchema>
+
+export const AntiSlopReviewItemSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .regex(/^anti-slop-[a-z0-9][a-z0-9-]*$/, "id must start with 'anti-slop-' and contain only [a-z0-9-]"),
+    rejected_trait: z.string().min(1).describe("The shallow, generic, or unfit design trait rejected."),
+    evidence: z.string().min(1).describe("Resource-backed reason this trait is wrong for the product."),
+    correction: z.string().min(1).describe("The selected design or implementation correction."),
+  })
+  .strict()
+export type AntiSlopReviewItem = z.infer<typeof AntiSlopReviewItemSchema>
+
 export const ImplementationPhase = z.enum([
   "evidence_lock",
   "implementation_scaffold",
@@ -431,6 +459,22 @@ export const FrontendTemplateFinalSchema = z
       .default([])
       .describe(
         "Preferred compact replacement for a long frontend_template string. Use one item per route, layout slot, scoped viewport evidence item, or acceptance anchor.",
+      ),
+    design_directions: z
+      .array(DesignDirectionSchema)
+      .default([])
+      .describe(
+        "Competing named design directions considered before the selected handoff. Frontend Innovate tasks should record at least two resource-backed directions here.",
+      ),
+    selected_design_direction_id: z
+      .string()
+      .default("")
+      .describe("The id from design_directions selected for downstream implementation, empty when no alternatives were needed."),
+    anti_slop_review: z
+      .array(AntiSlopReviewItemSchema)
+      .default([])
+      .describe(
+        "Rejected shallow/generic design traits and the resource-backed corrections. Frontend Innovate tasks should use this before handoff.",
       ),
     fillable_modules: OptionalMarkdownField(
       "Modules/slots frontend_design filled or left as explicit source debt: page modules, data modules, interactions, state, adapters, and verification modules.",
@@ -586,6 +630,17 @@ export const ToolMaterialInventoryItemSchema = z
     source_refs: SourceReferenceListSchema.default([]),
   })
   .strict()
+
+export const ToolDesignDirectionSchema = DesignDirectionSchema
+export const ToolDesignDirectionSelectionSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .regex(/^direction-[a-z0-9][a-z0-9-]*$/, "id must start with 'direction-' and contain only [a-z0-9-]"),
+  })
+  .strict()
+export const ToolAntiSlopReviewItemSchema = AntiSlopReviewItemSchema
 
 export const ToolImplementationPhaseOutcomeSchema = z
   .object({
@@ -758,6 +813,9 @@ export const FrontendTemplateToolInputSchema = z
     final_acceptance_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]),
     frontend_template: z.string().default(""),
     frontend_template_sections: z.array(ToolCompactTemplateItemSchema).default([]),
+    design_directions: z.array(ToolDesignDirectionSchema).default([]),
+    selected_design_direction_id: z.string().default(""),
+    anti_slop_review: z.array(ToolAntiSlopReviewItemSchema).default([]),
     fillable_modules: z.string().default(""),
     fillable_module_items: z.array(ToolCompactTemplateItemSchema).default([]),
     component_inventory: z.string().default(""),

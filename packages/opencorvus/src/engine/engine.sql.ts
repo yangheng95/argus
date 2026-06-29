@@ -113,6 +113,7 @@ export type EngineArtifactKind =
   | "fact_check_attempt"
   | "research_brief"
   | "frontend_research_brief"
+  | "design_resource_manifest"
   | "run"
   | "architect_contract_graph"
   | "goal_workload"
@@ -199,6 +200,7 @@ export const EngineTaskTable = sqliteTable(
      *  Carries what the USER explicitly attached as part of the task contract:
      *    `source: "user-upload"` — files the user uploaded with the request
      *    `source: "figma"`       — frames fetched from a user-provided Figma URL
+     *    `source: "figma-mcp"`   — Figma Model Context Protocol (MCP) screenshot frames
      *  Read by requirements / frontend-design as the user's intent (multimodal
      *  prompt content). Read by acceptance alongside system_artifacts for visual
      *  comparison. Shown in the overlay as user-attached files.
@@ -225,10 +227,12 @@ export const EngineTaskTable = sqliteTable(
      *    `source: "url-screenshot"`  — frontend_design URL captures
      *    `source: "material"`        — frontend_design local file reads
      *    `source: "playwright"`      — acceptance rendered.png captures
-     *  Read ONLY by acceptance (visual diff against user attachments). Never
-     *  fed to requirements/frontend-design as user intent. Losing one of these
-     *  on disk is a soft failure: the consuming agent skips it; it does NOT
-     *  kill the whole task the way a user-contract attachment loss would. */
+     *  Read by acceptance for visual comparison. Frontend-design may consume
+     *  URL screenshots, local materials, and Figma MCP artifacts only after the
+     *  orchestrator indexes them through a task-scoped design_resource_manifest;
+     *  requirements still reads only user-contract attachments. Losing one of
+     *  these on disk is a soft failure for downstream consumers; explicit
+     *  frontend_design materialization failures are reported before analysis. */
     system_artifacts: text({ mode: "json" })
       .$type<
         Array<{
