@@ -5,7 +5,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Filesystem } from "../../src/util/filesystem"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
-import { resetDatabase } from "../fixture/db"
+import { rebuildTestDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Database, eq } from "../../src/storage/db"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
@@ -77,7 +77,8 @@ describe("project routes", () => {
   afterEach(async () => {
     mock.restore()
     Server.resetProjectRoutesAppForTest()
-    await resetDatabase()
+    await Instance.disposeAll()
+    rebuildTestDatabase()
   })
 
   test("POST /project/current/init-git initializes a standalone directory", async () => {
@@ -109,15 +110,17 @@ describe("project routes", () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()
 
-    await withDirectoryAlias(tmp.path, async (alias) => {
-      const response = await app.request(`/project/current?directory=${encodeURIComponent(alias)}`)
+    await expectNoProcessErrors(async () => {
+      await withDirectoryAlias(tmp.path, async (alias) => {
+        const response = await app.request(`/project/current?directory=${encodeURIComponent(alias)}`)
 
-      expect(response.status).toBe(200)
-      const body = (await response.json()) as Project.Info
-      expect(body.worktree).toBe(alias)
-      expect(body.sandboxes).not.toContain(tmp.path)
-      expect(projectRow(body.id)?.worktree).toBe(alias)
-    })
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as Project.Info
+        expect(body.worktree).toBe(alias)
+        expect(body.sandboxes).not.toContain(tmp.path)
+        expect(projectRow(body.id)?.worktree).toBe(alias)
+      })
+    }, 250)
   }, 30_000)
 
   test("POST /project/current/init-git is idempotent for git projects", async () => {

@@ -36,11 +36,17 @@ Deleting a project must not leave any project-owned prompt, queue wake, task loo
   - `packages/opencorvus/src/session/prompt/state.ts`
   - `packages/opencorvus/test/server/project-routes.test.ts`
   - `packages/opencorvus/test/fixture/process-errors.ts`
+  - `packages/opencorvus/src/file/watcher.ts`
+  - `packages/opencorvus/src/project/bootstrap.ts`
+  - `packages/opencorvus/src/project/state.ts`
+  - `packages/opencorvus/test/fixture/db.ts`
 - Full-repo grep performed:
   - `rg -n "Delete current project|project\\.current\\.delete|current project|delete.*project|cleanup-candidates|remove.*project|Instance\\.dispose|project/current" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test specs/current specs/records/2026-06 -S`
   - `rg -n "Project deletion|DELETE /project/current|deleteCurrentProject|project deleted|non-task project queue wake|unhandled|Unhandled|queue wake" specs/records/2026-06/2026-06-27-bug-hunt-residual-convergence.md packages/opencorvus/src packages/opencorvus/test -S`
   - `rg -n "export async function deleteTask|async function deleteTask|deleteTask\\(|deleteSession\\(|requestTaskAgentLifecycleCancellation|awaitTaskQueuePromptsIdle|awaitPipelineSettled|awaitTaskLoopIdleForDelete|recordTaskPhysicalDeleteBreadcrumb|Session.removeInProject|TaskQueueService.cancelSessionPrompts|TaskQueueService.awaitSessionPromptsIdle" packages/opencorvus/src/task-api/index.ts -C 4`
   - `rg -n "TaskQueueTable|a2a_task_queue|session_id.*references|onDelete|task_queue" packages/opencorvus/src/scheduler packages/opencorvus/src/storage packages/opencorvus/src/session packages/opencorvus/src/engine -S`
+  - `rg -n "FileWatcher\\.init|function init\\(|InstanceBootstrap|lazyInstanceState|readdir\\(vcsDir\\)|Project\\.isGitRepo|expectNoProcessErrors|visible alias" packages/opencorvus/src packages/opencorvus/test`
+  - `rg -n "function rebuildSqlite|rebuildSqlite|resetDatabase|db-wal|Database\\.rebuild" packages/opencorvus/src packages/opencorvus/test -C 4`
 - Independent agent feedback:
   - No sub-agent was spawned. The available multi-agent tool explicitly forbids spawning unless the user asks for sub-agents/delegation/parallel agent work, and the user did not authorize that. This record uses direct main-agent audit evidence instead.
 
@@ -66,6 +72,11 @@ Why a global catch is not a valid fix:
 
 - Swallowing `unhandledRejection` would hide the async owner leak and keep deleting rows under still-running code. The correct fix is to make physical deletion wait on the task-owned lifecycle proof before deleting the session/project facts.
 
+Verification-discovered sibling trigger:
+
+- Full `project-routes.test.ts` also exposed an async watcher initialization race: `GET /project/current?directory=<visible alias>` can return while `FileWatcher.init()` is still reading `<alias>/.git`; when the alias directory is removed immediately after the request, `readdir(vcsDir)` rejects outside the route promise.
+- This is the same ownership class as project delete: background initialization is using a project-owned path after that path has disappeared. The fix is not a process-level catch; watcher setup must explicitly terminate the subscription attempt when the source/git watch directory is gone, while still surfacing unrelated watcher errors.
+
 ## Call-Point Audit
 
 | Surface | Current behavior | Required change |
@@ -77,6 +88,8 @@ Why a global catch is not a valid fix:
 | `TaskQueueService.awaitSessionPromptsIdle` | Waits for in-flight promises and verifies no running rows remain. | Must be reached before session cascade delete, otherwise the DB proof disappears. |
 | `Session.removeInProject` | Physically deletes the session tree and cascades queue rows/messages/parts. | Must remain after queue/prompt idle proof. |
 | `process-error-logging.ts` | Logs and rethrows unhandled process errors. | Keep unchanged; tests should prove no unhandled process error is produced. |
+| `file/watcher.ts::FileWatcher.init` | Starts async watcher state without awaiting route completion; a disappearing source/git directory can reject during git-dir scan or subscription. | Treat missing watch directories as a disposed owner path and end that subscription attempt; do not swallow unrelated watcher failures. |
+| `test/fixture/db.ts::resetDatabase` | Removes SQLite files and can hit Windows busy file deletion during route-suite cleanup. | Keep it for file-reset suites; add a protected schema rebuild helper for this route suite so cleanup keeps the temp-path guard without deleting busy files. |
 
 ## Implementation Plan
 
@@ -89,10 +102,13 @@ Why a global catch is not a valid fix:
 2. Introduce a single task-owned prompt/queue settle helper in `task-api/index.ts` used by `deleteTask()` before `Session.removeInProject()`.
 3. Keep active task cancellation through `cancelTask()`; for terminal tasks, perform lifecycle cancellation + queue prompt cancellation + idle wait + prompt subtree finish without changing terminal task status.
 4. Run focused server tests and docs-health tests required by this spec addition.
+5. Extend the alias-path route regression with `expectNoProcessErrors()` and make watcher setup handle source/git watch directories that disappear during initialization.
+6. Use a guarded test-database schema rebuild for `project-routes.test.ts` cleanup to avoid Windows busy WAL deletion without bypassing the temp database path check.
 
 ## Verification
 
 - `bun test packages/opencorvus/test/server/project-routes.test.ts -t "DELETE /project/current" --timeout 60000`
+- `bun test packages/opencorvus/test/server/project-routes.test.ts --timeout 60000 --max-concurrency=1`
 - `bun test packages/opencorvus/test/task-api/delete-running-task-settle.test.ts --timeout 60000`
 - `bun test packages/opencorvus/test/fixture/process-errors.ts` is not a standalone suite; project route tests use `expectNoProcessErrors`.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
