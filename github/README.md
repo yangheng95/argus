@@ -54,6 +54,17 @@ The action runs the repository source entrypoint directly with Bun:
 `bun "$GITHUB_ACTION_PATH/../packages/opencorvus/src/index.ts" github run`.
 That runtime parses the GitHub event, creates the session, and calls `SessionPrompt.prompt` in-process.
 
+Supported triggers:
+
+- `issue_comment` — Issue and PR comments
+- `pull_request_review_comment` — line-level PR review comments
+- `issues` — issue lifecycle events
+- `pull_request` — PR lifecycle events
+- `schedule` — scheduled repository automation
+- `workflow_dispatch` — manually triggered repository automation
+
+Comment triggers read the `/opencorvus` or `/oc` request from the GitHub comment. `issues`, `schedule`, and `workflow_dispatch` require the `prompt` input because their payloads do not include a comment body.
+
 1. Install the GitHub app https://github.com/apps/opencorvus-agent. Make sure it is installed on the target repository.
 2. Add the following workflow file to `.github/workflows/opencorvus.yml` in your repo. Set the appropriate `model` and required API keys in `env`.
 

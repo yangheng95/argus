@@ -198,6 +198,12 @@ Later independent review rounds found and fixed these remaining drift classes:
     `specs/README.md`, `specs/current/**`, `specs/records/2026-06/**`, or
     `specs/artifacts/**`, and verifies `AGENTS.md` keeps the Recall/storage
     governance rules.
+18. A later GitHub Action public-doc review found `github/README.md` still
+    omitted the full six-event runtime contract after the website docs were
+    repaired. The README now lists `issue_comment`,
+    `pull_request_review_comment`, `issues`, `pull_request`, `schedule`, and
+    `workflow_dispatch`; `document-health.test.ts` checks the same event list
+    in the website docs and the published Action README.
 
 Validation after these addenda includes:
 
