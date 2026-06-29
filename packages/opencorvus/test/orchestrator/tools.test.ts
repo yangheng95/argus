@@ -25,6 +25,7 @@ import { createOrchestratorTools, READ_CONTEXT_OUTPUT_CHAR_BUDGET } from "../../
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
+import { Agent } from "../../src/agent/agent"
 import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
@@ -109,6 +110,7 @@ import { researchRequestHash, researchSourceDigest } from "../../src/research/sc
 import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
+import { SkillTool } from "../../src/tool/skill"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -125,6 +127,7 @@ let factCheckAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let visualQaAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
+let captureReferenceManifestImpl: ((input: any) => Promise<any>) | undefined
 
 function buildToolOptions(label = "build") {
   const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -1623,6 +1626,32 @@ mock.module("@/visual-qa", () => ({
   },
 }))
 
+mock.module("@/frontend-design/capture-gate", () => {
+  class CaptureReferenceError extends Error {
+    override readonly cause?: unknown
+    constructor(
+      message: string,
+      readonly stage: "browser" | "navigate" | "content_paint" | "screenshot" | "stats",
+      cause?: unknown,
+    ) {
+      super(message)
+      this.name = "CaptureReferenceError"
+      this.cause = cause
+    }
+  }
+  return {
+    CaptureReferenceError,
+    captureReferenceManifest: (input: any) => {
+      if (!captureReferenceManifestImpl) {
+        throw new CaptureReferenceError("captureReferenceManifest mock not configured", "browser")
+      }
+      return captureReferenceManifestImpl(input)
+    },
+    assessCaptureDiagnostics: () => [],
+    summarizeCaptureDiagnostics: () => "none",
+  }
+})
+
 mock.module("@/mcp", () => ({
   MCP: {
     Status: z.any(),
@@ -2063,6 +2092,7 @@ describe("orchestrator tools", () => {
     visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
+    captureReferenceManifestImpl = undefined
     reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
   })
 
@@ -2082,6 +2112,7 @@ describe("orchestrator tools", () => {
     visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
+    captureReferenceManifestImpl = undefined
     ExecutorRegistry.reset()
     mock.restore()
     await resetDatabase()
@@ -2120,7 +2151,7 @@ describe("orchestrator tools", () => {
           project_id: projectID,
           source: "test",
           title: "Select expert squad",
-          request: "Use the frontend automation debug expert squad.",
+          request: "Use the frontend innovate expert squad for product-grade design synthesis.",
           kind: "workflow",
           priority: "normal",
           time_created: now,
@@ -2149,13 +2180,26 @@ describe("orchestrator tools", () => {
 
         const result = await tools.select_expert_squad.execute(
           {
-            profile_id: "frontend-automation-debug",
-            reason: "The current failure requires browser automation and screenshot evidence.",
+            profile_id: "frontend-innovate",
+            reason: "The current task requires product-grade design synthesis from Figma and screenshots.",
           },
           buildToolOptions("select_expert_squad"),
         )
         expect(toolText(result)).toContain("- previous: frontend-replica")
-        expect(toolText(result)).toContain("- active: frontend-automation-debug")
+        expect(toolText(result)).toContain("- active: frontend-innovate")
+        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+          prompt_profile: { active: "frontend-innovate" },
+        })
+
+        const automationResult = await tools.select_expert_squad.execute(
+          {
+            profile_id: "frontend-automation-debug",
+            reason: "The current failure now requires browser automation and screenshot evidence.",
+          },
+          buildToolOptions("select_expert_squad_automation"),
+        )
+        expect(toolText(automationResult)).toContain("- previous: frontend-innovate")
+        expect(toolText(automationResult)).toContain("- active: frontend-automation-debug")
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
           prompt_profile: { active: "frontend-automation-debug" },
         })
@@ -11705,10 +11749,14 @@ describe("orchestrator tools", () => {
 
     designAnalyzeImpl = async (input) => {
       const attachments = input.attachments ?? []
+      expect(input.designResourceManifest?.entries.map((entry: any) => entry.kind).sort()).toEqual(
+        ["figma_context", "figma_metadata", "figma_screenshot", "figma_variables"].sort(),
+      )
       expect(attachments.some((item: any) => item.source === "figma-mcp" && item.mime === "image/png")).toBe(true)
       expect(
         attachments.filter((item: any) => item.source === "figma-mcp" && item.mime === "text/markdown").length,
       ).toBe(3)
+      expect(attachments.some((item: any) => item.intent === "design_resource_manifest")).toBe(false)
       return {
         specs: [],
         designSystem: "Figma MCP design system",
@@ -11819,8 +11867,718 @@ describe("orchestrator tools", () => {
         )!
         expect((task.attachments as any[]).some((item) => item.source === "figma-mcp")).toBe(true)
         expect((task.system_artifacts as any[]).filter((item) => item.source === "figma-mcp").length).toBe(3)
+        expect((task.system_artifacts as any[]).some((item) => item.intent === "design_resource_manifest")).toBe(true)
+        const manifests = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+            .all(),
+        )
+        expect(manifests).toHaveLength(1)
+        expect((manifests[0]?.payload as any).entries.map((entry: any) => entry.kind).sort()).toEqual(
+          ["figma_context", "figma_metadata", "figma_screenshot", "figma_variables"].sort(),
+        )
       },
     })
+  })
+
+  test("frontend_design rejects any explicit materialization failure before agent analysis", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_material_fail_${stamp}`
+    const goalID = `gol_frontend_design_material_fail_${stamp}`
+    let analyzeCalled = false
+
+    await fs.writeFile(
+      path.join(tmp.path, "reference.html"),
+      "<!doctype html><html><body><main>reference design</main></body></html>",
+      "utf8",
+    )
+    designAnalyzeImpl = async () => {
+      analyzeCalled = true
+      return minimalFrontendDesignResult({ sessionID: "ses_should_not_start" })
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design material failure" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Frontend design material failure",
+          taskTitle: "Frontend design material failure",
+          request: "Use the supplied HTML design resource.",
+          goalTitle: "Implement supplied design",
+          goalSlug: "implement-supplied-design",
+          objective: "Implement supplied design resource.",
+          now,
+          insertProject: false,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.frontend_design.execute(
+            {
+              reason: "Material failure must stop the design handoff.",
+              materials: ["reference.html", "missing.html"],
+            },
+            buildToolOptions("frontend_design_material_fail"),
+          ),
+        ).rejects.toThrow("frontend_design aborted: explicit material source missing.html failed during read")
+
+        expect(analyzeCalled).toBe(false)
+        const abortEntries = createDecisionLog(taskID).readByPhase("frontend_design")
+        expect(abortEntries.some((entry) => entry.key === "abort_materialization_failed")).toBe(true)
+        expect(
+          Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .all(),
+          ),
+        ).toHaveLength(0)
+      },
+    })
+  })
+
+  test("frontend_design rejects URL screenshot capture failure before agent analysis", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_url_fail_${stamp}`
+    const goalID = `gol_frontend_design_url_fail_${stamp}`
+    let analyzeCalled = false
+
+    designAnalyzeImpl = async () => {
+      analyzeCalled = true
+      return minimalFrontendDesignResult({ sessionID: "ses_should_not_start" })
+    }
+    captureReferenceManifestImpl = async () => {
+      const { CaptureReferenceError } = await import("@/frontend-design/capture-gate")
+      throw new CaptureReferenceError("navigation timed out", "navigate")
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design URL failure" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Frontend design URL failure",
+          taskTitle: "Frontend design URL failure",
+          request: "Use the supplied URL design reference.",
+          goalTitle: "Implement URL design",
+          goalSlug: "implement-url-design",
+          objective: "Implement URL design reference.",
+          now,
+          insertProject: false,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.frontend_design.execute(
+            {
+              reason: "URL capture failure must stop the design handoff.",
+              urls: ["https://example.com/dead-reference"],
+            },
+            buildToolOptions("frontend_design_url_fail"),
+          ),
+        ).rejects.toThrow(
+          "frontend_design aborted: explicit url source https://example.com/dead-reference failed during navigate",
+        )
+
+        expect(analyzeCalled).toBe(false)
+        const abortEntries = createDecisionLog(taskID).readByPhase("frontend_design")
+        const abortFailures = abortEntries.filter((entry) => entry.key === "abort_materialization_failed")
+        expect(abortFailures).toHaveLength(1)
+        expect(abortFailures[0]?.value).toContain("navigation timed out")
+        expect(
+          Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .all(),
+          ),
+        ).toHaveLength(0)
+      },
+    })
+  })
+
+  test("frontend_design rejects material paths that only share the project root prefix", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_material_escape_${stamp}`
+    const goalID = `gol_frontend_design_material_escape_${stamp}`
+    const outsideDir = `${tmp.path}-outside`
+    const outsideFile = path.join(outsideDir, "reference.html")
+    let analyzeCalled = false
+
+    await fs.mkdir(outsideDir, { recursive: true })
+    await fs.writeFile(outsideFile, "<!doctype html><html><body>outside</body></html>", "utf8")
+    designAnalyzeImpl = async () => {
+      analyzeCalled = true
+      return minimalFrontendDesignResult({ sessionID: "ses_should_not_start" })
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design material escape" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Frontend design material escape",
+          taskTitle: "Frontend design material escape",
+          request: "Reject a material path outside the project root.",
+          goalTitle: "Reject escaped material",
+          goalSlug: "reject-escaped-material",
+          objective: "Reject escaped material path before frontend design analysis.",
+          now,
+          insertProject: false,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.frontend_design.execute(
+            {
+              reason: "Material paths must not escape the project root.",
+              materials: [outsideFile],
+            },
+            buildToolOptions("frontend_design_material_escape"),
+          ),
+        ).rejects.toThrow("failed during path")
+
+        expect(analyzeCalled).toBe(false)
+        const abortEntries = createDecisionLog(taskID).readByPhase("frontend_design")
+        const abortFailures = abortEntries.filter((entry) => entry.key === "abort_materialization_failed")
+        expect(abortFailures).toHaveLength(1)
+        expect(abortFailures[0]?.value).toContain("resolved path escapes project root")
+        expect(
+          Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .all(),
+          ),
+        ).toHaveLength(0)
+      },
+    })
+  })
+
+  test("frontend innovate expert squad runs visible skill selection through design, build drafts, visual QA, and integrity", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_innovate_flow_${stamp}`
+    const specID = `spec_frontend_innovate_flow_${stamp}`
+    const consoleDraftGoalID = `gol_console_draft_${stamp}`
+    const editorialDraftGoalID = `gol_editorial_draft_${stamp}`
+    const selectedImplementationGoalID = `gol_selected_impl_${stamp}`
+    const sourceURL = "https://example.com/frontend-innovate-product"
+    const buildSessions: string[] = []
+    let frontendResearchInput: any
+    let visualQaInput: any
+    let integrityInput: any
+
+    await fs.writeFile(
+      path.join(tmp.path, "reference.html"),
+      [
+        "<!doctype html>",
+        "<html><body>",
+        "<main class='terminal-desk'>",
+        "<h1>Enterprise market command center</h1>",
+        "<section data-density='high'>Positions, alerts, allocation, and compliance evidence.</section>",
+        "</main>",
+        "</body></html>",
+      ].join(""),
+      "utf8",
+    )
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "frontend innovate flow root" })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
+            goalID: consoleDraftGoalID,
+            specID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Frontend innovate flow",
+            taskTitle: "Frontend innovate flow",
+            request:
+              "Create a Frontend Innovate expert squad flow for a product-grade enterprise market webpage from source-page investigation and HTML material. The operator explicitly asks for multiple Build brainstorm drafts.",
+            goalTitle: "Build operator console draft",
+            goalSlug: "build-operator-console-draft",
+            objective:
+              "Build the bounded operator-console design direction draft from the Frontend Design handoff.",
+            now,
+            requirementIDs: ["REQ-frontend-innovate"],
+            insertProject: false,
+          })
+          Database.use((db) => {
+            insertRequirements(db, {
+              taskID,
+              specSnapshotID: specID,
+              now,
+              requirements: [
+                {
+                  id: "REQ-frontend-innovate",
+                  title: "Frontend Innovate product surface",
+                  description:
+                    "The enterprise webpage must be implemented from manifest-backed design directions and anti-slop review.",
+                  acceptance: [
+                    "Frontend Design records directions, selected direction, and anti-slop review.",
+                    "Build drafts and selected implementation are verified before Visual QA and Integrity.",
+                  ],
+                  evidence_refs: ["design_resource_manifest"],
+                  non_goals: [],
+                  priority: "blocking",
+                },
+              ],
+            })
+            for (const [index, goal] of (
+              [
+                {
+                  id: editorialDraftGoalID,
+                  title: "Build editorial dashboard draft",
+                slug: "build-editorial-dashboard-draft",
+                objective:
+                  "Build the bounded editorial-dashboard design direction draft from the Frontend Design handoff.",
+                owned: "src/editorial-dashboard-draft.tsx",
+              },
+              {
+                id: selectedImplementationGoalID,
+                title: "Implement selected operator console",
+                slug: "implement-selected-operator-console",
+                  objective:
+                    "Implement the selected direction-operator-console product design as the final webpage surface.",
+                  owned: "src/selected-operator-console.tsx",
+                },
+              ] as const
+            ).entries()) {
+              db.insert(EngineGoalTable)
+                .values({
+                  id: goal.id,
+                  task_id: taskID,
+                  spec_snapshot_id: specID,
+                  title: goal.title,
+                  slug: goal.slug,
+                  objective: goal.objective,
+                  acceptance_specs: [],
+                  owned_paths: [goal.owned],
+                  depends_on: [],
+                  exports: [],
+                  imports: [],
+                  kind: "feature",
+                  requirement_ids: ["REQ-frontend-innovate"],
+                  priority: "blocking",
+                  source: "test",
+                  status: "pending",
+                  order_index: index + 1,
+                  time_created: now,
+                  time_updated: now,
+                })
+                .run()
+            }
+          })
+
+          const orchestrator = await Agent.get("orchestrator")
+          expect(orchestrator).toBeDefined()
+          const skillTool = await SkillTool.init({ agent: orchestrator })
+          const skillContext = {
+            sessionID: parent.id,
+            messageID: `msg_skill_${stamp}`,
+            callID: `cal_skill_${stamp}`,
+            agent: "orchestrator",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => {},
+            ask: async () => {},
+          } as any
+          const skillSearch = await skillTool.execute({ query: "frontend innovate expert squad" }, skillContext)
+          expect(skillSearch.output).toContain("<name>frontend-innovate-expert-squad</name>")
+          const skillLoad = await skillTool.execute({ name: "frontend-innovate-expert-squad" }, skillContext)
+          expect(skillLoad.output).toContain('<skill_content name="frontend-innovate-expert-squad">')
+          expect(skillLoad.output).toContain('profile_id: "frontend-innovate"')
+          expect(skillLoad.output).toContain("multiple Build brainstorm drafts")
+          expect(skillLoad.output).toContain("Anti-Slop Review")
+
+          frontendResearchRunImpl = async (input: any) => {
+            frontendResearchInput = input
+            const researchSession = await Session.create({
+              kind: "frontend-research",
+              parentID: parent.id,
+              title: "frontend innovate source investigation",
+            })
+            input.onSessionCreated?.(researchSession.id)
+            return {
+              sessionID: researchSession.id,
+              brief: {
+                ...minimalFrontendResearchBrief({
+                  taskID,
+                  sessionID: researchSession.id,
+                  sourceURL,
+                  request: input.request,
+                }),
+                summary:
+                  "Frontend Innovate source page investigation identified enterprise command center information architecture.",
+              },
+            }
+          }
+
+          designAnalyzeImpl = async (input) => {
+            expect(input.parentSessionID).toBe(parent.id)
+            expect(input.requireFrontendInnovateContract).toBe(true)
+            expect(input.designResourceManifest?.entries).toHaveLength(1)
+            expect(input.designResourceManifest.entries[0]).toMatchObject({
+              kind: "html",
+              origin: "material",
+              mime: "text/html",
+              region: "reference.html",
+            })
+            expect(input.attachments).toHaveLength(1)
+            expect(input.attachments[0]).toMatchObject({
+              filename: "reference.html",
+              mime: "text/html",
+              source: "material",
+              intent: "visual_reference",
+            })
+            return {
+              specs: [],
+              designSystem: "Enterprise market command system",
+              techStack: ["React", "CSS modules", "local data fixtures"],
+              frontendTemplate:
+                "Implement direction-operator-console: dense enterprise market command center with audit-ready panels and source-backed HTML material.",
+              finalAcceptanceMode: "maintainable_replacement_required",
+              fillableModules: "market overview, risk queue, allocation grid, compliance trail",
+              componentInventory: "MarketShell, AllocationGrid, RiskQueue, AuditTimeline",
+              componentReusePlan: [
+                {
+                  family_id: "market-shell",
+                  name: "Market shell",
+                  observed_surface: "reference.html command center",
+                  source_refs: ["reference.html", "design_resource_manifest"],
+                  implementation_strategy: "project_specific_component",
+                  reuse_source: "src/components/MarketShell.tsx",
+                  mature_library_candidates: [],
+                  props_states: "default, alert, loading",
+                  replacement_boundary: "page shell",
+                  parity_guard: "Visual QA screenshot inspection",
+                },
+              ],
+              baselineReplacementPlan: [],
+              implementationPhaseOutcomes: [],
+              qualityProjectContract:
+                "Selected direction direction-operator-console must ship as semantic enterprise product UI, not generic cards.",
+              materialInventory: "design_resource_manifest includes reference.html as the source HTML design material.",
+              frontendProject: {
+                status: "not_created",
+                role: "implementation_target",
+                project_root: "packages/overlay",
+                source_package: "",
+                entrypoints: ["src/selected-operator-console.tsx"],
+                generation_tool: "frontend-innovate",
+                notes: ["Build implements selected direction after draft evidence."],
+              },
+              visualConsistencyContract:
+                "Selected design direction direction-operator-console wins; reject generic card-heavy dashboards.",
+              uiDataContract: "Use local fixture rows for positions, alerts, allocation, and compliance events.",
+              templateIterationNotes: [
+                "Compared operator-console and editorial-dashboard directions against the HTML material.",
+                "Selected operator-console after anti-slop review of generic card layouts.",
+              ],
+              completenessReview:
+                "Frontend Innovate handoff is complete: two directions, selected direction, anti-slop review, and manifest-backed HTML material.",
+              referenceArtifacts: ["reference.html", "design_resource_manifest"],
+              openQuestions: [],
+              report: {
+                summary: "Selected direction-operator-console for enterprise market command center.",
+                detail: [
+                  "## Design Directions",
+                  "- direction-operator-console: dense command surface for repeated enterprise market work.",
+                  "- direction-editorial-dashboard: narrative overview rejected for lower operational density.",
+                  "## Selected Design Direction",
+                  "direction-operator-console",
+                  "## Anti-Slop Review",
+                  "- anti-slop-generic-cards: rejected generic card-heavy SaaS layout.",
+                  "## Design Resource Manifest",
+                  "design_resource_manifest includes reference.html.",
+                ].join("\n"),
+              },
+              sessionID: `ses_frontend_design_innovate_${stamp}`,
+            }
+          }
+
+          buildAgentRunImpl = async (input: any) => {
+            const sessionID = `ses_frontend_innovate_build_${buildSessions.length + 1}_${stamp}`
+            buildSessions.push(sessionID)
+            expect(input.context?.frontendDesign).toContain("direction-operator-console")
+            expect(input.context?.frontendDesign).toContain("design_resource_manifest")
+            await markBuildSlotAcquired(input, sessionID)
+            const targetID = input.target?.id ?? "task"
+            const changedPath =
+              targetID === editorialDraftGoalID
+                ? "src/editorial-dashboard-draft.tsx"
+                : targetID === selectedImplementationGoalID
+                  ? "src/selected-operator-console.tsx"
+                  : "src/operator-console-draft.tsx"
+            return {
+              result: {
+                status: "passed",
+                summary: `Build ${targetID} implemented from direction-operator-console handoff evidence.`,
+                files_changed: [
+                  {
+                    path: changedPath,
+                    summary: "Implemented frontend innovate surface.",
+                    reason: "Required by the selected or draft design direction.",
+                  },
+                ],
+                tests: [
+                  {
+                    name: `render verification for ${targetID}`,
+                    passed: true,
+                    detail: "mocked rendered verification passed",
+                  },
+                ],
+                commit_ref: `abc${buildSessions.length}${stamp.slice(-4)}`,
+              },
+              sessionID,
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+              mergeBackStatus: "not_invoked",
+              actualChangedFiles: [
+                {
+                  path: changedPath,
+                  status: "modified",
+                  additions: 12,
+                  deletions: 1,
+                },
+              ],
+            }
+          }
+
+          visualQaAnalyzeImpl = async (input: any) => {
+            visualQaInput = input
+            const child = await Session.create({
+              kind: "visual-qa",
+              parentID: parent.id,
+              title: "frontend innovate visual qa",
+            })
+            input.onSessionCreated?.(child.id)
+            expect(input.frontendDesign).toContain("direction-operator-console")
+            expect(input.frontendDesign).toContain("design_resource_manifest")
+            return {
+              sessionID: child.id,
+              report: {
+                ...minimalVisualQaReport(),
+                summary: "Frontend Innovate selected implementation passed visual QA.",
+                evidence: [
+                  {
+                    type: "screenshot" as const,
+                    ref: "browser-preview:frontend-innovate-selected",
+                    state: "default",
+                    note: "Selected direction rendered without generic card slop.",
+                  },
+                ],
+              },
+              acceptance: {
+                submittedAccepted: true,
+                effectiveAccepted: true,
+                selfReportIssues: [],
+                blockingIssues: [],
+              },
+            }
+          }
+
+          computeRequirementStatusSnapshotImpl = () => [
+            {
+              requirementID: "REQ-frontend-innovate",
+              claimingGoals: [
+                { goalID: consoleDraftGoalID, runStatus: "completed" },
+                { goalID: editorialDraftGoalID, runStatus: "completed" },
+                { goalID: selectedImplementationGoalID, runStatus: "completed" },
+              ],
+            },
+          ]
+          reviewIntegrityImpl = async (input: any) => {
+            integrityInput = input
+            expect(input.frontendDesign).toContain("direction-operator-console")
+            expect(input.frontendDesign).toContain("anti-slop-generic-cards")
+            expect(input.visualQa).toContain("effective_accepted=true")
+            expect(JSON.stringify(input.replayContext)).toContain(selectedImplementationGoalID)
+            return integrityTeamResult({
+              sessionID: `ses_integrity_frontend_innovate_${stamp}`,
+              verdict: "pass",
+              summary: "Frontend Innovate design, build, Visual QA, and Integrity evidence passed.",
+            })
+          }
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const selected = await tools.select_expert_squad.execute(
+            {
+              profile_id: "frontend-innovate",
+              reason: "The task requires product-grade design synthesis from HTML material and multiple Build drafts.",
+            },
+            buildToolOptions("frontend_innovate_select"),
+          )
+          expect(toolText(selected)).toContain("- active: frontend-innovate")
+          expect((await Session.get(parent.id)).metadata?.configOverlay).toMatchObject({
+            prompt_profile: { active: "frontend-innovate" },
+          })
+
+          const researchResult = await tools.frontend_research.execute(
+            {
+              reason: "Investigate the source page before design convergence.",
+              source_urls: [sourceURL],
+              focus: "Enterprise command center IA, density, interaction states, and evidence gaps.",
+            },
+            buildToolOptions("frontend_innovate_research"),
+          )
+          expect(toolText(researchResult)).toContain("Frontend research brief persisted")
+          expect(frontendResearchInput.sourceUrls).toEqual([sourceURL])
+          expect(frontendResearchInput.focus).toContain("Enterprise command center IA")
+          expect(
+            Database.use((db) =>
+              db
+                .select()
+                .from(EngineArtifactTable)
+                .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "frontend_research_brief")))
+                .all(),
+            ),
+          ).toHaveLength(1)
+
+          const designResult = await tools.frontend_design.execute(
+            {
+              reason: "HTML material must become the Frontend Innovate design handoff.",
+              materials: ["reference.html"],
+            },
+            buildToolOptions("frontend_innovate_design"),
+          )
+          expect(toolText(designResult)).toContain("SUCCESS")
+          const task = Database.use((db) =>
+            db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+          )!
+          expect((task.system_artifacts as any[]).some((item) => item.intent === "design_resource_manifest")).toBe(
+            true,
+          )
+          const manifests = Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .all(),
+          )
+          expect(manifests).toHaveLength(1)
+          expect((manifests[0]?.payload as any).entries.map((entry: any) => entry.kind)).toEqual(["html"])
+
+          for (const goalID of [consoleDraftGoalID, editorialDraftGoalID, selectedImplementationGoalID]) {
+            const buildResult = await tools.build.execute(
+              {
+                goalID,
+                reason: "Frontend Innovate bounded Build draft or selected implementation.",
+              },
+              buildToolOptions(`frontend_innovate_build_${goalID}`),
+            )
+            expectGoalBuildStarted(buildResult)
+            await waitForGoalStatus(goalID, "passed")
+          }
+
+          expect(buildSessions).toHaveLength(3)
+          expect(new Set(buildSessions).size).toBe(3)
+          for (const goalID of [consoleDraftGoalID, editorialDraftGoalID, selectedImplementationGoalID]) {
+            expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("completed")
+          }
+          const buildContracts = Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_session_contract")))
+              .all(),
+          )
+          expect(buildContracts).toHaveLength(3)
+
+          const visualResult = await tools.visual_qa.execute(
+            {
+              reason: "Review the selected Frontend Innovate implementation.",
+              focus: "Selected operator console direction",
+              app_url: "http://127.0.0.1:5173",
+              preview_command: "npm run dev",
+            },
+            buildToolOptions("frontend_innovate_visual_qa"),
+          )
+          expect(toolText(visualResult)).toContain("visual_qa complete: effective_accepted=true")
+          expect(visualQaInput.frontendDesign).toContain("direction-operator-console")
+          expect(createDecisionLog(taskID).readByPhase("visual_qa").some((entry) => entry.key === "latest_summary")).toBe(
+            true,
+          )
+
+          const integrityResult = await tools.integrity.execute(
+            { reason: "Final Frontend Innovate chain review." },
+            buildToolOptions("frontend_innovate_integrity"),
+          )
+          expect(toolText(integrityResult)).toContain("integrity_attempt_id")
+          expect(integrityInput.frontendDesign).toContain("anti-slop-generic-cards")
+          expect(
+            findLatestIntegrityAttemptArtifact({
+              taskID,
+              specSnapshotID: specID,
+              phase: "post_build",
+            })?.artifactID,
+          ).toBeTruthy()
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+    }
   })
 
   test("goal build re-reads dependency status before dispatch", async () => {

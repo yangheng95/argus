@@ -76,6 +76,14 @@ const promptProfileScenarios = [
         agents: {},
       },
       {
+        id: "frontend-innovate",
+        label: "Frontend Innovate",
+        description: "Product design synthesis squad.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
+      {
         id: "backend",
         label: "Backend",
         description: "Contract and data integrity squad.",
@@ -103,12 +111,14 @@ const promptProfileScenarios = [
     expectedLabels: [
       "General Baseline prompt set.",
       "Frontend Replica Visual UI verification squad.",
+      "Frontend Innovate Product design synthesis squad.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
       "Frontend Automation Debug Regression and evidence squad.",
     ],
     expectedUnselectedLabels: [
       "General Baseline prompt set.",
+      "Frontend Innovate Product design synthesis squad.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
       "Frontend Automation Debug Regression and evidence squad.",
@@ -131,6 +141,14 @@ const promptProfileScenarios = [
         id: "frontend-replica",
         label: "前端",
         description: "视觉界面验证专家团。",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
+      {
+        id: "frontend-innovate",
+        label: "创新",
+        description: "产品设计综合专家团。",
         built_in: true,
         editable: false,
         agents: {},
@@ -163,12 +181,14 @@ const promptProfileScenarios = [
     expectedLabels: [
       "通用 基础提示词集合。",
       "前端 视觉界面验证专家团。",
+      "创新 产品设计综合专家团。",
       "后端 契约和数据完整性专家团。",
       "算法 正确性和基准回归专家团。",
       "测试 回归和证据专家团。",
     ],
     expectedUnselectedLabels: [
       "通用 基础提示词集合。",
+      "创新 产品设计综合专家团。",
       "后端 契约和数据完整性专家团。",
       "算法 正确性和基准回归专家团。",
       "测试 回归和证据专家团。",
@@ -565,7 +585,7 @@ for (const scenario of promptProfileScenarios) {
       )
       assert.deepEqual(
         result.options.map((option) => option.selectedAttribute),
-        ["false", "true", "false", "false", "false"],
+        ["false", "true", "false", "false", "false", "false"],
       )
       assert.equal(
         result.options.every((option) => option.role === "option"),

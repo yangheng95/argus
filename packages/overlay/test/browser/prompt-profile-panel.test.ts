@@ -100,6 +100,18 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         },
       },
       {
+        id: "frontend-innovate",
+        label: "Frontend Innovate",
+        description: "Bias toward product-grade design synthesis, alternatives, and anti-slop review.",
+        built_in: true,
+        editable: false,
+        agents: {
+          requirements: "Capture product design outcomes, states, accessibility, and anti-slop criteria.",
+          build: "Implement the selected product design direction and verify the rendered experience.",
+          orchestrator: "Drive resource-backed design synthesis through implementation and review.",
+        },
+      },
+      {
         id: "frontend-automation-debug",
         label: "Frontend Automation Debug",
         description: "Bias toward reproducible verification, regression coverage, and acceptance evidence.",
@@ -178,6 +190,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
     if (path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     if (path === "/session") return send([])
     if (path === "/mission") return send([])
     if (path === "/project/current/worktrees") return send([])
@@ -204,8 +218,18 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     if (path === "/config" && req.method === "PATCH") {
       const body = (await req.json()) as Record<string, unknown>
       patches.push(body)
-      config = mergePatch(config, body) as Record<string, unknown>
-      return send(config)
+        config = mergePatch(config, body) as Record<string, unknown>
+        return send(config)
+      }
+    if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
+    if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+    if (path === "/task/events") {
+      return new Response(":\n\n", {
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+        },
+      })
     }
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])
@@ -301,7 +325,13 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       }))
       return { list, overview, readonly, editors, promptCards, metadata, actions, targetStates }
     })
-    assert.deepEqual(builtInState.list, ["General", "Frontend Replica", "Frontend Automation Debug", "Custom Squad"])
+    assert.deepEqual(builtInState.list, [
+      "General",
+      "Frontend Replica",
+      "Frontend Innovate",
+      "Frontend Automation Debug",
+      "Custom Squad",
+    ])
     assert.match(builtInState.overview.scope, /Project config/)
     assert.match(builtInState.overview["project-active"], /Frontend Replica/)
     assert.match(builtInState.overview.selected, /Frontend Replica/)
@@ -417,9 +447,9 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       }
     })
     assert.deepEqual(selectedProfileListItem, {
-      labels: ["General", "Frontend Replica", "Frontend Automation Debug", "Custom Squad"],
-      primitiveRows: 4,
-      rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON"],
+      labels: ["General", "Frontend Replica", "Frontend Innovate", "Frontend Automation Debug", "Custom Squad"],
+      primitiveRows: 5,
+      rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON", "BUTTON"],
       legacyRows: 0,
       currentLabels: ["Custom Squad"],
       selectedLabel: "Custom Squad",

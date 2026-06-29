@@ -440,6 +440,7 @@ mounted_agents:
         availableToolNames: ["skill", "select_expert_squad"],
       })
       expect(orchestratorPrompt).toContain("frontend-replica-expert-squad")
+      expect(orchestratorPrompt).toContain("frontend-innovate-expert-squad")
       expect(orchestratorPrompt).toContain("frontend-automation-debug-expert-squad")
       expect(orchestratorPrompt).not.toContain("tool-skill")
       const prompt = await SystemPrompt.skills(requirements!)

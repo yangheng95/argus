@@ -17,6 +17,25 @@ const requiredBuiltInTargetMatrix = {
     "integrity",
     "orchestrator",
   ],
+  "frontend-innovate": [
+    "coding",
+    "coding-assistant",
+    "general",
+    "explore",
+    "mission",
+    "intent-analysis",
+    "requirements",
+    "architect",
+    "frontend-design",
+    "frontend-research",
+    "build",
+    "visual-qa",
+    "deep-research",
+    "fact-check",
+    "goal-workload-analyst",
+    "integrity",
+    "orchestrator",
+  ],
   backend: [
     "coding",
     "coding-assistant",
@@ -113,6 +132,22 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
       "browser_preview_compare_scroll_slices",
     )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
+      "multiple named directions",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain("reject shallow drafts")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain("webpage design")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
+      "Use Build brainstorm drafts only when the current operator explicitly asks",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).not.toContain(
+      "multiple directions, parallel Build draft prototypes",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain("brainstorming drafts")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain(
+      "only when the current operator explicitly asks",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.integrity).toContain("anti-slop review")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("repair local deps")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("rerun original command")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
@@ -137,6 +172,14 @@ describe("prompt profiles", () => {
     expect(PromptProfile.overlayFor("integrity", config)).toContain("targeted automation")
   })
 
+  test("frontend innovate profile reaches direct session agents and specialists", () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend-innovate" } })
+    expect(PromptProfile.overlayFor("coding", config)).toContain("product design synthesis")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("competing directions")
+    expect(PromptProfile.overlayFor("frontend-design", config)).toContain("implementation-ready product design handoff")
+    expect(PromptProfile.overlayFor("visual-qa", config)).toContain("enterprise polish")
+  })
+
   test("target catalog covers every built-in overlay target", () => {
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
     for (const profile of Object.values(PromptProfile.builtIns)) {
@@ -154,6 +197,7 @@ describe("prompt profiles", () => {
     expect(Object.keys(PromptProfile.builtIns)).toEqual([
       "general",
       "frontend-replica",
+      "frontend-innovate",
       "backend",
       "algorithm",
       "frontend-automation-debug",

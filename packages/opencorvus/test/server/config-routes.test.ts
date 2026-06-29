@@ -234,6 +234,7 @@ describe("config prompt routes", () => {
         expect(body.profiles.map((profile) => profile.id)).toEqual([
           "general",
           "frontend-replica",
+          "frontend-innovate",
           "backend",
           "algorithm",
           "frontend-automation-debug",
@@ -241,6 +242,11 @@ describe("config prompt routes", () => {
         ])
         expect(body.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
           label: "Frontend Replica",
+          built_in: true,
+          editable: false,
+        })
+        expect(body.profiles.find((profile) => profile.id === "frontend-innovate")).toMatchObject({
+          label: "Frontend Innovate",
           built_in: true,
           editable: false,
         })

@@ -611,10 +611,11 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
 
         expect(Object.keys(resolved).sort()).toEqual(["select_expert_squad", "skill"])
         const result = await (resolved.skill as any).execute(
-          { query: "frontend replica" },
+          { query: "frontend expert squad" },
           { toolCallId: "call_orchestrator_expert_skill" },
         )
         expect(result.output).toContain("<name>frontend-replica-expert-squad</name>")
+        expect(result.output).toContain("<name>frontend-innovate-expert-squad</name>")
         expect(result.output).toContain("<name>frontend-automation-debug-expert-squad</name>")
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },

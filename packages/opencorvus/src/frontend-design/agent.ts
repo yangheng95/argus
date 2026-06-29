@@ -77,6 +77,7 @@ import {
   summarizeReferencePixels,
   type HostPreparedFrontendProject,
 } from "./host-prepared-source-project"
+import type { DesignResourceManifest } from "./design-resource-manifest"
 
 import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
 
@@ -142,6 +143,9 @@ export namespace FrontendDesignAgent {
     completenessReview: string
     referenceArtifacts: string[]
     openQuestions: string[]
+    designDirections: FrontendTemplateFinal["design_directions"]
+    selectedDesignDirectionID: string
+    antiSlopReview: FrontendTemplateFinal["anti_slop_review"]
     processTrace: ProcessTrace
     processTraceArtifact?: string
     iterationStateArtifact?: string
@@ -168,6 +172,8 @@ export namespace FrontendDesignAgent {
       intent?: string
       source?: string
     }>
+    designResourceManifest?: DesignResourceManifest
+    requireFrontendInnovateContract?: boolean
     taskID?: string
     /** Parent session — a child "frontend-design" session is created under it. */
     parentSessionID?: string
@@ -206,6 +212,7 @@ export namespace FrontendDesignAgent {
       artifactRoot: frontendRuntimePaths?.absoluteDir ?? Instance.worktree,
       artifactRootRelative: frontendRuntimePaths?.relativeDir,
       workspaceRoot: Instance.worktree,
+      requireFrontendInnovateContract: input.requireFrontendInnovateContract === true,
     })
     const submitFrontendTemplateTool = createFrontendSubmitTools(outputToolKit)
     const hostPreparedFrontendProject = await resolveHostPreparedFrontendProject(input.taskID)
@@ -312,6 +319,9 @@ export namespace FrontendDesignAgent {
       completenessReview: structured.completeness_review,
       referenceArtifacts: structured.reference_artifacts,
       openQuestions: structured.open_questions,
+      designDirections: structured.design_directions,
+      selectedDesignDirectionID: structured.selected_design_direction_id,
+      antiSlopReview: structured.anti_slop_review,
       processTrace,
       processTraceArtifact,
       iterationStateArtifact,
@@ -379,6 +389,7 @@ async function buildPromptParts(
       intent?: string
       source?: string
     }>
+    designResourceManifest?: DesignResourceManifest
   },
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
 ) {
@@ -414,6 +425,22 @@ function isTextOnlyNoVisualSource(input: {
   )
 }
 
+function renderDesignResourceManifestSection(manifest?: DesignResourceManifest): string {
+  if (!manifest) return ""
+  const rows = manifest.entries.map(
+    (entry, index) =>
+      `${index + 1}. ${entry.id}: ${entry.kind} / ${entry.intent} / ${entry.origin} / ${entry.mime} -> ${entry.canonical_ref}`,
+  )
+  return [
+    "# Design Resource Manifest",
+    "",
+    `Manifest version ${manifest.version} for task ${manifest.task_id} contains ${manifest.entries.length} resource(s).`,
+    "This manifest is the semantic source of truth for design-resource kind, intent, origin, and canonical file refs. Use the attached files as bytes/pixels/text only through these manifest rows; do not infer design-resource semantics from raw attachment order.",
+    "",
+    ...rows,
+  ].join("\n")
+}
+
 function renderFrontendReviewDiscipline(): string {
   return [
     "## Frontend Review Discipline",
@@ -427,6 +454,7 @@ function buildUserPrompt(
     title: string
     request: string
     attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
+    designResourceManifest?: DesignResourceManifest
     taskID?: string
   },
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
@@ -448,6 +476,8 @@ function buildUserPrompt(
     request: input.request,
   })
   if (frontendResearchBlueprint) sections.push(frontendResearchBlueprint)
+  const manifestSection = renderDesignResourceManifestSection(input.designResourceManifest)
+  if (manifestSection) sections.push(manifestSection)
   // URL presence is a *structural* detection (syntactic protocol scheme),
   // not a keyword policy: the agent decides whether to propose a
   // `url_screenshot` capture based on whether a web URL is even
@@ -1009,6 +1039,9 @@ function createFrontendSubmitTools(outputToolKit: ReturnType<typeof createFronte
     "update_frontend_basics",
     "update_frontend_text",
     "update_frontend_item",
+    "update_frontend_design_direction",
+    "select_frontend_design_direction",
+    "update_frontend_anti_slop_review",
     "update_frontend_material",
     "update_frontend_project",
     "update_frontend_component_reuse",

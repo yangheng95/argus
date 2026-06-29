@@ -83,13 +83,50 @@ async function createVisualBaselineFixture() {
   }
 }
 
-async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputTools()) {
+async function registerMinimalFrontendResult(
+  kit = createFrontendTemplateOutputTools(),
+  options: { includeDesignDirections?: boolean; selectDesignDirection?: boolean; includeAntiSlopReview?: boolean } = {},
+) {
   const { tools } = kit
+  const includeDesignDirections = options.includeDesignDirections ?? true
+  const shouldSelectDesignDirection = options.selectDesignDirection ?? true
+  const includeAntiSlopReview = options.includeAntiSlopReview ?? true
   await callTool(tools, "update_frontend_basics", {
     design_system: "source-backed custom visual system",
     tech_stack: ["React", "Vite", "CSS modules", "local fixture data"],
     final_acceptance_mode: "maintainable_replacement_required",
   })
+  if (includeDesignDirections) {
+    await callTool(tools, "update_frontend_design_direction", {
+      id: "direction-operator-console",
+      name: "Operator console",
+      concept: "Dense enterprise console with table-first scanning, calm status surfaces, and restrained emphasis.",
+      evidence_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/style-tokens.json"],
+      tradeoffs: "Best fit for repeated financial rows and high-frequency comparison, but needs careful hierarchy control.",
+      implementation_notes: "Build reusable metric cards, row groups, and status bands from local fixture data.",
+    })
+    await callTool(tools, "update_frontend_design_direction", {
+      id: "direction-editorial-dashboard",
+      name: "Editorial dashboard",
+      concept: "A more narrative dashboard with larger summary modules and stronger section pacing.",
+      evidence_refs: ["web-clone-source/reference.png"],
+      tradeoffs: "Readable first impression, but weaker for dense market scanning and repeated operational use.",
+      implementation_notes: "Would prioritize hero summaries and fewer dense comparison regions.",
+    })
+  }
+  if (includeDesignDirections && shouldSelectDesignDirection) {
+    await callTool(tools, "select_frontend_design_direction", {
+      id: "direction-operator-console",
+    })
+  }
+  if (includeAntiSlopReview) {
+    await callTool(tools, "update_frontend_anti_slop_review", {
+      id: "anti-slop-generic-cards",
+      rejected_trait: "Generic card-heavy SaaS layout with decorative gradients.",
+      evidence: "The source evidence is dense financial scanning UI, not a marketing dashboard.",
+      correction: "Use compact table/card hybrids, restrained status color, and task-focused grouping.",
+    })
+  }
   await callTool(tools, "update_frontend_item", {
     target: "frontend_template_sections",
     item: {
@@ -574,8 +611,88 @@ test("update_frontend tools assemble and finalize the canonical frontend templat
 
   expect(result).toContain("OK")
   expect(kit.getCollector().final?.frontend_template).toContain("Desktop page skeleton")
+  expect(kit.getCollector().final?.design_directions).toHaveLength(2)
+  expect(kit.getCollector().final?.selected_design_direction_id).toBe("direction-operator-console")
+  expect(kit.getCollector().final?.anti_slop_review[0]?.id).toBe("anti-slop-generic-cards")
   expect(kit.getCollector().final?.component_reuse_plan[0]?.family_id).toBe("market-card-grid")
   expect(kit.getCollector().final?.implementation_phase_outcomes).toHaveLength(5)
+  expect(kit.buildReport().detail).toContain("## Design Directions")
+  expect(kit.buildReport().detail).toContain("## Selected Design Direction\ndirection-operator-console")
+  expect(kit.buildReport().detail).toContain("## Anti-Slop Review")
+})
+
+test("frontend design directions must be selected before final submit", async () => {
+  const kit = await registerMinimalFrontendResult(createFrontendTemplateOutputTools(), {
+    selectDesignDirection: false,
+  })
+
+  const status = await callTool(kit.tools, "inspect_frontend_result_status", {})
+  const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+  expect(status).toContain("design_directions=2")
+  expect(status).toContain("select_frontend_design_direction")
+  expect(result).toContain("MISSING_FRONTEND_TEMPLATE_RESULT")
+  expect(result).toContain("select_frontend_design_direction")
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("select_frontend_design_direction rejects unknown direction ids", async () => {
+  const kit = createFrontendTemplateOutputTools()
+
+  const result = await callTool(kit.tools, "select_frontend_design_direction", {
+    id: "direction-missing",
+  })
+
+  expect(result).toContain('Error: selected design direction "direction-missing" is not registered')
+})
+
+test("ordinary frontend template submit does not require frontend innovate directions", async () => {
+  const kit = await registerMinimalFrontendResult(createFrontendTemplateOutputTools(), {
+    includeDesignDirections: false,
+    includeAntiSlopReview: false,
+  })
+
+  const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+  expect(result).toContain("OK")
+  expect(kit.getCollector().final?.design_directions).toEqual([])
+  expect(kit.getCollector().final?.anti_slop_review).toEqual([])
+})
+
+test("frontend innovate submit requires multiple directions, selection, and anti-slop review", async () => {
+  const missingDirections = await registerMinimalFrontendResult(
+    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    {
+      includeDesignDirections: false,
+      includeAntiSlopReview: true,
+    },
+  )
+  expect(await callTool(missingDirections.tools, "submit_frontend_template", { final: true })).toContain(
+    "frontend-innovate handoff requires at least two resource-backed design_directions",
+  )
+
+  const missingSelection = await registerMinimalFrontendResult(
+    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    {
+      includeDesignDirections: true,
+      selectDesignDirection: false,
+      includeAntiSlopReview: true,
+    },
+  )
+  expect(await callTool(missingSelection.tools, "submit_frontend_template", { final: true })).toContain(
+    "select_frontend_design_direction({ id })",
+  )
+
+  const missingAntiSlop = await registerMinimalFrontendResult(
+    createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
+    {
+      includeDesignDirections: true,
+      includeAntiSlopReview: false,
+    },
+  )
+  expect(await callTool(missingAntiSlop.tools, "submit_frontend_template", { final: true })).toContain(
+    "frontend-innovate handoff requires anti_slop_review",
+  )
 })
 
 test(

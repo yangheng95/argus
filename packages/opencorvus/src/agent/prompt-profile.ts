@@ -153,6 +153,47 @@ export namespace PromptProfile {
           "Keep replica decisions grounded in exact reference surface, source evidence, goals, acceptance. Assign build/visual-qa to reference-region proof and scroll-slice supporting evidence; keep template mobile text out of goals.",
       },
     },
+    "frontend-innovate": {
+      label: "Frontend Innovate",
+      description:
+        "Enterprise and product-grade frontend design synthesis, ideation, convergence, and anti-slop review expert squad.",
+      agents: {
+        coding:
+          "Treat frontend innovation work as product design synthesis: inspect references, compare alternatives, preserve design-system fit, and verify the rendered experience before claiming completion.",
+        "coding-assistant":
+          "Answer frontend innovation questions through design-resource evidence, product intent, competing directions, convergence tradeoffs, and implementation-ready UI details.",
+        general:
+          "Anchor exploratory frontend design work to screenshots, HTML, Figma material, product goals, enterprise polish, accessibility, and evidence-backed alternatives.",
+        explore:
+          "Map design resources, existing UI primitives, product conventions, visual patterns, and implementation constraints without mutating the workspace.",
+        mission:
+          "Keep frontend innovation missions tied to resource-backed design directions, anti-slop critique, selected direction rationale, and rendered proof expectations.",
+        "intent-analysis":
+          "Resolve frontend innovation requests into design resources, product audience, enterprise quality bar, competing directions, interaction scope, and evidence gaps.",
+        requirements:
+          "Write product-grade frontend requirements as observable design outcomes: information architecture, density, states, accessibility, component reuse, and anti-slop criteria.",
+        architect:
+          "Turn selected frontend innovation direction into component, data, styling, interaction, and verification contracts without losing design-system ownership.",
+        "frontend-design":
+          "Inspect screenshots, HTML, Figma, and design resources; produce multiple named directions, reject shallow drafts, then submit one implementation-ready product design handoff.",
+        "frontend-research":
+          "Extract product intent, design patterns, information architecture, interaction states, and evidence gaps from source pages and design resources.",
+      build:
+        "Implement the selected frontend innovation handoff; only when the current operator explicitly asks for multiple Build brainstorming drafts, build one assigned resource-backed direction as bounded rendered evidence.",
+        "visual-qa":
+          "Review the rendered product for enterprise polish, anti-slop defects, interaction truth, accessibility signals, and design-resource alignment.",
+        "deep-research":
+          "Research current product, design-system, accessibility, or library facts only when the design decision depends on external evidence.",
+        "fact-check":
+          "Check design and implementation claims against cited resources, installed libraries, rendered evidence, and documented product constraints.",
+        "goal-workload-analyst":
+          "Challenge frontend innovation goals for hidden design complexity, weak convergence, missing evidence, and oversized implementation surfaces.",
+        integrity:
+          "Treat frontend innovation delivery as incomplete without selected-direction rationale, anti-slop review, implementation evidence, and rendered product proof.",
+      orchestrator:
+        "Select frontend innovation for product-grade webpage design; connect evidence, Frontend Design directions, selected implementation, Visual QA, and Integrity. Use Build brainstorm drafts only when the current operator explicitly asks.",
+      },
+    },
     backend: {
       label: "Backend",
       description: "API, state, data, integration, and operational correctness focused expert squad.",
