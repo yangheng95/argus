@@ -30,6 +30,7 @@ A Mission is the long-running coordination layer. One Mission is backed by one `
 | Check one concrete work item                                   | `GET /task/{taskID}/status`          |
 | Check all work under a long-running goal                       | `GET /mission/{missionID}/status`    |
 | Download code and execution flow for one task                  | `GET /task/{taskID}/project-archive` |
+| Download the current project archive for one Mission           | `GET /mission/{missionID}/project-archive` |
 
 ## Request Basics
 
@@ -45,7 +46,7 @@ Raw HTTP clients may also send the equivalent header:
 x-opencorvus-directory: D:\repo\my-project
 ```
 
-Single-task record reads are keyed by `taskID` and do not need a project directory. Use `directory` for project-scoped routes such as `GET /tasks`, `POST /task`, task write routes, browser preview routes, and `GET /task/{taskID}/project-archive`.
+Single-task record reads are keyed by `taskID` and do not need a project directory. Use `directory` for project-scoped routes such as `GET /tasks`, `POST /task`, task write routes, browser preview routes, `GET /task/{taskID}/project-archive`, `GET /mission/{missionID}/status`, and `GET /mission/{missionID}/project-archive`.
 
 When `OPENCORVUS_SERVER_PASSWORD` is set, requests need HTTP Basic Auth. The default username is `opencorvus`; `OPENCORVUS_SERVER_USERNAME` overrides it.
 
@@ -289,6 +290,26 @@ console.log(snapshot.data.status, snapshot.data.taskCounts)
 | `progress`   | Aggregate progress.                         |
 | `tasks`      | One `TaskStatusDetail` per Task.            |
 
+## Download Mission Project
+
+Use `GET /mission/{missionID}/project-archive` when the integration needs one ZIP for the Mission's current project directory:
+
+```typescript
+const archive = await client.mission.projectArchive({ missionID })
+
+if (archive.error) throw archive.error
+const bytes = await archive.data.arrayBuffer()
+```
+
+HTTP download:
+
+```bash
+curl -L "http://127.0.0.1:7878/mission/mission-1/project-archive?directory=D%3A%5Crepo%5Cmy-project" \
+  -o mission-project.zip
+```
+
+The response is `application/zip`. The route is project-scoped and requires `directory`; it returns the Git-included project files plus OpenCorvus execution-flow exports for the Mission scope.
+
 ## Manage Missions
 
 | Action | Route                              | Meaning                                              |
@@ -313,7 +334,7 @@ Long-running goal:
 1. `POST /mission/wake` creates or resumes the Mission.
 2. `GET /mission/{missionID}/status` shows aggregate progress across dispatched Tasks.
 3. `POST /mission/wake` gives the Mission more direction.
-4. Use each concrete Task's `status` and `project-archive` for deliverables.
+4. Use `GET /mission/{missionID}/project-archive` for a Mission-scoped project ZIP, or each concrete Task's `project-archive` for one Task's execution flow.
 
 ## Next
 

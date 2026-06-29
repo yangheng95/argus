@@ -123,3 +123,54 @@ Validation after this addendum:
 - HEAD-level retired spec path grep returned no active hits outside the
   migration evidence record and negative guard tests.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`
+
+## 2026-06-29 Later Independent Review Addenda
+
+Later independent review rounds found and fixed these remaining drift classes:
+
+1. GitHub Action direct-token compatibility still existed in `github/action.yml`
+   and `packages/opencorvus/src/cli/cmd/github.ts`. The action input/env and
+   CLI `GITHUB_TOKEN` branch were deleted; local test mode now requires both
+   `--token` and `--event` and still exchanges the PAT for an App token.
+2. `.scratch` retained stale deleted spec-tree references in text extensions
+   that the scanner did not cover, plus ignored backup copies of old
+   root-level `specs/*.md` / `specs/*.txt` records. The scanner now includes
+   `.tsx`, `.tmp`, `.tsv`, `.diff`, `.log`, JavaScript, and YAML text
+   artifacts, rejects `.scratch/**/specs/*.md` / `.scratch/**/specs/*.txt`,
+   and stale scratch snapshots matching retired spec trees or root-level spec
+   backups were deleted.
+3. MCP runtime timeout drift existed after config/doc updates. Runtime MCP
+   requests, selected prompt/resource fetches, connect, and startup tool
+   discovery now route through one `effectiveTimeout(...)` /
+   `mcpRequestOptions(...)` contract, including global
+   `experimental.mcp_timeout`.
+4. The shared `withTimeout` helper only cleared its timer on inner resolve. It
+   now clears in `finally` and `unref`s supported timers so rejected or fast
+   operations cannot leave active timeout handles behind.
+5. `.env.example` still published retired GitHub Action token-mode variables.
+   `GITHUB_TOKEN` and `USE_GITHUB_TOKEN` examples were removed, and the
+   document-health guard now rejects their return.
+6. June records could still publish retired root-level spec file paths. June
+   records outside this migration record now reject root-level `specs/*.md` /
+   `specs/*.txt` references.
+7. The public GitHub Action README still told external users to call the
+   repository-private `.github/actions/setup-bun` action. The example now relies
+   on the published composite action's own Bun setup, and the document-health
+   guard rejects the private setup step in that README.
+8. `MCP.startAuth(...)` could leak the OAuth probe client and transport on
+   already-authenticated success or non-auth connection failure. The start-auth
+   path now closes probe resources unless the transport is intentionally handed
+   to `pendingOAuthTransports` for `finishAuth(...)`.
+9. `.scratch` still retained ignored text snapshots with deleted pre-June spec
+   filename references. The stale scratch files were deleted, and
+   `historical-docs-links.test.ts` now scans scratch text for the same deleted
+   filename contract.
+
+Validation after these addenda includes:
+
+- `bun test packages/opencorvus/test/cli/github-action-run.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts packages/opencorvus/test/script/enterprise-architecture-explorer.test.ts packages/opencorvus/test/mcp/remote-transport-config.test.ts packages/overlay/test/mcp-service.test.ts`
+- `bun test ./packages/opencorvus/test/mcp/prompt-resource-fail-fast.isolated.ts packages/opencorvus/test/util/timeout.test.ts`
+- `bun run docs:check`
+- `bun run api:routes-check`
+- `bun run typecheck`
+- `git diff --check`

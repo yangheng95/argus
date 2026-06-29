@@ -13,12 +13,12 @@ description: OpenCorvus HTTP 服务器运行时、路由模块与集成接口。
 opencorvus serve --hostname 127.0.0.1 --port 7878
 ```
 
-完整 flag 见 [CLI](/docs/zh-cn/cli/)。绑定非 loopback 时必须设 `OPENCORVUS_SERVER_PASSWORD`。
+完整 flag 见 [CLI](/docs/zh-cn/cli/)。绑定非 loopback 且需要保护 API 时设置 `OPENCORVUS_SERVER_PASSWORD`。
 
 ## 架构
 
 - `server.ts` — HTTP 入口，挂载所有路由模块
-- `defaults.ts` — 默认端口/主机/密码规则
+- `defaults.ts` — 默认端口、主机和 server URL 规则
 - `event.ts` — SSE 事件多路复用
 - `mdns.ts` — 可选 mDNS 服务发现
 - `overlay-ui.ts` — 在 `/ui/` 提供 Overlay UI 静态资源
@@ -27,20 +27,23 @@ opencorvus serve --hostname 127.0.0.1 --port 7878
 
 ## 路由模块
 
-路由分散在 `packages/opencorvus/src/server/routes/` 的多个聚焦模块中：
+大多数 HTTP 路由分散在 `packages/opencorvus/src/server/routes/` 的多个聚焦模块中：
 
 | 模块          | 模块            | 模块              |
 | ------------- | --------------- | ----------------- |
 | `app.ts`      | `attachment.ts` | `auth.ts`         |
-| `channel.ts`  | `coding.ts`     | `config.ts`       |
-| `control.ts`  | `executor.ts`   | `experimental.ts` |
-| `export.ts`   | `file.ts`       | `gateway.ts`      |
-| `global.ts`   | `mcp.ts`        | `orchestrator.ts` |
-| `panel.ts`    | `permission.ts` | `project.ts`      |
-| `provider.ts` | `pty.ts`        | `question.ts`     |
-| `session.ts`  | `skill.ts`      |                   |
+| `browser-preview.ts` | `channel.ts`  | `coding.ts`      |
+| `config.ts`   | `control.ts`    | `documentation.ts` |
+| `executor.ts` | `experimental.ts` | `export.ts`     |
+| `file.ts`     | `gateway.ts`    | `global.ts`      |
+| `mcp.ts`      | `mission.ts`    | `orchestrator.ts` |
+| `panel.ts`    | `permission.ts` | `plugin.ts`      |
+| `project.ts`  | `provider.ts`   | `pty.ts`         |
+| `question.ts` | `session.ts`    | `skill.ts`       |
+| `terminal.ts` |                |                   |
 
 每个模块负责一段相关 API（例如 `permission.ts` 暴露 `/permission/*`，`mcp.ts` 暴露 `/mcp/*`）。
+`QuickNoteRoutes` 是挂载在该目录外的功能路由：源码位于 `packages/opencorvus/src/quicknote/routes.ts`，由 `app.ts` 挂载到 `/api/v1/notes`。
 
 ## 流式
 

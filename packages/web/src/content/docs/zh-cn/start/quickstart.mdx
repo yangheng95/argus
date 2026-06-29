@@ -16,12 +16,12 @@ opencorvus serve
 
 | flag                   | 说明                                                |
 | ---------------------- | --------------------------------------------------- |
-| `--hostname 0.0.0.0`   | 对外监听（必须同时设 `OPENCORVUS_SERVER_PASSWORD`） |
+| `--hostname 0.0.0.0`   | 对外监听；设置 `OPENCORVUS_SERVER_PASSWORD` 后启用 HTTP Basic Auth |
 | `--port 7878`          | 改端口                                              |
 | `--project-dir <path>` | 指定工作仓库                                        |
 | `--mdns`               | 启用 mDNS 服务发现                                  |
 
-> 如果暴露到 localhost 以外，**务必**先设置 `OPENCORVUS_SERVER_PASSWORD`。
+> 如果暴露到 localhost 以外且没有设置 `OPENCORVUS_SERVER_PASSWORD`，server 会启动，但会打印 `server is unsecured`，并且不会启用 HTTP Basic Auth。
 
 ## 2. 打开 UI（可选）
 

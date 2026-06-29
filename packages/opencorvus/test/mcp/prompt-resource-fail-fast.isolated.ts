@@ -1,22 +1,34 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 
+let connectError: Error | undefined
 let promptError: Error | undefined
 let resourceError: Error | undefined
 let toolErrorDuringStartup: Error | undefined
 let toolErrorAfterStartup: Error | undefined
 let promptFetchError: Error | undefined
 let resourceFetchError: Error | undefined
+let connectOptions: unknown[] = []
+let listToolOptions: unknown[] = []
+let callToolOptions: unknown[] = []
+let listPromptOptions: unknown[] = []
+let listResourceOptions: unknown[] = []
+let getPromptOptions: unknown[] = []
+let readResourceOptions: unknown[] = []
 let listToolsCalls = 0
 let listPromptsCalls = 0
 let listResourcesCalls = 0
 let closeCalls = 0
 let transportCloseCalls = 0
+let toolList: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }> = []
 let resourceList: Array<{ uri: string; name: string; title?: string; description?: string; mimeType?: string }> = []
 let serverCapabilities: Record<string, Record<string, unknown>> = {}
 
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
-    async connect() {}
+    async connect(_transport?: unknown, options?: unknown) {
+      connectOptions.push(options)
+      if (connectError) throw connectError
+    }
     async close() {
       closeCalls += 1
     }
@@ -24,27 +36,36 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
     getServerCapabilities() {
       return serverCapabilities
     }
-    async listTools() {
+    async listTools(_params?: unknown, options?: unknown) {
+      listToolOptions.push(options)
       listToolsCalls += 1
       if (toolErrorDuringStartup) throw toolErrorDuringStartup
       if (toolErrorAfterStartup && listToolsCalls > 1) throw toolErrorAfterStartup
-      return { tools: [] }
+      return { tools: toolList }
     }
-    async listPrompts() {
+    async callTool(_params: unknown, _schema?: unknown, options?: unknown) {
+      callToolOptions.push(options)
+      return { content: [] }
+    }
+    async listPrompts(_params?: unknown, options?: unknown) {
+      listPromptOptions.push(options)
       listPromptsCalls += 1
       if (promptError) throw promptError
       return { prompts: [] }
     }
-    async listResources() {
+    async listResources(_params?: unknown, options?: unknown) {
+      listResourceOptions.push(options)
       listResourcesCalls += 1
       if (resourceError) throw resourceError
       return { resources: resourceList }
     }
-    async getPrompt() {
+    async getPrompt(_params?: unknown, options?: unknown) {
+      getPromptOptions.push(options)
       if (promptFetchError) throw promptFetchError
       return { messages: [] }
     }
-    async readResource() {
+    async readResource(_params?: unknown, options?: unknown) {
+      readResourceOptions.push(options)
       if (resourceFetchError) throw resourceFetchError
       return { contents: [] }
     }
@@ -70,18 +91,28 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 }))
 
 const { MCP } = await import("../../src/mcp")
+const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
-const { resetDatabase } = await import("../fixture/db")
+const { Database } = await import("../../src/storage/db")
 const { tmpdir } = await import("../fixture/fixture")
 
 beforeEach(async () => {
+  connectError = undefined
   promptError = undefined
   resourceError = undefined
   toolErrorDuringStartup = undefined
   toolErrorAfterStartup = undefined
   promptFetchError = undefined
   resourceFetchError = undefined
+  connectOptions = []
+  listToolOptions = []
+  callToolOptions = []
+  listPromptOptions = []
+  listResourceOptions = []
+  getPromptOptions = []
+  readResourceOptions = []
   resourceList = []
+  toolList = []
   listToolsCalls = 0
   listPromptsCalls = 0
   listResourcesCalls = 0
@@ -89,7 +120,12 @@ beforeEach(async () => {
   transportCloseCalls = 0
   serverCapabilities = { tools: {}, prompts: {}, resources: {} }
   await Instance.disposeAll()
-  await resetDatabase()
+  await McpOAuthCallback.stop()
+  Database.close()
+})
+
+afterEach(async () => {
+  await McpOAuthCallback.stop()
 })
 
 async function withRemoteMcp(fn: () => Promise<void>) {
@@ -243,6 +279,130 @@ describe("MCP prompt and resource listing", () => {
           `client:${Buffer.from("remote_a", "utf8").toString("base64url")}:uri:${Buffer.from("mcp://fixture/shared.md", "utf8").toString("base64url")}`,
         ])
         expect(Object.values(resources).map((item) => item.client).sort()).toEqual(["remote/a", "remote_a"])
+      },
+    })
+  })
+
+  test("runtime MCP requests use the documented 30000ms default timeout", async () => {
+    toolList = [
+      {
+        name: "lookup",
+        description: "Lookup fixture",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]
+    resourceList = [{ uri: "mcp://fixture/shared.md", name: "README", mimeType: "text/markdown" }]
+
+    await withRemoteMcp(async () => {
+      await MCP.prompts()
+      await MCP.resources()
+      await MCP.callTool({ key: "remote_lookup", args: {} })
+      await MCP.getPrompt("remote", "template")
+      await MCP.readResource("remote", "mcp://fixture/shared.md")
+    })
+
+    expect(listToolOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+    expect(callToolOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+    expect(listPromptOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+    expect(listResourceOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+    expect(getPromptOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+    expect(readResourceOptions.at(-1)).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+  })
+
+  test("connect and startup tool discovery use the global MCP timeout override", async () => {
+    toolList = []
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        experimental: {
+          mcp_timeout: 12_345,
+        },
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            oauth: false,
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.tools()
+      },
+    })
+
+    expect(connectOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+    expect(listToolOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 12_345 })
+  })
+
+  test("OAuth startAuth closes the probe client and transport after an already-authenticated probe", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            enabled: false,
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const closeCallsBefore = closeCalls
+        const transportCloseCallsBefore = transportCloseCalls
+        await expect(MCP.startAuth("remote")).resolves.toEqual({ authorizationUrl: "" })
+        expect(closeCalls - closeCallsBefore).toBe(1)
+        expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
+      },
+    })
+
+    expect(connectOptions[0]).toEqual({ resetTimeoutOnProgress: true, timeout: 30_000 })
+  })
+
+  test("OAuth startAuth closes the probe client and transport after non-auth connection failures", async () => {
+    connectError = new Error("connect exploded")
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://example.com/mcp",
+            transport: "streamable-http",
+            enabled: false,
+          },
+          browser: {
+            enabled: false,
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const closeCallsBefore = closeCalls
+        const transportCloseCallsBefore = transportCloseCalls
+        await expect(MCP.startAuth("remote")).rejects.toThrow("connect exploded")
+        expect(closeCalls - closeCallsBefore).toBe(1)
+        expect(transportCloseCalls - transportCloseCallsBefore).toBe(1)
       },
     })
   })

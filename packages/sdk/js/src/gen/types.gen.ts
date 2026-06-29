@@ -733,7 +733,7 @@ export type McpLocalConfig = {
    */
   enabled?: boolean
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
    */
   timeout?: number
 }
@@ -781,7 +781,7 @@ export type McpRemoteConfig = {
    */
   oauth?: McpOAuthConfig | false
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
    */
   timeout?: number
 }
@@ -3180,7 +3180,7 @@ export type EventWorkflowStepUpdated = {
     taskID: string
     stepID: string
     goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed"
+    status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
     summary: string
   }
 }
@@ -10699,7 +10699,7 @@ export type MissionStatusResponses = {
           scope: "task" | "goal"
           tool: string
           status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
         }>
       }
       goals: Array<{
@@ -10722,14 +10722,14 @@ export type MissionStatusResponses = {
           stepID: string
           label: string
           status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
           startedAt?: number
           completedAt?: number
           summary?: string
           phases?: Array<{
             phaseID: string
             status: "success" | "failed" | "running"
-            rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+            rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
             startedAt?: number
             completedAt?: number
           }>
@@ -11193,6 +11193,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
     regionID?: string
     stateID?: string
+    cropIntent?: "full-region" | "content-well"
     manifestPath?: string
     artifactPaths?: {
       [key: string]: string
@@ -11520,6 +11521,7 @@ export type BrowserPreviewCompareTaskTargetRegionsData = {
       viewport_id: "desktop" | "tablet" | "mobile"
       state_id?: string
       region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
+      crop_intent: "full-region" | "content-well"
       source: {
         reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
         bbox: {
@@ -11617,6 +11619,7 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
       region_id: string
       viewport_id: "desktop" | "tablet" | "mobile"
       state_id?: string
+      crop_intent?: "full-region" | "content-well"
       status: "completed" | "failed"
       reason?: string
       source_bbox?: {
@@ -13098,7 +13101,7 @@ export type TaskStatusResponses = {
         scope: "task" | "goal"
         tool: string
         status: "success" | "failed" | "running"
-        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
       }>
     }
     goals: Array<{
@@ -13121,14 +13124,14 @@ export type TaskStatusResponses = {
         stepID: string
         label: string
         status: "success" | "failed" | "running"
-        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+        rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
         startedAt?: number
         completedAt?: number
         summary?: string
         phases?: Array<{
           phaseID: string
           status: "success" | "failed" | "running"
-          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed"
+          rawStatus: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
           startedAt?: number
           completedAt?: number
         }>
@@ -13836,7 +13839,7 @@ export type TaskConversationResponses = {
           tool: string
           scope: "task" | "goal"
           skippable: boolean
-          status: "pending" | "running" | "completed" | "skipped" | "failed"
+          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
           phases?: Array<{
             id: string
             label: string
@@ -13878,7 +13881,7 @@ export type TaskConversationResponses = {
           stepID: string
           orderKey: string
           label: string
-          status: "pending" | "running" | "completed" | "skipped" | "failed"
+          status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
           startedAt?: number
           completedAt?: number
           summary?: string
@@ -13914,6 +13917,21 @@ export type TaskConversationResponses = {
               additions?: number
               deletions?: number
             }
+            buildOutcome?: {
+              id: string
+              goalRunID: string
+              terminalStatus: "completed" | "failed" | "aborted"
+              outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
+              acceptancePresent: boolean
+              summary?: string
+              error?: string
+              noDiffReason?: string
+              changedFiles: Array<string>
+              commitRef?: string
+              publishedCommitRef?: string
+              diffBaseRef?: string
+              diffHeadRef?: string
+            }
             checks?: Array<{
               name: string
               status: string
@@ -13926,7 +13944,7 @@ export type TaskConversationResponses = {
           phases?: {
             [key: string]: {
               orderKey: string
-              status: "pending" | "running" | "completed" | "skipped" | "failed"
+              status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
               startedAt?: number
               completedAt?: number
             }
@@ -14802,7 +14820,7 @@ export type TaskBoardResponses = {
         tool: string
         scope: "task" | "goal"
         skippable: boolean
-        status: "pending" | "running" | "completed" | "skipped" | "failed"
+        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
         phases?: Array<{
           id: string
           label: string
@@ -14844,7 +14862,7 @@ export type TaskBoardResponses = {
         stepID: string
         orderKey: string
         label: string
-        status: "pending" | "running" | "completed" | "skipped" | "failed"
+        status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
         startedAt?: number
         completedAt?: number
         summary?: string
@@ -14880,6 +14898,21 @@ export type TaskBoardResponses = {
             additions?: number
             deletions?: number
           }
+          buildOutcome?: {
+            id: string
+            goalRunID: string
+            terminalStatus: "completed" | "failed" | "aborted"
+            outcomeKind: "delivered" | "failed" | "aborted" | "no_project_diff"
+            acceptancePresent: boolean
+            summary?: string
+            error?: string
+            noDiffReason?: string
+            changedFiles: Array<string>
+            commitRef?: string
+            publishedCommitRef?: string
+            diffBaseRef?: string
+            diffHeadRef?: string
+          }
           checks?: Array<{
             name: string
             status: string
@@ -14892,7 +14925,7 @@ export type TaskBoardResponses = {
         phases?: {
           [key: string]: {
             orderKey: string
-            status: "pending" | "running" | "completed" | "skipped" | "failed"
+            status: "pending" | "running" | "completed" | "skipped" | "failed" | "aborted"
             startedAt?: number
             completedAt?: number
           }

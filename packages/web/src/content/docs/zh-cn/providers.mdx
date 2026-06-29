@@ -43,9 +43,9 @@ export GOOGLE_GENERATIVE_AI_API_KEY=...
 export DEEPSEEK_API_KEY=...
 export OPENROUTER_API_KEY=...
 
-# 阿里云 DashScope（按 key 前缀自动路由）
-export CODING_DASHSCOPE_API_KEY=sk-sp-...   # Coding Plan 专线
-export DASHSCOPE_API_KEY=sk-...             # 标准 intl
+# 阿里云 DashScope
+export DASHSCOPE_API_KEY=sk-...                 # alibaba-cn 和 DashScope 共享 key
+export ALIBABA_CODING_PLAN_API_KEY=sk-sp-...    # alibaba-coding-plan-cn
 ```
 
 ### 方式 B：自定义 provider（OpenAI-兼容网关）
@@ -67,7 +67,7 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 }
 ```
 
-`env` 数组声明该 provider 所需的环境变量名；缺失时报错退出，不 fallback。
+`env` 数组声明该 provider 所需的环境变量名；缺失时报错退出，不 fallback。Provider base URL 由 model database 决定，不依据密钥前缀改写路由。
 
 ## 模型选择策略
 

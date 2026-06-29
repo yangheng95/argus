@@ -14,9 +14,8 @@ The benchmark harness provides **end-to-end quality regression**. It simulates a
 ```bash
 cd packages/opencorvus
 
-CODING_DASHSCOPE_API_KEY=sk-sp-... \
+DASHSCOPE_API_KEY=sk-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
-DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=/path/to/prd.txt" \
   "--idle-timeout-ms=2700000"
@@ -90,7 +89,7 @@ Historical baseline:
 ```yaml
 - name: Benchmark
   env:
-    CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
+    DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \

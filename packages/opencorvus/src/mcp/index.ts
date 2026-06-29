@@ -26,6 +26,7 @@ import { Bus } from "@/bus"
 import open from "open"
 import { entries, values as objectValues } from "@/util/object"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
+import type { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -149,7 +150,7 @@ export namespace MCP {
   }
 
   // Convert MCP tool definition to AI SDK Tool type
-  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout?: number): Promise<Tool> {
+  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout: number): Promise<Tool> {
     const inputSchema = mcpTool.inputSchema
 
     // Spread first, then override type to ensure it's always "object"
@@ -170,10 +171,7 @@ export namespace MCP {
             arguments: (args || {}) as Record<string, unknown>,
           },
           CallToolResultSchema,
-          {
-            resetTimeoutOnProgress: true,
-            timeout,
-          },
+          mcpRequestOptions(timeout),
         )
       },
     })
@@ -221,6 +219,24 @@ export namespace MCP {
     const entry = config[name]
     if (!entry) throw mcpNotFound(name)
     return entry
+  }
+
+  function effectiveTimeout(mcp?: Config.Mcp, globalTimeout?: number): number {
+    return mcp?.timeout ?? globalTimeout ?? DEFAULT_TIMEOUT
+  }
+
+  function mcpRequestOptions(timeout: number): RequestOptions {
+    return {
+      resetTimeoutOnProgress: true,
+      timeout,
+    }
+  }
+
+  async function timeoutForClient(clientName: string): Promise<number> {
+    const cfg = await Config.get()
+    const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
+    const entry = config[clientName]
+    return effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, cfg.experimental?.mcp_timeout)
   }
 
   function createRemoteTransport(mcp: RemoteMcpConfig, authProvider?: McpOAuthProvider) {
@@ -416,11 +432,11 @@ export namespace MCP {
   }
 
   // Helper function to fetch prompts for a specific client
-  async function fetchPromptsForClient(state: McpState, clientName: string, client: Client) {
+  async function fetchPromptsForClient(state: McpState, clientName: string, client: Client, timeout: number) {
     if (!client.getServerCapabilities()?.prompts) return {}
     let prompts: Awaited<ReturnType<Client["listPrompts"]>>
     try {
-      prompts = await client.listPrompts()
+      prompts = await client.listPrompts(undefined, mcpRequestOptions(timeout))
     } catch (error) {
       return failClientList(state, clientName, "prompts", error)
     }
@@ -437,11 +453,11 @@ export namespace MCP {
     return commands
   }
 
-  async function fetchResourcesForClient(state: McpState, clientName: string, client: Client) {
+  async function fetchResourcesForClient(state: McpState, clientName: string, client: Client, timeout: number) {
     if (!client.getServerCapabilities()?.resources) return {}
     let resources: Awaited<ReturnType<Client["listResources"]>>
     try {
-      resources = await client.listResources()
+      resources = await client.listResources(undefined, mcpRequestOptions(timeout))
     } catch (error) {
       return failClientList(state, clientName, "resources", error)
     }
@@ -489,6 +505,10 @@ export namespace MCP {
       }
     }
 
+    const cfg = await Config.get()
+    const globalTimeout = cfg.experimental?.mcp_timeout
+    const requestTimeout = effectiveTimeout(mcp, globalTimeout)
+
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
     let mcpTransport: ClosableTransport | undefined
@@ -523,14 +543,13 @@ export namespace MCP {
 
       const { name: transportName, transport } = createRemoteTransport(mcp, authProvider)
 
-      const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       let client: Client | undefined
       try {
         client = new Client({
           name: "opencorvus",
           version: Installation.VERSION,
         })
-        await withTimeout(client.connect(transport), connectTimeout)
+        await withTimeout(client.connect(transport, mcpRequestOptions(requestTimeout)), requestTimeout)
         registerNotificationHandlers(client, key)
         mcpClient = client
         mcpTransport = transport
@@ -612,14 +631,13 @@ export namespace MCP {
         log.info(`mcp stderr: ${text}`, { key })
       })
 
-      const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       let client: Client | undefined
       try {
         client = new Client({
           name: "opencorvus",
           version: Installation.VERSION,
         })
-        await withTimeout(client.connect(transport), connectTimeout)
+        await withTimeout(client.connect(transport, mcpRequestOptions(requestTimeout)), requestTimeout)
         registerNotificationHandlers(client, key)
         mcpClient = client
         mcpTransport = transport
@@ -667,7 +685,7 @@ export namespace MCP {
     let result: Awaited<ReturnType<Client["listTools"]>> | undefined
     let listToolsError = ""
     try {
-      result = await withTimeout(mcpClient.listTools(), mcp.timeout ?? DEFAULT_TIMEOUT)
+      result = await mcpClient.listTools(undefined, mcpRequestOptions(requestTimeout))
     } catch (err) {
       listToolsError = errorMessage(err)
       log.error("failed to get tools from client", { key, error: listToolsError })
@@ -802,7 +820,9 @@ export namespace MCP {
       connectedClients.map(async ([clientName, client]) => {
         let toolsResult: Awaited<ReturnType<Client["listTools"]>>
         try {
-          toolsResult = await client.listTools()
+          const entry = config[clientName]
+          const timeout = effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, defaultTimeout)
+          toolsResult = await client.listTools(undefined, mcpRequestOptions(timeout))
         } catch (error) {
           return failClientList(s, clientName, "tools", error)
         }
@@ -813,8 +833,7 @@ export namespace MCP {
     for (const { clientName, client, toolsResult } of toolsResults) {
       if (!toolsResult) continue
       const mcpConfig = config[clientName]
-      const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
-      const timeout = entry?.timeout ?? defaultTimeout
+      const timeout = effectiveTimeout(isMcpConfigured(mcpConfig) ? mcpConfig : undefined, defaultTimeout)
       for (const mcpTool of toolsResult.tools) {
         const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
         const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
@@ -827,7 +846,9 @@ export namespace MCP {
   export async function prompts() {
     const s = await state()
     const cfg = await Config.get()
-    await ensureConfiguredConnections(s, cfg.mcp ?? {})
+    const config = cfg.mcp ?? {}
+    const defaultTimeout = cfg.experimental?.mcp_timeout
+    await ensureConfiguredConnections(s, config)
     const clientsSnapshot = await clients()
 
     const prompts = Object.fromEntries(
@@ -838,7 +859,9 @@ export namespace MCP {
               return []
             }
 
-            return entries(await fetchPromptsForClient(s, clientName, client))
+            const entry = config[clientName]
+            const timeout = effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, defaultTimeout)
+            return entries(await fetchPromptsForClient(s, clientName, client, timeout))
           }),
         )
       ).flat(),
@@ -850,7 +873,9 @@ export namespace MCP {
   export async function resources() {
     const s = await state()
     const cfg = await Config.get()
-    await ensureConfiguredConnections(s, cfg.mcp ?? {})
+    const config = cfg.mcp ?? {}
+    const defaultTimeout = cfg.experimental?.mcp_timeout
+    await ensureConfiguredConnections(s, config)
     const clientsSnapshot = await clients()
 
     const result = Object.fromEntries(
@@ -861,7 +886,9 @@ export namespace MCP {
               return []
             }
 
-            return entries(await fetchResourcesForClient(s, clientName, client))
+            const entry = config[clientName]
+            const timeout = effectiveTimeout(isMcpConfigured(entry) ? entry : undefined, defaultTimeout)
+            return entries(await fetchResourcesForClient(s, clientName, client, timeout))
           }),
         )
       ).flat(),
@@ -873,6 +900,7 @@ export namespace MCP {
   export async function getPrompt(clientName: string, name: string, args?: Record<string, string>) {
     const clientsSnapshot = await clients()
     const client = clientsSnapshot[clientName]
+    const timeout = await timeoutForClient(clientName)
 
     if (!client) {
       log.warn("client not found for prompt", {
@@ -885,7 +913,7 @@ export namespace MCP {
       return await client.getPrompt({
         name: name,
         arguments: args,
-      })
+      }, mcpRequestOptions(timeout))
     } catch (error) {
       log.error("failed to get prompt from MCP server", {
         clientName,
@@ -899,6 +927,7 @@ export namespace MCP {
   export async function readResource(clientName: string, resourceUri: string) {
     const clientsSnapshot = await clients()
     const client = clientsSnapshot[clientName]
+    const timeout = await timeoutForClient(clientName)
 
     if (!client) {
       log.warn("client not found for prompt", {
@@ -910,7 +939,7 @@ export namespace MCP {
     try {
       return await client.readResource({
         uri: resourceUri,
-      })
+      }, mcpRequestOptions(timeout))
     } catch (error) {
       log.error("failed to read resource from MCP server", {
         clientName: clientName,
@@ -941,6 +970,7 @@ export namespace MCP {
     if (mcpConfig.oauth === false) {
       throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
     }
+    const authTimeout = effectiveTimeout(mcpConfig, cfg.experimental?.mcp_timeout)
 
     // Start the callback server
     await McpOAuthCallback.ensureRunning()
@@ -973,15 +1003,16 @@ export namespace MCP {
       },
     )
 
-    const { transport } = createRemoteTransport(mcpConfig, authProvider)
+    const { name: transportName, transport } = createRemoteTransport(mcpConfig, authProvider)
+    let client: Client | undefined
 
     // Try to connect - this will trigger the OAuth flow
     try {
-      const client = new Client({
+      client = new Client({
         name: "opencorvus",
         version: Installation.VERSION,
       })
-      await client.connect(transport)
+      await withTimeout(client.connect(transport, mcpRequestOptions(authTimeout)), authTimeout)
       // If we get here, we're already authenticated
       return { authorizationUrl: "" }
     } catch (error) {
@@ -991,6 +1022,15 @@ export namespace MCP {
         return { authorizationUrl: capturedUrl.toString() }
       }
       throw error
+    } finally {
+      if (!pendingOAuthTransports.has(authKey)) {
+        await client?.close().catch((closeError) => {
+          log.error("Failed to close OAuth probe MCP client", { mcpName, transport: transportName, error: closeError })
+        })
+        await transport.close().catch((closeError) => {
+          log.error("Failed to close OAuth probe MCP transport", { mcpName, transport: transportName, error: closeError })
+        })
+      }
     }
   }
 

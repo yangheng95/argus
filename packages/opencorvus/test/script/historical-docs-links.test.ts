@@ -20,6 +20,7 @@ const scratchTextExtensions = new Set([
   ".tmp",
   ".tsv",
   ".diff",
+  ".log",
   ".yaml",
   ".yml",
 ])
@@ -141,6 +142,7 @@ function scratchSpecSnapshotOffenders(): string[] {
   const scratchRoot = path.join(repoRoot, ".scratch")
   if (!fs.existsSync(scratchRoot)) return []
   const offenders: string[] = []
+  const scratchRootSpecFilePattern = /\/specs\/(?!README\.md$)[^/]+\.(?:md|txt)$/
 
   const walk = (dir: string) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -156,11 +158,15 @@ function scratchSpecSnapshotOffenders(): string[] {
       }
       if (/specs__new-arch__|packages__opencorvus__specs__/.test(entry.name)) offenders.push(rel)
       const extension = path.extname(entry.name).toLowerCase()
+      if ((extension === ".md" || extension === ".txt") && scratchRootSpecFilePattern.test(rel)) offenders.push(rel)
       if (!scratchTextExtensions.has(extension)) continue
       const date = entry.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
       if (extension === ".md" && date && date < "2026-06-01") offenders.push(rel)
       const text = fs.readFileSync(fullPath, "utf8")
       if (/specs\/new-arch|packages\/opencorvus\/specs/.test(text)) offenders.push(rel)
+      for (const match of text.matchAll(deletedPreJuneSpecNamePattern)) {
+        offenders.push(`${rel}: ${match[0]}`)
+      }
     }
   }
 
@@ -351,6 +357,21 @@ describe("historical docs repository links", () => {
           .map(({ label }) => `${rel}: ${label}: ${line}`),
       )
     })
+
+    expect(offenders).toEqual([])
+  })
+
+  test("June records do not publish retired root spec paths outside migration evidence", () => {
+    const allowedHistoricalMigrationRecord = "specs/records/2026-06/2026-06-29-spec-consolidation.md"
+    const rootSpecPathPattern =
+      /specs[/\\](?!README\.md\b|current[/\\]|records[/\\]|artifacts[/\\])[^/\\\s`"')]+\.(?:md|txt)\b/g
+    const offenders = juneTaskRecordFiles()
+      .map((file) => [file, path.relative(repoRoot, file).replace(/\\/g, "/")] as const)
+      .filter(([, rel]) => rel !== allowedHistoricalMigrationRecord)
+      .flatMap(([file, rel]) => {
+        const text = fs.readFileSync(file, "utf8")
+        return Array.from(text.matchAll(rootSpecPathPattern)).map((match) => `${rel}: ${match[0]}`)
+      })
 
     expect(offenders).toEqual([])
   })

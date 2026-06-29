@@ -14,12 +14,12 @@ Default: `127.0.0.1:7878`. Common flags:
 
 | flag                   | purpose                                                   |
 | ---------------------- | --------------------------------------------------------- |
-| `--hostname 0.0.0.0`   | Listen externally (requires `OPENCORVUS_SERVER_PASSWORD`) |
+| `--hostname 0.0.0.0`   | Listen externally; set `OPENCORVUS_SERVER_PASSWORD` to enable HTTP Basic Auth |
 | `--port 7878`          | Change port                                               |
 | `--project-dir <path>` | Target repo                                               |
 | `--mdns`               | Enable mDNS service discovery                             |
 
-> If you expose beyond localhost, **always** set `OPENCORVUS_SERVER_PASSWORD` first.
+> If you expose beyond localhost without `OPENCORVUS_SERVER_PASSWORD`, the server starts but prints `server is unsecured` and leaves HTTP Basic Auth disabled.
 
 ## 2. Open the UI (optional)
 

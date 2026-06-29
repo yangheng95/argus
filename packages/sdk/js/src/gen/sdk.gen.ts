@@ -6150,6 +6150,7 @@ export class BrowserPreview extends HeyApiClient {
         viewport_id: "desktop" | "tablet" | "mobile"
         state_id?: string
         region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
+        crop_intent: "full-region" | "content-well"
         source: {
           reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
           bbox: {

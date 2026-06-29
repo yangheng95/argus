@@ -16,7 +16,7 @@ export interface AddMcpInput {
 }
 
 type McpAddRequest =
-  | { name: string; config: { type: "remote"; url: string } }
+  | { name: string; config: { type: "remote"; transport: "streamable-http"; url: string } }
   | { name: string; config: { type: "local"; command: string[] } }
 
 type McpRequestOptions = ConfigRequestOptions
@@ -66,7 +66,7 @@ export function buildMcpAddRequest(input: AddMcpInput): McpAddRequest {
   if (input.type === "remote") {
     const url = (input.url ?? "").trim()
     if (!url) throw new Error("MCP remote URL is required")
-    return { name, config: { type: "remote", url } }
+    return { name, config: { type: "remote", transport: "streamable-http", url } }
   }
 
   const command = (input.command ?? "").trim()

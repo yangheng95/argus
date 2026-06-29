@@ -458,7 +458,7 @@ async function recordToolExecuteErrorsForFinalMessage(input: {
  * (`appendInformationMissingDiagnostic`); the prompt then instructs the
  * agent to emit this block (and ONLY this block) when invocation
  * context drops required information, and the host treats the block
- * as a non-retryable run failure. Spec — 2026-05-07
+ * as a non-retryable run failure. Information-missing debug toggle contract
  * INFORMATION MISSING debug toggle; `prompt/information-missing.ts`
  * owns the diagnostic text. The companion test
  * `test/agent/information-missing-diagnostic.test.ts` pins (a) the
@@ -678,7 +678,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   // exits the process when any agent emits <INFORMATION MISSING>. Toggle
   // is exposed via overlay GeneralPanel → PATCH /config →
   // opencorvus.jsonc. Default off — runs go through unchanged in
-  // production. Spec — 2026-05-07 INFORMATION MISSING debug toggle.
+  // production. Information-missing debug toggle contract.
   const debugCfg = (await EngineConfig.get()).debug
   const baseSystemPrompt = [composed.prompt, liveContext.trim().length > 0 ? liveContext : undefined]
     .filter((section): section is string => typeof section === "string" && section.trim().length > 0)
@@ -1016,7 +1016,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     // and fails the current run so the operator immediately sees the
     // upstream-context drop signal instead of a long log of guessed-default
     // work. When the toggle is off, this guard is a
-    // no-op — production runs are unaffected. Spec — 2026-05-07
+    // no-op — production runs are unaffected. Information-missing debug toggle contract
     // INFORMATION MISSING debug toggle; detection helpers pinned via
     // test/agent/information-missing-detection.test.ts.
     if (debugCfg.fail_on_information_missing && messageHasInformationMissing(finalMessage)) {
@@ -1252,7 +1252,7 @@ function namedErrorReason(err: Error): string {
 
 /**
  * Pure classification of a just-finished attempt's outcome — see
- * deleted pre-June record 2026-04-28-structured-output-systemic-fix §F.
+ * structured-output systemic fix record §F.
  *
  * Rules:
  *

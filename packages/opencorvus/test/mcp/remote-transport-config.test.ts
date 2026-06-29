@@ -36,6 +36,17 @@ describe("mcp remote transport config", () => {
     expect(configSource).not.toContain("Defaults to 5000 (5 seconds)")
   })
 
+  test("MCP client requests use explicit timeout options instead of SDK defaults", async () => {
+    const mcpSource = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+
+    expect(mcpSource).not.toMatch(/client\.connect\(transport\)/)
+    expect(mcpSource).not.toMatch(/client\.listTools\(\)/)
+    expect(mcpSource).not.toMatch(/client\.listPrompts\(\)/)
+    expect(mcpSource).not.toMatch(/client\.listResources\(\)/)
+    expect(mcpSource).toContain("client.connect(transport, mcpRequestOptions(requestTimeout))")
+    expect(mcpSource).toContain("client.connect(transport, mcpRequestOptions(authTimeout))")
+  })
+
   test("ACP bridge maps protocol remote servers to SSE", async () => {
     const source = await Bun.file(new URL("../../src/acp/agent.ts", import.meta.url)).text()
     expect(source).toMatch(/mcpCapabilities:\s*\{[\s\S]*?sse:\s*true,/)

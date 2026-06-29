@@ -698,8 +698,8 @@ Second independent review on 2026-06-06 found additional implementation blockers
 
 ## Superseded Spec
 
-This supersedes the backend ownership conclusion in retired root note
-`specs/coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md`.
+This supersedes the backend ownership conclusion in the retired root note named
+`coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md`.
 
 That earlier spec correctly identified that a generic browser PTY terminal was not a valid OpenTUI embed, but it incorrectly accepted OpenCorvus core ownership of `/tui/embed/*`. This spec replaces that with a plugin-owned service route.
 

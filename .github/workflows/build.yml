@@ -21,7 +21,7 @@ jobs:
       release: ${{ steps.meta.outputs.release }}
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -93,7 +93,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -106,7 +106,7 @@ jobs:
         run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
 
       - name: Cache Bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-cli-${{ matrix.platform }}-${{ hashFiles('**/bun.lock') }}
@@ -241,7 +241,7 @@ jobs:
             $EXTRA
 
       - name: Upload CLI dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opencorvus-dist-${{ matrix.platform }}
           path: packages/opencorvus/dist/
@@ -269,7 +269,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -359,7 +359,7 @@ jobs:
             $EXTRA
 
       - name: Upload overlay artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: overlay-${{ matrix.platform }}
           path: packages/overlay/dist-artifacts/${{ matrix.platform }}
@@ -381,12 +381,12 @@ jobs:
         shell: bash
     steps:
       - name: Download CLI dist artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: opencorvus-dist-*
           path: /tmp/release-assets
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: overlay-*
           path: /tmp/release-assets
@@ -416,20 +416,20 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Download CLI dist artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: opencorvus-dist-*
           path: /tmp/dist
           merge-multiple: true
 
       - name: Download overlay artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: overlay-*
           path: /tmp/overlay
