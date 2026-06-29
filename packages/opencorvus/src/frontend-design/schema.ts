@@ -366,7 +366,15 @@ export const VisualValidationEvidenceSchema = z
     renderer: z
       .enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"])
       .describe("Renderer/provenance used to produce screenshot_artifact from rendered_entrypoint."),
-    viewport: z.string().min(1).describe("Viewport/device state rendered, e.g. desktop-1440x900."),
+    viewport: z
+      .string()
+      .min(1)
+      .describe("Viewport/device state used for rendering, including explicit dimensions such as desktop-1440x900."),
+    capture_mode: z
+      .enum(["viewport", "full_page"])
+      .describe(
+        "Screenshot capture mode used for screenshot_artifact. Use viewport for a single viewport crop and full_page when the screenshot captures the complete document height.",
+      ),
     screenshot_sha256: z
       .string()
       .regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest")
@@ -513,7 +521,7 @@ export const FrontendTemplateFinalSchema = z
       .array(VisualValidationEvidenceSchema)
       .default([])
       .describe(
-        "Structured rendered-screenshot evidence for visual-html-skeleton acceptance. Required when frontend_project.role=visual_baseline_input. Each item must tie the rendered skeleton entrypoint to a task-scoped renderer, rendered screenshot artifact, source reference screenshot, hashes, viewport, review status, and optional diff artifact. Text-only screenshot paths do not satisfy visual baseline acceptance.",
+        "Structured rendered-screenshot evidence for visual-html-skeleton acceptance. Required when frontend_project.role=visual_baseline_input. Each item must tie the rendered skeleton entrypoint to a task-scoped renderer, rendered screenshot artifact, source reference screenshot, hashes, viewport dimensions, capture mode, review status, and optional diff artifact. Text-only screenshot paths do not satisfy visual baseline acceptance.",
       ),
     ui_data_contract: OptionalMarkdownField(
       "UI data contract required to reproduce the frontend: local mock/static data, observable endpoints when present, state transitions, and error/loading behavior.",
@@ -653,6 +661,7 @@ export const ToolVisualValidationEvidenceSchema = z
     }),
     renderer: z.enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"]),
     viewport: z.string().min(1),
+    capture_mode: z.enum(["viewport", "full_page"]),
     screenshot_sha256: z.string().regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest"),
     source_reference_sha256: z
       .string()

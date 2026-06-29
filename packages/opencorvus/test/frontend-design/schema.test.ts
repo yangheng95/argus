@@ -45,6 +45,7 @@ function visualValidationEvidence() {
     source_reference_artifact: "web-clone-source/reference.png",
     renderer: "node_playwright_static_file",
     viewport: "desktop-320x180",
+    capture_mode: "viewport",
     screenshot_sha256: "a".repeat(64),
     source_reference_sha256: "b".repeat(64),
     diff_artifact: "visual-html-skeleton/visual-diff.json",
@@ -96,6 +97,13 @@ test("visual validation evidence keeps source reference and rendered preview rol
   expect(VisualValidationEvidenceSchema.parse(visualValidationEvidence()).source_reference_artifact).toBe(
     "web-clone-source/reference.png",
   )
+  expect(VisualValidationEvidenceSchema.parse(visualValidationEvidence()).capture_mode).toBe("viewport")
+
+  expect(() => {
+    const withoutCaptureMode: Record<string, unknown> = { ...visualValidationEvidence() }
+    delete withoutCaptureMode.capture_mode
+    return VisualValidationEvidenceSchema.parse(withoutCaptureMode)
+  }).toThrow("capture_mode")
 
   expect(() =>
     VisualValidationEvidenceSchema.parse({

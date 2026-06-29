@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { asSchema } from "ai"
+import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -20,6 +21,67 @@ const phases = [
   "runtime_visual_verification",
   "source_quality_cleanup",
 ] as const
+
+function sha256(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex")
+}
+
+async function createVisualBaselineFixture() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-visual-baseline-evidence-"))
+  const visualRoot = path.join(root, "visual-html-skeleton")
+  const screenshotsRoot = path.join(visualRoot, "screenshots")
+  const sourceRoot = path.join(root, "web-clone-source")
+  await fs.mkdir(screenshotsRoot, { recursive: true })
+  await fs.mkdir(sourceRoot, { recursive: true })
+  const entrypoint = path.join(visualRoot, "index.html")
+  const referenceEntrypoint = path.join(root, "reference-source.html")
+  await fs.writeFile(
+    entrypoint,
+    `<!doctype html>
+      <html>
+        <head><title>Full page skeleton</title></head>
+        <body style="margin:0;background:#f8fafc">
+          <main style="width:320px;height:420px;background:linear-gradient(#0f172a,#14b8a6);color:white;font:16px Arial,sans-serif">
+            <h1 style="margin:0;padding:24px">World economy</h1>
+            <section style="margin:24px;height:300px;background:rgba(255,255,255,.18)">Long source-backed region</section>
+          </main>
+        </body>
+      </html>`,
+    "utf8",
+  )
+  await fs.writeFile(
+    referenceEntrypoint,
+    `<!doctype html>
+      <html>
+        <head><title>Source reference</title></head>
+        <body style="margin:0;background:#ffffff">
+          <main style="width:320px;height:180px;background:#e2e8f0;color:#111827;font:16px Arial,sans-serif">
+            <h1 style="margin:0;padding:24px">Source reference</h1>
+          </main>
+        </body>
+      </html>`,
+    "utf8",
+  )
+  const screenshot = await renderVisualHtmlSkeletonScreenshotForValidation({
+    entrypointFile: entrypoint,
+    viewport: { width: 320, height: 180 },
+    captureMode: "full_page",
+    timeoutMs: 10_000,
+  })
+  const reference = await renderVisualHtmlSkeletonScreenshotForValidation({
+    entrypointFile: referenceEntrypoint,
+    viewport: { width: 320, height: 180 },
+    captureMode: "viewport",
+    timeoutMs: 10_000,
+  })
+  await fs.writeFile(path.join(screenshotsRoot, "desktop-full-page.png"), screenshot)
+  await fs.writeFile(path.join(sourceRoot, "reference.png"), reference)
+  return {
+    root,
+    screenshotSha256: sha256(screenshot),
+    sourceReferenceSha256: sha256(reference),
+  }
+}
 
 async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputTools()) {
   const { tools } = kit
@@ -102,6 +164,114 @@ async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputT
   return kit
 }
 
+async function registerVisualBaselineResult(
+  kit: ReturnType<typeof createFrontendTemplateOutputTools>,
+  evidence: {
+    captureMode: "viewport" | "full_page"
+    screenshotSha256: string
+    sourceReferenceSha256: string
+  },
+) {
+  const { tools } = kit
+  await callTool(tools, "update_frontend_basics", {
+    design_system: "source-backed static visual baseline",
+    tech_stack: ["static HTML", "CSS", "Node Playwright visual evidence"],
+    final_acceptance_mode: "visual_baseline_allowed",
+  })
+  await callTool(tools, "update_frontend_item", {
+    target: "frontend_template_sections",
+    item: {
+      title: "Desktop static skeleton",
+      detail: "Render visual-html-skeleton/index.html as the source-editable first workflow surface.",
+      source_refs: ["web-clone-source/reference.png"],
+    },
+  })
+  await callTool(tools, "update_frontend_item", {
+    target: "fillable_module_items",
+    item: {
+      title: "Long visual section",
+      detail: "The restored HTML skeleton owns a long page section that extends beyond the initial viewport.",
+      source_refs: ["web-clone-source/reference.png"],
+    },
+  })
+  await callTool(tools, "update_frontend_component_reuse", {
+    family_id: "static-shell",
+    name: "Static shell",
+    observed_surface: "Source-editable visual HTML skeleton shell.",
+    source_refs: ["visual-html-skeleton/index.html", "web-clone-source/reference.png"],
+    implementation_strategy: "extracted_baseline_defer",
+    reuse_source: "visual-html-skeleton/index.html",
+    mature_library_candidates: [],
+    props_states: "Static desktop visual state.",
+    replacement_boundary: "The later workflow transcribes the static shell into maintainable source.",
+    parity_guard: "Use the registered rendered screenshot evidence before downstream transcription.",
+    project_specific_reason: "",
+  })
+  await callTool(tools, "update_frontend_item", {
+    target: "quality_project_items",
+    item: {
+      title: "Skeleton transcription contract",
+      detail: "Downstream work transcribes the accepted HTML/CSS skeleton into maintainable project modules.",
+      source_refs: ["visual-html-skeleton/index.html"],
+    },
+  })
+  await callTool(tools, "update_frontend_material", {
+    title: "Visual source materials",
+    detail: "Reference pixels and rendered skeleton screenshots bind the static visual baseline.",
+    source_refs: ["web-clone-source/reference.png"],
+  })
+  await callTool(tools, "update_frontend_project", {
+    status: "created",
+    role: "visual_baseline_input",
+    project_root: "visual-html-skeleton",
+    source_package: "web-clone-source",
+    entrypoints: ["visual-html-skeleton/index.html"],
+    generation_tool: "node-playwright-static-file",
+    notes: ["Source-editable static HTML/CSS skeleton with structured screenshot evidence."],
+  })
+  await callTool(tools, "update_frontend_item", {
+    target: "visual_consistency_items",
+    item: {
+      title: "Rendered screenshot evidence",
+      detail: "The skeleton screenshot is materialized under visual-html-skeleton and compared with web-clone-source/reference.png.",
+      source_refs: ["web-clone-source/reference.png"],
+    },
+  })
+  await callTool(tools, "update_frontend_visual_evidence", {
+    id: "desktop-full-page",
+    render_target: "visual-html-skeleton",
+    rendered_entrypoint: "visual-html-skeleton/index.html",
+    screenshot_artifact: "visual-html-skeleton/screenshots/desktop-full-page.png",
+    source_reference_artifact: "web-clone-source/reference.png",
+    renderer: "node_playwright_static_file",
+    viewport: "desktop-320x180",
+    capture_mode: evidence.captureMode,
+    screenshot_sha256: evidence.screenshotSha256,
+    source_reference_sha256: evidence.sourceReferenceSha256,
+    diff_artifact: "",
+    review_status: "reviewed_no_blocking_debt",
+    review_summary: "Rendered static skeleton screenshot was reviewed against the source reference.",
+  })
+  await callTool(tools, "update_frontend_item", {
+    target: "ui_data_contract_items",
+    item: {
+      title: "Static visual data",
+      detail: "The current workflow uses static source-backed visible text only.",
+      source_refs: ["visual-html-skeleton/index.html"],
+    },
+  })
+  await callTool(tools, "update_frontend_iteration_note", {
+    value: "Reviewed source-editable skeleton evidence and screenshot provenance before finalization.",
+  })
+  await callTool(tools, "update_frontend_iteration_note", {
+    value: "Reviewed downstream transcription contract against the registered visual evidence.",
+  })
+  await callTool(tools, "update_frontend_text", {
+    section: "completeness_review",
+    content: "The visual baseline evidence is complete for downstream transcription of the source-editable skeleton.",
+  })
+}
+
 test("submit_frontend_template exposes a small finalizer schema", () => {
   const schema = asSchema(createFrontendTemplateOutputTools().tools.submit_frontend_template.inputSchema)
     .jsonSchema as any
@@ -148,6 +318,7 @@ test(
       renderVisualHtmlSkeletonScreenshotForValidation({
         entrypointFile: entrypoint,
         viewport: { width: 320, height: 200 },
+        captureMode: "viewport",
         timeoutMs: 10_000,
       }),
     ).rejects.toThrow("late static pageerror")
@@ -185,6 +356,7 @@ test("update_frontend_visual_evidence rejects source references outside web-clon
       source_reference_artifact: "webpage-evidence/reference.png",
       renderer: "node_playwright_static_file",
       viewport: "desktop-320x180",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "visual-html-skeleton/visual-diff.json",
@@ -313,6 +485,7 @@ test("update_frontend reference and source refs reject rendered local preview ca
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "task_scoped_backend_browser",
       viewport: "1440x900",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "",
@@ -330,6 +503,7 @@ test("update_frontend reference and source refs reject rendered local preview ca
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "task_scoped_backend_browser",
       viewport: "1440x900",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "diffs/desktop.json",
@@ -347,6 +521,7 @@ test("update_frontend reference and source refs reject rendered local preview ca
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "task_scoped_backend_browser",
       viewport: "1440x900",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "/tmp/opencorvus-capture/1782540923070-jbqnrq/manifest.json",
@@ -364,6 +539,7 @@ test("update_frontend reference and source refs reject rendered local preview ca
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "task_scoped_backend_browser",
       viewport: "1440x900",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "/tmp/opencorvus-capture/1782540923070-jbqnrq/manifest.json",
@@ -381,6 +557,7 @@ test("update_frontend reference and source refs reject rendered local preview ca
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "task_scoped_backend_browser",
       viewport: "1440x900",
+      capture_mode: "viewport",
       screenshot_sha256: "a".repeat(64),
       source_reference_sha256: "b".repeat(64),
       diff_artifact: "visual-html-skeleton/visual-diffs/desktop.json",
@@ -400,3 +577,53 @@ test("update_frontend tools assemble and finalize the canonical frontend templat
   expect(kit.getCollector().final?.component_reuse_plan[0]?.family_id).toBe("market-card-grid")
   expect(kit.getCollector().final?.implementation_phase_outcomes).toHaveLength(5)
 })
+
+test(
+  "visual baseline submit validates full-page screenshot evidence with explicit capture mode",
+  async () => {
+    const fixture = await createVisualBaselineFixture()
+    const kit = createFrontendTemplateOutputTools({
+      artifactRoot: fixture.root,
+      workspaceRoot: fixture.root,
+    })
+    await registerVisualBaselineResult(kit, {
+      captureMode: "full_page",
+      screenshotSha256: fixture.screenshotSha256,
+      sourceReferenceSha256: fixture.sourceReferenceSha256,
+    })
+
+    const status = await callTool(kit.tools, "inspect_frontend_result_status", {})
+    const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+    expect(status).toContain("FRONTEND_TEMPLATE_RESULT_STATUS: ready_for_submit_validation")
+    expect(result).toContain("OK")
+    expect(kit.getCollector().final?.visual_validation_evidence[0]?.capture_mode).toBe("full_page")
+  },
+  30_000,
+)
+
+test(
+  "visual baseline status blocks full-page evidence declared as viewport capture",
+  async () => {
+    const fixture = await createVisualBaselineFixture()
+    const kit = createFrontendTemplateOutputTools({
+      artifactRoot: fixture.root,
+      workspaceRoot: fixture.root,
+    })
+    await registerVisualBaselineResult(kit, {
+      captureMode: "viewport",
+      screenshotSha256: fixture.screenshotSha256,
+      sourceReferenceSha256: fixture.sourceReferenceSha256,
+    })
+
+    const status = await callTool(kit.tools, "inspect_frontend_result_status", {})
+    const result = await callTool(kit.tools, "submit_frontend_template", { final: true })
+
+    expect(status).toContain("FRONTEND_TEMPLATE_RESULT_STATUS: blocked_by_visual_evidence")
+    expect(status).toContain("rendered_entrypoint_hash_mismatch")
+    expect(result).toContain("frontend template failed final validation")
+    expect(result).toContain("rendered_entrypoint_hash_mismatch")
+    expect(kit.getCollector().final).toBeUndefined()
+  },
+  30_000,
+)
