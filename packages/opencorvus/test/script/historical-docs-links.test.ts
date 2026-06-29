@@ -114,11 +114,11 @@ const retiredSpecPathPatterns: { label: string; pattern: RegExp }[] = [
   },
   {
     label: "deleted pre-June root spec",
-    pattern: /specs[/\\][A-Za-z0-9_@%+.-]*2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.md/,
+    pattern: /specs[/\\][A-Za-z0-9_@%+.-]*2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.(?:md|txt)/,
   },
   {
     label: "deleted pre-June superpowers spec",
-    pattern: /docs[/\\]superpowers[/\\]specs[/\\]2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.md/,
+    pattern: /docs[/\\]superpowers[/\\]specs[/\\]2026-0[1-5]-[0-9]{2}[A-Za-z0-9_@%+.-]*\.(?:md|txt)/,
   },
   { label: "deleted overlay flat redesign plan", pattern: /specs[/\\]overlay-flat-redesign(?:[/\\]|$)/ },
   { label: "deleted implementation progress note", pattern: new RegExp("specs[/\\\\]\\u5b9e\\u65bd\\u8fdb\\u5ea6") },
@@ -476,13 +476,16 @@ describe("historical docs repository links", () => {
 
   test("no pre-June dated spec markdown or text file remains in the spec tree", () => {
     expect(preJuneDatedSpecFiles()).toEqual([])
+    const staleTextSpec = ["specs", "artifacts", "2026-05-31-stale-input.txt"].join("/")
+    const currentTextSpec = ["specs", "artifacts", "2026-06-01-current-input.txt"].join("/")
+    const nonSpecJson = ["specs", "current", "architecture", "2026-05-31-non-spec.json"].join("/")
     expect(
       preJuneDatedSpecFiles([
-        "specs/artifacts/2026-05-31-stale-input.txt",
-        "specs/artifacts/2026-06-01-current-input.txt",
-        "specs/current/architecture/2026-05-31-non-spec.json",
+        staleTextSpec,
+        currentTextSpec,
+        nonSpecJson,
       ]),
-    ).toEqual(["specs/artifacts/2026-05-31-stale-input.txt"])
+    ).toEqual([staleTextSpec])
   })
 
   test("scratch text detection scans unknown UTF-8 snapshot extensions", () => {

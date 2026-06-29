@@ -10,6 +10,7 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 | June 2026 task records | `specs/records/2026-06/` |
 | 2026-06-29 database I/O incident | `specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md` |
 | 2026-06-29 model image auto resize | `specs/records/2026-06/2026-06-29-model-image-input-auto-resize.md` |
+| 2026-06-29 operator steer single source | `specs/records/2026-06/2026-06-29-operator-steer-single-source.md` |
 | 2026-06-29 project delete unhandled rejection | `specs/records/2026-06/2026-06-29-project-delete-unhandled-rejection.md` |
 | Prompt and product-reference artifacts | `specs/artifacts/` |
 | Public product docs | `packages/web/src/content/docs/**` |

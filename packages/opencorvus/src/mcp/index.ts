@@ -241,6 +241,10 @@ export namespace MCP {
     return { signal: AbortSignal.timeout(timeout) }
   }
 
+  function unsupportedRemoteTransport(transport: never): never {
+    throw new Error(`Unsupported remote MCP transport: ${String(transport)}`)
+  }
+
   async function timeoutForClient(clientName: string): Promise<number> {
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
@@ -260,16 +264,19 @@ export namespace MCP {
       authProvider,
       requestInit: mergedRequestInit,
     }
-    if (mcp.transport === "sse") {
-      return {
-        name: "SSE",
-        transport: new SSEClientTransport(new URL(mcp.url), options),
-      }
+    switch (mcp.transport) {
+      case "sse":
+        return {
+          name: "SSE",
+          transport: new SSEClientTransport(new URL(mcp.url), options),
+        }
+      case "streamable-http":
+        return {
+          name: "StreamableHTTP",
+          transport: new StreamableHTTPClientTransport(new URL(mcp.url), options),
+        }
     }
-    return {
-      name: "StreamableHTTP",
-      transport: new StreamableHTTPClientTransport(new URL(mcp.url), options),
-    }
+    return unsupportedRemoteTransport(mcp.transport)
   }
 
   type McpState = {
