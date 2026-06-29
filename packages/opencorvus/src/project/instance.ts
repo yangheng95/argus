@@ -63,7 +63,7 @@ async function bootstrapContext(ctx: Context, init?: InstanceInit) {
   const { ensureGitignore } = await import("@/engine/git")
   await ensureGitignore()
   // Sweep orphan attachments on first bootstrap per project
-  // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
+  // (attachment-store single-source contract).
   // `AttachmentStore.write` is content-addressed and write-only — without
   // this hook, removed parts / archived sessions leave bytes on disk forever.
   // Errors degrade to a log line — sweep failure must not turn into a

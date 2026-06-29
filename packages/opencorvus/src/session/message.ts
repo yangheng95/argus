@@ -85,7 +85,7 @@ export namespace Message {
    * full breakdown so the operator can identify whether to drop tools, raise
    * the budget, or change the agent design (rule 26: surface the actual
    * cause, do not loop a useless action).
-   * See deleted pre-June record 2026-04-28-structured-output-systemic-fix Â§C.
+   * See structured-output systemic fix record Â§C.
    */
   export const PromptBudgetOverflowError = NamedError.create(
     "PromptBudgetOverflowError",
@@ -734,7 +734,7 @@ export namespace Message {
     //
     // Two URL shapes are accepted:
     //  1. `/attachment/<projectID>/<sha>.<ext>` ref â€” the canonical form
-    //     post-2026-05-11 (deleted pre-June record acceptance-attachment-store-single-source-2026-05-11).
+    //     post-2026-05-11 (attachment-store single-source contract).
     //     Bytes are read from `AttachmentStore` on demand and base64-encoded
     //     here, so `part.data` stores small refs instead of MB of inline
     //     base64. This is the OOM fix; the disk read is amortized across all
@@ -1099,7 +1099,7 @@ export namespace Message {
         // 4xx. Before restart recovery became passive, `monitorRuns` kept
         // replaying the same broken history, burning a deterministic retry storm
         // (orchestrator-stream-error artifact loop, 2026-05-08, see
-        // deleted pre-June record 2026-05-08-stream-early-death-and-retry-fuse).
+        // stream early-death retry-fuse contract).
         // step-start is dropped by the global filter below; reasoning alone
         // is not visible content for chat-completion providers, so neither
         // counts toward "message has something the provider can read".

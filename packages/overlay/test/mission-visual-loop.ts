@@ -736,7 +736,7 @@ async function captureStates(page: OverlayPage, runtimeFailures: string[]): Prom
 
   await step("05-launcher-filled", async () => {
     // The decompose-then-review proposal flow was replaced by the Mission
-    // launcher (gateway-mission-split-2026-05-28.md §3): a single textarea
+    // launcher: a single textarea
     // that POSTs /mission/wake. Capture the filled launcher rather than a
     // proposal preview, which no longer exists.
     const wakeBefore = fixtureSignals.missionWakeHits

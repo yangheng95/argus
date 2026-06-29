@@ -49,7 +49,6 @@ describe("build agent prompt context", () => {
   })
 
   /**
-   * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.2.
    * retryGuidance is the orchestrator LLM's first-class instruction for
    * THIS attempt — it must render before historical retryFeedback (the
    * orchestrator's just-now decision honours over historical context),

@@ -193,7 +193,7 @@ export type GoalRunRow = {
    *  at dispatch). A live goal_run whose owner ≠ the current process owner is
    *  physically orphaned — the owning process restarted and the mid-stream turn
    *  cannot resume. Null for never-dispatched/queued rows. Spec:
-   *  deleted pre-June record 2026-05-29-goal-run-owner-orphan-liveness */
+   *  goal-run owner orphan liveness contract */
   owner: string | null
   time_started: number | null
   time_completed: number | null
@@ -862,7 +862,7 @@ export function findLatestAcceptanceVerdictArtifact(taskID: string) {
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "acceptance-review-verdict")))
       // id is a monotonic ascending id — the secondary key breaks same-ms ties
       // deterministically now that raw/host/final artifacts are written in the
-      // same Date.now() batch (deleted pre-June record acceptance-fresh-eyes-decoupling-2026-05-18 §2.4).
+      // same Date.now() batch (acceptance fresh-eyes decoupling contract §2.4).
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )

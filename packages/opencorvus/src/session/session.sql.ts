@@ -31,7 +31,7 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  concrete artifact is produced by a dispatched task led by the
  *                  orchestrator. Distinct from the `gateway` infrastructure
  *                  surface (remote/mobile transport), which does not create
- *                  sessions of this kind. See specs/gateway-mission-split-2026-05-28.md.
+ *                  sessions of this kind. See mission split contract.
  *   requirements   requirements sub-agent (goal decomposition)
  *   frontend-design sub-agent (vision -> template/modules/components/materials)
  *   goal           legacy catch-all for sub-agents that predate the dedicated

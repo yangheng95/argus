@@ -20,7 +20,7 @@ fallback is not a valid repair.
 
 - `2026-06-02-bedrock-claude-assistant-tail-normalization.md` fixed only the
   `assistant tool-call -> tool result -> assistant text` local narration tail.
-- `2026-05-21-build-retry-session-reuse-runtime-contract.md` introduced
+- The pre-June build retry session reuse runtime contract introduced
   `SessionRuntimeContract` and the `orchestrator-wake` runtime contract.
 - `2026-06-25-scheduler-orchestrator-auto-compaction.md` keeps
   `orchestrator-wake` as the live scheduler continuation source.

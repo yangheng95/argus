@@ -4,7 +4,7 @@ import type { Provider } from "../../src/provider/provider"
 
 /**
  * Stream early-death structural-validity check at the toModelMessages
- * boundary. See deleted pre-June record 2026-05-08-stream-early-death-and-retry-fuse.
+ * boundary. See stream early-death retry-fuse contract.
  *
  * When an LLM stream early-dies (provider truncates response after opening
  * a reasoning block, socket dies, model returns nothing), the persisted

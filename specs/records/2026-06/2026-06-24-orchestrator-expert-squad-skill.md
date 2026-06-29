@@ -35,7 +35,7 @@ Orchestrator decision changes it.
 | `2026-06-22-testing-expert-squad-profile.md`                | The old `testing` profile lives in `PromptProfile.builtIns`; changing its product meaning belongs in that registry and related tests.                                                          |
 | `2026-06-23-agent-skill-mount-matrix.md`                    | Skill visibility must go through mounted `SKILL.md` frontmatter and the canonical `skill` tool. Full skill bodies are loaded through visible tool results, not hidden prompt injection.        |
 | `2026-06-08-frontend-agents-skill-tool.md`                  | Exact runtime contracts must expose `skill` in the actual runtime tool set, not only in the agent registry.                                                                                    |
-| `2026-05-21-orchestrator-skill-loop-provider-error-fuse.md` | The previous Orchestrator skill ban prevented generic skill-loop drift. This task intentionally supersedes that ban with explicit expert-squad skills and a tested Orchestrator skill surface. |
+| Pre-June orchestrator skill-loop provider error fuse record | The previous Orchestrator skill ban prevented generic skill-loop drift. This task intentionally supersedes that ban with explicit expert-squad skills and a tested Orchestrator skill surface. |
 
 ## Impact Inventory
 

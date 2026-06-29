@@ -152,8 +152,7 @@ describe("buildHardErrorFromFinalMessage", () => {
   })
 
   test("TerminalToolMissingError stamped → nonRetryable=true (deterministic; retrying same prompt repeats failure)", () => {
-    // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
-    // build path currently uses single-shot runAgentSession so the
+    // Missing-terminal contract: build path currently uses single-shot runAgentSession so the
     // nonRetryable flag is defensive (no with-retry classifier reads it
     // today). Pinned here so a future migration to runAgentSessionWithRetry
     // does not silently turn a deterministic missing-terminal failure into
@@ -175,8 +174,7 @@ describe("buildHardErrorFromFinalMessage", () => {
   })
 
   test("TerminalToolMissingError → AgentRunError.cause is the original error object", () => {
-    // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
-    // build/agent.ts catch block recognises this failure mode by reading
+    // Missing-terminal contract: build/agent.ts catch block recognises this failure mode by reading
     // err.cause and instanceOf-checking against Message.TerminalToolMissingError.
     // Without cause propagation, build/agent.ts would have to keyword-match
     // the message string (rule 20 — forbidden). Keep the original object

@@ -6,7 +6,7 @@
  * The settingsStore is updated via init.ts on next config load.
  *
  * Rebuilt on 2026-05-26 onto the `.s-*` settings primitives — see
- * specs/overlay-settings-primitives-2026-05-26.md.
+ * settings primitive contract.
  */
 import { For } from "solid-js"
 import { appStore } from "../../store/app"

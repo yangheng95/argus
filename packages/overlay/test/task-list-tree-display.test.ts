@@ -5,7 +5,7 @@
 // renders the chevron + count badge, uses canDrag for the drag guard,
 // and ships the matching CSS + i18n keys.
 //
-// Spec: docs/superpowers/specs/2026-05-27-task-tree-display.md.
+// Task tree display contract.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"

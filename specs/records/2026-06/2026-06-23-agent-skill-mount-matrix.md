@@ -17,8 +17,8 @@ stays intact, but those skills are unusable until mounted.
 | Source                                                      | Constraint carried forward                                                                                                              |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                                                 | No fallback, no hidden gates, no double source, no hidden skill prompt injection, inspect existing plans before edits.                  |
-| `2026-05-21-remove-stage-skill-injection.md`                | Skills must be visible workflows loaded through the `skill` tool. Stage-based hidden injection must not return.                         |
-| `2026-05-21-orchestrator-skill-loop-provider-error-fuse.md` | Orchestrator must not inherit generic skill policy; specialist agents own task-specific skill loading.                                  |
+| Pre-June remove-stage skill injection record                | Skills must be visible workflows loaded through the `skill` tool. Stage-based hidden injection must not return.                         |
+| Pre-June orchestrator skill-loop provider error fuse record | Orchestrator must not inherit generic skill policy; specialist agents own task-specific skill loading.                                  |
 | `2026-06-08-frontend-agents-skill-tool.md`                  | Prompt visibility and runtime tool transport must agree; frontend agents get `skill` through exact runtime toolkits where needed.       |
 | `2026-06-10-skill-expiry-duplicates.md`                     | Discovery is the single source for expiry and duplicate metadata; overlay consumes server evidence.                                     |
 | `2026-06-10-external-skill-directory-parity.md`             | `.claude`, `.agents`, `.codex`, and `.opencorvus` skill roots are one discovery pool.                                                   |

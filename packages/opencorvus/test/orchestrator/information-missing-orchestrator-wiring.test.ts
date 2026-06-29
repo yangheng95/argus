@@ -15,7 +15,7 @@ import path from "node:path"
  * benchmark run before the operator notices the orchestrator never
  * had the section in its trace.
  *
- * Spec — 2026-05-07 INFORMATION MISSING debug toggle, orchestrator-side
+ * Information-missing debug toggle contract, orchestrator-side
  * wiring fix discovered during the post-cleanup default-case benchmark.
  */
 const orchestratorAgentPath = path.resolve(import.meta.dir, "../../src/orchestrator/agent.ts")

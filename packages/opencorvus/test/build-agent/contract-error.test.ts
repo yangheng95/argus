@@ -15,7 +15,7 @@ import { Database } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 /**
- * Regression for specs/scheduler-fix-plan-2026-04-30.md P2 (commit
+ * Regression for scheduler fix regression contract P2 (commit
  * e87333dbb) + audit §11.1 / L1. Pre-fix, a OpenCorvus build session that
  * ended without calling report_build_result emitted a generic
  * `Error("build agent: terminal build report did not match
@@ -61,8 +61,7 @@ describe("BuildAgentContractError", () => {
 
   test("missing_terminal_report carries lastMergeBackOutcome diagnostic when supplied", () => {
     // The host no longer throws a separate merge_back_blocked variant
-    // (spec architecture-rework-loosening-plan-2026-05-06.md B8): the
-    // orchestrator LLM reads the merge facts in the build tool result and
+    // (current build contract): the orchestrator LLM reads the merge facts in the build tool result and
     // decides next. But missing_terminal_report still surfaces the most
     // recent merge_back tool outcome in its diagnostics so the orchestrator
     // can include it in the next attempt's prompt.
@@ -92,7 +91,7 @@ describe("BuildAgentContractError", () => {
       error: err.message,
       // Host-synthesised BuildResult: LLM never reached terminal tool,
       // so fact_check_items defaults to empty array
-      // (specs/fact-check-agent-2026-05-25.md §6.1.3 — host construction site).
+      // (fact-check agent contract §6.1.3 — host construction site).
       fact_check_items: [],
     }
     const parsed = BuildResultSchema.safeParse(synthFailed)
@@ -134,8 +133,8 @@ describe("BuildAgentContractError", () => {
 })
 
 /**
- * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1 +
- * codex review BLOCKING B1: `BuildAgentContractError` must have ONE
+ * Missing-terminal contract plus codex review BLOCKING B1:
+ * `BuildAgentContractError` must have ONE
  * throw site (rule 8 single source). The original throw at
  * build/agent.ts:704-714 was unreachable dead code (runAgentSession
  * threw AgentRunError before parsed was computed). The new throw site

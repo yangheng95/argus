@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { renderVisualContractPreamble } from "../../src/build/agent"
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix D.
+ * Overlay image ingestion fidelity contract.
  *
  * The build agent's user prompt prepends an UNCONDITIONAL visual-contract
  * preamble whenever this dispatch carries multimodal references. The static
@@ -96,8 +96,8 @@ describe("renderVisualContractPreamble", () => {
   })
 
   /**
-   * Spec: acceptance-attachment-store-single-source-2026-05-11.md (companion
-   * to the `InlineBase64InPartError` session.updatePart guard). The host
+   * Attachment-store single-source companion to the
+   * `InlineBase64InPartError` session.updatePart guard. The host
    * gate is rule-6.1 second branch (data integrity) and is permanent; the
    * preamble carries rule-6.1 first branch (prompt-side correction) so the
    * build LLM never reaches for `data:image/...;base64,...` when emitting

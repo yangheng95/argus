@@ -9,7 +9,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix #2 (codex review).
+ * Overlay image ingestion fidelity contract.
  *
  * Pre-fix `ChannelIngress.message` ignored `input.attachments` and called
  * `ControlMessage.handle` without forwarding them. Slack/feishu/etc. file

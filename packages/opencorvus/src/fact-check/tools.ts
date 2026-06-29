@@ -1,7 +1,7 @@
 /**
  * Fact-check terminal tool + collector.
  *
- * Per specs/fact-check-agent-2026-05-25.md §3.2:
+ * Per fact-check agent contract §3.2:
  *   - Single terminal tool `report_fact_check_result` accepts the full
  *     FactCheckReport in one structured payload.
  *   - Schema has NO `fact_check_items` field — anti-recursion guarantee

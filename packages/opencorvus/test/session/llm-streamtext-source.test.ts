@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 /**
- * Regression for audit §12 (specs/scheduler-collab-audit-2026-04-30.md):
+ * Regression for audit §12 (scheduler collaboration audit):
  * the canonical streaming entry point for the orchestrator + every sub-agent
  * is `LLM.stream` in `session/llm.ts`. It MUST go through `@/llm/api`'s
  * wrapped `streamText` so the returned `fullStream` is the Proxy that

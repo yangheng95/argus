@@ -10,7 +10,7 @@ export interface GitResult {
 /**
  * Timeout profile bands. Use `timeoutProfile` to express intent rather than
  * hard-coding ms; the band rationalises Phase-1 of the systemic timeout
- * sweep (specs/git-timeout-systemic-fix-2026-05-06.md):
+ * sweep (git timeout systemic fix contract):
  *  - `fast`    — local read-only metadata: rev-parse, show-ref, log -1, status --short
  *  - `default` — local heavy: status, diff, add, commit, worktree prune
  *  - `network` — fetch / clone / push / submodule update

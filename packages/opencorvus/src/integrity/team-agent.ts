@@ -1216,7 +1216,7 @@ function createNoGoalsResult(): IntegrityResult {
     // Host-synthesised team report (no-goals path): the supervisor LLM
     // never ran, so it has no chance to register fact_check_items.
     // Empty array at the single construction site (rule 8 single source,
-    // specs/fact-check-agent-2026-05-25.md §6.1.3).
+    // fact-check agent contract §6.1.3).
     fact_check_items: [],
   })
 }

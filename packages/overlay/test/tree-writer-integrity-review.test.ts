@@ -228,7 +228,7 @@ test("integrity review progress reconstructs running card when started is outsid
 
 test("multiple reviewers with independent reviewIDs do not cross-contaminate a single part", () => {
   // Regression: before the fix in
-  // deleted pre-June record 2026-05-26-integrity-reviewer-stream-reviewid
+  // integrity reviewer stream review-id contract
   // all N integrity reviewers shared the supervisor's reviewID, so
   // their reasoning streams collapsed onto one overlay partID and the
   // SolidJS Store rendered ~195KB of interleaved text per task.

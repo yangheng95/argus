@@ -7,7 +7,7 @@ const OWNER = `${process.pid}:${Date.now().toString(36)}:${Math.random().toStrin
  * (restarted) process and is physically orphaned. `OWNER` embeds pid + boot
  * timestamp + random, so it changes on every restart (PID reuse safe).
  * Load-bearing invariant: one opencorvus process per project (single owner).
- * Spec: deleted pre-June record 2026-05-29-goal-run-owner-orphan-liveness
+ * Spec: goal-run owner orphan liveness contract
  */
 export function processOwner() {
   return OWNER

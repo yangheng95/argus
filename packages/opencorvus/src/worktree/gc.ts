@@ -15,7 +15,7 @@ import { Worktree } from "./index"
  * Implements the previously-unimplemented Phase F of
  * `specs/current/architecture/10-worktree-lifecycle.md` §9 — Claude-Code-aligned
  * orphaned-worktree sweep (§2.1 / §6 of that doc, and the addendum
- * `deleted pre-June record 2026-05-15-orphan-worktree-gc`).
+ * `orphan worktree garbage collection contract`).
  *
  * A managed path under `<primary>/.opencorvus/r/w/` is removed ONLY when
  * it is genuinely abandoned junk. "Older than N days" is necessary but NOT

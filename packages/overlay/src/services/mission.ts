@@ -51,7 +51,7 @@ export interface MissionStats {
 }
 
 // Mission wake — single endpoint that starts or resumes the Mission agent
-// session for one mission. See specs/gateway-mission-split-2026-05-28.md.
+// session for one mission. See mission split contract.
 export interface MissionWakeInput {
   /** Existing missionID to resume. Omit to start a new mission. */
   missionID?: string

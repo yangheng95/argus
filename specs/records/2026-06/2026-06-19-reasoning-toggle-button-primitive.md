@@ -19,7 +19,7 @@ contains reasoning.
 
 | Source                                                  | Relevant constraint                                                                                                                      |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `2026-05-15-overlay-streaming-text-main-thread-plan.md` | `ReasoningPart` is part of the streaming transcript path; streaming text must remain synchronous and not reparse markdown while running. |
+| Pre-June overlay streaming text main-thread plan | `ReasoningPart` is part of the streaming transcript path; streaming text must remain synchronous and not reparse markdown while running. |
 | `2026-06-18-chat-composer-button-primitive-owner.md`    | Operation buttons route through shared `Button` semantics; local classes should not own button chrome.                                   |
 | `2026-06-18-connection-banner-button-primitive.md`      | Shared `.oc-button` owns keyboard focus, hover policy, and density for action controls.                                                  |
 | `packages/overlay/src/components/ui/Button.tsx`         | `Button` emits the canonical `.oc-button` and `data-variant`, `data-size`, `data-tone` attributes.                                       |

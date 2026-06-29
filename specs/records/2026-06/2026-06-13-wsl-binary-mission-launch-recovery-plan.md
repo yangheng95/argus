@@ -2,7 +2,7 @@
 
 ## Problem
 
-The first failure was a project directory scope failure: the panel/backend tried to operate under `/.opencorvus`, which matches the historical `process.cwd()`/root directory cascade fixed by `1ab27386f4` and documented in `2026-04-30-instance-bootstrap-darwin-cascade.md`.
+The first failure was a project directory scope failure: the panel/backend tried to operate under `/.opencorvus`, which matches the historical `process.cwd()`/root directory cascade fixed by `1ab27386f4` and documented in the retired instance-bootstrap cascade record.
 
 During live repair, unrelated filesystem/config patches were added before proving the running binary, project path, and historical fixes. Those patches produced a second visible failure:
 

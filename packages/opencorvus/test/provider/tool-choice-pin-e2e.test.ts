@@ -4,7 +4,7 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 /**
- * Phase E of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
+ * Phase E of structured-output systemic fix record:
  * end-to-end provider probe for the `{ type: "tool", toolName: "..." }`
  * tool-choice pin.
  *

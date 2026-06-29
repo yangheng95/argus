@@ -19,7 +19,7 @@ active-text spacing reset for current `TextPart` output.
 | Source                                                  | Constraint carried forward                                                                        |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                                             | Do not delete CSS blindly; migrate live semantics to the current owner and test it.               |
-| `2026-05-15-overlay-streaming-text-main-thread-plan.md` | Streaming text must keep the active tail raw and avoid markdown parsing during deltas.            |
+| Pre-June overlay streaming text main-thread plan | Streaming text must keep the active tail raw and avoid markdown parsing during deltas.            |
 | `2026-06-19-retire-overlay-orphan-css-residue.md`       | Markdown renderer-emitted selectors can remain live; only orphan selectors should be retired.     |
 | `2026-06-19-markdown-syntax-theme-contrast.md`          | `markdown.css` remains the syntax/rendered markdown owner; do not disturb code/highlight classes. |
 

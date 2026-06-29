@@ -31,7 +31,7 @@ Relevant decisions:
 
 ## Decision
 
-Create one session-level policy source for automatic compaction eligibility. `build` and `frontend-design` must be included with the already-disabled workflow kinds. This restores the accepted `2026-05-29-compaction-continuation-rewrite.md` Phase 0 behavior: workflow sessions that exceed budget fail visibly with typed errors until durable continuation is implemented, rather than entering automatic compaction.
+Create one session-level policy source for automatic compaction eligibility. `build` and `frontend-design` must be included with the already-disabled workflow kinds. This restores the accepted pre-June compaction-continuation Phase 0 behavior: workflow sessions that exceed budget fail visibly with typed errors until durable continuation is implemented, rather than entering automatic compaction.
 
 This is not a fallback or route bypass. It removes duplicate policy lists and applies the existing workflow compaction design consistently.
 

@@ -24,7 +24,7 @@ import { Session } from "../../src/session"
  * "do not poll" discipline relies on so future edits cannot silently
  * loosen them.
  *
- * Spec — 2026-05-23 orchestrator-wait-tool.
+ * Orchestrator wait-tool contract.
  */
 
 afterEach(async () => {

@@ -1,7 +1,7 @@
 /**
  * Garbage-collection regression suite for AttachmentStore.sweep.
  *
- * Specs: specs/acceptance-attachment-store-single-source-2026-05-11.md.
+ * Attachment-store single-source contract.
  *
  * The store is content-addressed and write-only — every part / session /
  * task that ever referenced a file leaves its bytes behind on disk

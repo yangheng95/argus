@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { decodeDataUrlBase64, decodeDataUrlBase64Bytes, decodeDataUrlText } from "../../src/session/text-mime"
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §helper.
+ * Overlay image ingestion fidelity helper contract.
  *
  * `decodeDataUrlBase64` is the strict counterpart to `decodeDataUrlText`:
  * it powers panel.create_task / panel.send_task_message / ChannelIngress

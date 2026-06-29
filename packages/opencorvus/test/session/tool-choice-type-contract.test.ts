@@ -3,7 +3,7 @@ import "../../src/session/prompt"
 import type { LLM } from "../../src/session/llm"
 
 /**
- * Phase E of deleted pre-June record 2026-04-28-structured-output-systemic-fix:
+ * Phase E of structured-output systemic fix record:
  * after ripping out `ProviderLLM.stream` (rule 2 / rule 22 — single source
  * for the agent stream entry), `LLM.StreamInput.toolChoice` is the only
  * type that decides what shapes the loop can pass to `streamText`.

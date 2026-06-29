@@ -613,7 +613,7 @@ export namespace Session {
 
   /**
    * Snapshot the latest assistant message in a session for fact-check
-   * idempotency keying. Per specs/fact-check-agent-2026-05-25.md §3.3.
+   * idempotency keying. Per fact-check agent contract §3.3.
    *
    * Returns `finished=false` when SessionStatus is currently streaming or
    * retrying — fact-check tooling treats that as a reject signal (do not
@@ -1094,7 +1094,7 @@ export namespace Session {
 
   /** Detector for inline base64 image / pdf / audio / video data URLs inside
    *  a part's serialized data. Single source for the write-boundary guard
-   *  (see specs/acceptance-attachment-store-single-source-2026-05-11.md):
+   *  (see attachment-store single-source contract):
    *
    *  - This is the inverse pattern of `AttachmentStore` refs
    *    (`/attachment/<projectID>/<sha>.<ext>`). Every inline-base64 producer
@@ -1116,7 +1116,7 @@ export namespace Session {
         `Session.updatePart: refusing inline base64 data URL in part ${partID}. ` +
           `Route the producer through AttachmentStore.write so part.data stores a ` +
           `/attachment/<sha>.<ext> ref instead of MB of inline bytes. ` +
-          `(specs/acceptance-attachment-store-single-source-2026-05-11.md). ` +
+          `(attachment-store single-source contract). ` +
           `Offending snippet: ${snippet}`,
       )
       this.name = "InlineBase64InPartError"

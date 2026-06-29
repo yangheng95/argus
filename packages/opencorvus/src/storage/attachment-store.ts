@@ -175,7 +175,7 @@ export namespace AttachmentStore {
    * content-addressed store. Single source for tool producers (acceptance
    * screenshot/verify, future MCP image migration) so callers never roll
    * their own readFile + base64 + data-URL pipeline (which was the OOM
-   * driver — see specs/acceptance-attachment-store-single-source-2026-05-11.md).
+   * driver — see attachment-store single-source contract).
    */
   export async function writeFromPath(
     projectID: string,
@@ -730,7 +730,7 @@ export namespace AttachmentStore {
   // payloads dedupe to the same `<sha>.<ext>` file. Before the GC pass
   // added below, nothing ever deleted those files — every removed part /
   // session / task left its referenced bytes behind on disk. The first
-  // OOM forensic pass (specs/acceptance-attachment-store-single-source-2026-05-11.md)
+  // OOM forensic pass (attachment-store single-source contract)
   // found that screenshot tools were bloating `part.data` with
   // inline base64 instead of using the store at all. As the migration
   // moves them onto the store, the on-disk directory becomes the single

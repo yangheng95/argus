@@ -14,7 +14,7 @@
 
 ## 已核对的历史约束
 
-- `2026-04-27-task-rewind-code-resource.md` 明确区分 task rewind 与 Snapshot 子系统：task rewind 不应接入 `Snapshot.*`，Snapshot 只服务 session/message 级文件差异证据。
+- The retired task rewind code-resource record 明确区分 task rewind 与 Snapshot 子系统：task rewind 不应接入 `Snapshot.*`，Snapshot 只服务 session/message 级文件差异证据。
 - `2026-06-06-snapshot-global-root-cache-fix.md` 明确 `Snapshot.track()` 是正常消息/session 流里产生 snapshot hash 的入口；`patch/restore/revert/diff` 消费已有 hash 或显式调试命令。
 - 前端卡片撤回按钮的唯一 TSX owner 是 `CardHeaderChrome.tsx`；`Card.tsx` 和 `ChatBubble.tsx` 只负责把 `submitTaskRewind` 传入。
 

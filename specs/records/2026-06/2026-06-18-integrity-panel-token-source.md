@@ -20,7 +20,7 @@ white panel.
 
 | Source                                             | Relevant constraint                                                                               |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `2026-05-24-overlay-integrity-card-performance.md` | Integrity card readability depends on bounded, structured report sections.                        |
+| Pre-June overlay integrity card performance record | Integrity card readability depends on bounded, structured report sections.                        |
 | `2026-06-11-integrity-verdict-findings-layout.md`  | Integrity rows should keep flat, readable report grouping.                                        |
 | `flat-redesign-radius-coverage.test.ts`            | Runtime border radii must use canonical `--oc-radius-*` tokens, not legacy aliases.               |
 | `design-language.css`                              | Defines `--oc-radius-soft`, `--surface-inset`, and control tokens as the canonical single source. |

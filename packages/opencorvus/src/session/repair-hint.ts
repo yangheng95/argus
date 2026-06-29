@@ -5,7 +5,7 @@
  * `{ code:"invalid_union", note:"No matching discriminator", discriminator,
  *   path }` that does NOT carry the legal discriminator values. The AI SDK
  * relays that opaque JSON verbatim, so the model cannot self-correct and
- * loops byte-for-byte (deleted pre-June record
+ * loops byte-for-byte (session repair-hint loop record
  * 2026-05-19-goal-contract-tool-schema-single-source §6; observed in architect `register_contract`,
  * task tsk_e3f3a5e13001sIKjGs1nVHLkBD: 9 failures, last 6 byte-identical,
  * task wedged).
@@ -150,7 +150,7 @@ export function discriminatorRepairHint(
  *     legal values, and returning null relays that opaque JSON verbatim — the
  *     model then guesses schema-external values forever (architect
  *     register_contract: 9 failures, last 6 byte-identical, task wedged; spec
- *     deleted pre-June record 2026-05-19-.. §6). The schema stays the sole data gate
+ *     session repair-hint loop record §6). The schema stays the sole data gate
  *     (rule 6.1); we only translate the gate's rejection into the allowed
  *     values, pulled live from the tool's own JSON Schema (rule 8 — no second
  *     source). Thrown here → SDK wraps it as ToolCallRepairError whose message

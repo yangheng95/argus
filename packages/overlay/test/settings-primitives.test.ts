@@ -7,7 +7,7 @@
  * PermissionsPanel migration; this file owns the primitive contract
  * itself so future panels see the same shape.
  *
- * See specs/overlay-settings-primitives-2026-05-26.md.
+ * See settings primitive contract.
  */
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"

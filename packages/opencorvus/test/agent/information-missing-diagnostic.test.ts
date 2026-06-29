@@ -19,7 +19,7 @@ const promptDir = path.join(repoRoot, "packages/opencorvus/src/prompt/core")
  * binary semantics — runtime composition is the only path that adds
  * the block.
  *
- * Spec — 2026-05-07 INFORMATION MISSING debug toggle.
+ * Information-missing debug toggle contract.
  */
 
 const AGENT_PROMPTS = [

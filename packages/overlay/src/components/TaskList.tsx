@@ -765,7 +765,7 @@ export function TaskList(props: TaskListProps) {
   const [dragOverID, setDragOverID] = createSignal("")
   // Per-task expand state for the lineage tree. Per-session only; local-
   // storage persistence is intentionally out of scope (see spec
-  // docs/superpowers/specs/2026-05-27-task-tree-display.md §3.2).
+  // task tree display contract §3.2).
   const [expandedTasks, setExpandedTasks] = createSignal<Set<string>>(new Set())
   const directoryCollapse = createProjectLedgerGroupCollapseState()
 

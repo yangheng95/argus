@@ -307,7 +307,7 @@ export namespace Agent {
         // Mission primary agent — owns long-running user goals. Runs through
         // the standard SessionWake → SessionPrompt.loop primary-agent runtime
         // (same as `coding` / `control`), NOT runAgentSession. See
-        // specs/gateway-mission-split-2026-05-28.md.
+        // mission split contract.
         //
         // Capability set = COORDINATOR (updated 2026-06-15): it reads and
         // analyses the project, maintains mission state, plans, dispatches

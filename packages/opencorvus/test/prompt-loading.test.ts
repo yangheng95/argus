@@ -3,7 +3,7 @@
  *
  * Run: bun test test/prompt-loading.test.ts
  *
- * audit-2026-04-29 W2-V37 — pre-fix imported `summary.txt`,
+ * Pre-June audit W2-V37 — pre-fix imported `summary.txt`,
  * `spec-core.txt`, `plan-core.txt`, all of which were removed
  * (same plan-mode + spec-mode cleanup pattern as W2-V27/V33/V36).
  * The bare `import x from "missing.txt"` fired at module load

@@ -14,7 +14,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-mission-split-2026-05-28.md.
+ * Mission split contract.
  *
  * mission_state is path-confined I/O for the Mission agent. The boundary is
  * the protection — Mission cannot read or write outside

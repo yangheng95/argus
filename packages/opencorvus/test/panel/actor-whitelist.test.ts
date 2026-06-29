@@ -10,7 +10,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: gateway-mission-split-2026-05-28.md §1 (Panel = coordination set).
+ * Mission split contract: Panel = coordination set.
  *
  * Mission is a coordinator, not an executor. The panel surface is shared
  * with control_agent + panel_ui, but the `mission` actor may only invoke a

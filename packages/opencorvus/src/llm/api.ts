@@ -50,7 +50,7 @@ function retries(value?: number) {
   // The AI SDK's `maxRetries` is set to 0 here so the SDK does NOT also retry —
   // double-retry was the cause of confused terminal events / mismatched
   // attempt counters / quota exhaustion noise across the layered retry stack
-  // (see deleted pre-June record 2026-04-30-llm-activity-redesign). The `value`
+  // (see LLM activity redesign contract). The `value`
   // parameter is preserved on the input type for forward-compat but is
   // intentionally ignored — callers that want retries should configure
   // their LLMActivityPolicy.maxRetries instead.

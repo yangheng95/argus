@@ -11,7 +11,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 /**
- * Spec: overlay-image-ingestion-fidelity-2026-05-07.md §Fix C.
+ * Overlay image ingestion fidelity contract.
  *
  * panel.create_task previously decoded only `isDecodableText` attachments
  * (template .txt, .md) and inlined them into the request prose, then called
