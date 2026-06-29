@@ -18128,7 +18128,8 @@
                                         "running",
                                         "completed",
                                         "skipped",
-                                        "failed"
+                                        "failed",
+                                        "aborted"
                                       ]
                                     }
                                   },
@@ -18255,7 +18256,8 @@
                                           "running",
                                           "completed",
                                           "skipped",
-                                          "failed"
+                                          "failed",
+                                          "aborted"
                                         ]
                                       },
                                       "startedAt": {
@@ -18290,7 +18292,8 @@
                                                 "running",
                                                 "completed",
                                                 "skipped",
-                                                "failed"
+                                                "failed",
+                                                "aborted"
                                               ]
                                             },
                                             "startedAt": {
@@ -26245,7 +26248,8 @@
                                   "running",
                                   "completed",
                                   "skipped",
-                                  "failed"
+                                  "failed",
+                                  "aborted"
                                 ]
                               }
                             },
@@ -26372,7 +26376,8 @@
                                     "running",
                                     "completed",
                                     "skipped",
-                                    "failed"
+                                    "failed",
+                                    "aborted"
                                   ]
                                 },
                                 "startedAt": {
@@ -26407,7 +26412,8 @@
                                           "running",
                                           "completed",
                                           "skipped",
-                                          "failed"
+                                          "failed",
+                                          "aborted"
                                         ]
                                       },
                                       "startedAt": {
@@ -29285,7 +29291,8 @@
                                       "running",
                                       "completed",
                                       "skipped",
-                                      "failed"
+                                      "failed",
+                                      "aborted"
                                     ]
                                   },
                                   "phases": {
@@ -29501,7 +29508,8 @@
                                         "running",
                                         "completed",
                                         "skipped",
-                                        "failed"
+                                        "failed",
+                                        "aborted"
                                       ]
                                     },
                                     "startedAt": {
@@ -29695,7 +29703,8 @@
                                               "running",
                                               "completed",
                                               "skipped",
-                                              "failed"
+                                              "failed",
+                                              "aborted"
                                             ]
                                           },
                                           "startedAt": {
@@ -33362,7 +33371,8 @@
                                   "running",
                                   "completed",
                                   "skipped",
-                                  "failed"
+                                  "failed",
+                                  "aborted"
                                 ]
                               },
                               "phases": {
@@ -33578,7 +33588,8 @@
                                     "running",
                                     "completed",
                                     "skipped",
-                                    "failed"
+                                    "failed",
+                                    "aborted"
                                   ]
                                 },
                                 "startedAt": {
@@ -33772,7 +33783,8 @@
                                           "running",
                                           "completed",
                                           "skipped",
-                                          "failed"
+                                          "failed",
+                                          "aborted"
                                         ]
                                       },
                                       "startedAt": {
@@ -53257,7 +53269,8 @@
                   "running",
                   "completed",
                   "skipped",
-                  "failed"
+                  "failed",
+                  "aborted"
                 ]
               },
               "summary": {
