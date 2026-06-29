@@ -47,3 +47,8 @@
 3. Expose tools in `AgentToolPool` and orchestrator prompt.
 4. Add targeted tests in `packages/opencorvus/test/orchestrator/tools.test.ts` and `packages/opencorvus/test/agent/agent.test.ts`.
 5. Run focused tests plus spec link health.
+
+## Validation
+
+- `bun test packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "complete_goal|delete_goal" --timeout 60000`
+- `bun test packages/opencorvus/test/agent/agent.test.ts --test-name-pattern "orchestrator registry exposes lifecycle tools|task lifecycle tools are exposed" --timeout 60000`

@@ -10328,6 +10328,280 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("complete_goal marks an undispatched goal complete through goal_run facts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_complete_goal_${stamp}`
+    const taskID = `tsk_complete_goal_${stamp}`
+    const goalID = `gol_complete_goal_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "complete goal",
+      taskTitle: "complete goal from scheduler",
+      request: "Mark a proven no-op goal complete",
+      goalTitle: "Already satisfied goal",
+      goalSlug: "already-satisfied-goal",
+      objective: "Represent work already proven satisfied by current task evidence.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "complete goal parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.complete_goal.execute(
+            {
+              goalID,
+              reason: "Current task evidence proves this goal is already satisfied without a build attempt.",
+            },
+            buildToolOptions("complete_goal"),
+          ),
+        )
+
+        expect(result).toContain("Goal marked complete")
+        expect(goalStatusByID(goalID)).toBe("passed")
+        const runs = listGoalRunsByGoal(goalID)
+        expect(runs).toHaveLength(1)
+        expect(runs[0]?.status).toBe("completed")
+        expect(runs[0]?.metadata?.manual_completion).toMatchObject({
+          source: "orchestrator.complete_goal",
+          reason: "Current task evidence proves this goal is already satisfied without a build attempt.",
+        })
+        const decisions = createDecisionLog(taskID).readByPhase("orchestrator")
+        expect(decisions.some((entry) => entry.key === `completed_goal_${goalID}`)).toBe(true)
+      },
+    })
+  })
+
+  test("delete_goal deletes an obsolete goal and prunes graph dependency references", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_delete_goal_${stamp}`
+    const taskID = `tsk_delete_goal_${stamp}`
+    const removedGoalID = `gol_delete_goal_removed_${stamp}`
+    const dependentGoalID = `gol_delete_goal_dependent_${stamp}`
+    const planID = `plan_delete_goal_${stamp}`
+    const removedPlanNodeID = `plan_node_delete_goal_removed_${stamp}`
+    const dependentPlanNodeID = `plan_node_delete_goal_dependent_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID: removedGoalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "delete goal",
+      taskTitle: "delete goal from scheduler",
+      request: "Remove an obsolete goal from the graph",
+      goalTitle: "Obsolete goal",
+      goalSlug: "obsolete-goal",
+      objective: "This goal is obsolete and should be removed.",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: planID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${removedGoalID}`,
+          version: 1,
+          status: "active",
+          summary: "2 goals",
+          prompt: "Remove one obsolete goal",
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.update(EngineGoalTable)
+        .set({ plan_version_id: planID })
+        .where(eq(EngineGoalTable.id, removedGoalID))
+        .run()
+      db.insert(EngineGoalTable)
+        .values({
+          id: dependentGoalID,
+          task_id: taskID,
+          plan_version_id: planID,
+          spec_snapshot_id: `spec_${removedGoalID}`,
+          title: "Dependent goal",
+          slug: "dependent-goal",
+          objective: "This goal remains after the obsolete dependency is removed.",
+          acceptance_specs: [],
+          owned_paths: ["src/dependent.ts"],
+          depends_on: [removedGoalID],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: removedPlanNodeID,
+          task_id: taskID,
+          plan_version_id: planID,
+          kind: "goal",
+          goal_id: removedGoalID,
+          title: "Obsolete goal",
+          brief: "obsolete brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: dependentPlanNodeID,
+          task_id: taskID,
+          plan_version_id: planID,
+          kind: "goal",
+          goal_id: dependentGoalID,
+          title: "Dependent goal",
+          brief: "dependent brief",
+          depends_on_ids: [removedPlanNodeID],
+          order_index: 1,
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "delete goal parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.delete_goal.execute(
+            {
+              goalID: removedGoalID,
+              reason: "Current evidence proves this goal is obsolete and its remaining dependent work is independent.",
+            },
+            buildToolOptions("delete_goal"),
+          ),
+        )
+
+        expect(result).toContain("Goal deleted")
+        expect(findGoal(removedGoalID)).toBeUndefined()
+        expect(findGoal(dependentGoalID)?.depends_on).toEqual([])
+        const planNodes = Database.use((db) =>
+          db
+            .select()
+            .from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.task_id, taskID))
+            .orderBy(EnginePlanNodeTable.order_index)
+            .all(),
+        )
+        expect(planNodes).toHaveLength(1)
+        expect(planNodes[0]?.id).toBe(dependentPlanNodeID)
+        expect(planNodes[0]?.depends_on_ids).toBeNull()
+        const decisions = createDecisionLog(taskID).readByPhase("orchestrator")
+        expect(decisions.some((entry) => entry.key === `deleted_goal_${removedGoalID}`)).toBe(true)
+      },
+    })
+  })
+
+  test("complete_goal and delete_goal refuse live goal work", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_mutation_live_refusal_${stamp}`
+    const taskID = `tsk_goal_mutation_live_refusal_${stamp}`
+    const goalID = `gol_goal_mutation_live_refusal_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "goal mutation live refusal",
+      taskTitle: "goal mutation live refusal",
+      request: "Do not complete or delete live goal work",
+      goalTitle: "Live goal",
+      goalSlug: "live-goal",
+      objective: "Stay unchanged while a build attempt is live.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "live goal mutation parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "live goal mutation child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const completeResult = toolText(
+          await tools.complete_goal.execute(
+            {
+              goalID,
+              reason: "should not complete while build is live",
+            },
+            buildToolOptions("complete_goal_live"),
+          ),
+        )
+        const deleteResult = toolText(
+          await tools.delete_goal.execute(
+            {
+              goalID,
+              reason: "should not delete while build is live",
+            },
+            buildToolOptions("delete_goal_live"),
+          ),
+        )
+
+        expect(completeResult).toContain("Error: complete_goal refused")
+        expect(deleteResult).toContain("Error: delete_goal refused")
+        expect(findGoal(goalID)).toBeDefined()
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+      },
+    })
+  })
+
   test("cancel_subagent recover_stale mode closes live ownership and aborts the wedged goal attempt", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

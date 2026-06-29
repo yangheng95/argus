@@ -105,6 +105,8 @@ import {
 import {
   supersedePriorActivePlansForTask,
   appendGoalToActiveGraph,
+  completeGoal,
+  deleteGoal as deleteGoalRow,
   ensureBuildRetryFeedbackForGoal,
   persistTaskFrontendResearchBrief,
   persistTaskResearchBrief,
@@ -1263,6 +1265,26 @@ function findLiveGoalRunByGoalID(goalID: string) {
   return listGoalRunsByGoal(goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
 }
 
+function goalMutationBlockedByLiveWork(input: { taskID: string; goalID: string; action: string }): string | undefined {
+  const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
+  if (liveGoalRun) {
+    return (
+      `Error: ${input.action} refused because goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
+      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}). ` +
+      `Wait for terminal refill evidence or cancel the live attempt before mutating the goal.`
+    )
+  }
+  const liveOwner = findLiveBuildOwnershipByGoal({ taskID: input.taskID, goalID: input.goalID })
+  if (liveOwner) {
+    return (
+      `Error: ${input.action} refused because goal ${input.goalID} is currently owned by live build tool ` +
+      `${liveOwner.payload.tool_part_id} (session ${liveOwner.payload.child_session_id}, ownership ${liveOwner.ownershipID}). ` +
+      `Wait for that build result before mutating the goal.`
+    )
+  }
+  return undefined
+}
+
 function assertNoLiveGoalRunForBuild(input: { taskID: string; goalID: string; action: string }): void {
   const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
   if (!liveGoalRun) return
@@ -1431,6 +1453,16 @@ const AddGoalInputSchema = z.object({
     .string()
     .min(1)
     .describe("Evidence that this new goal comes from the latest operator instruction or current task findings."),
+})
+
+const CompleteGoalInputSchema = z.object({
+  goalID: z.string().min(1).describe("The existing goal ID to mark completed."),
+  reason: z.string().min(1).describe("Concrete evidence proving this goal no longer needs build work."),
+})
+
+const DeleteGoalInputSchema = z.object({
+  goalID: z.string().min(1).describe("The existing goal ID to delete from the current task goal graph."),
+  reason: z.string().min(1).describe("Concrete evidence proving this goal is obsolete or out of current task scope."),
 })
 
 const FrontendDesignReasonField = z
@@ -9102,6 +9134,101 @@ export function createOrchestratorTools(input: {
         // build reads the retry decision-log feedback and recovers the same
         // verified directory per the 2026-06-25 worktree reuse contract.
         return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}`
+      },
+    }),
+
+    complete_goal: tool({
+      description:
+        "Mark one existing workflow goal completed when current task evidence proves it is already satisfied or " +
+        "no longer needs build work, while the goal should remain in the graph for dependency/traceability purposes. " +
+        "This writes an explicit goal_run_attempt completion fact; do not use it to hide failed or unverified work.",
+      inputSchema: CompleteGoalInputSchema,
+      execute: async ({ goalID, reason }) => {
+        requireTask(taskID)
+        const goal = listGoals(taskID).find((row) => row.id === goalID)
+        if (!goal) return `Goal ${goalID} not found.`
+        const blocker = goalMutationBlockedByLiveWork({ taskID, goalID, action: "complete_goal" })
+        if (blocker) return blocker
+
+        const beforeStatus = goalStatusByID(goalID)
+        const row = completeGoal({ goalID, reason })
+        const afterStatus = goalStatusByID(goalID)
+        createDecisionLog(taskID).append({
+          phase: "orchestrator",
+          key: `completed_goal_${goalID}`,
+          value:
+            `Marked goal ${goalID} complete.\n\n` +
+            `Reason: ${reason}\n\n` +
+            `Previous status: ${beforeStatus}\n` +
+            `Goal run: ${row.id}`,
+          reason: "complete_goal",
+        })
+
+        return SubAgentProtocol.yieldResult({
+          headline:
+            beforeStatus === "passed"
+              ? `Goal already complete: ${goalID} ${goal.title}`
+              : `Goal marked complete: ${goalID} ${goal.title}`,
+          fields: [
+            ["goal_id", goalID],
+            ["goal_run_id", row.id],
+            ["previous_status", beforeStatus],
+            ["current_status", afterStatus],
+            ["reason", reason],
+          ],
+          pointer: "current task snapshot; continue scheduling from dependency facts",
+        })
+      },
+    }),
+
+    delete_goal: tool({
+      description:
+        "Delete one obsolete goal from the current workflow graph when task evidence proves the goal is out of " +
+        "scope, redundant, or replaced by a corrected graph. This reuses the engine goal deletion writer, which " +
+        "also prunes dependent goal and plan-node references. Do not use it while a goal has live work.",
+      inputSchema: DeleteGoalInputSchema,
+      execute: async ({ goalID, reason }) => {
+        requireTask(taskID)
+        const goal = listGoals(taskID).find((row) => row.id === goalID)
+        if (!goal) return `Goal ${goalID} not found.`
+        const blocker = goalMutationBlockedByLiveWork({ taskID, goalID, action: "delete_goal" })
+        if (blocker) return blocker
+
+        const result = deleteGoalRow(goalID)
+        createDecisionLog(taskID).append({
+          phase: "orchestrator",
+          key: `deleted_goal_${goalID}`,
+          value:
+            `Deleted goal ${goalID}: ${goal.title}\n\n` +
+            `Reason: ${reason}\n\n` +
+            `Deleted goals: ${result.deletedGoals}\n` +
+            `Deleted plan nodes: ${result.deletedPlanNodes}\n` +
+            `Pruned goal dependency refs: ${result.prunedGoalDependencyRefs}\n` +
+            `Pruned plan-node dependency refs: ${result.prunedPlanNodeDependencyRefs}`,
+          reason: "delete_goal",
+        })
+        EngineProtocol.emit(
+          EngineEvent.TaskUpdated,
+          {
+            taskID,
+            status: deriveTaskStatus(requireTask(taskID)),
+            summary: `Goal ${goalID} deleted by Orchestrator`,
+          },
+          { source: "orchestrator.delete_goal" },
+        )
+
+        return SubAgentProtocol.yieldResult({
+          headline: `Goal deleted: ${goalID} ${goal.title}`,
+          fields: [
+            ["goal_id", goalID],
+            ["deleted_goals", String(result.deletedGoals)],
+            ["deleted_plan_nodes", String(result.deletedPlanNodes)],
+            ["pruned_goal_dependency_refs", String(result.prunedGoalDependencyRefs)],
+            ["pruned_plan_node_dependency_refs", String(result.prunedPlanNodeDependencyRefs)],
+            ["reason", reason],
+          ],
+          pointer: "current task snapshot; continue scheduling from the updated goal graph",
+        })
       },
     }),
 
