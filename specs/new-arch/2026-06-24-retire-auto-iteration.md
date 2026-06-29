@@ -20,22 +20,22 @@ the dependency graph was repairable in the goal worktree.
 
 `rg -n "auto_iteration|autoIteration" packages/opencorvus/src packages/opencorvus/test packages/sdk specs AGENTS.md -S`
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/opencorvus/src/config/config.ts` | Exposes `assistant.auto_iteration` in the project config schema. | Delete the field from schema; unknown config keys remain rejected by the existing strict config contract. |
-| `packages/opencorvus/src/engine/config.ts` | Materializes `auto_iteration` into `EngineConfigType`. | Delete the field and default. |
-| `packages/opencorvus/src/build/agent.ts` | Reads `EngineConfig.auto_iteration`, accepts `RunInput.autoIteration`, and renders dynamic Build auto-iteration prose. | Remove the input and config branch; compose a single Build core. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Renders dynamic auto-iteration guidance and passes the flag into task description. | Render one same-task recovery contract derived from task facts only. |
-| `packages/opencorvus/src/engine/describe.ts` | Renders different failed-goal closure guidance based on `autoIteration`. | Render one failed-goal recovery instruction. |
-| `packages/opencorvus/src/frontend-design/agent.ts` | Reads the setting and changes frontend-design review prompt text. | Render fixed frontend-design review discipline. |
-| `packages/opencorvus/src/frontend-design/output-tools.ts` | Requires a second review note only when auto-iteration is true. | Require two review notes consistently. |
-| `packages/opencorvus/src/frontend-design/schema.ts` | Documents review notes in terms of `assistant.auto_iteration`. | Describe the fixed two-pass review contract. |
-| `packages/opencorvus/src/prompt/core/frontend-design-core.txt` | Documents auto-iteration-specific review pass counts. | Replace with fixed review-and-revise guidance. |
-| `packages/opencorvus/src/prompt/core/build-core.txt` | Mentions `assistant.auto_iteration=false` in toolchain blocker rules. | State the invariant directly without the deleted setting. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Tells frontend-design to follow `assistant.auto_iteration`. | Tell frontend-design to perform the fixed review passes. |
-| `packages/opencorvus/src/agent/prompt-profile.ts` | Frontend expert squads do not explicitly teach dependency repair discipline. | Add frontend dependency/toolchain handling to frontend-replica and frontend-automation-debug Build overlays. |
-| `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/types.gen.ts` | Expose generated `auto_iteration` field. | Remove the generated field. |
-| Tests | Assert auto-iteration branches. | Replace with tests that assert the setting is gone and fixed prompt behavior remains. |
+| Surface                                                             | Current behavior                                                                                                       | Change                                                                                                       |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/config/config.ts`                          | Exposes `assistant.auto_iteration` in the project config schema.                                                       | Delete the field from schema; unknown config keys remain rejected by the existing strict config contract.    |
+| `packages/opencorvus/src/engine/config.ts`                          | Materializes `auto_iteration` into `EngineConfigType`.                                                                 | Delete the field and default.                                                                                |
+| `packages/opencorvus/src/build/agent.ts`                            | Reads `EngineConfig.auto_iteration`, accepts `RunInput.autoIteration`, and renders dynamic Build auto-iteration prose. | Remove the input and config branch; compose a single Build core.                                             |
+| `packages/opencorvus/src/orchestrator/agent.ts`                     | Renders dynamic auto-iteration guidance and passes the flag into task description.                                     | Render one same-task recovery contract derived from task facts only.                                         |
+| `packages/opencorvus/src/engine/describe.ts`                        | Renders different failed-goal closure guidance based on `autoIteration`.                                               | Render one failed-goal recovery instruction.                                                                 |
+| `packages/opencorvus/src/frontend-design/agent.ts`                  | Reads the setting and changes frontend-design review prompt text.                                                      | Render fixed frontend-design review discipline.                                                              |
+| `packages/opencorvus/src/frontend-design/output-tools.ts`           | Requires a second review note only when auto-iteration is true.                                                        | Require two review notes consistently.                                                                       |
+| `packages/opencorvus/src/frontend-design/schema.ts`                 | Documents review notes in terms of `assistant.auto_iteration`.                                                         | Describe the fixed two-pass review contract.                                                                 |
+| `packages/opencorvus/src/prompt/core/frontend-design-core.txt`      | Documents auto-iteration-specific review pass counts.                                                                  | Replace with fixed review-and-revise guidance.                                                               |
+| `packages/opencorvus/src/prompt/core/build-core.txt`                | Mentions `assistant.auto_iteration=false` in toolchain blocker rules.                                                  | State the invariant directly without the deleted setting.                                                    |
+| `packages/opencorvus/src/orchestrator/tools.ts`                     | Tells frontend-design to follow `assistant.auto_iteration`.                                                            | Tell frontend-design to perform the fixed review passes.                                                     |
+| `packages/opencorvus/src/agent/prompt-profile.ts`                   | Frontend expert squads do not explicitly teach dependency repair discipline.                                           | Add frontend dependency/toolchain handling to frontend-replica and frontend-automation-debug Build overlays. |
+| `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/types.gen.ts` | Expose generated `auto_iteration` field.                                                                               | Remove the generated field.                                                                                  |
+| Tests                                                               | Assert auto-iteration branches.                                                                                        | Replace with tests that assert the setting is gone and fixed prompt behavior remains.                        |
 
 ## Decision
 

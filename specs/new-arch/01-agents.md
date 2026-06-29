@@ -139,17 +139,21 @@ orchestrator/loop.ts — runTaskLoop()
 
 **Acceptance review 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 acceptance tool/service surface 不再存在。
 
-**Orchestrator 当前显式 tool surface**（2026-06-15，真源是 `src/agent/agent.ts` 的 orchestrator include 列表和 `src/orchestrator/tools.ts` 实现；`deliver` / `publish_acceptance` 已删除）：
+**Orchestrator 当前显式 tool surface**（2026-06-27，真源是 `src/agent/tool-pool-contract.ts` 的 orchestrator private/global 列表和 `src/orchestrator/tools.ts` 实现；`deliver` / `publish_acceptance` / `steer_subagent` 已删除）：
 
 1. **Stage / evidence 调用**：`requirements`、`frontend_design`、`frontend_research`、`deep_research`、`architect`、`workload_analysis`、`build`
 2. **审查 / 复核**：`visual_qa`、`integrity`、`fact_check`、`analyze_intent`、`explore`
 3. **Goal 维护**：`add_goal`、`modify_goal`、`query_failed_goals`、`goal_report`
 4. **状态 / 上下文 / 预览**：`read_context`、`analytics`、`browser_preview`
-5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
+5. **任务级控制**：`complete_task`、`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
    `cancel_subagent`（中止指定子 agent session；session 级恢复手段，取消后须显式重新
-   dispatch 同一 goal/stage）、`restart_from_stage`、`refine`
+   dispatch 同一 goal/stage；如果来源是 pending `agent_coordination_request`，取消只能走
+   `respond_agent_coordination(decision="cancel_worker")`）、`refine`
 6. **用户交互 / 等待 / merge 修复**：`question`、`wait`、`bash`（仅项目根 git merge-state 修复）
 7. **任务繁衍**：`propose_task`（按自动确认配置创建继承 follow-up task）
+8. **A2A 协议响应**：`respond_agent_coordination` 是 orchestrator 回答 worker-to-orchestrator coordination request 的唯一调度响应入口；它只能处理 durable `agent_coordination_request`，并写入 visible `agent_coordination_response` / `agent_coordination_action` 后执行 continue / cancel_worker / ask_user / fail_task / bound redispatch。
+
+Worker 侧 A2A 请求入口是 `request_orchestrator_decision`，只暴露给 task worker / stage agent 工具池，不暴露给普通 coding 或 custom default。它创建 durable `agent_coordination_request` 并唤醒 task orchestrator；worker 不应通过 task-root message、hidden note、direct reply 或新 subtask chat 请求调度决策。
 
 **Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
@@ -191,4 +195,5 @@ Executor 是**外部**进程，不属于 Agent Team：
 - [02-data.md](02-data.md) — `engine_*` 13 张表的行为
 - [03-control.md](03-control.md) — ChannelIngress / ControlMessage / Panel Capability 路由
 - [04-extensions.md](04-extensions.md) — Executor 与 plugin/mcp/acp 的边界
+- [2026-06-27-add-opencorvus-agent-playbook.md](2026-06-27-add-opencorvus-agent-playbook.md) — 新增 native agent 的单源接线、A2A、runtime、handoff、测试清单
 - [13-agent-communication-matrix.md](13-agent-communication-matrix.md) — 预期 whitelist 与当前 direct/indirect 通信真相对照

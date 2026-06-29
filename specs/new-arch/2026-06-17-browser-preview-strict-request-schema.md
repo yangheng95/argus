@@ -20,7 +20,7 @@ instead of failing at the API boundary.
 Command:
 
 ```powershell
-rg -n "z\.object|capture|compare|live/snapshot|live/input|targetID|viewportID|outDir|url" packages/opencorvus/src/server/routes/browser-preview.ts packages/opencorvus/src/browser-preview/region-comparison.ts packages/opencorvus/src/tool/browser-preview-compare-regions.ts packages/opencorvus/test/server packages/opencorvus/test/browser-preview packages/opencorvus/test/tool -g "*.ts"
+rg -n "z\.object|capture|compare|live/snapshot|live/input|targetID|viewportID|outDir|url" packages/opencorvus/src/server/routes/browser-preview.ts packages/opencorvus/src/browser-preview/region-comparison.ts packages/opencorvus/src/tool/region-comparison-tool.ts packages/opencorvus/test/server packages/opencorvus/test/browser-preview packages/opencorvus/test/tool -g "*.ts"
 ```
 
 | Surface                    | Evidence                                                                       | Decision                                                                                |
@@ -29,7 +29,7 @@ rg -n "z\.object|capture|compare|live/snapshot|live/input|targetID|viewportID|ou
 | Capture route              | Inline request schema accepts extra keys.                                      | Extract and make strict.                                                                |
 | Live snapshot/input routes | Shared request schema and nested input variants accept extra keys.             | Make top-level and input variants strict.                                               |
 | Region comparison route    | `BrowserPreviewRegionComparisonRequest` and nested bindings accept extra keys. | Make request, binding, locator, source, implementation, output, and box schemas strict. |
-| Tool params                | `BrowserPreviewCompareRegionsToolParameters` accepts extra keys.               | Make strict and add schema regression coverage.                                         |
+| Tool params                | `RegionComparisonToolParameters` accepts extra keys.               | Make strict and add schema regression coverage.                                         |
 | OpenAPI/SDK                | Generated request bodies reflect schema strictness.                            | Regenerate/update generated API artifacts after source changes.                         |
 
 ## Fix
@@ -37,7 +37,7 @@ rg -n "z\.object|capture|compare|live/snapshot|live/input|targetID|viewportID|ou
 1. Add strict browser preview request schema constants for capture and live
    routes.
 2. Make region-comparison request and nested input objects reject unknown keys.
-3. Make the `browser_preview_compare_regions` tool parameter schema reject
+3. Make the `region comparison tool` tool parameter schema reject
    unknown keys.
 4. Add route and tool/schema tests proving valid target requests with `url` or
    `outDir` fail instead of being stripped.

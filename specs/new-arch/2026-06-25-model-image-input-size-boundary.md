@@ -39,14 +39,14 @@ rg -n "url_screenshot|webfetch|read image|buildMultimodalToolResult|attachments.
 rg -n "PNG|JPEG|WebP|image dimensions|8000|sharp|pngjs" packages/opencorvus/src packages/opencorvus/test specs/new-arch -S -g "*.ts" -g "*.md" -g "*.txt"
 ```
 
-| Surface | Finding | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/session/message.ts::attachmentToBase64` | Converts tool-result attachments into AI SDK `image-data`. | Add the hard image-size boundary here for tool output media. |
-| `packages/opencorvus/src/session/message.ts::userFileUrl` | Converts stored user file parts into provider-bound data URLs. | Add the same hard image-size boundary here for user/task attachments. |
-| `packages/opencorvus/src/session/prompt/parts.ts` | Persists incoming data/file attachments into `AttachmentStore`. | Do not reject at persistence time; persistence is storage, not model delivery. |
-| `packages/opencorvus/src/frontend-design/url-screenshot-tool.ts` | Returns live URL screenshot attachments. | Keep tool behavior; the model-delivery layer owns the provider limit. |
-| `packages/opencorvus/src/tool/multimodal-result.ts` | Returns persisted image refs for visual comparison tools. | Keep transport; all callers converge through `Message.toModelMessages`. |
-| `packages/opencorvus/src/agent/runner.ts` | Filters by model modality support only. | Do not add provider-dimension logic here; the byte-to-model boundary is lower. |
+| Surface                                                          | Finding                                                         | Decision                                                                       |
+| ---------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/session/message.ts::attachmentToBase64` | Converts tool-result attachments into AI SDK `image-data`.      | Add the hard image-size boundary here for tool output media.                   |
+| `packages/opencorvus/src/session/message.ts::userFileUrl`        | Converts stored user file parts into provider-bound data URLs.  | Add the same hard image-size boundary here for user/task attachments.          |
+| `packages/opencorvus/src/session/prompt/parts.ts`                | Persists incoming data/file attachments into `AttachmentStore`. | Do not reject at persistence time; persistence is storage, not model delivery. |
+| `packages/opencorvus/src/frontend-design/url-screenshot-tool.ts` | Returns live URL screenshot attachments.                        | Keep tool behavior; the model-delivery layer owns the provider limit.          |
+| `packages/opencorvus/src/tool/multimodal-result.ts`              | Returns persisted image refs for visual comparison tools.       | Keep transport; all callers converge through `Message.toModelMessages`.        |
+| `packages/opencorvus/src/agent/runner.ts`                        | Filters by model modality support only.                         | Do not add provider-dimension logic here; the byte-to-model boundary is lower. |
 
 ## Fix
 

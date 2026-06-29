@@ -6,7 +6,7 @@ import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
 type GroupCfg = {
   title_en: string
   title_zh: string
-  order?: number
+  order: number
   merge_into?: string
 }
 
@@ -74,7 +74,7 @@ function collectOps(spec: any): Op[] {
     for (const m of HTTP_METHODS) {
       const op = (item as any)?.[m]
       if (!op || typeof op !== "object") continue
-      if (!op.operationId) continue
+      if (!op.operationId) throw new Error(`OpenAPI operation ${m.toUpperCase()} ${pth} is missing operationId`)
       out.push({
         method: m.toUpperCase(),
         path: pth,
@@ -93,12 +93,18 @@ function groupOps(ops: Op[], i18n: I18n): Group[] {
     const seg = firstSegment(op.path)
     let cfg = cfgs[seg]
     let key = seg
+    if (!cfg) {
+      throw new Error(`API docs i18n missing route group for first path segment "${seg}" from ${op.method} ${op.path}`)
+    }
     if (cfg?.merge_into) {
       key = cfg.merge_into
       cfg = cfgs[key]
+      if (!cfg) {
+        throw new Error(`API docs i18n group "${seg}" merges into missing group "${key}"`)
+      }
     }
-    if (!cfg) {
-      cfg = { title_en: capitalize(seg), title_zh: capitalize(seg), order: 9999 }
+    if (typeof cfg.order !== "number") {
+      throw new Error(`API docs i18n group "${key}" is missing numeric order`)
     }
     let group = map.get(key)
     if (!group) {
@@ -106,7 +112,7 @@ function groupOps(ops: Op[], i18n: I18n): Group[] {
         key,
         title_en: cfg.title_en,
         title_zh: cfg.title_zh,
-        order: cfg.order ?? 9999,
+        order: cfg.order,
         ops: [],
       }
       map.set(key, group)
@@ -123,11 +129,6 @@ function groupOps(ops: Op[], i18n: I18n): Group[] {
     if (a.order !== b.order) return a.order - b.order
     return a.title_en < b.title_en ? -1 : 1
   })
-}
-
-function capitalize(s: string): string {
-  if (!s) return s
-  return s[0]!.toUpperCase() + s.slice(1)
 }
 
 type Lang = "en" | "zh"

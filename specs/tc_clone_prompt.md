@@ -4,7 +4,9 @@
 
 ## 模板准备
 
-如果当前目录不存在模板文件夹，则需要将 `nova-vibecoding-template` 文件夹中的代码复制到当前项目中
+如果当前目录不存在模板文件夹，则需要将 `nova-vibecoding-template` 文件夹中的代码复制到当前项目中。
+
+### 警告：模板存在很多问题，不要纠结绝对正确，你只需要确保视觉、交互和响应式行为符合 TradingView 目标页面证据即可
 
 ## 核心目标
 
@@ -32,12 +34,9 @@ AInvest 组件复用不能覆盖 TradingView 视觉目标。若某个 AInvest �
 - 项目中已有页面实现方式
 - 项目路由、样式、token、i18n、测试约定
 - 项目中已有 `@ainvest/*` 组件用法
-- 与 `world-economy` 相关的现有文件、spec、回测文档和问题记录
 
 必须先 grep：
 
-- `world-economy`
-- `TradingView`
 - `ainvest`
 - `i18n`
 - `locale`
@@ -94,18 +93,6 @@ AInvest 组件复用不能覆盖 TradingView 视觉目标。若某个 AInvest �
 - hover/focus/active 状态规则
 
 所有 TradingView 视觉值必须集中管理，禁止散落在 JSX 或零散 CSS 中。
-
-允许建立页面级语义变量，例如：
-
-- `--world-economy-bg-page`
-- `--world-economy-bg-card`
-- `--world-economy-text-primary`
-- `--world-economy-text-secondary`
-- `--world-economy-border-subtle`
-- `--world-economy-hover-bg`
-- `--world-economy-positive`
-- `--world-economy-negative`
-- `--world-economy-map-fill-*`
 
 这些变量必须集中定义，并且每个变量都要能追溯到 TradingView 证据。
 
@@ -312,7 +299,6 @@ raw color 扫描范围至少覆盖：
 
 - 本次新增文件
 - 本次修改文件
-- world-economy 页面直接引用的样式文件
 
 不要把第三方依赖或无关历史文件作为本次失败依据，但最终报告必须说明扫描范围。
 

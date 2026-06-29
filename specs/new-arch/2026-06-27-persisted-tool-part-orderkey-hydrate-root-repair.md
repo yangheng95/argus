@@ -1,5 +1,12 @@
 # Persisted Tool Part OrderKey Hydrate Root Repair
 
+Supersession note 2026-06-27: the persisted part projection repair remains
+valid, but this document's earlier claim that `message.part.updated`
+top-level `payload.orderKey` should equal `payload.part.orderKey` is
+superseded by `2026-06-27-message-card-orderkey-convergence.md`. The canonical
+contract is now: top-level `payload.orderKey` orders the owning message;
+`payload.part.orderKey` orders the part.
+
 ## Failure
 
 The active task `tsk_f081eb57a001n3C27LyqLht49b` fails during overlay initialization:
@@ -42,10 +49,10 @@ and `payload.part.orderKey` was still missing. The overlay correctly failed when
 | `Message.Part` schema | Part base has ids only. | Accept projected `orderKey` as part of the public DTO. |
 | `timeline/order.ts` | Has domains for task/control/message/protocol/session/board/interaction, but no part domain. | Add `part` as a first-class domain ordered after message headers and before protocol events. |
 | `Session.updatePart()` | Publishes the caller's raw part after writing `PartTable`, so live `Message.Event.PartUpdated` lacks `part.orderKey`. | Publish and return the projected part with `orderKey` derived from the written row's `time_created + partID`; do not persist the derived field in `PartTable.data`. |
-| `orchestrator/protocol/message-bridge.ts::enrichProperties()` | For part events, route `orderKey` is copied from the owning message metadata. | For `message.part.updated`, require/stamp `payload.part.orderKey` and route `payload.orderKey` from the part key, not the message key. |
-| `protocol/session-mirror.ts::mapSessionBusEvent()` | Standalone session mirror stamps only message route metadata; part payload lacks part key. | Stamp `payload.part.orderKey` and `payload.orderKey` from the persisted part row or already projected part. |
-| `overlay/src/services/events.ts::convertExecutorEventToMessages()` | Converts `run.progress` into synthetic `message.part.updated` events whose part lacks `orderKey`. | Use the backend `run.progress` event `orderKey` as the synthetic part/event key; do not invent a browser-side timestamp/id key. |
-| `overlay/src/services/tree-writer.ts::ensurePartProjection()` | Requires route meta `orderKey` but upserts the raw part; `toolToCardNode()` later fails if `part.orderKey` is absent. | Require displayable part `orderKey`, require it equals route meta `orderKey`, and upsert that validated part. |
+| `orchestrator/protocol/message-bridge.ts::enrichProperties()` | For part events, route `orderKey` was copied from the owning message metadata while part payload could lack part key. | For `message.part.updated`, stamp top-level `payload.orderKey` with the owning message key and `payload.part.orderKey` with the part key; conflicting provided keys fail loudly. |
+| `protocol/session-mirror.ts::mapSessionBusEvent()` | Standalone session mirror stamps message route metadata; part payload lacked part key. | Same contract as the task bridge: top-level message key, nested part key. |
+| `overlay/src/services/events.ts::convertExecutorEventToMessages()` | Converts `run.progress` into synthetic `message.part.updated` events whose part lacks `orderKey`. | Superseded: overlay must not synthesize conversation messages from executor `run.*`; executor-visible content must come from backend durable message rows. |
+| `overlay/src/services/tree-writer.ts::ensurePartProjection()` | Requires route meta `orderKey` but upserts the raw part; `toolToCardNode()` later fails if `part.orderKey` is absent. | Require both top-level message `orderKey` and nested displayable part `orderKey`, and keep them in their separate domains. |
 | `overlay/src/utils/tool-card-node.ts` | Fails fast when tool part lacks `orderKey`. | Keep strict; no fallback. |
 
 ## Repair
@@ -57,8 +64,10 @@ Add a single backend part projection helper beside the persisted message read pa
 - Extend the part DTO schema with optional `orderKey`; write callers are not required to persist it into `PartTable.data`.
 - Add a shared `timelinePartOrderKey()` helper in `timeline/order.ts` so hydrate, live bridge, and tests do not duplicate the part domain/rank contract.
 - Publish `Message.Event.PartUpdated` with the projected part key after `Session.updatePart()` writes or updates the row.
-- Make live bridge and session mirror part events carry the same part key at both `payload.orderKey` and `payload.part.orderKey`.
-- Keep overlay strict by validating route/part key equality before rendering.
+- Make live bridge and session mirror part events carry the owning message key
+  at `payload.orderKey` and the part key at `payload.part.orderKey`.
+- Keep overlay strict by validating that both keys exist in their proper
+  domains before rendering.
 - Keep the overlay strict. Missing `orderKey` remains a backend contract violation.
 
 ## Acceptance
@@ -67,7 +76,12 @@ Add a single backend part projection helper beside the persisted message read pa
 - The same persisted tool part read through `Message.latestAcrossSessions()` has the identical `orderKey`, covering task hydrate.
 - The same persisted tool part read through `Message.parts()` has the identical `orderKey`, covering direct part lookups.
 - The repaired active task conversation API returns tool parts with backend `orderKey` and no longer triggers `tool part ... missing orderKey`.
-- A live `Message.Event.PartUpdated` dispatched through the task bridge exposes `payload.part.orderKey` and `payload.orderKey` with the same part-domain key, not the owning message key.
-- A standalone session mirror `message.part.updated` exposes `payload.part.orderKey` and `payload.orderKey` with the same part-domain key.
-- Overlay tree-writer rejects a `message.part.updated` whose route key and part key differ, and accepts the corrected backend shape.
-- Executor `run.progress` conversion emits synthetic tool parts with a backend-sourced `orderKey`.
+- A live `Message.Event.PartUpdated` dispatched through the task bridge exposes
+  top-level `payload.orderKey` with the owning message key and
+  `payload.part.orderKey` with the part-domain key.
+- A standalone session mirror `message.part.updated` exposes the same split
+  contract.
+- Overlay tree-writer rejects a displayable `message.part.updated` missing
+  either key, and accepts the corrected backend shape.
+- Executor `run.progress` and `run.output` do not create synthetic
+  conversation message cards in the overlay.

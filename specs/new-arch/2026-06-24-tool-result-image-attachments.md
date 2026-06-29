@@ -9,7 +9,7 @@
 
 ## Problem
 
-`browser_preview_compare_regions` already returns side-by-side and diff PNGs as
+`region comparison tool` already returns side-by-side and diff PNGs as
 tool result attachments through `buildMultimodalToolResult`, and the screenshot
 browser indexes `state.attachments`. The center tool-result card only renders
 tool output text plus the special browser metadata screenshot path, so comparison
@@ -22,7 +22,7 @@ preview compare backend.
 ## Recall
 
 - `2026-06-18-preview-repair-tool-adapter-single-source.md` keeps
-  `browser_preview_compare_regions` as a `Tool.define` source used by stage
+  `region comparison tool` as a `Tool.define` source used by stage
   agents through the shared adapter.
 - `2026-06-17-browser-preview-region-runner-single-source.md` requires region
   comparison artifacts to come from task-scoped target/evidence runner state.
@@ -39,20 +39,20 @@ preview compare backend.
 Commands:
 
 ```powershell
-rg -n "browser_preview_compare_regions|compareTaskTargetRegions|compare_regions|CompareRegions|compare regions" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test -S -g "*.ts" -g "*.tsx"
+rg -n "region comparison tool|compareTaskTargetRegions|compare_regions|CompareRegions|compare regions" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test -S -g "*.ts" -g "*.tsx"
 rg -n "type:\s*\"image\"|type:\s*\"file\"|mediaType.*image|attachments|data-image-preview|ToolOutput|tool-output|toolPart|tool-result|state\.output|output" packages/overlay/src/components packages/overlay/src/utils packages/overlay/src/store packages/overlay/test -S -g "*.ts" -g "*.tsx"
 rg -n "attachments" packages/opencorvus/src/engine packages/opencorvus/src/session packages/opencorvus/src/agent packages/opencorvus/src/server -S -g "*.ts"
 ```
 
-| Surface | Finding | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/tool/browser-preview-compare-regions.ts` | Builds `attachments` from side-by-side and diff artifacts via `buildMultimodalToolResult`. | Keep backend contract; no second image transport. |
-| `packages/opencorvus/src/tool/multimodal-result.ts` | Writes images into `AttachmentStore` and returns file attachment refs. | Reuse this as the source for UI display. |
-| `packages/opencorvus/src/session/loop.ts` / `processor.ts` | Tool result attachments are stamped and persisted on `part.state.attachments`. | Do not change event/session shape. |
-| `packages/overlay/src/utils/screenshot-browser.ts` | Collects image refs from `state.attachments` or top-level `attachments`. | Mirror the same attachment locations for inline rendering. |
-| `packages/overlay/src/components/FilePart.tsx` | Already renders image file parts through authenticated fetch and shared preview UI. | Reuse `FilePart` for tool attachment images. |
-| `packages/overlay/src/components/InlineToolPart.tsx` | Renders special `metadata.browser.screenshot`, but not generic tool attachment images. | Add a generic image attachment block after structured output/browsing evidence. |
-| `packages/overlay/test/browser/image-preview-copy.test.ts` | Proves special browser metadata images can be opened and copied. | Extend the browser fixture with generic tool attachment images. |
+| Surface                                                           | Finding                                                                                    | Decision                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/tool/region-comparison-tool.ts` | Builds `attachments` from side-by-side and diff artifacts via `buildMultimodalToolResult`. | Keep backend contract; no second image transport.                               |
+| `packages/opencorvus/src/tool/multimodal-result.ts`               | Writes images into `AttachmentStore` and returns file attachment refs.                     | Reuse this as the source for UI display.                                        |
+| `packages/opencorvus/src/session/loop.ts` / `processor.ts`        | Tool result attachments are stamped and persisted on `part.state.attachments`.             | Do not change event/session shape.                                              |
+| `packages/overlay/src/utils/screenshot-browser.ts`                | Collects image refs from `state.attachments` or top-level `attachments`.                   | Mirror the same attachment locations for inline rendering.                      |
+| `packages/overlay/src/components/FilePart.tsx`                    | Already renders image file parts through authenticated fetch and shared preview UI.        | Reuse `FilePart` for tool attachment images.                                    |
+| `packages/overlay/src/components/InlineToolPart.tsx`              | Renders special `metadata.browser.screenshot`, but not generic tool attachment images.     | Add a generic image attachment block after structured output/browsing evidence. |
+| `packages/overlay/test/browser/image-preview-copy.test.ts`        | Proves special browser metadata images can be opened and copied.                           | Extend the browser fixture with generic tool attachment images.                 |
 
 ## Fix
 
@@ -70,7 +70,7 @@ rg -n "attachments" packages/opencorvus/src/engine packages/opencorvus/src/sessi
 
 - A completed tool part with image attachments renders the images inside the
   expanded tool result card.
-- `browser_preview_compare_regions` side-by-side/diff attachments need no
+- `region comparison tool` side-by-side/diff attachments need no
   backend-specific overlay branch.
 - The screenshot browser still indexes the same attachment refs.
 - Image preview opens from generic tool attachment images.

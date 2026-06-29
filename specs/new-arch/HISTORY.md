@@ -12,56 +12,136 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md)                                   | Right Sidebar OpenCode TUI Upgrade                  |
 | [spec-vscode-extension.md](spec-vscode-extension.md)                                                                                   | spec: opencorvus VSCode 扩展                        |
 
+## 2026-06-28
+
+| File                                                                                             | Title                                 |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| [2026-06-28-delete-running-task-no-premature-queue-terminalization.md](2026-06-28-delete-running-task-no-premature-queue-terminalization.md) | Delete Running Task No Premature Queue Terminalization |
+| [2026-06-28-tool-pending-start-time-contract.md](2026-06-28-tool-pending-start-time-contract.md) | Tool Pending Start Time Contract      |
+
+## 2026-06-27
+
+| File                                                                                             | Title                                 |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| [2026-06-27-bug-hunt-residual-convergence.md](2026-06-27-bug-hunt-residual-convergence.md)       | Bug Hunt Residual Convergence         |
+| [2026-06-27-enterprise-architecture-explorer.md](2026-06-27-enterprise-architecture-explorer.md) | Enterprise Architecture Explorer Plan |
+
 ## 2026-06-26
 
-| File                                                                                                         | Title                                  |
-| ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| [2026-06-26-task-cron-nonblocking-wait.md](2026-06-26-task-cron-nonblocking-wait.md)                         | Task Cron Nonblocking Wait             |
-| [2026-06-26-mission-task-parallel-subtasks.md](2026-06-26-mission-task-parallel-subtasks.md) | Mission And Task Parallel Subtasks |
-| [2026-06-26-wait-tool-twenty-minute-recommendation.md](2026-06-26-wait-tool-twenty-minute-recommendation.md) | Wait Tool Twenty Minute Recommendation |
+| File                                                                                                                                                 | Title                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [2026-06-26-agent-specific-compaction-schema.md](2026-06-26-agent-specific-compaction-schema.md)                                                     | Agent Specific Compaction Schema                           |
+| [2026-06-26-coding-assistant-stop-prompt-state-lifetime.md](2026-06-26-coding-assistant-stop-prompt-state-lifetime.md)                               | Coding Assistant Stop Prompt State Lifetime                |
+| [2026-06-26-mission-task-parallel-subtasks.md](2026-06-26-mission-task-parallel-subtasks.md)                                                         | Mission And Task Parallel Subtasks                         |
+| [2026-06-26-enterprise-a2a-protocol-root-repair.md](2026-06-26-enterprise-a2a-protocol-root-repair.md)                                               | Enterprise A2A Protocol Root Repair                        |
+| [2026-06-26-obsolete-test-suite-prune.md](2026-06-26-obsolete-test-suite-prune.md)                                                                   | Obsolete Test Suite Prune                                  |
+| [2026-06-26-overlay-full-file-browser.md](2026-06-26-overlay-full-file-browser.md)                                                                   | Overlay Full File Browser                                  |
+| [2026-06-26-overlay-reset-db-file-delete-root-repair.md](2026-06-26-overlay-reset-db-file-delete-root-repair.md)                                     | Overlay Reset DB File Delete Root Repair                   |
+| [2026-06-26-prompt-profile-settings-clarity.md](2026-06-26-prompt-profile-settings-clarity.md)                                                       | Prompt Profile Settings Clarity                            |
+| [2026-06-26-repo-obsolete-test-doc-prune-followup.md](2026-06-26-repo-obsolete-test-doc-prune-followup.md)                                           | Repo Obsolete Test/Doc Prune Follow-up                     |
+| [2026-06-26-architect-explicit-goal-count-contract.md](2026-06-26-architect-explicit-goal-count-contract.md)                                         | Architect Explicit Goal Count Contract                     |
+| [2026-06-26-coding-assistant-directory-status-contract.md](2026-06-26-coding-assistant-directory-status-contract.md)                                 | Coding Assistant Directory And Status Contract             |
+| [2026-06-26-cwd-detected-project-scroll.md](2026-06-26-cwd-detected-project-scroll.md)                                                               | CWD Detected Project Scroll                                |
+| [2026-06-26-explicit-terminal-task-lifecycle.md](2026-06-26-explicit-terminal-task-lifecycle.md)                                                     | Explicit Terminal Task Lifecycle                           |
+| [2026-06-26-frontend-replica-desktop-only-decision-surface.md](2026-06-26-frontend-replica-desktop-only-decision-surface.md)                         | Frontend Replica Desktop-Only Decision Surface             |
+| [2026-06-26-model-image-input-blank-crop.md](2026-06-26-model-image-input-blank-crop.md)                                                             | Model Image Input Blank Crop                               |
+| [2026-06-26-message-card-adjacent-segment-timeline.md](2026-06-26-message-card-adjacent-segment-timeline.md)                                         | Message Card Adjacent Segment Timeline                     |
+| [2026-06-26-notification-panel-width-fill.md](2026-06-26-notification-panel-width-fill.md)                                                           | Notification Panel Width Fill                              |
+| [2026-06-26-orchestrator-park-lifecycle-evidence-algorithm.md](2026-06-26-orchestrator-park-lifecycle-evidence-algorithm.md)                         | Orchestrator Park Lifecycle Evidence Algorithm             |
+| [2026-06-26-remove-overlay-transparency-capability.md](2026-06-26-remove-overlay-transparency-capability.md)                                         | Remove Overlay Transparency Capability                     |
+| [2026-06-26-right-toolbar-panel-initial-max-width.md](2026-06-26-right-toolbar-panel-initial-max-width.md)                                           | Right Toolbar Panel Initial Max Width                      |
+| [2026-06-26-screenshot-browser-agent-time-owner.md](2026-06-26-screenshot-browser-agent-time-owner.md)                                               | Screenshot Browser Agent Time Owner                        |
+| [2026-06-26-skill-settings-matrix-density.md](2026-06-26-skill-settings-matrix-density.md)                                                           | Skill Settings Matrix Density                              |
+| [2026-06-26-task-cron-nonblocking-wait.md](2026-06-26-task-cron-nonblocking-wait.md)                                                                 | Task Cron Nonblocking Wait                                 |
+| [2026-06-26-visual-qa-screen-by-screen-blockers.md](2026-06-26-visual-qa-screen-by-screen-blockers.md)                                               | Visual QA Screen-by-Screen Blockers                        |
+| [2026-06-26-wait-cron-early-activity-consume.md](2026-06-26-wait-cron-early-activity-consume.md)                                                     | Wait Cron Early Activity Consume                           |
+| [2026-06-26-wait-tool-twenty-minute-recommendation.md](2026-06-26-wait-tool-twenty-minute-recommendation.md)                                         | Wait Tool Twenty Minute Recommendation                     |
+| [2026-06-26-webpage-evidence-2k-viewport.md](2026-06-26-webpage-evidence-2k-viewport.md)                                                             | Webpage Evidence 2K Viewport                               |
+| [2026-06-26-workspace-command-dock-windows-terminal-launch-root-repair.md](2026-06-26-workspace-command-dock-windows-terminal-launch-root-repair.md) | Workspace Command Dock Windows Terminal Launch Root Repair |
+| [2026-06-26-worktree-clean-expired-root-repair.md](2026-06-26-worktree-clean-expired-root-repair.md)                                                 | Worktree Clean Expired Root Repair                         |
 
 ## 2026-06-25
 
-| File                                                                                                   | Title                               |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| [2026-06-25-context-recovery-and-worktree-reuse.md](2026-06-25-context-recovery-and-worktree-reuse.md) | Context Recovery And Worktree Reuse |
-| [2026-06-25-agent-rail-execution-ledger-source.md](2026-06-25-agent-rail-execution-ledger-source.md)   | Agent Rail Execution Ledger Source  |
-| [2026-06-25-agent-rail-converted-message-stream.md](2026-06-25-agent-rail-converted-message-stream.md) | Agent Rail Converted Message Stream |
+| File                                                                                                                           | Title                                                |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| [2026-06-25-context-recovery-and-worktree-reuse.md](2026-06-25-context-recovery-and-worktree-reuse.md)                         | Context Recovery And Worktree Reuse                  |
+| [2026-06-25-agent-rail-execution-ledger-source.md](2026-06-25-agent-rail-execution-ledger-source.md)                           | Agent Rail Execution Ledger Source                   |
+| [2026-06-25-agent-rail-converted-message-stream.md](2026-06-25-agent-rail-converted-message-stream.md)                         | Agent Rail Converted Message Stream                  |
+| [2026-06-25-architect-contract-graph-persist-integrity.md](2026-06-25-architect-contract-graph-persist-integrity.md)           | Architect Contract Graph Persist Integrity           |
+| [2026-06-25-build-retry-session-resume-and-visible-feedback.md](2026-06-25-build-retry-session-resume-and-visible-feedback.md) | Build Retry Session Resume And Visible Feedback      |
+| [2026-06-25-model-image-input-size-boundary.md](2026-06-25-model-image-input-size-boundary.md)                                 | Model Image Input Size Boundary                      |
+| [2026-06-25-orchestrator-under-one-hour-cancel-boundary.md](2026-06-25-orchestrator-under-one-hour-cancel-boundary.md)         | Orchestrator Under-One-Hour Cancel Boundary          |
+| [2026-06-25-panel-request-and-goal-commit-source-repair.md](2026-06-25-panel-request-and-goal-commit-source-repair.md)         | Panel Request And Goal Commit Source Repair          |
+| [2026-06-25-scheduler-orchestrator-auto-compaction.md](2026-06-25-scheduler-orchestrator-auto-compaction.md)                   | Scheduler Orchestrator Auto Compaction               |
+| [2026-06-25-session-first-message-title.md](2026-06-25-session-first-message-title.md)                                         | Session First Message Title                          |
+| [2026-06-25-skill-panel-refresh-cache-invalidation.md](2026-06-25-skill-panel-refresh-cache-invalidation.md)                   | Skill Panel Refresh Cache Invalidation               |
+| [2026-06-25-terminal-refill-no-decision-contract-repair.md](2026-06-25-terminal-refill-no-decision-contract-repair.md)         | Terminal Refill Wake And No-Decision Contract Repair |
+| [2026-06-25-tool-result-browser-image-single-owner.md](2026-06-25-tool-result-browser-image-single-owner.md)                   | Tool Result Browser Image Single Owner               |
+| [2026-06-25-visual-evidence-no-hard-gate-root-repair.md](2026-06-25-visual-evidence-no-hard-gate-root-repair.md)               | Visual Evidence No Hard Gate Root Repair             |
+| [2026-06-25-visual-qa-self-report-consistency-repair.md](2026-06-25-visual-qa-self-report-consistency-repair.md)               | Visual QA Self-Report Consistency Repair             |
+| [2026-06-25-windows-supervisor-worktree-lock.md](2026-06-25-windows-supervisor-worktree-lock.md)                               | Windows Supervisor Worktree Lock                     |
 
 ## 2026-06-24
 
 | File                                                                                                     | Title                                         |
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| [2026-06-24-a2a-agent-lifecycle-coordination.md](2026-06-24-a2a-agent-lifecycle-coordination.md)         | A2A Agent Lifecycle Coordination              |
+| [2026-06-24-active-task-restart-message.md](2026-06-24-active-task-restart-message.md)                   | Active Task Restart Message                   |
+| [2026-06-24-agent-abstraction-convergence.md](2026-06-24-agent-abstraction-convergence.md)               | Agent Abstraction Convergence                 |
 | [2026-06-24-tool-result-image-attachments.md](2026-06-24-tool-result-image-attachments.md)               | Tool Result Image Attachments                 |
 | [2026-06-24-agent-rail-live-message-stream.md](2026-06-24-agent-rail-live-message-stream.md)             | Agent Rail Live Message Stream                |
-| [2026-06-24-remove-web-clone-source-audit.md](2026-06-24-remove-web-clone-source-audit.md)               | Remove Web Clone Source Audit Tool            |
-| [2026-06-24-prune-obsolete-invalid-tests.md](2026-06-24-prune-obsolete-invalid-tests.md)                 | Prune Obsolete Invalid Tests                  |
+| [2026-06-24-build-toolchain-blocker-persistence.md](2026-06-24-build-toolchain-blocker-persistence.md)   | Build Toolchain Blocker Persistence           |
+| [2026-06-24-orchestrator-expert-squad-skill.md](2026-06-24-orchestrator-expert-squad-skill.md)           | Orchestrator Expert Squad Skill               |
+| [2026-06-24-overlay-task-deep-link.md](2026-06-24-overlay-task-deep-link.md)                             | Overlay Task Deep Link                        |
 | [2026-06-24-read-context-drilldown-only.md](2026-06-24-read-context-drilldown-only.md)                   | Read Context Drilldown Only                   |
+| [2026-06-24-remove-restart-stage-goal-reset.md](2026-06-24-remove-restart-stage-goal-reset.md)           | Retire restart_from_stage                     |
+| [2026-06-24-remove-steer-subagent-tool.md](2026-06-24-remove-steer-subagent-tool.md)                     | Remove steer_subagent Tool                    |
+| [2026-06-24-retire-auto-iteration.md](2026-06-24-retire-auto-iteration.md)                               | Retire Auto Iteration                         |
 | [2026-06-24-scheduler-compact-read-context.md](2026-06-24-scheduler-compact-read-context.md)             | Scheduler Compact And Read Context Repair     |
 | [2026-06-24-terminal-task-no-wake-tool-ownership.md](2026-06-24-terminal-task-no-wake-tool-ownership.md) | Terminal Task No-Wake And Task Tool Ownership |
 | [2026-06-24-task-read-routes-drop-directory.md](2026-06-24-task-read-routes-drop-directory.md)           | Task Read Routes Drop Directory Requirement   |
+| [2026-06-24-tool-pool-convergence.md](2026-06-24-tool-pool-convergence.md)                               | Tool Pool Convergence                         |
 
 ## 2026-06-23
 
 | File                                                                                                                       | Title                                             |
 | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| [2026-06-23-agent-rail-visibility-regression.md](2026-06-23-agent-rail-visibility-regression.md)                           | Agent Rail Visibility Regression                  |
+| [2026-06-23-agent-skill-mount-matrix.md](2026-06-23-agent-skill-mount-matrix.md)                                           | Agent Skill Mount Matrix                          |
 | [2026-06-23-conversation-agent-rail-pointer-capture.md](2026-06-23-conversation-agent-rail-pointer-capture.md)             | Conversation Agent Rail Pointer Capture           |
 | [2026-06-23-packaged-ripgrep-runtime-source.md](2026-06-23-packaged-ripgrep-runtime-source.md)                             | Packaged Ripgrep Runtime Source                   |
 | [2026-06-23-overlay-compact-legal-frame-query.md](2026-06-23-overlay-compact-legal-frame-query.md)                         | Overlay Compact Legal Frame Query                 |
 | [2026-06-23-conversation-hydrate-global-message-budget.md](2026-06-23-conversation-hydrate-global-message-budget.md)       | Conversation Hydrate Global Message Budget        |
 | [2026-06-23-screenshot-top-level-incremental-index.md](2026-06-23-screenshot-top-level-incremental-index.md)               | Screenshot Top Level Incremental Index            |
+| [2026-06-23-delete-running-task-settle-root-repair.md](2026-06-23-delete-running-task-settle-root-repair.md)               | Delete Running Task Settle Root Repair            |
+| [2026-06-23-dialog-drag-frame-owner.md](2026-06-23-dialog-drag-frame-owner.md)                                             | Dialog Drag Frame Owner                           |
+| [2026-06-23-disable-snapshot-and-card-rewind.md](2026-06-23-disable-snapshot-and-card-rewind.md)                           | Disable Snapshot Capture And Card Rewind          |
+| [2026-06-23-final-system-prompt-audit.md](2026-06-23-final-system-prompt-audit.md)                                         | Final System Prompt Audit                         |
+| [2026-06-23-image-preview-wheel-frame-owner.md](2026-06-23-image-preview-wheel-frame-owner.md)                             | Image Preview Wheel Frame Owner                   |
+| [2026-06-23-incremental-frontend-result-tools.md](2026-06-23-incremental-frontend-result-tools.md)                         | Incremental Frontend Result Tools                 |
+| [2026-06-23-intent-analysis-dynamic-followup.md](2026-06-23-intent-analysis-dynamic-followup.md)                           | Intent Analysis Dynamic Follow-Up Questions       |
 | [2026-06-23-task-list-row-directory-selection.md](2026-06-23-task-list-row-directory-selection.md)                         | Task List Row Directory Selection                 |
 | [2026-06-23-center-workbench-frame-phase-split.md](2026-06-23-center-workbench-frame-phase-split.md)                       | Center Workbench Frame Phase Split                |
 | [2026-06-23-overlay-row-main-button-primitive.md](2026-06-23-overlay-row-main-button-primitive.md)                         | Overlay Row Main Button Primitive                 |
+| [2026-06-23-overlay-conversation-render-backpressure.md](2026-06-23-overlay-conversation-render-backpressure.md)           | Overlay Conversation Render Backpressure          |
+| [2026-06-23-overlay-window-unhandledrejection-root-repair.md](2026-06-23-overlay-window-unhandledrejection-root-repair.md) | Overlay window.unhandledrejection Root Repair     |
+| [2026-06-23-project-copy-rename-buttons.md](2026-06-23-project-copy-rename-buttons.md)                                     | Project Copy And Rename Buttons                   |
+| [2026-06-23-project-delete-button.md](2026-06-23-project-delete-button.md)                                                 | Project Delete Button                             |
+| [2026-06-23-research-semantic-validation-batch.md](2026-06-23-research-semantic-validation-batch.md)                       | Research Semantic Validation Batch                |
 | [2026-06-23-browser-preview-live-snapshot-scope-owner.md](2026-06-23-browser-preview-live-snapshot-scope-owner.md)         | Browser Preview Live Snapshot Scope Owner         |
 | [2026-06-23-browser-preview-live-input-rect-cache.md](2026-06-23-browser-preview-live-input-rect-cache.md)                 | Browser Preview Live Input Rect Cache             |
 | [2026-06-23-retire-right-pane-layout-state.md](2026-06-23-retire-right-pane-layout-state.md)                               | Retire Right Pane Layout State                    |
 | [2026-06-23-screenshot-thumbnail-load-queue-cancellation.md](2026-06-23-screenshot-thumbnail-load-queue-cancellation.md)   | Screenshot Thumbnail Load Queue Cancellation      |
+| [2026-06-23-screenshot-thumbnail-derived-resource.md](2026-06-23-screenshot-thumbnail-derived-resource.md)                 | Screenshot Thumbnail Derived Resource             |
+| [2026-06-23-screenshot-thumbnail-request-abort.md](2026-06-23-screenshot-thumbnail-request-abort.md)                       | Screenshot Thumbnail Request Abort                |
 | [2026-06-23-overlay-panel-legal-size-contract.md](2026-06-23-overlay-panel-legal-size-contract.md)                         | Overlay Panel Legal Size Contract                 |
 | [2026-06-23-overlay-ui-asset-fingerprint.md](2026-06-23-overlay-ui-asset-fingerprint.md)                                   | Overlay UI Asset Fingerprint                      |
 | [2026-06-23-screenshot-cache-server-time-restamp.md](2026-06-23-screenshot-cache-server-time-restamp.md)                   | Screenshot Cache Server Time Restamp              |
 | [2026-06-23-task-stop-agent-settle-validation.md](2026-06-23-task-stop-agent-settle-validation.md)                         | Task Stop Agent Settle Validation                 |
 | [2026-06-23-shutdown-scheduler-enterprise-debug.md](2026-06-23-shutdown-scheduler-enterprise-debug.md)                     | Shutdown Scheduler Enterprise Debug               |
+| [2026-06-23-task-list-refresh-unhandled-rejection.md](2026-06-23-task-list-refresh-unhandled-rejection.md)                 | Task List Refresh Unhandled Rejection             |
+| [2026-06-23-titlebar-menubar-popper-single-owner.md](2026-06-23-titlebar-menubar-popper-single-owner.md)                   | Titlebar Menubar Popper Single Owner              |
+| [2026-06-23-uncaught-exception-root-repair.md](2026-06-23-uncaught-exception-root-repair.md)                               | Uncaught Exception Root Repair                    |
 | [2026-06-23-visual-skeleton-region-comparison-root-repair.md](2026-06-23-visual-skeleton-region-comparison-root-repair.md) | Visual Skeleton And Region Comparison Root Repair |
 | [2026-06-23-frontend-research-page-skeleton-blueprint.md](2026-06-23-frontend-research-page-skeleton-blueprint.md)         | Frontend Research Page Skeleton Blueprint         |
 | [2026-06-23-auto-confirm-proposed-tasks.md](2026-06-23-auto-confirm-proposed-tasks.md)                                     | Auto-Confirm Proposed Tasks                       |
@@ -71,17 +151,26 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                                                     | Title                                                |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [2026-06-22-agent-retry-final-trace-session-owner.md](2026-06-22-agent-retry-final-trace-session-owner.md)                               | Agent Retry Final Trace Session Owner                |
+| [2026-06-22-build-terminal-finalizer-continuation.md](2026-06-22-build-terminal-finalizer-continuation.md)                               | Build Terminal Finalizer Continuation                |
 | [2026-06-22-testing-expert-squad-profile.md](2026-06-22-testing-expert-squad-profile.md)                                                 | Testing Expert Squad Profile                         |
 | [2026-06-22-read-context-output-budget.md](2026-06-22-read-context-output-budget.md)                                                     | Read Context Output Budget                           |
 | [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md)                     | Browser Preview Evidence Previewable Image           |
 | [2026-06-22-browser-preview-evidence-live-snapshot-boundary.md](2026-06-22-browser-preview-evidence-live-snapshot-boundary.md)           | Browser Preview Evidence Live Snapshot Boundary      |
 | [2026-06-22-browser-preview-live-input-batch-owner.md](2026-06-22-browser-preview-live-input-batch-owner.md)                             | Browser Preview Live Input Batch Owner               |
 | [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md)                               | Browser Preview Selected Target Probe                |
+| [2026-06-22-delete-active-task-record-context.md](2026-06-22-delete-active-task-record-context.md)                                       | Delete Active Task Record Context                    |
 | [2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md](2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md) | Center Workbench Deferred Reveal Single Layout Owner |
 | [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md)                                     | Center Workbench Open Layout Frame                   |
 | [2026-06-22-config-sidebar-width-single-source.md](2026-06-22-config-sidebar-width-single-source.md)                                     | Config Sidebar Width Single Source                   |
+| [2026-06-22-file-explorer-button-primitive-visual-regression.md](2026-06-22-file-explorer-button-primitive-visual-regression.md)         | File Explorer Button Primitive Visual Regression     |
+| [2026-06-22-frontend-tool-schema-clarity.md](2026-06-22-frontend-tool-schema-clarity.md)                                                 | Frontend Tool Schema Clarity                         |
 | [2026-06-22-retire-default-network-proxy.md](2026-06-22-retire-default-network-proxy.md)                                                 | Retire Default Network Proxy                         |
+| [2026-06-22-new-task-clears-stale-message-panel.md](2026-06-22-new-task-clears-stale-message-panel.md)                                   | New Task Clears Stale Message Panel                  |
 | [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md)                                           | Overlay Resize Frame Coalescing                      |
+| [2026-06-22-overlay-directory-switch-task-ownership-race.md](2026-06-22-overlay-directory-switch-task-ownership-race.md)                 | Overlay Directory Switch Task Ownership Race         |
+| [2026-06-22-overlay-new-task-directory-ownership.md](2026-06-22-overlay-new-task-directory-ownership.md)                                 | Overlay New Task Directory Ownership                 |
+| [2026-06-22-overlay-project-switch-backend-disconnect.md](2026-06-22-overlay-project-switch-backend-disconnect.md)                       | Overlay Project Switch Backend Disconnect            |
 | [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md)                                                       | Overlay UI Serving Source                            |
 | [2026-06-22-packaged-overlay-ui-asset-parity.md](2026-06-22-packaged-overlay-ui-asset-parity.md)                                         | Packaged Overlay UI Asset Parity                     |
 | [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md)                                   | Orchestrator Live Build Park Prompt Repair           |
@@ -101,6 +190,8 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md)                       | Screenshot Browser Bounded Card Collector            |
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md)                                                 | Screenshot Browser Open Jank                         |
 | [2026-06-22-section-phase-solid-owner.md](2026-06-22-section-phase-solid-owner.md)                                                       | Section Phase Solid Owner                            |
+| [2026-06-22-shutdown-interrupted-task-semantics.md](2026-06-22-shutdown-interrupted-task-semantics.md)                                   | Shutdown Interrupted Task Semantics                  |
+| [2026-06-22-task-create-init-git-query.md](2026-06-22-task-create-init-git-query.md)                                                     | Task Create `init-git` Query Parameter               |
 | [2026-06-22-task-switch-directory-source.md](2026-06-22-task-switch-directory-source.md)                                                 | Task Switch Directory Source                         |
 | [2026-06-22-task-switch-stable-request-keys.md](2026-06-22-task-switch-stable-request-keys.md)                                           | Task Switch Stable Request Keys                      |
 | [2026-06-22-prompt-profile-task-session-owner.md](2026-06-22-prompt-profile-task-session-owner.md)                                       | Prompt Profile Task Session Owner                    |
@@ -113,16 +204,19 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-pane-semantics-layout-frame.md](2026-06-22-pane-semantics-layout-frame.md)                                                   | Pane Semantics Layout Frame                          |
 | [2026-06-22-file-changes-hidden-projection-boundary.md](2026-06-22-file-changes-hidden-projection-boundary.md)                           | File Changes Hidden Projection Boundary              |
 | [2026-06-22-usage-strip-card-tree-aggregate.md](2026-06-22-usage-strip-card-tree-aggregate.md)                                           | Usage Strip Card Tree Aggregate                      |
+| [2026-06-22-web-clone-desktop-only-evidence.md](2026-06-22-web-clone-desktop-only-evidence.md)                                           | Web Clone Desktop-Only Evidence                      |
 
 ## 2026-06-21
 
-| File                                                                                                                   | Title                                       |
-| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md)                       | Frontend Research Context Digest            |
-| [2026-06-21-overlay-payload-stamp-rerun-discipline.md](2026-06-21-overlay-payload-stamp-rerun-discipline.md)           | Overlay Payload Stamp Rerun Discipline      |
-| [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md)           | Operator Message Live Goal Abort Audit      |
-| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md)               | Orchestrator Tool-Only Trace Summary Repair |
-| [2026-06-21-world-economy-stuck-adversarial-goal-review.md](2026-06-21-world-economy-stuck-adversarial-goal-review.md) | World Economy Stuck Adversarial Goal Review |
+| File                                                                                                                   | Title                                         |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| [2026-06-21-dispatch-algorithm-agent-audit.md](2026-06-21-dispatch-algorithm-agent-audit.md)                           | Dispatch Algorithm / Agent Boundary Audit     |
+| [2026-06-21-frontend-design-research-adversarial-repair.md](2026-06-21-frontend-design-research-adversarial-repair.md) | Frontend Design / Research Adversarial Repair |
+| [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md)                       | Frontend Research Context Digest              |
+| [2026-06-21-overlay-payload-stamp-rerun-discipline.md](2026-06-21-overlay-payload-stamp-rerun-discipline.md)           | Overlay Payload Stamp Rerun Discipline        |
+| [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md)           | Operator Message Live Goal Abort Audit        |
+| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md)               | Orchestrator Tool-Only Trace Summary Repair   |
+| [2026-06-21-world-economy-stuck-adversarial-goal-review.md](2026-06-21-world-economy-stuck-adversarial-goal-review.md) | World Economy Stuck Adversarial Goal Review   |
 
 ## 2026-06-20
 

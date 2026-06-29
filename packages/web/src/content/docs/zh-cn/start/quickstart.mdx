@@ -56,15 +56,15 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 
 ## 5. 常用任务端点
 
-| 端点                      | 用途                      | 目录 |
-| ------------------------- | ------------------------- | ---- |
-| `GET /tasks`              | 项目任务列表              | 需要 |
+| 端点                      | 用途                      | 目录   |
+| ------------------------- | ------------------------- | ------ |
+| `GET /tasks`              | 项目任务列表              | 需要   |
 | `GET /task/<id>`          | 单任务状态                | 不需要 |
 | `GET /task/<id>/board`    | Kanban 视图               | 不需要 |
-| `POST /task/<id>/message` | 追加用户消息（follow-up） | 需要 |
-| `POST /task/<id>/retry`   | 保持 plan，重试执行       | 需要 |
-| `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   | 需要 |
-| `POST /task/<id>/cancel`  | 取消任务                  | 需要 |
+| `POST /task/<id>/message` | 追加用户消息（follow-up） | 需要   |
+| `POST /task/<id>/retry`   | 保持 plan，重试执行       | 需要   |
+| `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   | 需要   |
+| `POST /task/<id>/cancel`  | 取消任务                  | 需要   |
 
 ## 6. 通过 Slack 创建任务
 

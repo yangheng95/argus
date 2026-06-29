@@ -11,14 +11,14 @@
 ## Problem
 
 The World Economy task had `browser_preview_bind_local_module` and
-`browser_preview_compare_regions` exposed to the visual QA session, but the DB
+`region comparison tool` exposed to the visual QA session, but the DB
 contains no calls to either tool and no `operation_kind="reference-comparison"`
 evidence.
 
 This is not a registration-only bug. The observed chain is:
 
 1. The visual QA tool descriptor included `browser_preview`,
-   `browser_preview_bind_local_module`, and `browser_preview_compare_regions`.
+   `browser_preview_bind_local_module`, and `region comparison tool`.
 2. The task request/goals treated full per-region Reference vs Implementation
    evidence as a later phase instead of a goal-local acceptance requirement.
 3. No separate phase task carrying that evidence requirement existed.
@@ -34,7 +34,7 @@ This is not a registration-only bug. The observed chain is:
 Commands:
 
 ```powershell
-rg -n "browser_preview_compare_regions|browser_preview_bind_local_module|Reference vs Implementation|visual QA|visual-qa|browser_preview" specs packages/opencorvus/src packages/opencorvus/test -g "*.md" -g "*.txt" -g "*.ts"
+rg -n "region comparison tool|browser_preview_bind_local_module|Reference vs Implementation|visual QA|visual-qa|browser_preview" specs packages/opencorvus/src packages/opencorvus/test -g "*.md" -g "*.txt" -g "*.ts"
 rg -n "missing_final_visual_acceptance|requireReferenceCoverage|visual-evidence-bundle|isEssentialVisualEvidenceAcceptanceSpec|reference-comparison" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 rg -n "createVisualQaOutputTools\\(" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 ```

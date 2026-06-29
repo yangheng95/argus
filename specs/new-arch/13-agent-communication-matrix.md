@@ -1,6 +1,8 @@
 # 13 — Agent 通信矩阵（预期 vs 实际）
 
-> 对应代码（2026-06-17 真源）：`src/orchestrator/tools.ts` · `src/orchestrator/loop.ts` ·
+> 对应代码（2026-06-27 真源）：`src/orchestrator/tools.ts` · `src/tool/request-orchestrator-decision.ts` ·
+> `src/engine/agent-coordination.ts` · `src/engine/queue.ts` · `src/conversation/view.ts` ·
+> `src/orchestrator/loop.ts` ·
 > `src/goal/runner.ts`（build tool 的 worktree+executor 执行体） ·
 > `src/build/agent.ts`（build agent；独立包 `agent.ts` / `index.ts` / `report.ts` / `types.ts`） ·
 > `src/agent/sub-agent-protocol.ts`（共享 sub-agent 协议） ·
@@ -9,17 +11,30 @@
 > `src/requirements/agent.ts` · `src/architect/agent.ts` · `src/frontend-design/agent.ts` ·
 > `src/control/message.ts` · `src/channel/ingress.ts`
 >
-> 用途：把"规范里允许谁对谁发消息"和"当前代码里谁真正能触发/接收/间接拿到上下文"并列出来，便于排查通信问题。
+> 用途：把"规范里允许谁对谁发消息"、"当前代码里谁真正能触发/接收/间接拿到上下文"、
+> 以及 worker-to-orchestrator A2A（Agent-to-Agent）调度协议的 durable mailbox 真源并列出来，便于排查通信问题。
 
 ## 先看结论
 
-- 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
+- 当前运行时仍不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 OOP mailbox/registry 协议；外部入口与普通 tool 调用仍是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
+- **worker-to-orchestrator scheduling 的当前真源已切到 durable A2A mailbox**：worker 只能通过 `request_orchestrator_decision` 写入 `agent_coordination_request`；orchestrator 只能通过 `respond_agent_coordination` 原子写入 `agent_coordination_response` / `agent_coordination_action` 并执行 visible action。不要再把 task-root message、direct reply、hidden note、generic same-kind redispatch 或历史 `steer_subagent` 当成调度协议。
+- **A2A 当前实现合同**见 [2026-06-26-enterprise-a2a-protocol-root-repair.md](2026-06-26-enterprise-a2a-protocol-root-repair.md)。本文件的 direct/indirect 矩阵描述的是非 A2A 普通 agent 调用和历史预期对照，不是 worker scheduling mailbox 的替代真源。
 - **Planning tool role 已删除**：the removed planning package 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
 - **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），并吸收旧固定维度 review 与旧对抗性复核职责。`prosecute` / `prosecutor` 已删除。
 - `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：默认按 `experimental.auto_confirm_proposed_tasks=true` 自动创建"完善上一个 request 的新任务"候选，只有该配置显式为 `false` 时才先询问用户；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
+
+## 当前 A2A 调度协议（worker -> orchestrator）
+
+| 方向                          | 唯一入口                                        | Durable artifact / event                                                                            | 说明                                                                                                                                               |
+| ----------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| worker -> orchestrator        | `request_orchestrator_decision`                 | `agent_coordination_request` + `agent.coordination.requested`                                       | worker 记录调度/取消/重试/用户问题请求，并通过 durable wake 唤醒 task orchestrator。                                                               |
+| orchestrator -> worker/action | `respond_agent_coordination`                    | `agent_coordination_response` + `agent_coordination_action` + `agent.coordination.responded/action` | orchestrator 先 claim pending request，再执行 visible `continue_worker` / `cancel_worker` / `ask_user` / `fail_task` / concrete stage redispatch。 |
+| observable projection         | task conversation / SSE / `conversation/events` | `protocol_event` + message/part/session status                                                      | A2A request/response/action、worker continuation、terminal/error、task_report 状态都必须进入同一可恢复投影。                                       |
+
+这个 A2A 表优先级高于下面的 direct whitelist 矩阵。下面矩阵中的 `R/X/A/B/IT/G/E/I -> O` direct/result 只表示普通 tool result 或 task subagent result 回到上游上下文，不表示这些 agent 可以绕过 durable A2A mailbox 请求调度决策。
 
 ## 节点缩写
 
@@ -207,13 +222,16 @@ flowchart LR
 3. `frontend-design` 的结果如果 `build` / `integrity` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
 4. `integrity` 非 pass 后没有进入回修时，先查 review result 是否返回了 actionable findings，以及下一轮 Orchestrator 是否真的再次调了 `build` / `modify_goal` / `architect`。
 5. integrity 结果没出现时，确认 orchestrator 是否真的调了 `integrity` tool；它是 review 路径，不会被 build 自动触发。
-6. 如果未来切到 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 mailbox 协议，`general -> explore` 这条当前真实可用的链路会先卡在 whitelist 定义不闭合的问题上。
+6. 如果未来要实现 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 OOP mailbox/registry，需要单独收敛它与当前 durable A2A mailbox 的边界；不能让两套 mailbox 同时承担 worker scheduling。`general -> explore` 这条当前真实可用的链路仍会先卡在 whitelist 定义不闭合的问题上。
 
 ## 真源文件索引
 
 - `src/channel/ingress.ts`：外部入站是否直接回填 interaction，还是委托 control 层
 - `src/control/message.ts`：panel/control 入口，任务真正创建前的 LLM 路由
 - `src/orchestrator/tools.ts`：orchestrator tools（含 `requirements / frontend_design / architect / build / analyze_intent / integrity / visual_qa / workload_analysis / propose_task / cancel_subagent / refine` 等）
+- `src/tool/request-orchestrator-decision.ts`：worker 创建 durable A2A coordination request 的唯一工具入口
+- `src/engine/agent-coordination.ts`：A2A request/response/action artifact、idempotency、claim、malformed diagnostic 的核心真源
+- `src/conversation/view.ts`：A2A 与 worker lifecycle 进入 task conversation hydrate/replay 的投影
 - `src/orchestrator/loop.ts`：`runTaskLoop` 决策入口
 - `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
 - `src/build/agent.ts`：build agent 入口（`build/` 独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）

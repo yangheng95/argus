@@ -11,7 +11,7 @@ This can bind source regions to the wrong implementation page or persist a faile
 ## Recall
 
 - `specs/new-arch/2026-06-15-gui-benchmark-quality-audit.md` moved browser preview region implementation capture into `browser-preview/evidence-runner.ts`.
-- `specs/new-arch/2026-06-16-local-module-source-binding.md` keeps `browser_preview_compare_regions` as the consumer once a binding exists; the crop must point at the correct local module.
+- `specs/new-arch/2026-06-16-local-module-source-binding.md` keeps `region comparison tool` as the consumer once a binding exists; the crop must point at the correct local module.
 - Existing dirty worktree edits in `region-comparison.ts` and `region-comparison.test.ts` are unrelated to this route-state fix and must not be included in this commit.
 
 ## Callsite Inventory

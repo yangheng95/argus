@@ -45,6 +45,66 @@ function urlToSlug(url) {
   return (tail || "_root").replace(/\//g, "__")
 }
 
+function docsActivityLabel(event, payload) {
+  if (payload && typeof payload.url === "function") return `${event} ${payload.url()}`
+  if (payload && typeof payload.message === "function") return `${event} ${payload.message()}`
+  if (payload && typeof payload.text === "function") return `${event} ${payload.text()}`
+  if (payload && typeof payload.errorText === "string") return `${event} ${payload.errorText}`
+  return event
+}
+
+async function withDocsBrowserInactivity(page, label, inactivityTimeoutMs, action) {
+  let settled = false
+  let lastActivity = "start"
+  let timer
+  let rejectInactive
+  const listeners = []
+  const inactive = new Promise((_, reject) => {
+    rejectInactive = reject
+  })
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+  }
+  const reset = (source) => {
+    if (settled) return
+    lastActivity = source
+    clearTimer()
+    timer = setTimeout(() => {
+      rejectInactive(new Error(`${label} browser inactive for ${inactivityTimeoutMs}ms after ${lastActivity}`))
+    }, inactivityTimeoutMs)
+  }
+  const fail = (source) => {
+    if (settled) return
+    lastActivity = source
+    clearTimer()
+    rejectInactive(new Error(`${label} browser failure before screenshot: ${source}`))
+  }
+  const on = (event, handler) => {
+    page.on(event, handler)
+    listeners.push([event, handler])
+  }
+  on("console", (payload) => reset(docsActivityLabel("console", payload)))
+  on("response", (payload) => {
+    const status = typeof payload.status === "function" ? payload.status() : 0
+    if (status >= 400) {
+      fail(`${docsActivityLabel("response", payload)} HTTP ${status}`)
+      return
+    }
+    reset(docsActivityLabel("response", payload))
+  })
+  on("requestfailed", (payload) => fail(docsActivityLabel("requestfailed", payload)))
+  on("pageerror", (payload) => fail(docsActivityLabel("pageerror", payload)))
+  reset("start")
+  try {
+    return await Promise.race([action(), inactive])
+  } finally {
+    settled = true
+    clearTimer()
+    for (const [event, handler] of listeners) page.off(event, handler)
+  }
+}
+
 ;(async () => {
   const files = listMdx(ROOT).sort()
   console.log(`pages to screenshot: ${files.length}`)
@@ -60,13 +120,17 @@ function urlToSlug(url) {
     const url = fileToUrl(f)
     const slug = urlToSlug(url)
     try {
-      const resp = await page.goto(url, { waitUntil: "networkidle", timeout: 30000 })
+      const resp = await withDocsBrowserInactivity(page, `goto ${url}`, 30_000, () =>
+        page.goto(url, { waitUntil: "domcontentloaded", timeout: 0 }),
+      )
       if (!resp || resp.status() >= 400) {
         errors.push({ url, reason: `HTTP ${resp ? resp.status() : "no-resp"}` })
         console.log(`FAIL ${resp ? resp.status() : "??"} ${url}`)
         continue
       }
-      await page.waitForLoadState("domcontentloaded")
+      await withDocsBrowserInactivity(page, `networkidle ${url}`, 5_000, () =>
+        page.waitForLoadState("networkidle", { timeout: 0 }),
+      )
       // Cap height at 1800 to stay under the 2000px viewer limit; no fullPage.
       await page.setViewportSize({ width: 1440, height: 1800 })
       await page.evaluate(() => window.scrollTo(0, 0))

@@ -48,13 +48,13 @@ This plan must move together with agent and skill definitions:
 
 ### Recall
 
-| Source                                                       | Constraint                                                                                                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AGENTS.md`                                                  | No fallback, no double source, inspect plans before edits, tests for behavior changes.                                                       |
-| `specs/new-arch/08-agent-tool-adapter.md`                    | Current truth is `Agent.Info.tools` plus `ToolRegistry.tools(model, agent)` filtering; the doc admits include/exclude drift and old rows.    |
-| `specs/new-arch/2026-06-24-agent-abstraction-convergence.md` | Agent abstractions are only `host` and `worker`; role-specific metadata belongs in a backend contract.                                       |
-| `packages/opencorvus/src/session/loop.ts`                    | Runtime contract extra tools are merged after registry tools and may shadow registry names.                                                  |
-| `packages/opencorvus/src/agent/context-tools.ts`             | Before this change, `read_file`, `find_files`, `list_directory`, `memory_search`, and `memory_get` were stage-runtime private tools.          |
+| Source                                                       | Constraint                                                                                                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                  | No fallback, no double source, inspect plans before edits, tests for behavior changes.                                                              |
+| `specs/new-arch/08-agent-tool-adapter.md`                    | Current truth is `Agent.Info.tools` plus `ToolRegistry.tools(model, agent)` filtering; the doc admits include/exclude drift and old rows.           |
+| `specs/new-arch/2026-06-24-agent-abstraction-convergence.md` | Agent abstractions are only `host` and `worker`; role-specific metadata belongs in a backend contract.                                              |
+| `packages/opencorvus/src/session/loop.ts`                    | Runtime contract extra tools are merged after registry tools and may shadow registry names.                                                         |
+| `packages/opencorvus/src/agent/context-tools.ts`             | Before this change, `read_file`, `find_files`, `list_directory`, `memory_search`, and `memory_get` were stage-runtime private tools.                |
 | `packages/opencorvus/src/skill/mounts.ts`                    | Before this change, skill required-tool checks inspected `agent.tools.include/exclude`; this moved to the same pool contract as registry filtering. |
 
 ### Current Problem

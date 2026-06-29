@@ -15,14 +15,14 @@ per-goal build attempt 会发布持久证据，任务最终复核面是 `integri
 
 ## 证据表面
 
-| 表面 | 当前源码 |
-| --- | --- |
-| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts` |
-| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts` |
-| Visual QA semantics | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
-| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
-| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
-| Completion guard | `packages/opencorvus/src/orchestrator/tools.ts` |
+| 表面                            | 当前源码                                                    |
+| ------------------------------- | ----------------------------------------------------------- |
+| Verification evidence artifacts | `packages/opencorvus/src/engine/store.ts`                   |
+| Browser preview target/evidence | `packages/opencorvus/src/tool/browser-preview.ts`           |
+| Visual QA semantics             | `packages/opencorvus/src/visual-qa/acceptance-semantics.ts` |
+| Integrity team review           | `packages/opencorvus/src/integrity/team-agent.ts`           |
+| Integrity schemas               | `packages/opencorvus/src/integrity/team-schema.ts`          |
+| Completion guard                | `packages/opencorvus/src/orchestrator/tools.ts`             |
 
 ## Artifact Records
 
@@ -41,11 +41,11 @@ checks 是给 operator 和后续 review 使用的审计证据，不能替代最�
 
 ## Integrity Verdict 语义
 
-| Integrity outcome | Orchestrator 含义 |
-| --- | --- |
-| pass | 集成系统满足本任务；orchestrator 可以用最新 post-build `integrity_attempt` id 调用 `complete_task`。 |
-| non-pass 且有 blocking findings | orchestrator 必须基于证据把修复路由到 build、`modify_goal`、`architect` 或用户问题。 |
-| thrown / artifact missing | orchestrator 会收到可见失败证据并决定恢复；UI 不应静默显示空卡片。 |
+| Integrity outcome               | Orchestrator 含义                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| pass                            | 集成系统满足本任务；orchestrator 可以用最新 post-build `integrity_attempt` id 调用 `complete_task`。 |
+| non-pass 且有 blocking findings | orchestrator 必须基于证据把修复路由到 build、`modify_goal`、`architect` 或用户问题。                 |
+| thrown / artifact missing       | orchestrator 会收到可见失败证据并决定恢复；UI 不应静默显示空卡片。                                   |
 
 ## 你接下来要看的
 

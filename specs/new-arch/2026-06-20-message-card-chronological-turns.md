@@ -1,5 +1,14 @@
 # Message Card Chronological Turns Repair - 2026-06-20
 
+Status: Superseded by `2026-06-26-message-card-adjacent-segment-timeline.md`
+and `2026-06-27-message-card-orderkey-convergence.md`.
+
+This document is historical. Its per-message-card conclusion was replaced by
+the adjacent same-segment projection: cards are ordered by backend message
+timeline order, and adjacent compatible messages can be absorbed into the
+first message's segment card. Interleaved sessions, user/agent role changes,
+and goal phase exceptions still prevent incorrect cross-turn merging.
+
 ## Problem
 
 Mission, coding assistant, and orchestrator cards are currently not a real message timeline. Later messages in the same runtime session can be folded back into the first visible card, so the UI deletes the later card identity and renders the content out of chronological position. The visible symptom is systemic:
@@ -26,28 +35,32 @@ The 2026-06-15 / 2026-06-19 behavior conflicts with the current bug report and w
 
 | Area                      | File / symbol                                                                                                                                                                                                                              | Decision                                                                                                                                                           |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Non-phase card projection | `packages/overlay/src/services/tree-writer.ts` `ensureMessageTurnProjection`, `regroupTimelineSegments`, `timelineCardID`                                                                                                                  | Every visible non-phase message owns one deterministic card id: `<stage>:session:<sid>:message:<mid>`, except integrity's dedicated card. No same-session regroup. |
+| Non-phase card projection | `packages/overlay/src/services/tree-writer.ts` `ensureMessageTurnProjection`, `regroupTimelineSegments`, `timelineCardID`                                                                                                                  | Adjacent compatible display messages share the first message's segment card. Interleaved sessions or role changes start a new card. |
 | Part relocation           | `collectTimelineParts`, `clearTimelinePartIndexes`, `upsertPart`                                                                                                                                                                           | Rebuild parts by message owner; never move parts from a later message into an earlier message card.                                                                |
-| Usage/model projection    | `projectUsageOntoCard`, `projectModelOntoCard`                                                                                                                                                                                             | Since non-phase cards are one message each, usage/model are projected to that message card. Phase cards may still aggregate.                                       |
+| Usage/model projection    | `projectUsageOntoCard`, `projectModelOntoCard`                                                                                                                                                                                             | Usage/model are projected onto the rendered owner card for each message; segment cards may aggregate compatible adjacent messages.                                  |
 | Hierarchy/order           | `sessionOwnedCardIDs`, `rebuildCardHierarchy`, `rebuildTopLevelOrder`                                                                                                                                                                      | All non-phase message cards stay top-level unless claimed by existing hierarchy rules; global card order remains real time.                                        |
-| Hydration                 | `hydrateConversationView`                                                                                                                                                                                                                  | Hydrate first creates per-message cards, then regroup verifies per-message ownership from transcript time.                                                         |
+| Hydration                 | `hydrateConversationView`                                                                                                                                                                                                                  | Hydrate consumes backend `view.messages[]` order keys and transcript payload, then applies the same adjacent segment projection as live events.                     |
 | Agent rail                | `packages/overlay/src/store/conversation-agents.ts`                                                                                                                                                                                        | Hydrated rail targets must use message-level view entries when available, not session-level `lastDisplayMessageID` heuristics.                                     |
 | Backend view              | `packages/opencorvus/src/conversation/view.ts`, `packages/opencorvus/src/engine/model.ts`                                                                                                                                                  | Add `messages[]` as the canonical render/rail projection. `sessions[]` remains session metadata and aggregate indexing.                                            |
 | Routes                    | `packages/opencorvus/src/server/routes/orchestrator.ts`, `packages/opencorvus/src/server/routes/session.ts`                                                                                                                                | They already call `projectConversationView`; schema and tests cover the new view shape.                                                                            |
-| Tests                     | `packages/overlay/test/tree-writer-*`, `packages/overlay/test/conversation-agent-rail-records.test.ts`, `packages/opencorvus/test/server/conversation-view.test.ts`, `packages/opencorvus/test/server/session-conversation-routes.test.ts` | Replace tests that assert same-agent merging; add multi-turn Mission/coding/orchestrator coverage.                                                                 |
+| Tests                     | `packages/overlay/test/tree-writer-*`, `packages/overlay/test/conversation-agent-rail-records.test.ts`, `packages/opencorvus/test/server/conversation-view.test.ts`, `packages/opencorvus/test/server/session-conversation-routes.test.ts` | Replace per-message-card expectations with adjacent-segment expectations plus interleaving separation coverage.                                                    |
 
 ## New Invariant
 
 For any displayable non-phase message:
 
-1. The render card id is a function of the real message id.
-2. A later message never reuses an earlier non-phase message card, even if both messages share `sessionID`, `stage`, and `goalID`.
-3. User cards are never merged.
-4. Orchestrator/root cards do not absorb child-agent-interrupted resumes.
-5. Phase-absorbed goal sessions continue to render inside the phase card and use boundary parts there.
-6. Integrity keeps its dedicated integrity card identity.
-7. Hydrated transcript and live SSE produce the same card ids and the same chronological order.
-8. Agent rail target ids must refer to an actually renderable card for the target message.
+1. Global card order follows backend message `orderKey`.
+2. Adjacent compatible messages in the same rendered segment share the first
+   message's card ID.
+3. Interleaved sessions, user/agent role changes, and filtered/hidden
+   placements start separate cards.
+4. Phase-absorbed goal sessions continue to render inside the phase card and
+   use boundary parts there.
+5. Integrity keeps its dedicated integrity card identity.
+6. Hydrated transcript and live SSE produce the same segment card ids and the
+   same chronological order.
+7. Agent rail target ids come from the actual tree-writer rendered target for
+   the target message.
 
 ## Acceptance
 

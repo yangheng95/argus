@@ -28,27 +28,27 @@ Orchestrator decision changes it.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, no hidden prompt injection, inspect plans before edits, and test code changes. |
-| `2026-06-16-prompt-profile-expert-squad-switching.md` | Expert squads are prompt profiles compiled by one backend registry. They must not create workflows, routing branches, per-agent prompt mutations, or keyword selection gates. |
-| `2026-06-22-testing-expert-squad-profile.md` | The old `testing` profile lives in `PromptProfile.builtIns`; changing its product meaning belongs in that registry and related tests. |
-| `2026-06-23-agent-skill-mount-matrix.md` | Skill visibility must go through mounted `SKILL.md` frontmatter and the canonical `skill` tool. Full skill bodies are loaded through visible tool results, not hidden prompt injection. |
-| `2026-06-08-frontend-agents-skill-tool.md` | Exact runtime contracts must expose `skill` in the actual runtime tool set, not only in the agent registry. |
+| Source                                                      | Constraint                                                                                                                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                 | No fallback, no double source, no hidden prompt injection, inspect plans before edits, and test code changes.                                                                                  |
+| `2026-06-16-prompt-profile-expert-squad-switching.md`       | Expert squads are prompt profiles compiled by one backend registry. They must not create workflows, routing branches, per-agent prompt mutations, or keyword selection gates.                  |
+| `2026-06-22-testing-expert-squad-profile.md`                | The old `testing` profile lives in `PromptProfile.builtIns`; changing its product meaning belongs in that registry and related tests.                                                          |
+| `2026-06-23-agent-skill-mount-matrix.md`                    | Skill visibility must go through mounted `SKILL.md` frontmatter and the canonical `skill` tool. Full skill bodies are loaded through visible tool results, not hidden prompt injection.        |
+| `2026-06-08-frontend-agents-skill-tool.md`                  | Exact runtime contracts must expose `skill` in the actual runtime tool set, not only in the agent registry.                                                                                    |
 | `2026-05-21-orchestrator-skill-loop-provider-error-fuse.md` | The previous Orchestrator skill ban prevented generic skill-loop drift. This task intentionally supersedes that ban with explicit expert-squad skills and a tested Orchestrator skill surface. |
 
 ## Impact Inventory
 
-| Surface | Call points | Action |
-| --- | --- | --- |
-| Prompt profile registry | `packages/opencorvus/src/agent/prompt-profile.ts` | Rename built-in IDs to `frontend-replica` and `frontend-automation-debug`; update default and role-scoped overlays. |
-| Prompt profile backend tests | `packages/opencorvus/test/agent/prompt-profile.test.ts`, server/task/session route tests | Update expected IDs, labels, default active profile, config activation, and prompt composition assertions. |
-| Orchestrator registry surface | `packages/opencorvus/src/agent/agent.ts` | Add `skill` and `select_expert_squad` to the Orchestrator declared tool surface. |
-| Orchestrator exact runtime tools | `packages/opencorvus/src/orchestrator/tools.ts`, `packages/opencorvus/src/session/loop.ts` existing finalizer | Add `select_expert_squad` and a runtime `skill` placeholder so `SessionLoop` rebinds it to the canonical mounted-skill surface for the turn. |
-| Session prompt profile overlay | `Session.mergeConfigOverlay`, `EffectiveConfig.base`, `PromptProfile.assertKnownProfileID` | Use the existing root-session config overlay as the single selection source. |
-| Skill builtins | `packages/opencorvus/src/skill/skill.ts`, `packages/opencorvus/src/skill/builtin/*.md` | Add two built-in `SKILL.md` files mounted to `orchestrator`; do not add auto-detection or hidden loading. |
-| Skill tests | `packages/opencorvus/test/skill/skill.test.ts`, `packages/opencorvus/test/tool/skill.test.ts`, agent/session exact-tool tests | Prove built-in skills are mounted to Orchestrator and can be searched/loaded through the canonical `skill` tool. |
-| Overlay fixtures | Prompt profile fixtures under `packages/overlay/test` | Update visible fixture rows where tests pin built-in prompt profiles. |
+| Surface                          | Call points                                                                                                                   | Action                                                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt profile registry          | `packages/opencorvus/src/agent/prompt-profile.ts`                                                                             | Rename built-in IDs to `frontend-replica` and `frontend-automation-debug`; update default and role-scoped overlays.                          |
+| Prompt profile backend tests     | `packages/opencorvus/test/agent/prompt-profile.test.ts`, server/task/session route tests                                      | Update expected IDs, labels, default active profile, config activation, and prompt composition assertions.                                   |
+| Orchestrator registry surface    | `packages/opencorvus/src/agent/agent.ts`                                                                                      | Add `skill` and `select_expert_squad` to the Orchestrator declared tool surface.                                                             |
+| Orchestrator exact runtime tools | `packages/opencorvus/src/orchestrator/tools.ts`, `packages/opencorvus/src/session/loop.ts` existing finalizer                 | Add `select_expert_squad` and a runtime `skill` placeholder so `SessionLoop` rebinds it to the canonical mounted-skill surface for the turn. |
+| Session prompt profile overlay   | `Session.mergeConfigOverlay`, `EffectiveConfig.base`, `PromptProfile.assertKnownProfileID`                                    | Use the existing root-session config overlay as the single selection source.                                                                 |
+| Skill builtins                   | `packages/opencorvus/src/skill/skill.ts`, `packages/opencorvus/src/skill/builtin/*.md`                                        | Add two built-in `SKILL.md` files mounted to `orchestrator`; do not add auto-detection or hidden loading.                                    |
+| Skill tests                      | `packages/opencorvus/test/skill/skill.test.ts`, `packages/opencorvus/test/tool/skill.test.ts`, agent/session exact-tool tests | Prove built-in skills are mounted to Orchestrator and can be searched/loaded through the canonical `skill` tool.                             |
+| Overlay fixtures                 | Prompt profile fixtures under `packages/overlay/test`                                                                         | Update visible fixture rows where tests pin built-in prompt profiles.                                                                        |
 
 ## Work Checklist
 

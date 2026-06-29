@@ -8,17 +8,17 @@ Delete the `steer_agent` tool related logic and code. Repository search shows no
 
 Full-repository search before this plan:
 
-| Surface | Current references | Action |
-| --- | --- | --- |
-| Tool implementation | `packages/opencorvus/src/orchestrator/tools.ts::steer_subagent` | Delete the tool entry entirely. |
-| Shared target resolver | `packages/opencorvus/src/orchestrator/tools.ts::resolveSteerTarget` | Keep behavior for `cancel_subagent`, rename to remove steer semantics, and update error text. |
-| Decision-control set | `packages/opencorvus/src/orchestrator/tools.ts` contains `"steer_subagent"` | Remove. |
-| Orchestrator visible tools | `packages/opencorvus/src/agent/tool-pool-contract.ts` contains `"steer_subagent"` | Remove from the orchestrator private tool list. |
-| Orchestrator prompt | `packages/opencorvus/src/prompt/core/orchestrator-core.txt` teaches `steer_subagent` | Remove steering instructions; keep `cancel_subagent` recovery guidance. |
-| Active architecture docs | `specs/new-arch/01-agents.md`, `specs/new-arch/13-agent-communication-matrix.md` list `steer_subagent` as current surface | Update current-surface docs. Historical dated specs remain historical evidence. |
-| Agent visibility tests | `packages/opencorvus/test/agent/agent.test.ts` expects visibility | Assert absence. |
-| Tool description tests | `packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts` reads steer schema/description | Remove steer assertions and keep cancel schema coverage. |
-| Tool behavior tests | `packages/opencorvus/test/orchestrator/tools.test.ts` contains four `steer_subagent` behavior tests | Replace with absence assertions for the generated orchestrator tools. |
+| Surface                    | Current references                                                                                                        | Action                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Tool implementation        | `packages/opencorvus/src/orchestrator/tools.ts::steer_subagent`                                                           | Delete the tool entry entirely.                                                               |
+| Shared target resolver     | `packages/opencorvus/src/orchestrator/tools.ts::resolveSteerTarget`                                                       | Keep behavior for `cancel_subagent`, rename to remove steer semantics, and update error text. |
+| Decision-control set       | `packages/opencorvus/src/orchestrator/tools.ts` contains `"steer_subagent"`                                               | Remove.                                                                                       |
+| Orchestrator visible tools | `packages/opencorvus/src/agent/tool-pool-contract.ts` contains `"steer_subagent"`                                         | Remove from the orchestrator private tool list.                                               |
+| Orchestrator prompt        | `packages/opencorvus/src/prompt/core/orchestrator-core.txt` teaches `steer_subagent`                                      | Remove steering instructions; keep `cancel_subagent` recovery guidance.                       |
+| Active architecture docs   | `specs/new-arch/01-agents.md`, `specs/new-arch/13-agent-communication-matrix.md` list `steer_subagent` as current surface | Update current-surface docs. Historical dated specs remain historical evidence.               |
+| Agent visibility tests     | `packages/opencorvus/test/agent/agent.test.ts` expects visibility                                                         | Assert absence.                                                                               |
+| Tool description tests     | `packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts` reads steer schema/description             | Remove steer assertions and keep cancel schema coverage.                                      |
+| Tool behavior tests        | `packages/opencorvus/test/orchestrator/tools.test.ts` contains four `steer_subagent` behavior tests                       | Replace with absence assertions for the generated orchestrator tools.                         |
 
 ## Implementation Rules
 

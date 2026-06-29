@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 ## Problem
 
-`browser_preview_compare_regions` records the authored `source_bbox` in the result, but `region-comparison.ts` crops PNGs by clamping the box to the image bounds. A bbox such as `x=80,y=80,w=30,h=30` on a `100x100` source image becomes a `20x20` artifact while the manifest still says `30x30`.
+`region comparison tool` records the authored `source_bbox` in the result, but `region-comparison.ts` crops PNGs by clamping the box to the image bounds. A bbox such as `x=80,y=80,w=30,h=30` on a `100x100` source image becomes a `20x20` artifact while the manifest still says `30x30`.
 
 This creates false completed evidence: the comparison artifact no longer represents the declared source region.
 

@@ -6,12 +6,12 @@ Date: 2026-06-20
 
 Root-cause and repair the OpenCorvus visual reference evidence chain so a
 reference-driven frontend task cannot substitute standalone screenshots or text
-reports for task-scoped `browser_preview_compare_regions` evidence.
+reports for task-scoped `region comparison tool` evidence.
 
 The triggering task was `tsk_ee0f11c510011D4AnsTMGr0bh7`. Database and artifact
 forensics showed:
 
-- `browser_preview_compare_regions` actual tool calls for the task: `0`.
+- `region comparison tool` actual tool calls for the task: `0`.
 - `browser_screenshot` calls existed, but they were standalone screenshots.
 - Three `browser_preview` calls returned `target.status="missing"` and did not
   persist a `browser_preview_target`.
@@ -27,7 +27,7 @@ forensics showed:
   shell, browser MCP output, and old targets must not silently write or satisfy
   preview target state.
 - `2026-06-18-browser-preview-repair-tool-algorithm-pressure-benchmark.md`
-  requires `browser_preview_bind_local_module` -> `browser_preview_compare_regions`
+  requires `browser_preview_bind_local_module` -> `region comparison tool`
   tool-level reachability and `operation_kind="reference-comparison"` evidence.
 - `2026-06-19-browser-preview-repair-pressure-benchmark-timeout-fix.md`
   requires inactivity-aware benchmark timeout behavior.
@@ -42,7 +42,7 @@ forensics showed:
 | `packages/opencorvus/src/tool/browser-preview.ts`                 | Starts the service through `BashTool`, then probes explicit/process-output URLs once through `waitForBrowserPreviewUrlReachable`. A slow dev server can miss the window and return `target.status="missing"`. | Keep `browser_preview` as sole owner, but make its own startup observation and reachability wait robust enough for slow URL output and slow page readiness.                                 |
 | `packages/opencorvus/src/browser-preview/liveness.ts`             | Uses a fixed short reachability window and HTTP status only.                                                                                                                                                  | Add configurable readiness waiting that can be reused by the explicit tool tests without relying on browser-session fallback.                                                               |
 | `packages/opencorvus/src/browser-preview/extract.ts`              | Exposes output URL extraction and generic `persistBrowserPreviewUrls`.                                                                                                                                        | Do not reintroduce generic automatic materialization. Any helper used for this repair must be called only by `browser_preview` or direct tests.                                             |
-| `packages/opencorvus/src/tool/browser-preview-compare-regions.ts` | Correctly requires a persisted `browser_preview_target` ID.                                                                                                                                                   | Preserve this strict target ID requirement.                                                                                                                                                 |
+| `packages/opencorvus/src/tool/region-comparison-tool.ts` | Correctly requires a persisted `browser_preview_target` ID.                                                                                                                                                   | Preserve this strict target ID requirement.                                                                                                                                                 |
 | `packages/opencorvus/src/acceptance/visual-evidence.ts`           | `VisualRegionEvidence.evidenceRefs` is `string[]`; `visualEvidenceBundlePasses` does not resolve refs to `browser_preview_evidence` rows or require `reference-comparison`.                                   | Add a resolver/validator contract for required reference regions. Passing visual bundles must include readable `browser_preview_evidence` rows with `operationKind="reference-comparison"`. |
 | `packages/opencorvus/src/visual-qa/schema.ts`                     | Evidence type still allows generic `screenshot`; refs are free-form strings.                                                                                                                                  | Add a first-class `reference_comparison` evidence type or structured equivalent. Keep screenshots as context only.                                                                          |
 | `packages/opencorvus/src/visual-qa/output-tools.ts`               | `accepted=true` only requires some evidence and coverage, so screenshot-only reports pass.                                                                                                                    | When a report claims or covers reference parity, `accepted=true` must require reference comparison evidence or reject with a blocker message.                                               |
@@ -60,7 +60,7 @@ forensics showed:
   URL comparison as fallback.
 - Command-derived URLs remain diagnostic only unless explicitly supplied as
   `url`.
-- `browser_preview_compare_regions` continues to require a persisted target ID.
+- `region comparison tool` continues to require a persisted target ID.
 - Visual QA cannot accept screenshot-only evidence when reference parity is in
   scope; it must cite `reference_comparison` / `browser_preview_evidence`
   evidence or submit blockers.
@@ -144,7 +144,7 @@ forensics showed:
   `reference_comparison_evidence_refs` field. The field is optional for
   ordinary builds, but a build whose structured context declares reference
   parity cannot record `status="passed"` unless those refs resolve to readable,
-  passed `browser_preview_compare_regions` `reference-comparison` evidence.
+  passed `region comparison tool` `reference-comparison` evidence.
 - Orchestrator now passes current-target reference parity context into Build.
   Goal builds use the current goal's structured acceptance scorers; task-level
   direct builds use the task-level reference parity context. This avoids

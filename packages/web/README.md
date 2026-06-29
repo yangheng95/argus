@@ -15,7 +15,7 @@ bun run --cwd packages/web check
 ## Content
 
 - Product documentation lives in `packages/web/src/content/docs/**`.
-- API reference pages are generated from `packages/sdk/openapi.json`.
+- API reference pages are generated from live OpenAPI route metadata by `packages/opencorvus/script/docs/render-api-md.ts`.
 - Shared site configuration lives in `packages/web/config.mjs`.
 
 Do not recreate the retired `docs/product/**` tree; public product docs use this package as the single source.

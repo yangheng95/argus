@@ -33,9 +33,8 @@
 
 | 表                         | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `browser_preview_target` · `browser_preview_evidence` · `orchestrator-stream-error` |
+| `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。`EngineArtifactKind` 的唯一真源是 `packages/opencorvus/src/engine/engine.sql.ts`，本文档禁止复制完整枚举。 |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `engine_executor_session`  | 执行器会话绑定                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### 交互与绑定
 
@@ -44,7 +43,7 @@
 | `engine_interaction_request` | type ∈ {permission, question}; status ∈ {pending, …}                            |
 | `engine_channel_binding`     | 外部 channel（platform/channel/thread） ↔ task 绑定；`ChannelIngress` 查询入口 |
 
-> 实际 `sqliteTable` 注册见 `engine.sql.ts`：EngineSpecSnapshotTable、EngineSpecItemTable、EngineTaskTable、EnginePlanVersionTable、EngineMilestoneTable、EngineGoalTable、EngineRequirementTable、EnginePlanNodeTable、EngineInteractionRequestTable、EngineArtifactTable、EngineProgressSnapshotTable、EngineExecutorSessionTable、EngineChannelBindingTable（共 13 个）。
+> 实际 `sqliteTable` 注册以 `packages/opencorvus/src/engine/engine.sql.ts` 的 `export const Engine*Table = sqliteTable(...)` 为唯一真源；本文档只描述表职责，不复制完整注册清单或数量。
 
 **唯一写入者**：`task-api/index.ts` 和 `engine/persist.ts` / `engine/state.ts` / `engine/store.ts`。禁止其他模块直接写 `engine_*` 表。
 
@@ -60,10 +59,11 @@
 | `todo`       | session 内 todo                                                                           |
 | `permission` | 权限请求（project 级全量规则集）                                                          |
 
-**SessionKind**（固定在 creation time，见 `session.sql.ts:50-65`，按代码出现顺序）：
-`root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` · `requirements` ·
-`frontend-design` · `goal` · `architect` · `integrity` · `acceptance` · `executor` · `build` ·
-`evaluator` · `system` —— **共 15 种**。
+**SessionKind**（固定在 creation time，见 `session.sql.ts` 的 `SESSION_KINDS`，按代码出现顺序）：
+`root` · `orchestrator` · `assistant` · `mission` · `intent-analysis` · `requirements` ·
+`frontend-design` · `goal` · `architect` · `goal-workload-analyst` · `integrity` ·
+`fact-check` · `acceptance` · `executor` · `build` · `explore` · `deep-research` ·
+`frontend-research` · `visual-qa` · `evaluator` · `system` —— **共 21 种**。
 
 > 历史版本本文档曾写"16 种"且把 `planner` 列入，那是抄旧 `planner/` 包时代的草稿。
 > Planning tool role 已随 the removed planning package 整目录删除（见 [01-agents.md](01-agents.md)），
@@ -75,7 +75,7 @@
 - ~~`session.channel_key`~~ — Gateway 单例概念删除
 - ~~`session_gateway_singleton_idx`~~ — partial unique index 已删
 
-`kind='gateway'` 的 SessionKind **保留**——`src/gateway/` 目录仍在，承担"SDK gateway 客户端会话"职责（见 [03-control.md](03-control.md)）；只是不再有 per-channel 单例。
+`gateway` 不再是 SessionKind；当前 gateway 是 control-plane HTTP surface / route（见 [03-control.md](03-control.md)），不通过独立 session kind 或旧 gateway 包承载。
 
 新增的字段 `goal_id`：当 session 归属某个 goal（`executor` / `build` / `evaluator` session）时写入，overlay 据此把消息嵌在 goal 卡片下。`planner` kind 已删除，此处不再列入。
 

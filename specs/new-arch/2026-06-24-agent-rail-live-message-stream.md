@@ -16,23 +16,23 @@ conversation hydrate.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, no blind patching, inspect disk plans before edits, test every change, visually verify UI-related delivery, do not restart/refresh the live overlay process without explicit confirmation. |
-| `2026-05-13-conversation-agent-workflow-rail.md` | The rail is a Conversation-owned bottom strip, hidden when there are no real agent records, and must not create synthetic cards. |
-| `2026-06-23-overlay-conversation-render-backpressure.md` | The mounted rail must read `conversationAgentStore.records` and must not restore component-level card-tree workflow scans. |
-| `2026-06-23-agent-rail-visibility-regression.md` | Tail hydrate already updates `conversationAgentStore`; visibility fixes must preserve the single `conversation-agents.ts` store owner. |
+| Source                                                   | Constraint carried forward                                                                                                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no double source, no blind patching, inspect disk plans before edits, test every change, visually verify UI-related delivery, do not restart/refresh the live overlay process without explicit confirmation. |
+| `2026-05-13-conversation-agent-workflow-rail.md`         | The rail is a Conversation-owned bottom strip, hidden when there are no real agent records, and must not create synthetic cards.                                                                                          |
+| `2026-06-23-overlay-conversation-render-backpressure.md` | The mounted rail must read `conversationAgentStore.records` and must not restore component-level card-tree workflow scans.                                                                                                |
+| `2026-06-23-agent-rail-visibility-regression.md`         | Tail hydrate already updates `conversationAgentStore`; visibility fixes must preserve the single `conversation-agents.ts` store owner.                                                                                    |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `ConversationAgentRail.tsx` | Reads only `conversationAgentRecordsForSource(boardStore.selectedSource)`. | Keep unchanged; no card-tree fallback or local scan. |
-| `conversation-agents.ts` | Owns `hydrateConversationAgentView()` and source-keyed records. | Add the live `message.updated` projection here so the same store remains the rail source. |
-| `events.ts` | `message.*` SSE writes `cardTreeStore`; only `task.messages.changed` schedules tail hydrate. | After a selected `message.updated` is accepted by tree-writer, update the rail store for the selected task source. |
-| `conversation.ts` | Full hydrate and tail merge call `hydrateConversationAgentView()`. | Keep authoritative hydrate behavior; full `agentView` replaces live incremental records when received. |
-| `selected-task-recovery.test.ts` | Covers `task.messages.changed` DB tail updating rail records. | Add direct `message.updated` coverage proving rail records appear without a refresh or tail hydrate. |
-| `conversation-agent-rail-records.test.ts` | Covers hydrated record targeting and source scoping. | Add live-message record tests for top-level, goal-phase, filtered/user, and source scoping behavior. |
+| Surface                                   | Evidence                                                                                     | Decision                                                                                                           |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `ConversationAgentRail.tsx`               | Reads only `conversationAgentRecordsForSource(boardStore.selectedSource)`.                   | Keep unchanged; no card-tree fallback or local scan.                                                               |
+| `conversation-agents.ts`                  | Owns `hydrateConversationAgentView()` and source-keyed records.                              | Add the live `message.updated` projection here so the same store remains the rail source.                          |
+| `events.ts`                               | `message.*` SSE writes `cardTreeStore`; only `task.messages.changed` schedules tail hydrate. | After a selected `message.updated` is accepted by tree-writer, update the rail store for the selected task source. |
+| `conversation.ts`                         | Full hydrate and tail merge call `hydrateConversationAgentView()`.                           | Keep authoritative hydrate behavior; full `agentView` replaces live incremental records when received.             |
+| `selected-task-recovery.test.ts`          | Covers `task.messages.changed` DB tail updating rail records.                                | Add direct `message.updated` coverage proving rail records appear without a refresh or tail hydrate.               |
+| `conversation-agent-rail-records.test.ts` | Covers hydrated record targeting and source scoping.                                         | Add live-message record tests for top-level, goal-phase, filtered/user, and source scoping behavior.               |
 
 ## Root Cause
 

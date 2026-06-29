@@ -16,23 +16,23 @@ content width while the parent panel remains wider.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate width source, no blind patching, add tests, and visually verify frontend work with screenshots. |
-| `specs/notification-center-history-contract-2026-06-09.md` | Toast and panel surfaces share `NotificationCenter`; panel list padding was removed so cards align to panel edges. |
-| `specs/new-arch/2026-06-18-notification-live-region-task-action.md` | `NotificationCenter` remains one shared component; do not split toast and panel rendering. |
+| Source                                                               | Constraint carried forward                                                                                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                          | No fallback logic, no duplicate width source, no blind patching, add tests, and visually verify frontend work with screenshots.   |
+| `specs/notification-center-history-contract-2026-06-09.md`           | Toast and panel surfaces share `NotificationCenter`; panel list padding was removed so cards align to panel edges.                |
+| `specs/new-arch/2026-06-18-notification-live-region-task-action.md`  | `NotificationCenter` remains one shared component; do not split toast and panel rendering.                                        |
 | `specs/new-arch/2026-06-26-right-toolbar-panel-initial-max-width.md` | Right toolbar panel width is controlled by center workbench tokens and initial-width caps, not by per-panel JavaScript constants. |
 
 ## Call Point Inventory
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Notification mount | `packages/overlay/src/index.html` contains `#solidNotificationCenterMount.notification-center-panel` inside `#rightPanelNotifications`. | Keep the DOM mount. The host must stretch its child instead of creating a second wrapper. |
-| Solid component | `packages/overlay/src/components/NotificationCenter.tsx` renders one `.app-notifications` root for toast and panel surfaces. | Keep the shared component and add no panel-specific render branch. |
-| Notification CSS | `packages/overlay/src/styles/surfaces/notifications.css` owns `.notification-center-panel`, its direct child, `.app-notifications[data-surface="panel"]`, `.app-notification-group__items`, and `.app-notification`. | Make the mount, Solid Portal direct child, panel root, and notification rows stretch to the inherited panel width in the existing CSS owner. |
-| Workbench sizing | `packages/overlay/src/styles/surfaces/workspace.css` owns `.center-workbench-view[data-initial-width-capped="true"]` and the right-toolbar max-width token. | Do not change workbench width ownership; the bug is descendant width fill, not panel max-width. |
-| Static tests | `packages/overlay/test/notification-center-primitive.test.ts` guards shared component/CSS contracts. | Add source assertions that the panel root and rows fill available width. |
-| Browser visual test | `packages/overlay/test/browser/notification-center-task-action-browser.test.ts` already opens the real Notifications panel and captures a panel screenshot. | Extend it to measure panel/card widths and save a current screenshot for visual review. |
+| Area                | Evidence                                                                                                                                                                                                             | Decision                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notification mount  | `packages/overlay/src/index.html` contains `#solidNotificationCenterMount.notification-center-panel` inside `#rightPanelNotifications`.                                                                              | Keep the DOM mount. The host must stretch its child instead of creating a second wrapper.                                                    |
+| Solid component     | `packages/overlay/src/components/NotificationCenter.tsx` renders one `.app-notifications` root for toast and panel surfaces.                                                                                         | Keep the shared component and add no panel-specific render branch.                                                                           |
+| Notification CSS    | `packages/overlay/src/styles/surfaces/notifications.css` owns `.notification-center-panel`, its direct child, `.app-notifications[data-surface="panel"]`, `.app-notification-group__items`, and `.app-notification`. | Make the mount, Solid Portal direct child, panel root, and notification rows stretch to the inherited panel width in the existing CSS owner. |
+| Workbench sizing    | `packages/overlay/src/styles/surfaces/workspace.css` owns `.center-workbench-view[data-initial-width-capped="true"]` and the right-toolbar max-width token.                                                          | Do not change workbench width ownership; the bug is descendant width fill, not panel max-width.                                              |
+| Static tests        | `packages/overlay/test/notification-center-primitive.test.ts` guards shared component/CSS contracts.                                                                                                                 | Add source assertions that the panel root and rows fill available width.                                                                     |
+| Browser visual test | `packages/overlay/test/browser/notification-center-task-action-browser.test.ts` already opens the real Notifications panel and captures a panel screenshot.                                                          | Extend it to measure panel/card widths and save a current screenshot for visual review.                                                      |
 
 ## Root Cause
 

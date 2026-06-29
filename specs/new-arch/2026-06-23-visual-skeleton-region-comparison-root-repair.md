@@ -10,7 +10,7 @@ Economy clone task `tsk_eef6e866c001v3gMMrwSzAcmfb`:
 1. `frontend_design` can submit a `visual-html-skeleton` whose rendered
    screenshot exists but whose page structure omits source sections, reorders
    sections, or counts navigation labels as content coverage.
-2. `browser_preview_compare_regions` can produce readable
+2. `region comparison tool` can produce readable
    `reference-comparison` artifacts while using the wrong implementation
    viewport or marking a severe visual mismatch as passed evidence.
 
@@ -165,7 +165,7 @@ be cited as passed reference parity proof.
   crops are stitched at true size and dimension mismatch remains a failure
   signal.
 - The comparison result makes this visible by including `comparison_mode:
-  "true-size"`, an artifact note, and a true-size label in the side-by-side PNG.
+"true-size"`, an artifact note, and a true-size label in the side-by-side PNG.
 - Low-similarity region artifacts are available for repair but cannot become
   passed `browser_preview_evidence` used by Visual QA or Integrity.
 - Targeted tests and typecheck pass.

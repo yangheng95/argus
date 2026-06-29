@@ -29,13 +29,13 @@ prompt loop finishes or an explicit cancellation reaches it.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | No fallback, no masking errors, inspect disk plans before edits, tests required for behavior changes. |
-| `2026-06-23-task-stop-agent-settle-validation.md` | Ordinary stop success must wait for prompt state settlement; terminal `SessionStatus` is not proof. |
-| `2026-06-22-delete-active-task-record-context.md` | User/operator cancellation must remain fail-loud when a live session has no matching prompt state. |
-| `2026-06-26-coding-assistant-directory-status-contract.md` | Coding Assistant uses canonical session routes and must carry the selected project directory explicitly. |
-| `session/prompt/state.ts` comment | `Instance.dispose()` must not abort running sessions merely because configuration or overlay context is refreshed. |
+| Source                                                     | Constraint                                                                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                | No fallback, no masking errors, inspect disk plans before edits, tests required for behavior changes.              |
+| `2026-06-23-task-stop-agent-settle-validation.md`          | Ordinary stop success must wait for prompt state settlement; terminal `SessionStatus` is not proof.                |
+| `2026-06-22-delete-active-task-record-context.md`          | User/operator cancellation must remain fail-loud when a live session has no matching prompt state.                 |
+| `2026-06-26-coding-assistant-directory-status-contract.md` | Coding Assistant uses canonical session routes and must carry the selected project directory explicitly.           |
+| `session/prompt/state.ts` comment                          | `Instance.dispose()` must not abort running sessions merely because configuration or overlay context is refreshed. |
 
 ## Call Point Inventory
 
@@ -47,14 +47,14 @@ rg -n "SessionPromptState\\.start|SessionPrompt\\.loop|enqueuePromptAfterPersist
 rg -n "SessionStatus\\.set|SessionStatus\\.get|State\\.dispose|Instance\\.dispose|lazyInstanceState" packages/opencorvus/src packages/opencorvus/test
 ```
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/session/prompt/state.ts` | Prompt states are per-directory `State` entries with no disposer. `State.dispose(directory)` can remove them while `SessionStatus` remains process-global. | Replace prompt state storage with one process-local map keyed by resolved directory. Do not attach it to `Instance.state`. |
-| `packages/opencorvus/src/session/loop.ts` | Loop starts/resumes/finishes prompt state with `session.directory`. | Keep call shape. The state module continues to require the same directory key. |
-| `packages/opencorvus/src/engine/cancellation-scope.ts` | `cancelSessionPromptInScope` correctly rejects `streaming` without matched prompt state. | Preserve fail-loud invariant; the fix is preventing state loss, not weakening cancellation proof. |
-| `packages/opencorvus/src/server/routes/coding.ts` | Coding abort validates the right-sidebar session and calls the shared cancellation scope. | Keep route semantics and 409 on genuine missing live owner. |
-| `packages/overlay/src/services/coding-assistant.ts` / `main.tsx` | Frontend already sends row/session directory explicitly. | No frontend 409 suppression. |
-| Existing tests | `extra-tools.test.ts`, `coding-routes.test.ts`, and `session-prompt-async.test.ts` pin fail-loud behavior for manually inconsistent `streaming` status. | Keep or adjust only where the new lifetime invariant changes observable state. Add survival regression. |
+| Surface                                                          | Evidence                                                                                                                                                   | Decision                                                                                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/session/prompt/state.ts`                | Prompt states are per-directory `State` entries with no disposer. `State.dispose(directory)` can remove them while `SessionStatus` remains process-global. | Replace prompt state storage with one process-local map keyed by resolved directory. Do not attach it to `Instance.state`. |
+| `packages/opencorvus/src/session/loop.ts`                        | Loop starts/resumes/finishes prompt state with `session.directory`.                                                                                        | Keep call shape. The state module continues to require the same directory key.                                             |
+| `packages/opencorvus/src/engine/cancellation-scope.ts`           | `cancelSessionPromptInScope` correctly rejects `streaming` without matched prompt state.                                                                   | Preserve fail-loud invariant; the fix is preventing state loss, not weakening cancellation proof.                          |
+| `packages/opencorvus/src/server/routes/coding.ts`                | Coding abort validates the right-sidebar session and calls the shared cancellation scope.                                                                  | Keep route semantics and 409 on genuine missing live owner.                                                                |
+| `packages/overlay/src/services/coding-assistant.ts` / `main.tsx` | Frontend already sends row/session directory explicitly.                                                                                                   | No frontend 409 suppression.                                                                                               |
+| Existing tests                                                   | `extra-tools.test.ts`, `coding-routes.test.ts`, and `session-prompt-async.test.ts` pin fail-loud behavior for manually inconsistent `streaming` status.    | Keep or adjust only where the new lifetime invariant changes observable state. Add survival regression.                    |
 
 ## Fix Plan
 

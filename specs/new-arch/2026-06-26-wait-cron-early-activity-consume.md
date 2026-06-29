@@ -27,12 +27,12 @@ Command basis:
 rg -n "createTaskWake|dispatchTaskLoop|beforeAcceptedWake|Message.Event.PartUpdated|appendAndWakeTaskOperatorMessage|replyAgentSession|updatePart" packages/opencorvus/src packages/opencorvus/test -g "*.ts"
 ```
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/scheduler/cron-service.ts` | Add the single cron consumption primitive. It deletes enabled, one-shot, unclaimed or expired-lease task wait rows and wait-created session rows. Install activity subscriptions for terminal non-`wait` tool results and direct user replies in task session trees. |
-| `packages/opencorvus/src/engine/queue.ts` | When `dispatchTaskLoop` accepts any real task wake, synchronously consume pending task wait cron rows before custom accepted-wake hooks run. Due cron jobs are leased and therefore are not deleted out from under their executor. |
-| `Session` message/part writes | Keep as the observable event source. Do not add hidden messages or route-specific fallback wakes. |
-| `packages/opencorvus/test/scheduler/cron-service.test.ts` | Cover deletion semantics, leased-row preservation, early terminal tool result wake, and `wait` tool result self-consumption prevention. |
+| Surface                                                   | Decision                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/scheduler/cron-service.ts`       | Add the single cron consumption primitive. It deletes enabled, one-shot, unclaimed or expired-lease task wait rows and wait-created session rows. Install activity subscriptions for terminal non-`wait` tool results and direct user replies in task session trees. |
+| `packages/opencorvus/src/engine/queue.ts`                 | When `dispatchTaskLoop` accepts any real task wake, synchronously consume pending task wait cron rows before custom accepted-wake hooks run. Due cron jobs are leased and therefore are not deleted out from under their executor.                                   |
+| `Session` message/part writes                             | Keep as the observable event source. Do not add hidden messages or route-specific fallback wakes.                                                                                                                                                                    |
+| `packages/opencorvus/test/scheduler/cron-service.test.ts` | Cover deletion semantics, leased-row preservation, early terminal tool result wake, and `wait` tool result self-consumption prevention.                                                                                                                              |
 
 ## Acceptance
 

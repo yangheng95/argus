@@ -107,7 +107,7 @@
   - `executor/` 新增 `codex.ts` / `bootstrap.ts` / `discovery.ts` / `external-process.ts` / `managed.ts` / `runtime-env.ts`
   - `provider/` 拆出 `vendor-headers.ts` / `vendor-messages.ts`；新增 `policy.ts` / `hexin-discovery.ts` / `hexin-profiles.ts`；删除 `codex-live.ts`
   - `mcp/` 新增 `stdio.ts`
-  - 修正：`gateway/` **未整删**，保留 3 个文件（SDK gateway 客户端会话辅助）
+  - 2026-06-27 修正：旧 gateway 包已不存在；gateway 是 `server/routes/gateway.ts` 的 control-plane surface，不是独立 SessionKind 或 SDK gateway 客户端会话包
   - 09-verification-evidence.md / 12-overlay-card-system.md / 11-agent-oop-protocol.md
     在头部补"实施状态"标注，区分"目标设计"与"代码现状"
   - 15/16 文档头部补 follow-up TODO（runtime.ts status 分支 / goal-status mapRunStatus / teardown 多源）
@@ -135,10 +135,11 @@
   - 2026-06-15 修正：`prosecutor` / `prosecute` 不再是当前注册 agent/tool；对抗性复核职责归入
     `integrity` reviewer team。
   - `panel/capability.ts` 当前注册 **20 个 action**（详见 03-control.md）
-  - **SessionKind 实际是 15 种**（02-data.md 写"16 种"且把 `planner` 列入是错的）：
-    `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` ·
-    `requirements` · `frontend-design` · `goal` · `architect` · `integrity` ·
-    `acceptance` · `executor` · `build` · `evaluator` · `system`
+  - **SessionKind 实际是 21 种**（以 `session.sql.ts` 的 `SESSION_KINDS` 为准）：
+    `root` · `orchestrator` · `assistant` · `mission` · `intent-analysis` ·
+    `requirements` · `frontend-design` · `goal` · `architect` · `goal-workload-analyst` ·
+    `integrity` · `fact-check` · `acceptance` · `executor` · `build` · `explore` ·
+    `deep-research` · `frontend-research` · `visual-qa` · `evaluator` · `system`
   - SSE 端点真源是 `src/server/routes/orchestrator.ts`（task / task event 双 SSE 主线）+
     `routes/panel.ts` / `routes/global.ts` / `routes/app.ts` / `routes/coding.ts` 5 个文件；
     `src/server/event.ts` 只是 7 行的 `BusEvent` 类型声明（`server.connected` / `global.disposed`），

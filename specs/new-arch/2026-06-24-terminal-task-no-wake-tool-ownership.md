@@ -37,15 +37,15 @@ Command basis:
 rg -n "handleTaskMessage|appendAndWakeTaskOperatorMessage|recordOperatorNote|injectMessage|dispatchTaskLoop|cancel_task|retry_task|inject_operator_message|fail_task|build: tool|integrity: tool" packages/opencorvus/src packages/opencorvus/test -S
 ```
 
-| Surface | Decision |
-| --- | --- |
-| `AgentToolPool.ORCHESTRATOR_PRIVATE_TOOL_IDS` | Keep task-level lifecycle tools in the Orchestrator private list only. |
-| `createOrchestratorTools()` | Add a terminal-task tool execution guard so same-turn continuations after success/failure/cancel cannot mutate terminal tasks. |
-| `dispatchTaskLoop()` / `runTaskLoop()` | Ignore passive terminal wakes. Accept structured operator wake events by reopening the terminal task to `queued`, then let the directory queue activate it. |
-| `appendAndWakeTaskOperatorMessage()` | Append visible operator messages, reopen terminal tasks to `queued`, and dispatch through the queue. |
-| `recordOperatorNote()` | Record the note, reopen terminal tasks to `queued`, and dispatch through the queue. |
-| `injectMessage()` | Reuse the same append/operator-wake behavior; terminal tasks can be woken by explicit injection. |
-| `orchestrator-core.txt` | Teach the scheduler that task lifecycle/control tools are scheduler-owned, terminal self-wakes are suppressed, and external operator wakes restart only through queue activation. |
+| Surface                                       | Decision                                                                                                                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentToolPool.ORCHESTRATOR_PRIVATE_TOOL_IDS` | Keep task-level lifecycle tools in the Orchestrator private list only.                                                                                                            |
+| `createOrchestratorTools()`                   | Add a terminal-task tool execution guard so same-turn continuations after success/failure/cancel cannot mutate terminal tasks.                                                    |
+| `dispatchTaskLoop()` / `runTaskLoop()`        | Ignore passive terminal wakes. Accept structured operator wake events by reopening the terminal task to `queued`, then let the directory queue activate it.                       |
+| `appendAndWakeTaskOperatorMessage()`          | Append visible operator messages, reopen terminal tasks to `queued`, and dispatch through the queue.                                                                              |
+| `recordOperatorNote()`                        | Record the note, reopen terminal tasks to `queued`, and dispatch through the queue.                                                                                               |
+| `injectMessage()`                             | Reuse the same append/operator-wake behavior; terminal tasks can be woken by explicit injection.                                                                                  |
+| `orchestrator-core.txt`                       | Teach the scheduler that task lifecycle/control tools are scheduler-owned, terminal self-wakes are suppressed, and external operator wakes restart only through queue activation. |
 
 ## Acceptance
 

@@ -22,6 +22,8 @@
 > `packages/overlay/src/services/events.ts` · `services/sse.ts` · `services/chat.ts` ·
 > `services/tree-writer.ts`
 >
+> **当前消息卡片契约（2026-06-27 以后）**：下文仍保留的“一个 session 一张卡”“`message.part.updated` 写入 session card parts”等描述是历史设计，不是当前实现依据。当前真源是 `2026-06-27-message-card-orderkey-convergence.md` 与 `tree-writer.ts`：可见消息按 backend `orderKey` 时间线排序，只有相邻且同一聚合 key 的消息 segment 才吸收进同一 card；`message.part.updated` 顶层 / `payload.orderKey` 是 owning message-domain key，`payload.part.orderKey` 是 part-domain key；lifecycle 使用 session-domain key，不能按 sessionID 做全局卡片聚合。
+>
 > 起因：task `tsk_d9f5d9e9f001sl07PPCdRLIhGL` goal 阶段 overlay 频繁卡死。
 > 本文档是系统性重构方案（不是打补丁），执行前必须先读完。
 

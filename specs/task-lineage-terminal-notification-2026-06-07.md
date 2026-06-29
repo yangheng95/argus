@@ -8,16 +8,16 @@
 
 ## Call-point inventory
 
-| Surface                         | File                                                                                       | Decision                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Task terminal writes            | `packages/opencorvus/src/engine/state.ts`                                                  | Single notification trigger, because all completed/failed/cancelled task transitions pass through `updateTask`. |
+| Surface                         | File                                                                                       | Decision                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Task terminal writes            | `packages/opencorvus/src/engine/state.ts`                                                  | Single notification trigger, because all completed/failed/cancelled task transitions pass through `updateTask`.   |
 | Direct task creation            | `packages/opencorvus/src/task-api/index.ts`                                                | No mission/parent owner-wide serialization; channel/request idempotency remains the duplicate-ingress protection. |
-| Mission task creation           | `packages/opencorvus/src/tool/panel.ts`                                                    | Keep provenance owner as `metadata.mission.session_id`; no separate lock here.                                  |
-| Orchestrator follow-up creation | `packages/opencorvus/src/orchestrator/tools.ts`                                            | Keep parent owner as `metadata.parent_task_id`; no separate lock here.                                          |
-| Parent task lineage read        | `packages/opencorvus/src/engine/store.ts`                                                  | Keep `metadata.parent_task_id` as single source.                                                                |
-| Mission task lineage read       | `packages/opencorvus/src/engine/store.ts` and `packages/opencorvus/src/mission/session.ts` | Keep `metadata.mission.{id,session_id}` as single source.                                                       |
-| Generic subagent tool prompt    | `packages/opencorvus/src/tool/task.txt`                                                    | Keep dependency-aware parallel-agent guidance.                                                                  |
-| Mission prompt                  | `packages/opencorvus/src/prompt/core/mission-core.txt`                                     | Permit multiple independent `create_task` calls; dependent work queues or waits for prerequisite completion.     |
+| Mission task creation           | `packages/opencorvus/src/tool/panel.ts`                                                    | Keep provenance owner as `metadata.mission.session_id`; no separate lock here.                                    |
+| Orchestrator follow-up creation | `packages/opencorvus/src/orchestrator/tools.ts`                                            | Keep parent owner as `metadata.parent_task_id`; no separate lock here.                                            |
+| Parent task lineage read        | `packages/opencorvus/src/engine/store.ts`                                                  | Keep `metadata.parent_task_id` as single source.                                                                  |
+| Mission task lineage read       | `packages/opencorvus/src/engine/store.ts` and `packages/opencorvus/src/mission/session.ts` | Keep `metadata.mission.{id,session_id}` as single source.                                                         |
+| Generic subagent tool prompt    | `packages/opencorvus/src/tool/task.txt`                                                    | Keep dependency-aware parallel-agent guidance.                                                                    |
+| Mission prompt                  | `packages/opencorvus/src/prompt/core/mission-core.txt`                                     | Permit multiple independent `create_task` calls; dependent work queues or waits for prerequisite completion.      |
 
 ## Implementation notes
 
