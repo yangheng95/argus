@@ -73,6 +73,7 @@ describe("MCP overlay service", () => {
     await addMcpServer({
       name: "docs",
       type: "remote",
+      transport: "streamable-http",
       url: "https://mcp.example.com/api",
     })
 
@@ -119,6 +120,7 @@ describe("MCP overlay service", () => {
       {
         name: "docs",
         type: "remote",
+        transport: "streamable-http",
         url: "https://mcp.example.com/api",
       },
       { directory: PROJECT_DIR },
@@ -139,6 +141,7 @@ describe("MCP overlay service", () => {
       {
         name: "docs",
         type: "remote",
+        transport: "streamable-http",
         url: "https://mcp.example.com/api",
       },
       {
@@ -158,6 +161,7 @@ describe("MCP overlay service", () => {
       buildMcpAddRequest({
         name: "docs",
         type: "remote",
+        transport: "streamable-http",
         url: "https://mcp.example.com/api",
       }),
     ).toEqual({
@@ -168,6 +172,16 @@ describe("MCP overlay service", () => {
         url: "https://mcp.example.com/api",
       },
     })
+  })
+
+  test("remote MCP config requires an explicit transport", () => {
+    expect(() =>
+      buildMcpAddRequest({
+        name: "docs",
+        type: "remote",
+        url: "https://mcp.example.com/api",
+      } as Parameters<typeof buildMcpAddRequest>[0]),
+    ).toThrow("MCP remote transport is required")
   })
 
   test("builds local MCP config using the server-side command array contract", () => {
