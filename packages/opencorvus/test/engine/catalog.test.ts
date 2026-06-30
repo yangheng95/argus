@@ -10,9 +10,11 @@ import {
   doesGoalRunSatisfyGoal,
   goalRunGoalProjectionStatus,
   goalRunWorkflowProjectionStatus,
+  doesRunStatusImplyStarted,
   isAbortedGoalRunStatus,
   isActiveGoalRunStatus,
   isDispatchableRunStatus,
+  isExecutorActiveRunStatus,
   isFailedGoalRunStatus,
   isGoalRunStatus,
   isLiveGoalRunStatus,
@@ -20,6 +22,7 @@ import {
   isRunStatus,
   isSuccessfulGoalRunStatus,
   isTerminalGoalRunStatus,
+  isTerminalRunStatus,
 } from "../../src/engine/catalog"
 
 describe("engine status catalog", () => {
@@ -67,15 +70,29 @@ describe("engine status catalog", () => {
     expect(isGoalRunStatus("zombie")).toBe(false)
   })
 
-  test("run status catalog separates live from dispatchable", () => {
+  test("run status catalog centralizes projection semantics", () => {
     expect(LIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
     expect(DISPATCHABLE_RUN_STATUSES).toEqual(["accepted", "running", "blocked"])
     expect(EXECUTOR_ACTIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
 
-    expect(isLiveRunStatus("queued")).toBe(true)
-    expect(isDispatchableRunStatus("queued")).toBe(false)
-    expect(isDispatchableRunStatus("running")).toBe(true)
-    expect(isLiveRunStatus("completed")).toBe(false)
+    const cases = [
+      ["queued", true, false, true, false, false],
+      ["accepted", true, true, true, false, true],
+      ["running", true, true, true, false, true],
+      ["blocked", true, true, true, false, true],
+      ["completed", false, false, false, true, true],
+      ["failed", false, false, false, true, false],
+      ["aborted", false, false, false, true, false],
+    ] as const
+
+    for (const [status, live, dispatchable, executorActive, terminal, started] of cases) {
+      expect(isLiveRunStatus(status)).toBe(live)
+      expect(isDispatchableRunStatus(status)).toBe(dispatchable)
+      expect(isExecutorActiveRunStatus(status)).toBe(executorActive)
+      expect(isTerminalRunStatus(status)).toBe(terminal)
+      expect(doesRunStatusImplyStarted(status)).toBe(started)
+    }
+
     expect(isRunStatus("queued")).toBe(true)
     expect(isRunStatus("zombie")).toBe(false)
   })

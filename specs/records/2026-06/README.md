@@ -44,6 +44,7 @@ Current-day records:
 - [2026-06-30-goal-run-attempt-status-required.md](2026-06-30-goal-run-attempt-status-required.md) records the goal-run attempt status fail-fast parsing repair.
 - [2026-06-30-goal-run-state-simplification.md](2026-06-30-goal-run-state-simplification.md) records the goal-run state projection simplification plan.
 - [2026-06-30-run-artifact-status-required.md](2026-06-30-run-artifact-status-required.md) records the run artifact status fail-fast parsing repair.
+- [2026-06-30-run-status-catalog-classification.md](2026-06-30-run-status-catalog-classification.md) records the run status catalog classification cleanup.
 - [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md) records the plan to retire live run/live goal_run lifecycle rows as orchestration control sources while preserving live ownership and active session protection.
 
 ## Rules

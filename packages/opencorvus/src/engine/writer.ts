@@ -18,7 +18,7 @@
 import { Log } from "@/util/log"
 import { Database, and, eq, inArray, isNotNull, isNull } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isLiveGoalRunStatus, isLiveRunStatus } from "./catalog"
+import { GOAL_RUN_RESETTABLE_STATUSES, isLiveGoalRunStatus, isLiveRunStatus } from "./catalog"
 import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -754,7 +754,7 @@ export async function abortLiveOrchestratorToolOwnership(input: {
  * Used by explicit task-level abort paths. Filters mirror what earlier inline
  * implementations used:
  *   - goal_runs with a resettable status (skips completed/aborted/failed)
- *   - runs in any live status (LIVE_RUN_STATUSES)
+ *   - runs in any live status
  *
  * Goal workspaces are goal-scoped, not goal_run-scoped. Task-level aborts
  * preserve workspaces by default. Physical deletion is success-only and is
@@ -771,8 +771,7 @@ export async function abortLiveExecutionForTask(input: {
     input.includeGoalRuns === false
       ? []
       : listGoalRunsForTask(input.taskID).filter((row) => GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
-  const runRows =
-    input.includeRuns === false ? [] : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
+  const runRows = input.includeRuns === false ? [] : findRuns(input.taskID).filter((row) => isLiveRunStatus(row.status))
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true ? listGoals(input.taskID).map((goal) => goal.id) : []
   await cleanupGoalWorkspaces(cleanupGoals)

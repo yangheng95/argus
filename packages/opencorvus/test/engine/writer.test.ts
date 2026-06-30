@@ -4,9 +4,9 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
-import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { findGoalLatestWorkspace } from "../../src/engine/store"
-import { cleanupGoalWorkspaceForGoal } from "../../src/engine/writer"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { findGoalLatestWorkspace, findRun } from "../../src/engine/store"
+import { abortLiveExecutionForTask, cleanupGoalWorkspaceForGoal } from "../../src/engine/writer"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -267,6 +267,88 @@ describe("engine writer goal workspace cleanup", () => {
         await expect(cleanupGoalWorkspaceForGoal(goalID)).rejects.toThrow("outside goal workspace roots")
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         expect(findGoalLatestWorkspace(goalID).branch).toBe("opencorvus/not-a-goal-worktree")
+      },
+    })
+  })
+
+  test("abortLiveExecutionForTask aborts live runs and leaves terminal runs unchanged", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const projectID = Instance.project.id
+        const taskID = `tsk_writer_abort_${now}`
+        const liveRunID = `run_writer_live_${now}`
+        const terminalRunID = `run_writer_done_${now}`
+
+        Database.transaction((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Writer Test",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoNothing()
+            .run()
+
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "writer abort task",
+              request: "abort live run",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+
+          for (const [runID, status] of [
+            [liveRunID, "running"],
+            [terminalRunID, "completed"],
+          ] as const) {
+            db.insert(EngineArtifactTable)
+              .values({
+                id: runID,
+                task_id: taskID,
+                run_id: runID,
+                kind: "run",
+                label: `run-${status}`,
+                payload: {
+                  plan_version_id: null,
+                  session_id: null,
+                  executor: "opencorvus",
+                  status,
+                  phase: "execute",
+                  blocking_reason: null,
+                  error: null,
+                  retry_count: 0,
+                  executor_ref: null,
+                  metadata: null,
+                  time_started: status === "running" ? now : now - 10,
+                  time_completed: status === "completed" ? now : null,
+                },
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          }
+        })
+
+        const result = await abortLiveExecutionForTask({
+          taskID,
+          reason: "operator abort",
+          includeGoalRuns: false,
+        })
+
+        expect(result.runs).toBe(1)
+        expect(findRun(liveRunID)?.status).toBe("aborted")
+        expect(findRun(terminalRunID)?.status).toBe("completed")
       },
     })
   })
