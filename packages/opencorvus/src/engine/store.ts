@@ -49,10 +49,11 @@ import {
 } from "./engine.sql"
 import {
   ACTIVE_GOAL_RUN_STATUSES,
-  DISPATCHABLE_RUN_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
-  LIVE_RUN_STATUSES,
+  isDispatchableRunStatus,
   isGoalRunStatus,
+  isLiveRunStatus,
+  isRunStatus,
 } from "./catalog"
 import { deriveTaskStatus, taskTerminalReason } from "./task-status"
 import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
@@ -438,7 +439,7 @@ export function findLatestRunForTask(taskID: string): RunRow | undefined {
  * completed/failed/aborted tips stay in history but are not active. */
 export function findActiveRunForTask(taskID: string): RunRow | undefined {
   const latest = findLatestRunForTask(taskID)
-  return latest && (LIVE_RUN_STATUSES as readonly string[]).includes(latest.status) ? latest : undefined
+  return latest && isLiveRunStatus(latest.status) ? latest : undefined
 }
 
 /** Phase-6-f-5: return the single non-superseded spec snapshot for a task,
@@ -1303,7 +1304,7 @@ export function listLiveRuns(): RunRow[] {
   )
   return latestPerRun(rows)
     .map(artifactRowToRunRow)
-    .filter((r) => (LIVE_RUN_STATUSES as readonly string[]).includes(r.status))
+    .filter((r) => isLiveRunStatus(r.status))
 }
 
 export function listLiveRunsForProject(projectID: string): RunRow[] {
@@ -1319,7 +1320,7 @@ export function listLiveRunsForProject(projectID: string): RunRow[] {
   )
   return latestPerRun(rows)
     .map(artifactRowToRunRow)
-    .filter((r) => (LIVE_RUN_STATUSES as readonly string[]).includes(r.status))
+    .filter((r) => isLiveRunStatus(r.status))
 }
 
 export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
@@ -1717,7 +1718,7 @@ export function activeRunBySession(sessionID: string): RunRow | undefined {
       .map((row) => row.artifact),
   )
   const collapsed = latestPerRun(rows).map(artifactRowToRunRow)
-  return collapsed.find((r) => (DISPATCHABLE_RUN_STATUSES as readonly string[]).includes(r.status))
+  return collapsed.find((r) => isDispatchableRunStatus(r.status))
 }
 
 export function viewTask(row: TaskRow, input?: { directory?: string }) {
@@ -2053,12 +2054,27 @@ function latestPerRun(
 }
 
 /** Reconstruct a `RunRow` from an `engine_artifact` row with kind="run". */
+function requireRunPayloadStatus(
+  row: typeof EngineArtifactTable.$inferSelect,
+  payload: { status?: unknown },
+): import("./engine.sql").EngineRunStatus {
+  if (payload.status === undefined) {
+    throw new Error(`run artifact ${row.id} (run_id=${row.run_id ?? "(missing)"}) is missing payload.status`)
+  }
+  if (!isRunStatus(payload.status)) {
+    throw new Error(
+      `run artifact ${row.id} (run_id=${row.run_id ?? "(missing)"}) has invalid payload.status ${JSON.stringify(payload.status)}`,
+    )
+  }
+  return payload.status
+}
+
 function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunRow {
   const payload = (row.payload ?? {}) as {
     plan_version_id?: string | null
     session_id?: string | null
     executor?: import("./engine.sql").EngineExecutor
-    status?: import("./engine.sql").EngineRunStatus
+    status?: unknown
     phase?: import("./engine.sql").EngineRunPhase
     blocking_reason?: string | null
     error?: string | null
@@ -2077,7 +2093,7 @@ function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunR
     plan_version_id: payload.plan_version_id ?? null,
     session_id: payload.session_id ?? null,
     executor: payload.executor ?? "opencorvus",
-    status: payload.status ?? "queued",
+    status: requireRunPayloadStatus(row, payload),
     phase: payload.phase ?? "dispatch",
     blocking_reason: payload.blocking_reason ?? null,
     error: payload.error ?? null,
