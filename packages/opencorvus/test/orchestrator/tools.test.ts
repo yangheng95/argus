@@ -10651,12 +10651,97 @@ describe("orchestrator tools", () => {
         const runs = listGoalRunsByGoal(goalID)
         expect(runs).toHaveLength(1)
         expect(runs[0]?.status).toBe("completed")
+        expect(runs[0]?.session_id).toBeNull()
+        expect(runs[0]?.time_started).toBeNull()
         expect(runs[0]?.metadata?.manual_completion).toMatchObject({
           source: "orchestrator.complete_goal",
           reason: "Current task evidence proves this goal is already satisfied without a build attempt.",
         })
         const decisions = createDecisionLog(taskID).readByPhase("orchestrator")
         expect(decisions.some((entry) => entry.key === `completed_goal_${goalID}`)).toBe(true)
+      },
+    })
+  })
+
+  test("complete_goal clears synthetic start time on a sessionless stale goal_run", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_complete_sessionless_stale_${stamp}`
+    const taskID = `tsk_complete_sessionless_stale_${stamp}`
+    const goalID = `gol_complete_sessionless_stale_${stamp}`
+    const goalRunID = `glr_complete_sessionless_stale_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "complete sessionless stale",
+      taskTitle: "complete sessionless stale",
+      request: "Mark a sessionless stale goal_run complete",
+      goalTitle: "Sessionless stale goal",
+      goalSlug: "sessionless-stale-goal",
+      objective: "Represent a stale audit row without a live executor session.",
+      now,
+    })
+
+    Database.use((db) =>
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id: goalRunID,
+          task_id: taskID,
+          run_id: null,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "sessionless-running",
+          payload: {
+            goal_id: goalID,
+            session_id: null,
+            status: "running",
+            retry_count: 0,
+            time_started: now - 5_000,
+            time_completed: null,
+          },
+          time_created: now - 5_000,
+          time_updated: now - 5_000,
+        })
+        .run(),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "complete sessionless stale parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.complete_goal.execute(
+            {
+              goalID,
+              reason: "Current task evidence proves this stale audit row is already satisfied.",
+            },
+            buildToolOptions("complete_goal_sessionless_stale"),
+          ),
+        )
+
+        expect(result).toContain("Goal marked complete")
+        const run = findGoalRun(goalRunID)
+        expect(run?.status).toBe("completed")
+        expect(run?.session_id).toBeNull()
+        expect(run?.time_started).toBeNull()
+        expect(run?.metadata?.manual_completion).toMatchObject({
+          source: "orchestrator.complete_goal",
+          reason: "Current task evidence proves this stale audit row is already satisfied.",
+        })
       },
     })
   })

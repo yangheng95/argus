@@ -2088,7 +2088,7 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
             superseded_at: null,
             metadata: completionMetadata,
             owner: null,
-            time_started: now,
+            time_started: null,
             time_completed: now,
           },
           time_created: now,
@@ -2102,6 +2102,8 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
     return row
   }
 
+  const sessionOwnedStartedAt =
+    typeof tip.session_id === "string" && tip.session_id.length > 0 ? (tip.time_started ?? now) : null
   appendGoalRunArtifact({
     goalRunID: tip.id,
     existing: tip,
@@ -2112,7 +2114,7 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
       superseded_reason: null,
       superseded_at: null,
       metadata: completionMetadata,
-      time_started: tip.time_started ?? now,
+      time_started: sessionOwnedStartedAt,
       time_completed: now,
     },
     label: "attempt-completed",

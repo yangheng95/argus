@@ -124,6 +124,99 @@ test("compileBoard does not retain a mutable process board between hydrations", 
   })
 })
 
+test("compileBoard does not materialize build phases for sessionless manual completions", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_sessionless_complete_${stamp}`
+  const taskID = `tsk_board_sessionless_complete_${stamp}`
+  const goalID = `gol_board_sessionless_complete_${stamp}`
+  const goalRunID = `glr_board_sessionless_complete_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board sessionless completion",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board sessionless completion",
+        request: "show manual completion without executor phase",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      } as any)
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: taskID,
+        title: "Already satisfied",
+        slug: "already-satisfied",
+        objective: "Represent work already proven satisfied without a build executor.",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: goalRunID,
+        task_id: taskID,
+        run_id: null,
+        goal_run_id: goalRunID,
+        kind: "goal_run_attempt",
+        label: "attempt-completed",
+        payload: {
+          goal_id: goalID,
+          session_id: null,
+          status: "completed",
+          retry_count: 0,
+          metadata: {
+            manual_completion: {
+              source: "orchestrator.complete_goal",
+              reason: "Existing evidence proves this goal is already satisfied.",
+              time_completed: now,
+            },
+          },
+          time_started: now - 5_000,
+          time_completed: now,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const goalWorkflow = board.goalWorkflows?.[0]
+      const buildStep = goalWorkflow?.steps?.find((step: any) => step.stepID === "build")
+
+      expect(goalWorkflow?.goalStatus).toBe("passed")
+      expect(buildStep?.status).toBe("completed")
+      expect(buildStep?.startedAt).toBeUndefined()
+      expect(buildStep?.completedAt).toBeUndefined()
+      expect(buildStep?.phases).toBeUndefined()
+      expect(buildStep?.payload?.buildSessionID).toBeUndefined()
+    },
+  })
+})
+
 test("compileBrief surfaces memory recall backend errors", async () => {
   await resetDatabase()
   await using tmp = await tmpdir()
