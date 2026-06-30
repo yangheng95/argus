@@ -6744,7 +6744,7 @@ export function createOrchestratorTools(input: {
         parentSessionID: input.agentSessionID,
         signal: input.signal,
         continuation,
-        onStatus: () => {},
+        onStatus: (summary) => trackStepProgress("frontend_research", summary),
         onSessionCreated: (id) => {
           runnerSessionID = id
         },
@@ -6871,7 +6871,7 @@ export function createOrchestratorTools(input: {
         parentSessionID: input.agentSessionID,
         signal: input.signal,
         continuation,
-        onStatus: () => {},
+        onStatus: (summary) => trackStepProgress("deep_research", summary),
         onSessionCreated: (id) => {
           runnerSessionID = id
         },

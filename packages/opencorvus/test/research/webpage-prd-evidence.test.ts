@@ -25,6 +25,7 @@ describe("research webpage PRD evidence", () => {
       await using tmp = await tmpdir()
       const taskID = "tsk_research_webpage_prd"
       const calls: string[] = []
+      const progress: string[] = []
 
       const evidence = await prepareWebpagePrdEvidence({
         projectDir: tmp.path,
@@ -32,6 +33,7 @@ describe("research webpage PRD evidence", () => {
         taskID,
         sourceUrls: ["https://example.com/markets/world-economy/"],
         pipeline: fakePipeline(calls),
+        onProgress: (event) => progress.push(`${event.phase}:${event.status}`),
       })
 
       expect(evidence?.status).toBe("generated")
@@ -41,6 +43,9 @@ describe("research webpage PRD evidence", () => {
         "analyze",
         "captureRuntimeState:https://example.com/markets/world-economy/",
       ])
+      expect(progress).toContain("captureRuntimeState:started")
+      expect(progress).toContain("captureRuntimeState:completed")
+      expect(progress).toContain("sourcePackage:completed")
       expect(evidence?.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
 
       const prompt = renderWebpagePrdEvidencePromptSection(evidence)
