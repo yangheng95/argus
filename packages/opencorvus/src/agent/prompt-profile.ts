@@ -2,7 +2,7 @@ import z from "zod"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 
 export const DEFAULT_PROMPT_PROFILE_ID = "frontend-replica"
-export const PROMPT_PROFILE_ID_PATTERN = /^(?!.*--)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+export const PROMPT_PROFILE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
 export const PromptProfileIDSchema = z
   .string()

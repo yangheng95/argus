@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { asSchema } from "ai"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { ProviderSchema } from "../../src/provider/schema"
 import { BrowserPreviewToolStaticDefinition } from "../../src/tool/browser-preview"
 
 describe("orchestrator tool descriptions for integrity stuck loops", () => {
@@ -100,6 +101,42 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.skill.description).toContain(
       "never use it to load production, research, report, or implementation skills",
     )
+  })
+
+  test("select_expert_squad provider schema exports OpenAI-compatible profile_id pattern", () => {
+    const providerBoundSchema = ProviderSchema.input(
+      {
+        id: "hexin/gpt-5.5",
+        providerID: "hexin",
+        api: {
+          id: "gpt-5.5",
+          url: "https://aimemodeldev.myhexin.com/litellm/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "Gpt 5 5",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: true,
+          toolcall: true,
+          input: { text: true, audio: false, image: true, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+        limit: { context: 1_050_000, output: 128_000 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      tools.select_expert_squad.inputSchema,
+    )
+    const jsonSchema = asSchema(providerBoundSchema as any).jsonSchema as any
+    const pattern = jsonSchema.properties?.profile_id?.pattern
+
+    expect(pattern).toBe("^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+    expect(pattern).not.toMatch(/\(\?(?:[=!]|<[=!])/)
+    expect(jsonSchema.required).toContain("profile_id")
   })
 
   test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {

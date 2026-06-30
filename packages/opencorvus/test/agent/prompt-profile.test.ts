@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { PromptProfile } from "../../src/agent/prompt-profile"
+import { PROMPT_PROFILE_ID_PATTERN, PromptProfile, PromptProfileIDSchema } from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
 
 const requiredBuiltInTargetMatrix = {
@@ -354,7 +354,11 @@ describe("prompt profiles", () => {
   })
 
   test("rejects malformed profile ids, blank labels, and blank target overlays", () => {
-    for (const active of ["custom squad", " frontend ", "Backend!"]) {
+    expect(PROMPT_PROFILE_ID_PATTERN.source).not.toContain("?!")
+    expect(PromptProfileIDSchema.safeParse("frontend-replica").success).toBe(true)
+    expect(PromptProfileIDSchema.safeParse("custom-squad-2").success).toBe(true)
+
+    for (const active of ["custom squad", " frontend ", "Backend!", "custom--squad", "custom-", "1custom", "custom_squad"]) {
       expectConfigRejected({ prompt_profile: { active } }, "prompt profile id")
     }
 
