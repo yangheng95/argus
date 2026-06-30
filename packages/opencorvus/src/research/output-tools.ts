@@ -172,32 +172,8 @@ function parseResearchBriefWithCanonicalDigest(input: unknown): ResearchBrief {
   })
 }
 
-function knownResearchClaimIDs(brief: ResearchBrief): Set<string> {
-  const ids = new Set<string>()
-  for (const item of brief.facts) ids.add(item.id)
-  for (const item of brief.inferences) ids.add(item.id)
-  for (const item of brief.problem_statements) ids.add(item.id)
-  for (const item of brief.user_needs) ids.add(item.id)
-  for (const item of brief.constraints) ids.add(item.id)
-  for (const item of brief.document_outline) ids.add(item.id)
-  for (const item of brief.open_questions) ids.add(item.id)
-  const contract = brief.webpage_contract
-  if (contract) {
-    for (const item of contract.functional_surfaces) ids.add(item.id)
-    for (const item of contract.visual_layout) ids.add(item.id)
-    for (const item of contract.style_requirements) ids.add(item.id)
-    for (const item of contract.interaction_states) ids.add(item.id)
-    for (const item of contract.data_content_inventory) ids.add(item.id)
-    for (const item of contract.fidelity_acceptance) ids.add(item.id)
-    for (const item of contract.fidelity_risks) ids.add(item.id)
-  }
-  for (const item of brief.subpage_research_tasks) ids.add(item.id)
-  return ids
-}
-
 function validateResearchBundleInputSemantics(bundle: ResearchBundleInput, brief: ResearchBrief): string | undefined {
   const evidenceIDs = new Set(brief.evidence_index.map((item) => item.id))
-  const claimIDs = knownResearchClaimIDs(brief)
   for (const section of bundle.full_markdown_sections) {
     const missing = section.evidence_ids.filter((id) => !evidenceIDs.has(id))
     if (missing.length > 0)
@@ -212,7 +188,6 @@ function validateResearchBundleInputSemantics(bundle: ResearchBundleInput, brief
     if (missingEvidence.length > 0) {
       return `bundle.citation_map "${entry.claim_id}" references unknown evidence id(s): ${missingEvidence.join(", ")}.`
     }
-    if (!claimIDs.has(entry.claim_id)) return `bundle.citation_map references unknown claim id: ${entry.claim_id}.`
   }
   return undefined
 }
@@ -383,26 +358,6 @@ function knownEvidenceIDs(collector: ResearchCollector): Set<string> {
   return new Set(collector.evidence_index.map((item) => item.id))
 }
 
-function knownCollectorClaimIDs(collector: ResearchCollector): Set<string> {
-  const ids = new Set<string>()
-  for (const item of collector.facts) ids.add(item.id)
-  for (const item of collector.inferences) ids.add(item.id)
-  for (const item of collector.problem_statements) ids.add(item.id)
-  for (const item of collector.user_needs) ids.add(item.id)
-  for (const item of collector.constraints) ids.add(item.id)
-  for (const item of collector.document_outline) ids.add(item.id)
-  for (const item of collector.open_questions) ids.add(item.id)
-  for (const item of collector.webpage_functional_surfaces) ids.add(item.id)
-  for (const item of collector.webpage_visual_layout) ids.add(item.id)
-  for (const item of collector.webpage_style_requirements) ids.add(item.id)
-  for (const item of collector.webpage_interaction_states) ids.add(item.id)
-  for (const item of collector.webpage_data_content_inventory) ids.add(item.id)
-  for (const item of collector.webpage_fidelity_acceptance) ids.add(item.id)
-  for (const item of collector.webpage_fidelity_risks) ids.add(item.id)
-  for (const item of collector.subpage_research_tasks) ids.add(item.id)
-  return ids
-}
-
 function sortedKnownList(ids: Set<string>): string {
   const known = [...ids].sort()
   return known.length ? known.join(", ") : "(none)"
@@ -419,23 +374,17 @@ function unknownFactIDError(collector: ResearchCollector, label: string, ids: re
   )
 }
 
-function unknownEvidenceIDError(collector: ResearchCollector, label: string, ids: readonly string[]): string | undefined {
+function unknownEvidenceIDError(
+  collector: ResearchCollector,
+  label: string,
+  ids: readonly string[],
+): string | undefined {
   const known = knownEvidenceIDs(collector)
   const missing = [...new Set(ids.filter((id) => !known.has(id)))]
   if (missing.length === 0) return undefined
   return (
     `Error: ${label} references unknown evidence id(s): ${missing.join(", ")}. ` +
     `Register or correct the evidence ids first; known evidence ids: ${sortedKnownList(known)}. ` +
-    "Collector unchanged."
-  )
-}
-
-function unknownClaimIDError(collector: ResearchCollector, label: string, id: string): string | undefined {
-  const known = knownCollectorClaimIDs(collector)
-  if (known.has(id)) return undefined
-  return (
-    `Error: ${label} references unknown claim id: ${id}. ` +
-    `Register the claim with its matching update_* tool first, or use a known claim id: ${sortedKnownList(known)}. ` +
     "Collector unchanged."
   )
 }
@@ -872,8 +821,6 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleCitationEntrySchema.parse(input)
-        const claimErr = unknownClaimIDError(collector, "citation.claim_id", parsed.claim_id)
-        if (claimErr) return claimErr
         const evidenceErr = unknownEvidenceIDError(
           collector,
           `citation "${parsed.claim_id}".evidence_ids`,
