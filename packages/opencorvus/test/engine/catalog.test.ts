@@ -17,6 +17,7 @@ import {
   isGoalRunStatus,
   isLiveGoalRunStatus,
   isLiveRunStatus,
+  isRunStatus,
   isSuccessfulGoalRunStatus,
   isTerminalGoalRunStatus,
 } from "../../src/engine/catalog"
@@ -75,5 +76,7 @@ describe("engine status catalog", () => {
     expect(isDispatchableRunStatus("queued")).toBe(false)
     expect(isDispatchableRunStatus("running")).toBe(true)
     expect(isLiveRunStatus("completed")).toBe(false)
+    expect(isRunStatus("queued")).toBe(true)
+    expect(isRunStatus("zombie")).toBe(false)
   })
 })

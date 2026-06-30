@@ -171,6 +171,10 @@ export function isGoalRunStatus(status: unknown): status is EngineGoalRunStatus 
   return typeof status === "string" && Object.prototype.hasOwnProperty.call(GOAL_RUN_STATUS_CATALOG, status)
 }
 
+export function isRunStatus(status: unknown): status is EngineRunStatus {
+  return typeof status === "string" && Object.prototype.hasOwnProperty.call(RUN_STATUS_CATALOG, status)
+}
+
 export function isLiveGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "live"
 }

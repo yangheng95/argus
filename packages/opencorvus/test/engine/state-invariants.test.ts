@@ -4,7 +4,18 @@ import { Database, eq, and, sql } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { goalStatusByID } from "../../src/engine/describe"
 import { isLiveGoalRunStatus } from "../../src/engine/catalog"
-import { findGoalRun, listGoalRunsByGoal, listLiveGoalRunsForProject } from "../../src/engine/store"
+import {
+  findActiveRunForTask,
+  findGoalRun,
+  findRun,
+  findRuns,
+  findTask,
+  listGoalRunsByGoal,
+  listLiveGoalRunsForProject,
+  listLiveRuns,
+  listLiveRunsForProject,
+  viewTask,
+} from "../../src/engine/store"
 
 /**
  * Cross-table state invariants. These are the properties the Phase 1-6
@@ -78,6 +89,79 @@ describe("engine state invariants", () => {
     } finally {
       Database.transaction((db) => {
         db.delete(EngineArtifactTable).where(eq(EngineArtifactTable.goal_run_id, goalRunID)).run()
+        db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+        db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
+      })
+    }
+  }
+
+  function withMalformedRunArtifact(
+    input: { suffix: string; status?: unknown },
+    assertMalformed: (ids: { projectID: string; taskID: string; runID: string }) => void,
+  ) {
+    const now = Date.now()
+    const projectID = `proj_run_status_${input.suffix}_${now}`
+    const taskID = `tsk_run_status_${input.suffix}_${now}`
+    const runID = `run_status_${input.suffix}_${now}`
+    const payload: Record<string, unknown> = {
+      plan_version_id: null,
+      session_id: null,
+      executor: "opencorvus",
+      phase: "dispatch",
+      blocking_reason: null,
+      error: null,
+      retry_count: 0,
+      executor_ref: null,
+      metadata: null,
+      time_started: null,
+      time_completed: null,
+    }
+    if ("status" in input) payload.status = input.status
+
+    Database.transaction((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "run artifact status invariant",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "run artifact status invariant",
+          request: "test",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineArtifactTable)
+        .values({
+          id: runID,
+          task_id: taskID,
+          run_id: runID,
+          kind: "run",
+          label: "malformed-run",
+          payload,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    try {
+      assertMalformed({ projectID, taskID, runID })
+    } finally {
+      Database.transaction((db) => {
+        db.delete(EngineArtifactTable).where(eq(EngineArtifactTable.run_id, runID)).run()
         db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
         db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
       })
@@ -229,6 +313,26 @@ describe("engine state invariants", () => {
     withMalformedGoalRunAttempt({ suffix: "invalid", status: "zombie" }, ({ goalID, goalRunID }) => {
       expect(() => listGoalRunsByGoal(goalID)).toThrow(/invalid payload\.status "zombie"/)
       expect(() => findGoalRun(goalRunID)).toThrow(/invalid payload\.status "zombie"/)
+    })
+  })
+
+  test("run artifact payload status is required on common read projections", () => {
+    withMalformedRunArtifact({ suffix: "missing" }, ({ projectID, taskID, runID }) => {
+      expect(() => findRun(runID)).toThrow(/missing payload\.status/)
+      expect(() => findRuns(taskID)).toThrow(/missing payload\.status/)
+      expect(() => findActiveRunForTask(taskID)).toThrow(/missing payload\.status/)
+      expect(() => listLiveRunsForProject(projectID)).toThrow(/missing payload\.status/)
+      expect(() => listLiveRuns()).toThrow(/missing payload\.status/)
+      const task = findTask(taskID)
+      expect(task).toBeDefined()
+      expect(() => viewTask(task!)).toThrow(/missing payload\.status/)
+    })
+  })
+
+  test("run artifact payload status must be a catalog status", () => {
+    withMalformedRunArtifact({ suffix: "invalid", status: "zombie" }, ({ taskID, runID }) => {
+      expect(() => findRun(runID)).toThrow(/invalid payload\.status "zombie"/)
+      expect(() => findRuns(taskID)).toThrow(/invalid payload\.status "zombie"/)
     })
   })
 })
