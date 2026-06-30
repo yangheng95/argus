@@ -16,13 +16,22 @@ import { createStreamingTextPartModel } from "./text-part-model"
  */
 
 export function TextPart(props: { text: string; streaming?: boolean }) {
+  return <StreamingMarkdownPart text={props.text} streaming={props.streaming} />
+}
+
+export function StreamingMarkdownPart(props: {
+  text: string
+  streaming?: boolean
+  className?: string
+  activeTextClassName?: string
+}) {
   const { frozenHtml, activeText } = createStreamingTextPartModel(props, renderMarkdown)
 
   return (
-    <div class="msg-text">
+    <div class={props.className || "msg-text"}>
       <For each={frozenHtml()}>{(html) => <div class="md-frozen-block" innerHTML={html} />}</For>
       <Show when={activeText()}>
-        <div class="md-active-text">{activeText()}</div>
+        <div class={props.activeTextClassName || "md-active-text"}>{activeText()}</div>
       </Show>
     </div>
   )

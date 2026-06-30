@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const MESSAGES_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "messages.css"), "utf8")
+const MARKDOWN_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "markdown.css"), "utf8")
 
 function lastRuleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -27,5 +28,7 @@ test("dense tool and patch blocks keep their own scroll container while reasonin
   expect(MESSAGES_CSS).not.toContain("tool-output / reasoning blocks")
   expect(MESSAGES_CSS).not.toMatch(/\.msg-reasoning\s*\{[^}]*max-height:/)
   expect(MESSAGES_CSS).not.toMatch(/\.msg-reasoning\s*\{[^}]*overflow:\s*auto/)
+  expect(MESSAGES_CSS).toMatch(/(?:^|\n)\.reasoning-text\s*\{[^}]*white-space:\s*normal;/)
+  expect(MARKDOWN_CSS).toMatch(/\.md-active-text,\s*\.reasoning-text--streaming\s*\{[^}]*white-space:\s*pre-wrap;/)
   expect(MESSAGES_CSS).not.toContain("overflow-y: visible;")
 })

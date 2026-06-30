@@ -101,11 +101,26 @@ test("streaming active text CSS follows the current TextPart producer", () => {
   const inspectorCss = readText("src/styles/surfaces/inspector.css")
   const css = `${cardCss}\n${inspectorCss}`
 
-  expect(textPart).toContain('class="md-active-text"')
+  expect(textPart).toContain('class={props.activeTextClassName || "md-active-text"}')
   expect(textPart).not.toContain("md-active-block")
   expect(css).toContain(".card__goal-desc-text .md-active-text")
   expect(css).toContain(".gwg-objective-text .md-active-text")
   expect(css).toContain(".gwg-done-definition-text .md-active-text")
   expect(css).toContain(".gwg-eval-summary .md-active-text")
   expect(css).not.toContain(".md-active-block")
+})
+
+test("text and reasoning share the streaming markdown primitive", () => {
+  const textPart = readText("src/components/TextPart.tsx")
+  const reasoningPart = readText("src/components/ReasoningPart.tsx")
+
+  expect(textPart).toContain("export function StreamingMarkdownPart")
+  expect(textPart).toContain("createStreamingTextPartModel(props, renderMarkdown)")
+  expect(textPart).toContain('<For each={frozenHtml()}>{(html) => <div class="md-frozen-block" innerHTML={html} />}</For>')
+  expect(textPart).toContain('class={props.activeTextClassName || "md-active-text"}')
+  expect(reasoningPart).toContain('import { StreamingMarkdownPart } from "./TextPart"')
+  expect(reasoningPart).toContain("<StreamingMarkdownPart")
+  expect(reasoningPart).toContain('className="reasoning-text md-content"')
+  expect(reasoningPart).toContain('activeTextClassName="md-active-text reasoning-text--streaming"')
+  expect(reasoningPart).not.toContain("visibleStreamingText")
 })

@@ -853,7 +853,7 @@
   display: block;
   color: var(--text-strong);
   font-size: var(--ui-font-control);
-  white-space: pre-wrap;
+  white-space: normal;
   min-width: 0;
 }
 
