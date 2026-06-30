@@ -9975,6 +9975,23 @@ describe("orchestrator tools", () => {
           runID,
           sessionID: child.id,
         })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_cancel_subagent_goal_${stamp}`,
+          toolCallID: `cal_cancel_subagent_goal_${stamp}`,
+          toolPartID: `prt_cancel_subagent_goal_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+        })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -9993,13 +10010,76 @@ describe("orchestrator tools", () => {
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-        expect(toolText(result)).toContain(`Cancelled sub-agent session ${child.id}`)
+        expect(toolText(result)).toContain(`Cancelled live-owned build session ${child.id}`)
         expect(toolText(result)).toContain(`source=${goalID} -> goal_run ${goalRunID} -> session ${child.id}`)
       },
     })
   })
 
-  test("live build ownership blocks contract mutation but cancel_subagent can stop the running build", async () => {
+  test("cancel_subagent goal_id refuses audit-only latest goal_run", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_cancel_subagent_goal_audit_${stamp}`
+    const taskID = `tsk_cancel_subagent_goal_audit_${stamp}`
+    const goalID = `gol_cancel_subagent_goal_audit_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "cancel_subagent audit goal id",
+      taskTitle: "cancel_subagent audit goal id",
+      request: "Do not cancel a stale latest goal_run just because it is marked running",
+      goalTitle: "Audit-only latest goal_run",
+      goalSlug: "audit-only-latest-goal-run",
+      objective: "Keep goal_id cancellation bound to a real active worker.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "cancel_subagent audit parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "cancel_subagent audit child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.cancel_subagent.execute(
+            {
+              goal_id: goalID,
+              reason: "should not auto-cancel audit-only latest tip",
+            },
+            buildToolOptions("cancel_subagent_goal_audit"),
+          ),
+        ).rejects.toThrow(/no live build ownership or active build session/)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+      },
+    })
+  })
+
+  test("live build ownership blocks goal mutation but cancel_subagent can stop the running build", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_live_owner_guard_${stamp}`
@@ -10076,8 +10156,33 @@ describe("orchestrator tools", () => {
           ),
         )
         expect(modifyResult).toContain("Error: modify_goal refused")
+        expect(modifyResult).toContain("live build tool")
         expect(findGoal(goalID)?.objective).toBe("Guard live build ownership")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+
+        const completeResult = toolText(
+          await tools.complete_goal.execute(
+            {
+              goalID,
+              reason: "should be rejected while live owned",
+            },
+            buildToolOptions("complete_goal_live_owner"),
+          ),
+        )
+        const deleteResult = toolText(
+          await tools.delete_goal.execute(
+            {
+              goalID,
+              reason: "should be rejected while live owned",
+            },
+            buildToolOptions("delete_goal_live_owner"),
+          ),
+        )
+        expect(completeResult).toContain("Error: complete_goal refused")
+        expect(completeResult).toContain("live build tool")
+        expect(deleteResult).toContain("Error: delete_goal refused")
+        expect(deleteResult).toContain("live build tool")
+        expect(findGoal(goalID)).toBeDefined()
 
         const cancelResult = toolText(
           await tools.cancel_subagent.execute(
@@ -10104,7 +10209,103 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("live goal_run without tool ownership blocks contract mutation", async () => {
+  for (const statusKind of ["streaming", "retry"] as const) {
+    test(`${statusKind} build session blocks goal mutation without tool ownership`, async () => {
+      const now = Date.now()
+      const stamp = `${now.toString(16)}_${statusKind}`
+      const projectID = `project_active_session_guard_${stamp}`
+      const taskID = `tsk_active_session_guard_${stamp}`
+      const goalID = `gol_active_session_guard_${stamp}`
+
+      insertWorkflowTaskWithGoal({
+        projectID,
+        taskID,
+        goalID,
+        sessionID: null,
+        worktree: tmp.path,
+        projectName: "active session guard",
+        taskTitle: "active session guard",
+        request: "Do not mutate a goal while its build session is active",
+        goalTitle: "Active session goal",
+        goalSlug: "active-session-goal",
+        objective: "Stay unchanged while the build session is active.",
+        now,
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "active session parent" })
+          const child = await Session.create({
+            kind: "build",
+            parentID: parent.id,
+            goalID,
+            title: "active session child",
+          })
+          Database.use((db) =>
+            db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+          )
+          const goalRunID = beginBuildAttempt({
+            taskID,
+            goalID,
+            sessionID: child.id,
+          })
+          SessionStatus.set(
+            child.id,
+            statusKind === "streaming"
+              ? { type: "streaming" }
+              : { type: "retry", attempt: 1, message: "provider retry", next: now + 1_000 },
+            { publish: false },
+          )
+          expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const modifyResult = toolText(
+            await tools.modify_goal.execute(
+              {
+                goalID,
+                updates: { objective: "Mutated while session active" },
+                reason: "should be rejected while session active",
+              },
+              buildToolOptions(`modify_goal_${statusKind}`),
+            ),
+          )
+          const completeResult = toolText(
+            await tools.complete_goal.execute(
+              {
+                goalID,
+                reason: "should be rejected while session active",
+              },
+              buildToolOptions(`complete_goal_${statusKind}`),
+            ),
+          )
+          const deleteResult = toolText(
+            await tools.delete_goal.execute(
+              {
+                goalID,
+                reason: "should be rejected while session active",
+              },
+              buildToolOptions(`delete_goal_${statusKind}`),
+            ),
+          )
+
+          expect(modifyResult).toContain("active build session")
+          expect(completeResult).toContain("active build session")
+          expect(deleteResult).toContain("active build session")
+          expect(findGoal(goalID)?.objective).toBe("Stay unchanged while the build session is active.")
+          expect(findGoalRun(goalRunID)?.status).toBe("running")
+          SessionStatus.set(child.id, { type: "terminal", reason: "aborted", error: "test cleanup" }, { publish: false })
+        },
+      })
+    })
+  }
+
+  test("stale live goal_run without live ownership or active session does not block modify_goal", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_live_goal_run_guard_${stamp}`
@@ -10119,10 +10320,10 @@ describe("orchestrator tools", () => {
       worktree: tmp.path,
       projectName: "live goal_run guard",
       taskTitle: "live goal_run guard",
-      request: "Do not mutate a goal while its async build goal_run is live",
+      request: "Do not let stale goal_run lifecycle facts block contract repair",
       goalTitle: "Async build goal",
       goalSlug: "async-build-goal",
-      objective: "Guard live goal_run facts",
+      objective: "Original stale goal_run objective",
       now,
     })
 
@@ -10158,15 +10359,15 @@ describe("orchestrator tools", () => {
             {
               goalID,
               updates: { objective: "Mutated while live goal_run exists" },
-              reason: "should be rejected while async build is live",
+              reason: "stale lifecycle row has no live ownership or active session",
             },
             buildToolOptions(),
           ),
         )
 
-        expect(modifyResult).toContain("Error: modify_goal refused")
-        expect(modifyResult).toContain(`live goal_run ${goalRunID}`)
-        expect(findGoal(goalID)?.objective).toBe("Guard live goal_run facts")
+        expect(modifyResult).toContain(`Goal ${goalID} modified`)
+        expect(modifyResult).not.toContain("Error: modify_goal refused")
+        expect(findGoal(goalID)?.objective).toBe("Mutated while live goal_run exists")
         expect(findGoalRun(goalRunID)?.status).toBe("running")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
       },
@@ -10585,7 +10786,140 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("complete_goal and delete_goal refuse live goal work", async () => {
+  test("complete_goal completes stale live goal_run when no live ownership or active session exists", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_complete_stale_live_${stamp}`
+    const taskID = `tsk_complete_stale_live_${stamp}`
+    const goalID = `gol_complete_stale_live_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "complete stale live",
+      taskTitle: "complete stale live",
+      request: "Complete a stale live goal_run without cancelling a non-existent worker",
+      goalTitle: "Stale live goal",
+      goalSlug: "stale-live-goal",
+      objective: "Represent work already proven satisfied despite stale lifecycle status.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "complete stale live parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "complete stale live child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(
+          await tools.complete_goal.execute(
+            {
+              goalID,
+              reason: "Current task evidence proves this stale live row has no live worker and is satisfied.",
+            },
+            buildToolOptions("complete_goal_stale_live"),
+          ),
+        )
+
+        expect(result).toContain("Goal marked complete")
+        expect(goalStatusByID(goalID)).toBe("passed")
+        expect(findGoalRun(goalRunID)?.status).toBe("completed")
+        expect(findGoalRun(goalRunID)?.metadata?.manual_completion).toMatchObject({
+          source: "orchestrator.complete_goal",
+          reason: "Current task evidence proves this stale live row has no live worker and is satisfied.",
+        })
+      },
+    })
+  })
+
+  test("delete_goal deletes stale live goal_run goal when no live ownership or active session exists", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_delete_stale_live_${stamp}`
+    const taskID = `tsk_delete_stale_live_${stamp}`
+    const goalID = `gol_delete_stale_live_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "delete stale live",
+      taskTitle: "delete stale live",
+      request: "Delete obsolete goal despite stale lifecycle status",
+      goalTitle: "Obsolete stale live goal",
+      goalSlug: "obsolete-stale-live-goal",
+      objective: "This stale goal is obsolete.",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "delete stale live parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "delete stale live child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: child.id,
+        })
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(
+          await tools.delete_goal.execute(
+            {
+              goalID,
+              reason: "Current evidence proves this stale live goal is obsolete.",
+            },
+            buildToolOptions("delete_goal_stale_live"),
+          ),
+        )
+
+        expect(result).toContain("Goal deleted")
+        expect(findGoal(goalID)).toBeUndefined()
+      },
+    })
+  })
+
+  test("complete_goal and delete_goal refuse live build ownership", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_goal_mutation_live_refusal_${stamp}`
@@ -10625,6 +10959,23 @@ describe("orchestrator tools", () => {
           goalID,
           sessionID: child.id,
         })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_goal_mutation_live_${stamp}`,
+          toolCallID: `cal_goal_mutation_live_${stamp}`,
+          toolPartID: `prt_goal_mutation_live_${stamp}`,
+          childSessionID: child.id,
+          scope: "goal",
+          goalID,
+          goalRunID,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+        })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -10651,7 +11002,9 @@ describe("orchestrator tools", () => {
         )
 
         expect(completeResult).toContain("Error: complete_goal refused")
+        expect(completeResult).toContain("live build tool")
         expect(deleteResult).toContain("Error: delete_goal refused")
+        expect(deleteResult).toContain("live build tool")
         expect(findGoal(goalID)).toBeDefined()
         expect(findGoalRun(goalRunID)?.status).toBe("running")
       },
@@ -13626,6 +13979,13 @@ describe("orchestrator tools", () => {
           value: "Terminal error: exact retry failure from persisted facts",
           reason: "AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT",
         })
+        createDecisionLog(taskID).append({
+          phase: "retry",
+          goalID,
+          key: `build_retry_previous_${priorGoalRunID}`,
+          value: `Previous goal_run ${priorGoalRunID} terminal error (status=failed): exact retry failure from persisted facts`,
+          reason: "clarified retry fact",
+        })
 
         const createNextSpy = spyOn(Session, "createNext")
         buildAgentRunImpl = async (input: any) => {
@@ -13665,12 +14025,15 @@ describe("orchestrator tools", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "failed")
         expect(observedExistingSessionID).toBe(priorSessionID)
-        expect(observedRetryFeedback).toBe("Terminal error: exact retry failure from persisted facts")
+        expect(observedRetryFeedback).toBe(
+          `Previous goal_run ${priorGoalRunID} terminal error (status=failed): prior build failed`,
+        )
         expect(String(observedRetryFeedback)).not.toContain("AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT")
+        expect(String(observedRetryFeedback)).not.toContain("Terminal error:")
         expect(createNextSpy).not.toHaveBeenCalled()
       },
     })
-  })
+  }, 30_000)
 
   test("goal build retry opens a fresh session on the same worktree after prior context overflow", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -14401,7 +14764,7 @@ describe("orchestrator tools", () => {
     { timeout: 15_000 },
   )
 
-  test("goal build rejects duplicate dispatch while a live goal_run exists", async () => {
+  test("goal build rejects duplicate dispatch while live build ownership exists", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -14423,20 +14786,39 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Duplicate live goal test",
           taskTitle: "Duplicate live goal task",
-          request: "Reject duplicate goal dispatch while a live run exists",
+          request: "Reject duplicate goal dispatch while live ownership exists",
           goalTitle: "Duplicate live guard",
           goalSlug: "duplicate-live-guard",
-          objective: "Ensure duplicate dispatch is keyed by live goal_run facts",
+          objective: "Ensure duplicate dispatch is keyed by live build ownership facts",
           now,
         })
-        beginBuildAttempt({
+        const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
           sessionID: `ses_duplicate_live_${stamp}`,
           now: now + 1,
         })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: parent.id,
+          orchestratorMessageID: `msg_duplicate_live_${stamp}`,
+          toolCallID: `cal_duplicate_live_${stamp}`,
+          toolPartID: `prt_duplicate_live_${stamp}`,
+          childSessionID: `ses_duplicate_live_${stamp}`,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now: now + 1,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now: now + 1,
+        })
         buildAgentRunImpl = async () => {
-          throw new Error("BuildAgent.run must not start for duplicate live goal_run")
+          throw new Error("BuildAgent.run must not start for duplicate live ownership")
         }
 
         const { tools } = createOrchestratorTools({
@@ -14445,16 +14827,23 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        await expect(
-          tools.build.execute(
+        let error: unknown
+        try {
+          await tools.build.execute(
             {
               goalID,
               request: "Start duplicate build",
               reason: "This should be rejected before BuildAgent starts.",
             },
             buildToolOptions(),
-          ),
-        ).rejects.toThrow(/already has live goal_run/)
+          )
+        } catch (err) {
+          error = err
+        }
+        expect(error).toBeInstanceOf(Error)
+        const message = error instanceof Error ? error.message : String(error)
+        expect(message).toContain("live build tool")
+        expect(message).not.toContain("already has live goal_run")
       },
     })
   })

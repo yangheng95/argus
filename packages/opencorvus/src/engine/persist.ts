@@ -36,6 +36,8 @@ import type { ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { isGoalRunOrphaned } from "./orphan"
+import { findLiveBuildOwnershipByGoal } from "./tool-ownership"
+import { SessionStatus } from "@/session/status"
 import { EngineProtocol } from "./protocol"
 import {
   findGoal,
@@ -77,6 +79,53 @@ function terminalGoalRunStatus(status: GoalRunRow["status"]): boolean {
   return status === "failed" || status === "aborted" || status === "completed"
 }
 
+function activeSessionStatus(sessionID: string): SessionStatus.Info | undefined {
+  const status = SessionStatus.get(sessionID)
+  return status.type === "streaming" || status.type === "retry" ? status : undefined
+}
+
+function liveGoalRunControlBlocker(input: { taskID: string; goalID: string; goalRun: GoalRunRow }): string | undefined {
+  const liveOwner = findLiveBuildOwnershipByGoal({ taskID: input.taskID, goalID: input.goalID })
+  if (liveOwner) {
+    return (
+      `goal ${input.goalID} is owned by live build tool ${liveOwner.payload.tool_part_id} ` +
+      `(session ${liveOwner.payload.child_session_id}, ownership ${liveOwner.ownershipID})`
+    )
+  }
+  if (input.goalRun.session_id) {
+    const status = activeSessionStatus(input.goalRun.session_id)
+    if (status) {
+      return (
+        `goal ${input.goalID} has active build session ${input.goalRun.session_id} ` +
+        `(${status.type}) on goal_run ${input.goalRun.id}`
+      )
+    }
+  }
+  if (
+    (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(input.goalRun.status) &&
+    input.goalRun.owner &&
+    input.goalRun.owner !== processOwner() &&
+    !isGoalRunOrphaned(input.goalRun)
+  ) {
+    return `goal ${input.goalID} has goal_run ${input.goalRun.id} owned by live process ${input.goalRun.owner}`
+  }
+  return undefined
+}
+
+function retireLiveGoalRunWithoutControl(input: { goalRun: GoalRunRow; reason: string; now: number }): void {
+  updateGoalRun(input.goalRun.id, {
+    status: "aborted",
+    error: input.reason,
+    blocking_reason: null,
+    time_completed: input.now,
+  })
+  recordAbortedBuildAttemptOutcome({
+    goalRunID: input.goalRun.id,
+    reason: input.reason,
+    now: input.now,
+  })
+}
+
 function latestBuildReportForGoal(taskID: string, goalID: string): string | undefined {
   const entry = createDecisionLog(taskID)
     .readByPhase("build")
@@ -104,7 +153,9 @@ function latestBuildReportForGoal(taskID: string, goalID: string): string | unde
 function retryFeedbackValueFromGoalRun(input: { taskID: string; goalID: string; priorRun: GoalRunRow }): string {
   const lines: string[] = []
   if (input.priorRun.error && input.priorRun.error.trim().length > 0) {
-    lines.push(`Terminal error: ${input.priorRun.error.trim()}`)
+    lines.push(
+      `Previous goal_run ${input.priorRun.id} terminal error (status=${input.priorRun.status}): ${input.priorRun.error.trim()}`,
+    )
   }
   const report = latestBuildReportForGoal(input.taskID, input.goalID)
   if (report) {
@@ -126,13 +177,13 @@ function appendRetryFeedbackOnce(input: {
 }): boolean {
   const decisionLog = createDecisionLog(input.taskID)
   const existing = decisionLog.readByKey(input.key)
-  if (existing) return false
+  if (existing?.value === input.value) return false
   decisionLog.append({
     goalID: input.goalID,
     phase: "retry",
     key: input.key,
     value: input.value,
-    reason: input.reason,
+    reason: existing ? `${input.reason}; supersedes decision_log ${existing.id}` : input.reason,
   })
   return true
 }
@@ -1994,10 +2045,10 @@ export function completeGoal(input: { goalID: string; reason: string; now?: numb
   }
   const now = input.now ?? Date.now()
   const tip = findLatestTipGoalRun(input.goalID)
-  if (tip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(tip.status)) {
+  const blocker = tip ? liveGoalRunControlBlocker({ taskID: goal.task_id, goalID: input.goalID, goalRun: tip }) : undefined
+  if (blocker) {
     throw new Error(
-      `completeGoal: goal ${input.goalID} has live goal_run ${tip.id} ` +
-        `(status=${tip.status}); finish or abort the live attempt before marking the goal complete.`,
+      `completeGoal: ${blocker}; finish or abort the active worker before marking the goal complete.`,
     )
   }
   if (tip?.status === "completed" && !tip.superseded_reason) {
@@ -2153,35 +2204,21 @@ export function beginBuildAttempt(input: {
   }
   let priorTip = findLatestTipGoalRun(input.goalID)
   if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
-    if (!isGoalRunOrphaned(priorTip)) {
-      throw new Error(
-        `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
-          `with status=${priorTip.status}; refusing to open a second live build attempt.`,
-      )
+    const blocker = liveGoalRunControlBlocker({ taskID: input.taskID, goalID: input.goalID, goalRun: priorTip })
+    if (blocker) {
+      throw new Error(`beginBuildAttempt: ${blocker}; refusing to open a second build attempt.`)
     }
-    // Owner-orphaned live tip: the process that drove it live has restarted, so
-    // the half-streamed goal turn is physically dead and cannot resume (spec
-    // 2026-05-29 §0). Retire it to `aborted` here, at the re-dispatch choke
-    // point, so the supersede chain below projects the fresh attempt as the
-    // tip instead of throwing "second live attempt". This is execution-layer
-    // cleanup at the explicit build tool boundary, not background routing —
-    // the orchestrator already chose to call build after reading
-    // describeGoal.is_orphaned. Without this the
-    // overlay stops spinning but `build({goalID})` would throw, leaving the
-    // goal stuck in a build-error loop (independent review 2026-05-29).
-    updateGoalRun(priorTip.id, {
-      status: "aborted",
-      error:
-        `owner process restarted mid-stream; goal_run ${priorTip.id} orphaned and ` +
-        `cannot resume — retired on re-dispatch`,
-      blocking_reason: null,
-      time_completed: now,
-    })
-    recordAbortedBuildAttemptOutcome({
-      goalRunID: priorTip.id,
-      reason:
-        `owner process restarted mid-stream; goal_run ${priorTip.id} orphaned and ` +
-        `cannot resume — retired on re-dispatch`,
+    const reason = isGoalRunOrphaned(priorTip)
+      ? `owner process restarted mid-stream; goal_run ${priorTip.id} orphaned and ` +
+        `cannot resume — retired on re-dispatch`
+      : `goal_run ${priorTip.id} had live status=${priorTip.status} but no live build ownership, ` +
+        `active build session, or live foreign owner — retired on explicit build re-dispatch`
+    // A live lifecycle status without active ownership/session is an audit fact,
+    // not an executor. Retire it at the explicit build boundary so the new
+    // attempt becomes the only tip.
+    retireLiveGoalRunWithoutControl({
+      goalRun: priorTip,
+      reason,
       now,
     })
     priorTip = findLatestTipGoalRun(input.goalID)

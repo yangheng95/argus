@@ -204,6 +204,76 @@ describe("engine queue", () => {
     })
   })
 
+  test("active task wake is not queued by stale live goal_run alone", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_queue_stale_goal_run_${Date.now()}`
+        const goalID = `goal_queue_stale_goal_run_${Date.now()}`
+        const now = Date.now()
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "active task with stale live goal_run",
+              request: "wake should not queue behind audit-only lifecycle facts",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Stale live goal",
+              slug: "stale-live-goal",
+              objective: "Do not queue task wake from this row alone.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: `ses_queue_stale_goal_run_${now}`,
+          now,
+        })
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const result = await dispatchTaskLoop({
+          taskID,
+          event: { note: "operator wake should not queue behind stale goal_run" },
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result).toBe("started")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: { note: "operator wake should not queue behind stale goal_run" },
+        })
+      },
+    })
+  })
+
   test("passive wake does not restart a stream-error blocked run", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 

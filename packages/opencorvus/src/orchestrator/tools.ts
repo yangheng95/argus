@@ -35,7 +35,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
-import { createDecisionLog } from "@/decision-log"
+import { createDecisionLog, type DecisionEntry } from "@/decision-log"
 import { DecisionLogTable } from "@/decision-log/schema"
 import { EngineService } from "@/task-api"
 import { canReceiveDirectAgentSessionControl } from "./direct-reply"
@@ -154,6 +154,8 @@ import {
 } from "@/engine/store"
 import { goalStatusByID } from "@/engine/describe"
 import { isLiveGoalRunStatus, isLiveRunStatus } from "@/engine/catalog"
+import { isGoalRunOrphaned } from "@/engine/orphan"
+import { processOwner } from "@/engine/lease"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, terminalTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
@@ -252,6 +254,12 @@ export const ORCHESTRATOR_WAIT_RECOMMENDED_MS = WAIT_RECOMMENDED_MS
 export const ORCHESTRATOR_WAIT_MAX_MS = WAIT_MAX_MS
 
 const log = Log.create({ service: "task-tools" })
+
+function latestDecisionEntriesByKey(entries: DecisionEntry[]): DecisionEntry[] {
+  const latest = new Map<string, DecisionEntry>()
+  for (const entry of entries) latest.set(entry.key, entry)
+  return Array.from(latest.values()).sort((a, b) => a.timeCreated - b.timeCreated)
+}
 
 const ProposedTaskCodeModuleReferenceSchema = z.object({
   entity: z
@@ -1264,19 +1272,30 @@ function scopedFidelityForBuildGoal(input: {
   return { sourceCoverage, referenceCoverage, assemblyOwners }
 }
 
-function findLiveGoalRunByGoalID(goalID: string) {
-  return listGoalRunsByGoal(goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
+function activeSessionStatus(sessionID: string): SessionStatus.Info | undefined {
+  const status = SessionStatus.get(sessionID)
+  return status.type === "streaming" || status.type === "retry" ? status : undefined
+}
+
+function findActiveBuildSessionGoalRun(goalID: string) {
+  return listGoalRunsByGoal(goalID).find((goalRun) => {
+    if (!goalRun.session_id) return false
+    return Boolean(activeSessionStatus(goalRun.session_id))
+  })
+}
+
+function findForeignLiveOwnerGoalRun(goalID: string) {
+  const owner = processOwner()
+  return listGoalRunsByGoal(goalID).find(
+    (goalRun) =>
+      isLiveGoalRunStatus(goalRun.status) &&
+      Boolean(goalRun.owner) &&
+      goalRun.owner !== owner &&
+      !isGoalRunOrphaned(goalRun),
+  )
 }
 
 function goalMutationBlockedByLiveWork(input: { taskID: string; goalID: string; action: string }): string | undefined {
-  const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
-  if (liveGoalRun) {
-    return (
-      `Error: ${input.action} refused because goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
-      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}). ` +
-      `Wait for terminal refill evidence or cancel the live attempt before mutating the goal.`
-    )
-  }
   const liveOwner = findLiveBuildOwnershipByGoal({ taskID: input.taskID, goalID: input.goalID })
   if (liveOwner) {
     return (
@@ -1285,15 +1304,33 @@ function goalMutationBlockedByLiveWork(input: { taskID: string; goalID: string; 
       `Wait for that build result before mutating the goal.`
     )
   }
+  const activeSessionRun = findActiveBuildSessionGoalRun(input.goalID)
+  if (activeSessionRun?.session_id) {
+    const status = activeSessionStatus(activeSessionRun.session_id)
+    return (
+      `Error: ${input.action} refused because goal ${input.goalID} has active build session ` +
+      `${activeSessionRun.session_id} (${status?.type ?? "active"}) on goal_run ${activeSessionRun.id}. ` +
+      `Wait for terminal session evidence or cancel that session explicitly before mutating the goal.`
+    )
+  }
+  const foreignOwnerRun = findForeignLiveOwnerGoalRun(input.goalID)
+  if (foreignOwnerRun?.owner) {
+    return (
+      `Error: ${input.action} refused because goal ${input.goalID} has goal_run ${foreignOwnerRun.id} ` +
+      `owned by live process ${foreignOwnerRun.owner}. Wait for that process to write terminal evidence before mutating the goal.`
+    )
+  }
   return undefined
 }
 
-function assertNoLiveGoalRunForBuild(input: { taskID: string; goalID: string; action: string }): void {
-  const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
-  if (!liveGoalRun) return
+function assertNoActiveGoalWorkForBuild(input: { taskID: string; goalID: string; action: string }): void {
+  const blocker = goalMutationBlockedByLiveWork(input)
+  if (!blocker) return
   throw new Error(
-    `${input.action}: goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
-      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}); do not call wait for this internal live build. Park this wake until terminal refill evidence appears, or abort the live attempt explicitly.`,
+    blocker.replace(
+      /^Error: [^ ]+ refused because /,
+      `${input.action}: refused because `,
+    ),
   )
 }
 
@@ -1982,6 +2019,14 @@ function resolveSubagentControlTarget(input: {
     if (!goalRun.session_id) {
       throw new Error(
         `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or finalize the stale attempt before controlling it.`,
+      )
+    }
+    const liveOwner = findLiveBuildOwnershipByGoalRun({ taskID: input.taskID, goalRunID: goalRun.id })
+    const activeSession = activeSessionStatus(goalRun.session_id)
+    if (!liveOwner && !activeSession) {
+      throw new Error(
+        `goal ${input.goalID} latest goal_run ${goalRun.id} has no live build ownership or active build session; ` +
+          `goal_id cancellation only targets a controllable live worker. Pass session_id or goal_run_id only when explicitly cancelling that exact historical session.`,
       )
     }
     return {
@@ -9021,22 +9066,8 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
-        const liveGoalRun = findLiveGoalRunByGoalID(goalID)
-        if (liveGoalRun) {
-          return (
-            `Error: modify_goal refused because goal ${goalID} already has live goal_run ${liveGoalRun.id} ` +
-            `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}). ` +
-            `Wait for terminal refill evidence or cancel the live attempt before changing the goal contract.`
-          )
-        }
-        const liveOwner = findLiveBuildOwnershipByGoal({ taskID, goalID })
-        if (liveOwner) {
-          return (
-            `Error: modify_goal refused because goal ${goalID} is currently owned by live build tool ` +
-            `${liveOwner.payload.tool_part_id} (session ${liveOwner.payload.child_session_id}, ownership ${liveOwner.ownershipID}). ` +
-            `Wait for that build result before changing the goal contract.`
-          )
-        }
+        const blocker = goalMutationBlockedByLiveWork({ taskID, goalID, action: "modify_goal" })
+        if (blocker) return blocker.replace("before mutating the goal.", "before changing the goal contract.")
 
         // Deep-equality no-op detection (rule 2 + rule 7) via the
         // computeContractFieldChanges helper: only fields whose submitted
@@ -9072,22 +9103,8 @@ export function createOrchestratorTools(input: {
         let abortedRuns = 0
         let supersededTipID: string | undefined
         if (statusReset) {
-          const { listGoalRunsForTask } = await import("@/engine/store")
           const { startNewAttempt } = await import("@/engine/persist")
-          const { LIVE_GOAL_RUN_STATUSES } = await import("@/engine/catalog")
-          // 1. Abort only LIVE goal_runs (queued/accepted/planning/running/
-          //    evaluating/blocked). `completed` is never reset — its
-          //    verification evidence is load-bearing, and the parent goal
-          //    should not regress from passed to pending via a
-          //    completed-to-aborted flip.
-          const toAbort = listGoalRunsForTask(taskID).filter(
-            (row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status),
-          )
-          for (const row of toAbort) {
-            updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
-          }
-          abortedRuns = toAbort.length
-          // 2. Record retry intent under reason=modify_contract. The
+          // Record retry intent under reason=modify_contract. The
           //    terminal tip remains lifecycle truth; the orchestrator reads
           //    the intent fact and explicitly chooses a follow-up build.
           //    Idempotent if the tip is already superseded.
@@ -12659,7 +12676,7 @@ export function createOrchestratorTools(input: {
         const attachedGoalID = resolvedGoalReference?.goalID
         const isTaskLevelBuild = !attachedGoalID
         if (attachedGoalID) {
-          assertNoLiveGoalRunForBuild({
+          assertNoActiveGoalWorkForBuild({
             taskID,
             goalID: attachedGoalID,
             action: "build",
@@ -12984,7 +13001,9 @@ export function createOrchestratorTools(input: {
               goalID: goal.id,
               source: "orchestrator.build.prompt_context",
             })
-            const retryEntries = decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id)
+            const retryEntries = latestDecisionEntriesByKey(
+              decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id),
+            )
             const retryFeedback =
               retryEntries.length > 0
                 ? retryEntries
