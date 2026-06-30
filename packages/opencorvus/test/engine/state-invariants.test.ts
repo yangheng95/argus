@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { Database, count, eq, and, inArray, sql } from "../../src/storage/db"
-import { EngineArtifactTable } from "../../src/engine/engine.sql"
-import { listGoalRunsByGoal, listGoalRunsForTask } from "../../src/engine/store"
+import { ProjectTable } from "../../src/project/project.sql"
+import { Database, eq, and, sql } from "../../src/storage/db"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { goalStatusByID } from "../../src/engine/describe"
+import { isLiveGoalRunStatus } from "../../src/engine/catalog"
+import { findGoalRun, listGoalRunsByGoal, listLiveGoalRunsForProject } from "../../src/engine/store"
 
 /**
  * Cross-table state invariants. These are the properties the Phase 1-6
@@ -16,6 +19,71 @@ import { listGoalRunsByGoal, listGoalRunsForTask } from "../../src/engine/store"
  * is off".
  */
 describe("engine state invariants", () => {
+  function withMalformedGoalRunAttempt(
+    input: { suffix: string; status?: unknown },
+    assertMalformed: (ids: { projectID: string; taskID: string; goalID: string; goalRunID: string }) => void,
+  ) {
+    const now = Date.now()
+    const projectID = `proj_goal_run_status_${input.suffix}_${now}`
+    const taskID = `tsk_goal_run_status_${input.suffix}_${now}`
+    const goalID = `gol_goal_run_status_${input.suffix}_${now}`
+    const runID = `run_goal_run_status_${input.suffix}_${now}`
+    const goalRunID = `grun_goal_run_status_${input.suffix}_${now}`
+    const artifactID = `art_goal_run_status_${input.suffix}_${now}`
+    const payload: Record<string, unknown> = { goal_id: goalID }
+    if ("status" in input) payload.status = input.status
+
+    Database.transaction((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "goal_run_attempt status invariant",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "goal_run_attempt status invariant",
+          request: "test",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineArtifactTable)
+        .values({
+          id: artifactID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "malformed-goal-run-attempt",
+          payload,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    try {
+      assertMalformed({ projectID, taskID, goalID, goalRunID })
+    } finally {
+      Database.transaction((db) => {
+        db.delete(EngineArtifactTable).where(eq(EngineArtifactTable.goal_run_id, goalRunID)).run()
+        db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+        db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
+      })
+    }
+  }
+
   test("every acceptance has at least one evidence artifact row", () => {
     // Post-phase-6-c: deliveries live in engine_artifact (kind='acceptance') and
     // evidence too (kind='verification-evidence'). Evidence is append-only so
@@ -53,7 +121,6 @@ describe("engine state invariants", () => {
     // Phase-6-d: goal_run rows are engine_artifact kind='goal_run_attempt';
     // `listGoalRunsByGoal` collapses the append-only stream to the latest per
     // logical goal_run. The invariant is unchanged.
-    const liveStatuses = ["queued", "accepted", "planning", "running", "evaluating", "blocked"] as const
     const distinctGoalIDs = Database.use((db) =>
       db
         .selectDistinct({ goalID: sql<string>`json_extract(${EngineArtifactTable.payload}, '$.goal_id')` })
@@ -68,7 +135,7 @@ describe("engine state invariants", () => {
       const goalRuns = listGoalRunsByGoal(goalID)
       const supersededIDs = new Set(goalRuns.map((r) => r.supersede_of).filter((x): x is string => !!x))
       const tips = goalRuns.filter((r) => !supersededIDs.has(r.id))
-      const liveTips = tips.filter((r) => liveStatuses.includes(r.status as (typeof liveStatuses)[number]))
+      const liveTips = tips.filter((r) => isLiveGoalRunStatus(r.status))
       if (liveTips.length > 1) {
         violations.push({ goalID, liveTips: liveTips.map((r) => r.id) })
       }
@@ -147,5 +214,21 @@ describe("engine state invariants", () => {
       }
     }
     expect(cycles).toEqual([])
+  })
+
+  test("goal_run_attempt payload status is required on all common read projections", () => {
+    withMalformedGoalRunAttempt({ suffix: "missing" }, ({ projectID, goalID, goalRunID }) => {
+      expect(() => listGoalRunsByGoal(goalID)).toThrow(/missing payload\.status/)
+      expect(() => findGoalRun(goalRunID)).toThrow(/missing payload\.status/)
+      expect(() => goalStatusByID(goalID)).toThrow(/missing payload\.status/)
+      expect(() => listLiveGoalRunsForProject(projectID)).toThrow(/missing payload\.status/)
+    })
+  })
+
+  test("goal_run_attempt payload status must be a catalog status", () => {
+    withMalformedGoalRunAttempt({ suffix: "invalid", status: "zombie" }, ({ goalID, goalRunID }) => {
+      expect(() => listGoalRunsByGoal(goalID)).toThrow(/invalid payload\.status "zombie"/)
+      expect(() => findGoalRun(goalRunID)).toThrow(/invalid payload\.status "zombie"/)
+    })
   })
 })
