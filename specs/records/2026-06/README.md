@@ -47,6 +47,7 @@ Current-day records:
 - [2026-06-30-run-artifact-status-required.md](2026-06-30-run-artifact-status-required.md) records the run artifact status fail-fast parsing repair.
 - [2026-06-30-run-status-catalog-classification.md](2026-06-30-run-status-catalog-classification.md) records the run status catalog classification cleanup.
 - [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md) records the plan to retire live run/live goal_run lifecycle rows as orchestration control sources while preserving live ownership and active session protection.
+- [2026-06-30-sessionless-goal-completion-phase-projection.md](2026-06-30-sessionless-goal-completion-phase-projection.md) records the session-owned build phase projection repair for manual goal completion.
 
 ## Rules
 

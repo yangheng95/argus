@@ -442,9 +442,9 @@ function parseVisualQaReportProjection(value: string): boolean | undefined {
  * supersede-chain tip goal_run says. One true source, no drift.
  *
  * When a step declares `phases` (currently pipeline.build declares only the
- * `build` phase), we also project per-phase status from the same
- * goal_run.status. Phase status transitions are deterministic from run
- * status, so there's still one source of truth.
+ * `build` phase), per-phase cards are projected only for a tip with a concrete
+ * build session. Sessionless manual completion remains a status fact, not a
+ * materialized build-session phase.
  *
  * Returns a goalID-keyed projection for board.ts and renderWorkflowPrompt.
  * The value is computed from engine rows on every read, not persisted state.
@@ -465,13 +465,14 @@ export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record
     const tip = runs.find((r) => !supersededIDs.has(r.id)) // runs are desc by time_created
     const effectiveStatus = tip?.status
     const stepStatus = mapGoalRunToStepStatus(tip?.status)
-    const startedAt = tip?.time_started ?? undefined
-    const completedAt = tip?.time_completed ?? undefined
+    const hasBuildSession = typeof tip?.session_id === "string" && tip.session_id.length > 0
+    const startedAt = hasBuildSession ? (tip?.time_started ?? undefined) : undefined
+    const completedAt = hasBuildSession ? (tip?.time_completed ?? undefined) : undefined
     const steps: Record<string, GoalStepStatus> = {}
     const stepPhases: Record<string, Record<string, GoalStepStatus>> = {}
     for (const step of goalScopeSteps) {
       steps[step.id] = { status: stepStatus, startedAt, completedAt }
-      if (step.phases && step.phases.length > 0) {
+      if (hasBuildSession && step.phases && step.phases.length > 0) {
         stepPhases[step.id] = projectPhases(step.phases, effectiveStatus, startedAt, completedAt)
       }
     }

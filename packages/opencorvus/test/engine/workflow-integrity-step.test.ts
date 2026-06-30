@@ -128,6 +128,7 @@ describe("pipeline workflow review topology", () => {
     const goalID = `goal_workflow_build_phase_${stamp}`
     const goalRunID = `glr_workflow_build_phase_${stamp}`
     const runID = `run_workflow_build_phase_${stamp}`
+    const sessionID = `ses_workflow_build_phase_${stamp}`
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const buildStep = pipeline.steps.find((step) => step.id === "build")
 
@@ -180,6 +181,7 @@ describe("pipeline workflow review topology", () => {
           label: "running",
           payload: {
             goal_id: goalID,
+            session_id: sessionID,
             status: "running",
             retry_count: 0,
             time_started: now,
@@ -192,8 +194,92 @@ describe("pipeline workflow review topology", () => {
 
     const projected = projectGoalSteps(taskID, pipeline)
     expect(projected[goalID]?.steps.build?.status).toBe("running")
+    expect(projected[goalID]?.steps.build?.startedAt).toBe(now)
     expect(projected[goalID]?.stepPhases?.build?.build?.status).toBe("running")
     expect(projected[goalID]?.stepPhases?.build?.plan).toBeUndefined()
+  })
+
+  test("does not project sessionless manual completion as a build phase", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_sessionless_complete_${stamp}`
+    const taskID = `tsk_workflow_sessionless_complete_${stamp}`
+    const goalID = `goal_workflow_sessionless_complete_${stamp}`
+    const goalRunID = `glr_workflow_sessionless_complete_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: "/tmp/workflow-sessionless-complete",
+          branch: "main",
+          status: "active",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "sessionless completion",
+          request: "project a manual completion without a build phase",
+          priority: "normal",
+          time_started: now,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineGoalTable)
+        .values({
+          id: goalID,
+          task_id: taskID,
+          title: "Already satisfied",
+          slug: "already-satisfied",
+          objective: "Represent work proven satisfied without executor dispatch.",
+          order_index: 0,
+          time_created: now,
+          time_updated: now,
+        } as any)
+        .run()
+      db.insert(EngineArtifactTable)
+        .values({
+          id: goalRunID,
+          task_id: taskID,
+          run_id: null,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "attempt-completed",
+          payload: {
+            goal_id: goalID,
+            session_id: null,
+            status: "completed",
+            retry_count: 0,
+            metadata: {
+              manual_completion: {
+                source: "orchestrator.complete_goal",
+                reason: "Existing evidence proves this goal is already satisfied.",
+                time_completed: now,
+              },
+            },
+            time_started: now - 5_000,
+            time_completed: now,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    const projected = projectGoalSteps(taskID, pipeline)
+    expect(projected[goalID]?.goalStatus).toBe("passed")
+    expect(projected[goalID]?.steps.build?.status).toBe("completed")
+    expect(projected[goalID]?.steps.build?.startedAt).toBeUndefined()
+    expect(projected[goalID]?.steps.build?.completedAt).toBeUndefined()
+    expect(projected[goalID]?.stepPhases?.build).toBeUndefined()
   })
 
   test("rendered workflow prompt does not expose deleted architect or scheduler semantics", () => {
