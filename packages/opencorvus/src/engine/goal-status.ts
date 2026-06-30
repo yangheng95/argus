@@ -24,6 +24,7 @@
 
 import type { EngineGoalRunStatus } from "./engine.sql"
 import type { EngineGoalStatus } from "./describe"
+import { goalRunGoalProjectionStatus } from "./catalog"
 import { Database } from "@/storage/db"
 import { EngineProtocol } from "./protocol"
 import { Event } from "./model"
@@ -31,33 +32,6 @@ import { listGoalRunsByGoal, findGoal } from "./store"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-status" })
-
-/**
- * Map a goal_run.status to the corresponding engine_goal.status contribution.
- * Returns undefined for states that do not map cleanly (e.g. supersede_of link
- * should be filtered by the caller before calling this).
- */
-function mapRunStatus(runStatus: EngineGoalRunStatus): EngineGoalStatus {
-  switch (runStatus) {
-    case "queued":
-    case "accepted":
-    case "planning":
-      return "pending"
-    case "running":
-    case "evaluating":
-    case "blocked":
-      return "running"
-    case "completed":
-      return "passed"
-    case "failed":
-      return "failed"
-    case "aborted":
-      // `aborted` is terminal and non-satisfying. Retry remains an
-      // orchestrator decision based on the goal_run attempt facts; projecting
-      // it as pending made aborted work look like never-started work.
-      return "failed"
-  }
-}
 
 /**
  * Pure function: derive goal status from the goal_run chain tip alone.
@@ -89,7 +63,7 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   // is the new tip, and an old terminal row that was not yet superseded is
   // the only tip if no retry happened.
   const head = tips[0]!
-  return mapRunStatus(head.status as EngineGoalRunStatus)
+  return goalRunGoalProjectionStatus(head.status as EngineGoalRunStatus) as EngineGoalStatus
 }
 
 /**

@@ -21,6 +21,7 @@ import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { updateGoalRun } from "./persist"
 import { findTask, listGoalRunsForTask, type GoalRunRow } from "./store"
+import { isTerminalGoalRunStatus } from "./catalog"
 
 const log = Log.create({ service: "engine-rewind" })
 const WORKTREE_RESET_IDLE_TIMEOUT_MS = 10_000
@@ -73,8 +74,6 @@ function ensureAnchorBelongsToTask(taskID: string, sessionID: string) {
     throw new NotFoundError({ message: `Session ${sessionID} does not belong to task ${taskID}` })
   }
 }
-
-const TERMINAL_GOAL_RUN_STATUSES = new Set<EngineGoalRunStatus>(["completed", "failed", "aborted"])
 
 type RewindWorkspaceAction = {
   goalID: string
@@ -168,11 +167,11 @@ function projectWorkspaceAction(action: RewindWorkspaceAction): void {
       workspace_dir: null,
       workspace_branch: null,
       workspace_base_ref: null,
-      ...(!TERMINAL_GOAL_RUN_STATUSES.has(action.status) ? { status: "aborted" as const } : {}),
+      ...(!isTerminalGoalRunStatus(action.status) ? { status: "aborted" as const } : {}),
     })
     return
   }
-  if (!TERMINAL_GOAL_RUN_STATUSES.has(action.status)) {
+  if (!isTerminalGoalRunStatus(action.status)) {
     updateGoalRun(action.goalRunID, { status: "aborted" })
   }
 }

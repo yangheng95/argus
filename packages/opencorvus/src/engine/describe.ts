@@ -28,6 +28,12 @@ import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isGoalRunOrphaned, isRunOrphan } from "./orphan"
+import {
+  isAbortedGoalRunStatus,
+  isFailedGoalRunStatus,
+  isLiveGoalRunStatus,
+  isSuccessfulGoalRunStatus,
+} from "./catalog"
 import { deriveTaskStatus } from "./task-status"
 import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
 import { SessionStatus } from "@/session/status"
@@ -85,11 +91,6 @@ const TerminalGoalRefillNotificationPayloadSchema = z.object({
   dispatch_result: z.enum(["started", "queued"]),
   time_dispatched: z.number(),
 })
-
-const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
-const TERMINAL_OK_STATES = new Set(["completed"])
-const TERMINAL_FAIL_STATES = new Set(["failed"])
-const TERMINAL_ABORTED_STATES = new Set(["aborted"])
 
 // ---------------------------------------------------------------------------
 // Structured description types (exported for tests / UI)
@@ -606,10 +607,10 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
   // Keep is_running tied to the persisted goal_run status; expose ownership
   // death separately through is_orphaned so the LLM decides the next action.
   const tipIsOrphaned = !!tip && isGoalRunOrphaned(tip)
-  const tipIsLive = !!tip && LIVE_STATES.has(tip.status)
-  const tipIsOk = !!tip && TERMINAL_OK_STATES.has(tip.status)
-  const tipIsFail = !!tip && TERMINAL_FAIL_STATES.has(tip.status)
-  const tipIsAborted = !!tip && TERMINAL_ABORTED_STATES.has(tip.status)
+  const tipIsLive = isLiveGoalRunStatus(tip?.status)
+  const tipIsOk = isSuccessfulGoalRunStatus(tip?.status)
+  const tipIsFail = isFailedGoalRunStatus(tip?.status)
+  const tipIsAborted = isAbortedGoalRunStatus(tip?.status)
   const tipHasRedispatchIntent = !!tip && !!tip.superseded_reason
   const isTerminal = tipIsOk || tipIsFail || tipIsAborted
 

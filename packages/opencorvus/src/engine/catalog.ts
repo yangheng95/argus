@@ -24,6 +24,11 @@ import type { EngineGoalRunStatus, EngineRunStatus } from "./engine.sql"
  */
 type GoalRunStatusMeta = {
   liveness: "live" | "terminal" | "retriable"
+  goalProjection: "pending" | "running" | "passed" | "failed"
+  workflowProjection: "pending" | "running" | "completed" | "failed" | "aborted"
+  terminalKind: "success" | "failure" | "aborted" | null
+  activeExecution: boolean
+  startedAtImplied: boolean
   satisfiesGoal: boolean
   resettable: boolean
 }
@@ -34,21 +39,102 @@ type RunStatusMeta = {
 }
 
 const GOAL_RUN_STATUS_CATALOG = {
-  queued: { liveness: "live", satisfiesGoal: false, resettable: true },
-  accepted: { liveness: "live", satisfiesGoal: false, resettable: true },
-  planning: { liveness: "live", satisfiesGoal: false, resettable: true },
-  running: { liveness: "live", satisfiesGoal: false, resettable: true },
-  evaluating: { liveness: "live", satisfiesGoal: false, resettable: true },
-  blocked: { liveness: "live", satisfiesGoal: false, resettable: true },
+  queued: {
+    liveness: "live",
+    goalProjection: "pending",
+    workflowProjection: "pending",
+    terminalKind: null,
+    activeExecution: false,
+    startedAtImplied: false,
+    satisfiesGoal: false,
+    resettable: true,
+  },
+  accepted: {
+    liveness: "live",
+    goalProjection: "pending",
+    workflowProjection: "pending",
+    terminalKind: null,
+    activeExecution: true,
+    startedAtImplied: true,
+    satisfiesGoal: false,
+    resettable: true,
+  },
+  planning: {
+    liveness: "live",
+    goalProjection: "pending",
+    workflowProjection: "pending",
+    terminalKind: null,
+    activeExecution: true,
+    startedAtImplied: true,
+    satisfiesGoal: false,
+    resettable: true,
+  },
+  running: {
+    liveness: "live",
+    goalProjection: "running",
+    workflowProjection: "running",
+    terminalKind: null,
+    activeExecution: true,
+    startedAtImplied: true,
+    satisfiesGoal: false,
+    resettable: true,
+  },
+  evaluating: {
+    liveness: "live",
+    goalProjection: "running",
+    workflowProjection: "running",
+    terminalKind: null,
+    activeExecution: true,
+    startedAtImplied: true,
+    satisfiesGoal: false,
+    resettable: true,
+  },
+  blocked: {
+    liveness: "live",
+    goalProjection: "running",
+    workflowProjection: "running",
+    terminalKind: null,
+    activeExecution: true,
+    startedAtImplied: true,
+    satisfiesGoal: false,
+    resettable: true,
+  },
   // `completed` is truly terminal: the goal_run succeeded under its contract
   // and its verification evidence is load-bearing for acceptance replay + the
   // overlay timeline. Retry under a new contract or graph repair must create
   // a NEW goal_run and supersede
   // the old one via metadata — never mutate the completed row into aborted,
   // which erases the success record and reverts parent goal.status.
-  completed: { liveness: "terminal", satisfiesGoal: true, resettable: false },
-  failed: { liveness: "retriable", satisfiesGoal: false, resettable: false },
-  aborted: { liveness: "retriable", satisfiesGoal: false, resettable: false },
+  completed: {
+    liveness: "terminal",
+    goalProjection: "passed",
+    workflowProjection: "completed",
+    terminalKind: "success",
+    activeExecution: false,
+    startedAtImplied: true,
+    satisfiesGoal: true,
+    resettable: false,
+  },
+  failed: {
+    liveness: "retriable",
+    goalProjection: "failed",
+    workflowProjection: "failed",
+    terminalKind: "failure",
+    activeExecution: false,
+    startedAtImplied: false,
+    satisfiesGoal: false,
+    resettable: false,
+  },
+  aborted: {
+    liveness: "retriable",
+    goalProjection: "failed",
+    workflowProjection: "aborted",
+    terminalKind: "aborted",
+    activeExecution: false,
+    startedAtImplied: false,
+    satisfiesGoal: false,
+    resettable: false,
+  },
 } as const satisfies Record<EngineGoalRunStatus, GoalRunStatusMeta>
 
 const RUN_STATUS_CATALOG = {
@@ -74,9 +160,7 @@ function runStatusesWhere(predicate: (meta: RunStatusMeta) => boolean): EngineRu
 }
 
 export const LIVE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "live")
-export const ACTIVE_GOAL_RUN_STATUSES = LIVE_GOAL_RUN_STATUSES.filter(
-  (status) => status !== "queued",
-) as EngineGoalRunStatus[]
+export const ACTIVE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.activeExecution)
 export const GOAL_RUN_RESETTABLE_STATUSES = goalRunStatusesWhere((meta) => meta.resettable)
 
 export const LIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.live)
@@ -87,8 +171,40 @@ export function isLiveGoalRunStatus(status?: EngineGoalRunStatus | null): status
   return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "live"
 }
 
+export function isActiveGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].activeExecution
+}
+
+export function isTerminalGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].terminalKind !== null
+}
+
+export function isSuccessfulGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].terminalKind === "success"
+}
+
+export function isFailedGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].terminalKind === "failure"
+}
+
+export function isAbortedGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].terminalKind === "aborted"
+}
+
+export function doesGoalRunStatusImplyStarted(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].startedAtImplied
+}
+
 export function doesGoalRunSatisfyGoal(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].satisfiesGoal
+}
+
+export function goalRunGoalProjectionStatus(status?: EngineGoalRunStatus | null) {
+  return status ? GOAL_RUN_STATUS_CATALOG[status].goalProjection : undefined
+}
+
+export function goalRunWorkflowProjectionStatus(status?: EngineGoalRunStatus | null) {
+  return status ? GOAL_RUN_STATUS_CATALOG[status].workflowProjection : undefined
 }
 
 export function isLiveRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {

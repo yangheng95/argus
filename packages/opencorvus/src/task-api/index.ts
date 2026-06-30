@@ -103,6 +103,7 @@ import {
   isTaskQueued,
   isTaskTerminal,
 } from "@/engine/task-status"
+import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import {
@@ -2388,9 +2389,7 @@ export namespace EngineService {
         "abortLiveOrchestratorToolOwnership",
       ).catch((err) => onAbortFailure("abortLiveOrchestratorToolOwnership", err, {}))
     }
-    const liveGoalRuns = listGoalRunsForTask(taskID).filter(
-      (row) => !["completed", "failed", "aborted"].includes(row.status),
-    )
+    const liveGoalRuns = listGoalRunsForTask(taskID).filter((row) => isLiveGoalRunStatus(row.status))
     await Promise.all(
       liveGoalRuns.map(async (row) => {
         await abortGoalRunExecution({

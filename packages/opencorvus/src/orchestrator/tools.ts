@@ -153,7 +153,7 @@ import {
   type TaskRow,
 } from "@/engine/store"
 import { goalStatusByID } from "@/engine/describe"
-import { isLiveGoalRunStatus, isLiveRunStatus } from "@/engine/catalog"
+import { isLiveGoalRunStatus, isLiveRunStatus, isTerminalGoalRunStatus } from "@/engine/catalog"
 import { isGoalRunOrphaned } from "@/engine/orphan"
 import { processOwner } from "@/engine/lease"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
@@ -5546,11 +5546,8 @@ export function createOrchestratorTools(input: {
     // beyond the structural decomposition. Treating in-flight runs as
     // post_build would let the freshness evidence accept attempts that
     // were taken mid-build, which is what codex review §6.4 #8 flagged.
-    // Per @/engine/catalog GOAL_RUN_STATUS_CATALOG: completed = terminal,
-    // failed/aborted = retriable, everything else = live.
-    const TERMINAL_RUN_STATUSES = new Set<string>(["completed", "failed", "aborted"])
     const phase: "pre_build" | "post_build" = requirementStatus.some((r) =>
-      r.claimingGoals.some((g) => TERMINAL_RUN_STATUSES.has(g.runStatus)),
+      r.claimingGoals.some((g) => g.runStatus !== "unstarted" && isTerminalGoalRunStatus(g.runStatus)),
     )
       ? "post_build"
       : "pre_build"
