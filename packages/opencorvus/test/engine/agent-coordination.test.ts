@@ -2,8 +2,10 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Database, and, eq } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
+  AgentCoordinationPendingConflictError,
   completeAgentCoordinationAction,
   createAgentCoordinationRequest,
+  createOperatorSteerCoordinationRequest,
   createAgentCoordinationResponse,
   failAgentCoordinationAction,
   findAgentCoordinationAction,
@@ -29,6 +31,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
+  await Instance.disposeAll()
   await resetDatabase()
 })
 
@@ -361,6 +364,109 @@ describe("agent coordination artifacts", () => {
         const event = ProtocolStore.listTaskEvents(taskID).find((row) => row.type === "agent.coordination.requested")
         expect(event?.sessionID).toBe(worker.id)
         expect(event?.target).toBe("orchestrator")
+      },
+    })
+  })
+
+  test("operator steer request helper records one operator-origin request and rejects duplicate pending steer", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const operatorSteerID = Identifier.ascending("artifact")
+        seedTask(taskID, now)
+        const root = await Session.create({ kind: "root", title: "operator steer helper root" })
+        const worker = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "operator steer helper worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: root.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        const request = await createOperatorSteerCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "requirements",
+          operatorMessage: "Operator asks the requirements agent to keep the contract strict.",
+          operatorSteerID,
+          now,
+        })
+
+        expect(request.artifactID).toBe(operatorSteerID)
+        expect(request.createdNow).toBe(true)
+        expect(request.payload).toMatchObject({
+          request_id: operatorSteerID,
+          task_id: taskID,
+          session_id: worker.id,
+          agent: "requirements",
+          origin: "operator_steer",
+          operator_steer_id: operatorSteerID,
+          operator_message: "Operator asks the requirements agent to keep the contract strict.",
+          requested_decision: "operator_steer",
+          summary: `Operator steer for requirements session ${worker.id}`,
+          details: "Operator asks the requirements agent to keep the contract strict.",
+          blocking: true,
+          severity: "blocked",
+          status: "pending",
+          session_ownership_source: "task_session_tree",
+        })
+        expect(request.payload.message_id).toBeUndefined()
+        expect(request.payload.tool_call_id).toBeUndefined()
+        expect(listPendingAgentCoordinationRequests(taskID).map((row) => row.payload.request_id)).toEqual([
+          operatorSteerID,
+        ])
+
+        const replay = await createOperatorSteerCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "requirements",
+          operatorMessage: "Operator asks the requirements agent to keep the contract strict.",
+          operatorSteerID,
+          now: now + 1,
+        })
+        expect(replay.artifactID).toBe(operatorSteerID)
+        expect(replay.createdNow).toBe(false)
+        expect(listAgentCoordinationRequests(taskID).map((row) => row.payload.request_id)).toEqual([operatorSteerID])
+
+        await expect(
+          createOperatorSteerCoordinationRequest({
+            taskID,
+            sessionID: worker.id,
+            agent: "requirements",
+            operatorMessage: "Conflicting replay must not rewrite the operator steer payload.",
+            operatorSteerID,
+            now: now + 2,
+          }),
+        ).rejects.toThrow(/conflicts with existing request.*operator_message/)
+
+        await expect(
+          createOperatorSteerCoordinationRequest({
+            taskID,
+            sessionID: worker.id,
+            agent: "requirements",
+            operatorMessage: "A second pending operator steer must wait for the first response.",
+            operatorSteerID: Identifier.ascending("artifact"),
+            now: now + 3,
+          }),
+        ).rejects.toBeInstanceOf(AgentCoordinationPendingConflictError)
+        expect(listAgentCoordinationRequests(taskID).map((row) => row.payload.request_id)).toEqual([operatorSteerID])
+
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        const event = ProtocolStore.listTaskEvents(taskID).find((row) => row.type === "agent.coordination.requested")
+        expect(event?.sessionID).toBe(worker.id)
+        expect(event?.target).toBe("orchestrator")
+        expect(event?.payload).toMatchObject({
+          taskID,
+          requestID: operatorSteerID,
+          sessionID: worker.id,
+          agent: "requirements",
+          blocking: true,
+          severity: "blocked",
+        })
       },
     })
   })

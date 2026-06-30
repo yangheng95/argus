@@ -555,7 +555,7 @@ describe("task session operator steer route", () => {
     })
   })
 
-  test("root and invalid-kind sessions fail before writing coordination artifacts", async () => {
+  test("root, orchestrator, and invalid-kind sessions fail before writing artifacts or messages", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({
       directory: tmp.path,
@@ -563,14 +563,29 @@ describe("task session operator steer route", () => {
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         const root = await Session.create({ kind: "root", title: "invalid steer root" })
+        const orchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "invalid orchestrator target",
+        })
         const executor = await Session.create({ kind: "executor", parentID: root.id, title: "executor" })
         seedTask({ taskID, rootID: root.id, now, active: false })
+        const rootMessagesBefore = await Session.messages({ sessionID: root.id })
+        const orchestratorMessagesBefore = await Session.messages({ sessionID: orchestrator.id })
+        const executorMessagesBefore = await Session.messages({ sessionID: executor.id })
 
         const rootResponse = await postSteer({ taskID, sessionID: root.id, directory: tmp.path })
         expect(rootResponse.status).toBe(400)
         expect(await rootResponse.json()).toMatchObject({
           name: "OperatorSteerTargetError",
           data: { reason: "task_root", taskID, sessionID: root.id },
+        })
+
+        const orchestratorResponse = await postSteer({ taskID, sessionID: orchestrator.id, directory: tmp.path })
+        expect(orchestratorResponse.status).toBe(400)
+        expect(await orchestratorResponse.json()).toMatchObject({
+          name: "OperatorSteerTargetError",
+          data: { reason: "orchestrator_session", taskID, sessionID: orchestrator.id },
         })
 
         const executorResponse = await postSteer({ taskID, sessionID: executor.id, directory: tmp.path })
@@ -580,6 +595,43 @@ describe("task session operator steer route", () => {
           data: { reason: "invalid_kind", taskID, sessionID: executor.id },
         })
 
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(rootMessagesBefore.length)
+        expect(await Session.messages({ sessionID: orchestrator.id })).toHaveLength(orchestratorMessagesBefore.length)
+        expect(await Session.messages({ sessionID: executor.id })).toHaveLength(executorMessagesBefore.length)
+        expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
+        expect(queuedCoordinationWakes(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("unowned sessions fail before writing coordination artifacts or messages", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "owned task root" })
+        const detachedRoot = await Session.create({ kind: "root", title: "detached root" })
+        const unownedWorker = await Session.create({
+          kind: "requirements",
+          parentID: detachedRoot.id,
+          title: "unowned worker",
+        })
+        seedTask({ taskID, rootID: root.id, now, active: false })
+
+        const rootMessagesBefore = await Session.messages({ sessionID: root.id })
+        const workerMessagesBefore = await Session.messages({ sessionID: unownedWorker.id })
+
+        const response = await postSteer({ taskID, sessionID: unownedWorker.id, directory: tmp.path })
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({
+          name: "OperatorSteerTargetError",
+          data: { reason: "unowned_session", taskID, sessionID: unownedWorker.id },
+        })
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(rootMessagesBefore.length)
+        expect(await Session.messages({ sessionID: unownedWorker.id })).toHaveLength(workerMessagesBefore.length)
         expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
         expect(queuedCoordinationWakes(taskID)).toHaveLength(0)
       },

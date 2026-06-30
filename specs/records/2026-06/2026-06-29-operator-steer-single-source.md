@@ -45,9 +45,12 @@ steer protocol.
   deep-research, goal-workload-analyst, requirements, frontend-design,
   architect, integrity, and intent-analysis are all targetable through the same
   operator steer API.
-- Errors: invalid target, pending A2A, missing runtime contract, build live
-  ownership, and stale/terminal sessions produce structured visible errors, not
-  fallback behavior.
+- Errors: invalid target, pending A2A, build live ownership, and
+  stale/terminal sessions produce structured visible errors, not fallback
+  behavior. A missing runtime contract on an otherwise task-owned non-terminal
+  target is accepted into the operator coordination request; the real
+  orchestrator decision/action path owns any later continuation or redispatch
+  runtime-contract validation.
 - Tests: backend route, overlay service, source-level anti-regression tests,
   real browser visual tests, and docs/spec health tests must pass.
 - Review: independent agents must adversarially review the implementation until
@@ -389,12 +392,24 @@ The repair is not accepted if any of these remain true:
 
 2026-06-29 targeted verification:
 
-- `bun test --parallel=1 packages/opencorvus/test/server/task-session-operator-steer.test.ts packages/opencorvus/test/server/task-message-routes.test.ts --test-name-pattern "operator steer|target-scoped|triggers scheduler|queues behind multiple live build owners|does not interrupt async goal"`
+- `bun test packages/opencorvus/test/server/task-session-operator-steer.test.ts`
   passed: accepted build steer, all current worker kinds, response/action chain,
   pending conflict, strict request body rejection, dispatch-failure wake
-  cleanup, persisted terminal 410, root/invalid/foreign 400, and task-root
-  `/message` target rejection. The explicit file isolation prevents unrelated
-  DB fixture reset interference between these server test files.
+  cleanup, persisted terminal 410, and root/orchestrator/invalid/unowned/foreign
+  400 without coordination artifacts, queued wakes, or fallback messages.
+- `bun test packages/opencorvus/test/engine/agent-coordination.test.ts`
+  passed after fixing the test harness cleanup to dispose active instances
+  before resetting the shared DB. The new helper-level regression covers
+  `createOperatorSteerCoordinationRequest`: `origin: "operator_steer"`,
+  no worker `message_id`, replay by `operator_steer_id`, conflicting replay
+  rejection, pending duplicate rejection, and visible coordination event
+  emission.
+- `bun test packages/opencorvus/test/server/task-message-routes.test.ts --test-name-pattern "target-scoped|triggers scheduler|queues behind multiple live build owners|does not interrupt async goal"`
+  passed: task-root `/message` remains ordinary scheduler input, rejects
+  target-scoped payloads before persistence, and queues behind live build
+  ownership. These backend route files must run as separate Bun processes;
+  running multiple server test files concurrently shares root DB fixtures and
+  can produce unrelated afterEach timeout / FK noise.
 - `bun test packages/opencorvus/test/server/task-message-routes.test.ts --test-name-pattern "POST /task/:taskID/message rejects target-scoped input before writing a root message"`
   passed: task-root messages reject targeted steer fields before persistence.
 - `bun test packages/opencorvus/test/server/reply-error-taxonomy.test.ts`
@@ -407,9 +422,11 @@ The repair is not accepted if any of these remain true:
 - `bun test packages/overlay/test/agent-session-controls.test.ts packages/overlay/test/agent-reply-box-structured-errors.test.ts`
   passed.
 - `cd packages/overlay; node test/browser-runner.mjs test/browser/agent-reply-box-primitives.test.ts`
-  passed and produced `.scratch/agent-reply-box-operator-target-error.png`,
-  visually reviewed for preserved draft, visible Steer button, and non-overlap
-  structured error panel.
+  passed and produced `.scratch/agent-reply-box-operator-accepted.png` plus
+  `.scratch/agent-reply-box-operator-target-error.png`. Both screenshots were
+  visually reviewed: accepted steer clears the textarea and shows no error;
+  structured error preserves the draft, keeps the Steer button visible, and has
+  no text/control overlap.
 - `bun run ./packages/sdk/js/script/build.ts`, `bun run api:routes-check`,
   `bun run docs:check`, and docs health tests passed.
 - `bun run typecheck` passed.
@@ -422,5 +439,15 @@ The repair is not accepted if any of these remain true:
 - Independent review findings were incorporated:
   `AgentSessionOperatorSteerInput` is strict, dispatch failure discards any
   pending coordination-request wake after cancelling the request, superseded
-  build task-root steer history is marked in-place, and docs health now pins
-  those historical conflicts plus this record's Recall.
+  build task-root steer history is marked in-place, docs health now pins those
+  historical conflicts plus this record's Recall, current architecture is pinned
+  to `/operator-steer` + `agent_coordination_request(origin="operator_steer")`,
+  and the spec acceptance wording no longer conflicts with the implemented
+  non-terminal missing-runtime-contract route behavior.
+- Second/third independent review findings were incorporated:
+  browser visual coverage now exercises both 202 accepted and 400 structured
+  error responses with screenshots; route-level target failures now assert
+  root/orchestrator/executor/unowned message counts remain unchanged in addition
+  to no coordination artifacts or wakes; document health includes current
+  architecture negative checks against `/message` or `/reply` operator-steer
+  contradictions. Follow-up review reported no remaining blockers.
