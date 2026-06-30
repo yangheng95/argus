@@ -10,6 +10,7 @@ import {
   findRun,
   findRuns,
   findTask,
+  listActiveGoalRunsForRun,
   listGoalRunsByGoal,
   listLiveGoalRunsForProject,
   listLiveRuns,
@@ -314,6 +315,90 @@ describe("engine state invariants", () => {
       expect(() => listGoalRunsByGoal(goalID)).toThrow(/invalid payload\.status "zombie"/)
       expect(() => findGoalRun(goalRunID)).toThrow(/invalid payload\.status "zombie"/)
     })
+  })
+
+  test("active goal-run projection excludes queued and terminal tips", () => {
+    const now = Date.now()
+    const projectID = `proj_goal_run_active_${now}`
+    const taskID = `tsk_goal_run_active_${now}`
+    const runID = `run_goal_run_active_${now}`
+    const statuses = [
+      "queued",
+      "accepted",
+      "planning",
+      "running",
+      "evaluating",
+      "blocked",
+      "completed",
+      "failed",
+      "aborted",
+    ] as const
+
+    Database.transaction((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "active goal_run projection",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "active goal_run projection",
+          request: "test",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+
+      for (const [index, status] of statuses.entries()) {
+        const goalRunID = `grun_goal_run_active_${status}_${now}`
+        db.insert(EngineArtifactTable)
+          .values({
+            id: `art_goal_run_active_${status}_${now}`,
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: goalRunID,
+            kind: "goal_run_attempt",
+            label: `attempt-${status}`,
+            payload: {
+              goal_id: `gol_goal_run_active_${status}_${now}`,
+              status,
+              retry_count: 0,
+              time_started: index === 0 ? null : now,
+              time_completed: status === "completed" || status === "failed" || status === "aborted" ? now : null,
+            },
+            time_created: now + index,
+            time_updated: now + index,
+          })
+          .run()
+      }
+    })
+
+    try {
+      expect(listActiveGoalRunsForRun(runID).map((row) => row.status).sort()).toEqual([
+        "accepted",
+        "blocked",
+        "evaluating",
+        "planning",
+        "running",
+      ])
+    } finally {
+      Database.transaction((db) => {
+        db.delete(EngineArtifactTable).where(eq(EngineArtifactTable.run_id, runID)).run()
+        db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+        db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run()
+      })
+    }
   })
 
   test("run artifact payload status is required on common read projections", () => {

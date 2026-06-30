@@ -7,7 +7,7 @@ import { git } from "@/util/git"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
-import { ACTIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { isActiveGoalRunStatus } from "./catalog"
 import { InternalGitCommitSubject } from "./internal-git-commit-subject"
 import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
 import fs from "node:fs/promises"
@@ -593,9 +593,8 @@ export type LKGOutcome =
   | { kind: "regressed"; score: number; previous: AcceptanceLKG; rolledBackTo: string }
 
 async function detectActiveSiblingGoals(taskID: string): Promise<string[]> {
-  const active = new Set(ACTIVE_GOAL_RUN_STATUSES as readonly string[])
   return listGoalRunsForTask(taskID)
-    .filter((row) => active.has(row.status))
+    .filter((row) => isActiveGoalRunStatus(row.status))
     .map((row) => row.id)
     .sort()
 }
