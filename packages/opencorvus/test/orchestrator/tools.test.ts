@@ -40,7 +40,7 @@ import {
 } from "../../src/engine/persist"
 import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
-import { resetDatabase } from "../fixture/db"
+import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import {
   findActiveRunForTask,
@@ -111,6 +111,8 @@ import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
 import { SkillTool } from "../../src/tool/skill"
+
+const ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -1390,7 +1392,15 @@ function expectGoalBuildStarted(result: unknown): string {
 }
 
 async function waitForGoalStatus(goalID: string, status: "passed" | "failed" | "running") {
-  await waitForCondition(`goal ${goalID} status ${status}`, () => goalStatusByID(goalID) === status)
+  await waitForCondition(`goal ${goalID} status ${status}`, async () => {
+    if (goalStatusByID(goalID) !== status) return false
+    if (status !== "passed") return true
+    const workspace = findGoalLatestWorkspace(goalID)
+    if (!workspace.directory) return true
+    const normalized = workspace.directory.replace(/\\/g, "/")
+    if (!normalized.includes("/.opencorvus/r/w/")) return true
+    return !(await Filesystem.exists(workspace.directory))
+  })
 }
 
 function activeOnlyLineage(taskID: string, specSnapshotID: string) {
@@ -2077,47 +2087,53 @@ function seedSettingsRequirement(input: { taskID: string; specID: string; now: n
 describe("orchestrator tools", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
 
-  beforeEach(async () => {
-    await resetDatabase()
-    tmp = await tmpdir()
-    requirementsRunImpl = undefined
-    architectCoordinateImpl = undefined
-    designAnalyzeImpl = undefined
-    frontendResearchRunImpl = undefined
-    deepResearchRunImpl = undefined
-    intentAnalysisAnalyzeImpl = undefined
-    exploreRunImpl = undefined
-    goalWorkloadAnalyzeImpl = undefined
-    factCheckAgentRunImpl = undefined
-    visualQaAnalyzeImpl = undefined
-    mcpServerToolsImpl = undefined
-    mcpCallToolImpl = undefined
-    captureReferenceManifestImpl = undefined
-    reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
-  })
+  beforeEach(
+    async () => {
+      await resetDatabase()
+      tmp = await tmpdir()
+      requirementsRunImpl = undefined
+      architectCoordinateImpl = undefined
+      designAnalyzeImpl = undefined
+      frontendResearchRunImpl = undefined
+      deepResearchRunImpl = undefined
+      intentAnalysisAnalyzeImpl = undefined
+      exploreRunImpl = undefined
+      goalWorkloadAnalyzeImpl = undefined
+      factCheckAgentRunImpl = undefined
+      visualQaAnalyzeImpl = undefined
+      mcpServerToolsImpl = undefined
+      mcpCallToolImpl = undefined
+      captureReferenceManifestImpl = undefined
+      reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
+    },
+    { timeout: ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS },
+  )
 
-  afterEach(async () => {
-    buildAgentRunImpl = undefined
-    reviewIntegrityImpl = undefined
-    computeRequirementStatusSnapshotImpl = undefined
-    requirementsRunImpl = undefined
-    architectCoordinateImpl = undefined
-    designAnalyzeImpl = undefined
-    frontendResearchRunImpl = undefined
-    deepResearchRunImpl = undefined
-    intentAnalysisAnalyzeImpl = undefined
-    exploreRunImpl = undefined
-    goalWorkloadAnalyzeImpl = undefined
-    factCheckAgentRunImpl = undefined
-    visualQaAnalyzeImpl = undefined
-    mcpServerToolsImpl = undefined
-    mcpCallToolImpl = undefined
-    captureReferenceManifestImpl = undefined
-    ExecutorRegistry.reset()
-    mock.restore()
-    await resetDatabase()
-    await tmp?.[Symbol.asyncDispose]?.()
-  })
+  afterEach(
+    async () => {
+      buildAgentRunImpl = undefined
+      reviewIntegrityImpl = undefined
+      computeRequirementStatusSnapshotImpl = undefined
+      requirementsRunImpl = undefined
+      architectCoordinateImpl = undefined
+      designAnalyzeImpl = undefined
+      frontendResearchRunImpl = undefined
+      deepResearchRunImpl = undefined
+      intentAnalysisAnalyzeImpl = undefined
+      exploreRunImpl = undefined
+      goalWorkloadAnalyzeImpl = undefined
+      factCheckAgentRunImpl = undefined
+      visualQaAnalyzeImpl = undefined
+      mcpServerToolsImpl = undefined
+      mcpCallToolImpl = undefined
+      captureReferenceManifestImpl = undefined
+      ExecutorRegistry.reset()
+      mock.restore()
+      await resetDatabase()
+      await tmp?.[Symbol.asyncDispose]?.()
+    },
+    { timeout: ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS },
+  )
 
   test("build integrity feedback markdown uses the task primary runtime root", async () => {
     const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
@@ -14665,11 +14681,14 @@ describe("orchestrator tools", () => {
             "background goal build finalization",
             () => listGoalRunsByGoal(goalID)[0]?.status === "completed",
           )
+          await waitForCondition("background goal build cleanup", () => {
+            return findGoalLatestWorkspace(goalID).directory === null
+          })
           expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
         },
       })
     },
-    { timeout: 15_000 },
+    { timeout: ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS },
   )
 
   test(
@@ -14846,7 +14865,7 @@ describe("orchestrator tools", () => {
         expect(message).not.toContain("already has live goal_run")
       },
     })
-  })
+  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
   test("goal build is not blocked by correction-bearing review history", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -14943,7 +14962,7 @@ describe("orchestrator tools", () => {
         expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
       },
     })
-  })
+  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
   test("orchestrator tool surface omits retired deliver verification", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -15008,7 +15027,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("goal build success preserves the completed worktree for later retries", async () => {
+  test("goal build success reclaims the completed worktree immediately", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -15031,10 +15050,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal cleanup build test",
           taskTitle: "Goal cleanup build task",
-          request: "Build a scoped goal and preserve its worktree after success",
-          goalTitle: "Preserve successful worktree",
-          goalSlug: "preserve-successful-worktree",
-          objective: "Verify completed goal worktrees remain available after a passed build",
+          request: "Build a scoped goal and reclaim its worktree after success",
+          goalTitle: "Reclaim successful worktree",
+          goalSlug: "reclaim-successful-worktree",
+          objective: "Verify completed goal worktrees are reclaimed after a passed build",
           now,
           insertProject: false,
         })
@@ -15083,14 +15102,19 @@ describe("orchestrator tools", () => {
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
         expect(buildWorktreeDir).not.toBe("")
-        expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
+        await waitForCondition("completed goal worktree cleanup", async () => {
+          return !(await Filesystem.exists(buildWorktreeDir)) && findGoalLatestWorkspace(goalID).directory === null
+        })
+        expect(await Filesystem.exists(buildWorktreeDir)).toBe(false)
         const ws = findGoalLatestWorkspace(goalID)
-        expect(ws.directory).toBe(buildWorktreeDir)
-        expect(ws.branch).toBe(listGoalRunsByGoal(goalID)[0]?.workspace_branch)
-        expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(buildWorktreeDir)
+        expect(ws.directory).toBeNull()
+        expect(ws.branch).toBeNull()
+        expect(ws.baseRef).toBeNull()
+        expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBeNull()
+        expect(listGoalRunsByGoal(goalID)[0]?.workspace_branch).toBeNull()
       },
     })
-  }, 30_000)
+  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
   test("goal build failure keeps the worktree for diagnosis", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -15164,9 +15188,9 @@ describe("orchestrator tools", () => {
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(buildWorktreeDir)
       },
     })
-  })
+  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
-  test("goal build success keeps workspace pointers from the build result", async () => {
+  test("goal build success fails visibly when completed workspace cleanup is refused", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -15188,10 +15212,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal workspace pointer test",
           taskTitle: "Goal workspace pointer task",
-          request: "Build a scoped goal and preserve the returned workspace pointer",
-          goalTitle: "Preserve returned workspace",
-          goalSlug: "preserve-returned-workspace",
-          objective: "Verify successful builds keep workspace pointers",
+          request: "Build a scoped goal and surface refused completed workspace cleanup",
+          goalTitle: "Refuse returned workspace cleanup",
+          goalSlug: "refuse-returned-workspace-cleanup",
+          objective: "Verify refused completed workspace cleanup is visible",
           now,
           insertProject: false,
         })
@@ -15235,13 +15259,16 @@ describe("orchestrator tools", () => {
         )
 
         expectGoalBuildStarted(result)
-        await waitForGoalStatus(goalID, "passed")
+        await waitForGoalStatus(goalID, "failed")
         expect(await Filesystem.exists(tmp.path)).toBe(true)
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(tmp.path)
+        expect(listGoalRunsByGoal(goalID)[0]?.error).toContain("completed worktree cleanup failed")
+        expect(listGoalRunsByGoal(goalID)[0]?.error).toContain("outside goal workspace roots")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
       },
     })
-  })
+  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
   test("goal build retry forwards previous rendered screenshot through attachment store URL", async () => {
     await tmp?.[Symbol.asyncDispose]?.()

@@ -13506,6 +13506,8 @@ export function createOrchestratorTools(input: {
             let goalRunInvalidatedLine = ""
             let goalRunInvalidated = false
             let goalRunFinalizationFailedLine = ""
+            let completedGoalWorkspaceCleanupLine = ""
+            let finalizedGoalRunStatus: "completed" | "failed" | undefined
             if (attachedGoalID && goalRunID) {
               try {
                 const { finalizeBuildAttempt } = await import("@/engine/persist")
@@ -13533,12 +13535,13 @@ export function createOrchestratorTools(input: {
                     diffHeadRef,
                     publishedCommitRef,
                   } = buildOutcome.result
+                  const terminalStatus = result.status === "passed" ? "completed" : "failed"
                   finalizeBuildAttempt({
                     goalRunID,
                     taskID,
                     goalID: attachedGoalID,
                     runID: coordinatorRunID,
-                    status: result.status === "passed" ? "completed" : "failed",
+                    status: terminalStatus,
                     commitRef: contributionCommitRef,
                     publishedCommitRef,
                     diffBaseRef,
@@ -13555,6 +13558,7 @@ export function createOrchestratorTools(input: {
                     fileChanges: result.files_changed,
                     summary: result.summary,
                   })
+                  finalizedGoalRunStatus = terminalStatus
                 } else {
                   const errMsg =
                     buildOutcome.error instanceof Error
@@ -13572,6 +13576,7 @@ export function createOrchestratorTools(input: {
                     error: errMsg,
                     summary: `BuildAgent.run threw before producing a verdict: ${errMsg.slice(0, 240)}`,
                   })
+                  finalizedGoalRunStatus = "failed"
                 }
               } catch (persistErr) {
                 const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr)
@@ -13601,6 +13606,41 @@ export function createOrchestratorTools(input: {
                     }
                   }
                 }
+              }
+            }
+
+            if (
+              attachedGoalID &&
+              goalRunID &&
+              finalizedGoalRunStatus === "completed" &&
+              !goalRunInvalidated &&
+              !goalRunFinalizationFailedLine
+            ) {
+              const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+              try {
+                const cleaned = await cleanupGoalWorkspaceForGoal(attachedGoalID)
+                if (cleaned) {
+                  completedGoalWorkspaceCleanupLine =
+                    `\n- completed_worktree_reclaimed: goal ${attachedGoalID} goal_run ${goalRunID}`
+                }
+              } catch (cleanupErr) {
+                const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+                log.error("build: completed goal workspace cleanup failed", {
+                  taskID,
+                  goalID: attachedGoalID,
+                  goalRunID,
+                  error: cleanupMessage,
+                })
+                const currentGoalRun = findGoalRun(goalRunID)
+                if (currentGoalRun?.status === "completed") {
+                  updateGoalRun(goalRunID, {
+                    status: "failed",
+                    error: `completed worktree cleanup failed: ${cleanupMessage}`,
+                    time_completed: Date.now(),
+                  })
+                }
+                closeBuildOwnership("failed", cleanupMessage)
+                throw cleanupErr
               }
             }
 
@@ -13749,7 +13789,7 @@ export function createOrchestratorTools(input: {
               `### Build report\n` +
               `- summary: ${result.summary}\n` +
               `- files_changed:\n${fileLines}\n` +
-              `${commitLine}${errorLine}${worktreeLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
+              `${commitLine}${errorLine}${worktreeLine}${completedGoalWorkspaceCleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
               `- repair_report:\n${repairReportLines}\n` +
               `- tests:\n${testLines}` +
               `${factBlock}\n\n` +

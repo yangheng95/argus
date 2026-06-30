@@ -4,6 +4,8 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 
+export const TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS = 60_000
+
 function inside(parent: string, child: string) {
   const relative = path.relative(path.resolve(parent), path.resolve(child))
   return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
@@ -38,7 +40,7 @@ async function removeDatabaseFile(file: string) {
       if (!isBusyRemovalError(error)) throw error
       lastBusyError = error
       const elapsed = Date.now() - started
-      if (elapsed >= 60_000) {
+      if (elapsed >= TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS) {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(
           `Timed out removing locked test database file after ${elapsed}ms and ${attempt + 1} attempts: ${file}. Last busy error: ${message}`,
