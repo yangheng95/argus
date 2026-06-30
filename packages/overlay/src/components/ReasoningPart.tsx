@@ -1,9 +1,8 @@
 import { createMemo, createSignal, Show } from "solid-js"
 import { reasoningPartHidden, reasoningRevision } from "../store/reasoning"
 import { t } from "../utils/i18n"
-import { renderMarkdown } from "../utils/markdown"
 import { Icon } from "./Icon"
-import { visibleStreamingText } from "./text-part-model"
+import { StreamingMarkdownPart } from "./TextPart"
 import { Button } from "./ui/Button"
 
 export function isEmptyReasoning(s: string): boolean {
@@ -14,7 +13,6 @@ export function isEmptyReasoning(s: string): boolean {
 export function ReasoningPart(props: { part: any; streaming?: boolean }) {
   const [expanded, setExpanded] = createSignal(true)
   const text = () => String(props.part?.text || "")
-  const renderedHtml = createMemo(() => (props.streaming ? "" : renderMarkdown(text())))
   const hidden = createMemo(() => {
     reasoningRevision()
     return reasoningPartHidden(props.part)
@@ -39,9 +37,12 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
         >
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
         </Button>
-        <Show when={props.streaming} fallback={<div class="reasoning-text md-content" innerHTML={renderedHtml()} />}>
-          <div class="reasoning-text reasoning-text--streaming">{visibleStreamingText(text())}</div>
-        </Show>
+        <StreamingMarkdownPart
+          text={text()}
+          streaming={props.streaming}
+          className="reasoning-text md-content"
+          activeTextClassName="md-active-text reasoning-text--streaming"
+        />
       </div>
     </Show>
   )
