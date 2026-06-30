@@ -19,6 +19,10 @@ describe("build agent prompt context", () => {
 
     expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("review:contract_audit")
+    expect(prompt).toContain("problem_dom_regions")
+    expect(prompt).toContain("Document Object Model (DOM)")
+    expect(prompt).toContain("code-search terms")
+    expect(prompt).toContain("fresh screenshot or comparison evidence")
     expect(prompt).not.toContain("Canonical acceptance feedback packet")
     expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
   })

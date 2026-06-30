@@ -177,6 +177,29 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `evidence=${problem.evidence_refs.join(", ") || "(none)"}`,
     ].join("; "),
   )
+  const problemDomLines = report.problem_dom_regions.map((region) =>
+    [
+      `${region.id}: blockers=${region.blocker_ids.join(", ")}`,
+      `region=${region.region}`,
+      region.route ? `route=${region.route}` : undefined,
+      region.viewport ? `viewport=${region.viewport.width}x${region.viewport.height}` : undefined,
+      `locator=${region.locator}`,
+      region.dom_path ? `dom_path=${region.dom_path}` : undefined,
+      region.bbox
+        ? `bbox=x:${region.bbox.x},y:${region.bbox.y},w:${region.bbox.width},h:${region.bbox.height}`
+        : undefined,
+      region.code_search_terms.length ? `code_search_terms=${region.code_search_terms.join(", ")}` : undefined,
+      Object.keys(region.attributes).length ? `attributes=${compactRecord(region.attributes)}` : undefined,
+      Object.keys(region.computed_style).length ? `computed_style=${compactRecord(region.computed_style)}` : undefined,
+      `outer_html=${compactText(region.outer_html_excerpt, 360)}`,
+      region.ancestor_context.length ? `ancestors=${region.ancestor_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
+      region.sibling_context.length ? `siblings=${region.sibling_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
+      `evidence=${region.evidence_refs.join(", ") || "(none)"}`,
+      `notes=${region.notes}`,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join("; "),
+  )
   return {
     summary: limitSummary(report.summary),
     detail: [
@@ -186,6 +209,7 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       `## Findings\n${findingLines.length ? markdownList(findingLines) : "- no findings"}`,
       `## Production Blockers\n${blockerLines.length ? markdownList(blockerLines) : "- none"}`,
       `## Unresolved Code Module Problems\n${unresolvedProblemLines.length ? markdownList(unresolvedProblemLines) : "- none"}`,
+      `## Problem DOM Regions\n${problemDomLines.length ? markdownList(problemDomLines) : "- none"}`,
       `## Evidence\n${report.evidence.length ? markdownList(report.evidence.map((item) => `${item.type}: ${item.ref} — ${item.note}`)) : "- no evidence submitted"}`,
       `## Repairs\n${report.repairs.length ? markdownList(report.repairs.map((repair) => `${repair.files_changed.join(", ") || "(no files)"}: ${repair.reason}`)) : "- no repairs"}`,
       `## Commands\n${report.commands.length ? markdownList(report.commands.map((command) => `${command.passed ? "passed" : "failed"} ${command.command}: ${command.detail}`)) : "- no commands"}`,
@@ -202,6 +226,7 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       description:
         "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
         "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no unresolved_code_module_problems. " +
+        "When visual blockers map to rendered Document Object Model (DOM) nodes, include problem_dom_regions with selectors, HTML excerpts, computed styles, and code search terms for Build. " +
         "When unrepairable production blockers expose a code-module issue, submit accepted=false and report unresolved_code_module_problems instead of requesting a new task.",
       inputSchema: VisualQaReportSchema,
       execute: async (raw) => {
@@ -235,4 +260,18 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       return collector
     },
   }
+}
+
+function compactRecord(input: Record<string, string>, max = 320): string {
+  return compactText(
+    Object.entries(input)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(", "),
+    max,
+  )
+}
+
+function compactText(input: string, max: number): string {
+  const normalized = input.replace(/\s+/g, " ").trim()
+  return normalized.length <= max ? normalized : `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`
 }

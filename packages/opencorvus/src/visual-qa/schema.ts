@@ -11,6 +11,13 @@ export const VisualQaViewportSchema = z.object({
   device_scale_factor: z.number().positive().optional(),
 })
 
+export const VisualQaDomBoxSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().nonnegative(),
+  height: z.number().nonnegative(),
+})
+
 export const VisualQaCoverageSchema = z.object({
   region: z.string().min(1).describe("Visible region, route, component family, or interaction surface checked."),
   viewports: z.array(VisualQaViewportSchema).default([]),
@@ -85,6 +92,50 @@ export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
   evidence_refs: z.array(z.string().min(1)).default([]),
 })
 
+export const VisualQaProblemDomRegionSchema = z.object({
+  id: z.string().min(1),
+  blocker_ids: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe("Production blocker IDs exposed by this rendered Document Object Model (DOM) region."),
+  region: z.string().min(1).describe("Human-readable rendered region name."),
+  route: z.string().min(1).optional().describe("Rendered app route where this DOM region was observed."),
+  viewport: VisualQaViewportSchema.optional(),
+  locator: z.string().min(1).describe("Stable selector or locator expression for the problematic rendered DOM node."),
+  dom_path: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Concise path from the target node through relevant ancestors."),
+  outer_html_excerpt: z.string().min(1).describe("Bounded HTML excerpt for the target DOM node."),
+  ancestor_context: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Nearby parent container summaries relevant to the visual defect."),
+  sibling_context: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Adjacent sibling summaries relevant to layout, spacing, or ordering."),
+  text_content: z.string().optional(),
+  role: z.string().optional(),
+  accessible_name: z.string().optional(),
+  bbox: VisualQaDomBoxSchema.optional().describe("Rendered CSS pixel box for the target DOM node."),
+  computed_style: z
+    .record(z.string(), z.string())
+    .default({})
+    .describe("Selected computed style values such as display, position, margin, padding, font, color, overflow, width, and height."),
+  attributes: z
+    .record(z.string(), z.string())
+    .default({})
+    .describe("Repair-relevant id, class, data, ARIA, and role attributes."),
+  code_search_terms: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Strings Build should grep first when mapping the DOM region to source code."),
+  evidence_refs: z.array(z.string().min(1)).default([]),
+  notes: z.string().min(1).describe("Concise repair guidance tied to these DOM facts."),
+})
+
 export const VisualQaRepairSchema = z.object({
   finding_ids: z.array(z.string().min(1)).default([]),
   files_changed: z.array(z.string().min(1)).default([]),
@@ -138,6 +189,7 @@ export const VisualQaReportSchema = z.object({
   findings: z.array(VisualQaFindingSchema).default([]),
   production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),
   unresolved_code_module_problems: z.array(VisualQaUnresolvedCodeModuleProblemSchema).default([]),
+  problem_dom_regions: z.array(VisualQaProblemDomRegionSchema).default([]),
   repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
   reference_parity: VisualQaReferenceParitySchema.default({

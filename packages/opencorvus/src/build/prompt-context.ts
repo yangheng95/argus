@@ -111,6 +111,7 @@ function renderAcceptanceRepairOverlay(acceptanceFeedback: string): string {
     "## Acceptance Repair Overlay",
     "",
     "The persisted acceptance review supplied the following rejection packet. Use it as task-specific repair evidence; do not replace the goal/request contract with a generic summary.",
+    "If it includes `problem_dom_regions`, use those rendered Document Object Model (DOM) selectors, HTML excerpts, computed styles, attributes, and code-search terms as the first source-code repair map, then prove the visual fix with fresh screenshot or comparison evidence.",
     "",
     acceptanceFeedback.trim(),
   ].join("\n")
