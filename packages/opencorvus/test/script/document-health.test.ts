@@ -2241,4 +2241,60 @@ describe("document health audit regressions", () => {
       expect(read(record)).toContain("`build`")
     }
   })
+
+  test("current architecture pins targeted operator steer to coordination request single source", () => {
+    const agents = read("specs/current/architecture/01-agents.md")
+    const matrix = read("specs/current/architecture/13-agent-communication-matrix.md")
+    const teardown = read("specs/current/architecture/16-unified-teardown.md")
+
+    expect(agents).toContain(
+      "Overlay targeted operator steer 的唯一入口是 `POST /task/:taskID/session/:sessionID/operator-steer`",
+    )
+    expect(agents).toContain(
+      "不写 task-root operator message，不写 child-session direct reply，也不伪造 `respond_agent_coordination` tool identity",
+    )
+    expect(agents).toContain(
+      "`POST /task/:taskID/message` 只表示 task-root operator input；它不接受 `target` session/build 字段",
+    )
+
+    expect(matrix).toContain(
+      "overlay targeted operator steer 只能通过 `POST /task/:taskID/session/:sessionID/operator-steer` 写入 `origin=\"operator_steer\"` 的 `agent_coordination_request`",
+    )
+    expect(matrix).toContain(
+      "不要再把 task-root message、direct reply、hidden note、generic same-kind redispatch 或历史 `steer_subagent` 当成调度协议",
+    )
+    expect(matrix).toContain(
+      "| Operator -> orchestrator      | `POST /task/:taskID/session/:sessionID/operator-steer` | `agent_coordination_request(origin=\"operator_steer\")`",
+    )
+
+    expect(teardown).toContain(
+      "Targeted sub-agent operator steer is not task-root operator input and is not a",
+    )
+    expect(teardown).toContain(
+      "writes an\n`origin=\"operator_steer\"` durable coordination request",
+    )
+
+    const currentArchitecture = [
+      ["specs/current/architecture/01-agents.md", agents],
+      ["specs/current/architecture/13-agent-communication-matrix.md", matrix],
+      ["specs/current/architecture/16-unified-teardown.md", teardown],
+    ] as const
+    const conflictingCurrentPhrases = [
+      "operator steer 通过 `/task/:taskID/message`",
+      "operator steer 走 `/task/:taskID/message`",
+      "operator steer calls `/task/:taskID/message`",
+      "operator steer 通过 `POST /task/:taskID/session/:sessionID/reply`",
+      "operator steer 走 `POST /task/:taskID/session/:sessionID/reply`",
+      "operator steer calls `POST /task/:taskID/session/:sessionID/reply`",
+      "targeted sub-agent steer uses `/task/:taskID/message`",
+      "targeted sub-agent steer uses `/task/:taskID/session/:sessionID/reply`",
+      "targeted sub-agent steer must use `/task/:taskID/message`",
+      "targeted sub-agent steer must use `/task/:taskID/session/:sessionID/reply`",
+    ]
+    for (const [file, text] of currentArchitecture) {
+      for (const phrase of conflictingCurrentPhrases) {
+        expect(text, `${file} must not contradict operator-steer single source with ${phrase}`).not.toContain(phrase)
+      }
+    }
+  })
 })

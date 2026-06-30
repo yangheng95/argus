@@ -110,7 +110,7 @@ function assistantMessage() {
 }
 
 test(
-  "agent reply box component keeps draft and shows structured operator steer errors",
+  "agent reply box component clears accepted operator steer and preserves structured errors",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -264,6 +264,17 @@ test(
       if (path === `/task/${TASK_ID}/trace`) return json({ events: [], traceDir: `${PROJECT_ROOT}/.opencorvus/trace` })
       if (path === `/task/${TASK_ID}/session/${SESSION_ID}/operator-steer` && req.method === "POST") {
         postedSteers.push(await req.json())
+        if (postedSteers.length === 1) {
+          return json(
+            {
+              task_id: TASK_ID,
+              session_id: SESSION_ID,
+              request_id: "artifact_operator_steer_browser_accepted",
+              wake_status: "queued",
+            },
+            { status: 202 },
+          )
+        }
         return json(
           {
             name: "OperatorSteerTargetError",
@@ -354,6 +365,50 @@ test(
           ].join("\n"),
         )
       }
+      const acceptedDraft = "Keep this scoped guidance on the operator-steer route."
+      await page.evaluate(() => {
+        const input = document.querySelector<HTMLTextAreaElement>(".card__agent-reply-input")
+        if (!input) throw new Error("missing AgentSessionReplyBox textarea")
+        input.value = "Keep this scoped guidance on the operator-steer route."
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }))
+      })
+      await page.waitForFunction(() => {
+        const send = document.querySelector<HTMLButtonElement>('[data-ui="agent-reply-send"]')
+        return !!send && !send.disabled
+      })
+      await page.click('[data-ui="agent-reply-send"]')
+      await page.waitForFunction(() => {
+        const form = document.querySelector(".card__agent-reply")
+        const input = form?.querySelector<HTMLTextAreaElement>(".card__agent-reply-input")
+        const send = form?.querySelector<HTMLButtonElement>('[data-ui="agent-reply-send"]')
+        return !!input && !!send && input.value === "" && send.disabled && !form?.querySelector(".card__agent-reply-error")
+      })
+
+      const acceptedMetrics = await page.evaluate(() => {
+        const activeForm = document.querySelector(".card__agent-reply") as HTMLElement
+        const activeInput = activeForm.querySelector(".card__agent-reply-input") as HTMLTextAreaElement
+        const activeSend = activeForm.querySelector('[data-ui="agent-reply-send"]') as HTMLButtonElement
+        const formRect = activeForm.getBoundingClientRect()
+        const sendRect = activeSend.getBoundingClientRect()
+        return {
+          draftValue: activeInput.value,
+          sendDisabled: activeSend.disabled,
+          errorPresent: !!activeForm.querySelector(".card__agent-reply-error"),
+          sendVisible: sendRect.width > 32 && sendRect.height > 24,
+          sendInsideForm: sendRect.right <= formRect.right && sendRect.left >= formRect.left,
+        }
+      })
+      assert.deepEqual(postedSteers, [{ message: acceptedDraft }])
+      assert.equal(acceptedMetrics.draftValue, "")
+      assert.equal(acceptedMetrics.sendDisabled, true)
+      assert.equal(acceptedMetrics.errorPresent, false)
+      assert.equal(acceptedMetrics.sendVisible, true)
+      assert.equal(acceptedMetrics.sendInsideForm, true)
+      const acceptedForm = await page.$(".card__agent-reply")
+      assert.ok(acceptedForm)
+      const acceptedScreenshot = await saveScreenshot(acceptedForm, "agent-reply-box-operator-accepted.png")
+      assert.ok(acceptedScreenshot.endsWith("agent-reply-box-operator-accepted.png"))
+
       await page.evaluate(() => {
         const input = document.querySelector<HTMLTextAreaElement>(".card__agent-reply-input")
         if (!input) throw new Error("missing AgentSessionReplyBox textarea")
@@ -407,7 +462,7 @@ test(
 
       const expectedDraft =
         "Please retry the layout pass.\nKeep the follow-up instruction visible.\nConfirm the screenshot evidence.\nReport the exact terminal state."
-      assert.deepEqual(postedSteers, [{ message: expectedDraft }])
+      assert.deepEqual(postedSteers, [{ message: acceptedDraft }, { message: expectedDraft }])
       assert.equal(metrics.draftValue, expectedDraft)
       assert.equal(metrics.sendDisabled, false)
       assert.equal(metrics.inputOverflowY, "auto")
