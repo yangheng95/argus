@@ -711,7 +711,7 @@ describe("browser preview local module source binding", () => {
     }
   })
 
-  test("writes stable source/local binding puzzle artifacts", async () => {
+  test("writes stable source/local module comparison artifacts", async () => {
     await using tmp = await tmpdir()
     const sourceImagePath = path.join(tmp.path, "source.png")
     const localImagePath = path.join(tmp.path, "local.png")
@@ -778,7 +778,14 @@ describe("browser preview local module source binding", () => {
       expect(metadata.width).toBeGreaterThan(0)
       expect(metadata.height).toBeGreaterThan(0)
     }
-    expect(path.basename(artifacts.binding_puzzle)).toBe("binding-puzzle.png")
+    expect(path.basename(artifacts.module_comparison)).toBe("module-comparison.png")
+    const sourceCrop = await sharp(artifacts.source_crop).metadata()
+    const implementationCrop = await sharp(artifacts.implementation_crop).metadata()
+    const moduleComparison = await sharp(artifacts.module_comparison).metadata()
+    expect(moduleComparison.width).toBeGreaterThanOrEqual(
+      (sourceCrop.width ?? 0) + (implementationCrop.width ?? 0) + 24,
+    )
+    expect(moduleComparison.height).toBeGreaterThan(Math.max(sourceCrop.height ?? 0, implementationCrop.height ?? 0))
   })
 
   test(

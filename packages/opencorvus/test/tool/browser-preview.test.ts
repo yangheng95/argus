@@ -48,7 +48,7 @@ function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PRE
 
 afterEach(async () => {
   await resetDatabase()
-})
+}, BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS)
 
 async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
@@ -152,6 +152,17 @@ describe("tool.browser_preview", () => {
     },
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test("reference regions tool describes one module binding comparison instead of page screenshots", async () => {
+    const tool = await BrowserPreviewReferenceRegionsTool.init()
+    const normalized = tool.description.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("exactly one module comparison screenshot attachment")
+    expect(normalized).toContain("does not run a second reference-comparison pass")
+    expect(normalized).toContain("does not auto-call other tools on bind failure")
+    expect(normalized).toContain("Use browser_preview_compare_scroll_slices for first-viewport")
+    expect(normalized).toContain("Browser MCP screenshot/observe tools")
+  })
 
   test(
     "starts a background service and opens preview from printed process URL",
@@ -913,7 +924,7 @@ describe("tool.browser_preview", () => {
   )
 
   test(
-    "reference regions tool binds a local module and persists reference comparison evidence",
+    "reference regions tool binds a local module and returns one module comparison attachment",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -932,7 +943,6 @@ describe("tool.browser_preview", () => {
             const tool = await BrowserPreviewReferenceRegionsTool.init()
             const result = await tool.execute(
               {
-                operation: "bind_and_compare_local_module",
                 targetID: target.id,
                 viewportID: "desktop",
                 regionID: "tool-local-module",
@@ -943,71 +953,105 @@ describe("tool.browser_preview", () => {
                 textAnchors: ["Tool Local Module", "Binding Anchor"],
                 sourcePadding: 0,
                 localPadding: 0,
-                includeDiff: true,
               },
               { ...baseCtx, extra: { taskID } },
             )
             const payload = JSON.parse(result.output)
             const bindingEvidenceID = result.metadata.bindingEvidenceID
-            const comparisonEvidenceID = result.metadata.comparisonEvidenceIDs["desktop:default:tool-local-module"]
             const bindingEvidence = await findReadableBrowserPreviewEvidenceByID({
               projectRoot: tmp.path,
               taskID,
               evidenceID: bindingEvidenceID,
             })
-            const comparisonEvidence = await findReadableBrowserPreviewEvidenceByID({
-              projectRoot: tmp.path,
-              taskID,
-              evidenceID: comparisonEvidenceID,
-            })
 
-            expect(result.title).toBe("Reference regions comparison completed")
-            expect(result.attachments).toHaveLength(3)
+            expect(result.title).toBe("Reference module binding completed")
+            expect(result.attachments).toHaveLength(1)
             expect(result.metadata.status).toBe("passed")
-            expect(result.metadata.operation).toBe("bind_and_compare_local_module")
-            expect(result.metadata.referenceComparisonProof).toBe(true)
+            expect(result.metadata.operation).toBe("bind_local_module")
+            expect(result.metadata.moduleBindingProof).toBe(true)
+            expect(result.metadata).not.toHaveProperty("comparisonEvidenceIDs")
+            expect(result.metadata).not.toHaveProperty("referenceComparisonProof")
             expect(bindingEvidence?.operationKind).toBe("source-binding")
-            expect(comparisonEvidence?.operationKind).toBe("reference-comparison")
-            expect(comparisonEvidence?.status).toBe("passed")
+            expect(bindingEvidence?.status).toBe("passed")
             expect(payload.sourceBinding.binding.region_id).toBe("tool-local-module")
             expect(payload.sourceBinding.binding.source.bbox).toEqual({ x: 24, y: 30, width: 180, height: 92 })
-            expect(payload.referenceComparison.operation).toBe("reference-comparison")
-            const comparedRegion = payload.referenceComparison.regions[0]
-            expect(comparedRegion.status).toBe("completed")
-            expect(comparedRegion.reason).toBeUndefined()
-            const artifacts = comparedRegion.artifacts
-            expect(comparisonEvidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
-            expect(comparisonEvidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
-            expect(comparisonEvidence?.artifactPaths?.side_by_side).toBe(artifacts.side_by_side)
-            expect(comparisonEvidence?.artifactPaths?.diff).toBe(artifacts.diff)
+            expect(payload).not.toHaveProperty("referenceComparison")
+            const artifacts = payload.sourceBinding.artifacts
+            expect(bindingEvidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
+            expect(bindingEvidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
+            expect(bindingEvidence?.artifactPaths?.side_by_side).toBe(artifacts.module_comparison)
 
             const sourceCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.source_crop)
             const implementationCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.implementation_crop)
-            const sideBySidePath = resolveRuntimeRelativePath(tmp.path, artifacts.side_by_side)
-            const diffPath = resolveRuntimeRelativePath(tmp.path, artifacts.diff)
+            const moduleComparisonPath = resolveRuntimeRelativePath(tmp.path, artifacts.module_comparison)
             expect(await fileExists(sourceCropPath)).toBe(true)
             expect(await fileExists(implementationCropPath)).toBe(true)
-            expect(await fileExists(sideBySidePath)).toBe(true)
-            expect(await fileExists(diffPath)).toBe(true)
-            const sourceDimensions = {
-              width: Math.ceil(comparedRegion.source_bbox.width),
-              height: Math.ceil(comparedRegion.source_bbox.height),
-            }
-            const implementationDimensions = {
-              width: Math.ceil(comparedRegion.implementation_bbox.width),
-              height: Math.ceil(comparedRegion.implementation_bbox.height),
-            }
+            expect(await fileExists(moduleComparisonPath)).toBe(true)
+            const sourceDimensions = { width: 180, height: 92 }
+            const implementationDimensions = { width: 180, height: 92 }
             await expectPngDimensions(sourceCropPath, sourceDimensions)
             await expectPngDimensions(implementationCropPath, implementationDimensions)
-            await expectPngDimensions(diffPath, sourceDimensions)
-            await expectPngDimensions(sideBySidePath, {
-              width: sourceDimensions.width + implementationDimensions.width + 16,
-              height: 62 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
+            await expectPngDimensions(moduleComparisonPath, {
+              width: 640,
+              height: 96 + 38 + Math.max(sourceDimensions.height, implementationDimensions.height) + 20,
             })
             await expectPngHasColorDiversity(sourceCropPath)
             await expectPngHasColorDiversity(implementationCropPath)
-            await expectPngHasColorDiversity(sideBySidePath)
-            await expectPngHasColorDiversity(diffPath)
+            await expectPngHasColorDiversity(moduleComparisonPath)
+          },
+        })
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: 60_000 },
+  )
+
+  test(
+    "reference regions tool reports binding failure without fallback attachments",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const server = await startBindingToolPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
+        })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const tool = await BrowserPreviewReferenceRegionsTool.init()
+            const result = await tool.execute(
+              {
+                targetID: target.id,
+                viewportID: "desktop",
+                regionID: "missing-local-module",
+                route: "/",
+                implementationLocator: { kind: "data-oc-region", value: "missing-local-module" },
+                componentFiles: ["src/MissingLocalModule.tsx"],
+                sourceReferenceArtifactID: "reference.png",
+                textAnchors: ["Missing Local Module"],
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(result.output)
+
+            expect(result.title).toBe("Reference module binding failed")
+            expect(result.attachments).toHaveLength(0)
+            expect(result.metadata.status).toBe("failed")
+            expect(result.metadata.operation).toBe("bind_local_module")
+            expect(result.metadata.moduleBindingProof).toBe(false)
+            expect(result.metadata.attachmentCount).toBe(0)
+            expect(result.metadata.reason).toEqual(expect.any(String))
+            expect(result.metadata).not.toHaveProperty("bindingEvidenceID")
+            expect(result.metadata).not.toHaveProperty("comparisonEvidenceIDs")
+            expect(result.metadata).not.toHaveProperty("referenceComparisonProof")
+            expect(payload.status).toBe("failed")
+            expect(payload.reason).toEqual(expect.any(String))
+            expect(payload).not.toHaveProperty("sourceBinding")
+            expect(payload).not.toHaveProperty("referenceComparison")
           },
         })
       } finally {
