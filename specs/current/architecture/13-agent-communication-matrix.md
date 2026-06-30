@@ -31,12 +31,12 @@ If a message has not reached an engine task, debug the channel/control boundary 
 
 Agent-to-Agent (A2A) scheduling is represented by durable artifacts, not hidden messages or direct child-session replies.
 
-| Direction                     | Sole entry                                                         | Durable artifacts / events                                                               | Meaning                                                                                                           |
-| ----------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Worker -> orchestrator        | `request_orchestrator_decision`                                    | `agent_coordination_request` and `agent.coordination.requested`                          | A worker asks the task orchestrator for scheduling, cancel, retry, or user-question handling.                     |
-| Operator -> orchestrator      | `POST /task/:taskID/session/:sessionID/operator-steer`             | `agent_coordination_request(origin="operator_steer")` and `agent.coordination.requested` | The overlay records targeted operator intent for a specific live session.                                         |
-| Orchestrator -> worker/action | `respond_agent_coordination`                                       | `agent_coordination_response`, `agent_coordination_action`, and responded/action events  | The orchestrator claims a pending request and records the chosen visible action.                                  |
-| Observable projection         | task conversation, `conversation/events`, Server-Sent Events (SSE) | `protocol_event`, message parts, session status                                          | Coordination requests, responses, actions, continuations, and terminals rehydrate through one visible projection. |
+| Direction | Sole entry | Durable artifacts / events | Meaning |
+| --- | --- | --- | --- |
+| Worker -> orchestrator | `request_orchestrator_decision` | `agent_coordination_request` and `agent.coordination.requested` | A worker asks the task orchestrator for scheduling, cancel, retry, or user-question handling. |
+| Operator -> orchestrator      | `POST /task/:taskID/session/:sessionID/operator-steer` | `agent_coordination_request(origin="operator_steer")` and `agent.coordination.requested` | The overlay records targeted operator intent for a specific live session. |
+| Orchestrator -> worker/action | `respond_agent_coordination` | `agent_coordination_response`, `agent_coordination_action`, and responded/action events | The orchestrator claims a pending request and records the chosen visible action. |
+| Observable projection | task conversation, `conversation/events`, Server-Sent Events (SSE) | `protocol_event`, message parts, session status | Coordination requests, responses, actions, continuations, and terminals rehydrate through one visible projection. |
 
 The implementation contract for the current A2A repair is recorded in [2026-06-26-enterprise-a2a-protocol-root-repair.md](../../records/2026-06/2026-06-26-enterprise-a2a-protocol-root-repair.md).
 
