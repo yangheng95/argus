@@ -8,21 +8,29 @@ import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findGoalLatestWorkspace } from "../../src/engine/store"
 import { cleanupGoalWorkspaceForGoal } from "../../src/engine/writer"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
-import { resetDatabase } from "../fixture/db"
+import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+
+const WRITER_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
 describe("engine writer goal workspace cleanup", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
 
-  beforeEach(async () => {
-    await resetDatabase()
-    tmp = await tmpdir({ git: true })
-  })
+  beforeEach(
+    async () => {
+      await resetDatabase()
+      tmp = await tmpdir({ git: true })
+    },
+    { timeout: WRITER_TEST_TIMEOUT_MS },
+  )
 
-  afterEach(async () => {
-    await resetDatabase()
-    await tmp?.[Symbol.asyncDispose]?.()
-  })
+  afterEach(
+    async () => {
+      await resetDatabase()
+      await tmp?.[Symbol.asyncDispose]?.()
+    },
+    { timeout: WRITER_TEST_TIMEOUT_MS },
+  )
 
   test("cleanupGoalWorkspaceForGoal removes a completed goal worktree and clears workspace fields", async () => {
     await Instance.provide({
