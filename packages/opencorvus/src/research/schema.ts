@@ -238,7 +238,9 @@ export const ResearchBundleEvidenceNoteSchema = z.object({
 export type ResearchBundleEvidenceNote = z.infer<typeof ResearchBundleEvidenceNoteSchema>
 
 export const ResearchBundleCitationEntrySchema = z.object({
-  claim_id: ResearchBundleLine(160),
+  claim_id: ResearchBundleLine(160).describe(
+    "Bundle-local citation key for the cited claim. It may match a structured brief item id, but does not have to.",
+  ),
   evidence_ids: z.array(z.string().min(1)).min(1),
   pointer: ResearchBundleLine(500),
   usage: ResearchBundleLine(1200),

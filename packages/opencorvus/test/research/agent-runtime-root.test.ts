@@ -49,7 +49,7 @@ test(
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedResearchTask(taskID)
+        await seedResearchTask(taskID)
         const worktree = await Worktree.create({
           name: `research-runtime-${Date.now().toString(36)}`,
           taskID,
@@ -117,7 +117,7 @@ test(
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedResearchTask(taskID)
+        await seedResearchTask(taskID)
         const session = await Session.createNext({
           kind: "deep-research",
           title: "Deep Research continuation hydration",
@@ -174,14 +174,20 @@ test(
   { timeout: 30_000 },
 )
 
-function seedResearchTask(taskID: string): void {
+async function seedResearchTask(taskID: string): Promise<void> {
   const now = Date.now()
+  const rootSession = await Session.createNext({
+    kind: "root",
+    title: "Research runtime task root",
+    directory: Instance.directory,
+  })
   Database.use((db) =>
     db
       .insert(EngineTaskTable)
       .values({
         id: taskID,
         project_id: Instance.project.id,
+        session_id: rootSession.id,
         source: "test",
         title: "research runtime task",
         request: "research runtime task",
@@ -292,22 +298,25 @@ async function persistCompletedResearchToolCalls(
       tokens: { input: 0, output: 0, reasoning: 0, total: 0, cache: { read: 0, write: 0 } },
       path: { cwd: directory, root: directory },
     },
-    parts: calls.map((call, index) => ({
-      id: `prt_research_completed_update_${index}`,
-      sessionID,
-      messageID,
-      type: "tool",
-      callID: `call_research_completed_update_${index}`,
-      tool: call.toolName,
-      state: {
-        status: "completed",
-        input: call.input,
-        output: "OK",
-        title: call.toolName,
-        metadata: {},
-        time: { start: now + index, end: now + index + 1 },
-      },
-    })),
+    parts: calls.map((call, index) => {
+      const order = String(index).padStart(3, "0")
+      return {
+        id: `prt_research_completed_update_${order}`,
+        sessionID,
+        messageID,
+        type: "tool",
+        callID: `call_research_completed_update_${order}`,
+        tool: call.toolName,
+        state: {
+          status: "completed",
+          input: call.input,
+          output: "OK",
+          title: call.toolName,
+          metadata: {},
+          time: { start: now + index, end: now + index + 1 },
+        },
+      }
+    }),
     touchSessionID: sessionID,
   })
 }

@@ -481,23 +481,23 @@ describe("research output tools", () => {
     }
   })
 
-  test("citation update rejects unknown claim ids before mutating collector", async () => {
+  test("citation update accepts bundle-local claim keys while preserving evidence validation", async () => {
     const kit = await registerMinimalBrief()
-    const before = collectorSnapshot(kit.getCollector())
 
     const result = await callTool(kit.tools, "update_research_citation", {
-      claim_id: "claim_nine_major_regions",
+      claim_id: "claim_desktop_reference_truth",
       evidence_ids: ["ev_1"],
-      pointer: "research-bundle.md#bad-claim",
-      usage: "Bad claim reference.",
+      pointer: "research-bundle.md#desktop-reference-truth",
+      usage: "Supports the bundle-local desktop reference truth claim.",
     })
+    const submit = await callTool(kit.tools, "submit_research_brief", { final: true })
 
-    expect(result).toContain("references unknown claim id")
-    expect(result).toContain("claim_nine_major_regions")
-    expect(result).toContain("known claim id")
-    expect(result).toContain("fact_1")
-    expect(result).toContain("Collector unchanged")
-    expect(collectorSnapshot(kit.getCollector())).toBe(before)
+    expect(result).toContain('OK: citation "claim_desktop_reference_truth" registered')
+    expect(submit).toContain("PASS")
+    expect(kit.getCollector().finalized).toBe(true)
+    expect(
+      kit.getCollector().draft?.bundle.citation_map.some((item) => item.claim_id === "claim_desktop_reference_truth"),
+    ).toBe(true)
   })
 
   test("researchBundleFromDraft materializes registered structured notes with quotes", async () => {
