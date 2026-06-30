@@ -51,6 +51,7 @@ describe("acceptance Last-Known-Good parallel safety", () => {
         fn: async () => {
           const task = seedTask({ id: uniqueID("task_lkg_with_siblings") })
           const runID = uniqueID("run_lkg_siblings")
+          insertGoalRunAttempt({ taskID: task.id, runID, goalRunID: "grun_queued", status: "queued" })
           insertGoalRunAttempt({ taskID: task.id, runID, goalRunID: "grun_active_b", status: "running" })
           insertGoalRunAttempt({ taskID: task.id, runID, goalRunID: "grun_active_a", status: "accepted" })
           insertGoalRunAttempt({ taskID: task.id, runID, goalRunID: "grun_done", status: "completed" })
@@ -177,7 +178,7 @@ function insertGoalRunAttempt(input: {
   taskID: string
   runID: string
   goalRunID: string
-  status: "accepted" | "running" | "completed"
+  status: "queued" | "accepted" | "running" | "completed"
 }) {
   const now = Date.now()
   Database.use((db) =>

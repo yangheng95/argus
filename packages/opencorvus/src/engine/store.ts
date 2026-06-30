@@ -48,9 +48,9 @@ import {
   type EngineMetadata,
 } from "./engine.sql"
 import {
-  ACTIVE_GOAL_RUN_STATUSES,
-  LIVE_GOAL_RUN_STATUSES,
   isDispatchableRunStatus,
+  isActiveGoalRunStatus,
+  isLiveGoalRunStatus,
   isGoalRunStatus,
   isLiveRunStatus,
   isRunStatus,
@@ -1147,7 +1147,7 @@ export function listActiveGoalRunsForRun(coordinatorRunID: string): GoalRunRow[]
   )
   return latestPerGoalRun(rows)
     .map(artifactRowToGoalRunRow)
-    .filter((r) => (ACTIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status))
+    .filter((r) => isActiveGoalRunStatus(r.status))
 }
 
 export function listQueuedGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
@@ -1336,7 +1336,7 @@ export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
   )
   return latestPerGoalRun(rows)
     .map(artifactRowToGoalRunRow)
-    .filter((r) => (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status))
+    .filter((r) => isLiveGoalRunStatus(r.status))
 }
 
 /**

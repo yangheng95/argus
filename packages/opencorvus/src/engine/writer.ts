@@ -18,7 +18,7 @@
 import { Log } from "@/util/log"
 import { Database, and, eq, inArray, isNotNull, isNull } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { GOAL_RUN_RESETTABLE_STATUSES, isLiveGoalRunStatus, isLiveRunStatus } from "./catalog"
+import { isActiveGoalRunStatus, isLiveRunStatus, isResettableGoalRunStatus } from "./catalog"
 import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -484,9 +484,7 @@ function currentProcessSessionTaskIDs(): Set<string> {
 
 function currentProcessOwnedGoalRuns(task: TaskRow): GoalRunRow[] {
   const owner = processOwner()
-  return listGoalRunsForTask(task.id).filter(
-    (row) => isLiveGoalRunStatus(row.status) && row.status !== "queued" && row.owner === owner,
-  )
+  return listGoalRunsForTask(task.id).filter((row) => isActiveGoalRunStatus(row.status) && row.owner === owner)
 }
 
 function currentProcessOwnedToolOwnership(task: TaskRow): OrchestratorToolOwnershipRow[] {
@@ -500,11 +498,7 @@ function affectedRunsForGoalRuns(taskID: string, goalRuns: GoalRunRow[]): RunRow
     const run = findRun(runID)
     if (!run || !isLiveRunStatus(run.status)) return []
     const hasLiveExecutor = listGoalRunsForTask(taskID).some(
-      (row) =>
-        row.coordinator_run_id === runID &&
-        isLiveGoalRunStatus(row.status) &&
-        row.status !== "queued" &&
-        !isGoalRunOrphaned(row),
+      (row) => row.coordinator_run_id === runID && isActiveGoalRunStatus(row.status) && !isGoalRunOrphaned(row),
     )
     return hasLiveExecutor ? [] : [run]
   })
@@ -617,7 +611,7 @@ export async function convergeDeadOwnerLiveExecutionForTasks(input: {
     if (!task || task.time_started == null || task.time_completed != null) continue
     await provideTaskRootSessionDirectory(task, async () => {
       const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
-        (row) => row.status !== "queued" && isGoalRunOrphaned(row),
+        (row) => isActiveGoalRunStatus(row.status) && isGoalRunOrphaned(row),
       )
       if (orphanGoalRuns.length === 0) return
       tasks += 1
@@ -650,7 +644,7 @@ export async function abortDeadOwnerLiveExecutionForTasks(input: {
     if (!task || task.time_started == null || task.time_completed != null) continue
     await provideTaskRootSessionDirectory(task, async () => {
       const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
-        (row) => row.status !== "queued" && isGoalRunOrphaned(row),
+        (row) => isActiveGoalRunStatus(row.status) && isGoalRunOrphaned(row),
       )
       if (orphanGoalRuns.length === 0) return
       if (task.project_id === "global") {
@@ -770,7 +764,7 @@ export async function abortLiveExecutionForTask(input: {
   const goalRunRows =
     input.includeGoalRuns === false
       ? []
-      : listGoalRunsForTask(input.taskID).filter((row) => GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
+      : listGoalRunsForTask(input.taskID).filter((row) => isResettableGoalRunStatus(row.status))
   const runRows = input.includeRuns === false ? [] : findRuns(input.taskID).filter((row) => isLiveRunStatus(row.status))
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true ? listGoals(input.taskID).map((goal) => goal.id) : []
@@ -794,7 +788,9 @@ export async function abortLiveExecutionForProject(input: {
   reason: string
   cleanupGoalWorkspaces?: boolean
 }): Promise<AbortLiveResult> {
-  const goalRunRows = listLiveGoalRunsForProject(input.projectID).filter((goalRun) => goalRun.status !== "queued")
+  const goalRunRows = listLiveGoalRunsForProject(input.projectID).filter((goalRun) =>
+    isActiveGoalRunStatus(goalRun.status),
+  )
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals =
     input.cleanupGoalWorkspaces === true

@@ -186,6 +186,10 @@ export function isActiveGoalRunStatus(status?: EngineGoalRunStatus | null): stat
   return !!status && GOAL_RUN_STATUS_CATALOG[status].activeExecution
 }
 
+export function isResettableGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
+  return !!status && GOAL_RUN_STATUS_CATALOG[status].resettable
+}
+
 export function isTerminalGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].terminalKind !== null
 }

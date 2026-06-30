@@ -5,7 +5,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { findGoalLatestWorkspace, findRun } from "../../src/engine/store"
+import { findGoalLatestWorkspace, findGoalRun, findRun } from "../../src/engine/store"
 import { abortLiveExecutionForTask, cleanupGoalWorkspaceForGoal } from "../../src/engine/writer"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
@@ -271,7 +271,7 @@ describe("engine writer goal workspace cleanup", () => {
     })
   })
 
-  test("abortLiveExecutionForTask aborts live runs and leaves terminal runs unchanged", async () => {
+  test("abortLiveExecutionForTask aborts resettable goal runs and live runs", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -280,6 +280,13 @@ describe("engine writer goal workspace cleanup", () => {
         const taskID = `tsk_writer_abort_${now}`
         const liveRunID = `run_writer_live_${now}`
         const terminalRunID = `run_writer_done_${now}`
+        const queuedGoalID = `gol_writer_queued_${now}`
+        const runningGoalID = `gol_writer_running_${now}`
+        const completedGoalID = `gol_writer_completed_${now}`
+        const goalRunIDPrefix = (now % 0xffffff).toString(16).padStart(6, "0")
+        const queuedGoalRunID = `${goalRunIDPrefix}01`
+        const runningGoalRunID = `${goalRunIDPrefix}02`
+        const completedGoalRunID = `${goalRunIDPrefix}03`
 
         Database.transaction((db) => {
           db.insert(ProjectTable)
@@ -338,17 +345,80 @@ describe("engine writer goal workspace cleanup", () => {
               })
               .run()
           }
+
+          for (const [goalID, status] of [
+            [queuedGoalID, "queued"],
+            [runningGoalID, "running"],
+            [completedGoalID, "completed"],
+          ] as const) {
+            db.insert(EngineGoalTable)
+              .values({
+                id: goalID,
+                task_id: taskID,
+                title: `writer ${status} goal`,
+                slug: `writer-${status}-goal`,
+                objective: `writer ${status} goal`,
+                acceptance_specs: [],
+                owned_paths: [],
+                depends_on: [],
+                exports: [],
+                imports: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "test",
+                status: "pending",
+                order_index: 0,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          }
+        })
+
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID: queuedGoalID,
+          runID: liveRunID,
+          artifactID: queuedGoalRunID,
+          workspaceDir: null,
+          workspaceBranch: null,
+          status: "queued",
+          now,
+        })
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID: runningGoalID,
+          runID: liveRunID,
+          artifactID: runningGoalRunID,
+          workspaceDir: null,
+          workspaceBranch: null,
+          status: "running",
+          now,
+        })
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID: completedGoalID,
+          runID: liveRunID,
+          artifactID: completedGoalRunID,
+          workspaceDir: null,
+          workspaceBranch: null,
+          status: "completed",
+          now,
         })
 
         const result = await abortLiveExecutionForTask({
           taskID,
           reason: "operator abort",
-          includeGoalRuns: false,
         })
 
         expect(result.runs).toBe(1)
+        expect(result.goalRuns).toBe(2)
         expect(findRun(liveRunID)?.status).toBe("aborted")
         expect(findRun(terminalRunID)?.status).toBe("completed")
+        expect(findGoalRun(queuedGoalRunID)?.status).toBe("aborted")
+        expect(findGoalRun(runningGoalRunID)?.status).toBe("aborted")
+        expect(findGoalRun(completedGoalRunID)?.status).toBe("completed")
       },
     })
   })
