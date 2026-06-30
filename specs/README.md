@@ -29,6 +29,7 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 5. Root-level files in `specs/` are limited to this index plus the `current/`, `records/`, and `artifacts/` directories.
 6. If a deleted pre-June record must be discussed, use prose such as `deleted pre-June record <name>` rather than recreating a file or link.
 7. Every new landed plan, implementation record, or architecture-change record must include a `Recall` section with the user request, acceptance criteria, hard constraints, sources read, whole-repository search evidence, and independent agent feedback.
+8. Dated prompt-profile and expert-squad records are indexed through the monthly records README, not as root-level handpicked links.
 
 ## Verification
 

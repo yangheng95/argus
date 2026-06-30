@@ -90,6 +90,13 @@ function expectConfigRejected(input: unknown, expectedMessage: string) {
   if (!parsed.success) expect(JSON.stringify(parsed.error.issues)).toContain(expectedMessage)
 }
 
+function overlayLines(overlay: string): string[] {
+  return overlay
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
 describe("prompt profiles", () => {
   test("Config.Info materializes frontend-replica as the explicit default profile", () => {
     const config = Config.Info.parse({})
@@ -105,12 +112,14 @@ describe("prompt profiles", () => {
       userAppend: "USER_APPEND",
       config,
     })
-    expect(prompt.startsWith("BASE\n\nCarry backend changes through to a verified behavior change.")).toBe(true)
+    expect(prompt.startsWith("BASE\n\nCarry backend changes through to a verified behavior change")).toBe(true)
+    expect(prompt).toContain("real route, service, storage, or integration path")
     expect(prompt.endsWith("\n\nUSER_APPEND")).toBe(true)
   })
 
   test("general profile preserves prompt text", () => {
     const config = Config.Info.parse({ prompt_profile: { active: "general" } })
+    expect(PromptProfile.builtIns.general.agents).toEqual({})
     expect(PromptProfile.composeAgentPrompt({ agentID: "build", base: "BASE", config })).toBe("BASE")
   })
 
@@ -180,6 +189,25 @@ describe("prompt profiles", () => {
     expect(PromptProfile.overlayFor("visual-qa", config)).toContain("enterprise polish")
   })
 
+  test("frontend replica overlays carry source-to-target component-level discipline", () => {
+    const agents = PromptProfile.builtIns["frontend-replica"].agents
+    const allReplicaText = Object.values(agents).join("\n")
+
+    expect(agents.coding).toContain("target project primitives, business components, and code")
+    expect(agents.requirements).toContain("Component Interaction Matrix coverage")
+    expect(agents.architect).toContain("one accountable goal per meaningful component or region")
+    expect(agents["frontend-design"]).toContain("source-backed replica contract")
+    expect(agents["frontend-design"]).toContain("target project reuse constraints")
+    expect(agents["frontend-research"]).toContain("reference screenshots, source structure evidence, computed styles")
+    expect(agents.build).toContain("one scoped component or region goal at a time")
+    expect(agents.build).toContain("Reuse target project components and business code only where they preserve source parity")
+    expect(agents["visual-qa"]).toContain("source-token ownership")
+    expect(agents.integrity).toContain("component-per-goal request")
+    expect(agents.orchestrator).toContain("component-per-goal request")
+    expect(allReplicaText).not.toContain("TradingView")
+    expect(allReplicaText).not.toContain("AInvest")
+  })
+
   test("target catalog covers every built-in overlay target", () => {
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
     for (const profile of Object.values(PromptProfile.builtIns)) {
@@ -228,11 +256,14 @@ describe("prompt profiles", () => {
       "bias planning",
       "dispatch roster",
       "fallback",
+      "first action",
       "handoff graph",
       "host-side",
       "ownership lines",
+      "profile_id",
       "prioritize these tools",
       "retry strategy",
+      "select_expert_squad",
       "state machine",
       "tool inventory",
       "tool list",
@@ -244,8 +275,10 @@ describe("prompt profiles", () => {
       const seen = new Set<string>()
       for (const [targetID, overlay] of Object.entries(profile.agents)) {
         const normalized = overlay.trim().toLowerCase()
-        expect(normalized.length, `${profileID}.${targetID} is too short to be actionable`).toBeGreaterThanOrEqual(80)
-        expect(normalized.length, `${profileID}.${targetID} is too long for an overlay`).toBeLessThanOrEqual(240)
+        const lines = overlayLines(overlay)
+        expect(lines.length, `${profileID}.${targetID} must be multi-line expert guidance`).toBeGreaterThanOrEqual(3)
+        expect(normalized.length, `${profileID}.${targetID} is too short to be actionable`).toBeGreaterThanOrEqual(220)
+        expect(normalized.length, `${profileID}.${targetID} is too long for an overlay`).toBeLessThanOrEqual(1400)
         expect(seen.has(normalized), `${profileID}.${targetID} duplicates another target overlay`).toBe(false)
         seen.add(normalized)
         for (const fragment of [...forbiddenFragments, ...vagueFragments]) {
