@@ -54,6 +54,7 @@ Current-day records:
 - [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md) records the plan to retire live run/live goal_run lifecycle rows as orchestration control sources while preserving live ownership and active session protection.
 - [2026-06-30-sessionless-goal-completion-phase-projection.md](2026-06-30-sessionless-goal-completion-phase-projection.md) records the session-owned build phase projection repair for manual goal completion.
 - [2026-06-30-thick-expert-squad-prompts.md](2026-06-30-thick-expert-squad-prompts.md) records the thin-general, thick expert-squad prompt registry repair.
+- [2026-06-30-visual-qa-problem-dom-report.md](2026-06-30-visual-qa-problem-dom-report.md) records the Visual QA problem DOM report strategy and report contract.
 
 ## Rules
 

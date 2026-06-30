@@ -33,6 +33,7 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     findings: [],
     production_blockers: [],
     unresolved_code_module_problems: [],
+    problem_dom_regions: [],
     repairs: [],
     evidence: [
       {
@@ -673,6 +674,38 @@ describe("visual-qa output tools", () => {
             evidence_refs: ["artifacts/hero.png"],
           },
         ],
+        problem_dom_regions: [
+          {
+            id: "dom_hero_heading",
+            blocker_ids: ["blocker_density"],
+            region: "hero",
+            route: "/",
+            viewport: { width: 1440, height: 900 },
+            locator: "[data-testid=\"hero-heading\"]",
+            dom_path: "main > section.hero > h1",
+            outer_html_excerpt:
+              '<h1 data-testid="hero-heading" class="hero-title">United States market overview</h1>',
+            ancestor_context: ['<section class="hero">...</section>'],
+            sibling_context: ['<p class="hero-subtitle">...</p>'],
+            text_content: "United States market overview",
+            role: "heading",
+            accessible_name: "United States market overview",
+            bbox: { x: 120, y: 96, width: 540, height: 64 },
+            computed_style: {
+              display: "block",
+              fontSize: "32px",
+              marginTop: "0px",
+              marginBottom: "12px",
+            },
+            attributes: {
+              class: "hero-title",
+              "data-testid": "hero-heading",
+            },
+            code_search_terms: ["hero-heading", "hero-title", "United States market overview"],
+            evidence_refs: ["artifacts/hero.png"],
+            notes: "The heading node is too small and compressed compared with the required hero hierarchy.",
+          },
+        ],
       }),
     )
 
@@ -686,6 +719,11 @@ describe("visual-qa output tools", () => {
     expect(kit.buildReport().detail).toContain("problem_hero_hierarchy")
     expect(kit.buildReport().detail).toContain("packages/app/src/components/Hero.tsx")
     expect(kit.buildReport().detail).toContain("blockers=blocker_density")
+    expect(kit.buildReport().detail).toContain("## Problem DOM Regions")
+    expect(kit.buildReport().detail).toContain("dom_hero_heading")
+    expect(kit.buildReport().detail).toContain('[data-testid="hero-heading"]')
+    expect(kit.buildReport().detail).toContain("code_search_terms=hero-heading, hero-title")
+    expect(kit.buildReport().detail).toContain("computed_style=display=block")
   })
 
   test("records accepted reference parity with missing regions as effective failure", async () => {

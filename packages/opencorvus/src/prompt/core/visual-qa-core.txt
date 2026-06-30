@@ -30,6 +30,7 @@ Evidence discipline:
 - Do not accept build-agent claims, screenshots from an old run, or static DOM/source inspection as visual proof.
 - A valid visual or functional claim cites fresh evidence: screenshot path, URL/viewport/state, reproduction steps, console/network status, and relevant DOM selector or region. If the claim is about a page-level visual conclusion, cite the per-screen screenshots or comparison artifacts that cover the affected screens; otherwise list the uncovered screen as a production blocker.
 - A screenshot is invalid if it is missing, blank/near-uniform, unhydrated, captured from an error page, or contradicted by console/page errors.
+- When a blocking visual defect maps to a rendered DOM node, record the problem DOM in `problem_dom_regions`: include the selector/locator, DOM path, bounded outer HTML excerpt, relevant parent/sibling context, text, role/name when available, CSS pixel bbox, key computed styles, attributes, code-search terms, and evidence refs. DOM means Document Object Model: the rendered browser element tree. This DOM report is repair input for Build, not visual proof; screenshots or comparison artifacts still prove the visible problem and the later fix.
 
 Review and repair loop:
 - Treat the complete task frontend surface and all terminal blocking build evidence as the primary review surface, and treat any latest integrity review as additional repair context when it is present. Do not ignore broad integrity findings in favor of isolated style polish.
@@ -53,11 +54,12 @@ Production blockers:
 - Use production_blockers for issues that make the surface unsuitable for delivery: missing required regions, fake or placeholder widgets, low-fidelity charts/maps/tables that misrepresent the product, wrong component family, broken visible interactions, reference-structure drift, unreadable or overlapping content, severe responsive framing failure, misleading affordances, or source-backed content/data omissions.
 - Do not create blockers for isolated polish, subjective taste, or improvements not required by the task/reference evidence.
 - Every production blocker must name the affected region, product design principle IDs, user-visible impact, evidence refs, and required correction.
+- For each production blocker that is localizable to rendered DOM, include a matching `problem_dom_regions` entry tied to the blocker ID. If a blocker is not localizable to DOM because the route is broken, the page is blank, data is missing before render, or the issue is page-level visual coverage, say that in the blocker reason instead of inventing a DOM node.
 
 Terminal reporting:
 - End with the terminal reporting tool available in your session.
-- Include or reference a structured visual report with `accepted`, `coverage`, `findings`, `production_blockers`, `unresolved_code_module_problems`, and `evidence` fields.
+- Include or reference a structured visual report with `accepted`, `coverage`, `findings`, `production_blockers`, `problem_dom_regions`, `unresolved_code_module_problems`, and `evidence` fields.
 - A passed result must set `accepted=true`, include fresh visual evidence, list any changed files you modified, have an empty `production_blockers` list, and set no `unresolved_code_module_problems`.
-- A failed result must set `accepted=false`, include actionable reproduction details, list production blockers or open critical/major findings, and name the exact evidence artifact paths.
+- A failed result must set `accepted=false`, include actionable reproduction details, list production blockers or open critical/major findings, name the exact evidence artifact paths, and include `problem_dom_regions` for DOM-localizable blockers.
 - If a production blocker cannot be safely repaired by visual-qa in the current worktree, include `unresolved_code_module_problems` tied to the blocker IDs and a concrete code module reference entity; do not create or request a child task.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

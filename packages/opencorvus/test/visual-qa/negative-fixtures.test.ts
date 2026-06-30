@@ -51,6 +51,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
       },
     ],
     unresolved_code_module_problems: [],
+    problem_dom_regions: [],
     repairs: [],
     evidence: [
       {
