@@ -34,7 +34,7 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import type { ToolFailureCause } from "@/session/tool-failure-cause"
 import type { SpecSnapshotLineage } from "@/integrity/replay-lineage"
-import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { doesGoalRunStatusImplyStarted, isLiveGoalRunStatus, isTerminalGoalRunStatus } from "./catalog"
 import { isGoalRunOrphaned } from "./orphan"
 import { findLiveBuildOwnershipByGoal } from "./tool-ownership"
 import { SessionStatus } from "@/session/status"
@@ -75,10 +75,6 @@ type EngineDatabaseConnection = Parameters<Parameters<typeof Database.transactio
 
 const log = Log.create({ service: "engine-transition" })
 
-function terminalGoalRunStatus(status: GoalRunRow["status"]): boolean {
-  return status === "failed" || status === "aborted" || status === "completed"
-}
-
 function activeSessionStatus(sessionID: string): SessionStatus.Info | undefined {
   const status = SessionStatus.get(sessionID)
   return status.type === "streaming" || status.type === "retry" ? status : undefined
@@ -102,7 +98,7 @@ function liveGoalRunControlBlocker(input: { taskID: string; goalID: string; goal
     }
   }
   if (
-    (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(input.goalRun.status) &&
+    isLiveGoalRunStatus(input.goalRun.status) &&
     input.goalRun.owner &&
     input.goalRun.owner !== processOwner() &&
     !isGoalRunOrphaned(input.goalRun)
@@ -194,7 +190,7 @@ function appendBuildRetryFeedbackForPriorRun(input: {
   priorRun: GoalRunRow
   source: string
 }): boolean {
-  if (!terminalGoalRunStatus(input.priorRun.status)) return false
+  if (!isTerminalGoalRunStatus(input.priorRun.status)) return false
   return appendRetryFeedbackOnce({
     taskID: input.taskID,
     goalID: input.goalID,
@@ -1091,7 +1087,7 @@ export function createGoalRun(input: {
     (r) =>
       r.coordinator_run_id === input.coordinatorRunID &&
       (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
-      (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
+      isLiveGoalRunStatus(r.status),
   )
   if (liveTips.length > 0) {
     return liveTips[0]!
@@ -1330,7 +1326,7 @@ function appendGoalRunArtifact(input: {
     // process owner (the process driving it live owns it). Terminal/queued rows
     // without an owner stay null. Spec 2026-05-29-goal-run-owner-orphan-liveness.
     owner:
-      merged.owner ?? ((LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(merged.status) ? processOwner() : null),
+      merged.owner ?? (isLiveGoalRunStatus(merged.status) ? processOwner() : null),
     time_started: merged.time_started,
     time_completed: merged.time_completed,
   }
@@ -1505,12 +1501,11 @@ function buildGoalRunPatch(
     ...values,
     ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
     ...(!row.time_started &&
-    ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) &&
+    doesGoalRunStatusImplyStarted(nextStatus) &&
     values.time_started === undefined
       ? { time_started: now }
       : {}),
-    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") &&
-    values.time_completed === undefined
+    ...(isTerminalGoalRunStatus(nextStatus) && values.time_completed === undefined
       ? { time_completed: now }
       : {}),
   }
@@ -2203,7 +2198,7 @@ export function beginBuildAttempt(input: {
     throw new Error(`beginBuildAttempt: goal ${input.goalID} not found`)
   }
   let priorTip = findLatestTipGoalRun(input.goalID)
-  if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
+  if (priorTip && isLiveGoalRunStatus(priorTip.status)) {
     const blocker = liveGoalRunControlBlocker({ taskID: input.taskID, goalID: input.goalID, goalRun: priorTip })
     if (blocker) {
       throw new Error(`beginBuildAttempt: ${blocker}; refusing to open a second build attempt.`)

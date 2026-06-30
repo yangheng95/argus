@@ -1,31 +1,64 @@
 import { describe, expect, test } from "bun:test"
 import {
+  ACTIVE_GOAL_RUN_STATUSES,
   DISPATCHABLE_RUN_STATUSES,
   EXECUTOR_ACTIVE_RUN_STATUSES,
   GOAL_RUN_RESETTABLE_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
+  doesGoalRunStatusImplyStarted,
   doesGoalRunSatisfyGoal,
+  goalRunGoalProjectionStatus,
+  goalRunWorkflowProjectionStatus,
+  isAbortedGoalRunStatus,
+  isActiveGoalRunStatus,
   isDispatchableRunStatus,
+  isFailedGoalRunStatus,
   isLiveGoalRunStatus,
   isLiveRunStatus,
+  isSuccessfulGoalRunStatus,
+  isTerminalGoalRunStatus,
 } from "../../src/engine/catalog"
 
 describe("engine status catalog", () => {
-  test("goal-run liveness catalog is internally consistent", () => {
-    // `live` means in-flight only. `completed` is a distinct `terminal`
-    // class — merging completed into `live` deadlocked the orchestrator
-    // when a successful goal finished. Dispatch-dedup call sites combine
-    // `live ∪ satisfies` instead of relying on an over-inclusive `live`.
-    expect(LIVE_GOAL_RUN_STATUSES).toEqual(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
-    // `completed` is intentionally NOT resettable: the success record +
-    // verification evidence are preserved across contract changes; retry
-    // proceeds by creating a new goal_run and supersede-annotating the old.
-    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
+  test("goal-run catalog centralizes projection and terminal semantics", () => {
+    const cases = [
+      ["queued", "pending", "pending", true, false, false, false, false, false, false],
+      ["accepted", "pending", "pending", true, true, false, false, false, false, true],
+      ["planning", "pending", "pending", true, true, false, false, false, false, true],
+      ["running", "running", "running", true, true, false, false, false, false, true],
+      ["evaluating", "running", "running", true, true, false, false, false, false, true],
+      ["blocked", "running", "running", true, true, false, false, false, false, true],
+      ["completed", "passed", "completed", false, false, true, true, false, false, true],
+      ["failed", "failed", "failed", false, false, true, false, true, false, false],
+      ["aborted", "failed", "aborted", false, false, true, false, false, true, false],
+    ] as const
 
-    expect(isLiveGoalRunStatus("planning")).toBe(true)
-    expect(isLiveGoalRunStatus("completed")).toBe(false)
-    expect(isLiveGoalRunStatus("failed")).toBe(false)
+    for (const [
+      status,
+      goalProjection,
+      workflowProjection,
+      live,
+      active,
+      terminal,
+      successful,
+      failed,
+      aborted,
+      started,
+    ] of cases) {
+      expect(goalRunGoalProjectionStatus(status)).toBe(goalProjection)
+      expect(goalRunWorkflowProjectionStatus(status)).toBe(workflowProjection)
+      expect(isLiveGoalRunStatus(status)).toBe(live)
+      expect(isActiveGoalRunStatus(status)).toBe(active)
+      expect(isTerminalGoalRunStatus(status)).toBe(terminal)
+      expect(isSuccessfulGoalRunStatus(status)).toBe(successful)
+      expect(isFailedGoalRunStatus(status)).toBe(failed)
+      expect(isAbortedGoalRunStatus(status)).toBe(aborted)
+      expect(doesGoalRunStatusImplyStarted(status)).toBe(started)
+    }
+
+    expect(ACTIVE_GOAL_RUN_STATUSES).toEqual(LIVE_GOAL_RUN_STATUSES.filter((status) => status !== "queued"))
+    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual(LIVE_GOAL_RUN_STATUSES)
     expect(doesGoalRunSatisfyGoal("completed")).toBe(true)
     expect(doesGoalRunSatisfyGoal("running")).toBe(false)
   })

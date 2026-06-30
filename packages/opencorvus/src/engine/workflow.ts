@@ -19,6 +19,8 @@ import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
 import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
+import { goalRunWorkflowProjectionStatus } from "./catalog"
+import type { EngineGoalRunStatus } from "./engine.sql"
 import {
   findActiveSpecForTask,
   findLatestFrontendResearchBriefArtifact,
@@ -493,7 +495,7 @@ export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record
  */
 function projectPhases(
   phases: MiniWorkflowPhase[],
-  runStatus: string | undefined,
+  runStatus: EngineGoalRunStatus | undefined,
   startedAt: number | undefined,
   completedAt: number | undefined,
 ): Record<string, GoalStepStatus> {
@@ -501,53 +503,12 @@ function projectPhases(
   const setAll = (s: GoalStepStatus["status"]) => {
     for (const p of phases) out[p.id] = { status: s, startedAt, completedAt }
   }
-  switch (runStatus) {
-    case undefined:
-    case "queued":
-    case "accepted":
-    case "planning":
-      setAll("pending")
-      break
-    case "aborted":
-      setAll("aborted")
-      break
-    case "running":
-    case "evaluating":
-    case "blocked":
-      setAll("running")
-      break
-    case "completed":
-      setAll("completed")
-      break
-    case "failed":
-      setAll("failed")
-      break
-    default:
-      setAll("pending")
-  }
+  setAll(goalRunWorkflowProjectionStatus(runStatus) ?? "pending")
   return out
 }
 
-function mapGoalRunToStepStatus(runStatus: string | undefined): GoalStepStatus["status"] {
-  switch (runStatus) {
-    case undefined:
-    case "queued":
-    case "accepted":
-    case "planning":
-      return "pending"
-    case "aborted":
-      return "aborted"
-    case "running":
-    case "evaluating":
-    case "blocked":
-      return "running"
-    case "completed":
-      return "completed"
-    case "failed":
-      return "failed"
-    default:
-      return "pending"
-  }
+function mapGoalRunToStepStatus(runStatus: EngineGoalRunStatus | undefined): GoalStepStatus["status"] {
+  return goalRunWorkflowProjectionStatus(runStatus) ?? "pending"
 }
 
 /**
