@@ -129,8 +129,9 @@ test("hydrateConversationView rejects transcript messages without role", () => {
     }),
   ]
 
-  expect(() => hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript))
-    .toThrow("hydrateConversationView: message msg_missing_role missing info.role")
+  expect(() =>
+    hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript),
+  ).toThrow("hydrateConversationView: message msg_missing_role missing info.role")
 })
 
 test("hydrateConversationView rejects display parts without orderKey", () => {
@@ -145,8 +146,9 @@ test("hydrateConversationView rejects display parts without orderKey", () => {
     }),
   ]
 
-  expect(() => hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript))
-    .toThrow("persisted message part part_missing_order missing orderKey")
+  expect(() =>
+    hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript),
+  ).toThrow("persisted message part part_missing_order missing orderKey")
 })
 
 test("hydrateConversationView rejects parts without their own message and session identity", () => {
@@ -163,8 +165,80 @@ test("hydrateConversationView rejects parts without their own message and sessio
   ]
   delete transcript[0].parts[0].messageID
 
-  expect(() => hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript))
-    .toThrow("hydrateConversationView: part part_missing_owner missing messageID/sessionID")
+  expect(() =>
+    hydrateConversationView({ sessions: [], messages: viewMessagesForTranscript(transcript) }, transcript),
+  ).toThrow("hydrateConversationView: part part_missing_owner missing messageID/sessionID")
+})
+
+test("hydrateConversationView keeps deleted goal transcript top-level when view omits display goalID", () => {
+  seedHydrateBoard("tsk_deleted_goal_hydrate")
+  const messageID = "msg_deleted_goal_hydrate"
+  const sessionID = "ses_deleted_goal_hydrate"
+  const partID = "part_deleted_goal_hydrate"
+  const time = 1_776_000_050_500
+  const transcript = [
+    {
+      info: {
+        id: messageID,
+        sessionID,
+        role: "assistant",
+        resolvedRole: "build",
+        channel: "build",
+        goalID: "goal_deleted",
+        parentSessionID: "ses_executor",
+        orderKey: orderKey("message", time, messageID),
+        time: { created: time },
+      },
+      parts: [
+        {
+          id: partID,
+          messageID,
+          sessionID,
+          type: "text",
+          text: "deleted goal output remains visible",
+          orderKey: orderKey("part", time + 1, partID),
+        },
+      ],
+    },
+  ]
+
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID,
+          stage: "build",
+          parentSessionID: "ses_executor",
+          messageIDs: [messageID],
+          firstMessageTime: time,
+          lastMessageTime: time,
+          placement: "top_level",
+        },
+      ],
+      messages: [
+        {
+          messageID,
+          sessionID,
+          stage: "build",
+          parentSessionID: "ses_executor",
+          time,
+          orderKey: orderKey("message", time, messageID),
+          placement: "top_level",
+        },
+      ],
+    },
+    transcript,
+  )
+
+  const messageCardID = `build:session:${sessionID}:message:${messageID}`
+  expect(cardTreeStore.cards["step:goal_deleted:build:phase:build"]).toBeUndefined()
+  expect(cardTreeStore.cards[messageCardID]).toBeDefined()
+  expect(cardTreeStore.cards[messageCardID]?.parts).toContainEqual(
+    expect.objectContaining({
+      type: "text",
+      text: "deleted goal output remains visible",
+    }),
+  )
 })
 
 test("hydrateConversationView routes goal-phase transcript messages into the phase card", () => {

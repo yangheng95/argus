@@ -20,6 +20,18 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         },
       ],
     },
+    goalWorkflows: [
+      {
+        goalID: "goal_1",
+        steps: [
+          {
+            stepID: "build",
+            payload: { buildSessionID: "ses_build" },
+            phases: { build: { startedAt: 40 } },
+          },
+        ],
+      },
+    ],
   }
   const transcript = [
     {
@@ -71,6 +83,7 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
   expect(view.sessions.find((session) => session.sessionID === "ses_build")).toEqual(
     expect.objectContaining({
       placement: "goal_phase",
+      goalID: "goal_1",
       phase: { stepID: "build", phaseID: "build" },
       messageIDs: ["msg_build"],
       lastDisplayMessageID: "msg_build",
@@ -81,10 +94,116 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
     ["msg_executor", "executor", "hidden"],
     ["msg_build", "build", "goal_phase"],
   ])
+  expect(view.messages.find((message) => message.messageID === "msg_build")?.goalID).toBe("goal_1")
   expect(view.messages.find((message) => message.messageID === "msg_build")?.phase).toEqual({
     stepID: "build",
     phaseID: "build",
   })
+})
+
+test("projectConversationView keeps deleted goal build transcript visible as top-level display", () => {
+  const board = {
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          phases: [{ id: "build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [],
+  }
+  const transcript = [
+    {
+      info: {
+        id: "msg_deleted_goal",
+        sessionID: "ses_deleted_goal_build",
+        channel: "build",
+        goalID: "goal_deleted",
+        parentSessionID: "ses_executor",
+        time: { created: 40 },
+      },
+      parts: [{ type: "text", text: "old build output" }],
+    },
+  ]
+
+  const view = projectConversationView(board, transcript)
+  const session = view.sessions.find((item) => item.sessionID === "ses_deleted_goal_build")
+  const message = view.messages.find((item) => item.messageID === "msg_deleted_goal")
+
+  expect(view.topLevelSessionIDs).toEqual(["ses_deleted_goal_build"])
+  expect(session).toEqual(
+    expect.objectContaining({
+      placement: "top_level",
+      goalID: undefined,
+      phase: undefined,
+      messageIDs: ["msg_deleted_goal"],
+      lastDisplayMessageID: "msg_deleted_goal",
+    }),
+  )
+  expect(message).toEqual(
+    expect.objectContaining({
+      placement: "top_level",
+      goalID: undefined,
+      phase: undefined,
+    }),
+  )
+})
+
+test("projectConversationView rejects stale goal phase ownership in the display projection", () => {
+  const board = {
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          phases: [{ id: "build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID: "goal_1",
+        steps: [
+          {
+            stepID: "build",
+            payload: { buildSessionID: "ses_current_build" },
+            phases: { build: { startedAt: 40 } },
+          },
+        ],
+      },
+    ],
+  }
+  const transcript = [
+    {
+      info: {
+        id: "msg_stale_build",
+        sessionID: "ses_stale_build",
+        channel: "build",
+        goalID: "goal_1",
+        parentSessionID: "ses_executor",
+        time: { created: 40 },
+      },
+      parts: [{ type: "text", text: "stale owner output" }],
+    },
+  ]
+
+  const view = projectConversationView(board, transcript)
+
+  expect(view.topLevelSessionIDs).toEqual(["ses_stale_build"])
+  expect(view.sessions[0]).toEqual(
+    expect.objectContaining({
+      placement: "top_level",
+      goalID: undefined,
+      phase: undefined,
+    }),
+  )
+  expect(view.messages[0]).toEqual(
+    expect.objectContaining({
+      placement: "top_level",
+      goalID: undefined,
+      phase: undefined,
+    }),
+  )
 })
 
 test("projectConversationView rejects transcript messages without backend created time", () => {

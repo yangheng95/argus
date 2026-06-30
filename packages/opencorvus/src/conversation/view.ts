@@ -77,25 +77,60 @@ function stageFromChannel(channel: unknown): string {
   return value
 }
 
-function phaseLocation(board: any, stage: string): ConversationPhaseLocation | undefined {
+function workflowPhaseDefinition(
+  board: any,
+  stepID: string,
+  stage: string,
+): { stepID: string; phaseID: string } | undefined {
   const steps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : []
-  for (const step of steps) {
-    const stepID = String(step?.id || "")
-    if (!stepID) continue
-    const phases = Array.isArray(step?.phases) ? step.phases : []
-    for (const phase of phases) {
-      if (String(phase?.sessionKind || "") !== stage) continue
-      const phaseID = String(phase?.id || "")
-      if (!phaseID) continue
-      return { stepID, phaseID }
-    }
+  const step = steps.find((candidate: any) => String(candidate?.id || "") === stepID)
+  const phases = Array.isArray(step?.phases) ? step.phases : []
+  for (const phase of phases) {
+    if (String(phase?.sessionKind || "") !== stage) continue
+    const phaseID = String(phase?.id || "")
+    if (!phaseID) continue
+    return { stepID, phaseID }
   }
   return undefined
 }
 
-function placementOf(board: any, stage: string, goalID: string): ConversationSessionView["placement"] {
+function concreteGoalPhaseLocation(
+  board: any,
+  stage: string,
+  goalID: string,
+  sessionID: string,
+): ConversationPhaseLocation | undefined {
+  if (!goalID || !sessionID) return undefined
+  const goalWorkflows = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
+  const goalWorkflow = goalWorkflows.find((goal: any) => String(goal?.goalID || "") === goalID)
+  const steps = Array.isArray(goalWorkflow?.steps) ? goalWorkflow.steps : []
+  for (const step of steps) {
+    const stepID = String(step?.stepID || "")
+    if (!stepID) continue
+    const phase = workflowPhaseDefinition(board, stepID, stage)
+    if (!phase) continue
+    const phaseEntries =
+      step?.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
+        ? (step.phases as Record<string, unknown>)
+        : undefined
+    const phaseEntry = phaseEntries?.[phase.phaseID] as { startedAt?: unknown } | undefined
+    if (!phaseEntry || !(Number(phaseEntry.startedAt || 0) > 0)) continue
+    const buildSessionID =
+      typeof step?.payload?.buildSessionID === "string" && step.payload.buildSessionID.length > 0
+        ? step.payload.buildSessionID
+        : ""
+    if (phase.phaseID !== "build" || buildSessionID !== sessionID) continue
+    return phase
+  }
+  return undefined
+}
+
+function placementOf(
+  stage: string,
+  phase: ConversationPhaseLocation | undefined,
+): ConversationSessionView["placement"] {
   if (stage === "filtered") return "filtered"
-  if (goalID && phaseLocation(board, stage)) return "goal_phase"
+  if (phase) return "goal_phase"
   if (stage === "executor") return "hidden"
   return "top_level"
 }
@@ -152,14 +187,16 @@ function applyLifecycleSession(
   const observedAt = lifecycleObservedAt(event)
   const parentSessionID = String(payload.parentSessionID || existing.parentSessionID || "")
   const goalID = String(payload.goalID || existing.goalID || "")
-  const placement = placementOf(board, stage, goalID)
-  const phase = phaseLocation(board, stage)
+  const phase = concreteGoalPhaseLocation(board, stage, goalID, sessionID)
+  const placement = placementOf(stage, phase)
+  const displayGoalID = placement === "goal_phase" ? goalID : ""
   const status = statusFromLifecycleStatus(payload.status)
   existing.firstObservedAt = Math.min(existing.firstObservedAt ?? existing.firstMessageTime, observedAt)
   existing.lastObservedAt = Math.max(existing.lastObservedAt ?? existing.lastMessageTime, observedAt)
   existing.status = status
   if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
-  if (!existing.goalID && goalID) existing.goalID = goalID
+  if (!existing.goalID && displayGoalID) existing.goalID = displayGoalID
+  if (!existing.phase && phase) existing.phase = phase
 }
 
 function applyLedgerSession(
@@ -180,8 +217,9 @@ function applyLedgerSession(
   const lastObservedAt = Math.max(observedAt, Number(ledger.timeUpdated || 0))
   const parentSessionID = String(ledger.parentSessionID || "")
   const goalID = String(ledger.goalID || "")
-  const phase = phaseLocation(board, stage)
-  const placement = placementOf(board, stage, goalID)
+  const phase = concreteGoalPhaseLocation(board, stage, goalID, sessionID)
+  const placement = placementOf(stage, phase)
+  const displayGoalID = placement === "goal_phase" ? goalID : ""
   const existing = bySession.get(sessionID)
   if (!existing) {
     const created: ConversationSessionView = {
@@ -189,7 +227,7 @@ function applyLedgerSession(
       orderKey: ledger.orderKey,
       stage,
       parentSessionID: parentSessionID || undefined,
-      goalID: goalID || undefined,
+      goalID: displayGoalID || undefined,
       messageIDs: [],
       firstMessageTime: observedAt,
       lastMessageTime: lastObservedAt,
@@ -207,7 +245,8 @@ function applyLedgerSession(
   existing.lastObservedAt = Math.max(existing.lastObservedAt ?? existing.lastMessageTime, lastObservedAt)
   existing.status = existing.status || "pending"
   if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
-  if (!existing.goalID && goalID) existing.goalID = goalID
+  if (!existing.goalID && displayGoalID) existing.goalID = displayGoalID
+  if (!existing.phase && phase) existing.phase = phase
   applyLedgerLatestStatus(existing, ledger)
 }
 
@@ -265,8 +304,9 @@ export function projectConversationView(
     const parentSessionID = String(info?.parentSessionID || "")
     const goalID = String(info?.goalID || "")
     const displayMessageID = conversationMessageHasDisplay(message) ? messageID : ""
-    const phase = phaseLocation(board, stage)
-    const placement = placementOf(board, stage, goalID)
+    const phase = concreteGoalPhaseLocation(board, stage, goalID, sessionID)
+    const placement = placementOf(stage, phase)
+    const displayGoalID = placement === "goal_phase" ? goalID : ""
     if (displayMessageID) {
       const orderKey = timelineMessageOrderKey(message)
       messages.push({
@@ -275,7 +315,7 @@ export function projectConversationView(
         sessionID,
         stage,
         parentSessionID: parentSessionID || undefined,
-        goalID: goalID || undefined,
+        goalID: displayGoalID || undefined,
         time: created,
         placement,
         phase,
@@ -287,7 +327,8 @@ export function projectConversationView(
       if (displayMessageID) existing.lastDisplayMessageID = displayMessageID
       existing.lastMessageTime = created
       if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
-      if (!existing.goalID && goalID) existing.goalID = goalID
+      if (!existing.goalID && displayGoalID) existing.goalID = displayGoalID
+      if (!existing.phase && phase) existing.phase = phase
       continue
     }
     bySession.set(sessionID, {
@@ -299,7 +340,7 @@ export function projectConversationView(
       }),
       stage,
       parentSessionID: parentSessionID || undefined,
-      goalID: goalID || undefined,
+      goalID: displayGoalID || undefined,
       messageIDs: [messageID],
       lastDisplayMessageID: displayMessageID || undefined,
       firstMessageTime: created,
