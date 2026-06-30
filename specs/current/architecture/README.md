@@ -9,6 +9,7 @@ This directory contains the living OpenCorvus architecture source of truth. Date
 | [01-agents.svg](01-agents.svg)   | Agent family and execution chain.                  |
 | [02-data.svg](02-data.svg)       | Data plane, storage, trace, and bus relationships. |
 | [03-control.svg](03-control.svg) | Control plane and extension entry points.          |
+| [17-agent-team-infrastructure.html](17-agent-team-infrastructure.html) | Agent Team infrastructure, skill/MCP/memory/workflow/expert-squad map. |
 
 ## Chapters
 
