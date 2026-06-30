@@ -40,6 +40,7 @@ Current-day records:
 - [2026-06-29-task-active-sse-elapsed.md](2026-06-29-task-active-sse-elapsed.md) records task active SSE elapsed handling.
 - [2026-06-29-task-active-sse-runtime-elapsed.md](2026-06-29-task-active-sse-runtime-elapsed.md) records task active SSE runtime elapsed handling.
 - [2026-06-30-completed-worktree-immediate-reclaim.md](2026-06-30-completed-worktree-immediate-reclaim.md) records the completed goal worktree immediate reclaim repair.
+- [2026-06-30-goal-run-attempt-status-required.md](2026-06-30-goal-run-attempt-status-required.md) records the goal-run attempt status fail-fast parsing repair.
 - [2026-06-30-goal-run-state-simplification.md](2026-06-30-goal-run-state-simplification.md) records the goal-run state projection simplification plan.
 - [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md) records the plan to retire live run/live goal_run lifecycle rows as orchestration control sources while preserving live ownership and active session protection.
 

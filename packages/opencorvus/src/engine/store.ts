@@ -52,6 +52,7 @@ import {
   DISPATCHABLE_RUN_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
+  isGoalRunStatus,
 } from "./catalog"
 import { deriveTaskStatus, taskTerminalReason } from "./task-status"
 import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
@@ -2107,6 +2108,23 @@ function latestPerGoalRun(
   return result
 }
 
+function requireGoalRunPayloadStatus(
+  row: typeof EngineArtifactTable.$inferSelect,
+  payload: { status?: unknown },
+): EngineGoalRunStatus {
+  if (payload.status === undefined) {
+    throw new Error(
+      `goal_run_attempt artifact ${row.id} (goal_run_id=${row.goal_run_id ?? "(missing)"}) is missing payload.status`,
+    )
+  }
+  if (!isGoalRunStatus(payload.status)) {
+    throw new Error(
+      `goal_run_attempt artifact ${row.id} (goal_run_id=${row.goal_run_id ?? "(missing)"}) has invalid payload.status ${JSON.stringify(payload.status)}`,
+    )
+  }
+  return payload.status
+}
+
 /** Reconstruct a `GoalRunRow` from an `engine_artifact` row whose
  *  `kind === "goal_run_attempt"`. The payload carries all goal_run-specific
  *  state; only id/task_id/run_id/goal_run_id/timestamps come from columns. */
@@ -2115,7 +2133,7 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     goal_id?: string
     plan_node_id?: string | null
     session_id?: string | null
-    status?: EngineGoalRunStatus
+    status?: unknown
     retry_count?: number
     blocking_reason?: string | null
     error?: string | null
@@ -2140,7 +2158,7 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     // goal_run_attempt artifacts always carry the coordinating run_id.
     coordinator_run_id: row.run_id!,
     session_id: payload.session_id ?? null,
-    status: payload.status ?? "queued",
+    status: requireGoalRunPayloadStatus(row, payload),
     retry_count: payload.retry_count ?? 0,
     blocking_reason: payload.blocking_reason ?? null,
     error: payload.error ?? null,

@@ -14,6 +14,7 @@ import {
   isActiveGoalRunStatus,
   isDispatchableRunStatus,
   isFailedGoalRunStatus,
+  isGoalRunStatus,
   isLiveGoalRunStatus,
   isLiveRunStatus,
   isSuccessfulGoalRunStatus,
@@ -61,6 +62,8 @@ describe("engine status catalog", () => {
     expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual(LIVE_GOAL_RUN_STATUSES)
     expect(doesGoalRunSatisfyGoal("completed")).toBe(true)
     expect(doesGoalRunSatisfyGoal("running")).toBe(false)
+    expect(isGoalRunStatus("queued")).toBe(true)
+    expect(isGoalRunStatus("zombie")).toBe(false)
   })
 
   test("run status catalog separates live from dispatchable", () => {

@@ -167,6 +167,10 @@ export const LIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.live)
 export const DISPATCHABLE_RUN_STATUSES = runStatusesWhere((meta) => meta.dispatchable)
 export const EXECUTOR_ACTIVE_RUN_STATUSES = LIVE_RUN_STATUSES
 
+export function isGoalRunStatus(status: unknown): status is EngineGoalRunStatus {
+  return typeof status === "string" && Object.prototype.hasOwnProperty.call(GOAL_RUN_STATUS_CATALOG, status)
+}
+
 export function isLiveGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "live"
 }
