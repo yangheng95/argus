@@ -2199,8 +2199,12 @@ describe("document health audit regressions", () => {
     }
 
     const directReplyRepairPlan = read("specs/records/2026-06/bug-hunt-repair-plan-2026-06-17.md")
-    expect(directReplyRepairPlan).toContain("Superseded for overlay targeted steer on 2026-06-29 by")
-    expect(directReplyRepairPlan).toContain("rejects task-message\n> `target` fields before writing a root message")
+    expect(directReplyRepairPlan).toContain(
+      "Superseded for overlay targeted steer on 2026-06-29 by",
+    )
+    expect(directReplyRepairPlan).toContain(
+      "rejects task-message\n> `target` fields before writing a root message",
+    )
 
     expect(read("specs/records/2026-06/2026-06-06-mission-session-agent-identity.md")).not.toContain("| TUI runtime")
     expect(read("specs/records/2026-06/task-row-action-rail-visual-alignment-2026-06-05.md")).not.toContain("TUI host")

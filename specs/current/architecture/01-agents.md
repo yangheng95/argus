@@ -157,7 +157,7 @@ Worker 侧 A2A 请求入口是 `request_orchestrator_decision`，只暴露给 ta
 Overlay targeted operator steer 的唯一入口是 `POST /task/:taskID/session/:sessionID/operator-steer` / `EngineService.operatorSteerAgentSession(...)`。它写入 `origin="operator_steer"` 的 durable `agent_coordination_request` 并唤醒 orchestrator，不写 task-root operator message，不写 child-session direct reply，也不伪造 `respond_agent_coordination` tool identity；后续动作仍由真实 orchestrator turn 通过 `respond_agent_coordination` 或其他 visible lifecycle action 决定。
 `POST /task/:taskID/message` 只表示 task-root operator input；它不接受 `target` session/build 字段，不能作为 targeted sub-agent steer 的替代入口。
 
-**Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同旧 goal-pool 模块一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
+**Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同旧目标池模块一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
