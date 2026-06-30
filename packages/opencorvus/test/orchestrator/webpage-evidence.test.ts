@@ -18,6 +18,7 @@ describe("live webpage evidence pipeline", () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_generate"
     const calls: string[] = []
+    const progress: string[] = []
     const pipeline = fakePipeline(calls)
 
     const result = await ensureLiveWebpageEvidence({
@@ -26,6 +27,7 @@ describe("live webpage evidence pipeline", () => {
       taskID,
       urls: ["https://example.com/markets"],
       pipeline,
+      onProgress: (event) => progress.push(`${event.phase}:${event.status}`),
     })
 
     const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
@@ -35,6 +37,20 @@ describe("live webpage evidence pipeline", () => {
       "compile",
       "analyze",
       "captureRuntimeState:https://example.com/markets",
+    ])
+    expect(progress).toEqual([
+      "materialize:started",
+      "materialize:completed",
+      "extract:started",
+      "extract:completed",
+      "compile:started",
+      "compile:completed",
+      "analyze:started",
+      "analyze:completed",
+      "captureRuntimeState:started",
+      "captureRuntimeState:completed",
+      "sourcePackage:started",
+      "sourcePackage:completed",
     ])
     expect(await hasCompletePrimaryEvidence(evidenceDir, "https://example.com/markets")).toBe(true)
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
@@ -212,6 +228,7 @@ describe("live webpage evidence pipeline", () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_extract_timeout"
     const calls: string[] = []
+    const progress: string[] = []
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
 
     await expect(
@@ -220,6 +237,7 @@ describe("live webpage evidence pipeline", () => {
         worktreeDir: tmp.path,
         taskID,
         urls: ["https://example.com/slow"],
+        onProgress: (event) => progress.push(`${event.phase}:${event.status}`),
         pipeline: {
           extract: async () => {
             calls.push("extract")
@@ -239,6 +257,7 @@ describe("live webpage evidence pipeline", () => {
     ).rejects.toThrow("Live webpage evidence extract failed")
 
     expect(calls).toEqual(["extract"])
+    expect(progress).toEqual(["materialize:started", "materialize:completed", "extract:started", "extract:failed"])
     const diagnostic = JSON.parse(
       await fs.readFile(path.join(paths.webpageEvidenceAbsolute, LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE), "utf8"),
     )

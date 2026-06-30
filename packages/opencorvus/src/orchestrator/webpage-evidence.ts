@@ -12,6 +12,8 @@ import { readPngEvidence } from "@/web-clone/evidence-integrity"
 import { isHttpWebpageUrl } from "@/util/web-url"
 
 export type LiveWebpageEvidenceStatus = "skipped" | "reused" | "generated"
+export type LiveWebpageEvidenceProgressPhase = LiveWebpageEvidenceFailurePhase | "materialize" | "reuse"
+export type LiveWebpageEvidenceProgressStatus = "started" | "completed" | "failed"
 export type LiveWebpageEvidenceFailurePhase =
   | "extract"
   | "compile"
@@ -19,6 +21,15 @@ export type LiveWebpageEvidenceFailurePhase =
   | "captureRuntimeState"
   | "completePrimaryEvidence"
   | "sourcePackage"
+
+export interface LiveWebpageEvidenceProgress {
+  taskID: string
+  url: string
+  phase: LiveWebpageEvidenceProgressPhase
+  status: LiveWebpageEvidenceProgressStatus
+  evidenceDir?: string
+  summary: string
+}
 
 export const LIVE_WEBPAGE_EVIDENCE_FAILURE_FILE = "webpage-evidence-failure.json"
 
@@ -113,10 +124,17 @@ export async function ensureLiveWebpageEvidence(input: {
   urls: readonly string[]
   signal?: AbortSignal
   pipeline?: LiveWebpageEvidencePipeline
+  onProgress?: (progress: LiveWebpageEvidenceProgress) => void | Promise<void>
 }): Promise<LiveWebpageEvidenceResult> {
   const url = input.urls.find(isHttpWebpageUrl)
   if (!url) return { status: "skipped", artifacts: [] }
 
+  await emitLiveWebpageEvidenceProgress(input, {
+    url,
+    phase: "materialize",
+    status: "started",
+    summary: `webpage evidence: materializing task runtime for ${url}`,
+  })
   await TaskRuntimeMaterializer.materializeFrontendDesign({
     projectDir: input.projectDir,
     taskID: input.taskID,
@@ -125,9 +143,30 @@ export async function ensureLiveWebpageEvidence(input: {
 
   const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
   const evidenceDir = paths.webpageEvidenceAbsolute
+  await emitLiveWebpageEvidenceProgress(input, {
+    url,
+    phase: "materialize",
+    status: "completed",
+    evidenceDir,
+    summary: `webpage evidence: task runtime materialized for ${url}`,
+  })
 
   if (await hasCompletePrimaryEvidence(evidenceDir, url)) {
-    await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
+    await emitLiveWebpageEvidenceProgress(input, {
+      url,
+      phase: "reuse",
+      status: "completed",
+      evidenceDir,
+      summary: `webpage evidence: reusing complete rendered evidence for ${url}`,
+    })
+    await runLiveWebpageEvidenceStage({
+      phase: "sourcePackage",
+      taskID: input.taskID,
+      url,
+      evidenceDir,
+      onProgress: input.onProgress,
+      fn: () => ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID),
+    })
     return {
       status: "reused",
       url,
@@ -145,6 +184,7 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
+    onProgress: input.onProgress,
     fn: () => pipeline.extract({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
   })
   await runLiveWebpageEvidenceStage({
@@ -152,6 +192,7 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
+    onProgress: input.onProgress,
     fn: () => pipeline.compile({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
   })
   await runLiveWebpageEvidenceStage({
@@ -159,6 +200,7 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
+    onProgress: input.onProgress,
     fn: () => pipeline.analyze({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
   })
   await runLiveWebpageEvidenceStage({
@@ -166,9 +208,17 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
+    onProgress: input.onProgress,
     fn: () => pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID }),
   })
   if (!(await hasCompletePrimaryEvidence(evidenceDir, url))) {
+    await emitLiveWebpageEvidenceProgress(input, {
+      url,
+      phase: "completePrimaryEvidence",
+      status: "failed",
+      evidenceDir,
+      summary: `webpage evidence: completePrimaryEvidence failed for ${url}`,
+    })
     await failLiveWebpageEvidence({
       phase: "completePrimaryEvidence",
       taskID: input.taskID,
@@ -184,6 +234,7 @@ export async function ensureLiveWebpageEvidence(input: {
     taskID: input.taskID,
     url,
     evidenceDir,
+    onProgress: input.onProgress,
     fn: () => ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID),
   })
 
@@ -203,11 +254,33 @@ async function runLiveWebpageEvidenceStage(input: {
   taskID: string
   url: string
   evidenceDir: string
+  onProgress?: (progress: LiveWebpageEvidenceProgress) => void | Promise<void>
   fn: () => Promise<void>
 }): Promise<void> {
   try {
+    await emitLiveWebpageEvidenceProgress(input, {
+      url: input.url,
+      phase: input.phase,
+      status: "started",
+      evidenceDir: input.evidenceDir,
+      summary: `webpage evidence: ${input.phase} started for ${input.url}`,
+    })
     await input.fn()
+    await emitLiveWebpageEvidenceProgress(input, {
+      url: input.url,
+      phase: input.phase,
+      status: "completed",
+      evidenceDir: input.evidenceDir,
+      summary: `webpage evidence: ${input.phase} completed for ${input.url}`,
+    })
   } catch (error) {
+    await emitLiveWebpageEvidenceProgress(input, {
+      url: input.url,
+      phase: input.phase,
+      status: "failed",
+      evidenceDir: input.evidenceDir,
+      summary: `webpage evidence: ${input.phase} failed for ${input.url}`,
+    })
     await failLiveWebpageEvidence({
       phase: input.phase,
       taskID: input.taskID,
@@ -216,6 +289,16 @@ async function runLiveWebpageEvidenceStage(input: {
       error,
     })
   }
+}
+
+async function emitLiveWebpageEvidenceProgress(
+  input: {
+    taskID: string
+    onProgress?: (progress: LiveWebpageEvidenceProgress) => void | Promise<void>
+  },
+  progress: Omit<LiveWebpageEvidenceProgress, "taskID">,
+): Promise<void> {
+  await input.onProgress?.({ taskID: input.taskID, ...progress })
 }
 
 async function failLiveWebpageEvidence(input: {

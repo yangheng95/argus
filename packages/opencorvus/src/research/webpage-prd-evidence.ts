@@ -6,6 +6,7 @@ import {
   hasCompletePrimaryEvidence,
   hasCompleteSourcePackage,
   type LiveWebpageEvidencePipeline,
+  type LiveWebpageEvidenceProgress,
   type LiveWebpageEvidenceResult,
   primaryWebpageEvidenceArtifacts,
   primaryWebpageSourcePackageArtifacts,
@@ -87,6 +88,7 @@ export async function prepareWebpagePrdEvidence(input: {
   sourceUrls: readonly string[]
   signal?: AbortSignal
   pipeline?: LiveWebpageEvidencePipeline
+  onProgress?: (progress: LiveWebpageEvidenceProgress) => void | Promise<void>
 }): Promise<WebpagePrdEvidence | undefined> {
   const url = input.sourceUrls.find(isHttpWebpageUrl)
   if (!url) return undefined
@@ -98,6 +100,7 @@ export async function prepareWebpagePrdEvidence(input: {
     urls: input.sourceUrls,
     signal: input.signal,
     pipeline: input.pipeline,
+    onProgress: input.onProgress,
   })
   if (!evidence.url) throw new Error("webpage PRD evidence preparation did not resolve a source URL")
 

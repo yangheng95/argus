@@ -13,6 +13,7 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
+import type { LiveWebpageEvidenceProgress } from "@/orchestrator/webpage-evidence"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
@@ -113,10 +114,14 @@ export async function runResearchSession(
   if (!input.continuation) input.onSessionCreated?.(session.id)
 
   let webpagePrdEvidence: WebpagePrdEvidence | undefined
+  const reportWebpageEvidenceProgress = async (progress: LiveWebpageEvidenceProgress) => {
+    SessionStatus.set(session.id, { type: "streaming" })
+    await input.onStatus?.(progress.summary)
+  }
   try {
     webpagePrdEvidence = input.continuation
       ? undefined
-      : await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+      : await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence, reportWebpageEvidenceProgress)
   } catch (err) {
     SessionStatus.set(session.id, {
       type: "terminal",
@@ -284,6 +289,7 @@ async function createResearchTool(
 async function prepareInputWebpagePrdEvidence(
   input: DeepResearchAgent.RunInput,
   mode: ResearchSessionConfig["prepareWebpageEvidence"],
+  onProgress?: (progress: LiveWebpageEvidenceProgress) => void | Promise<void>,
 ): Promise<WebpagePrdEvidence | undefined> {
   const sourceUrls = input.sourceUrls ?? []
   const hasWebpageSource = sourceUrls.some(isHttpWebpageUrl)
@@ -315,6 +321,7 @@ async function prepareInputWebpagePrdEvidence(
     taskID: input.taskID,
     sourceUrls,
     signal: input.signal,
+    onProgress,
   })
 }
 

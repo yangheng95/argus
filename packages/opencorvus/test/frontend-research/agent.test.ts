@@ -57,7 +57,15 @@ describe("frontend-research agent", () => {
     const runAgentSessionCall = source.slice(source.indexOf("const out = await runAgentSession"))
 
     expect(source).toContain("await outputToolKit.replayUpdateToolCalls")
+    expect(source).toContain("const reportWebpageEvidenceProgress")
+    expect(source).toContain('SessionStatus.set(session.id, { type: "streaming" })')
     expect(runAgentSessionCall).toContain("continuation: input.continuation")
     expect(runAgentSessionCall).toContain("shouldExposeOnlyTerminalTool: () => outputToolKit.isReadyToSubmit()")
+  })
+
+  test("orchestrator forwards frontend research host-evidence progress to workflow progress", async () => {
+    const source = await Bun.file(new URL("../../src/orchestrator/tools.ts", import.meta.url)).text()
+
+    expect(source).toContain('onStatus: (summary) => trackStepProgress("frontend_research", summary)')
   })
 })
