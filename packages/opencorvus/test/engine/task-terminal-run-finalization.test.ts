@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findRun, findTask } from "../../src/engine/store"
-import { terminalTask, updateTask } from "../../src/engine/state"
+import { terminalTask, updateRun, updateTask } from "../../src/engine/state"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -10,11 +10,13 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-function seedRunningTaskRun(input?: { taskCompleted?: number }) {
+function seedRunningTaskRun(input?: { taskCompleted?: number; runStatus?: "queued" | "running"; runStarted?: number | null }) {
   const now = Date.now()
   const taskID = `task_terminal_run_${now}_${Math.random().toString(36).slice(2)}`
   const runID = `run_terminal_${now}_${Math.random().toString(36).slice(2)}`
   const projectID = `project_terminal_${now}_${Math.random().toString(36).slice(2)}`
+  const runStatus = input?.runStatus ?? "running"
+  const runStarted = input?.runStarted === undefined ? now : input.runStarted
   Database.transaction((db) => {
     db.insert(ProjectTable)
       .values({
@@ -46,19 +48,19 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
         task_id: taskID,
         run_id: runID,
         kind: "run",
-        label: "run-running",
+        label: `run-${runStatus}`,
         payload: {
           plan_version_id: null,
           session_id: null,
           executor: "opencorvus",
-          status: "running",
+          status: runStatus,
           phase: "deliver",
           blocking_reason: null,
           error: null,
           retry_count: 0,
           executor_ref: null,
           metadata: null,
-          time_started: now,
+          time_started: runStarted,
           time_completed: null,
         },
         time_created: now,
@@ -136,5 +138,18 @@ describe("terminal task writes finalize live runs", () => {
     const run = findRun(runID)
     expect(run?.status).toBe("completed")
     expect(run?.time_completed).toBe(completed)
+  })
+
+  test("failed and aborted run statuses complete without implying start", async () => {
+    for (const status of ["failed", "aborted"] as const) {
+      const { runID } = seedRunningTaskRun({ runStatus: "queued", runStarted: null })
+      const run = findRun(runID)!
+
+      const updated = await updateRun(run, { status }, `run ${status}`)
+
+      expect(updated.status).toBe(status)
+      expect(updated.time_started).toBeNull()
+      expect(updated.time_completed).toBeNumber()
+    }
   })
 })

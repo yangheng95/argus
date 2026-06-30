@@ -36,6 +36,9 @@ type GoalRunStatusMeta = {
 type RunStatusMeta = {
   live: boolean
   dispatchable: boolean
+  terminal: boolean
+  startedAtImplied: boolean
+  executorActive: boolean
 }
 
 const GOAL_RUN_STATUS_CATALOG = {
@@ -138,13 +141,13 @@ const GOAL_RUN_STATUS_CATALOG = {
 } as const satisfies Record<EngineGoalRunStatus, GoalRunStatusMeta>
 
 const RUN_STATUS_CATALOG = {
-  queued: { live: true, dispatchable: false },
-  accepted: { live: true, dispatchable: true },
-  running: { live: true, dispatchable: true },
-  blocked: { live: true, dispatchable: true },
-  completed: { live: false, dispatchable: false },
-  failed: { live: false, dispatchable: false },
-  aborted: { live: false, dispatchable: false },
+  queued: { live: true, dispatchable: false, terminal: false, startedAtImplied: false, executorActive: true },
+  accepted: { live: true, dispatchable: true, terminal: false, startedAtImplied: true, executorActive: true },
+  running: { live: true, dispatchable: true, terminal: false, startedAtImplied: true, executorActive: true },
+  blocked: { live: true, dispatchable: true, terminal: false, startedAtImplied: true, executorActive: true },
+  completed: { live: false, dispatchable: false, terminal: true, startedAtImplied: true, executorActive: false },
+  failed: { live: false, dispatchable: false, terminal: true, startedAtImplied: false, executorActive: false },
+  aborted: { live: false, dispatchable: false, terminal: true, startedAtImplied: false, executorActive: false },
 } as const satisfies Record<EngineRunStatus, RunStatusMeta>
 
 function goalRunStatusesWhere(predicate: (meta: GoalRunStatusMeta) => boolean): EngineGoalRunStatus[] {
@@ -165,7 +168,7 @@ export const GOAL_RUN_RESETTABLE_STATUSES = goalRunStatusesWhere((meta) => meta.
 
 export const LIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.live)
 export const DISPATCHABLE_RUN_STATUSES = runStatusesWhere((meta) => meta.dispatchable)
-export const EXECUTOR_ACTIVE_RUN_STATUSES = LIVE_RUN_STATUSES
+export const EXECUTOR_ACTIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.executorActive)
 
 export function isGoalRunStatus(status: unknown): status is EngineGoalRunStatus {
   return typeof status === "string" && Object.prototype.hasOwnProperty.call(GOAL_RUN_STATUS_CATALOG, status)
@@ -221,4 +224,16 @@ export function isLiveRunStatus(status?: EngineRunStatus | null): status is Engi
 
 export function isDispatchableRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {
   return !!status && RUN_STATUS_CATALOG[status].dispatchable
+}
+
+export function isTerminalRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {
+  return !!status && RUN_STATUS_CATALOG[status].terminal
+}
+
+export function doesRunStatusImplyStarted(status?: EngineRunStatus | null): status is EngineRunStatus {
+  return !!status && RUN_STATUS_CATALOG[status].startedAtImplied
+}
+
+export function isExecutorActiveRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {
+  return !!status && RUN_STATUS_CATALOG[status].executorActive
 }

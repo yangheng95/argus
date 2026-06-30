@@ -5,7 +5,7 @@ import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
-import { isLiveRunStatus } from "./catalog"
+import { doesRunStatusImplyStarted, isLiveRunStatus, isTerminalRunStatus } from "./catalog"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -339,16 +339,10 @@ export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: s
     executor_ref: nextRef,
     metadata: nextMetadata,
     time_started:
-      !row.time_started &&
-      ["accepted", "running", "blocked", "completed"].includes(nextStatus) &&
-      values.time_started === undefined
+      !row.time_started && doesRunStatusImplyStarted(nextStatus) && values.time_started === undefined
         ? now
         : nextStarted,
-    time_completed:
-      (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") &&
-      values.time_completed === undefined
-        ? now
-        : nextCompleted,
+    time_completed: isTerminalRunStatus(nextStatus) && values.time_completed === undefined ? now : nextCompleted,
   }
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)

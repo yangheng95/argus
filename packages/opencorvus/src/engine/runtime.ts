@@ -27,7 +27,7 @@ import {
   type RunRow,
 } from "./store"
 import { Identifier } from "@/id/id"
-import { EXECUTOR_ACTIVE_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
+import { isExecutorActiveRunStatus, isLiveGoalRunStatus, isTerminalRunStatus } from "./catalog"
 
 export const ActiveExecutorSessionsError = NamedError.create(
   "ActiveExecutorSessionsError",
@@ -38,7 +38,7 @@ export const ActiveExecutorSessionsError = NamedError.create(
 )
 
 function hasExecutorActiveRuns(runs: RunRow[]): boolean {
-  return runs.some((r) => (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status))
+  return runs.some((r) => isExecutorActiveRunStatus(r.status))
 }
 
 function hasActiveTaskSessions(taskIDs: string[]): boolean {
@@ -163,7 +163,7 @@ export namespace EngineRuntime {
     // Runtime sync is an observation surface. It records terminal-goal refill
     // wakes and projects durable interaction blockers. It does not poll
     // executor queues or auto-reject interactions.
-    if (run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
+    if (!isTerminalRunStatus(run.status)) {
       return syncTerminalGoalRefills(runID, hooks)
     }
     return false
