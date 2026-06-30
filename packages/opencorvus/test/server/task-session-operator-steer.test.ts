@@ -555,7 +555,32 @@ describe("task session operator steer route", () => {
     })
   })
 
-  test("root, orchestrator, and invalid-kind sessions fail before writing artifacts or messages", async () => {
+  test("root sessions fail before writing artifacts or messages", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "invalid steer root" })
+        seedTask({ taskID, rootID: root.id, now, active: false })
+        const rootMessagesBefore = await Session.messages({ sessionID: root.id })
+
+        const rootResponse = await postSteer({ taskID, sessionID: root.id, directory: tmp.path })
+        expect(rootResponse.status).toBe(400)
+        expect(await rootResponse.json()).toMatchObject({
+          name: "OperatorSteerTargetError",
+          data: { reason: "task_root", taskID, sessionID: root.id },
+        })
+
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(rootMessagesBefore.length)
+        expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
+        expect(queuedCoordinationWakes(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("orchestrator sessions fail before writing artifacts or messages", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({
       directory: tmp.path,
@@ -568,35 +593,46 @@ describe("task session operator steer route", () => {
           parentID: root.id,
           title: "invalid orchestrator target",
         })
-        const executor = await Session.create({ kind: "executor", parentID: root.id, title: "executor" })
         seedTask({ taskID, rootID: root.id, now, active: false })
         const rootMessagesBefore = await Session.messages({ sessionID: root.id })
         const orchestratorMessagesBefore = await Session.messages({ sessionID: orchestrator.id })
-        const executorMessagesBefore = await Session.messages({ sessionID: executor.id })
 
-        const rootResponse = await postSteer({ taskID, sessionID: root.id, directory: tmp.path })
-        expect(rootResponse.status).toBe(400)
-        expect(await rootResponse.json()).toMatchObject({
-          name: "OperatorSteerTargetError",
-          data: { reason: "task_root", taskID, sessionID: root.id },
-        })
-
-        const orchestratorResponse = await postSteer({ taskID, sessionID: orchestrator.id, directory: tmp.path })
-        expect(orchestratorResponse.status).toBe(400)
-        expect(await orchestratorResponse.json()).toMatchObject({
+        const response = await postSteer({ taskID, sessionID: orchestrator.id, directory: tmp.path })
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({
           name: "OperatorSteerTargetError",
           data: { reason: "orchestrator_session", taskID, sessionID: orchestrator.id },
         })
 
-        const executorResponse = await postSteer({ taskID, sessionID: executor.id, directory: tmp.path })
-        expect(executorResponse.status).toBe(400)
-        expect(await executorResponse.json()).toMatchObject({
+        expect(await Session.messages({ sessionID: root.id })).toHaveLength(rootMessagesBefore.length)
+        expect(await Session.messages({ sessionID: orchestrator.id })).toHaveLength(orchestratorMessagesBefore.length)
+        expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
+        expect(queuedCoordinationWakes(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("invalid-kind sessions fail before writing artifacts or messages", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "invalid steer root" })
+        const executor = await Session.create({ kind: "executor", parentID: root.id, title: "executor" })
+        seedTask({ taskID, rootID: root.id, now, active: false })
+        const rootMessagesBefore = await Session.messages({ sessionID: root.id })
+        const executorMessagesBefore = await Session.messages({ sessionID: executor.id })
+
+        const response = await postSteer({ taskID, sessionID: executor.id, directory: tmp.path })
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({
           name: "OperatorSteerTargetError",
           data: { reason: "invalid_kind", taskID, sessionID: executor.id },
         })
 
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(rootMessagesBefore.length)
-        expect(await Session.messages({ sessionID: orchestrator.id })).toHaveLength(orchestratorMessagesBefore.length)
         expect(await Session.messages({ sessionID: executor.id })).toHaveLength(executorMessagesBefore.length)
         expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
         expect(queuedCoordinationWakes(taskID)).toHaveLength(0)
