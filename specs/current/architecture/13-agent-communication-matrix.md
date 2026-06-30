@@ -1,6 +1,8 @@
 # 13 — Agent Communication Matrix
 
-> 当前真源：`packages/opencorvus/src/orchestrator/tools.ts`、`packages/opencorvus/src/tool/request-orchestrator-decision.ts`、`packages/opencorvus/src/engine/agent-coordination.ts`、`packages/opencorvus/src/conversation/view.ts`、`packages/opencorvus/src/orchestrator/loop.ts`、`packages/opencorvus/src/build/agent.ts`、`packages/opencorvus/src/executor/registry.ts`、`packages/opencorvus/src/tool/task.ts`、`packages/opencorvus/src/agent/agent.ts`、`packages/opencorvus/src/control/message.ts`、`packages/opencorvus/src/channel/ingress.ts`。
+> 当前真源：`packages/opencorvus/src/orchestrator/tools.ts`、`packages/opencorvus/src/tool/request-orchestrator-decision.ts`、`packages/opencorvus/src/engine/agent-coordination.ts`、`packages/opencorvus/src/engine/queue.ts`、`packages/opencorvus/src/conversation/view.ts`、`packages/opencorvus/src/orchestrator/loop.ts`、`packages/opencorvus/src/goal/runner.ts`、`packages/opencorvus/src/build/agent.ts`、`packages/opencorvus/src/agent/sub-agent-protocol.ts`、`packages/opencorvus/src/tool/task.ts`、`packages/opencorvus/src/agent/agent.ts`、`packages/opencorvus/src/intent-analysis/agent.ts`、`packages/opencorvus/src/integrity/team-agent.ts`、`packages/opencorvus/src/requirements/agent.ts`、`packages/opencorvus/src/architect/agent.ts`、`packages/opencorvus/src/frontend-design/agent.ts`、`packages/opencorvus/src/control/message.ts`、`packages/opencorvus/src/channel/ingress.ts`。
+>
+> 用途：把"规范里允许谁对谁发消息"、"当前代码里谁真正能触发/接收/间接拿到上下文"、以及 worker/operator-to-orchestrator durable coordination mailbox 真源并列出来，便于排查通信问题。
 
 This chapter describes the communication paths that exist in the current runtime. It is not a roadmap and does not describe retired planner, deliver, prosecutor, or acceptance-agent routes.
 
@@ -14,7 +16,18 @@ This chapter describes the communication paths that exist in the current runtime
 
 If a message has not reached an engine task, debug the channel/control boundary before debugging agent-to-agent paths.
 
-## Durable Coordination
+## Current Calibration
+
+- 当前运行时仍不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的对象协议；外部入口与普通 tool 调用仍是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
+- **worker/operator-to-orchestrator scheduling 的当前真源已切到 durable coordination mailbox**：worker 只能通过 `request_orchestrator_decision` 写入 `agent_coordination_request`；overlay targeted operator steer 只能通过 `POST /task/:taskID/session/:sessionID/operator-steer` 写入 `origin="operator_steer"` 的 `agent_coordination_request`；orchestrator 只能通过 `respond_agent_coordination` 原子写入 `agent_coordination_response` / `agent_coordination_action` 并执行 visible action。不要再把 task-root message、direct reply、hidden note、generic same-kind redispatch 或历史 `steer_subagent` 当成调度协议。
+- `POST /task/:taskID/message` 是 task-root operator input。它不接受 `target` session/build 字段；targeted sub-agent steer 必须走 operator-steer route 和 coordination artifacts。
+- **A2A 当前实现合同**见 [2026-06-26-enterprise-a2a-protocol-root-repair.md](../../records/2026-06/2026-06-26-enterprise-a2a-protocol-root-repair.md)。本文件的 direct/indirect 矩阵描述的是非 A2A 普通 agent 调用和历史预期对照，不是 worker scheduling mailbox 的替代真源。
+- **Planning tool role 已删除**：the removed planning package 整目录、旧目标池模块、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
+- **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
+- **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），并吸收旧固定维度 review 与旧对抗性复核职责。`prosecute` / `prosecutor` 已删除。
+- `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
+- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：默认按 `experimental.auto_confirm_proposed_tasks=true` 自动创建"完善上一个 request 的新任务"候选，只有该配置显式为 `false` 时才先询问用户；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
+- [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
 Agent-to-Agent (A2A) scheduling is represented by durable artifacts, not hidden messages or direct child-session replies.
 

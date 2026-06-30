@@ -48,6 +48,29 @@ const REPLY_400_RESPONSE = {
   },
 } as const
 
+const OPERATOR_STEER_400_RESPONSE = {
+  description: "Operator steer target or request body rejected",
+  content: {
+    "application/json": {
+      schema: resolver(
+        z.union([
+          z.object({
+            name: z.literal("OperatorSteerTargetError"),
+            data: z.record(z.string(), z.any()),
+          }),
+          BAD_REQUEST_SCHEMA,
+        ]),
+      ),
+    },
+  },
+} as const
+
+const OPERATOR_STEER_409_RESPONSE = namedErrorResponse(
+  "Operator steer conflict",
+  "AgentSessionPendingCoordinationError",
+  "OperatorSteerWakeError",
+)
+
 export const ERRORS = {
   400: {
     description: "Bad request",

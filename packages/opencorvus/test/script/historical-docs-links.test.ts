@@ -484,9 +484,17 @@ describe("historical docs repository links", () => {
       { rel: "specs/current/architecture/README.md", required: "must include a `Recall` section" },
       { rel: "specs/records/2026-06/README.md", required: "must include a `Recall` section" },
     ]
+    const requiredRecallRecords = [
+      "specs/records/2026-06/2026-06-29-spec-consolidation.md",
+      "specs/records/2026-06/2026-06-29-database-ioerr-runtime-boundary.md",
+      "specs/records/2026-06/2026-06-29-operator-steer-single-source.md",
+    ]
     for (const source of recallGovernanceSources) {
       const text = fs.readFileSync(path.join(repoRoot, source.rel), "utf8")
       expect(text).toContain(source.required)
+    }
+    for (const rel of requiredRecallRecords) {
+      expect(fs.readFileSync(path.join(repoRoot, rel), "utf8")).toMatch(/^## Recall$/m)
     }
     const specsReadme = fs.readFileSync(path.join(repoRoot, "specs/README.md"), "utf8")
     expect(specsReadme).toContain("`specs/records/YYYY-MM/**`")
