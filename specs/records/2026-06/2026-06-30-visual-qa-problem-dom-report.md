@@ -47,10 +47,21 @@ Date: 2026-06-30
   - `rg -n "browser_preview_layout_geometry|browser_preview_compare_scroll_slices|browser_preview_reference_regions|VISUAL_QA_SESSION_TOOL_IDS|VISUAL_QA_IMPLEMENTATION_TOOL_IDS|submit_visual_qa_report|production_blockers|unresolved_code_module_problems|Build Evidence Pointers|Prior Visual QA Pointers|reference_comparison_evidence_refs|browser_preview_evidence|operationKind" packages/opencorvus/src packages/opencorvus/test specs/current specs/records/2026-06 -g "*.ts" -g "*.txt" -g "*.md"`
   - `rg -n "playwright|sharp|pngjs" package.json packages/opencorvus/package.json packages/overlay/package.json`
   - `rg -n "annotation|annotated|draw|bbox|box|sharp|png|screenshotPath|attachments" packages/opencorvus/src/browser-preview packages/opencorvus/src/tool/browser-preview-layout-geometry.ts packages/opencorvus/test/tool packages/opencorvus/test/browser-preview`
-- Independent agent feedback: none for this implementation round. A prior
-  independent review of `7a6cfdaf4c` found no blocker in the browser-preview
-  module binding convergence, and noted that MCP inclusion was covered by mock
-  tool discovery rather than a real Browser MCP build session.
+- Independent agent feedback:
+  - Review of commit `bb038532e7` found a P1 handoff gap: Visual QA could
+    produce and render `problem_dom_regions`, but
+    `composeLatestAcceptanceFeedbackForBuild` only read final acceptance
+    verdict artifacts. Normal Build repair prompts therefore did not have a
+    tested path from the persisted `visual_qa` decision log report to Build's
+    first prompt.
+  - Required correction: the latest failed structured Visual QA report must be
+    read from `decision_log phase=visual_qa report_*` and rendered into Build
+    repair feedback, with a regression test proving DOM locator, HTML, style,
+    evidence, and search terms reach `composeLatestAcceptanceFeedbackForBuild`.
+  - A prior independent review of `7a6cfdaf4c` found no blocker in the
+    browser-preview module binding convergence, and noted that MCP inclusion
+    was covered by mock tool discovery rather than a real Browser MCP build
+    session.
 
 ## Decision
 
@@ -112,4 +123,7 @@ is observable, avoiding a host gate.
   visual blockers.
 - Build prompt/acceptance overlay instructs agents to use Visual QA DOM reports
   as first repair pointers while still verifying with screenshots afterward.
+- Latest failed Visual QA structured reports are rendered into Build retry
+  feedback from the persisted decision log, so Build receives the DOM report
+  through the normal orchestration path rather than manual copy/paste.
 - Focused tests cover schema/report rendering and prompt guidance.

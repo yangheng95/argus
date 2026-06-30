@@ -4530,13 +4530,92 @@ export function validatePersistedArchitectFidelity(input: {
   })
 }
 
+function latestFailedVisualQaDecisionRecord(taskID: string) {
+  const reportEntries = createDecisionLog(taskID)
+    .readByPhase("visual_qa")
+    .filter((entry) => entry.key.startsWith("report_"))
+  const latestReport = reportEntries[reportEntries.length - 1]
+  if (!latestReport) return undefined
+  let payload: unknown
+  try {
+    payload = JSON.parse(latestReport.value)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`Latest visual_qa report decision ${latestReport.id} is not JSON: ${detail}`)
+  }
+  const parsed = VisualQaDecisionRecordSchema.safeParse(payload)
+  if (!parsed.success) {
+    throw new Error(`Latest visual_qa report decision ${latestReport.id} is malformed: ${parsed.error.message}`)
+  }
+  return parsed.data.acceptance.effectiveAccepted ? undefined : parsed.data
+}
+
+function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
+  const record = latestFailedVisualQaDecisionRecord(taskID)
+  if (!record) return undefined
+  const report = record.report
+  const lines: string[] = [
+    "Latest failed Visual QA report for Build repair.",
+    `summary: ${report.summary}`,
+    `effective_accepted: ${record.acceptance.effectiveAccepted}`,
+    `production_blockers: ${report.production_blockers.length}`,
+    `problem_dom_regions: ${report.problem_dom_regions.length}`,
+  ]
+  if (record.acceptance.blockingIssues.length > 0) {
+    lines.push("Acceptance issues:", ...record.acceptance.blockingIssues.map((issue) => `- ${issue}`))
+  }
+  if (report.production_blockers.length > 0) {
+    lines.push(
+      "Production blockers:",
+      ...report.production_blockers.map(
+        (blocker) =>
+          `- ${blocker.id} region=${blocker.region} required_correction=${blocker.required_correction} evidence_refs=${blocker.evidence_refs.join(", ") || "(none)"}`,
+      ),
+    )
+  }
+  if (report.problem_dom_regions.length === 0) {
+    lines.push("Problem DOM Regions:", "- (none recorded; use visual evidence and production blockers)")
+    return lines.join("\n")
+  }
+  lines.push("Problem DOM Regions:")
+  for (const region of report.problem_dom_regions) {
+    const stylePairs = Object.entries(region.computed_style).map(([key, value]) => `${key}=${value}`)
+    const attributePairs = Object.entries(region.attributes).map(([key, value]) => `${key}=${value}`)
+    const regionLines = [
+      `- ${region.id} region=${region.region}`,
+      `  blocker_ids: ${region.blocker_ids.join(", ")}`,
+      `  locator: ${region.locator}`,
+      region.route ? `  route: ${region.route}` : undefined,
+      region.viewport ? `  viewport: ${region.viewport.width}x${region.viewport.height}` : undefined,
+      region.dom_path ? `  dom_path: ${region.dom_path}` : undefined,
+      region.bbox
+        ? `  bbox: x=${region.bbox.x} y=${region.bbox.y} width=${region.bbox.width} height=${region.bbox.height}`
+        : undefined,
+      `  outer_html_excerpt: ${region.outer_html_excerpt}`,
+      region.text_content ? `  text_content: ${region.text_content}` : undefined,
+      region.role ? `  role: ${region.role}` : undefined,
+      region.accessible_name ? `  accessible_name: ${region.accessible_name}` : undefined,
+      region.ancestor_context.length > 0 ? `  ancestor_context: ${region.ancestor_context.join(" | ")}` : undefined,
+      region.sibling_context.length > 0 ? `  sibling_context: ${region.sibling_context.join(" | ")}` : undefined,
+      stylePairs.length > 0 ? `  computed_style: ${stylePairs.join("; ")}` : undefined,
+      attributePairs.length > 0 ? `  attributes: ${attributePairs.join("; ")}` : undefined,
+      region.code_search_terms.length > 0 ? `  code_search_terms: ${region.code_search_terms.join(", ")}` : undefined,
+      region.evidence_refs.length > 0 ? `  evidence_refs: ${region.evidence_refs.join(", ")}` : undefined,
+      `  notes: ${region.notes}`,
+    ]
+    lines.push(...regionLines.filter((line): line is string => typeof line === "string"))
+  }
+  return lines.join("\n")
+}
+
 export async function composeLatestAcceptanceFeedbackForBuild(input: {
   taskID: string
   goalID?: string
 }): Promise<string | undefined> {
+  const visualQaFeedback = renderVisualQaProblemDomFeedback(input.taskID)
   const verdictArtifact = findLatestAcceptanceVerdictArtifact(input.taskID)
   const verdictPayload = (verdictArtifact?.payload ?? {}) as Record<string, unknown>
-  if (!verdictArtifact || verdictPayload.verdict !== "rejected") return undefined
+  if (!verdictArtifact || verdictPayload.verdict !== "rejected") return visualQaFeedback
 
   const rejectionDetails = Array.isArray(verdictPayload.rejection_details)
     ? (verdictPayload.rejection_details as Array<Record<string, unknown>>)
@@ -4551,7 +4630,7 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
   const acceptanceID = verdictArtifact.acceptance_id ?? undefined
   const manifest = acceptanceID ? findLatestAcceptanceEvidenceManifest({ acceptanceID }) : undefined
   const manifestFailureDetails = manifest ? formatAcceptanceManifestFailureDetails(manifest) : []
-  return composeAcceptanceRetryFeedback({
+  const acceptanceFeedback = composeAcceptanceRetryFeedback({
     iteration: typeof manifest?.iteration === "number" ? manifest.iteration : 0,
     verdict: String(verdictPayload.verdict),
     summary: typeof verdictPayload.summary === "string" ? verdictPayload.summary : "",
@@ -4567,6 +4646,7 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
     })),
     scope: input.goalID ? "goal" : "integrated_tree",
   })
+  return [acceptanceFeedback, visualQaFeedback].filter((value): value is string => Boolean(value)).join("\n\n")
 }
 
 async function composeIntegrityFeedbackMarkdownForBuild(input: {
@@ -7039,12 +7119,17 @@ export function createOrchestratorTools(input: {
           runnerSessionID = id
         },
       })
-      const visualQaSemantics = result.acceptance
+      const normalizedVisualQa = VisualQaDecisionRecordSchema.parse({
+        report: result.report,
+        acceptance: result.acceptance,
+      })
+      const report = normalizedVisualQa.report
+      const visualQaSemantics = normalizedVisualQa.acceptance
 
       decisionLog.append({
         phase: "visual_qa",
         key: `report_${Date.now()}`,
-        value: JSON.stringify({ report: result.report, acceptance: visualQaSemantics }, null, 2),
+        value: JSON.stringify({ report, acceptance: visualQaSemantics }, null, 2),
         reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
       })
       decisionLog.append({
@@ -7056,16 +7141,17 @@ export function createOrchestratorTools(input: {
           `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
           `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
           `effective_acceptance_issues=${visualQaSemantics.blockingIssues.length}`,
-          `summary=${result.report.summary}`,
-          `coverage=${result.report.coverage.length}`,
-          `findings=${result.report.findings.length}`,
-          `production_blockers=${result.report.production_blockers.length}`,
-          `unresolved_code_module_problems=${result.report.unresolved_code_module_problems.length}`,
-          `evidence=${result.report.evidence.length}`,
-          `reference_parity_required=${result.report.reference_parity.required}`,
-          `reference_comparison_evidence=${result.report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
-          `reference_missing_regions=${result.report.reference_parity.missing_regions.join(", ") || "(none)"}`,
-          `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
+          `summary=${report.summary}`,
+          `coverage=${report.coverage.length}`,
+          `findings=${report.findings.length}`,
+          `production_blockers=${report.production_blockers.length}`,
+          `unresolved_code_module_problems=${report.unresolved_code_module_problems.length}`,
+          `problem_dom_regions=${report.problem_dom_regions.length}`,
+          `evidence=${report.evidence.length}`,
+          `reference_parity_required=${report.reference_parity.required}`,
+          `reference_comparison_evidence=${report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
+          `reference_missing_regions=${report.reference_parity.missing_regions.join(", ") || "(none)"}`,
+          `changed_files=${report.changed_files.join(", ") || "(none)"}`,
         ].join("\n"),
         reason: "Latest structured visual QA summary for read_context and integrity review.",
       })
@@ -7076,28 +7162,29 @@ export function createOrchestratorTools(input: {
         sessionID: result.sessionID,
         accepted: visualQaSemantics.effectiveAccepted,
         submittedAccepted: visualQaSemantics.submittedAccepted,
-        findingsCount: result.report.findings.length,
-        productionBlockersCount: result.report.production_blockers.length,
-        evidenceCount: result.report.evidence.length,
-        repairsCount: result.report.repairs.length,
-        changedFilesCount: result.report.changed_files.length,
+        findingsCount: report.findings.length,
+        productionBlockersCount: report.production_blockers.length,
+        evidenceCount: report.evidence.length,
+        repairsCount: report.repairs.length,
+        changedFilesCount: report.changed_files.length,
         result: SubAgentProtocol.yieldResult({
           headline: `visual_qa complete: effective_accepted=${visualQaSemantics.effectiveAccepted}`,
-          summary: result.report.summary,
+          summary: report.summary,
           fields: [
             ["session", result.sessionID],
             ["accepted", String(visualQaSemantics.effectiveAccepted)],
             ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
             ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
             ["effective_acceptance_issues", String(visualQaSemantics.blockingIssues.length)],
-            ["coverage", String(result.report.coverage.length)],
-            ["findings", String(result.report.findings.length)],
-            ["production_blockers", String(result.report.production_blockers.length)],
-            ["unresolved_code_module_problems", String(result.report.unresolved_code_module_problems.length)],
-            ["evidence", String(result.report.evidence.length)],
-            ["repairs", String(result.report.repairs.length)],
-            ["changed_files", result.report.changed_files.join(", ") || "(none)"],
-            ["open_questions", String(result.report.open_questions.length)],
+            ["coverage", String(report.coverage.length)],
+            ["findings", String(report.findings.length)],
+            ["production_blockers", String(report.production_blockers.length)],
+            ["unresolved_code_module_problems", String(report.unresolved_code_module_problems.length)],
+            ["problem_dom_regions", String(report.problem_dom_regions.length)],
+            ["evidence", String(report.evidence.length)],
+            ["repairs", String(report.repairs.length)],
+            ["changed_files", report.changed_files.join(", ") || "(none)"],
+            ["open_questions", String(report.open_questions.length)],
           ],
           pointer: "decision_log phase=visual_qa",
         }),
