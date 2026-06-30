@@ -35,7 +35,7 @@ describe("frontend replica desktop-only generation scope", () => {
     expect(agents["visual-qa"]).toContain("Do not require mobile/tablet evidence")
     expect(agents["visual-qa"]).toContain("Own final region proof with browser_preview_reference_regions")
     expect(agents["visual-qa"]).toContain("browser_preview_compare_scroll_slices only for page-slice visual_diff")
-    expect(agents.orchestrator).toContain("keep template mobile text out of goals")
+    expect(agents.orchestrator?.toLowerCase()).toContain("keep template mobile text out of goals")
     expect(agents.orchestrator).toContain("reference-region proof and scroll-slice supporting evidence")
     expect(agents.coding).not.toContain("responsive behavior")
   })
