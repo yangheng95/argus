@@ -6,6 +6,11 @@ import { beginBuildAttempt, createGoalRun, startNewAttempt, updateGoalRun } from
 import { describeGoal, goalStatusByID } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
 import { findGoal, findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
+import {
+  createOrchestratorToolOwnershipPayload,
+  insertOrchestratorToolOwnershipArtifact,
+} from "../../src/engine/tool-ownership"
+import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
 
 /**
@@ -284,24 +289,116 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(artifacts[0]?.goalRunID).toBe(row.id)
   })
 
-  test("live tip → beginBuildAttempt refuses to supersede or duplicate the running executor", () => {
+  test("live tip without live worker control → beginBuildAttempt retires the audit row and re-dispatches", () => {
     const liveRunID = `grun_live_${Date.now()}`
     insertGoalRun({ id: liveRunID, status: "running" })
+
+    const newRunID = beginBuildAttempt({
+      taskID,
+      goalID,
+      runID,
+      sessionID: "ses_bba_live_reopen",
+    })
+
+    const rows = listGoalRunsByGoal(goalID)
+    expect(rows).toHaveLength(2)
+    expect(findGoalRun(liveRunID)?.status).toBe("aborted")
+    expect(findGoalRun(liveRunID)?.error).toContain("no live build ownership")
+    const newRow = findGoalRun(newRunID)
+    expect(newRow?.status).toBe("running")
+    expect(newRow?.supersede_of).toBe(liveRunID)
+    expect(findLatestTipGoalRun(goalID)?.id).toBe(newRunID)
+    expect(goalStatusByID(goalID)).toBe("running")
+  })
+
+  test("live tip with live build ownership → beginBuildAttempt refuses duplicate", () => {
+    const liveRunID = `grun_live_owned_${Date.now()}`
+    const childSessionID = `ses_bba_live_owned_${Date.now()}`
+    insertGoalRun({ id: liveRunID, status: "running" })
+    const ownershipPayload = createOrchestratorToolOwnershipPayload({
+      taskID,
+      orchestratorSessionID: `ses_orchestrator_${Date.now()}`,
+      orchestratorMessageID: `msg_orchestrator_${Date.now()}`,
+      toolCallID: `cal_build_${Date.now()}`,
+      toolPartID: `prt_build_${Date.now()}`,
+      childSessionID,
+      scope: "goal",
+      goalID,
+      goalRunID: liveRunID,
+    })
+    insertOrchestratorToolOwnershipArtifact({
+      taskID,
+      runID,
+      goalRunID: liveRunID,
+      label: "tool-ownership-start",
+      payload: ownershipPayload,
+    })
 
     expect(() =>
       beginBuildAttempt({
         taskID,
         goalID,
         runID,
-        sessionID: "ses_bba_live_refuse",
+        sessionID: "ses_bba_live_owned_refuse",
       }),
-    ).toThrow(/already has live goal_run/)
+    ).toThrow(/live build tool/)
 
-    const rows = listGoalRunsByGoal(goalID)
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.id).toBe(liveRunID)
-    expect(findGoalRun(liveRunID)?.supersede_of).toBeNull()
-    expect(goalStatusByID(goalID)).toBe("running")
+    expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+    expect(findGoalRun(liveRunID)?.status).toBe("running")
+  })
+
+  test("live tip with active build session → beginBuildAttempt refuses duplicate", () => {
+    const liveRunID = `grun_live_session_${Date.now()}`
+    const childSessionID = `ses_bba_live_session_${Date.now()}`
+    const now = Date.now()
+    Database.use((db) =>
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id: liveRunID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: liveRunID,
+          kind: "goal_run_attempt",
+          label: "attempt-running",
+          payload: {
+            goal_id: goalID,
+            plan_node_id: null,
+            session_id: childSessionID,
+            status: "running",
+            retry_count: 0,
+            blocking_reason: null,
+            error: null,
+            workspace_dir: null,
+            base_ref: null,
+            merge_ref: null,
+            supersede_of: null,
+            superseded_reason: null,
+            superseded_at: null,
+            metadata: null,
+            owner: null,
+            time_started: now,
+            time_completed: null,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+    SessionStatus.set(childSessionID, { type: "streaming" }, { publish: false })
+
+    expect(() =>
+      beginBuildAttempt({
+        taskID,
+        goalID,
+        runID,
+        sessionID: "ses_bba_live_session_refuse",
+      }),
+    ).toThrow(/active build session/)
+
+    expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+    expect(findGoalRun(liveRunID)?.status).toBe("running")
+    SessionStatus.set(childSessionID, { type: "terminal", reason: "aborted", error: "test cleanup" }, { publish: false })
   })
 
   test("foreign live owner with live PID → beginBuildAttempt refuses duplicate instead of retiring it", () => {
@@ -316,7 +413,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
         runID,
         sessionID: "ses_bba_live_foreign_refuse",
       }),
-    ).toThrow(/already has live goal_run/)
+    ).toThrow(/owned by live process/)
 
     const rows = listGoalRunsByGoal(goalID)
     expect(rows).toHaveLength(1)

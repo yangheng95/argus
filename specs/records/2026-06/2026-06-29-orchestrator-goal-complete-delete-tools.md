@@ -1,5 +1,9 @@
 # Orchestrator Goal Complete Delete Tools
 
+## Supersession Note
+
+The 2026-06-29 acceptance item that required `complete_goal` / `delete_goal` to reject raw live `goal_run` facts is superseded by [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md). Current behavior treats live `goal_run` rows as durable audit/projection facts; only live build ownership, active current-process build sessions, or proven live foreign owner evidence can block goal mutation.
+
 ## Recall
 
 - User request: "赋予调度器标记goal完成和删除goal的能力".
