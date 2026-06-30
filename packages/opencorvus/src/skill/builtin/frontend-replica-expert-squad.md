@@ -30,8 +30,9 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 
 ## Browser preview evidence ownership
 
-- Build owns changed-region parity proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and cite fresh `reference-comparison` evidence.
-- Visual QA owns independent final rendered parity proof: it must call `browser_preview_reference_regions` for formal bound-region proof and may call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- Build owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
+- Visual QA owns independent final rendered parity review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
 - Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or generic review text.
 
 ## Desktop-only replica scope

@@ -706,6 +706,7 @@ function isPathRefKey(key: string): boolean {
     key === "diagnosticsPath" ||
     key === "source_crop" ||
     key === "implementation_crop" ||
+    key === "module_comparison" ||
     key === "side_by_side" ||
     key === "diff"
   )

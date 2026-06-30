@@ -14,6 +14,7 @@ Current-day records:
 
 - [2026-06-29-a2a-stale-cancel-terminal-status.md](2026-06-29-a2a-stale-cancel-terminal-status.md) records the A2A stale cancel terminal status investigation.
 - [2026-06-30-agent-team-html-architecture-diagram.md](2026-06-30-agent-team-html-architecture-diagram.md) records the Agent Team infrastructure HTML architecture diagram plan.
+- [2026-06-30-browser-preview-viewport-slice-binding.md](2026-06-30-browser-preview-viewport-slice-binding.md) records the browser-preview first-viewport slice versus reference-region binding repair.
 - [2026-06-29-browser-mcp-node-package-manifest.md](2026-06-29-browser-mcp-node-package-manifest.md) records the browser MCP packaged Node runtime manifest fix.
 - [2026-06-29-browser-mcp-web-research-proxy.md](2026-06-29-browser-mcp-web-research-proxy.md) records the Browser MCP `network.proxy.webResearch` proxy bridge fix.
 - [2026-06-29-browser-preview-layout-geometry-diagnostic.md](2026-06-29-browser-preview-layout-geometry-diagnostic.md) records the browser preview layout geometry diagnostic.

@@ -75,6 +75,13 @@ afterEach(() => {
 })
 
 describe("BuildAgent managed worktree runtime", () => {
+  test("in-process build sessions preserve the default MCP tool inclusion", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/agent.ts"), "utf8")
+
+    expect(source).toContain("includeMcpTools: input.includeMcpTools,")
+    expect(source).not.toContain("includeMcpTools: input.includeMcpTools === true")
+  })
+
   test("managed worktrees do not receive copied runtime evidence views", async () => {
     await using tmp = await tmpdir({ git: true })
 

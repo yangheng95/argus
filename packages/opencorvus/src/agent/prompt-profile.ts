@@ -177,12 +177,12 @@ export namespace PromptProfile {
         ),
         build: expertOverlay(
           "Build approved desktop replica work without source drift, one scoped component or region goal at a time. Reuse target project components and business code only where they preserve source parity.",
-          "Implement real user interface, real state, and data-backed tables/charts/maps; concentrate source-derived visual tokens in the page source of truth and use browser_preview_reference_regions for changed-region parity proof when source and local regions exist.",
-          "Use browser_preview_compare_scroll_slices only for page-slice visual_diff support. Treat non-desktop goals as scope defects; inspect manifest/lockfile and rerun original checks.",
+          "Implement real user interface, real state, and data-backed tables/charts/maps; concentrate source-derived visual tokens in the page source of truth and use browser_preview_reference_regions only for one source-binding module comparison when source and concrete local component regions exist.",
+          "Use Browser MCP screenshot/observe tools for ordinary browser inspection, not a weakened duplicate screenshot tool. Do not use page-shell, whole-page, body/main/app-root locators as first-viewport reference-region proof; use browser_preview_compare_scroll_slices for first-viewport and page-slice visual_diff support. Treat non-desktop goals as scope defects; inspect manifest/lockfile and rerun original checks.",
         ),
         "visual-qa": expertOverlay(
           "Audit desktop structure, spacing, density, typography, interactions, source assets, and component states against the exact source evidence and rendered target page.",
-          "Own final region proof with browser_preview_reference_regions when source and local regions exist; use browser_preview_compare_scroll_slices only for page-slice visual_diff support.",
+          "Own final module source-binding review with browser_preview_reference_regions when source and concrete local component regions exist; use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, and use browser_preview_compare_scroll_slices only for first-viewport and page-slice visual_diff support.",
           "Do not require mobile/tablet evidence. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, or target project reuse proof is missing.",
         ),
         integrity: expertOverlay(

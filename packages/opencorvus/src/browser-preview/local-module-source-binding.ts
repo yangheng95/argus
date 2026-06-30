@@ -68,8 +68,7 @@ export type LocalModuleSourceBindingResult = {
   artifacts: {
     source_crop: string
     implementation_crop: string
-    source_context: string
-    binding_puzzle: string
+    module_comparison: string
   }
   diagnostics: string[]
 }
@@ -157,7 +156,7 @@ export async function bindLocalModuleToSourceRegion(
       locator: input.implementationLocator,
       component_files: input.componentFiles,
     },
-    acceptance_refs: [artifacts.binding_puzzle],
+    acceptance_refs: [artifacts.module_comparison],
   }
   const manifestPath = path.join(outDir, "local-module-source-binding.json")
   const diagnostics = [
@@ -189,7 +188,7 @@ export async function bindLocalModuleToSourceRegion(
     artifactPaths: {
       source_crop: artifacts.source_crop,
       implementation_crop: artifacts.implementation_crop,
-      side_by_side: artifacts.binding_puzzle,
+      side_by_side: artifacts.module_comparison,
     },
     status: "passed",
     summary: `local module ${input.regionID} bound to source region ${candidateWithExpandedBox.id}`,
@@ -287,19 +286,12 @@ export async function materializeLocalModuleBindingArtifacts(input: {
   await fs.mkdir(dir, { recursive: true })
   const sourceCrop = path.join(dir, "source-crop.png")
   const implementationCrop = path.join(dir, "implementation-crop.png")
-  const sourceContext = path.join(dir, "source-context.png")
-  const bindingPuzzle = path.join(dir, "binding-puzzle.png")
+  const moduleComparison = path.join(dir, "module-comparison.png")
   await cropPng(input.sourceImagePath, sourceCrop, input.sourceCandidate.bbox)
   await cropPng(input.localCapture.screenshotPath, implementationCrop, input.localCapture.bbox)
-  await writeSourceContext({
-    sourceImagePath: input.sourceImagePath,
-    sourceBox: input.sourceCandidate.bbox,
-    outputPath: sourceContext,
-  })
-  await writeBindingPuzzle({
-    outputPath: bindingPuzzle,
+  await writeModuleComparison({
+    outputPath: moduleComparison,
     title: input.regionID,
-    sourceContextPath: sourceContext,
     sourceCropPath: sourceCrop,
     implementationCropPath: implementationCrop,
     sourceCandidate: input.sourceCandidate,
@@ -308,8 +300,7 @@ export async function materializeLocalModuleBindingArtifacts(input: {
   return {
     source_crop: sourceCrop,
     implementation_crop: implementationCrop,
-    source_context: sourceContext,
-    binding_puzzle: bindingPuzzle,
+    module_comparison: moduleComparison,
   }
 }
 
@@ -666,34 +657,9 @@ async function cropPng(inputPath: string, outputPath: string, box: BrowserPrevie
   await sharp(inputPath).extract({ left, top, width, height }).png().toFile(outputPath)
 }
 
-async function writeSourceContext(input: {
-  sourceImagePath: string
-  sourceBox: BrowserPreviewRegionBox
-  outputPath: string
-}): Promise<void> {
-  const contextBox = await expandBoxInsideImage(input.sourceImagePath, input.sourceBox, 240)
-  const rel = {
-    x: input.sourceBox.x - contextBox.x,
-    y: input.sourceBox.y - contextBox.y,
-    width: input.sourceBox.width,
-    height: input.sourceBox.height,
-  }
-  const overlay = `<svg width="${contextBox.width}" height="${contextBox.height}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="${rel.x}" y="${rel.y}" width="${rel.width}" height="${rel.height}" fill="none" stroke="#dc2626" stroke-width="6"/>
-    <rect x="${rel.x}" y="${Math.max(0, rel.y - 28)}" width="360" height="28" fill="#dc2626" opacity="0.92"/>
-    <text x="${rel.x + 8}" y="${Math.max(20, rel.y - 8)}" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">selected source module bbox</text>
-  </svg>`
-  await sharp(input.sourceImagePath)
-    .extract({ left: contextBox.x, top: contextBox.y, width: contextBox.width, height: contextBox.height })
-    .composite([{ input: Buffer.from(overlay), left: 0, top: 0 }])
-    .png()
-    .toFile(input.outputPath)
-}
-
-async function writeBindingPuzzle(input: {
+async function writeModuleComparison(input: {
   outputPath: string
   title: string
-  sourceContextPath: string
   sourceCropPath: string
   implementationCropPath: string
   sourceCandidate: SourceRegionCandidate
@@ -701,31 +667,29 @@ async function writeBindingPuzzle(input: {
 }): Promise<void> {
   const maxPanelWidth = 680
   const maxPanelHeight = 560
-  const context = await resizeForPanel(input.sourceContextPath, maxPanelWidth * 2 + 20, 320)
   const source = await resizeForPanel(input.sourceCropPath, maxPanelWidth, maxPanelHeight)
   const local = await resizeForPanel(input.implementationCropPath, maxPanelWidth, maxPanelHeight)
-  const width = Math.max(context.width, source.width + local.width + 24)
+  const gap = 24
+  const width = Math.max(source.width + local.width + gap, 640)
   const headerHeight = 96
-  const contextTop = headerHeight
   const labelHeight = 38
-  const cropsTop = contextTop + context.height + labelHeight + 18
+  const cropsTop = headerHeight + labelHeight
   const height = cropsTop + Math.max(source.height, local.height) + 20
   const labels = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <rect width="100%" height="100%" fill="#f6f7f9"/>
-    <text x="16" y="30" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">${escapeXml(input.title)} local module source binding</text>
+    <text x="16" y="30" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">${escapeXml(input.title)} module source binding</text>
     <text x="16" y="56" font-family="Arial, sans-serif" font-size="14" fill="#374151">source: ${escapeXml(input.sourceCandidate.id)} (${escapeXml(input.sourceCandidate.source)}) bbox=${boxLabel(input.sourceCandidate.bbox)}</text>
     <text x="16" y="78" font-family="Arial, sans-serif" font-size="14" fill="#374151">local bbox=${boxLabel(input.localCapture.bbox)} anchors=${escapeXml(input.localCapture.textAnchors.slice(0, 5).join(" | "))}</text>
-    <text x="16" y="${contextTop + context.height + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Source crop</text>
-    <text x="${source.width + 40}" y="${contextTop + context.height + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Local implementation crop</text>
+    <text x="16" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Source crop</text>
+    <text x="${source.width + gap + 16}" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Local implementation crop</text>
   </svg>`
   await sharp({
     create: { width, height, channels: 4, background: "#f6f7f9" },
   })
     .composite([
       { input: Buffer.from(labels), left: 0, top: 0 },
-      { input: context.buffer, left: Math.floor((width - context.width) / 2), top: contextTop },
       { input: source.buffer, left: 16, top: cropsTop },
-      { input: local.buffer, left: source.width + 40, top: cropsTop },
+      { input: local.buffer, left: source.width + gap + 16, top: cropsTop },
     ])
     .png()
     .toFile(input.outputPath)
@@ -736,9 +700,12 @@ async function resizeForPanel(
   maxWidth: number,
   maxHeight: number,
 ): Promise<{ buffer: Buffer; width: number; height: number }> {
-  const buffer = await sharp(imagePath).resize({ width: maxWidth, height: maxHeight, fit: "inside" }).png().toBuffer()
+  const buffer = await sharp(imagePath)
+    .resize({ width: maxWidth, height: maxHeight, fit: "inside", withoutEnlargement: true })
+    .png()
+    .toBuffer()
   const metadata = await sharp(buffer).metadata()
-  if (!metadata.width || !metadata.height) throw new Error(`Cannot resize image for puzzle: ${imagePath}`)
+  if (!metadata.width || !metadata.height) throw new Error(`Cannot resize image for module comparison: ${imagePath}`)
   return { buffer, width: metadata.width, height: metadata.height }
 }
 

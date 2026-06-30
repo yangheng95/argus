@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { asSchema, tool } from "ai"
 import z from "zod"
@@ -22,6 +22,7 @@ import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from ".
 import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { SkillTool } from "../../src/tool/skill"
+import { MCP } from "../../src/mcp"
 
 const dummyTool = () =>
   tool({
@@ -95,6 +96,52 @@ describe("SessionLoop session runtime contract", () => {
 
     expect(SessionLoop.getSessionRuntimeContract(sessionID)?.includeMcpTools).toBe(false)
     SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
+  test("build runtime contract includes Model Context Protocol tools by default", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_mcp_default`
+        const toolsSpy = spyOn(MCP, "tools").mockResolvedValue({
+          browser_screenshot: dummyTool() as any,
+        })
+        try {
+          SessionLoop.setSessionRuntimeContract(
+            sessionID,
+            runtimeContract(sessionID, {
+              tools: { persistent: dummyTool() },
+            }),
+          )
+          const resolved = await SessionLoop.resolveTools({
+            agent: (await Agent.get("build"))!,
+            model: {
+              providerID: "test",
+              id: "test",
+              api: { id: "test", npm: "@ai-sdk/openai" },
+              capabilities: { input: {}, reasoning: false },
+            } as any,
+            session: { id: sessionID, kind: "task", permission: [] } as any,
+            processor: {
+              message: { id: "msg_test" },
+              partFromToolCall: () => undefined,
+              ensureToolPart: async () => undefined,
+            } as any,
+            bypassAgentCheck: false,
+            messages: [],
+            config: {} as any,
+          })
+
+          expect(toolsSpy).toHaveBeenCalled()
+          expect(resolved.browser_screenshot).toBeDefined()
+          expect(resolved.persistent).toBeDefined()
+        } finally {
+          SessionLoop.clearSessionRuntimeContract(sessionID)
+          toolsSpy.mockRestore()
+        }
+      },
+    })
   })
 
   test("runtime contract can request an exact worker tool surface", () => {
