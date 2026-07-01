@@ -133,11 +133,14 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents["visual-qa"]).toContain("screenshots")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("manifest/lockfile")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("rerun original checks")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("Do not satisfy source page height")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("height/min-height filler")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_compare_scroll_slices")
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
       "browser_preview_reference_regions",
     )
+    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain("Reject large blank filler bands")
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
       "browser_preview_compare_scroll_slices",
     )
@@ -245,6 +248,12 @@ describe("prompt profiles", () => {
     expect(skillText).toContain("source url/screenshot/dom evidence")
     expect(skillText).toContain("layout/style/data/interaction constraints")
     expect(skillText).toContain("rendered screenshot and interaction evidence review")
+    expect(skillText).toContain("blank filler geometry boundary")
+    expect(skillText).toContain("source page height")
+    expect(skillText).toContain("not implementation targets by themselves")
+    expect(skillText).toContain("empty spacer bands")
+    expect(skillText).toContain("blank margin/padding")
+    expect(skillText).toContain("unrendered media slots")
 
     for (const fragment of forbidden) {
       expect(profileText.includes(fragment), `frontend-replica profile contains ${fragment}`).toBe(false)
@@ -258,15 +267,24 @@ describe("prompt profiles", () => {
 
     expect(agents.coding).toContain("target project primitives, business components, and code")
     expect(agents.requirements).toContain("Component Interaction Matrix coverage")
+    expect(agents.requirements).toContain("not as blank spacer or min-height acceptance")
     expect(agents.architect).toContain("one accountable goal per meaningful component or region")
+    expect(agents.architect).toContain("empty CSS spacing")
     expect(agents["frontend-design"]).toContain("source-backed replica contract")
     expect(agents["frontend-design"]).toContain("target project reuse constraints")
+    expect(agents["frontend-design"]).toContain("source geometry together with the visible content")
     expect(agents["frontend-research"]).toContain("reference screenshots, source structure evidence, computed styles")
     expect(agents.build).toContain("one scoped component or region goal at a time")
     expect(agents.build).toContain("Reuse target project components and business code only where they preserve source parity")
+    expect(agents.build).toContain("Do not satisfy source page height")
+    expect(agents.build).toContain("restore missing source-backed content/assets/interactions")
     expect(agents["visual-qa"]).toContain("source-token ownership")
+    expect(agents["visual-qa"]).toContain("Reject large blank filler bands")
+    expect(agents["visual-qa"]).toContain("owning DOM/source module")
     expect(agents.integrity).toContain("component-per-goal request")
+    expect(agents.integrity).toContain("blank CSS space")
     expect(agents.orchestrator).toContain("component-per-goal request")
+    expect(agents.orchestrator).toContain("not to padding blank page space")
     expect(allReplicaText).not.toContain("TradingView")
     expect(allReplicaText).not.toContain("AInvest")
   })

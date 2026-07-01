@@ -35,6 +35,14 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
 - Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or unowned review prose.
 
+## Blank filler geometry boundary
+
+- Treat source page height, full-page screenshot dimensions, region y coordinates, and footer transition positions as diagnostic measurements for locating real visible source content and region boundaries. They are not implementation targets by themselves.
+- Requirements and Architect must not turn a measured y coordinate, footer boundary, or document height into acceptance that can be satisfied by empty spacer bands, blank margin/padding, `height`/`min-height` filler, phantom cards, or unrendered media slots.
+- Frontend Design must describe geometry together with the visible source sections, assets, canvas/image captures, repeated content, and footer material that occupy that region; if the source evidence is missing, mark the region as evidence debt instead of asking downstream agents to pad the page.
+- Build must not align a footer, page edge, scroll slice, or full-page height by adding blank CSS space. If the rendered page is short or a source interval is empty, restore the missing source-backed content/assets/interactions or report the concrete blocker.
+- Visual QA must reject large blank bands between completed regions, empty thumbnail/canvas/image slots, or CSS filler inserted to match source geometry as production blockers. The report should cite the source/reference slice and the owning DOM/source module that must be repaired.
+
 ## Desktop-only replica scope
 
 - Frontend replica, clone, visual parity, and source-page recreation tasks are desktop-only generation tasks by default.
