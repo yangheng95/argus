@@ -141,6 +141,7 @@ Verification already run and passed:
 - `bun test packages/opencorvus/test/engine/workflow-integrity-step.test.ts`
 - `bun test packages/opencorvus/test/visual-qa/output-tools.test.ts packages/opencorvus/test/visual-qa/negative-fixtures.test.ts packages/opencorvus/test/visual-qa/agent.test.ts packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/engine/workflow-integrity-step.test.ts`
 - `bun test packages/opencorvus/test/integrity/team-schema.test.ts packages/opencorvus/test/integrity/team-agent.test.ts packages/opencorvus/test/integrity/browser-preview-tool.test.ts packages/opencorvus/test/integrity/consensus-traceability.test.ts packages/opencorvus/test/integrity/severity-active-path.test.ts packages/opencorvus/test/orchestrator/build-feedback-context.test.ts`
+- `bun test packages/opencorvus/test/integrity/finding-traceability.test.ts`
 - `bun test packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/test/agent/integrity-prompt-repository-baseline.test.ts packages/opencorvus/test/agent/orchestrator-stale-recovery-prompt.test.ts`
 - `bun run --cwd packages/sdk/js build`
 - `bun run typecheck`

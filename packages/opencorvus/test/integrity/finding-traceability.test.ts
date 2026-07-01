@@ -172,6 +172,7 @@ describe("integrity finding traceability discipline", () => {
   test("finding schema accepts literal user request quote anchors without enforcing substring membership", () => {
     const parsed = IntegrityFindingSchema.safeParse({
       id: "maturity-missing",
+      checkIDs: ["check-maturity-scope"],
       severity: "advisory",
       verdictImpact: "concerns",
       title: "Maturity scope was not bounded",
