@@ -208,6 +208,28 @@ describe("prompt profiles", () => {
     expect(allReplicaText).not.toContain("AInvest")
   })
 
+  test("frontend replica requirements prompt carries webpage-generation coverage beyond responsive scope", () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "frontend-replica" } })
+    const prompt = PromptProfile.composeAgentPrompt({
+      agentID: "requirements",
+      base: "BASE_REQUIREMENTS",
+      config,
+    })
+
+    expect(prompt).toContain("BASE_REQUIREMENTS")
+    expect(prompt).toContain("source evidence binding")
+    expect(prompt).toContain("region completeness")
+    expect(prompt).toContain("visual style fidelity")
+    expect(prompt).toContain("interaction semantics")
+    expect(prompt).toContain("data/UI contracts")
+    expect(prompt).toContain("accessibility semantics")
+    expect(prompt).toContain("asset/media ownership")
+    expect(prompt).toContain("runtime integration")
+    expect(prompt).toContain("browser verification evidence")
+    expect(prompt).toContain("viewport-specific layout/alignment requirements")
+    expect(prompt).toContain("desktop-only")
+  })
+
   test("target catalog covers every built-in overlay target", () => {
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
     for (const profile of Object.values(PromptProfile.builtIns)) {

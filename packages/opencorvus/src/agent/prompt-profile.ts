@@ -157,7 +157,10 @@ export namespace PromptProfile {
         ),
         requirements: expertOverlay(
           "Write replica requirements as desktop observable truths: information architecture, module sequence, component states, source assets, visual acceptance, and interaction outcomes.",
+          "Register webpage-generation coverage beyond responsive behavior as explicit REQ or decision scope: source evidence binding, region completeness, visual style fidelity, interaction semantics, data/UI contracts, accessibility semantics, asset/media ownership, runtime integration, and browser verification evidence.",
           "Do not create tablet/mobile/non-desktop REQ rows from generic template, research, or handoff text; each requirement must bind to a source component, region, or state.",
+          "When responsive or multi-viewport generation is explicitly authorized, register viewport-specific layout/alignment requirements separately; otherwise keep the replica requirements desktop-only.",
+          "Each webpage-generation requirement must name the affected source component, region, or state with observable acceptance and non-goal boundaries; preserve broad coverage in scope decisions instead of hiding all concerns in one page-level payload.",
           "Require Component Interaction Matrix coverage for clickable, hoverable, focusable, sortable, filterable, chart, map, table, and popover surfaces before implementation is accepted.",
         ),
         architect: expertOverlay(
