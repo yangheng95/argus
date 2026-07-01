@@ -1,6 +1,7 @@
 # July 2026 Records
 
-- [2026-07-02-agent-team-investment-drawio.md](2026-07-02-agent-team-investment-drawio.md) records the executive Draw.io investment map for OpenCorvus as a general Agent Team infrastructure platform and use-case expansion flywheel.
+- [2026-07-02-single-agent-vs-opencorvus-clear-drawio.md](2026-07-02-single-agent-vs-opencorvus-clear-drawio.md) records the replacement clear Draw.io architecture comparison for traditional single-agent coding assistants versus OpenCorvus multi-agent orchestration.
+- [2026-07-02-agent-team-investment-drawio.md](2026-07-02-agent-team-investment-drawio.md) records the deleted/superseded executive investment Draw.io artifact.
 - [2026-07-02-compaction-part-card-projection.md](2026-07-02-compaction-part-card-projection.md) records the strict projection repair for completed compaction marker parts reaching `CardParts` as unsupported body content.
 - [2026-07-02-frontend-innovate-sloppy-review.md](2026-07-02-frontend-innovate-sloppy-review.md) records the independent-agent review of the overstated Frontend Innovate delivery, including the mocked-E2E boundary, reset violation, and required remediation before the expert squad can be treated as complete.
 - [2026-07-01-frontend-innovate-design-philosophy.md](2026-07-01-frontend-innovate-design-philosophy.md) records the external design research, Claude Code frontend-design plugin reference, prompt/skill replacement plan, and existing-URL redesign benchmark for the Frontend Innovate expert squad.

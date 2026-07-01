@@ -1,6 +1,6 @@
 # 2026-07-02 Agent Team Investment Draw.io
 
-Status: implemented
+Status: deleted / superseded
 
 ## Goal
 
@@ -132,6 +132,12 @@ first visual layer.
   brittle English wrapping, keep the core node readable, keep the right-side
   use-case list inside its panel, and make the expert-squad matrix dense but
   legible.
+- Later on 2026-07-02, the user rejected the "投资潜力图" direction and asked to
+  delete it. The artifact
+  `specs/artifacts/opencorvus-agent-team-investment-platform.drawio` was
+  removed and superseded by the clearer single-agent versus OpenCorvus
+  architecture comparison recorded in
+  `2026-07-02-single-agent-vs-opencorvus-clear-drawio.md`.
 
 ## Verification
 
