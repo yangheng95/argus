@@ -101,6 +101,8 @@ import type {
   ExperimentalWorkspaceRemoveResponses,
   ExportSessionErrors,
   ExportSessionResponses,
+  FileCopyErrors,
+  FileCopyResponses,
   FileCreateErrors,
   FileCreateResponses,
   FileDeleteErrors,
@@ -8766,6 +8768,43 @@ export class File extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<FileCreateResponses, FileCreateErrors, ThrowOnError>({
       url: "/file/item",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Copy file item
+   *
+   * Copy one file or directory within the project directory without overwriting.
+   */
+  public copy<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      path: string
+      newPath: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "newPath" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<FileCopyResponses, FileCopyErrors, ThrowOnError>({
+      url: "/file/item/copy",
       ...options,
       ...params,
       headers: {

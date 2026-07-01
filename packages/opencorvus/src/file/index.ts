@@ -108,12 +108,25 @@ export namespace File {
   })
   export type MoveRequest = z.infer<typeof MoveRequest>
 
+  export const CopyRequest = z.object({
+    path: z.string(),
+    newPath: z.string(),
+  })
+  export type CopyRequest = z.infer<typeof CopyRequest>
+
   export const MoveResult = z.object({
     previousPath: z.string(),
     path: z.string(),
     node: Node,
   })
   export type MoveResult = z.infer<typeof MoveResult>
+
+  export const CopyResult = z.object({
+    sourcePath: z.string(),
+    path: z.string(),
+    node: Node,
+  })
+  export type CopyResult = z.infer<typeof CopyResult>
 
   export const DeleteResult = z.object({
     path: z.string(),
@@ -925,6 +938,36 @@ export namespace File {
     }
   }
 
+  async function assertCopySymlinkTargetsAllowed(input: { file: string; fullPath: string }): Promise<void> {
+    const pending = [{ file: input.file, fullPath: input.fullPath }]
+    for (let index = 0; index < pending.length; index++) {
+      const current = pending[index]!
+      const stat = await fs.promises.lstat(current.fullPath).catch((error) => {
+        if (isMissingPathError(error)) throw fileNotFound({ path: current.file })
+        throw error
+      })
+      if (stat.isSymbolicLink()) {
+        const target = await realpathIfExists(current.fullPath)
+        if (!target) {
+          throw fileInvalidPath({ path: current.file, message: `Cannot copy broken symlink: ${current.file}` })
+        }
+        if (!(await isPathAllowed(target))) {
+          throw fileInvalidPath({
+            path: current.file,
+            message: `Cannot copy symlink target outside the project directory: ${current.file}`,
+          })
+        }
+        continue
+      }
+      if (!stat.isDirectory()) continue
+      const entries = await fs.promises.readdir(current.fullPath, { withFileTypes: true })
+      for (const entry of entries) {
+        const childFile = path.join(current.file, entry.name)
+        pending.push({ file: childFile, fullPath: path.join(current.fullPath, entry.name) })
+      }
+    }
+  }
+
   async function isIgnored(relativePath: string, directory: boolean): Promise<boolean> {
     if (!Project.isGitRepo(Instance.directory)) return false
     const ig = ignore()
@@ -1006,6 +1049,58 @@ export namespace File {
     await Bus.publish(Event.Edited, { file: target })
     return {
       previousPath: source,
+      path: target,
+      node: await nodeForPath(targetFull),
+    }
+  }
+
+  export async function copy(input: CopyRequest): Promise<CopyResult> {
+    using _ = log.time("copy", { path: input.path, newPath: input.newPath })
+    const source = input.path
+    const target = input.newPath
+    if (!source.trim()) {
+      throw fileInvalidPath({ path: source, message: "Cannot copy the project root from the file browser" })
+    }
+    const sourceFull = path.join(Instance.directory, source)
+    const targetFull = path.join(Instance.directory, target)
+    basenameForEntry(target)
+    await assertAllowedFilePath({ file: source, fullPath: sourceFull })
+    await assertAllowedFilePath({ file: target, fullPath: targetFull })
+    await assertExistingParent({ file: target, fullPath: targetFull })
+
+    const sourceStat = await fs.promises.stat(sourceFull).catch(() => undefined)
+    if (!sourceStat) throw fileNotFound({ path: source })
+    if (sourceStat.isDirectory()) {
+      const [sourceCanonical, targetCanonical] = await Promise.all([canonicalPath(sourceFull), canonicalPath(targetFull)])
+      if (isWithin(sourceCanonical, targetCanonical)) {
+        throw fileInvalidPath({
+          path: target,
+          message: `Cannot copy a directory into itself: ${target}`,
+        })
+      }
+    }
+    if (await Filesystem.exists(targetFull)) {
+      throw fileConflict({ path: target })
+    }
+    await assertCopySymlinkTargetsAllowed({ file: source, fullPath: sourceFull })
+
+    try {
+      await fs.promises.cp(sourceFull, targetFull, {
+        recursive: sourceStat.isDirectory(),
+        errorOnExist: true,
+        force: false,
+        dereference: false,
+      })
+    } catch (error) {
+      if (error && typeof error === "object" && (error as { code?: string }).code === "EEXIST") {
+        throw fileConflict({ path: target })
+      }
+      throw error
+    }
+    await Bus.publish(Event.Edited, { file: source })
+    await Bus.publish(Event.Edited, { file: target })
+    return {
+      sourcePath: source,
       path: target,
       node: await nodeForPath(targetFull),
     }

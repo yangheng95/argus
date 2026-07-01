@@ -152,15 +152,18 @@ describe("SDK build format contract", () => {
   test("file item OpenAPI and SDK expose route error contracts", () => {
     const openapi = JSON.parse(readRepo("packages/sdk/openapi.json"))
     const item = openapi.paths["/file/item"]
+    const copyItem = openapi.paths["/file/item/copy"]
     const upload = openapi.paths["/file/upload"]
 
     expect(Object.keys(item.post.responses).sort()).toEqual(["200", "400", "404", "409"])
+    expect(Object.keys(copyItem.post.responses).sort()).toEqual(["200", "400", "404", "409"])
     expect(Object.keys(item.patch.responses).sort()).toEqual(["200", "400", "404", "409"])
     expect(Object.keys(item.delete.responses).sort()).toEqual(["200", "400", "404"])
     expect(Object.keys(upload.post.responses).sort()).toEqual(["200", "400", "409"])
 
     const types = readRepo("packages/sdk/js/src/gen/types.gen.ts")
     expect(types).toContain("export type FileCreateErrors")
+    expect(types).toContain("export type FileCopyErrors")
     expect(types).toContain("export type FileMoveErrors")
     expect(types).toContain("export type FileDeleteErrors")
     expect(types).toContain("export type FileUploadErrors")
@@ -338,6 +341,7 @@ describe("SDK build format contract", () => {
     const requiredBodyMethods = [
       { methodName: "write", url: "/file/content", httpCall: "patch" },
       { methodName: "create", url: "/file/item", httpCall: "post" },
+      { methodName: "copy", url: "/file/item/copy", httpCall: "post" },
       { methodName: "move", url: "/file/item", httpCall: "patch" },
       { methodName: "promptAsync", url: "/session/{sessionID}/prompt_async", httpCall: "post" },
       { methodName: "reorder", url: "/task-queue/reorder", httpCall: "patch" },

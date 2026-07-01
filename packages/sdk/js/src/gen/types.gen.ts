@@ -17842,6 +17842,81 @@ export type FileCreateResponses = {
 
 export type FileCreateResponse = FileCreateResponses[keyof FileCreateResponses]
 
+export type FileCopyData = {
+  body: {
+    path: string
+    newPath: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/item/copy"
+}
+
+export type FileCopyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "AgentSessionPendingCoordinationError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type FileCopyError = FileCopyErrors[keyof FileCopyErrors]
+
+export type FileCopyResponses = {
+  /**
+   * Copied file node
+   */
+  200: {
+    sourcePath: string
+    path: string
+    node: FileNode
+  }
+}
+
+export type FileCopyResponse = FileCopyResponses[keyof FileCopyResponses]
+
 export type FileUploadData = {
   body: {
     targetDir: string

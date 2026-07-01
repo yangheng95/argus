@@ -43,6 +43,12 @@ export interface FileMoveResult {
   node: FileNode
 }
 
+export interface FileCopyResult {
+  sourcePath: string
+  path: string
+  node: FileNode
+}
+
 export interface FileDeleteResult {
   path: string
 }
@@ -174,6 +180,14 @@ export async function moveFileItem(path: string, newPath: string, scope: FileOpe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, newPath }),
   })) as FileMoveResult
+}
+
+export async function copyFileItem(path: string, newPath: string, scope: FileOperationScope): Promise<FileCopyResult> {
+  return (await apiJson(projectScopedPath("file/item/copy", scope.directory), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, newPath }),
+  })) as FileCopyResult
 }
 
 export async function deleteFileItem(path: string, scope: FileOperationScope): Promise<FileDeleteResult> {

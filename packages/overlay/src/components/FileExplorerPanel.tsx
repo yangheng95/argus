@@ -16,6 +16,7 @@ import { apiJson } from "../services/api"
 import { showAppDialog } from "../services/app-dialog"
 import {
   closeFileEditorIfDeleted,
+  copyFileItem,
   createFileItem,
   deleteFileItem,
   moveFileItem,
@@ -23,6 +24,7 @@ import {
   selectedFileTarget,
   updateOpenFilePathAfterMove,
   uploadDroppedFiles,
+  type FileCopyResult,
   type FileMoveResult,
   type FileNode,
   type FileOperationScope,
@@ -56,7 +58,7 @@ type ExplorerSelection = {
   type: "file" | "directory"
 }
 
-type FileMutationKind = "create-file" | "create-directory" | "rename" | "move" | "delete" | "refresh" | ""
+type FileMutationKind = "create-file" | "create-directory" | "rename" | "copy" | "move" | "delete" | "refresh" | ""
 type FileMutationOperation = {
   token: number
   kind: FileMutationKind
@@ -114,6 +116,15 @@ function parentPath(path: string): string {
 function fileName(path: string): string {
   const parts = normalizeExplorerPath(path).split("/").filter(Boolean)
   return parts.at(-1) || path
+}
+
+function copyNameSuggestion(path: string): string {
+  const name = fileName(path)
+  const extensionStart = name.lastIndexOf(".")
+  if (extensionStart > 0 && extensionStart < name.length - 1) {
+    return `${name.slice(0, extensionStart)}-copy${name.slice(extensionStart)}`
+  }
+  return `${name}-copy`
 }
 
 function dirname(path: string): string {
@@ -560,7 +571,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     setDropStatus("move")
   }
 
-  function canMoveSelectionsToDirectory(items: ExplorerSelection[], targetDirInput: string): boolean {
+  function canPlaceSelectionsInDirectory(items: ExplorerSelection[], targetDirInput: string): boolean {
     const targetDir = normalizeExplorerPath(targetDirInput)
     return !topLevelActionSelections(items).some(
       (item) => item.type === "directory" && (targetDir === item.path || isPathOrDescendant(targetDir, item.path)),
@@ -571,7 +582,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     if (dragHasFiles(event)) return "upload"
     const items = draggedItems()
     if (items.length === 0 && !Array.from(event.dataTransfer?.types ?? []).includes(EXPLORER_SELECTION_MIME)) return null
-    return canMoveSelectionsToDirectory(items, targetDir) ? "move" : "invalid"
+    return canPlaceSelectionsInDirectory(items, targetDir) ? "move" : "invalid"
   }
 
   function beginExplorerRowDrag(event: DragEvent, item: ExplorerSelection): void {
@@ -611,7 +622,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     }
     const targetDir = normalizeExplorerPath(targetDirInput)
     const targets = topLevelActionSelections(items)
-    if (!canMoveSelectionsToDirectory(targets, targetDir)) {
+    if (!canPlaceSelectionsInDirectory(targets, targetDir)) {
       setMutationError(t("explorer.drop_move_invalid"))
       return
     }
@@ -776,6 +787,34 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     setMutationSuccess(message)
   }
 
+  async function applyCopyResults(results: FileCopyResult[], message: string, scope: FileOperationScope): Promise<void> {
+    if (!ownsExplorerOperation(scope)) return
+    const refreshTargets: string[] = []
+    const cacheTargets: string[] = []
+    const nextSelection = new Map<string, ExplorerSelection>()
+    const expandedParents = new Set<string>()
+    for (const result of results) {
+      const normalizedSource = normalizeExplorerPath(result.sourcePath)
+      const normalizedNext = normalizeExplorerPath(result.path)
+      const sourceParent = parentPath(normalizedSource)
+      const nextParent = parentPath(normalizedNext)
+      refreshTargets.push(sourceParent, nextParent)
+      cacheTargets.push(sourceParent, nextParent, normalizedNext)
+      expandedParents.add(nextParent)
+      const selection = selectionFromNode(result.node)
+      nextSelection.set(selection.path, selection)
+    }
+    setExpandedPaths((prev) => new Set([...prev, ...expandedParents]))
+    clearDirectoryCaches(cacheTargets)
+    setSelectedItems(nextSelection)
+    setSelectionAnchorPath(results.at(-1)?.path ?? "")
+    await refreshDirectories(refreshTargets)
+    if (!ownsExplorerOperation(scope)) return
+    await refreshActiveSearchResults()
+    if (!ownsExplorerOperation(scope)) return
+    setMutationSuccess(message)
+  }
+
   async function createEntry(type: "file" | "directory", targetDirInput?: string): Promise<void> {
     const scope = currentOperationScope()
     if (!scope) {
@@ -924,6 +963,107 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
       return
     }
     await moveSelectionsToDirectory(items, targetDir)
+  }
+
+  async function copySelectionsToDirectory(items: ExplorerSelection[], targetDirInput: string): Promise<void> {
+    if (items.length === 0) {
+      setMutationError(t("explorer.select_required"))
+      return
+    }
+    const scope = currentOperationScope()
+    if (!scope) {
+      setMutationError("Project directory is required")
+      return
+    }
+    const targetDir = normalizeExplorerPath(targetDirInput)
+    const targets = topLevelActionSelections(items)
+    if (!canPlaceSelectionsInDirectory(targets, targetDir)) {
+      setMutationError(t("explorer.copy_invalid"))
+      return
+    }
+    await runMutation("copy", scope, async () => {
+      const copied: FileCopyResult[] = []
+      for (const item of targets) {
+        const nextPath = joinExplorerPath(targetDir, item.name)
+        copied.push(await copyFileItem(item.path, nextPath, scope))
+      }
+      const message =
+        copied.length === 1
+          ? t("explorer.copy_success", { path: copied[0]?.path ?? "" })
+          : t("explorer.copy_many_success", { count: copied.length, target: targetDir || "." })
+      await applyCopyResults(copied, message, scope)
+    })
+  }
+
+  async function copyItem(item: ExplorerSelection | null): Promise<void> {
+    if (!item) {
+      setMutationError(t("explorer.select_required"))
+      return
+    }
+    const scope = currentOperationScope()
+    if (!scope) {
+      setMutationError("Project directory is required")
+      return
+    }
+    const result = await showAppDialog({
+      kind: "file-copy",
+      title: t("explorer.copy"),
+      message: t("explorer.copy_message", { path: item.path }),
+      input: true,
+      inputLabel: t("explorer.destination_path"),
+      inputValue: joinExplorerPath(parentPath(item.path), copyNameSuggestion(item.path)),
+      okLabel: t("explorer.copy"),
+      cancel: true,
+    })
+    if (!result.confirmed) return
+    if (!ownsExplorerOperation(scope)) return
+    const nextPath = normalizeExplorerPath(String(result.value || "").trim())
+    if (!nextPath) {
+      setMutationError(t("explorer.name_required"))
+      return
+    }
+    if (item.type === "directory" && (nextPath === item.path || isPathOrDescendant(nextPath, item.path))) {
+      setMutationError(t("explorer.copy_invalid"))
+      return
+    }
+    await runMutation("copy", scope, async () => {
+      const result = await copyFileItem(item.path, nextPath, scope)
+      await applyCopyResults([result], t("explorer.copy_success", { path: result.path }), scope)
+    })
+  }
+
+  async function copyItems(items: ExplorerSelection[]): Promise<void> {
+    if (items.length === 0) {
+      setMutationError(t("explorer.select_required"))
+      return
+    }
+    if (items.length === 1) {
+      await copyItem(items[0] ?? null)
+      return
+    }
+    const scope = currentOperationScope()
+    if (!scope) {
+      setMutationError("Project directory is required")
+      return
+    }
+    const result = await showAppDialog({
+      kind: "file-copy-many",
+      title: t("explorer.copy"),
+      message: t("explorer.copy_many_message", { count: items.length }),
+      input: true,
+      inputLabel: t("explorer.destination_directory"),
+      inputPlaceholder: "src",
+      okLabel: t("explorer.copy"),
+      cancel: true,
+    })
+    if (!result.confirmed) return
+    if (!ownsExplorerOperation(scope)) return
+    const targetDir = normalizeExplorerPath(String(result.value || "").trim())
+    if (!targetDir) {
+      setMutationError(t("explorer.name_required"))
+      return
+    }
+    await copySelectionsToDirectory(items, targetDir)
   }
 
   async function deleteItems(items: ExplorerSelection[], capturedScope?: FileOperationScope): Promise<void> {
@@ -1125,6 +1265,13 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
             detail={targetDetail()}
             disabled={hasMultipleTargets() || commandBusy()}
             onSelect={() => void renameItem(targets()[0] ?? null)}
+          />
+          <FileExplorerContextMenuItem
+            dataUi="file-explorer-context-copy"
+            label={t("explorer.copy")}
+            detail={targetDetail()}
+            disabled={commandBusy()}
+            onSelect={() => void copyItems(targets())}
           />
           <FileExplorerContextMenuItem
             dataUi="file-explorer-context-move"

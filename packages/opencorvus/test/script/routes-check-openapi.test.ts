@@ -136,7 +136,11 @@ describe("api routes check OpenAPI drift", () => {
     expect(generateScript).toContain('import { GENERATED_ARTIFACT_PATHS } from "./generated-artifacts"')
     expect(generateScript).toContain("bun ./packages/sdk/js/script/build.ts")
     expect(generateScript).toContain("bun ./packages/opencorvus/script/docs/render-api-md.ts")
-    expect(generateScript).toContain('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write", ...GENERATED_ARTIFACT_PATHS]')
+    expect(generateScript).toContain("API_MDX_ARTIFACT_PATHS")
+    expect(generateScript).toContain("prettierArtifactPaths")
+    expect(generateScript).toContain(
+      'Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write", ...prettierArtifactPaths]',
+    )
     expect(generateScript.indexOf("bun ./packages/opencorvus/script/docs/render-api-md.ts")).toBeLessThan(
       generateScript.indexOf('Bun.spawn(["bun", "run", "prettier", "--ignore-unknown", "--write"'),
     )

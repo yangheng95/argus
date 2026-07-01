@@ -531,6 +531,8 @@ describe("document health audit regressions", () => {
     const generatedArtifacts = read("script/generated-artifacts.ts")
 
     expect(generate).toContain("GENERATED_ARTIFACT_PATHS")
+    expect(generate).toContain("API_MDX_ARTIFACT_PATHS")
+    expect(generate).toContain("prettierArtifactPaths")
     expect(generatedArtifacts).toContain("packages/sdk/openapi.json")
     expect(generatedArtifacts).toContain("packages/web/src/content/docs/zh-cn/reference/api.mdx")
     expect(generate).not.toContain("bun ./script/format.ts")

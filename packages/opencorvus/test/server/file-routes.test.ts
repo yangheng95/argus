@@ -223,7 +223,7 @@ describe("file routes", () => {
     })
   })
 
-  test("POST/PATCH/DELETE /file/item creates, moves, and deletes project file entries", async () => {
+  test("POST/PATCH/DELETE /file/item and POST /file/item/copy mutate project file entries", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
 
@@ -276,6 +276,28 @@ describe("file routes", () => {
         await expect(fs.stat(path.join(tmp.path, "notes.md"))).rejects.toThrow()
         expect(await fs.readFile(path.join(tmp.path, "docs", "renamed.md"), "utf-8")).toBe("route create")
 
+        const copyResponse = await app.request("/file/item/copy", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            path: path.join("docs", "renamed.md"),
+            newPath: path.join("docs", "renamed-copy.md"),
+          }),
+        })
+
+        expect(copyResponse.status).toBe(200)
+        await expect(copyResponse.json()).resolves.toMatchObject({
+          sourcePath: path.join("docs", "renamed.md"),
+          path: path.join("docs", "renamed-copy.md"),
+          node: {
+            name: "renamed-copy.md",
+            path: path.join("docs", "renamed-copy.md"),
+            type: "file",
+          },
+        })
+        expect(await fs.readFile(path.join(tmp.path, "docs", "renamed.md"), "utf-8")).toBe("route create")
+        expect(await fs.readFile(path.join(tmp.path, "docs", "renamed-copy.md"), "utf-8")).toBe("route create")
+
         const deleteResponse = await app.request(`/file/item?${new URLSearchParams({ path: "docs" })}`, {
           method: "DELETE",
           headers: {
@@ -325,6 +347,31 @@ describe("file routes", () => {
           expect(
             await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents", "config.md"), "utf-8"),
           ).toBe("agent config")
+
+          const copyResponse = await Server.App().request("/file/item/copy", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-opencorvus-directory": alias,
+            },
+            body: JSON.stringify({
+              path: path.join(".nova-vibecoding-template", ".agents"),
+              newPath: path.join(".nova-vibecoding-template", ".agents-copy"),
+            }),
+          })
+
+          expect(copyResponse.status).toBe(200)
+          await expect(copyResponse.json()).resolves.toMatchObject({
+            sourcePath: path.join(".nova-vibecoding-template", ".agents"),
+            path: path.join(".nova-vibecoding-template", ".agents-copy"),
+            node: {
+              name: ".agents-copy",
+              type: "directory",
+            },
+          })
+          expect(
+            await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents-copy", "config.md"), "utf-8"),
+          ).toBe("agent config")
         },
       })
     } finally {
@@ -334,6 +381,56 @@ describe("file routes", () => {
       })
       await fs.rm(alias, { recursive: true, force: true })
     }
+  })
+
+  test("POST /file/item/copy returns named errors for invalid, missing, and conflicting destinations", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, "source.md"), "source", "utf-8")
+    await fs.writeFile(path.join(tmp.path, "existing.md"), "existing", "utf-8")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const headers = {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        }
+        const invalid = await app.request("/file/item/copy", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            path: "",
+            newPath: "root-copy",
+          }),
+        })
+        const missing = await app.request("/file/item/copy", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            path: "missing.md",
+            newPath: "missing-copy.md",
+          }),
+        })
+        const conflict = await app.request("/file/item/copy", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            path: "source.md",
+            newPath: "existing.md",
+          }),
+        })
+
+        expect(invalid.status).toBe(400)
+        await expect(invalid.json()).resolves.toMatchObject({ name: "FileInvalidPathError" })
+        expect(missing.status).toBe(404)
+        await expect(missing.json()).resolves.toMatchObject({ name: "FileNotFoundError" })
+        expect(conflict.status).toBe(409)
+        await expect(conflict.json()).resolves.toMatchObject({ name: "FileConflictError" })
+        expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("source")
+        expect(await fs.readFile(path.join(tmp.path, "existing.md"), "utf-8")).toBe("existing")
+      },
+    })
   })
 
   test("POST /file/item returns named 400 errors for invalid project paths", async () => {

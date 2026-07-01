@@ -57,6 +57,7 @@ test("file explorer current file and directory expansion are exposed on the row 
 
   const requestLog: string[] = []
   const uploadBodies: Array<{ targetDir: string; files: Array<{ name: string; contentBase64: string }> }> = []
+  const copyBodies: Array<{ path: string; newPath: string }> = []
   const moveBodies: Array<{ path: string; newPath: string }> = []
   type FixtureFileNode = {
     name: string
@@ -96,7 +97,10 @@ test("file explorer current file and directory expansion are exposed on the row 
     ["README.md", fixtureFile("README.md")],
     ["src/main.tsx", fixtureFile("src/main.tsx")],
   ])
-  const fixtureDirectories = new Map<string, FixtureFileNode>([["src", fixtureDirectory("src")]])
+  const fixtureDirectories = new Map<string, FixtureFileNode>([
+    ["src", fixtureDirectory("src")],
+    ["src/copies", fixtureDirectory("src/copies")],
+  ])
   const fixtureContents = new Map<string, string>([
     ["README.md", "# README\n"],
     ["src/main.tsx", "export const file = true;\n"],
@@ -155,6 +159,36 @@ test("file explorer current file and directory expansion are exposed on the row 
       }
     }
     return movedDirectory
+  }
+  const copyFixtureNode = (from: string, to: string): FixtureFileNode => {
+    const sourcePath = normalizeFixturePath(from)
+    const targetPath = normalizeFixturePath(to)
+    const file = fixtureFiles.get(sourcePath)
+    if (file) {
+      const copied = addFixtureFile(targetPath, fixtureContents.get(sourcePath) ?? "")
+      return copied
+    }
+    const directory = fixtureDirectories.get(sourcePath)
+    if (!directory) throw new Error(`Missing fixture entry: ${sourcePath}`)
+    const copiedDirectory = addFixtureDirectory(targetPath)
+    for (const path of [...fixtureDirectories.keys()]) {
+      if (path !== sourcePath && path.startsWith(`${sourcePath}/`)) {
+        addFixtureDirectory(`${targetPath}/${path.slice(sourcePath.length).replace(/^\/+/, "")}`)
+      }
+    }
+    for (const [path, node] of [...fixtureFiles.entries()]) {
+      if (path.startsWith(`${sourcePath}/`)) {
+        const nextPath = `${targetPath}/${path.slice(sourcePath.length).replace(/^\/+/, "")}`
+        fixtureFiles.set(nextPath, {
+          ...node,
+          name: fixtureName(nextPath),
+          path: nextPath,
+          absolute: fixtureAbsolute(nextPath),
+        })
+        fixtureContents.set(nextPath, fixtureContents.get(path) ?? "")
+      }
+    }
+    return copiedDirectory
   }
   const deleteFixtureNode = (value: string): void => {
     const targetPath = normalizeFixturePath(value)
@@ -248,6 +282,12 @@ test("file explorer current file and directory expansion are exposed on the row 
       moveBodies.push(body)
       const moved = moveFixtureNode(body.path, body.newPath)
       return send({ previousPath: normalizeFixturePath(body.path), path: moved.path, node: moved })
+    }
+    if (path === "/file/item/copy" && req.method === "POST") {
+      const body = (await req.json()) as { path: string; newPath: string }
+      copyBodies.push(body)
+      const copied = copyFixtureNode(body.path, body.newPath)
+      return send({ sourcePath: normalizeFixturePath(body.path), path: copied.path, node: copied })
     }
     if (path === "/file/item" && req.method === "DELETE") {
       const deletedPath = normalizeFixturePath(url.searchParams.get("path") ?? "")
@@ -723,7 +763,7 @@ test("file explorer current file and directory expansion are exposed on the row 
         hasNewFolder: Boolean(menu?.querySelector('[data-ui="file-explorer-context-new-folder"]')),
         hasRefresh: Boolean(menu?.querySelector('[data-ui="file-explorer-context-refresh"]')),
         toolbarButtons: document.querySelectorAll(
-          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
+          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-copy"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
         ).length,
       }
     })
@@ -748,6 +788,7 @@ test("file explorer current file and directory expansion are exposed on the row 
       return {
         menuItems: menu?.querySelectorAll(".file-explorer-menu-item").length ?? 0,
         separatorCount: menu?.querySelectorAll(".file-explorer-menu-separator").length ?? 0,
+        hasCopy: Boolean(menu?.querySelector('[data-ui="file-explorer-context-copy"]')),
         deleteTone: menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-delete"]')?.dataset.tone ?? "",
         srcSelected:
           document.querySelector<HTMLElement>('.file-explorer-row[title="src"]')?.dataset.selected ?? "",
@@ -755,13 +796,14 @@ test("file explorer current file and directory expansion are exposed on the row 
           document.querySelector<HTMLElement>('.file-explorer-row[title="README.md"]')?.dataset.selected ?? "",
         localToolbarRoles: document.querySelectorAll('#centerWorkbenchExplorer [role="toolbar"]').length,
         toolbarButtons: document.querySelectorAll(
-          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
+          '#centerWorkbenchExplorer [data-ui="file-explorer-new-menu"], #centerWorkbenchExplorer [data-ui="file-explorer-refresh"], #centerWorkbenchExplorer [data-ui="file-explorer-rename"], #centerWorkbenchExplorer [data-ui="file-explorer-copy"], #centerWorkbenchExplorer [data-ui="file-explorer-move"], #centerWorkbenchExplorer [data-ui="file-explorer-delete"]',
         ).length,
       }
     })
     assert.deepEqual(contextMenuState, {
-      menuItems: 7,
+      menuItems: 8,
       separatorCount: 1,
+      hasCopy: true,
       deleteTone: "danger",
       srcSelected: "true",
       readmeSelected: "false",
@@ -802,6 +844,32 @@ test("file explorer current file and directory expansion are exposed on the row 
     await page.click("#btnAppDialogOk")
     await page.waitForSelector('.file-explorer-row[title="src/browser-renamed.txt"]', { visible: true })
     assert.equal(await page.$('.file-explorer-row[title="src/browser-created.txt"]'), null)
+
+    await openContextMenuOnRow('.file-explorer-row[title="src/browser-renamed.txt"]')
+    await clickContextMenuItem("file-explorer-context-copy")
+    await page.waitForSelector("#appDialogInput", { visible: true })
+    const copyDialogScreenshotPath = resolve(".scratch/file-explorer-copy-dialog.png")
+    mkdirSync(dirname(copyDialogScreenshotPath), { recursive: true })
+    const copyDialogElement = await page.$("#appDialog")
+    assert.ok(copyDialogElement)
+    writeFileSync(copyDialogScreenshotPath, await copyDialogElement.screenshot({}))
+    assert.equal(
+      await page.$eval("#appDialogInput", (node) => (node as HTMLInputElement).value),
+      "src/browser-renamed-copy.txt",
+    )
+    await page.click("#btnAppDialogOk")
+    await page.waitForSelector('.file-explorer-row[title="src/browser-renamed-copy.txt"]', { visible: true })
+    await page.waitForSelector('.file-explorer-row[title="src/browser-renamed.txt"]', { visible: true })
+    assert.ok(
+      requestLog.some(
+        (entry) =>
+          entry.startsWith("POST /file/item/copy?") &&
+          entry.includes("directory=D%3A%2Foverlay%2Fworkspace%2Fapp"),
+      ),
+    )
+    assert.ok(
+      copyBodies.some((body) => body.path === "src/browser-renamed.txt" && body.newPath === "src/browser-renamed-copy.txt"),
+    )
 
     await openContextMenuOnRow('.file-explorer-row[title="src/browser-renamed.txt"]')
     await clickContextMenuItem("file-explorer-context-move")
@@ -856,6 +924,9 @@ test("file explorer current file and directory expansion are exposed on the row 
         moveDetail:
           menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-move"] .file-explorer-menu-item-detail')
             ?.textContent ?? "",
+        copyDetail:
+          menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-copy"] .file-explorer-menu-item-detail')
+            ?.textContent ?? "",
         renameDisabled:
           menu?.querySelector<HTMLButtonElement>('[data-ui="file-explorer-context-rename"]')?.disabled ||
           menu?.querySelector<HTMLElement>('[data-ui="file-explorer-context-rename"]')?.hasAttribute("data-disabled") ||
@@ -863,11 +934,38 @@ test("file explorer current file and directory expansion are exposed on the row 
       }
     })
     assert.deepEqual(multiContextState.selectedRows.sort(), ["src/README.md", "src/moved-from-src.txt"])
+    assert.equal(multiContextState.copyDetail, "2 selected")
     assert.equal(multiContextState.moveDetail, "2 selected")
     assert.equal(multiContextState.renameDisabled, true)
     const multiContextMenuScreenshotPath = resolve(".scratch/file-explorer-context-menu-multiselect.png")
     mkdirSync(dirname(multiContextMenuScreenshotPath), { recursive: true })
     writeFileSync(multiContextMenuScreenshotPath, await page.screenshot({ fullPage: false }))
+    await clickContextMenuItem("file-explorer-context-copy")
+    await page.waitForSelector("#appDialogInput", { visible: true })
+    const copyManyDialogScreenshotPath = resolve(".scratch/file-explorer-copy-many-dialog.png")
+    mkdirSync(dirname(copyManyDialogScreenshotPath), { recursive: true })
+    const copyManyDialogElement = await page.$("#appDialog")
+    assert.ok(copyManyDialogElement)
+    writeFileSync(copyManyDialogScreenshotPath, await copyManyDialogElement.screenshot({}))
+    await page.$eval("#appDialogInput", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "src/copies"
+      input.dispatchEvent(
+        new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: input.value }),
+      )
+    })
+    await page.click("#btnAppDialogOk")
+    await page.waitForSelector('.file-explorer-row[title="src/copies/moved-from-src.txt"]', { visible: true })
+    await page.waitForSelector('.file-explorer-row[title="src/copies/README.md"]', { visible: true })
+    assert.ok(
+      copyBodies.some((body) => body.path === "src/moved-from-src.txt" && body.newPath === "src/copies/moved-from-src.txt"),
+    )
+    assert.ok(copyBodies.some((body) => body.path === "src/README.md" && body.newPath === "src/copies/README.md"))
+
+    await page.click('.file-explorer-row[title="src/moved-from-src.txt"]')
+    await page.click('.file-explorer-row[title="src/README.md"]', { modifiers: ["Control"] })
+    await openContextMenuOnRow('.file-explorer-row[title="src/moved-from-src.txt"]')
+    await page.waitForSelector('.file-explorer-context-menu [data-ui="file-explorer-context-delete"]', { visible: true })
     await clickContextMenuItem("file-explorer-context-delete")
     await page.waitForSelector("#appDialog", { visible: true })
     await page.click("#btnAppDialogOk")

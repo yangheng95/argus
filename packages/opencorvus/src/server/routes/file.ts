@@ -230,6 +230,31 @@ export const FileRoutes = lazy(() =>
         return c.json(node)
       },
     )
+    .post(
+      "/file/item/copy",
+      describeRoute({
+        summary: "Copy file item",
+        description: "Copy one file or directory within the project directory without overwriting.",
+        operationId: "file.copy",
+        responses: {
+          200: {
+            description: "Copied file node",
+            content: {
+              "application/json": {
+                schema: resolver(File.CopyResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", File.CopyRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.copy(input)
+        return c.json(result)
+      },
+    )
     .patch(
       "/file/item",
       describeRoute({

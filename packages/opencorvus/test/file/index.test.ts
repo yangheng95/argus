@@ -177,7 +177,7 @@ describe("file/index Filesystem patterns", () => {
     })
   })
 
-  describe("File.create(), File.move(), and File.remove()", () => {
+  describe("File.create(), File.move(), File.copy(), and File.remove()", () => {
     test("creates one file and one directory under existing parents", async () => {
       await using tmp = await tmpdir()
       await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
@@ -278,6 +278,75 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("copies files and directories recursively without removing sources", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "docs", "nested"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, "source.md"), "file content", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "docs", "nested", "draft.md"), "directory content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const fileCopy = await File.copy({
+            path: "source.md",
+            newPath: path.join("docs", "source-copy.md"),
+          })
+          const directoryCopy = await File.copy({
+            path: "docs",
+            newPath: "docs-copy",
+          })
+
+          expect(fileCopy).toMatchObject({
+            sourcePath: "source.md",
+            path: path.join("docs", "source-copy.md"),
+            node: {
+              name: "source-copy.md",
+              path: path.join("docs", "source-copy.md"),
+              type: "file",
+            },
+          })
+          expect(directoryCopy).toMatchObject({
+            sourcePath: "docs",
+            path: "docs-copy",
+            node: {
+              name: "docs-copy",
+              path: "docs-copy",
+              type: "directory",
+            },
+          })
+          expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("file content")
+          expect(await fs.readFile(path.join(tmp.path, "docs", "source-copy.md"), "utf-8")).toBe("file content")
+          expect(await fs.readFile(path.join(tmp.path, "docs", "nested", "draft.md"), "utf-8")).toBe(
+            "directory content",
+          )
+          expect(await fs.readFile(path.join(tmp.path, "docs-copy", "nested", "draft.md"), "utf-8")).toBe(
+            "directory content",
+          )
+        },
+      })
+    })
+
+    test("rejects copy conflicts and missing parents without overwriting or creating parents", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "source.md"), "source", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "existing.md"), "existing", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.copy({ path: "source.md", newPath: "existing.md" })).rejects.toThrow(
+            "FileConflictError",
+          )
+          await expect(File.copy({ path: "source.md", newPath: path.join("missing", "copy.md") })).rejects.toThrow(
+            "FileInvalidPathError",
+          )
+          expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("source")
+          expect(await fs.readFile(path.join(tmp.path, "existing.md"), "utf-8")).toBe("existing")
+          await expect(fs.stat(path.join(tmp.path, "missing"))).rejects.toThrow()
+        },
+      })
+    })
+
     test("resolves non-existing mutation targets under a selected directory alias", async () => {
       await using tmp = await tmpdir()
       await fs.mkdir(path.join(tmp.path, ".nova-vibecoding-template"), { recursive: true })
@@ -303,6 +372,22 @@ describe("file/index Filesystem patterns", () => {
             })
             expect(
               await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents", "config.md"), "utf-8"),
+            ).toBe("agent config")
+
+            const copied = await File.copy({
+              path: path.join(".nova-vibecoding-template", ".agents"),
+              newPath: path.join(".nova-vibecoding-template", ".agents-copy"),
+            })
+            expect(copied).toMatchObject({
+              sourcePath: path.join(".nova-vibecoding-template", ".agents"),
+              path: path.join(".nova-vibecoding-template", ".agents-copy"),
+              node: {
+                name: ".agents-copy",
+                type: "directory",
+              },
+            })
+            expect(
+              await fs.readFile(path.join(tmp.path, ".nova-vibecoding-template", ".agents-copy", "config.md"), "utf-8"),
             ).toBe("agent config")
 
             const created = await File.create({
@@ -343,9 +428,13 @@ describe("file/index Filesystem patterns", () => {
       await using tmp = await tmpdir()
       await using outside = await tmpdir()
       await fs.writeFile(path.join(tmp.path, "source.md"), "source", "utf-8")
+      await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
       const escapeLink = path.join(tmp.path, "escape-link")
+      const nestedEscapeLink = path.join(tmp.path, "docs", "escape-link")
       await fs.rm(escapeLink, { recursive: true, force: true })
+      await fs.rm(nestedEscapeLink, { recursive: true, force: true })
       await fs.symlink(outside.path, escapeLink, process.platform === "win32" ? "junction" : "dir")
+      await fs.symlink(outside.path, nestedEscapeLink, process.platform === "win32" ? "junction" : "dir")
 
       try {
         await Instance.provide({
@@ -364,9 +453,29 @@ describe("file/index Filesystem patterns", () => {
                 newPath: path.join("escape-link", "source.md"),
               }),
             ).rejects.toThrow("FileInvalidPathError")
+            await expect(
+              File.copy({
+                path: "source.md",
+                newPath: path.join("escape-link", "source.md"),
+              }),
+            ).rejects.toThrow("FileInvalidPathError")
+            await expect(
+              File.copy({
+                path: "escape-link",
+                newPath: "copied-link",
+              }),
+            ).rejects.toThrow("FileInvalidPathError")
+            await expect(
+              File.copy({
+                path: "docs",
+                newPath: "docs-copy",
+              }),
+            ).rejects.toThrow("FileInvalidPathError")
             expect(await fs.readFile(path.join(tmp.path, "source.md"), "utf-8")).toBe("source")
             await expect(fs.stat(path.join(outside.path, "created.md"))).rejects.toThrow()
             await expect(fs.stat(path.join(outside.path, "source.md"))).rejects.toThrow()
+            await expect(fs.stat(path.join(tmp.path, "copied-link"))).rejects.toThrow()
+            await expect(fs.stat(path.join(tmp.path, "docs-copy"))).rejects.toThrow()
           },
         })
       } finally {
@@ -375,7 +484,35 @@ describe("file/index Filesystem patterns", () => {
           fn: () => Instance.dispose(),
         })
         await fs.rm(escapeLink, { recursive: true, force: true })
+        await fs.rm(nestedEscapeLink, { recursive: true, force: true })
       }
+    })
+
+    test("rejects root copy, traversal copy, and copying a directory into itself", async () => {
+      await using tmp = await tmpdir()
+      const outside = path.join(tmp.path, "..", "outside-file-browser-copy.txt")
+      await fs.rm(outside, { force: true })
+      await fs.mkdir(path.join(tmp.path, "docs", "nested"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, "docs", "notes.md"), "notes", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.copy({ path: "", newPath: "root-copy" })).rejects.toThrow("FileInvalidPathError")
+          await expect(
+            File.copy({
+              path: "docs",
+              newPath: path.join("docs", "nested", "docs-copy"),
+            }),
+          ).rejects.toThrow("FileInvalidPathError")
+          await expect(File.copy({ path: "docs", newPath: "../outside-file-browser-copy.txt" })).rejects.toThrow(
+            "FileInvalidPathError",
+          )
+          await expect(fs.stat(path.join(tmp.path, "root-copy"))).rejects.toThrow()
+          await expect(fs.stat(path.join(tmp.path, "docs", "nested", "docs-copy"))).rejects.toThrow()
+          await expect(fs.stat(outside)).rejects.toThrow()
+        },
+      })
     })
 
     test("deletes files and directories recursively", async () => {
@@ -411,6 +548,9 @@ describe("file/index Filesystem patterns", () => {
               content: "nope",
             }),
           ).rejects.toThrow("FileInvalidPathError")
+          await expect(File.copy({ path: "missing.md", newPath: "../outside-file-browser.txt" })).rejects.toThrow(
+            "FileInvalidPathError",
+          )
           await expect(File.move({ path: "missing.md", newPath: "../outside-file-browser.txt" })).rejects.toThrow(
             "FileInvalidPathError",
           )

@@ -100,6 +100,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(explorer).toContain("apiJson(`find/file?")
   expect(explorer).toContain("uploadDroppedFiles")
   expect(explorer).toContain("createFileItem")
+  expect(explorer).toContain("copyFileItem")
   expect(explorer).toContain("moveFileItem")
   expect(explorer).toContain("deleteFileItem")
   expect(explorer).toContain("updateOpenFilePathAfterMove")
@@ -142,13 +143,15 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(explorer).toContain('dataUi="file-explorer-context-new-folder"')
   expect(explorer).toContain('dataUi="file-explorer-context-upload"')
   expect(explorer).toContain('dataUi="file-explorer-context-refresh"')
+  expect(explorer).toContain('dataUi="file-explorer-context-copy"')
   expect(explorer).toContain('dataUi="file-explorer-context-move"')
   expect(explorer).toContain('dataUi="file-explorer-context-delete"')
   expect(explorer).toContain("confirmDeleteItems")
+  expect(explorer).toContain("copyItems")
   expect(explorer).toContain("moveItems")
   expect(explorer).toContain("topLevelActionSelections")
   expect(explorer).toContain("isPathOrDescendant(item.path, candidate.path)")
-  expect(explorer).toContain("canMoveSelectionsToDirectory")
+  expect(explorer).toContain("canPlaceSelectionsInDirectory")
   expect(explorer).toContain("selectRangeTo")
   expect(explorer).toContain("toggleSelection")
   expect(explorer).toContain('data-selected={isNodeSelected() ? "true" : "false"}')
@@ -253,6 +256,9 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(service).toContain('apiJson(projectScopedPath("file/item", scope.directory)')
   expect(service).toContain("moveFileItem")
   expect(service).toContain('method: "PATCH"')
+  expect(service).toContain("copyFileItem")
+  expect(service).toContain('projectScopedPath("file/item/copy", scope.directory)')
+  expect(service).toContain('method: "POST"')
   expect(service).toContain("deleteFileItem")
   expect(service).toContain('fileQueryPath("file/item", { path }, scope)')
   expect(explorer).toContain("currentOperationScope")
@@ -269,6 +275,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(explorer).toContain("openExplorerFile")
   expect(explorer).toContain("createFileItem(")
   expect(explorer).toContain("scope,")
+  expect(explorer).toContain("copyFileItem(item.path, nextPath, scope)")
   expect(explorer).toContain("moveFileItem(item.path, nextPath, scope)")
   expect(explorer).toContain("deleteFileItem(item.path, scope)")
   expect(explorer).toContain("uploadDroppedFiles(targetDir, files, scope)")
@@ -415,6 +422,11 @@ test("file explorer, diff, and editor are wired through center workbench panels"
     "explorer.new_file",
     "explorer.new_folder",
     "explorer.rename",
+    "explorer.copy",
+    "explorer.copy_message",
+    "explorer.copy_many_message",
+    "explorer.copy_many_success",
+    "explorer.copy_invalid",
     "explorer.move",
     "explorer.move_many_message",
     "explorer.move_many_success",
@@ -428,6 +440,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
     "explorer.selected_count",
     "explorer.create_success",
     "explorer.rename_success",
+    "explorer.copy_success",
     "explorer.move_success",
     "explorer.delete_success",
   ]) {
