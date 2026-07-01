@@ -99,17 +99,25 @@ const COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT = [
 
 const REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT = [
   "Reviewer coverage row contract:",
-  "- Each `coverage[]` row uses singular anchor fields only: `requirementID?: string`, `specID?: string`, `userRequestQuote?: string`, `status`, and `evidence`.",
+  "- Each `coverage[]` row uses singular anchor fields plus `checkIDs`: `checkIDs[]`, `requirementID?: string`, `specID?: string`, `userRequestQuote?: string`, `status`, and `evidence`.",
   "- Do not put finding traceability fields inside `coverage[]`: no `requirementIDs`, `specIDs`, `userRequestQuotes`, `affectedSymbols`, or plural arrays.",
+  "- Every `coverage[]` row must cite the registered check item IDs that produced the coverage judgment.",
   "- Every `coverage[]` row must include at least one singular anchor: `requirementID`, `specID`, or `userRequestQuote`.",
   "- If several anchors apply, emit several coverage rows or choose the strongest single anchor; reserve plural traceability arrays for `findings[]` only.",
 ].join("\n")
 
 const REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT = [
   "Reviewer drilldown row contract:",
-  "- Each `drilldowns[]` row uses exactly `kind`, `target`, `purpose`, and `result`.",
+  "- Each `drilldowns[]` row uses exactly `checkIDs`, `kind`, `target`, `purpose`, and `result`.",
+  "- Every `drilldowns[]` row must cite the registered check item IDs that motivated the inspection.",
   "- Do not put finding fields inside `drilldowns[]`: no `affectedSymbols`, `requirementIDs`, `specIDs`, `userRequestQuotes`, `filePaths`, or typo variants.",
   "- Put impacted symbols and files on `findings[]` only when there is an actual finding.",
+].join("\n")
+
+const REVIEWER_EVIDENCE_ROW_CONTRACT_PROMPT = [
+  "Reviewer evidence row contract:",
+  "- Each reviewer `evidence[]` row uses exactly `checkIDs` and `note`.",
+  "- Every evidence note must cite the registered check item IDs it supports; do not submit plain evidence strings.",
 ].join("\n")
 
 const ADVERSARIAL_INVESTIGATION_PROMPT = [
@@ -118,6 +126,7 @@ const ADVERSARIAL_INVESTIGATION_PROMPT = [
   "- Treat executor reports, goal reports, build/typecheck success, grep output, and file listings as leads, not proof. A pass claim needs scoped evidence that could have disproved it.",
   "- Every reviewer report must include `investigationPlan` with `requestPromise`, `hypothesis`, `evidencePlan[]`, and `passCriteria[]`; `requestPromise` is the concrete original user/REQ/spec promise being falsified.",
   "- A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]` showing what was inspected and why that inspection would expose the scoped failure.",
+  "- Reviewer reports must not contain `findings[]`; register every finding through `register_integrity_finding` after registering the check item that exposed it.",
   "- If tools are available but a high-risk surface was not inspected, record `coverage` as `inconclusive` or `missing` and include `uninspectedRisks`; do not turn an inspection gap into praise.",
   "- Do not write congratulatory or effort-focused summaries. Summaries should say which request promises survived falsification, which did not, and what remains uninspected.",
 ].join("\n")
@@ -257,16 +266,57 @@ function upsertByRoundID(
   return "registered"
 }
 
+function unknownIntegrityCheckIDIssues(
+  knownCheckIDs: ReadonlySet<string>,
+  label: string,
+  id: string,
+  checkIDs: readonly string[],
+): string[] {
+  if (checkIDs.length === 0) return [`${label} "${id}" has no checkIDs; register a check item and reference it.`]
+  const unknown = checkIDs.filter((checkID) => !knownCheckIDs.has(checkID))
+  return unknown.length > 0 ? [`${label} "${id}" references unknown checkIDs: ${unknown.join(", ")}.`] : []
+}
+
 function integrityUnknownCheckIDIssues(
   report: IntegrityTeamReport,
   label: string,
   id: string,
   checkIDs: readonly string[],
 ): string[] {
-  const known = new Set(report.checkItems.map((item) => item.id))
-  if (checkIDs.length === 0) return [`${label} "${id}" has no checkIDs; register a check item and reference it.`]
-  const unknown = checkIDs.filter((checkID) => !known.has(checkID))
-  return unknown.length > 0 ? [`${label} "${id}" references unknown checkIDs: ${unknown.join(", ")}.`] : []
+  return unknownIntegrityCheckIDIssues(new Set(report.checkItems.map((item) => item.id)), label, id, checkIDs)
+}
+
+function collectorUnknownCheckIDIssues(
+  collector: Pick<ConsensusCollector, "checkItems">,
+  rows: Array<{ label: string; id: string; checkIDs: readonly string[] }>,
+): string[] {
+  const known = new Set(collector.checkItems.map((item) => item.id))
+  return rows.flatMap((row) => unknownIntegrityCheckIDIssues(known, row.label, row.id, row.checkIDs))
+}
+
+function integrityReviewerCheckIDRows(report: IntegrityReviewerReport): Array<{
+  label: string
+  id: string
+  checkIDs: readonly string[]
+}> {
+  return [
+    { label: "reviewer", id: report.reviewerID, checkIDs: report.checkIDs },
+    ...report.drilldowns.map((row, index) => ({
+      label: `reviewerDrilldown:${report.reviewerID}`,
+      id: `${row.target}#${index + 1}`,
+      checkIDs: row.checkIDs,
+    })),
+    ...report.coverage.map((row, index) => ({
+      label: `reviewerCoverage:${report.reviewerID}`,
+      id: `${row.requirementID ?? row.specID ?? row.userRequestQuote ?? "coverage"}#${index + 1}`,
+      checkIDs: row.checkIDs,
+    })),
+    ...report.evidence.map((row, index) => ({
+      label: `reviewerEvidence:${report.reviewerID}`,
+      id: `${row.note}#${index + 1}`,
+      checkIDs: row.checkIDs,
+    })),
+  ]
 }
 
 function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: ParsedRequirement[]): string[] {
@@ -274,6 +324,20 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
   if (report.checkItems.length === 0) {
     issues.push("integrity report has no registered checkItems; register each inspected requirement/problem first.")
     return issues
+  }
+  if (report.coverageAudit.length === 0) {
+    issues.push("integrity report has no registered coverageAudit rows; register coverage audit before final verdict.")
+  }
+  for (const reviewer of report.reviewers) {
+    if (reviewer.drilldowns.length === 0) {
+      issues.push(`reviewer "${reviewer.reviewerID}" has no drilldowns; register row-level inspected evidence.`)
+    }
+    if (reviewer.coverage.length === 0) {
+      issues.push(`reviewer "${reviewer.reviewerID}" has no coverage rows; register what requirement, spec, or user promise was covered.`)
+    }
+    if (reviewer.evidence.length === 0) {
+      issues.push(`reviewer "${reviewer.reviewerID}" has no evidence rows; register evidence rows tied to checkIDs.`)
+    }
   }
   const checkByID = new Map(report.checkItems.map((item) => [item.id, item]))
   const activeRequirementIDs = (requirements ?? []).map((requirement) => requirement.id)
@@ -289,8 +353,24 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
   if (report.verdict === "pass" && unresolvedCheckIDs.length > 0) {
     issues.push(`pass verdict was submitted with failed/inconclusive checkItems: ${unresolvedCheckIDs.join(", ")}.`)
   }
-  const rows: Array<{ label: string; id: string; checkIDs: string[] }> = [
-    ...report.reviewers.map((row) => ({ label: "reviewer", id: row.reviewerID, checkIDs: row.checkIDs })),
+  if (report.verdict === "pass") {
+    const nonCoveredReviewerRows = report.reviewers.flatMap((reviewer) =>
+      reviewer.coverage
+        .filter((row) => row.status !== "covered")
+        .map((row) => `${reviewer.reviewerID}:${row.requirementID ?? row.specID ?? row.userRequestQuote ?? "coverage"}`),
+    )
+    if (nonCoveredReviewerRows.length > 0) {
+      issues.push(`pass verdict was submitted with missing/inconclusive reviewer coverage: ${nonCoveredReviewerRows.join(", ")}.`)
+    }
+    const nonCoveredAuditRows = report.coverageAudit
+      .filter((row) => row.status !== "covered")
+      .map((row) => row.promise)
+    if (nonCoveredAuditRows.length > 0) {
+      issues.push(`pass verdict was submitted with missing/inconclusive coverageAudit rows: ${nonCoveredAuditRows.join(", ")}.`)
+    }
+  }
+  const rows: Array<{ label: string; id: string; checkIDs: readonly string[] }> = [
+    ...report.reviewers.flatMap((row) => integrityReviewerCheckIDRows(row)),
     ...report.findings.map((row) => ({ label: "finding", id: row.id, checkIDs: row.checkIDs })),
     ...report.requiredRepairs.map((row) => ({ label: "requiredRepair", id: row.id, checkIDs: row.checkIDs })),
     ...report.coverageAudit.map((row, index) => ({
@@ -308,13 +388,6 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
       id: row.id,
       checkIDs: row.checkIDs,
     })),
-    ...report.reviewers.flatMap((reviewer) =>
-      reviewer.findings.map((finding) => ({
-        label: `reviewerFinding:${reviewer.reviewerID}`,
-        id: finding.id,
-        checkIDs: finding.checkIDs,
-      })),
-    ),
   ]
   for (const row of rows) issues.push(...integrityUnknownCheckIDIssues(report, row.label, row.id, row.checkIDs))
   for (const finding of report.findings) {
@@ -327,13 +400,14 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
   return issues
 }
 
-const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
+const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 9_800
 const INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS = 18_000
 const INTEGRITY_EVIDENCE_LIMITS = {
   userRequestChars: 800,
   requirementDescriptionChars: 120,
   requirementAcceptanceChars: 100,
   requirementNonGoalChars: 80,
+  requirements: 24,
   requirementStatusGoals: 4,
   requirementStatusSpecs: 6,
   buildDirectories: 24,
@@ -539,11 +613,15 @@ async function createSingleSessionIntegrityToolKit(input: {
       }),
       register_integrity_reviewer_report: tool({
         description:
-          "Register one reviewer report tied to registered checkIDs. Do not put unregistered findings here; register findings separately too.",
+          "Register one reviewer report tied to registered checkIDs. Do not put findings here; register findings separately with register_integrity_finding.",
         inputSchema: IntegrityReviewerReportSchema,
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const report = IntegrityReviewerReportSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, integrityReviewerCheckIDRows(report))
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity reviewer report references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           const existingIdx = input.collector.reviewers.findIndex((row) => row.reviewerID === report.reviewerID)
           if (existingIdx >= 0) {
             input.collector.reviewers[existingIdx] = report
@@ -559,6 +637,12 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const row = IntegrityCoverageAuditRowSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, [
+            { label: "coverageAudit", id: row.promise, checkIDs: row.checkIDs },
+          ])
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity coverageAudit row references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           input.collector.coverageAudit.push(row)
           return `OK: integrity coverageAudit row registered (${input.collector.coverageAudit.length} total)`
         },
@@ -569,6 +653,12 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const row = IntegrityUninspectedRiskSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, [
+            { label: "uninspectedRisk", id: row.risk, checkIDs: row.checkIDs },
+          ])
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity uninspectedRisk references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           input.collector.uninspectedRisks.push(row)
           return `OK: integrity uninspectedRisk registered (${input.collector.uninspectedRisks.length} total)`
         },
@@ -579,6 +669,12 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const finding = IntegrityFindingSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, [
+            { label: "finding", id: finding.id, checkIDs: finding.checkIDs },
+          ])
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity finding references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           const status = upsertByID(input.collector.findings, finding)
           return `OK: integrity finding "${finding.id}" ${status} (${input.collector.findings.length} total)`
         },
@@ -599,6 +695,12 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const repair = IntegrityRequiredRepairSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, [
+            { label: "requiredRepair", id: repair.id, checkIDs: repair.checkIDs },
+          ])
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity requiredRepair references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           const status = upsertByID(input.collector.requiredRepairs, repair)
           return `OK: integrity requiredRepair "${repair.id}" ${status} (${input.collector.requiredRepairs.length} total)`
         },
@@ -609,6 +711,12 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
           const disagreement = IntegrityUnresolvedDisagreementSchema.parse(raw)
+          const checkIDIssues = collectorUnknownCheckIDIssues(input.collector, [
+            { label: "unresolvedDisagreement", id: disagreement.id, checkIDs: disagreement.checkIDs },
+          ])
+          if (checkIDIssues.length > 0) {
+            return `Error: integrity unresolvedDisagreement references unregistered check items: ${checkIDIssues.join("; ")}`
+          }
           const status = upsertByID(input.collector.unresolvedDisagreements, disagreement)
           return `OK: integrity unresolvedDisagreement "${disagreement.id}" ${status} (${input.collector.unresolvedDisagreements.length} total)`
         },
@@ -627,6 +735,9 @@ async function createSingleSessionIntegrityToolKit(input: {
         description: `Finalize the final integrity review from registered check items and report rows. Do not pass reviewers, findings, coverageAudit, requiredRepairs, checkItems, or other arrays in this final call; register them first. Produce multiple independent reviewer reports via register_integrity_reviewer_report without spawning reviewer sessions. Every reviewer report must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], passCriteria[], and checkIDs. Every active Requirements-produced REQ-N must have a registered check item before final verdict. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
         inputSchema: SubmitIntegrityConsensusSchema,
         execute: async (raw) => {
+          if (input.collector.report) {
+            return "Error: integrity report already submitted; duplicate submit_integrity_consensus ignored."
+          }
           const finalParsed = SubmitIntegrityConsensusSchema.safeParse(raw)
           if (!finalParsed.success) {
             return `Error: submit_integrity_consensus accepts only verdict, summary, and teamReportMarkdown after register_* calls: ${finalParsed.error.message}`
@@ -728,9 +839,6 @@ function integrityRequirementCoverageIssues(
     for (const row of reviewer.coverage) {
       if (row.requirementID) touchedRequirementIDs.add(row.requirementID)
     }
-    for (const finding of reviewer.findings) {
-      for (const requirementID of finding.requirementIDs) touchedRequirementIDs.add(requirementID)
-    }
   }
   for (const finding of report.findings) {
     for (const requirementID of finding.requirementIDs) touchedRequirementIDs.add(requirementID)
@@ -810,10 +918,11 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
+    REVIEWER_EVIDENCE_ROW_CONTRACT_PROMPT,
     buildIntegrityEvidencePrompt(input),
     "Use scoped evidence tools for the initial falsification pass: inspect overview, changed directories, goal summary, executor reports, and then exact files/diffs/runtime/visual evidence for the reviewer perspectives that matter. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
     "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces no reviewer actually inspected.",
-    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use `status:\"missing\"` or `status:\"inconclusive\"` coverage rows instead of silently skipping a REQ-N.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, top-level `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use `status:\"missing\"` or `status:\"inconclusive\"` coverage rows instead of silently skipping a REQ-N.",
     "Call submit_integrity_consensus exactly once after all register_integrity_* calls. The final submit call only sets verdict, summary, and teamReportMarkdown.",
   ].join("\n\n")
 }
@@ -833,6 +942,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
+    REVIEWER_EVIDENCE_ROW_CONTRACT_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
       "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report with `requestPromise`, `hypothesis`, `evidencePlan[]`, and `passCriteria[]`.",
@@ -864,6 +974,7 @@ export function buildSupervisorConsensusPrompt(
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
+    REVIEWER_EVIDENCE_ROW_CONTRACT_PROMPT,
     "Reviewer plan:",
     renderReviewerPlanMarkdown(plan),
     "Reviewer reports:",
@@ -871,7 +982,7 @@ export function buildSupervisorConsensusPrompt(
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
     "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked. If a reviewer report only summarizes executor claims without falsification-oriented drilldown, treat that surface as uninspected.",
-    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use missing/inconclusive coverage rows instead of silently skipping a REQ-N.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, top-level `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use missing/inconclusive coverage rows instead of silently skipping a REQ-N.",
     "Call submit_integrity_consensus exactly once after all register_integrity_* calls. The final submit call only sets verdict, summary, and teamReportMarkdown.",
   ].join("\n\n")
 }
@@ -946,8 +1057,14 @@ function renderVisualEvidenceSummary(visualEvidence: VisualEvidenceBundle[]): st
 }
 
 function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
-  const lines = ["# Requirements", `Rendered all ${requirements.length} requirements.`]
-  for (const r of requirements) {
+  const visible = requirements.slice(0, INTEGRITY_EVIDENCE_LIMITS.requirements)
+  const lines = [
+    "# Requirements",
+    visible.length === requirements.length
+      ? `Rendered all ${requirements.length} requirements.`
+      : `Rendered ${visible.length}/${requirements.length} requirements.`,
+  ]
+  for (const r of visible) {
     const row = [
       `- ${r.id} (${r.type}): ${sanitizePromptBlock(r.description, INTEGRITY_EVIDENCE_LIMITS.requirementDescriptionChars)}`,
     ]
@@ -964,6 +1081,7 @@ function renderRequirementsSummary(requirements: ParsedRequirement[]): string {
     }
     lines.push(row.join("\n"))
   }
+  appendOmittedLine(lines, requirements.length, visible.length, "requirements")
   return lines.join("\n")
 }
 
@@ -1406,8 +1524,7 @@ function createNoGoalsResult(): IntegrityResult {
       },
       drilldowns: [],
       coverage: [],
-      evidence: ["goals.length=0"],
-      findings: [finding],
+      evidence: [{ checkIDs: [checkID], note: "goals.length=0" }],
       openQuestions: [],
     },
     {
@@ -1424,8 +1541,7 @@ function createNoGoalsResult(): IntegrityResult {
       },
       drilldowns: [],
       coverage: [],
-      evidence: ["No goal accepts ownership of the user request."],
-      findings: [finding],
+      evidence: [{ checkIDs: [checkID], note: "No goal accepts ownership of the user request." }],
       openQuestions: [],
     },
   ]
@@ -1623,54 +1739,24 @@ function renderReviewerReportForConsensusPrompt(report: IntegrityReviewerReport)
   )
   if ((report.drilldowns ?? []).length > 0) {
     const items = report.drilldowns.map(
-      (drilldown) => `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
+      (drilldown) =>
+        `${drilldown.checkIDs.join(",")}: ${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
     )
     lines.push("Drilldowns:", markdownListWithOmissions(items, limits.drilldowns, limits.fieldChars, "drilldowns"))
   }
   if ((report.coverage ?? []).length > 0) {
     const items = report.coverage.map((row) => {
       const target = row.requirementID ?? row.specID ?? row.userRequestQuote ?? "(unanchored)"
-      return `${target}: ${row.status} - ${row.evidence}`
+      return `${row.checkIDs.join(",")}: ${target}: ${row.status} - ${row.evidence}`
     })
     lines.push("Coverage:", markdownListWithOmissions(items, limits.coverage, limits.fieldChars, "coverage rows"))
   }
   if ((report.evidence ?? []).length > 0) {
+    const evidenceItems = report.evidence.map((row) => `${row.checkIDs.join(",")}: ${row.note}`)
     lines.push(
       "Evidence:",
-      markdownListWithOmissions(report.evidence, limits.evidence, limits.fieldChars, "evidence rows"),
+      markdownListWithOmissions(evidenceItems, limits.evidence, limits.fieldChars, "evidence rows"),
     )
-  }
-  if ((report.findings ?? []).length > 0) {
-    lines.push("Findings:")
-    const visibleFindings = report.findings.slice(0, limits.findings)
-    for (const finding of visibleFindings) {
-      const metadata = [
-        finding.requirementIDs?.length ? `requirements=${finding.requirementIDs.join(",")}` : "",
-        finding.specIDs?.length ? `specs=${finding.specIDs.join(",")}` : "",
-        finding.filePaths?.length ? `paths=${promptPathDirectories(finding.filePaths).join(",")}` : "",
-        finding.affectedSymbols?.length ? `symbols=${finding.affectedSymbols.join(",")}` : "",
-        finding.userRequestQuotes?.length
-          ? `quotes=${boundedPromptList(finding.userRequestQuotes, 3, limits.fieldChars).join(" | ")}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("; ")
-      lines.push(
-        [
-          `- [${finding.severity}] ${sanitizePromptLine(finding.id, "generic")}: ${sanitizePromptBlock(
-            finding.title,
-            limits.fieldChars,
-          )}`,
-          `  description: ${sanitizePromptBlock(finding.description, limits.findingDescriptionChars)}`,
-          `  repair: ${sanitizePromptBlock(finding.repair, limits.findingRepairChars)}`,
-          metadata ? `  metadata: ${metadata}` : "",
-          `  evidence: ${boundedPromptList(finding.evidence, limits.findingEvidence, limits.fieldChars).join(" | ")}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      )
-    }
-    appendOmittedLine(lines, report.findings.length, visibleFindings.length, "findings")
   }
   if ((report.openQuestions ?? []).length > 0) {
     lines.push(

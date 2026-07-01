@@ -788,11 +788,28 @@ function minimalWorkloadBrief(goalID: string) {
 }
 
 function minimalVisualQaReport() {
+  const checkID = "check-main-surface"
   return {
     accepted: true,
     summary: "Recovered visual QA report.",
+    check_items: [
+      {
+        id: checkID,
+        category: "component-truth",
+        question: "Does the main visible surface render as the implemented product UI?",
+        region: "main surface",
+        status: "passed" as const,
+        expected: "The main surface renders with the intended product structure and no blocking visual defects.",
+        observed: "The main surface was checked from fresh Visual QA evidence.",
+        viewports: [{ width: 1280, height: 720 }],
+        states: ["default"],
+        source_refs: ["build evidence"],
+        evidence_refs: ["visual-qa-evidence"],
+      },
+    ],
     coverage: [
       {
+        check_ids: [checkID],
         region: "main surface",
         viewports: [{ width: 1280, height: 720 }],
         states: ["default"],
@@ -807,6 +824,7 @@ function minimalVisualQaReport() {
     repairs: [],
     evidence: [
       {
+        check_ids: [checkID],
         type: "command" as const,
         ref: "bun test visual-qa",
         state: "default",
@@ -1436,7 +1454,8 @@ function integrityFinding(input: {
 }) {
   return {
     id: input.id ?? `finding-${Math.random().toString(16).slice(2)}`,
-    severity: input.severity ?? (input.verdictImpact === "needs_correction" ? "blocking" : "advisory"),
+    checkIDs: ["check-requirements"],
+    severity: input.severity ?? ((input.verdictImpact ?? "needs_correction") === "needs_correction" ? "blocking" : "advisory"),
     verdictImpact: input.verdictImpact ?? "needs_correction",
     title: input.title ?? input.description,
     description: input.description,
@@ -1454,6 +1473,7 @@ function integrityFinding(input: {
 function integrityRepair(input: { id?: string; description: string; targetIDs?: string[]; filePaths?: string[] }) {
   return {
     id: input.id ?? `repair-${Math.random().toString(16).slice(2)}`,
+    checkIDs: ["check-requirements"],
     description: input.description,
     evidence: [`Mock repair evidence: ${input.description}`],
     targetIDs: input.targetIDs ?? [],
@@ -1475,6 +1495,8 @@ function integrityTeamResult(input: {
   const requiredRepairs = input.requiredRepairs ?? []
   const requirementsVerdict = verdict === "needs_correction" ? "needs_correction" : "pass"
   const acceptanceVerdict = verdict === "pass" ? "pass" : "concerns"
+  const requirementCheckStatus = verdict === "needs_correction" ? "failed" : "passed"
+  const acceptanceCheckStatus = verdict === "pass" ? "passed" : "inconclusive"
   return {
     verdict,
     summary,
@@ -1487,27 +1509,115 @@ function integrityTeamResult(input: {
       ]
         .filter(Boolean)
         .join("\n"),
+    checkItems: [
+      {
+        id: "check-requirements",
+        reviewerID: "requirements_surface",
+        category: "requirement",
+        target: "Requirement fidelity",
+        question: "Do requirements match the requested behavior?",
+        status: requirementCheckStatus,
+        expected: "Requirements and implementation evidence satisfy the request.",
+        observed: summary,
+        evidence: ["Mock requirement evidence."],
+        requirementIDs: [],
+        specIDs: [],
+        targetIDs: [],
+        userRequestQuotes: [],
+      },
+      {
+        id: "check-acceptance",
+        reviewerID: "acceptance_surface",
+        category: "acceptance",
+        target: "Acceptance and implementation evidence",
+        question: "Does acceptance evidence support the integrity verdict?",
+        status: acceptanceCheckStatus,
+        expected: "Acceptance evidence is acceptable.",
+        observed: verdict === "pass" ? "Acceptance evidence is acceptable." : summary,
+        evidence: ["Mock acceptance evidence."],
+        requirementIDs: [],
+        specIDs: [],
+        targetIDs: [],
+        userRequestQuotes: [],
+      },
+    ],
     reviewers: [
       {
         reviewerID: "requirements_surface",
+        checkIDs: ["check-requirements"],
         scope: "Requirement fidelity",
         verdict: requirementsVerdict,
         summary,
-        evidence: ["Mock requirement evidence."],
-        findings: findings.filter((finding) => finding.reviewers.includes("requirements_surface")),
+        investigationPlan: {
+          requestPromise: "Requirements match the requested behavior.",
+          hypothesis: "Requirements may omit the requested behavior.",
+          evidencePlan: ["Inspect requirement fidelity evidence."],
+          passCriteria: ["Requirement fidelity evidence supports the request."],
+        },
+        drilldowns: [
+          {
+            checkIDs: ["check-requirements"],
+            kind: "mock_integrity_evidence",
+            target: "Requirement fidelity",
+            purpose: "Exercise orchestrator integrity persistence.",
+            result: "Mock requirement evidence.",
+          },
+        ],
+        coverage: [
+          {
+            checkIDs: ["check-requirements"],
+            userRequestQuote: "requirements match request",
+            status: verdict === "needs_correction" ? "missing" : "covered",
+            evidence: "Mock requirement evidence.",
+          },
+        ],
+        evidence: [{ checkIDs: ["check-requirements"], note: "Mock requirement evidence." }],
         openQuestions: [],
       },
       {
         reviewerID: "acceptance_surface",
+        checkIDs: ["check-acceptance"],
         scope: "Acceptance and implementation evidence",
         verdict: acceptanceVerdict,
         summary: verdict === "pass" ? "Acceptance evidence is acceptable." : summary,
-        evidence: ["Mock acceptance evidence."],
-        findings: findings.filter((finding) => finding.reviewers.includes("acceptance_surface")),
+        investigationPlan: {
+          requestPromise: "Acceptance evidence supports the delivered implementation.",
+          hypothesis: "Acceptance evidence may be incomplete.",
+          evidencePlan: ["Inspect acceptance evidence."],
+          passCriteria: ["Acceptance evidence supports the delivered implementation."],
+        },
+        drilldowns: [
+          {
+            checkIDs: ["check-acceptance"],
+            kind: "mock_integrity_evidence",
+            target: "Acceptance and implementation evidence",
+            purpose: "Exercise orchestrator integrity persistence.",
+            result: "Mock acceptance evidence.",
+          },
+        ],
+        coverage: [
+          {
+            checkIDs: ["check-acceptance"],
+            userRequestQuote: "acceptance evidence supports implementation",
+            status: verdict === "pass" ? "covered" : "inconclusive",
+            evidence: "Mock acceptance evidence.",
+          },
+        ],
+        evidence: [{ checkIDs: ["check-acceptance"], note: "Mock acceptance evidence." }],
         openQuestions: [],
       },
     ],
     findings,
+    coverageAudit: [
+      {
+        checkIDs: ["check-requirements", "check-acceptance"],
+        promise: "Mock integrity task promises were reviewed.",
+        reviewerIDs: ["requirements_surface", "acceptance_surface"],
+        status: verdict === "pass" ? "covered" : "inconclusive",
+        notes: summary,
+      },
+    ],
+    uninspectedRisks: [],
     rounds: [],
     requiredRepairs,
     unresolvedDisagreements: [],
@@ -2428,6 +2538,84 @@ describe("orchestrator tools", () => {
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
         const latest = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID, phase: "post_build" })
         expect(latest?.artifactID).toBeTruthy()
+      },
+    })
+  })
+
+  test("post-build integrity non-pass records a completed review step event", async () => {
+    const now = Date.now()
+    const stamp = `${now.toString(16)}_non_pass_step`
+    const taskID = `tsk_integrity_non_pass_step_${stamp}`
+    const goalID = `gol_integrity_non_pass_step_${stamp}`
+    const specID = `spec_integrity_non_pass_step_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity non-pass completed step" })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          specID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity non-pass completed step",
+          taskTitle: "Integrity non-pass completed step",
+          request: "prove non-pass integrity is still a completed review report",
+          goalTitle: "Build terminal evidence",
+          goalSlug: "build-terminal-evidence",
+          objective: "Produce terminal build evidence",
+          now,
+          insertProject: false,
+        })
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            requirementID: "REQ-1",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
+        reviewIntegrityImpl = async () =>
+          integrityTeamResult({
+            sessionID: "ses_integrity_non_pass_step",
+            verdict: "needs_correction",
+            summary: "Post-build integrity found a repair.",
+            findings: [
+              integrityFinding({
+                id: "finding-non-pass-step",
+                description: "A blocking repair remains.",
+                targetIDs: [goalID],
+              }),
+            ],
+            requiredRepairs: [
+              integrityRepair({
+                id: "repair-non-pass-step",
+                description: "Repair the blocking issue.",
+                targetIDs: [goalID],
+              }),
+            ],
+          })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        await tools.integrity.execute({ reason: "post-build repair evidence" }, buildToolOptions("integrity"))
+
+        const statuses = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .filter((event) => event.payload?.stepID === "integrity")
+            .map((event) => String(event.payload?.status ?? "")),
+        )
+        expect(statuses).toEqual(["running", "completed"])
       },
     })
   })
@@ -11667,9 +11855,36 @@ describe("orchestrator tools", () => {
         const visualQaRecord: any = minimalVisualQaDecisionRecord()
         visualQaRecord.report.accepted = false
         visualQaRecord.report.summary = "Market tab row is clipped and spacing is too loose."
+        visualQaRecord.report.check_items[0] = {
+          ...visualQaRecord.report.check_items[0],
+          id: "check-market-tabs",
+          category: "reference-structure",
+          question: "Does the market tab row preserve the source page hierarchy and spacing?",
+          region: "market tabs",
+          status: "failed",
+          expected: "The market tab row matches the source hierarchy and first-viewport spacing.",
+          observed: "The market tab row is clipped and spacing is too loose.",
+          evidence_refs: ["screenshot://local/market-tabs.png"],
+          required_correction: "Restore tab row spacing and hierarchy from the source page.",
+        }
+        visualQaRecord.report.coverage[0] = {
+          ...visualQaRecord.report.coverage[0],
+          check_ids: ["check-market-tabs"],
+          region: "market tabs",
+          evidence_refs: ["screenshot://local/market-tabs.png"],
+        }
+        visualQaRecord.report.evidence[0] = {
+          ...visualQaRecord.report.evidence[0],
+          check_ids: ["check-market-tabs"],
+          type: "screenshot",
+          ref: "screenshot://local/market-tabs.png",
+          viewport: { width: 1440, height: 900 },
+          note: "Market tab row screenshot shows clipping and loose spacing.",
+        }
         visualQaRecord.report.production_blockers = [
           {
             id: "blocker-market-tabs",
+            check_ids: ["check-market-tabs"],
             principle_ids: ["reference-structure"],
             region: "market tabs",
             reason: "The tab row does not match the source hierarchy.",
@@ -11682,6 +11897,7 @@ describe("orchestrator tools", () => {
         visualQaRecord.report.problem_dom_regions = [
           {
             id: "dom-market-tabs",
+            check_ids: ["check-market-tabs"],
             blocker_ids: ["blocker-market-tabs"],
             region: "market tabs",
             route: "/markets/usa/",
@@ -13039,8 +13255,10 @@ describe("orchestrator tools", () => {
                 summary: "Frontend Innovate selected implementation passed visual QA.",
                 evidence: [
                   {
+                    check_ids: ["check-main-surface"],
                     type: "screenshot" as const,
                     ref: "browser-preview:frontend-innovate-selected",
+                    viewport: { width: 1280, height: 720 },
                     state: "default",
                     note: "Selected direction rendered without generic card slop.",
                   },

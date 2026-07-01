@@ -324,4 +324,132 @@ describe("orchestrator build feedback context", () => {
       },
     })
   })
+
+  test("hydrates visual QA feedback when persisted acceptance is stale accepted", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const suffix = `${now.toString(16)}_stale_visual_acceptance`
+        const projectID = `proj_visual_qa_feedback_${suffix}`
+        const taskID = `tsk_visual_qa_feedback_${suffix}`
+        const visualQaCheckID = "check-stale-acceptance"
+
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Visual QA stale acceptance feedback",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "Visual QA stale acceptance feedback",
+              request: "repair rejected visual QA report",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        createDecisionLog(taskID).append({
+          phase: "visual_qa",
+          key: `report_${now}`,
+          value: JSON.stringify({
+            report: {
+              accepted: true,
+              summary: "Report fields contain a blocker despite stale persisted acceptance.",
+              check_items: [
+                {
+                  id: visualQaCheckID,
+                  category: "reference-structure",
+                  question: "Does the hero spacing match the reference?",
+                  region: "hero",
+                  status: "failed",
+                  expected: "Hero spacing matches the reference.",
+                  observed: "Hero spacing overlaps the navigation.",
+                  viewports: [{ width: 1440, height: 900 }],
+                  states: ["default"],
+                  source_refs: ["visual_qa"],
+                  evidence_refs: ["screenshot://local/hero.png"],
+                },
+              ],
+              coverage: [
+                {
+                  check_ids: [visualQaCheckID],
+                  region: "hero",
+                  viewports: [{ width: 1440, height: 900 }],
+                  states: ["default"],
+                  source_refs: ["visual_qa"],
+                  evidence_refs: ["screenshot://local/hero.png"],
+                  notes: "Checked hero spacing.",
+                },
+              ],
+              findings: [],
+              production_blockers: [
+                {
+                  id: "blocker-stale-accepted",
+                  check_ids: [visualQaCheckID],
+                  principle_ids: ["reference-structure"],
+                  region: "hero",
+                  reason: "The hero overlaps the navigation.",
+                  impact: "Users cannot reliably scan the top navigation.",
+                  required_correction: "Restore hero top spacing.",
+                  source_refs: ["visual_qa"],
+                  evidence_refs: ["screenshot://local/hero.png"],
+                },
+              ],
+              unresolved_code_module_problems: [],
+              problem_dom_regions: [],
+              repairs: [],
+              evidence: [
+                {
+                  check_ids: [visualQaCheckID],
+                  type: "screenshot",
+                  ref: "screenshot://local/hero.png",
+                  viewport: { width: 1440, height: 900 },
+                  state: "default",
+                  note: "Local screenshot with overlap.",
+                },
+              ],
+              reference_parity: {
+                required: false,
+                required_regions: [],
+                reference_comparison_evidence_refs: [],
+                missing_regions: [],
+                blocker_ids: [],
+              },
+              commands: [],
+              changed_files: [],
+              open_questions: [],
+              fact_check_items: [],
+            },
+            acceptance: {
+              submittedAccepted: true,
+              effectiveAccepted: true,
+              selfReportIssues: [],
+              blockingIssues: [],
+            },
+          }),
+          reason: "Dedicated frontend GUI and functional QA report from session ses_visual_qa_feedback",
+        })
+
+        const feedback = composeLatestVisualQaFeedbackForBuild({ taskID })
+
+        expect(feedback ?? "").toContain("Latest failed Visual QA report for Build repair")
+        expect(feedback ?? "").toContain("effective_accepted: false")
+        expect(feedback ?? "").toContain("blocker-stale-accepted")
+      },
+    })
+  })
 })

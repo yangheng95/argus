@@ -107,15 +107,24 @@ mock.module("@/agent/runner", () => ({
         verdict: "needs_correction",
         summary: "rev_storage submitted a canned report.",
         investigationPlan,
+        drilldowns: [
+          {
+            checkIDs: ["check_storage"],
+            kind: "prompt_capture",
+            target: "REQ-3 storage persistence",
+            purpose: "Exercise severity reconciliation prompt path.",
+            result: "Stub intentionally emits a promotion for prompt capture.",
+          },
+        ],
         coverage: [
           {
+            checkIDs: ["check_storage"],
             requirementID: "REQ-3",
             status: "missing",
             evidence: "Stub intentionally emits a promotion for prompt capture.",
           },
         ],
-        evidence: ["prompt capture test"],
-        findings: [],
+        evidence: [{ checkIDs: ["check_storage"], note: "prompt capture test" }],
         openQuestions: [],
       })
       await input.toolKit.tools.register_integrity_reviewer_report.execute({
@@ -125,8 +134,24 @@ mock.module("@/agent/runner", () => ({
         verdict: "concerns",
         summary: "rev_scope submitted a canned report.",
         investigationPlan,
-        evidence: ["prompt capture test"],
-        findings: [],
+        drilldowns: [
+          {
+            checkIDs: ["check_scope"],
+            kind: "prompt_capture",
+            target: "maturity request wording",
+            purpose: "Exercise scope-bounded maturity guidance.",
+            result: "Prompt capture preserves scope-bounded maturity guidance.",
+          },
+        ],
+        coverage: [
+          {
+            checkIDs: ["check_scope"],
+            userRequestQuote: "maturity request wording",
+            status: "covered",
+            evidence: "Prompt capture preserves scope-bounded maturity guidance.",
+          },
+        ],
+        evidence: [{ checkIDs: ["check_scope"], note: "prompt capture test" }],
         openQuestions: [],
       })
       await input.toolKit.tools.register_integrity_finding.execute({
@@ -152,6 +177,13 @@ mock.module("@/agent/runner", () => ({
         evidence: ["prompt capture test"],
         targetIDs: ["goal_storage"],
         filePaths: ["src/services/storage.ts"],
+      })
+      await input.toolKit.tools.register_integrity_coverage_audit.execute({
+        checkIDs: ["check_storage", "check_scope"],
+        promise: "Storage persistence and scope-bounded maturity evidence were reviewed.",
+        reviewerIDs: ["rev_storage", "rev_scope"],
+        status: "missing",
+        notes: "Storage reviewer intentionally reports a missing requirement for prompt capture.",
       })
       await input.toolKit.tools.submit_integrity_consensus.execute({
         verdict: "needs_correction",

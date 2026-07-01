@@ -224,11 +224,12 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.accepted).toBe(true)
   })
 
-  test("records accepted report with blockers and unresolved module problems as effective failure", async () => {
+  test("records failed report with blockers and unresolved module problems", async () => {
     const kit = createVisualQaOutputTools()
     const result = await submitReport(
       kit,
       validReport({
+        accepted: false,
         check_items: [
           checkItem(),
           checkItem({
@@ -274,10 +275,8 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("BLOCKERS")
-    expect(result).toContain("production blockers")
-    expect(result).toContain("unresolved_code_module_problems")
     expect(kit.getCollector().final?.production_blockers[0]?.id).toBe("blocker_map_fidelity")
+    expect(kit.getCollector().final?.unresolved_code_module_problems[0]?.id).toBe("problem_map_module")
   })
 
   test("records reference parity screenshot-only report as effective failure", async () => {
@@ -599,7 +598,7 @@ describe("visual-qa output tools", () => {
     })
   }, 20_000)
 
-  test("records host-derived incomplete reference coverage as effective failure", async () => {
+  test("rejects host-derived incomplete reference coverage as an incomplete check graph", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_context_regions_${Date.now()}`
     await Instance.provide({
@@ -641,12 +640,9 @@ describe("visual-qa output tools", () => {
           }),
         )
 
-        expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=false")
-        expect(result).toContain("BLOCKERS")
+        expect(result).toContain("check graph is incomplete")
         expect(result).toContain("region_table@desktop")
-        expect(kit.getCollector().final?.accepted).toBe(true)
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+        expect(kit.getCollector().final).toBeUndefined()
       },
     })
   }, 20_000)
@@ -831,7 +827,7 @@ describe("visual-qa output tools", () => {
     expect(kit.buildReport().detail).toContain("computed_style=display=block")
   })
 
-  test("records accepted reference parity with missing regions as effective failure", async () => {
+  test("rejects accepted reference parity with missing regions as an incomplete check graph", async () => {
     const kit = createVisualQaOutputTools({
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop", "region_footer@desktop"],
@@ -863,10 +859,9 @@ describe("visual-qa output tools", () => {
       }),
     )
 
-    expect(result).toContain("RECORDED")
-    expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("reference_parity.missing_regions")
-    expect(kit.getCollector().final?.reference_parity.missing_regions).toEqual(["region_footer@desktop"])
+    expect(result).toContain("check graph is incomplete")
+    expect(result).toContain("region_footer@desktop")
+    expect(kit.getCollector().final).toBeUndefined()
   })
 
   test("duplicate submit is still rejected after the report is recorded", async () => {
@@ -882,6 +877,23 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.summary).not.toBe("second")
   })
 
+  test("register tools reject unknown visual QA check ids before final submit", async () => {
+    const kit = createVisualQaOutputTools()
+    await callTool(kit.tools, "register_visual_qa_check_item", checkItem())
+
+    const result = await callTool(kit.tools, "register_visual_qa_evidence", {
+      check_ids: ["missing-check"],
+      type: "screenshot",
+      ref: "artifacts/missing.png",
+      viewport: { width: 1440, height: 900 },
+      state: "default",
+      note: "This evidence points at an unregistered check.",
+    })
+
+    expect(result).toContain("references unregistered check items")
+    expect(kit.getCollector().evidence).toHaveLength(0)
+  })
+
   test("submit_visual_qa_report rejects the old full-report payload", async () => {
     const kit = createVisualQaOutputTools()
     const schema = kit.tools.submit_visual_qa_report.inputSchema as {
@@ -891,5 +903,8 @@ describe("visual-qa output tools", () => {
 
     expect(Object.keys(schema.shape)).toEqual(["accepted", "summary"])
     expect(schema.safeParse(validReport()).success).toBe(false)
+    const result = await callTool(kit.tools, "submit_visual_qa_report", validReport())
+    expect(result).toContain("accepts only accepted and summary")
+    expect(kit.getCollector().final).toBeUndefined()
   })
 })

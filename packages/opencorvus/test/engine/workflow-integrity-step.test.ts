@@ -1272,7 +1272,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa from the effective acceptance record rather than report fields", () => {
+  test("projects visual_qa from report semantics when the effective acceptance record is stale", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_effective_record_source`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -1312,7 +1312,7 @@ describe("pipeline workflow review topology", () => {
       value: JSON.stringify(
         visualQaDecisionRecord(
           visualQaReport({
-            summary: "Projection should trust the effective acceptance record.",
+            summary: "Projection should reject stale effective acceptance when report fields contradict it.",
             production_blockers: [
               {
                 id: "blocker_ignored_by_projection",
@@ -1320,8 +1320,8 @@ describe("pipeline workflow review topology", () => {
                 principle_ids: ["component-truth"],
                 region: "dashboard",
                 reason: "This report field is intentionally inconsistent with the acceptance record.",
-                impact: "Projection must not recompute acceptance from report fields.",
-                required_correction: "Use the persisted acceptance record.",
+                impact: "Projection must recompute acceptance from report fields.",
+                required_correction: "Treat the report as rejected.",
                 source_refs: ["visual_qa"],
                 evidence_refs: ["artifacts/dashboard.png"],
               },
@@ -1339,7 +1339,7 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("completed")
+    expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
   test("projects visual_qa as failed when accepted report omits current blocker fields", () => {

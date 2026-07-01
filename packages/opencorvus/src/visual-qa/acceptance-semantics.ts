@@ -1,4 +1,4 @@
-import type { VisualQaReport } from "./schema"
+import type { VisualQaAcceptance, VisualQaDecisionRecord, VisualQaReport } from "./schema"
 
 export function visualQaOpenBlockingFindings(report: VisualQaReport): VisualQaReport["findings"] {
   return report.findings.filter(
@@ -86,5 +86,16 @@ export function visualQaReportAcceptanceSemantics(report: VisualQaReport): {
     submittedAccepted: report.accepted,
     effectiveAccepted: report.accepted && selfReportIssues.length === 0,
     selfReportIssues,
+  }
+}
+
+export function visualQaDecisionRecordEffectiveAcceptance(record: VisualQaDecisionRecord): VisualQaAcceptance {
+  const semantics = visualQaReportAcceptanceSemantics(record.report)
+  const blockingIssues = [...new Set([...semantics.selfReportIssues, ...record.acceptance.blockingIssues])]
+  return {
+    submittedAccepted: semantics.submittedAccepted,
+    effectiveAccepted: semantics.effectiveAccepted && record.acceptance.effectiveAccepted,
+    selfReportIssues: semantics.selfReportIssues,
+    blockingIssues,
   }
 }

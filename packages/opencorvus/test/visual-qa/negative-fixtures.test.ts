@@ -133,16 +133,13 @@ describe("visual-qa negative product-grade fixtures", () => {
     }
   })
 
-  test("negative fixtures submitted as accepted reports are recorded with blocker feedback", async () => {
+  test("negative fixtures submitted as accepted reports are rejected as incomplete check graphs", async () => {
     const manifest = await readManifest()
 
     for (const item of manifest.cases) {
       const result = await callSubmit(reportForFixture(item, true))
-      expect(result, item.id).toContain("RECORDED")
-      expect(result, item.id).toContain("effective_accepted=false")
-      expect(result, item.id).toContain("BLOCKERS")
-      expect(result, item.id).toContain("accepted=true was submitted with production blockers")
-      expect(result, item.id).toContain(item.blocker.id)
+      expect(result, item.id).toContain("check graph is incomplete")
+      expect(result, item.id).toContain("accepted=true was submitted with failed/inconclusive check_items")
     }
   })
 

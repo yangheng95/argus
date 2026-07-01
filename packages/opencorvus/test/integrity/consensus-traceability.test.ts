@@ -11,22 +11,6 @@ const investigationPlan = {
   passCriteria: ["findings are anchored to REQ, AS, or a user quote"],
 }
 
-const untracedReviewerFinding = {
-  id: "untraced-bundle-size",
-  severity: "blocking",
-  verdictImpact: "needs_correction",
-  title: "Bundle size regression",
-  description: "The bundle might be too large, but no REQ, AS, or user quote anchors this concern.",
-  evidence: ["No requirement, acceptance spec, or original request quote names bundle size."],
-  targetIDs: [],
-  requirementIDs: [],
-  specIDs: [],
-  filePaths: [],
-  repair: "Drop this as out of scope unless requirements are amended first.",
-  reviewers: ["scope"],
-  consensus: "agreed",
-} as const
-
 const untracedReviewerReport = {
   reviewerID: "scope",
   checkIDs: ["check_scope_traceability"],
@@ -34,8 +18,29 @@ const untracedReviewerReport = {
   verdict: "needs_correction",
   summary: "Bundle size concern is untraced.",
   investigationPlan,
-  evidence: ["Reviewer intentionally returned one untraced finding."],
-  findings: [untracedReviewerFinding],
+  drilldowns: [
+    {
+      checkIDs: ["check_scope_traceability"],
+      kind: "traceability_review",
+      target: "bundle-size concern",
+      purpose: "Verify whether the concern is anchored to the task request.",
+      result: "No requirement, acceptance spec, or original request quote names bundle size.",
+    },
+  ],
+  coverage: [
+    {
+      checkIDs: ["check_scope_traceability"],
+      userRequestQuote: "Build a chat page that renders assistant replies.",
+      status: "covered",
+      evidence: "The scoped request concerns chat replies, not bundle size.",
+    },
+  ],
+  evidence: [
+    {
+      checkIDs: ["check_scope_traceability"],
+      note: "Reviewer intentionally noted one untraced bundle-size concern.",
+    },
+  ],
   openQuestions: [],
 } as const
 
@@ -46,15 +51,24 @@ const runtimeReviewerReport = {
   verdict: "pass",
   summary: "Runtime evidence is scoped and passes.",
   investigationPlan,
-  evidence: ["REQ-1 and acc-chat both name the chat response behavior."],
+  drilldowns: [
+    {
+      checkIDs: ["check_runtime_req_1"],
+      kind: "requirement_review",
+      target: "REQ-1",
+      purpose: "Verify assistant reply rendering coverage.",
+      result: "REQ-1 and acc-chat both name the chat response behavior.",
+    },
+  ],
+  evidence: [{ checkIDs: ["check_runtime_req_1"], note: "REQ-1 and acc-chat both name the chat response behavior." }],
   coverage: [
     {
+      checkIDs: ["check_runtime_req_1"],
       requirementID: "REQ-1",
       status: "covered",
       evidence: "REQ-1 and acc-chat both name the chat response behavior.",
     },
   ],
-  findings: [],
   openQuestions: [],
 } as const
 
@@ -143,10 +157,7 @@ mock.module("@/agent/runner", () => ({
         specIDs: ["acc-chat"],
         targetIDs: ["goal_chat"],
       })
-      await input.toolKit.tools.register_integrity_reviewer_report.execute({
-        ...untracedReviewerReport,
-        findings: [],
-      })
+      await input.toolKit.tools.register_integrity_reviewer_report.execute(untracedReviewerReport)
       await input.toolKit.tools.register_integrity_reviewer_report.execute(runtimeReviewerReport)
       await input.toolKit.tools.register_integrity_coverage_audit.execute({
         checkIDs: ["check_runtime_req_1"],
@@ -188,7 +199,7 @@ afterEach(() => {
 })
 
 describe("integrity consensus traceability discipline", () => {
-  test("production consensus drops reviewer findings without REQ, AS, or user quote anchors", async () => {
+  test("production consensus does not expose reviewer finding side channels", async () => {
     const { reviewIntegrity } = await import("../../src/integrity/team-agent")
     const result = await reviewIntegrity({
       userRequest: "Build a chat page that renders assistant replies.",
@@ -235,7 +246,7 @@ describe("integrity consensus traceability discipline", () => {
 
     expect(capturedConsensusPrompt).toContain("Perform the integrity review in this single streaming session")
     expect(capturedConsensusPrompt).toContain("must be removed from the final report")
-    expect(result.reviewers[0]?.findings).toEqual([])
+    expect(Object.prototype.hasOwnProperty.call(result.reviewers[0] ?? {}, "findings")).toBe(false)
     expect(result.findings).toEqual([])
     expect(result.issues).toEqual([])
     expect(result.verdict).toBe("pass")

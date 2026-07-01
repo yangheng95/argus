@@ -62,7 +62,34 @@ Whole-repository search evidence:
 
 Independent agent feedback:
 
-- None. The request is a direct implementation change in the current chain; no sub-agent was required.
+- 2026-07-01 follow-up review used four read-only independent agents.
+- Consensus: old full-report finalizer payloads are mostly blocked, but the work is
+  not complete because Integrity still has a reviewer-report finding side channel,
+  Integrity reviewer drilldowns / coverage / evidence are not individually linked
+  to check IDs, Visual QA persisted acceptance can be inconsistent with report
+  semantics, and one prompt regression test is red.
+- Required follow-up fixes:
+  - Remove the Integrity reviewer `findings[]` side channel; findings must be
+    registered through `register_integrity_finding`.
+  - Add check IDs to Integrity reviewer coverage and drilldown rows, and validate
+    them in the final graph.
+  - Recompute / validate Visual QA persisted acceptance from the report when
+    projecting workflow or build feedback; do not trust stale
+    `acceptance.effectiveAccepted` when the report contradicts it.
+  - Make Integrity non-pass review emit completed review-step events, not failed
+    workflow-step events.
+  - Add execute-path and malformed graph tests, and repair the prompt length
+    regression in `integrity-severity-prompt.test.ts`.
+
+Continuation findings:
+
+- The full orchestrator/workflow regression run exposed one remaining old-shape
+  Visual QA report fixture in the shared stage dispatcher tests. That fixture
+  still returned a report without registered `check_items` or row-level
+  `check_ids`, so the dispatcher persistence path failed schema validation.
+- The fix was to update the dispatcher fixture to emit the same registered check
+  graph that production Visual QA now requires, including a screenshot-bearing
+  accepted report for successful Visual QA consumption.
 
 ## Existing Pattern
 
@@ -140,3 +167,13 @@ must attach to those check items.
 - `bun test packages/opencorvus/test/agent/agent.test.ts packages/opencorvus/test/agent/role-contract.test.ts --timeout 120000`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts --timeout 60000`
 - `git diff --check`
+
+## Executed Validation
+
+- `bun test packages/opencorvus/test/visual-qa packages/opencorvus/test/integrity --timeout 120000` passed: 121 tests.
+- `bun test packages/opencorvus/test/engine/workflow-integrity-step.test.ts packages/opencorvus/test/orchestrator/build-feedback-context.test.ts packages/opencorvus/test/orchestrator/tools.test.ts --timeout 120000` passed: 146 tests.
+- `bun test packages/opencorvus/test/prompt/integrity-severity-prompt.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts --timeout 120000` passed: 70 tests.
+- `bun test packages/opencorvus/test/agent/agent.test.ts packages/opencorvus/test/agent/role-contract.test.ts --timeout 120000` passed: 80 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `git diff --check` passed.
+- `rg -n "reviewer\\.findings|findings:\\s*\\[\\s*\\].*reviewer|submit_visual_qa_report.*VisualQaReport|submit_integrity_consensus.*IntegrityTeamReport" packages/opencorvus/src packages/opencorvus/test -g "*.ts"` returned no matches.

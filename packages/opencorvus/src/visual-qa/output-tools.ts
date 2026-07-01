@@ -97,11 +97,27 @@ function upsertByID<T extends { id: string }>(items: T[], item: T): "registered"
   return "registered"
 }
 
-function unknownCheckIDs(report: VisualQaReport, label: string, id: string, checkIDs: readonly string[]): string[] {
-  const known = new Set(report.check_items.map((item) => item.id))
+function unknownVisualCheckIDs(
+  knownCheckIDs: ReadonlySet<string>,
+  label: string,
+  id: string,
+  checkIDs: readonly string[],
+): string[] {
   if (checkIDs.length === 0) return [`${label} "${id}" has no check_ids; register a check item and reference it.`]
-  const unknown = checkIDs.filter((checkID) => !known.has(checkID))
+  const unknown = checkIDs.filter((checkID) => !knownCheckIDs.has(checkID))
   return unknown.length > 0 ? [`${label} "${id}" references unknown check_ids: ${unknown.join(", ")}.`] : []
+}
+
+function unknownCheckIDs(report: VisualQaReport, label: string, id: string, checkIDs: readonly string[]): string[] {
+  return unknownVisualCheckIDs(new Set(report.check_items.map((item) => item.id)), label, id, checkIDs)
+}
+
+function collectorUnknownCheckIDIssues(
+  collector: Pick<VisualQaCollector, "check_items">,
+  rows: Array<{ label: string; id: string; checkIDs: readonly string[] }>,
+): string[] {
+  const known = new Set(collector.check_items.map((item) => item.id))
+  return rows.flatMap((row) => unknownVisualCheckIDs(known, row.label, row.id, row.checkIDs))
 }
 
 function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutputToolContext): string[] {
@@ -381,6 +397,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaCoverageSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "coverage", id: row.region, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA coverage references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         collector.coverage.push(row)
         return `OK: visual QA coverage "${row.region}" registered (${collector.coverage.length} total)`
       },
@@ -391,6 +413,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaEvidenceSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "evidence", id: row.ref, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA evidence references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         collector.evidence.push(row)
         return `OK: visual QA evidence "${row.ref}" registered (${collector.evidence.length} total)`
       },
@@ -401,6 +429,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaFindingSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "finding", id: row.id, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA finding references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         const status = upsertByID(collector.findings, row)
         return `OK: visual QA finding "${row.id}" ${status} (${collector.findings.length} total)`
       },
@@ -412,6 +446,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaProductionBlockerSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "production_blocker", id: row.id, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA production_blocker references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         const status = upsertByID(collector.production_blockers, row)
         return `OK: visual QA production_blocker "${row.id}" ${status} (${collector.production_blockers.length} total)`
       },
@@ -422,6 +462,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaProblemDomRegionSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "problem_dom_region", id: row.id, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA problem_dom_region references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         const status = upsertByID(collector.problem_dom_regions, row)
         return `OK: visual QA problem_dom_region "${row.id}" ${status} (${collector.problem_dom_regions.length} total)`
       },
@@ -433,6 +479,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaUnresolvedCodeModuleProblemSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "unresolved_code_module_problem", id: row.id, checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA unresolved_code_module_problem references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         const status = upsertByID(collector.unresolved_code_module_problems, row)
         return `OK: visual QA unresolved_code_module_problem "${row.id}" ${status} (${collector.unresolved_code_module_problems.length} total)`
       },
@@ -443,6 +495,12 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
         const row = VisualQaRepairSchema.parse(raw)
+        const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
+          { label: "repair", id: row.finding_ids.join(",") || "repair", checkIDs: row.check_ids },
+        ])
+        if (checkIDIssues.length > 0) {
+          return `Error: visual QA repair references unregistered check items: ${checkIDIssues.join("; ")}`
+        }
         collector.repairs.push(row)
         return `OK: visual QA repair registered (${collector.repairs.length} total)`
       },
@@ -528,6 +586,10 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
           open_questions: collector.open_questions,
           fact_check_items: collector.fact_check_items,
         })
+        const checkGraphIssues = visualQaCheckGraphIssues(report, context)
+        if (checkGraphIssues.length > 0) {
+          return `Error: visual QA check graph is incomplete: ${checkGraphIssues.join("; ")}`
+        }
         const feedback = await summarizeVisualQaReportFeedback(report, context)
         const acceptance = visualQaEffectiveAcceptance(report, feedback)
         collector.final = report

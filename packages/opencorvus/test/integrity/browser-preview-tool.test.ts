@@ -28,6 +28,7 @@ function reviewerReport(reviewerID: string) {
     },
     drilldowns: [
       {
+        checkIDs: [checkID],
         kind: "inspect_visual_evidence",
         target: "VisualEvidenceBundle",
         purpose: "Verify reference-comparison evidence.",
@@ -36,13 +37,13 @@ function reviewerReport(reviewerID: string) {
     ],
     coverage: [
       {
+        checkIDs: [checkID],
         userRequestQuote: "reference visual evidence",
         status: "covered",
         evidence: "Visual evidence inspected.",
       },
     ],
-    evidence: ["Visual evidence inspected."],
-    findings: [],
+    evidence: [{ checkIDs: [checkID], note: "Visual evidence inspected." }],
     openQuestions: [],
   }
 }

@@ -45,7 +45,6 @@ const basePayload = {
       summary: "A",
       investigationPlan: reviewerInvestigationPlan,
       evidence: [],
-      findings: [],
       openQuestions: [],
     },
     {
@@ -56,7 +55,6 @@ const basePayload = {
       summary: "B",
       investigationPlan: reviewerInvestigationPlan,
       evidence: [],
-      findings: [],
       openQuestions: [],
     },
   ],
@@ -166,6 +164,7 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
     },
     drilldowns: [
       {
+        checkIDs: ["check-schema"],
         kind: "diff_for_file",
         target: "src/features/orders/api.ts",
         purpose: "Check mock replacement",
@@ -174,13 +173,13 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
     ],
     coverage: [
       {
+        checkIDs: ["check-schema"],
         userRequestQuote: "wire real API",
         status: "covered",
         evidence: "diff shows real client path",
       },
     ],
-    evidence: ["Scoped diff inspected."],
-    findings: [],
+    evidence: [{ checkIDs: ["check-schema"], note: "Scoped diff inspected." }],
     openQuestions: [],
   })
   expect(reviewer.coverage[0]?.status).toBe("covered")
@@ -226,6 +225,7 @@ test("integrity reviewer report requires a complete investigation plan", () => {
     investigationPlan: reviewerInvestigationPlan,
     drilldowns: [
       {
+        checkIDs: ["check-schema"],
         kind: "diff_for_file",
         target: "src/api.ts",
         purpose: "Check dispatch authority",
@@ -234,17 +234,23 @@ test("integrity reviewer report requires a complete investigation plan", () => {
     ],
     coverage: [
       {
+        checkIDs: ["check-schema"],
         requirementID: "REQ-1",
         status: "covered",
         evidence: "Dispatch authority inspected.",
       },
     ],
-    evidence: ["Inspected changed files."],
-    findings: [],
+    evidence: [{ checkIDs: ["check-schema"], note: "Inspected changed files." }],
     openQuestions: [],
   }
 
   expect(IntegrityReviewerReportSchema.safeParse(validReport).success).toBe(true)
+  expect(
+    IntegrityReviewerReportSchema.safeParse({
+      ...validReport,
+      findings: [],
+    }).success,
+  ).toBe(false)
 
   const withoutPlan = IntegrityReviewerReportSchema.safeParse({
     ...validReport,
@@ -325,13 +331,13 @@ test("integrity reviewer coverage rejects finding traceability field names", () 
     drilldowns: [],
     coverage: [
       {
+        checkIDs: ["check-schema"],
         requirementIDs: ["REQ-1"],
         status: "missing",
         evidence: "The row uses finding traceability fields instead of coverage anchors.",
       },
     ],
-    evidence: ["Inspected changed files."],
-    findings: [],
+    evidence: [{ checkIDs: ["check-schema"], note: "Inspected changed files." }],
     openQuestions: [],
   })
 
@@ -352,6 +358,7 @@ test("integrity reviewer drilldowns reject finding-only fields", () => {
     investigationPlan: reviewerInvestigationPlan,
     drilldowns: [
       {
+        checkIDs: ["check-schema"],
         kind: "diff_for_file",
         target: "src/api.ts",
         purpose: "Check dispatch authority",
@@ -361,13 +368,13 @@ test("integrity reviewer drilldowns reject finding-only fields", () => {
     ],
     coverage: [
       {
+        checkIDs: ["check-schema"],
         requirementID: "REQ-1",
         status: "covered",
         evidence: "Dispatch authority inspected.",
       },
     ],
-    evidence: ["Inspected changed files."],
-    findings: [],
+    evidence: [{ checkIDs: ["check-schema"], note: "Inspected changed files." }],
     openQuestions: [],
   })
 

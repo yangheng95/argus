@@ -9,6 +9,10 @@ export const IntegrityCoverageStatusSchema = z.enum(IntegrityCoverageStatusValue
 export type IntegrityCoverageStatus = z.infer<typeof IntegrityCoverageStatusSchema>
 export const IntegrityCheckItemStatusSchema = z.enum(["passed", "failed", "inconclusive"])
 export type IntegrityCheckItemStatus = z.infer<typeof IntegrityCheckItemStatusSchema>
+const IntegrityCheckIDListSchema = z
+  .array(z.string().min(1))
+  .min(1)
+  .describe("Registered Integrity check item IDs that support this review row.")
 
 export const IntegrityReviewerPlanSchema = z
   .object({
@@ -140,6 +144,7 @@ export const IntegrityReviewerReportSchema = z
       .array(
         z
           .object({
+            checkIDs: IntegrityCheckIDListSchema,
             kind: z.string().min(1).describe("Evidence tool or inspection category."),
             target: z
               .string()
@@ -158,6 +163,7 @@ export const IntegrityReviewerReportSchema = z
       .array(
         z
           .object({
+            checkIDs: IntegrityCheckIDListSchema,
             requirementID: z
               .string()
               .min(1)
@@ -185,8 +191,16 @@ export const IntegrityReviewerReportSchema = z
           ),
       )
       .default([]),
-    evidence: z.array(z.string().min(1)).default([]),
-    findings: z.array(IntegrityFindingSchema).default([]),
+    evidence: z
+      .array(
+        z
+          .object({
+            checkIDs: IntegrityCheckIDListSchema,
+            note: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
     openQuestions: z.array(z.string().min(1)).default([]),
   })
   .strict()

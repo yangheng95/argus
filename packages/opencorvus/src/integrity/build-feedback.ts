@@ -40,7 +40,7 @@ export function composeIntegrityFeedbackForBuild(input: {
         : "(none)"
     }; reason=${input.specSnapshotLineage.reason}.`,
     `The latest post-build verdict is \`${latestAttempt.verdict ?? "unknown"}\` (R${latestAttempt.attemptNumber} at ${new Date(latestAttempt.timeCreated).toISOString()}).`,
-    "The workflow review boundary is not accepted until every blocking finding below is repaired and a later post-build integrity pass verdict is recorded.",
+    "Integrity reports are repair evidence, not a completion gate; repair every blocking finding below and let the orchestrator explicitly decide the next workflow action.",
     "Your terminal `report_build_result` must include `repair_report`: every blocking fingerprint must appear exactly once in either `repaired_findings[]` or `unrepaired_findings[]` with changed files and verification evidence.",
   ].join("\n")
   const rootSection = renderPersistentRootsSection(history.persistentBlockingRoots, input.promptBudget)

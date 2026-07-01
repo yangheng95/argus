@@ -79,7 +79,6 @@ mock.module("@/agent/runner", () => ({
         summary: `${reviewerID} passed`,
         investigationPlan,
         evidence: [],
-        findings: [],
         openQuestions: [],
       }
     } else if (input.terminalTool.toolName === "submit_integrity_consensus") {
@@ -194,8 +193,24 @@ function passTeamReport(input: { requirementIDs?: string[] } = {}) {
         verdict: "pass",
         summary: "rev_a passed",
         investigationPlan,
-        evidence: [],
-        findings: [],
+        drilldowns: [
+          {
+            checkIDs: ["check_surface_a"],
+            kind: "inspect_integrity_evidence",
+            target: "Surface A",
+            purpose: "Verify Surface A scoped promise.",
+            result: "Surface A evidence satisfies the scoped promise.",
+          },
+        ],
+        coverage: [
+          {
+            checkIDs: ["check_surface_a"],
+            userRequestQuote: "Surface A satisfies its scoped promise.",
+            status: "covered",
+            evidence: "inspect_integrity_evidence:surface-a",
+          },
+        ],
+        evidence: [{ checkIDs: ["check_surface_a"], note: "inspect_integrity_evidence:surface-a" }],
         openQuestions: [],
       },
       {
@@ -205,8 +220,24 @@ function passTeamReport(input: { requirementIDs?: string[] } = {}) {
         verdict: "pass",
         summary: "rev_b passed",
         investigationPlan,
-        evidence: [],
-        findings: [],
+        drilldowns: [
+          {
+            checkIDs: ["check_surface_b"],
+            kind: "inspect_integrity_evidence",
+            target: "Surface B",
+            purpose: "Verify Surface B scoped promise.",
+            result: "Surface B evidence satisfies the scoped promise.",
+          },
+        ],
+        coverage: [
+          {
+            checkIDs: ["check_surface_b"],
+            userRequestQuote: "Surface B satisfies its scoped promise.",
+            status: "covered",
+            evidence: "inspect_integrity_evidence:surface-b",
+          },
+        ],
+        evidence: [{ checkIDs: ["check_surface_b"], note: "inspect_integrity_evidence:surface-b" }],
         openQuestions: [],
       },
     ],
@@ -632,6 +663,7 @@ describe("integrity team-agent replay attempts", () => {
       [
         {
           reviewerID: "rev_api",
+          checkIDs: ["check_rev_api"],
           scope: "API authority",
           verdict: "concerns",
           summary: "API status has concerns.",
@@ -639,17 +671,18 @@ describe("integrity team-agent replay attempts", () => {
           drilldowns: [],
           coverage: [
             {
+              checkIDs: ["check_rev_api"],
               userRequestQuote: "Use only API names from SdkAdapter authority.",
               status: "missing",
               evidence: "One API name is not in SdkAdapter.",
             },
           ],
-          evidence: ["Read SdkAdapter."],
-          findings: [],
+          evidence: [{ checkIDs: ["check_rev_api"], note: "Read SdkAdapter." }],
           openQuestions: [],
         },
         {
           reviewerID: "rev_flow",
+          checkIDs: ["check_rev_flow"],
           scope: "Flow behavior",
           verdict: "pass",
           summary: "Flow checked.",
@@ -657,13 +690,13 @@ describe("integrity team-agent replay attempts", () => {
           drilldowns: [],
           coverage: [
             {
+              checkIDs: ["check_rev_flow"],
               userRequestQuote: "Use only API names from SdkAdapter authority.",
               status: "covered",
               evidence: "Flow reviewed.",
             },
           ],
-          evidence: ["Read handlers."],
-          findings: [],
+          evidence: [{ checkIDs: ["check_rev_flow"], note: "Read handlers." }],
           openQuestions: [],
         },
       ],
@@ -796,8 +829,12 @@ describe("integrity team-agent replay attempts", () => {
     expect((collector as any).report).toBeUndefined()
 
     const report = passTeamReport({ requirementIDs: ["REQ-1", "REQ-2"] })
+    ;(report as any).verdict = "concerns"
+    ;(report as any).summary = "Team found incomplete coverage."
+    ;(report as any).teamReportMarkdown = "Team found incomplete coverage."
     ;(report.reviewers[0] as any).coverage = [
       {
+        checkIDs: ["check_surface_a"],
         requirementID: "REQ-1",
         status: "covered",
         evidence: "Primary content evidence inspected.",
@@ -805,6 +842,7 @@ describe("integrity team-agent replay attempts", () => {
     ]
     ;(report.reviewers[1] as any).coverage = [
       {
+        checkIDs: ["check_surface_b"],
         requirementID: "REQ-2",
         status: "missing",
         evidence: "Footer evidence is absent.",
@@ -830,6 +868,38 @@ describe("integrity team-agent replay attempts", () => {
 
     const result = await kit.tools.submit_integrity_consensus.execute!(passTeamReport(), {} as any)
     expect(String(result)).toContain("accepts only verdict, summary, and teamReportMarkdown")
+  })
+
+  test("register_integrity_reviewer_report rejects unknown check ids before final submit", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const collector = IntegrityTestHooks.emptyConsensusCollector()
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector,
+      goals: [],
+    } as any)
+
+    const result = await kit.tools.register_integrity_reviewer_report.execute!(passTeamReport().reviewers[0], {} as any)
+
+    expect(String(result)).toContain("references unregistered check items")
+    expect(collector.reviewers).toHaveLength(0)
+  })
+
+  test("submit_integrity_consensus rejects duplicate submits without overwriting the report", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const collector = IntegrityTestHooks.emptyConsensusCollector()
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector,
+      goals: [],
+    } as any)
+
+    await submitRegisteredIntegrityReport(kit.tools, passTeamReport())
+    const duplicate = await kit.tools.submit_integrity_consensus.execute!(
+      { verdict: "pass", summary: "second", teamReportMarkdown: "second" },
+      {} as any,
+    )
+
+    expect(String(duplicate)).toContain("duplicate submit_integrity_consensus ignored")
+    expect(collector.report?.summary).toBe("Team passed")
   })
 
   test("consensus prompt summarizes oversized reviewer reports instead of replaying full tool dumps", async () => {
@@ -871,39 +941,23 @@ describe("integrity team-agent replay attempts", () => {
       [
         {
           reviewerID: "rev_large",
+          checkIDs: ["check_rev_large"],
           scope: "Large report",
           verdict: "needs_correction",
           summary: "Important finding survives while raw dumps are summarized.",
           investigationPlan,
           drilldowns: Array.from({ length: 40 }, (_value, index) => ({
+            checkIDs: ["check_rev_large"],
             kind: "command",
             target: `target-${index}`,
             purpose: `purpose-${index} ${"x".repeat(120)}`,
             result: `result-${index} ${"y".repeat(120)}`,
           })),
           coverage: [],
-          evidence: Array.from({ length: 80 }, (_value, index) => `late-evidence-${index} ${"z".repeat(180)}`),
-          findings: [
-            {
-              id: "large-finding",
-              severity: "blocking",
-              verdictImpact: "needs_correction",
-              title: "Important finding",
-              description: "This finding must remain visible to consensus.",
-              evidence: ["finding evidence"],
-              targetIDs: ["goal_large"],
-              requirementIDs: ["REQ-1"],
-              specIDs: [],
-              filePaths: ["src/large.ts"],
-              affectedSymbols: ["LargeComponent"],
-              repair: "Fix the important defect.",
-              verify: ["Run focused verification."],
-              sourceFindingIDs: [],
-              priorAttemptRefs: [],
-              reviewers: ["rev_large"],
-              consensus: "agreed",
-            },
-          ],
+          evidence: Array.from({ length: 80 }, (_value, index) => ({
+            checkIDs: ["check_rev_large"],
+            note: `late-evidence-${index} ${"z".repeat(180)}`,
+          })),
           openQuestions: [],
         },
       ],
@@ -1019,6 +1073,7 @@ describe("integrity team-agent replay attempts", () => {
       [
         {
           reviewerID: "rev_settings",
+          checkIDs: ["check_rev_settings"],
           scope: "Settings runtime behavior",
           verdict: "pass",
           summary: "Runtime behavior inspected.",
@@ -1030,6 +1085,7 @@ describe("integrity team-agent replay attempts", () => {
           },
           drilldowns: [
             {
+              checkIDs: ["check_rev_settings"],
               kind: "diff_for_file",
               target: "src/settings.ts",
               purpose: "Check validation before persistence.",
@@ -1038,13 +1094,13 @@ describe("integrity team-agent replay attempts", () => {
           ],
           coverage: [
             {
+              checkIDs: ["check_rev_settings"],
               userRequestQuote: "rejects invalid changes",
               status: "covered",
               evidence: "Validation handler inspected.",
             },
           ],
-          evidence: ["Scoped settings diff inspected."],
-          findings: [],
+          evidence: [{ checkIDs: ["check_rev_settings"], note: "Scoped settings diff inspected." }],
           openQuestions: [],
         },
       ],

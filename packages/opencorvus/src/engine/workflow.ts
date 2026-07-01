@@ -16,6 +16,7 @@
  */
 import { createDecisionLog } from "@/decision-log"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
+import { visualQaDecisionRecordEffectiveAcceptance } from "@/visual-qa/acceptance-semantics"
 import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
@@ -421,7 +422,7 @@ function parseVisualQaReportProjection(value: string): boolean | undefined {
   try {
     const parsed = VisualQaDecisionRecordSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined
-    return parsed.data.acceptance.effectiveAccepted
+    return visualQaDecisionRecordEffectiveAcceptance(parsed.data).effectiveAccepted
   } catch {
     return undefined
   }

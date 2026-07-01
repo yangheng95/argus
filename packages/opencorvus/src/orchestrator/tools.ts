@@ -92,6 +92,7 @@ import {
   renderVisualQaIntegrityContext,
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
+import { visualQaDecisionRecordEffectiveAcceptance } from "@/visual-qa/acceptance-semantics"
 import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
@@ -4038,7 +4039,8 @@ async function recoverPendingVisualQaRedispatchAction(input: {
     )
   }
   const record = parsed.data
-  const { acceptance, report } = record
+  const report = record.report
+  const acceptance = visualQaDecisionRecordEffectiveAcceptance(record)
   await completeAgentCoordinationAction({
     taskID: input.taskID,
     actionID: action.payload.action_id,
@@ -4571,7 +4573,8 @@ function latestFailedVisualQaDecisionRecord(taskID: string) {
   if (!parsed.success) {
     throw new Error(`Latest visual_qa report decision ${latestReport.id} is malformed: ${parsed.error.message}`)
   }
-  return parsed.data.acceptance.effectiveAccepted ? undefined : parsed.data
+  const acceptance = visualQaDecisionRecordEffectiveAcceptance(parsed.data)
+  return acceptance.effectiveAccepted ? undefined : { ...parsed.data, acceptance }
 }
 
 function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
@@ -8423,11 +8426,7 @@ export function createOrchestratorTools(input: {
         let integrityStepFailed = true
         try {
           const outcome = await runIntegrityReview(toolExecution, toolInput)
-          integrityStepFailed = !(
-            outcome.status === "reviewed" &&
-            outcome.verdict === "pass" &&
-            outcome.phase === "post_build"
-          )
+          integrityStepFailed = false
           return renderIntegrityOutcome(outcome)
         } finally {
           await trackStepComplete("integrity", undefined, integrityStepFailed)
