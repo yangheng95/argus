@@ -54948,7 +54948,7 @@
                 "minLength": 1
               },
               "checkItems": {
-                "default": [],
+                "minItems": 1,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -55058,7 +55058,7 @@
                     },
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs this reviewer report summarizes.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55220,7 +55220,7 @@
                           },
                           "checkIDs": {
                             "description": "Registered Integrity check item IDs that exposed this finding.",
-                            "default": [],
+                            "minItems": 1,
                             "type": "array",
                             "items": {
                               "type": "string",
@@ -55361,6 +55361,7 @@
                         },
                         "required": [
                           "id",
+                          "checkIDs",
                           "severity",
                           "verdictImpact",
                           "title",
@@ -55382,6 +55383,7 @@
                   },
                   "required": [
                     "reviewerID",
+                    "checkIDs",
                     "scope",
                     "verdict",
                     "summary",
@@ -55398,7 +55400,7 @@
                   "properties": {
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs that support this coverage audit row.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55432,6 +55434,7 @@
                     }
                   },
                   "required": [
+                    "checkIDs",
                     "promise",
                     "status",
                     "notes"
@@ -55447,7 +55450,7 @@
                   "properties": {
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs that left this risk uninspected.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55472,6 +55475,7 @@
                     }
                   },
                   "required": [
+                    "checkIDs",
                     "risk",
                     "reason",
                     "action"
@@ -55491,7 +55495,7 @@
                     },
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs that exposed this finding.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55632,6 +55636,7 @@
                   },
                   "required": [
                     "id",
+                    "checkIDs",
                     "severity",
                     "verdictImpact",
                     "title",
@@ -55690,7 +55695,7 @@
                     },
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs that require this repair.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55800,6 +55805,7 @@
                   },
                   "required": [
                     "id",
+                    "checkIDs",
                     "description",
                     "evidence"
                   ],
@@ -55818,7 +55824,7 @@
                     },
                     "checkIDs": {
                       "description": "Registered Integrity check item IDs involved in this disagreement.",
-                      "default": [],
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -55844,6 +55850,7 @@
                   },
                   "required": [
                     "id",
+                    "checkIDs",
                     "description",
                     "reviewerIDs",
                     "consequence"
@@ -55877,6 +55884,7 @@
               "verdict",
               "summary",
               "teamReportMarkdown",
+              "checkItems",
               "reviewers",
               "taskID",
               "sessionID",

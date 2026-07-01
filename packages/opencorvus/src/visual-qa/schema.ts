@@ -22,7 +22,7 @@ export const VisualQaDomBoxSchema = z.object({
 export const VisualQaCoverageSchema = z.object({
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs that produced this coverage row."),
   region: z.string().min(1).describe("Visible region, route, component family, or interaction surface checked."),
   viewports: z.array(VisualQaViewportSchema).default([]),
@@ -75,7 +75,7 @@ export const VisualQaFindingSchema = z.object({
   id: z.string().min(1),
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs that exposed this finding."),
   severity: VisualQaSeveritySchema,
   status: VisualQaFindingStatusSchema,
@@ -94,7 +94,7 @@ export const VisualQaProductionBlockerSchema = z.object({
   id: z.string().min(1),
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered failed or inconclusive Visual QA check item IDs that justify this blocker."),
   principle_ids: z
     .array(z.enum(VISUAL_QA_PRODUCT_DESIGN_PRINCIPLE_IDS))
@@ -128,7 +128,7 @@ export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
   id: z.string().min(1),
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs that exposed this unresolved module problem."),
   code_module_reference: VisualQaCodeModuleReferenceSchema,
   reason: z
@@ -143,7 +143,7 @@ export const VisualQaProblemDomRegionSchema = z.object({
   id: z.string().min(1),
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs that localized this DOM region."),
   blocker_ids: z
     .array(z.string().min(1))
@@ -190,7 +190,7 @@ export const VisualQaProblemDomRegionSchema = z.object({
 export const VisualQaRepairSchema = z.object({
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs whose defects were repaired or verified."),
   finding_ids: z.array(z.string().min(1)).default([]),
   files_changed: z.array(z.string().min(1)).default([]),
@@ -201,7 +201,7 @@ export const VisualQaRepairSchema = z.object({
 export const VisualQaEvidenceSchema = z.object({
   check_ids: z
     .array(z.string().min(1))
-    .default([])
+    .min(1)
     .describe("Registered Visual QA check item IDs supported by this evidence."),
   type: z.enum([
     "screenshot",
@@ -244,7 +244,7 @@ export const VisualQaCommandSchema = z.object({
 export const VisualQaReportSchema = z.object({
   accepted: z.boolean(),
   summary: z.string().min(1),
-  check_items: z.array(VisualQaCheckItemSchema).default([]),
+  check_items: z.array(VisualQaCheckItemSchema).min(1),
   coverage: z.array(VisualQaCoverageSchema).default([]),
   findings: z.array(VisualQaFindingSchema).default([]),
   production_blockers: z.array(VisualQaProductionBlockerSchema).default([]),

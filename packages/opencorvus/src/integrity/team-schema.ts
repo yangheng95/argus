@@ -82,7 +82,7 @@ export const IntegrityFindingSchema = z
     id: z.string().min(1),
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs that exposed this finding."),
     severity: z.enum(["blocking", "advisory"]),
     verdictImpact: IntegrityVerdictSchema,
@@ -113,7 +113,7 @@ export const IntegrityReviewerReportSchema = z
     reviewerID: z.string().min(1),
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs this reviewer report summarizes."),
     scope: z.string().min(1),
     verdict: IntegrityVerdictSchema,
@@ -209,7 +209,7 @@ export const IntegrityRequiredRepairSchema = z
     id: z.string().min(1),
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs that require this repair."),
     fingerprint: z.string().min(1).optional(),
     severity: z.enum(["blocking", "advisory"]).default("blocking"),
@@ -236,7 +236,7 @@ export const IntegrityUnresolvedDisagreementSchema = z
     id: z.string().min(1),
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs involved in this disagreement."),
     description: z.string().min(1),
     reviewerIDs: z.array(z.string().min(1)).min(2),
@@ -250,7 +250,7 @@ export const IntegrityCoverageAuditRowSchema = z
   .object({
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs that support this coverage audit row."),
     promise: z.string().min(1),
     reviewerIDs: z.array(z.string().min(1)).default([]),
@@ -267,7 +267,7 @@ export const IntegrityUninspectedRiskSchema = z
   .object({
     checkIDs: z
       .array(z.string().min(1))
-      .default([])
+      .min(1)
       .describe("Registered Integrity check item IDs that left this risk uninspected."),
     risk: z.string().min(1),
     reason: z.string().min(1),
@@ -282,7 +282,7 @@ export const IntegrityTeamReportSchema = z
     verdict: IntegrityVerdictSchema,
     summary: z.string().min(1),
     teamReportMarkdown: z.string().min(1),
-    checkItems: z.array(IntegrityCheckItemSchema).default([]),
+    checkItems: z.array(IntegrityCheckItemSchema).min(1),
     reviewers: z.array(IntegrityReviewerReportSchema).min(2),
     coverageAudit: z.array(IntegrityCoverageAuditRowSchema).default([]),
     uninspectedRisks: z.array(IntegrityUninspectedRiskSchema).default([]),

@@ -14,15 +14,32 @@ const reviewerInvestigationPlan = {
   passCriteria: ["scoped evidence proves the requested behavior"],
 }
 
+const baseCheckItem = {
+  id: "check-schema",
+  category: "requirement",
+  target: "schema payload",
+  question: "Does the schema payload represent a reviewed requirement?",
+  status: "passed",
+  expected: "The report includes an explicit registered check item.",
+  observed: "The schema fixture registers check-schema and cites it from report rows.",
+  evidence: ["schema fixture evidence"],
+  requirementIDs: ["REQ-schema"],
+  specIDs: [],
+  targetIDs: [],
+  userRequestQuotes: ["ship the requested behavior"],
+}
+
 const basePayload = {
   taskID: "tsk_schema",
   sessionID: "ses_schema",
   verdict: "pass",
   summary: "Team passed",
   teamReportMarkdown: "Team report",
+  checkItems: [baseCheckItem],
   reviewers: [
     {
       reviewerID: "reviewer-a",
+      checkIDs: ["check-schema"],
       scope: "A",
       verdict: "pass",
       summary: "A",
@@ -33,6 +50,7 @@ const basePayload = {
     },
     {
       reviewerID: "reviewer-b",
+      checkIDs: ["check-schema"],
       scope: "B",
       verdict: "pass",
       summary: "B",
@@ -64,7 +82,16 @@ test("integrity completed payload cannot pass with required repairs or unresolve
   expect(
     IntegrityReviewCompletedPayloadSchema.safeParse({
       ...basePayload,
-      requiredRepairs: [{ id: "repair-1", description: "repair", evidence: ["e"], targetIDs: [], filePaths: [] }],
+      requiredRepairs: [
+        {
+          id: "repair-1",
+          checkIDs: ["check-schema"],
+          description: "repair",
+          evidence: ["e"],
+          targetIDs: [],
+          filePaths: [],
+        },
+      ],
     }).success,
   ).toBe(false)
 
@@ -74,6 +101,7 @@ test("integrity completed payload cannot pass with required repairs or unresolve
       unresolvedDisagreements: [
         {
           id: "dispute-1",
+          checkIDs: ["check-schema"],
           description: "dispute",
           reviewerIDs: ["reviewer-a", "reviewer-b"],
           consequence: "cannot pass",
@@ -126,6 +154,7 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
 
   const reviewer = IntegrityReviewerReportSchema.parse({
     reviewerID: "rev-api",
+    checkIDs: ["check-schema"],
     scope: "Real API integration",
     verdict: "pass",
     summary: "API integration is backed by the real client.",
@@ -160,9 +189,11 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
     verdict: "pass",
     summary: "Covered critical request promises.",
     teamReportMarkdown: "pass",
+    checkItems: [baseCheckItem],
     reviewers: [reviewer, { ...reviewer, reviewerID: "rev-ui", scope: "UI", summary: "UI covered" }],
     coverageAudit: [
       {
+        checkIDs: ["check-schema"],
         promise: "wire real API",
         reviewerIDs: ["rev-api"],
         status: "covered",
@@ -188,6 +219,7 @@ test("integrity schemas carry dynamic audit strategy and coverage evidence", () 
 test("integrity reviewer report requires a complete investigation plan", () => {
   const validReport = {
     reviewerID: "reviewer-a",
+    checkIDs: ["check-schema"],
     scope: "API authority",
     verdict: "pass",
     summary: "API authority was inspected.",
@@ -255,9 +287,11 @@ test("integrity coverage audit status rejects verdict enums such as concerns", (
     verdict: "concerns",
     summary: "Coverage has concerns.",
     teamReportMarkdown: "concerns",
+    checkItems: [baseCheckItem],
     reviewers: basePayload.reviewers,
     coverageAudit: [
       {
+        checkIDs: ["check-schema"],
         promise: "API names from authority only",
         reviewerIDs: ["reviewer-a"],
         status: "concerns",
@@ -283,6 +317,7 @@ test("integrity coverage audit status rejects verdict enums such as concerns", (
 test("integrity reviewer coverage rejects finding traceability field names", () => {
   const parsed = IntegrityReviewerReportSchema.safeParse({
     reviewerID: "reviewer-a",
+    checkIDs: ["check-schema"],
     scope: "API authority",
     verdict: "concerns",
     summary: "API authority has a gap.",
@@ -310,6 +345,7 @@ test("integrity reviewer coverage rejects finding traceability field names", () 
 test("integrity reviewer drilldowns reject finding-only fields", () => {
   const parsed = IntegrityReviewerReportSchema.safeParse({
     reviewerID: "reviewer-a",
+    checkIDs: ["check-schema"],
     scope: "API authority",
     verdict: "pass",
     summary: "API authority was inspected.",

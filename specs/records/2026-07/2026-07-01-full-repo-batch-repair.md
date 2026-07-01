@@ -103,6 +103,15 @@ Root causes repaired during the full-repo pass:
   registration-first output tools: every coverage row, evidence row, finding,
   blocker, repair, reviewer report, and consensus claim cites registered check
   item IDs before the final accepted/verdict summary is submitted.
+- Visual QA report schema still allowed registered-check arrays to materialize
+  as empty defaults. The schema now requires non-empty `check_items` and
+  non-empty `check_ids` on rows that claim coverage, evidence, blockers,
+  findings, repairs, unresolved module problems, or DOM problem regions; workflow
+  projection tests now treat legacy bare reports as failed schema records rather
+  than relying on defaulted empty arrays.
+- Integrity report schema received the same non-empty registered-check
+  discipline for team check items, reviewer reports, findings, coverage audit
+  rows, uninspected risks, required repairs, and unresolved disagreements.
 
 Verification already run and passed:
 
@@ -130,6 +139,8 @@ Verification already run and passed:
 - `bun run --cwd packages/opencorvus typecheck`
 - `bun test packages/opencorvus/test/visual-qa/output-tools.test.ts packages/opencorvus/test/visual-qa/negative-fixtures.test.ts packages/opencorvus/test/visual-qa/agent.test.ts packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/integrity/team-schema.test.ts packages/opencorvus/test/integrity/team-agent.test.ts packages/opencorvus/test/integrity/browser-preview-tool.test.ts packages/opencorvus/test/integrity/consensus-traceability.test.ts packages/opencorvus/test/integrity/severity-active-path.test.ts`
 - `bun test packages/opencorvus/test/engine/workflow-integrity-step.test.ts`
+- `bun test packages/opencorvus/test/visual-qa/output-tools.test.ts packages/opencorvus/test/visual-qa/negative-fixtures.test.ts packages/opencorvus/test/visual-qa/agent.test.ts packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/engine/workflow-integrity-step.test.ts`
+- `bun test packages/opencorvus/test/integrity/team-schema.test.ts packages/opencorvus/test/integrity/team-agent.test.ts packages/opencorvus/test/integrity/browser-preview-tool.test.ts packages/opencorvus/test/integrity/consensus-traceability.test.ts packages/opencorvus/test/integrity/severity-active-path.test.ts packages/opencorvus/test/orchestrator/build-feedback-context.test.ts`
 - `bun test packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/test/agent/integrity-prompt-repository-baseline.test.ts packages/opencorvus/test/agent/orchestrator-stale-recovery-prompt.test.ts`
 - `bun run --cwd packages/sdk/js build`
 - `bun run typecheck`

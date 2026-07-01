@@ -84,6 +84,31 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function visualQaCoverage(checkID: string, overrides: Record<string, unknown> = {}) {
+  return {
+    check_ids: [checkID],
+    region: "dashboard",
+    viewports: [{ width: 1440, height: 900 }],
+    states: ["default"],
+    source_refs: ["visual_qa"],
+    evidence_refs: ["artifacts/dashboard.png"],
+    notes: "Checked the dashboard surface.",
+    ...overrides,
+  }
+}
+
+function visualQaEvidence(checkID: string, overrides: Record<string, unknown> = {}) {
+  return {
+    check_ids: [checkID],
+    type: "screenshot",
+    ref: "artifacts/dashboard.png",
+    viewport: { width: 1440, height: 900 },
+    state: "default",
+    note: "Fresh visual QA screenshot.",
+    ...overrides,
+  }
+}
+
 function visualQaDecisionRecord(reportInput: unknown, acceptanceOverrides: Record<string, unknown> = {}) {
   const report = VisualQaReportSchema.parse(reportInput)
   const semantics = visualQaReportAcceptanceSemantics(report)
@@ -95,6 +120,18 @@ function visualQaDecisionRecord(reportInput: unknown, acceptanceOverrides: Recor
       selfReportIssues: semantics.selfReportIssues,
       blockingIssues: semantics.selfReportIssues,
       ...acceptanceOverrides,
+    },
+  }
+}
+
+function legacyVisualQaDecisionRecord(report: Record<string, unknown>) {
+  return {
+    report,
+    acceptance: {
+      submittedAccepted: report.accepted === true,
+      effectiveAccepted: false,
+      selfReportIssues: ["Legacy Visual QA report does not satisfy current registered check item schema."],
+      blockingIssues: ["Legacy Visual QA report does not satisfy current registered check item schema."],
     },
   }
 }
@@ -531,7 +568,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("projects visual_qa as failed from schema-defaulted bare accepted report JSON", () => {
+  test("projects visual_qa as failed from legacy bare accepted report JSON", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_bare_report`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -569,13 +606,13 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaDecisionRecord({
+        legacyVisualQaDecisionRecord({
           accepted: true,
-          summary: "Bare accepted report projects completion through schema defaults.",
+          summary: "Bare accepted report cannot satisfy registered check item schema.",
           production_blockers: [],
         }),
       ),
-      reason: "Schema-defaulted frontend GUI and functional QA report.",
+      reason: "Legacy frontend GUI and functional QA report.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
@@ -685,6 +722,7 @@ describe("pipeline workflow review topology", () => {
             summary: "Report claimed acceptance while listing missing reference regions.",
             evidence: [
               {
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 type: "reference_comparison",
                 ref: "browser_preview_evidence:art_header",
                 viewport: { width: 1440, height: 900 },
@@ -928,11 +966,11 @@ describe("pipeline workflow review topology", () => {
       key: "report_1",
       value: JSON.stringify(
         visualQaDecisionRecord(
-          {
-            accepted: true,
+          visualQaReport({
             summary: "Report cited unverified string refs.",
             coverage: [
               {
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 region: "dashboard",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
@@ -947,6 +985,7 @@ describe("pipeline workflow review topology", () => {
             repairs: [],
             evidence: [
               {
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 type: "reference_comparison",
                 ref: "art_missing_comparison",
                 viewport: { width: 1440, height: 900 },
@@ -965,7 +1004,7 @@ describe("pipeline workflow review topology", () => {
             changed_files: [],
             open_questions: [],
             fact_check_items: [],
-          },
+          }),
           {
             effectiveAccepted: false,
             blockingIssues: [
@@ -1021,11 +1060,11 @@ describe("pipeline workflow review topology", () => {
       key: "report_1",
       value: JSON.stringify(
         visualQaDecisionRecord(
-          {
-            accepted: true,
+          visualQaReport({
             summary: "Report self-reported reference parity evidence.",
             coverage: [
               {
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 region: "dashboard",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
@@ -1040,6 +1079,7 @@ describe("pipeline workflow review topology", () => {
             repairs: [],
             evidence: [
               {
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 type: "reference_comparison",
                 ref: "art_missing_comparison",
                 viewport: { width: 1440, height: 900 },
@@ -1058,7 +1098,7 @@ describe("pipeline workflow review topology", () => {
             changed_files: [],
             open_questions: [],
             fact_check_items: [],
-          },
+          }),
           {
             effectiveAccepted: false,
             blockingIssues: [
@@ -1205,12 +1245,13 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaDecisionRecord({
-          accepted: true,
+        visualQaDecisionRecord(
+          visualQaReport({
           summary: "A report with blockers must not project as complete.",
           production_blockers: [
             {
               id: "blocker_map",
+              check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
               principle_ids: ["component-truth"],
               region: "dashboard",
               reason: "The visible map is a placeholder instead of the required production component.",
@@ -1220,7 +1261,8 @@ describe("pipeline workflow review topology", () => {
               evidence_refs: ["artifacts/dashboard.png"],
             },
           ],
-        }),
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
@@ -1269,14 +1311,12 @@ describe("pipeline workflow review topology", () => {
       key: "report_1",
       value: JSON.stringify(
         visualQaDecisionRecord(
-          {
-            accepted: true,
+          visualQaReport({
             summary: "Projection should trust the effective acceptance record.",
-            coverage: [],
-            findings: [],
             production_blockers: [
               {
                 id: "blocker_ignored_by_projection",
+                check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
                 principle_ids: ["component-truth"],
                 region: "dashboard",
                 reason: "This report field is intentionally inconsistent with the acceptance record.",
@@ -1286,21 +1326,7 @@ describe("pipeline workflow review topology", () => {
                 evidence_refs: ["artifacts/dashboard.png"],
               },
             ],
-            unresolved_code_module_problems: [],
-            repairs: [],
-            evidence: [],
-            reference_parity: {
-              required: false,
-              required_regions: [],
-              reference_comparison_evidence_refs: [],
-              missing_regions: [],
-              blocker_ids: [],
-            },
-            commands: [],
-            changed_files: [],
-            open_questions: [],
-            fact_check_items: [],
-          },
+          }),
           {
             effectiveAccepted: true,
             selfReportIssues: [],
@@ -1316,7 +1342,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
-  test("projects visual_qa as failed when accepted report relies on schema-defaulted blocker fields", () => {
+  test("projects visual_qa as failed when accepted report omits current blocker fields", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_visual_qa_missing_blockers_${stamp}`
@@ -1354,12 +1380,12 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaDecisionRecord({
+        legacyVisualQaDecisionRecord({
           accepted: true,
-          summary: "Accepted report relies on schema-defaulted blocker fields.",
+          summary: "Accepted report omits current registered check item and blocker fields.",
         }),
       ),
-      reason: "Schema-defaulted report is accepted by its own submitted fields.",
+      reason: "Legacy report is accepted by its own submitted fields.",
     })
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!

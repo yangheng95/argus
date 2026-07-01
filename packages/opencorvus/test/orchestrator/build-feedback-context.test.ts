@@ -162,6 +162,7 @@ describe("orchestrator build feedback context", () => {
         const suffix = now.toString(16)
         const projectID = `proj_visual_qa_feedback_${suffix}`
         const taskID = `tsk_visual_qa_feedback_${suffix}`
+        const visualQaCheckID = "check-hero-overlap"
 
         Database.use((db) => {
           db.insert(ProjectTable)
@@ -198,8 +199,26 @@ describe("orchestrator build feedback context", () => {
               report: {
                 accepted: false,
                 summary: "Hero module overlaps the navigation in the local implementation.",
+                check_items: [
+                  {
+                    id: visualQaCheckID,
+                    category: "reference-structure",
+                    question: "Does the local top viewport preserve the reference hero navigation structure?",
+                    region: "hero navigation boundary",
+                    reference_region_key: "top viewport",
+                    status: "failed",
+                    expected: "The hero module sits below the sticky navigation and keeps the tab row visible.",
+                    observed: "The hero module starts under the sticky navigation and clips the tab row.",
+                    viewports: [{ width: 1440, height: 900 }],
+                    states: ["default"],
+                    source_refs: ["browser_preview_reference_regions"],
+                    evidence_refs: ["screenshot://local/top-viewport.png"],
+                    required_correction: "Restore the hero container top spacing and tab row flow.",
+                  },
+                ],
                 coverage: [
                   {
+                    check_ids: [visualQaCheckID],
                     region: "top viewport",
                     viewports: [{ width: 1440, height: 900 }],
                     states: ["default"],
@@ -212,6 +231,7 @@ describe("orchestrator build feedback context", () => {
                 production_blockers: [
                   {
                     id: "blocker-hero-overlap",
+                    check_ids: [visualQaCheckID],
                     principle_ids: ["reference-structure"],
                     region: "hero navigation boundary",
                     reason: "The hero module starts under the sticky navigation and hides the tab row.",
@@ -225,6 +245,7 @@ describe("orchestrator build feedback context", () => {
                 problem_dom_regions: [
                   {
                     id: "dom-hero-tabs",
+                    check_ids: [visualQaCheckID],
                     blocker_ids: ["blocker-hero-overlap"],
                     region: "hero navigation boundary",
                     route: "/markets/indices/",
@@ -256,6 +277,7 @@ describe("orchestrator build feedback context", () => {
                 repairs: [],
                 evidence: [
                   {
+                    check_ids: [visualQaCheckID],
                     type: "screenshot",
                     ref: "screenshot://local/top-viewport.png",
                     viewport: { width: 1440, height: 900 },
