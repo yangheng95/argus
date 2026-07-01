@@ -17,6 +17,7 @@ test("task debug info keeps the concise workflow identity header", () => {
   expect(debugInfo).toContain("task.id:")
   expect(debugInfo).toContain("task.terminal:")
   expect(debugInfo).toContain("task.directory:")
+  expect(debugInfo).toContain("project.worktree:")
   expect(debugInfo).toContain("server.url:")
   expect(debugInfo).toContain("runtime.db:")
   expect(debugInfo).toContain("task.session:")
@@ -50,6 +51,11 @@ test("task debug info explains zero changed files with terminal build outcome", 
         sessionID: "ses_debug_outcome",
         time: { created: Date.now(), updated: Date.now() },
       },
+      project: {
+        id: "proj_debug_outcome",
+        name: "Debug project",
+        worktree: "C:/canonical/project",
+      },
       goalWorkflows: [
         {
           goalID: "gol_debug_outcome",
@@ -78,6 +84,8 @@ test("task debug info explains zero changed files with terminal build outcome", 
   )
 
   expect(blob).toContain("changedFiles=0")
+  expect(blob).toContain("task.directory: C:/repo")
+  expect(blob).toContain("project.worktree: C:/canonical/project")
   expect(blob).toContain("outcomes=grun_debug_outcome:aborted/aborted")
   expect(blob).toContain("noAcceptance=grun_debug_outcome:aborted")
 })

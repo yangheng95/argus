@@ -16,6 +16,10 @@ import { routeNotification } from "./notify"
 import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./event-policy"
 import { markSelectedLiveEventConsumed } from "./selected-stream-cursor"
 
+type SelectedTaskRecoveryOptions = {
+  requireFreshBoard?: boolean
+}
+
 // Forward SSE events to the tree-writer. The conversation view reads
 // `cardTreeStore`; message events stay out of the transcript mirror on the
 // visible hot path.
@@ -127,11 +131,28 @@ function isMessageWriterPrerequisiteError(error: unknown): boolean {
   )
 }
 
-function scheduleSelectedTaskRecovery(reason: string, taskID = activeTaskID()): void {
+function isGoalPhaseBoardProjectionPrerequisiteError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "")
+  return /^goal phase [^/]+\/[^/]+\/[^/]+ missing backend board projection$/.test(message)
+}
+
+function messageWriterRecoveryOptions(error: unknown): SelectedTaskRecoveryOptions | null {
+  if (isMessageWriterPrerequisiteError(error)) return {}
+  if (boardStore.boardSyncPending && isGoalPhaseBoardProjectionPrerequisiteError(error)) {
+    return { requireFreshBoard: true }
+  }
+  return null
+}
+
+function scheduleSelectedTaskRecovery(
+  reason: string,
+  taskID = activeTaskID(),
+  options: SelectedTaskRecoveryOptions = {},
+): void {
   const selectedTaskID = String(taskID || "")
   if (!selectedTaskID) return
   void import("./selected-task-recovery")
-    .then(({ recoverSelectedTaskConversation }) => recoverSelectedTaskConversation(reason, selectedTaskID))
+    .then(({ recoverSelectedTaskConversation }) => recoverSelectedTaskConversation(reason, selectedTaskID, options))
     .catch((error) => {
       if (error instanceof DOMException && error.name === "AbortError") return
       console.error("[sse] selected-task recovery failed", reason, selectedTaskID, error)
@@ -224,8 +245,9 @@ export function routeSSEEvent(event: any): boolean {
     try {
       writeSelectedMessageToTree(event)
     } catch (error) {
-      if (!isMessageWriterPrerequisiteError(error)) throw error
-      scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`)
+      const recoveryOptions = messageWriterRecoveryOptions(error)
+      if (!recoveryOptions) throw error
+      scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`, activeTaskID(), recoveryOptions)
       return true
     }
     advanceHandledSelectedTaskSequence(event)

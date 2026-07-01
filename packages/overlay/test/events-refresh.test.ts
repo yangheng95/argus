@@ -1,11 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import { installRealOverlayI18n } from "./fixtures/i18n"
-import {
-  stampTestEvent,
-  testEventOrderKey,
-  testSessionOrderKey,
-} from "./fixtures/timeline-order"
+import { stampTestEvent, testBoardOrderKey, testEventOrderKey, testSessionOrderKey } from "./fixtures/timeline-order"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 mock.module("../src/utils/icon-html", () => ({
@@ -21,9 +17,8 @@ const {
   handleTaskListNotification,
   __resetEventTimersForTest,
 } = await import("../src/services/events")
-const { boardStore, clearBoard, clearTasksForMissingDirectory, loadMoreTasks, loadTasks, setBoardStore } = await import(
-  "../src/store/board"
-)
+const { boardStore, clearBoard, clearTasksForMissingDirectory, loadMoreTasks, loadTasks, setBoardData, setBoardStore } =
+  await import("../src/store/board")
 const { appStore, setAppStore } = await import("../src/store/app")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
@@ -150,6 +145,49 @@ function fakeRecoveryTransport(
   }
 }
 
+function fakeGoalPhaseBoardRecoveryTransport(input: {
+  streams: Array<{ path: string; query?: Record<string, string> }>
+  requests: Array<{ path: string; query?: Record<string, string> }>
+  calls?: string[]
+  board?: Record<string, any>
+  status?: number
+}): HostTransport {
+  return {
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      input.requests.push({ path: req.path, query: req.query })
+      input.calls?.push(`request:${req.path}`)
+      if (req.path === "task/tsk_refresh/board") {
+        const status = input.status ?? 200
+        return {
+          status,
+          ok: status >= 200 && status < 300,
+          headers: {},
+          body: (status >= 200 && status < 300
+            ? (input.board ?? goalPhaseBoard())
+            : { message: "board refresh failed" }) as T,
+        }
+      }
+      if (req.path === "global/tasks") {
+        return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
+      }
+      throw new Error(`unexpected route ${req.path}`)
+    },
+    openStream(stream) {
+      input.streams.push(stream)
+      input.calls?.push(`stream:${stream.path}`)
+      return { close() {} }
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  }
+}
+
 async function waitForStreamCount(
   streams: Array<{ path: string; query?: Record<string, string> }>,
   count: number,
@@ -199,6 +237,117 @@ function assistantPartMeta(messageID: string, index: number) {
     channel: "assistant",
     resolvedRole: "assistant",
     orderKey: testOrderKey(messageID, index, "message"),
+  }
+}
+
+function goalPhaseBoard(
+  input: { goalID?: string; buildSessionID?: string; snapshotVersion?: string } = {},
+): Record<string, any> {
+  const goalID = input.goalID ?? "goal_phase_stale"
+  const buildSessionID = input.buildSessionID ?? "ses_phase_build"
+  const stepStartedAt = 1_776_000_400_000
+  const phaseStartedAt = 1_776_000_400_100
+  return {
+    snapshotVersion: input.snapshotVersion ?? `board:${goalID}:${buildSessionID}`,
+    lastSequence: 6,
+    task: {
+      id: "tsk_refresh",
+      orderKey: testOrderKey("tsk_refresh", 100_000, "task"),
+      sessionID: "ses_root",
+      status: "active",
+      request: "refresh",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "build",
+          orderKey: testBoardOrderKey(`${goalID}-workflow-build`, stepStartedAt, 61),
+          label: "Executor",
+          tool: "build",
+          scope: "goal",
+          phases: [{ id: "build", label: "Build", sessionKind: "build" }],
+        },
+      ],
+    },
+    goalWorkflows: [
+      {
+        goalID,
+        orderKey: testBoardOrderKey(`${goalID}-goal`, stepStartedAt - 1, 60),
+        goalRunID: `gr_${goalID}`,
+        goalTitle: "Goal Phase",
+        goalStatus: "running",
+        orderIndex: 0,
+        retryCount: 0,
+        steps: [
+          {
+            stepID: "build",
+            orderKey: testBoardOrderKey(`${goalID}-build`, stepStartedAt, 61),
+            label: "Executor",
+            status: "running",
+            startedAt: stepStartedAt,
+            payload: { buildSessionID },
+            phases: {
+              build: {
+                orderKey: testBoardOrderKey(`${goalID}-build-build`, phaseStartedAt, 62),
+                status: "running",
+                startedAt: phaseStartedAt,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    interactions: [],
+  }
+}
+
+function boardWithoutGoalPhase(snapshotVersion = "board:goal-phase-empty"): Record<string, any> {
+  return {
+    ...goalPhaseBoard({ snapshotVersion }),
+    goalWorkflows: [],
+  }
+}
+
+function goalPhasePartEvent(
+  input: {
+    goalID?: string
+    sessionID?: string
+    messageID?: string
+    partID?: string
+    sequence?: number
+    index?: number
+  } = {},
+): Record<string, any> {
+  const goalID = input.goalID ?? "goal_phase_stale"
+  const sessionID = input.sessionID ?? "ses_phase_build"
+  const messageID = input.messageID ?? "msg_phase_stale"
+  const partID = input.partID ?? "part_phase_stale"
+  const index = input.index ?? 401_000
+  const messageOrderKey = testOrderKey(messageID, index, "message")
+  return {
+    type: "message.part.updated",
+    taskID: "tsk_refresh",
+    sequence: input.sequence ?? 6,
+    timestamp: 1_776_000_401_000,
+    orderKey: messageOrderKey,
+    properties: {
+      taskID: "tsk_refresh",
+      channel: "build",
+      resolvedRole: "build",
+      parentSessionID: "ses_root",
+      goalID,
+      orderKey: messageOrderKey,
+      part: {
+        id: partID,
+        orderKey: testOrderKey(partID, index + 1, "part"),
+        messageID,
+        sessionID,
+        type: "text",
+        text: "build artifact ready",
+      },
+    },
   }
 }
 
@@ -637,6 +786,147 @@ test("message delta with missing tree prerequisites triggers selected-task recov
   expect(streams).toEqual([
     { path: "task/tsk_refresh/events", query: { directory: CONFIG_REFRESH_DIRECTORY, after_live: "0" } },
   ])
+})
+
+test("goal phase part waits for fresh board projection before selected-task recovery replay", async () => {
+  resetWriter()
+  const requests: Array<{ path: string; query?: Record<string, string> }> = []
+  const streams: Array<{ path: string; query?: Record<string, string> }> = []
+  const calls: string[] = []
+  __setHostTransportForTest(
+    fakeGoalPhaseBoardRecoveryTransport({
+      requests,
+      streams,
+      calls,
+      board: goalPhaseBoard({ goalID: "goal_phase_stale", buildSessionID: "ses_phase_build" }),
+    }),
+  )
+  selectTaskForTest("tsk_refresh")
+  setBoardStore("taskSequence", 5)
+  setBoardStore("board", boardWithoutGoalPhase("board:stale-goal-phase"))
+  setBoardStore("snapshotVersion", "board:stale-goal-phase")
+  setBoardStore("boardSyncPending", true)
+
+  const event = goalPhasePartEvent({ goalID: "goal_phase_stale", sessionID: "ses_phase_build" })
+  expect(routeSSEEvent(event)).toBe(true)
+
+  await waitForRequestCount(requests, 1)
+  await waitForStreamCount(streams, 1)
+  expect(calls).toEqual(["request:task/tsk_refresh/board", "stream:task/tsk_refresh/events"])
+  expect(requests[0]?.query?.sync).toBe("1")
+  expect(requests[0]?.query?.directory).toBe(CONFIG_REFRESH_DIRECTORY)
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_refresh/events",
+      query: { directory: CONFIG_REFRESH_DIRECTORY, after: "5", after_live: "0" },
+    },
+  ])
+  expect(boardStore.boardSyncPending).toBe(false)
+  expect(cardTreeStore.cards["step:goal_phase_stale:build:phase:build"]?.phaseSessionID).toBe("ses_phase_build")
+  expect(cardTreeStore.cards["step:goal_phase_stale:build:phase:build"]?.parts).toHaveLength(0)
+
+  expect(routeSSEEvent(event)).toBe(true)
+  expect(cardTreeStore.cards["step:goal_phase_stale:build:phase:build"]?.parts).toHaveLength(2)
+  expect(cardTreeStore.cards["build:session:ses_phase_build:message:msg_phase_stale"]).toBeUndefined()
+})
+
+test("goal phase part without pending board sync keeps backend projection invariant loud", () => {
+  resetWriter()
+  const requests: Array<{ path: string; query?: Record<string, string> }> = []
+  const streams: Array<{ path: string; query?: Record<string, string> }> = []
+  __setHostTransportForTest(fakeGoalPhaseBoardRecoveryTransport({ requests, streams }))
+  selectTaskForTest("tsk_refresh")
+  setBoardStore("taskSequence", 5)
+  setBoardStore("board", boardWithoutGoalPhase("board:no-pending-goal-phase"))
+  setBoardStore("snapshotVersion", "board:no-pending-goal-phase")
+  setBoardStore("boardSyncPending", false)
+
+  expect(() => routeSSEEvent(goalPhasePartEvent())).toThrow(
+    "goal phase goal_phase_stale/build/build missing backend board projection",
+  )
+  expect(requests).toEqual([])
+  expect(streams).toEqual([])
+})
+
+test("goal phase part with fresh board still missing phase stays loud on replay", async () => {
+  resetWriter()
+  const requests: Array<{ path: string; query?: Record<string, string> }> = []
+  const streams: Array<{ path: string; query?: Record<string, string> }> = []
+  __setHostTransportForTest(
+    fakeGoalPhaseBoardRecoveryTransport({
+      requests,
+      streams,
+      board: boardWithoutGoalPhase("board:fresh-missing-goal-phase"),
+    }),
+  )
+  selectTaskForTest("tsk_refresh")
+  setBoardStore("taskSequence", 5)
+  setBoardStore("board", boardWithoutGoalPhase("board:stale-missing-goal-phase"))
+  setBoardStore("snapshotVersion", "board:stale-missing-goal-phase")
+  setBoardStore("boardSyncPending", true)
+
+  const event = goalPhasePartEvent()
+  expect(routeSSEEvent(event)).toBe(true)
+  await waitForRequestCount(requests, 1)
+  await waitForStreamCount(streams, 1)
+  expect(boardStore.boardSyncPending).toBe(false)
+
+  expect(() => routeSSEEvent(event)).toThrow("goal phase goal_phase_stale/build/build missing backend board projection")
+})
+
+test("goal phase fresh board failure does not reopen selected-task stream", async () => {
+  resetWriter()
+  const originalError = console.error
+  let errorCalls = 0
+  console.error = () => {
+    errorCalls += 1
+  }
+  try {
+    const requests: Array<{ path: string; query?: Record<string, string> }> = []
+    const streams: Array<{ path: string; query?: Record<string, string> }> = []
+    __setHostTransportForTest(fakeGoalPhaseBoardRecoveryTransport({ requests, streams, status: 500 }))
+    selectTaskForTest("tsk_refresh")
+    setBoardStore("taskSequence", 5)
+    setBoardStore("board", boardWithoutGoalPhase("board:failed-goal-phase"))
+    setBoardStore("snapshotVersion", "board:failed-goal-phase")
+    setBoardStore("boardSyncPending", true)
+
+    expect(routeSSEEvent(goalPhasePartEvent())).toBe(true)
+    await waitForRequestCount(requests, 1)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(requests[0]?.path).toBe("task/tsk_refresh/board")
+    expect(streams).toEqual([])
+    expect(boardStore.snapshotVersion).toBe("board:failed-goal-phase")
+    expect(errorCalls).toBeGreaterThan(0)
+  } finally {
+    console.error = originalError
+  }
+})
+
+test("goal phase owner mismatch is not recovered as stale board projection", () => {
+  resetWriter()
+  const requests: Array<{ path: string; query?: Record<string, string> }> = []
+  const streams: Array<{ path: string; query?: Record<string, string> }> = []
+  __setHostTransportForTest(fakeGoalPhaseBoardRecoveryTransport({ requests, streams }))
+  selectTaskForTest("tsk_refresh")
+  setBoardData(goalPhaseBoard({ goalID: "goal_phase_owner", buildSessionID: "ses_phase_owner" }))
+  setBoardStore("taskSequence", 5)
+  setBoardStore("boardSyncPending", true)
+
+  expect(() =>
+    routeSSEEvent(
+      goalPhasePartEvent({
+        goalID: "goal_phase_owner",
+        sessionID: "ses_phase_other",
+        messageID: "msg_phase_owner",
+        partID: "part_phase_owner",
+      }),
+    ),
+  ).toThrow("goal phase goal_phase_owner/build/build expected session ses_phase_owner, got ses_phase_other")
+  expect(requests).toEqual([])
+  expect(streams).toEqual([])
 })
 
 test("board-owned run progress still schedules board refresh", () => {

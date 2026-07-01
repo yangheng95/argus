@@ -492,6 +492,10 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       const compactHeaders = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) =>
         (item as HTMLElement).getBoundingClientRect(),
       )
+      const glyphOpacity = (selector: string) =>
+        Array.from(node.querySelectorAll(`${selector} .agent-skill-grid-cell__glyph`)).map((item) =>
+          getComputedStyle(item as HTMLElement).opacity,
+        )
       return {
         matrix: { left: matrix.left, right: matrix.right, width: matrix.width },
         overflowX: (grid?.scrollWidth ?? 0) - (grid?.clientWidth ?? 0),
@@ -518,6 +522,9 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         compactCellHeight: compactCells[0]?.height ?? 0,
         compactRowHeight: compactRows[0]?.height ?? 0,
         compactHeaderHeight: compactHeaders[0]?.height ?? 0,
+        availableGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="available"]'),
+        mountedGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="mounted"]'),
+        conflictGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="conflict"]'),
         measured,
       }
     })
@@ -551,6 +558,21 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.equal(layout.mountedCells, 2, "enabled mounts should render as cell state")
     assert.equal(layout.conflictCells, 1, "disabled mounted skills should render as conflict cells")
     assert.equal(layout.unavailableCells, 0, "unavailable agent columns should be removed")
+    assert.deepEqual(
+      [...new Set(layout.availableGlyphOpacities)].sort(),
+      ["0"],
+      "compact available cells should hide add glyphs until hover or focus",
+    )
+    assert.deepEqual(
+      [...new Set(layout.mountedGlyphOpacities)].sort(),
+      ["1"],
+      "compact mounted cells should keep check glyphs visible",
+    )
+    assert.deepEqual(
+      [...new Set(layout.conflictGlyphOpacities)].sort(),
+      ["1"],
+      "compact conflict cells should keep warning glyphs visible",
+    )
     assert.equal(layout.cornerPosition, "sticky")
     assert.equal(layout.rowHeaderPosition, "sticky")
     assert.equal(layout.topHeaderPosition, "sticky")
@@ -670,6 +692,10 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           const rect = (item as HTMLElement).getBoundingClientRect()
           return rect.left >= gridRect.left && rect.right <= gridRect.right + 1
         }).length
+        const glyphOpacity = (selector: string) =>
+          Array.from(node.querySelectorAll(`${selector} .agent-skill-grid-cell__glyph`)).map((item) =>
+            getComputedStyle(item as HTMLElement).opacity,
+          )
         return {
           display: gridStyle.display,
           columns: gridStyle.gridTemplateColumns,
@@ -687,6 +713,9 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           rowNames,
           sourceBadges,
           unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
+          availableGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="available"]'),
+          mountedGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="mounted"]'),
+          conflictGlyphOpacities: glyphOpacity('.agent-skill-grid-cell[data-state="conflict"]'),
           cornerBackground: getComputedStyle(corner).backgroundColor,
           rowHeaderBackground: getComputedStyle(rowHeader).backgroundColor,
           topHeaderBackground: getComputedStyle(topHeader).backgroundColor,
@@ -732,6 +761,21 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.equal(settingsLayout.headers.includes("orchestrator"), false)
     assert.equal(settingsLayout.text.includes("Unavailable"), false)
     assert.equal(settingsLayout.unavailableCells, 0)
+    assert.deepEqual(
+      [...new Set(settingsLayout.availableGlyphOpacities)].sort(),
+      ["0"],
+      "settings available cells should hide add glyphs until hover or focus",
+    )
+    assert.deepEqual(
+      [...new Set(settingsLayout.mountedGlyphOpacities)].sort(),
+      ["1"],
+      "settings mounted cells should keep check glyphs visible",
+    )
+    assert.deepEqual(
+      [...new Set(settingsLayout.conflictGlyphOpacities)].sort(),
+      ["1"],
+      "settings conflict cells should keep warning glyphs visible",
+    )
     assert.deepEqual(settingsLayout.rowNames, ["opencorvus-plan", "claude-debug", "agents-legacy", "codex-review"])
     assert.deepEqual(
       settingsLayout.sourceBadges.map((badge) => badge.directory),
@@ -780,6 +824,81 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       )
       assert.ok(header.height <= 38, `agent header should stay compact: ${JSON.stringify(header)}`)
     }
+
+    const hoverAvailableCellSelector =
+      '#configDialog [data-config-panel="skill"] [aria-label="Mount skill: agents-legacy -> requirements"]'
+    const hoverAvailableCellBeforeHover = await page.$eval(hoverAvailableCellSelector, (cell: HTMLElement) => {
+      const glyph = cell.querySelector(".agent-skill-grid-cell__glyph") as HTMLElement
+      const rect = cell.getBoundingClientRect()
+      return {
+        ariaLabel: cell.getAttribute("aria-label") || "",
+        glyphOpacity: getComputedStyle(glyph).opacity,
+        height: rect.height,
+        state: cell.dataset.state || "",
+        width: rect.width,
+      }
+    })
+    assert.equal(hoverAvailableCellBeforeHover.ariaLabel, "Mount skill: agents-legacy -> requirements")
+    assert.equal(hoverAvailableCellBeforeHover.state, "available")
+    assert.equal(hoverAvailableCellBeforeHover.glyphOpacity, "0")
+    assert.ok(
+      hoverAvailableCellBeforeHover.width >= 76 && hoverAvailableCellBeforeHover.height >= 24,
+      `available mount target should keep a visible hit area: ${JSON.stringify(hoverAvailableCellBeforeHover)}`,
+    )
+    const waitForGlyphTransition = async () => {
+      await page.evaluate(() => new Promise((resolve) => window.setTimeout(resolve, 180)))
+    }
+
+    await page.hover(hoverAvailableCellSelector)
+    await waitForGlyphTransition()
+    const availableHoverState = await page.$eval(hoverAvailableCellSelector, (cell: HTMLElement) => {
+      const glyph = cell.querySelector(".agent-skill-grid-cell__glyph") as HTMLElement
+      return {
+        activeCombo: cell.dataset.activeCombo || "",
+        state: cell.dataset.state || "",
+        glyphOpacity: getComputedStyle(glyph).opacity,
+      }
+    })
+    assert.deepEqual(availableHoverState, {
+      activeCombo: "true",
+      state: "available",
+      glyphOpacity: "1",
+    })
+
+    await page.mouse.move(0, 0)
+    await waitForGlyphTransition()
+    const availableAfterLeaveState = await page.$eval(hoverAvailableCellSelector, (cell: HTMLElement) => {
+      const glyph = cell.querySelector(".agent-skill-grid-cell__glyph") as HTMLElement
+      return {
+        activeCombo: cell.dataset.activeCombo || "",
+        state: cell.dataset.state || "",
+        glyphOpacity: getComputedStyle(glyph).opacity,
+      }
+    })
+    assert.notEqual(availableAfterLeaveState.activeCombo, "true")
+    assert.equal(availableAfterLeaveState.state, "available")
+    assert.ok(
+      Number.parseFloat(availableAfterLeaveState.glyphOpacity) <= 0.01,
+      `available glyph should hide after pointer leaves: ${JSON.stringify(availableAfterLeaveState)}`,
+    )
+
+    const focusAvailableCellSelector =
+      '#configDialog [data-config-panel="skill"] [aria-label="Mount skill: opencorvus-plan -> coding-assistant"]'
+    await page.focus(focusAvailableCellSelector)
+    await waitForGlyphTransition()
+    const availableFocusState = await page.$eval(focusAvailableCellSelector, (cell: HTMLElement) => {
+      const glyph = cell.querySelector(".agent-skill-grid-cell__glyph") as HTMLElement
+      return {
+        activeCombo: cell.dataset.activeCombo || "",
+        state: cell.dataset.state || "",
+        glyphOpacity: getComputedStyle(glyph).opacity,
+      }
+    })
+    assert.deepEqual(availableFocusState, {
+      activeCombo: "true",
+      state: "available",
+      glyphOpacity: "1",
+    })
 
     const hoverCellSelector =
       '#configDialog [data-config-panel="skill"] [aria-label="codex-review -> build: permission_denied"]'

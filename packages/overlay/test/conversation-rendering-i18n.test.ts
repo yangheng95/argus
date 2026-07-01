@@ -23,6 +23,8 @@ describe("conversation rendering i18n", () => {
     expect(cardParts).toContain("CardParts unsupported part type")
     expect(cardParts).toContain("fallback={unsupportedPartFallback(part)}")
     expect(cardParts).not.toContain("fallback={null}")
+    expect(cardParts).toContain('"part-error"')
+    expect(cardParts).toContain('t("chat.part_error_title")')
 
     expect(inlineToolPart).toContain('t("tool.loaded_instructions")')
     expect(inlineToolPart).toContain('t("tool.browser_observation_alt_with_label"')
@@ -52,6 +54,9 @@ describe("conversation rendering i18n", () => {
       expect(locale).toContain('"agent_rail.status.running"')
       expect(locale).toContain('"tool.card.todos"')
       expect(locale).toContain('"tool.card.plan"')
+      expect(locale).toContain('"chat.part_error_title"')
+      expect(locale).toContain('"chat.part_error_message"')
+      expect(locale).toContain('"chat.part_error_unknown"')
     }
   })
 

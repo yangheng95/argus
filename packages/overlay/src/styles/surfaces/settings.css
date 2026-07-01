@@ -1345,6 +1345,17 @@ button.s-row:focus-visible {
   color: currentColor;
 }
 
+.agent-skill-grid-cell[data-state="available"] .agent-skill-grid-cell__glyph {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.agent-skill-grid-cell[data-state="available"]:hover .agent-skill-grid-cell__glyph,
+.agent-skill-grid-cell[data-state="available"]:focus-visible .agent-skill-grid-cell__glyph,
+.agent-skill-grid-cell[data-state="available"][data-active-combo="true"] .agent-skill-grid-cell__glyph {
+  opacity: 1;
+}
+
 .agent-skill-matrix[data-compact="true"] .agent-skill-grid-cell__glyph {
   width: calc(12px * var(--ui-scale));
   height: calc(12px * var(--ui-scale));

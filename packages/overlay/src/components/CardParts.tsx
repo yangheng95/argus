@@ -14,6 +14,7 @@ import { isBoundaryMessagePart } from "../utils/message-part"
 const KNOWN_PART_TYPES = new Set([
   "boundary",
   "text",
+  "part-error",
   "reasoning",
   "tool",
   "patch",
@@ -27,6 +28,21 @@ function unsupportedPartFallback(part: any) {
   const type = String(part?.type || "")
   if (KNOWN_PART_TYPES.has(type)) return null
   throw new Error(`CardParts unsupported part type: ${type || "<missing>"}`)
+}
+
+function partErrorSummary(part: any): string {
+  const message = String(part?.message || "").trim()
+  if (message) return message
+  const id = String(part?.id || "").trim()
+  return id ? t("chat.part_error_message", { id }) : t("chat.part_error_unknown")
+}
+
+function partErrorMeta(part: any): string {
+  const originalType = String(part?.originalType || "").trim()
+  const originalTool = String(part?.originalTool || "").trim()
+  return [originalType ? `type=${originalType}` : "", originalTool ? `tool=${originalTool}` : ""]
+    .filter(Boolean)
+    .join(" · ")
 }
 
 /** Render the parts list of a card body. Handles boundary separators,
@@ -49,6 +65,13 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
           </Match>
           <Match when={part?.type === "text" && (part.text || "").trim()}>
             <TextPart text={part.text || ""} streaming={props.streaming} />
+          </Match>
+          <Match when={part?.type === "part-error"}>
+            <div class="msg-tool-error" data-part-error-id={part.id || undefined}>
+              <div>{part.title || t("chat.part_error_title")}</div>
+              <div>{partErrorSummary(part)}</div>
+              <Show when={partErrorMeta(part)}>{(meta) => <div>{meta()}</div>}</Show>
+            </div>
           </Match>
           <Match when={part?.type === "reasoning" && (part.text || "").trim() && !isEmptyReasoning(part.text || "")}>
             <ReasoningPart part={part} streaming={props.streaming} />

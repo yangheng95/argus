@@ -1,4 +1,4 @@
-import { boardStore, activeTaskID } from "../store/board"
+import { boardStore, activeTaskID, loadBoard } from "../store/board"
 import {
   cancelConversationReplay,
   conversationSourceDirectory,
@@ -20,6 +20,10 @@ let recoveryGeneration = 0
 let recoveryAbort: AbortController | null = null
 let rewindClearTaskID = ""
 let rewindClearPromise: Promise<number> | null = null
+
+export interface SelectedTaskRecoveryOptions {
+  requireFreshBoard?: boolean
+}
 
 function abortError(message: string): DOMException {
   return new DOMException(message, "AbortError")
@@ -73,6 +77,7 @@ function isLiveReplayExpiredReason(reason: string): boolean {
 export async function recoverSelectedTaskConversation(
   reason: string,
   requestedTaskID = activeTaskID(),
+  options: SelectedTaskRecoveryOptions = {},
 ): Promise<number> {
   const taskID = String(requestedTaskID || "")
   if (!taskID) throw new Error(`selected-task recovery requires a taskID: ${reason}`)
@@ -106,6 +111,10 @@ export async function recoverSelectedTaskConversation(
     const directory = conversationSourceDirectory({ kind: "task", id: taskID })
     if (!replayLive) resetSelectedLiveCursor()
     if (replayLive) cancelConversationReplay()
+    if (options.requireFreshBoard === true) {
+      await loadBoard({ sync: true, requireFresh: true })
+      assertCurrentRecovery(taskID, generation, controller.signal)
+    }
     if (!replayLive) {
       await mergeLatestConversationTail(taskID, { directory, signal: controller.signal })
       assertCurrentRecovery(taskID, generation, controller.signal)

@@ -82,6 +82,7 @@ export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths)
   const id = typeof task?.id === "string" ? task.id : ""
   if (!id) return ""
   const taskDirectory = String(task?.directory ?? "-")
+  const projectWorktree = String(board?.project?.worktree ?? "-")
   const serverUrl = getServerUrl()
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
   const lines: string[] = []
@@ -96,6 +97,7 @@ export function buildTaskDebugBlob(board: any, runtimePaths?: RuntimeDebugPaths)
     `task.status:    ${String(task?.status ?? "-")}`,
     `task.terminal:  ${String(task?.terminalReason ?? "-")}`,
     `task.directory: ${taskDirectory}`,
+    `project.worktree: ${projectWorktree}`,
     `server.url:     ${serverUrl}`,
     `runtime.db:     ${runtimePaths?.database?.trim() || "-"}`,
     `task.session:   ${String(task?.sessionID ?? "-")}`,
