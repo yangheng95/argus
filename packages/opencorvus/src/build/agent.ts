@@ -86,6 +86,8 @@ import {
 import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { Database, eq } from "@/storage/db"
+import { PartTable } from "@/session/session.sql"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { abortableIterable, withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
@@ -98,6 +100,163 @@ import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 
 const log = Log.create({ service: "build-agent" })
+
+function isFilePartData(value: unknown): value is Omit<Message.FilePart, "id" | "sessionID" | "messageID" | "orderKey"> {
+  if (!value || typeof value !== "object") return false
+  const record = value as Record<string, unknown>
+  return record.type === "file" && typeof record.url === "string" && typeof record.mime === "string"
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === code
+}
+
+async function pathExists(absPath: string): Promise<boolean> {
+  try {
+    await fs.stat(absPath)
+    return true
+  } catch (error) {
+    if (hasNodeErrorCode(error, "ENOENT")) return false
+    throw error
+  }
+}
+
+async function fileSha256(absPath: string): Promise<string> {
+  const bytes = await fs.readFile(absPath)
+  return createHash("sha256").update(bytes).digest("hex")
+}
+
+function shaFromStoredAttachmentName(name: string): string | undefined {
+  const stem = path.basename(name, path.extname(name))
+  return /^[0-9a-f]{64}$/i.test(stem) ? stem.toLowerCase() : undefined
+}
+
+function contentAddressedStagedFilename(filename: string, sha: string): string {
+  const ext = path.extname(filename)
+  const stem = filename.slice(0, filename.length - ext.length)
+  return `${stem}-${sha.slice(0, 8)}${ext}`
+}
+
+function repairCandidateFilenames(input: {
+  storedName: string
+  filename?: string
+  mime: string
+  sha?: string
+}): string[] {
+  const candidates: string[] = []
+  const push = (name: string | undefined) => {
+    if (!name) return
+    const base = path.basename(name)
+    if (!base || base === "." || base === "..") return
+    if (!candidates.includes(base)) candidates.push(base)
+  }
+  push(input.filename)
+  push(
+    AttachmentStore.displayFilename({
+      filename: input.filename,
+      mime: input.mime,
+      sha: input.sha,
+      index: 0,
+    }),
+  )
+  push(input.storedName)
+  return candidates
+}
+
+async function resolveManagedRetryStagedReference(input: {
+  worktreeDir: string
+  storedName: string
+  filename?: string
+  mime: string
+  sha?: string
+}): Promise<string> {
+  const refsDir = path.join(input.worktreeDir, AttachmentStore.STAGED_REFERENCES_SUBDIR)
+  const tried: string[] = []
+  for (const filename of repairCandidateFilenames(input)) {
+    const stagedNames = [filename]
+    if (input.sha) stagedNames.push(contentAddressedStagedFilename(filename, input.sha))
+    for (const stagedName of stagedNames) {
+      const candidate = path.join(refsDir, stagedName)
+      tried.push(path.relative(input.worktreeDir, candidate))
+      if (!(await pathExists(candidate))) continue
+      if (input.sha && (await fileSha256(candidate)) !== input.sha) continue
+      return candidate
+    }
+  }
+  throw new Error(
+    "managed build retry cannot repair persisted file part: no staged reference matched " +
+      `${input.storedName} in ${refsDir}; tried ${tried.join(", ") || "<none>"}`,
+  )
+}
+
+export async function repairManagedBuildSessionStagedFileParts(input: {
+  sessionID: string
+  projectID: string
+  worktreeDir: string
+}): Promise<{ checked: number; repaired: number }> {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        id: PartTable.id,
+        data: PartTable.data,
+      })
+      .from(PartTable)
+      .where(eq(PartTable.session_id, input.sessionID))
+      .all(),
+  )
+  let checked = 0
+  let repaired = 0
+  for (const row of rows) {
+    if (!isFilePartData(row.data)) continue
+    const located = AttachmentStore.nameFromUrl(row.data.url)
+    if (!located) continue
+    checked++
+    if (located.projectID !== input.projectID) {
+      throw new Error(
+        `managed build retry cannot repair persisted file part ${row.id}: attachment belongs to project ` +
+          `${located.projectID}, expected ${input.projectID}`,
+      )
+    }
+    const canonicalAbs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+    if (!canonicalAbs) {
+      throw new Error(
+        `managed build retry cannot repair persisted file part ${row.id}: attachment ` +
+          `${located.projectID}/${located.name} is not resolvable`,
+      )
+    }
+    if (await pathExists(canonicalAbs)) continue
+
+    const expectedSha = shaFromStoredAttachmentName(located.name)
+    const stagedAbs = await resolveManagedRetryStagedReference({
+      worktreeDir: input.worktreeDir,
+      storedName: located.name,
+      filename: row.data.filename,
+      mime: row.data.mime,
+      sha: expectedSha,
+    })
+    const reference = await AttachmentStore.writeFromPath(
+      input.projectID,
+      stagedAbs,
+      row.data.mime,
+      row.data.filename ?? path.basename(stagedAbs),
+    )
+    const nextData = {
+      ...row.data,
+      url: reference.url,
+      mime: reference.mime,
+      filename: row.data.filename ?? reference.filename,
+    }
+    Database.use((db) =>
+      db
+        .update(PartTable)
+        .set({ data: nextData, time_updated: Date.now() })
+        .where(eq(PartTable.id, row.id))
+        .run(),
+    )
+    repaired++
+  }
+  return { checked, repaired }
+}
 
 export function createMergeBackSingleFlight<T extends { status: string }>(execute: () => Promise<T>): () => Promise<T> {
   let inFlight: Promise<T> | undefined
@@ -605,6 +764,22 @@ export namespace BuildAgent {
             `build agent: failed to stage task attachments into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
             { cause: err instanceof Error ? err : undefined },
           )
+        }
+      }
+      if (retryingExistingBuildSession && ownsWorktree && worktreeDir) {
+        const repaired = await repairManagedBuildSessionStagedFileParts({
+          sessionID: buildSession.id,
+          projectID: Instance.project.id,
+          worktreeDir,
+        })
+        if (repaired.repaired > 0) {
+          log.info("build agent: repaired persisted staged reference file parts for retry replay", {
+            taskID: input.task.id,
+            sessionID: buildSession.id,
+            repaired: repaired.repaired,
+            checked: repaired.checked,
+            worktreeDir,
+          })
         }
       }
       const buildUserPartsFn =

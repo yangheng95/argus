@@ -91,3 +91,59 @@ Results:
 - `bun test packages/opencorvus/test/storage/attachment-stage.test.ts packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts`: 28 pass.
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`: 19 pass.
 - `bun run --cwd packages/opencorvus typecheck`: pass.
+
+## 2026-07-02 Retry Replay Follow-up
+
+### Additional Observation
+
+After the first repair was pushed, the same task failed again on retry 2:
+
+```text
+BuildAgent.run threw before producing a verdict:
+Error: ENOENT: no such file or directory, open '/root/.local/share/opencorvus/markets-world-economy/.opencorvus/r/b/a/2620f83e83782968844b6e1040a829e8db3cc7ffaf0c9dd273e4d4cb61a9335a.png'
+```
+
+The board state showed `buildSessionID=ses_0e1b60003ffeV2SN22JHeu3vbm` and `retry=2`. That means the failing provider input was not the new first-turn prompt path fixed above. It was replay of an already persisted build-session history row whose file part still pointed at the missing original `/attachment/...` blob.
+
+### Recall
+
+| Item | Details |
+| --- | --- |
+| User update | The user reported the task still failed and provided the cancelled task debug info for the same Economy Heatmap task. |
+| New evidence | The task board for latest outcome `55977d0c` showed the same missing blob path and retry reuse of an existing build session. |
+| Refined root cause | Existing same-session retry replays old persisted user messages before the new retry prompt. Sessions created before the first repair can still contain canonical `/attachment/...` file parts whose original blob was already swept or absent. |
+| Required repair boundary | Managed Build retry must repair its own old persisted file parts from the already staged `references/` files before handing the session to `SessionPrompt`. `Message.toModelMessages` remains strict and must not grow a missing-file fallback. |
+| Additional grep/read | Re-read `packages/opencorvus/src/build/agent.ts`, `packages/opencorvus/src/storage/attachment-store.ts`, `packages/opencorvus/src/session/index.ts`, `packages/opencorvus/src/session/session.sql.ts`, `packages/opencorvus/src/agent/runner.ts`, and prompt/session tests. |
+
+### Retry Repair Contract
+
+Managed retry uses the existing staged-reference contract as the only recovery source for stale build-session rows:
+
+1. Scan the existing build session's persisted `PartTable` rows before retry replay.
+2. Only inspect file parts whose URL is a canonical `/attachment/<projectID>/<sha>.<ext>` reference for the current project.
+3. If the canonical attachment file still exists, leave the part unchanged.
+4. If it is missing, find the deterministic staged reference inside `<worktree>/references/` using the same display filename and sha-suffixed collision naming policy as `stageToWorktree`.
+5. Verify the staged file bytes match the sha embedded in the original canonical URL before writing it back through `AttachmentStore.writeFromPath(...)`.
+6. If the staged file is absent, ambiguous, wrong-sha, or from a different project, throw a hard Build retry error. Do not skip the file part and do not fall back to other sources.
+
+This is a one-time managed build-session migration boundary, not a global attachment-read fallback. Generic session replay continues to fail on missing canonical blobs, which keeps corrupt non-build histories visible.
+
+### Follow-up Verification
+
+Commands run after the retry repair:
+
+```powershell
+bun test packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts -t "managed build retries repair persisted file parts"
+bun test packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts -t "managed build retry invokes persisted file part repair"
+bun test packages/opencorvus/test/storage/attachment-stage.test.ts packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts
+bun test packages/opencorvus/test/script/historical-docs-links.test.ts
+bun run --cwd packages/opencorvus typecheck
+```
+
+Results:
+
+- Targeted helper replay test: pass.
+- Targeted `BuildAgent.run` managed retry invocation test: pass.
+- Combined attachment/session/build regression set: 30 pass.
+- `historical-docs-links.test.ts`: 19 pass.
+- `bun run --cwd packages/opencorvus typecheck`: pass.
