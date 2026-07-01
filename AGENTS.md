@@ -118,6 +118,8 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **28c（消息流验收教训 — 2026-06-04）**：涉及 orchestrator tool、sub-agent、frontend_research/frontend_design/research 等启动链路的修复，不能只验证 schema、prompt 或 typecheck。必须覆盖真实可观测消息流：启动前准备失败、agent session 未创建或创建后失败、terminal tool 未提交等错误路径，都必须有可见的 tool result / sub-agent yield / session terminal 状态，不能让 UI 只表现为“没有消息卡片”。涉及网页/视觉调查的修复，还必须验证页面证据准备或浏览器/渲染调查确实被触发，不能用静态提示词测试替代运行链路证据。
 
+**28d（mock / E2E 交付边界 — 2026-07-02）**：禁止把 mocked contract test、stubbed tool chain、fixture-only source URL、字符串形式的 screenshot ref、或 canned Visual QA / Integrity result 称为真实 E2E（End-to-End，端到端）网页改造验收、真实视觉验收或 benchmark 通过。真实网页改造验收必须包含实际 URL / source evidence、真实渲染目标、启动页面或可验证 preview target、Playwright / Browser Preview 截图、键盘 / focus 路径、状态覆盖和二次视觉 review；缺任一关键证据时必须按 rule 28b 明确标记未达成，而不能把 orchestrator wiring / schema / prompt 测试包装成完成。
+
 ---
 
 ## 六、工作流程与协作
