@@ -13,9 +13,11 @@ User request:
 Acceptance criteria:
 
 - Visual QA exposes item-level `register_*` tools for coverage, evidence, findings, production blockers, DOM problem regions, unresolved code module problems, repairs, commands, changed files, open questions, fact checks, and reference parity.
-- `submit_visual_qa_report` no longer accepts a full `VisualQaReport` payload; it finalizes from the collector and validates the accumulated items.
+- Visual QA exposes first-class review check items. Every coverage row, evidence row, finding, production blocker, DOM problem region, unresolved code module problem, and repair must reference registered check item IDs.
+- `submit_visual_qa_report` no longer accepts a full `VisualQaReport` payload; it finalizes from the collector and validates the accumulated review check graph.
 - Integrity exposes item-level `register_*` tools for reviewer reports, coverage-audit rows, uninspected risks, findings, review rounds, required repairs, unresolved disagreements, and fact checks.
-- `submit_integrity_consensus` no longer accepts a full `IntegrityTeamReport` payload; it finalizes from the collector and validates the accumulated items.
+- Integrity exposes first-class review check items. Every active requirement must be covered by at least one registered integrity check item, and findings/repairs/reviewer reports must reference registered check item IDs.
+- `submit_integrity_consensus` no longer accepts a full `IntegrityTeamReport` payload; it finalizes from the collector and validates the accumulated review check graph.
 - Downstream persisted report shapes remain `VisualQaReport` and `IntegrityTeamReport` so existing Orchestrator, Build feedback, workflow projection, and event consumers keep a single report data source.
 - Tests prove the old large-payload finalizers are replaced by item registration and that missing registered coverage/evidence is still rejected.
 - No fallback, no dual source, no host lifecycle gate, no new worktree, no process restart.
@@ -78,28 +80,33 @@ Visual QA and Integrity currently diverge:
   `IntegrityTeamReportSchema`.
 
 That lets an agent produce a large report-shaped payload without proving that each
-review item was deliberately inspected and registered.
+required promise, region, or discovered issue was deliberately inspected and tied
+to evidence.
 
 ## Decision
 
 Keep the downstream report schemas as the durable data model, but make the tool
-surface registration-first:
+surface check-registration-first:
 
-- Add small Visual QA registration tools that mutate a single collector.
-- Add small Integrity registration tools that mutate a single collector.
+- Add explicit Visual QA check item registration. Review facts are invalid unless
+  they cite registered check items.
+- Add explicit Integrity check item registration. Active requirements are invalid
+  unless covered by registered check items.
 - Finalizers accept only verdict/summary/narrative fields and optional reference
   parity metadata; list-shaped review facts must already be in the collector.
-- Validation runs on the assembled report, so Build/Orchestrator consumers still
-  read exactly one report shape.
+- Validation runs on the assembled report and the check graph, so Build/Orchestrator
+  consumers still read exactly one report shape.
 - Static tool lists and prompts must name the registration sequence explicitly.
 
 This is not a fallback or gate. It is a single-source output contract: registered
-review items are the only source of final report arrays.
+check items are the only source of reviewed status, and registered report rows
+must attach to those check items.
 
 ## Implementation Plan
 
 1. Refactor Visual QA output tools:
    - Replace `VisualQaCollector.final?: VisualQaReport` with item arrays plus `final`.
+   - Add `register_visual_qa_check_item`.
    - Add `register_visual_qa_coverage`, `register_visual_qa_evidence`,
      `register_visual_qa_finding`, `register_visual_qa_production_blocker`,
      `register_visual_qa_problem_dom_region`,
@@ -108,8 +115,11 @@ review items are the only source of final report arrays.
      `register_visual_qa_changed_file`, `register_visual_qa_open_question`,
      `register_visual_qa_fact_check_item`, and `set_visual_qa_reference_parity`.
    - Make `submit_visual_qa_report` accept `accepted` and `summary` only.
+   - Validate that every registered report row cites known check item IDs and that
+     `accepted=true` has no failed/inconclusive check item.
 2. Refactor Integrity consensus tools:
    - Replace `ConsensusCollector.report?: IntegrityTeamReport` with registered arrays plus final report.
+   - Add `register_integrity_check_item`.
    - Add `register_integrity_reviewer_report`,
      `register_integrity_coverage_audit`, `register_integrity_uninspected_risk`,
      `register_integrity_finding`, `register_integrity_round`,
@@ -117,6 +127,8 @@ review items are the only source of final report arrays.
      `register_integrity_unresolved_disagreement`, and
      `register_integrity_fact_check_item`.
    - Make `submit_integrity_consensus` accept `verdict`, `summary`, and `teamReportMarkdown` only.
+   - Validate that every active requirement is touched by at least one check item
+     and that findings/repairs/reviewer reports cite registered check item IDs.
 3. Update static tool IDs and prompts to forbid final large payloads.
 4. Update tests so helpers register reports item-by-item before final submit.
 5. Run targeted Visual QA and Integrity tests plus docs link tests.
