@@ -5,7 +5,7 @@
 > 编号沿用历史版本，便于追溯与对照。
 
 - 严格根据本规则进行自动化工作，不要等待用户的指令来执行每一步。你必须根据你的专业知识和项目现状，主动执行每一步，直到重构结束。
-- 并 git push 上传代码，直到重构结束。你需要关注合并 remote 代码。
+- 并 git push 上传代码到 git-cc 远端，直到重构结束。你需要关注合并 remote 代码。
 - 原则上禁止手搓有成熟工具链支持的UI/UX 设计、前端交互、后端架构、数据库设计等方案。对于任何有现成解决方案的设计问题，必须优先考虑使用成熟的工具链或库来实现，而不是从零开始手工编写。禁止在这些领域进行过度工程，必须利用现有的工具和框架来简化开发过程，提高效率和质量。
 - 原则上禁止任何gate/门规则和机制，加这些东西是因为你找不到真正的症结在哪里了，或者你不想修真正的症结。禁止使用 gate 来绕过问题，必须直接面对和解决问题的根本原因。任何试图通过 gate 来掩盖问题的行为都是不可接受的。
 - 设置benchmark后用定时器自我唤醒，不要保持监听日志
@@ -148,7 +148,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **32.5（spec 索引与验证 — 2026-06-29）**：移动、删除、新增 spec 后，必须同步更新 `specs/README.md`、相关子目录 README 和文档健康测试。验证至少包含 `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`；涉及产品 docs 或架构 docs 时，还必须跑对应的 docs 单源与 document-health 测试。
 
-**33.** 必须主动在任何改动前后 commit + push（不绕 hook；hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
+**33.** 必须主动在任何改动前后 commit + push 到 git-cc 远端（当前仓库 remote 名称为 `myhexin`，URL 为 `https://git-cc.myhexin.com:6443/yangheng/opencorvus.git`；`origin` / GitHub push 不能替代 git-cc push；不绕 hook，hook 是质量检查，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
 
 **33.1（非主分支工作收敛 — 2026-06-22）**：如果为了隔离、并行、审计或修复切换到主分支外的分支 / worktree 工作，所有有效修改在该分支提交后，必须在同一轮工作内合并回主分支并切回主分支；主分支是唯一交付和 push 的事实来源。禁止把非主分支上的 commit、未合并 worktree 或远端临时分支当作已交付结果；禁止让同一需求在多个分支上长期并存造成事实分叉。合并前必须先 `fetch` 并确认主分支最新，合并后必须验证、commit/push 主分支；确认为废弃的分支修改不得作为交付物引用。
 
