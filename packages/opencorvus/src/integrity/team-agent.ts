@@ -766,19 +766,18 @@ async function createSingleSessionIntegrityToolKit(input: {
           if (requirementCoverageIssues.length > 0) {
             return `Error: integrity review omitted active requirement coverage: ${requirementCoverageIssues.join("; ")}`
           }
-          const advisories = await summarizeIntegrityConsensusVisualEvidenceAdvisories({
+          const visualEvidenceIssues = await integrityConsensusVisualEvidenceBlockingIssues({
             report: parsed.data,
             projectRoot: input.projectRoot,
             taskID: input.taskID,
             visualEvidence: input.visualEvidence,
             visualEvidenceRequired: input.visualEvidenceRequired,
           })
+          if (visualEvidenceIssues.length > 0) {
+            return `Error: pass verdict requires passing task-scoped VisualEvidenceBundle evidence: ${visualEvidenceIssues.join("; ")}`
+          }
           input.collector.report = parsed.data
-          const advisoryText =
-            advisories.length > 0
-              ? `\n\nADVISORIES (${advisories.length}):\n${advisories.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
-              : ""
-          return `RECORDED: integrity review recorded with verdict=${parsed.data.verdict}.${advisoryText}`
+          return `RECORDED: integrity review recorded with verdict=${parsed.data.verdict}.`
         },
       }),
     },
@@ -790,7 +789,7 @@ async function createSingleSessionIntegrityToolKit(input: {
   }
 }
 
-async function summarizeIntegrityConsensusVisualEvidenceAdvisories(input: {
+async function integrityConsensusVisualEvidenceBlockingIssues(input: {
   report: IntegrityTeamReport
   projectRoot?: string
   taskID?: string
@@ -818,7 +817,7 @@ async function summarizeIntegrityConsensusVisualEvidenceAdvisories(input: {
     })
     if (!visualEvidenceBundlePasses(bundle) || !comparisonValidation.passing) {
       advisories.push(
-        `VisualEvidenceBundle ${bundle.id} is not passing visual evidence advisory checks: ${
+        `VisualEvidenceBundle ${bundle.id} is not passing visual evidence checks: ${
           comparisonValidation.issues.join("; ") || "required visual regions are not fully passing"
         }`,
       )

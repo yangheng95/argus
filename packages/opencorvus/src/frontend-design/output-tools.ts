@@ -1727,7 +1727,7 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
       return `${input.property}-${input.side} = ${input.value_px}px`
     case "layout": {
       const parent = input.parent_id ? ` inside ${input.parent_id}` : ""
-      return `${input.section_role} [${input.layout_method}] @ ${input.position}, ${input.dimensions}${parent}`
+      return `${input.section_role} [${input.layout_method}] @ ${input.position}, ${input.dimensions}${parent} · geometry=${input.coordinate_space}/${input.implementation_use}`
     }
     case "component": {
       const refs =
@@ -1824,6 +1824,15 @@ export function createFrontendTemplateOutputTools(
       execute: async (input) => {
         const existErr = assertIdFree(input.id)
         if (existErr) return existErr
+        if (input.coordinate_space === "source_capture_viewport_px") {
+          return (
+            "Error: source_capture_viewport_px geometry is source evidence, not an implementable layout spec. " +
+            "Keep source-capture x/y/width/height in reference evidence or visual consistency notes; register_layout_spec only accepts implementation_layout visible layout constraints."
+          )
+        }
+        if (input.coordinate_space === "implementation_layout" && input.implementation_use !== "visible_layout_constraint") {
+          return "Error: implementation_layout geometry must be registered as visible_layout_constraint."
+        }
         if (input.parent_id) {
           const parentErr = assertIdsExist([input.parent_id], "parent layout")
           if (parentErr) return parentErr

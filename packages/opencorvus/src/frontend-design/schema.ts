@@ -945,6 +945,8 @@ export const LayoutSchema = z.object({
   position: z.string().min(1).describe("e.g. 'top fixed', 'left 280px', 'centered below hero'"),
   dimensions: z.string().min(1).describe("e.g. 'full-width 64px height', '280px width 100vh'"),
   layout_method: z.enum(["flex", "grid", "absolute", "fixed", "sticky", "flow"]),
+  coordinate_space: z.enum(["implementation_layout", "source_capture_viewport_px"]),
+  implementation_use: z.enum(["visible_layout_constraint", "evidence_only"]),
   parent_id: z.string().optional().describe("Parent layout spec id if this section nests inside another"),
   applies_to: AppliesToField,
   severity: SeverityField,

@@ -12,6 +12,7 @@
  *   - shell:      { cmd, cwd?, parse: 'exit_code' | 'stdout_number' | 'stdout_pattern',
  *                   pattern?, timeout_ms?, expected_exit_code? }
  *   - judge:      { criteria, rubric?: RubricLevel[], inputs?: string[] }
+ *   - prebuilt:   { name: 'visual-evidence-bundle' }
  *   - query:      { sql, value_column? }
  *   - aggregator: { of: string[], op: 'mean' | 'min' | 'max' | 'sum' }
  *
@@ -30,6 +31,8 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
   summarizeVisualEvidenceBundle,
+  validateVisualEvidenceBundleReferenceComparisons,
+  visualEvidenceBundlePasses,
   VisualEvidenceBundleListSchema,
   type VisualEvidenceBundle,
 } from "@/acceptance/visual-evidence"
@@ -186,6 +189,8 @@ async function dispatchEvaluator(
       return runShell(spec, ctx)
     case "judge":
       return runJudge(spec, input, ctx)
+    case "prebuilt":
+      return runPrebuilt(spec, input)
     case "query":
       return runQuery(spec)
     case "aggregator":
@@ -381,6 +386,58 @@ async function runJudge(
 function formatJudgeEvidenceRef(rationale: string, visualEvidence: VisualEvidenceBundle[] | undefined): string {
   if (!visualEvidence?.length) return rationale
   return [rationale, ...visualEvidence.map((bundle) => summarizeVisualEvidenceBundle(bundle))].join(" | ")
+}
+
+// ---------------------------------------------------------------------------
+// Prebuilt evaluator
+// ---------------------------------------------------------------------------
+
+interface PrebuiltConfig {
+  name: "visual-evidence-bundle"
+}
+
+async function runPrebuilt(spec: MetricSpec, input: ExecuteMetricsInput): Promise<RawEvaluation> {
+  const cfg = spec.evaluator_config as unknown as PrebuiltConfig
+  if (!cfg || cfg.name !== "visual-evidence-bundle") {
+    throw new Error(`prebuilt evaluator for ${spec.id} must use name=visual-evidence-bundle`)
+  }
+  const parsed = VisualEvidenceBundleListSchema.safeParse(input.acceptance?.visual_evidence ?? [])
+  if (!parsed.success || parsed.data.length === 0) {
+    return {
+      raw_value: 0,
+      evidence_ref: `prebuilt://visual_evidence missing or invalid for ${spec.id}`,
+      evidence_fresh: false,
+    }
+  }
+  const issues: string[] = []
+  const summaries: string[] = []
+  for (const bundle of parsed.data) {
+    summaries.push(summarizeVisualEvidenceBundle(bundle))
+    const validation = await validateVisualEvidenceBundleReferenceComparisons({
+      projectRoot: bundle.rendered.projectDirectory,
+      bundle,
+      expectedTaskID: input.task_id,
+    })
+    if (!visualEvidenceBundlePasses(bundle) || !validation.passing) {
+      issues.push(
+        `VisualEvidenceBundle ${bundle.id}: ${
+          validation.issues.join("; ") || "required visual regions are not fully passing"
+        }`,
+      )
+    }
+  }
+  if (issues.length > 0) {
+    return {
+      raw_value: 0,
+      evidence_ref: `prebuilt://visual-evidence-bundle failed: ${truncate(issues.join(" | "), 400)}`,
+      evidence_fresh: true,
+    }
+  }
+  return {
+    raw_value: 1,
+    evidence_ref: `prebuilt://visual-evidence-bundle passed: ${truncate(summaries.join(" | "), 400)}`,
+    evidence_fresh: true,
+  }
 }
 
 // ---------------------------------------------------------------------------

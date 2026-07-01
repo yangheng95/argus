@@ -40,6 +40,23 @@ function visualBundle(taskID: string, projectDirectory: string, evidenceRefs: st
       blockerCount: 0,
       notes: "No production blockers remain.",
     },
+    pageCoverage: {
+      coordinateSpace: "source_reference_image_px",
+      implementationUse: "evidence_only",
+      requiredRegionIDs: ["region_header"],
+      coveredIntervals: [
+        {
+          id: "coverage_full_reference",
+          label: "Full reference page",
+          y: 0,
+          height: 900,
+          regionIDs: ["region_header"],
+          evidenceRefs,
+          notes: "Required evidence covers the full source reference height.",
+        },
+      ],
+      unexplainedBlankIntervals: [],
+    },
     regions: [
       {
         id: "region_header",
@@ -59,10 +76,66 @@ function visualBundle(taskID: string, projectDirectory: string, evidenceRefs: st
 }
 
 function visualBundleWithoutRequiredRegions(taskID: string, projectDirectory: string): VisualEvidenceBundle {
-  const bundle = visualBundle(taskID, projectDirectory, [])
+  const bundle = visualBundle(taskID, projectDirectory, ["browser_preview_evidence:art_unused"])
   return {
     ...bundle,
+    pageCoverage: {
+      ...bundle.pageCoverage,
+      requiredRegionIDs: [],
+    },
     regions: bundle.regions.map((region) => ({ ...region, required: false, evidenceRefs: [] })),
+  }
+}
+
+function referenceComparisonCapture(input: {
+  regionID: string
+  viewportID: string
+  cropIntent: "full-region" | "content-well"
+  blankImplementation?: boolean
+  sourceHeight?: number
+  omitContentMetrics?: boolean
+}) {
+  const sourceHeight = input.sourceHeight ?? 900
+  const implementationContent = input.blankImplementation
+    ? { non_white_pixel_ratio: 0, unique_color_count: 1 }
+    : { non_white_pixel_ratio: 0.12, unique_color_count: 14 }
+  const content = input.omitContentMetrics
+    ? {}
+    : {
+        content: {
+          source: { non_white_pixel_ratio: 0.12, unique_color_count: 18 },
+          implementation: implementationContent,
+        },
+      }
+  return {
+    operation: "reference-comparison",
+    region: {
+      region_id: input.regionID,
+      viewport_id: input.viewportID,
+      crop_intent: input.cropIntent,
+      source_bbox: { x: 0, y: 0, width: 1440, height: sourceHeight },
+      implementation_bbox: { x: 0, y: 0, width: 1440, height: sourceHeight },
+      source_image_size: { width: 1440, height: 900 },
+      implementation_viewport: { width: 1440, height: 900 },
+      visual: {
+        dimensions_match: true,
+        total_pixels: 6000,
+        overall_score: input.blankImplementation ? 0 : 98,
+        ssim_score: input.blankImplementation ? 0 : 0.99,
+        pixel_diff_percent: input.blankImplementation ? 100 : 1,
+        mismatched_pixels: input.blankImplementation ? 6000 : 60,
+      },
+      coverage: {
+        source_width: 100,
+        source_height: 60,
+        implementation_width: 100,
+        implementation_height: 60,
+        implementation_covers_source: true,
+        implementation_matches_source_size: true,
+      },
+      ...content,
+      diagnostics: [],
+    },
   }
 }
 
@@ -79,6 +152,9 @@ async function seedTaskWithReferenceComparison(input: {
   status?: "passed" | "failed"
   cropIntent?: "full-region" | "content-well"
   artifactNames?: Array<"source.png" | "implementation.png" | "side-by-side.png">
+  blankImplementation?: boolean
+  sourceHeight?: number
+  omitContentMetrics?: boolean
 }): Promise<string> {
   Database.use((db) =>
     db
@@ -115,6 +191,17 @@ async function seedTaskWithReferenceComparison(input: {
     ...(operationKind === "reference-comparison" ? { cropIntent: input.cropIntent ?? "full-region" } : {}),
     status: input.status ?? "passed",
     summary: input.status === "failed" ? "Reference comparison failed." : "Reference comparison passed.",
+    capture:
+      operationKind === "reference-comparison"
+        ? referenceComparisonCapture({
+            regionID: input.regionID ?? "region_header",
+            viewportID: input.viewportID ?? "desktop",
+            cropIntent: input.cropIntent ?? "full-region",
+            blankImplementation: input.blankImplementation,
+            sourceHeight: input.sourceHeight,
+            omitContentMetrics: input.omitContentMetrics,
+          })
+        : undefined,
     artifactPaths: {
       ...(artifactNames.includes("source.png") ? { source_crop: path.join(artifactDir, "source.png") } : {}),
       ...(artifactNames.includes("implementation.png")
@@ -522,6 +609,166 @@ test("integrity visual evidence rejects incomplete reference-comparison artifact
       )
       expect(String(visual)).toContain("status=not_passing")
       expect(String(visual)).toContain("was not found or has unreadable artifacts")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects blank reference-comparison content metrics", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_blank_metrics"
+      const evidenceID = await seedTaskWithReferenceComparison({
+        taskID,
+        projectDirectory: dir.path,
+        blankImplementation: true,
+      })
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [visualBundle(taskID, dir.path, [evidenceID])],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("implementation content metrics indicate a blank crop")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects missing reference-comparison content metrics without throwing", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_missing_content_metrics"
+      const evidenceID = await seedTaskWithReferenceComparison({
+        taskID,
+        projectDirectory: dir.path,
+        omitContentMetrics: true,
+      })
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [visualBundle(taskID, dir.path, [evidenceID])],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("missing source/implementation content metrics")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects unexplained blank intervals", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_blank_interval"
+      const evidenceID = await seedTaskWithReferenceComparison({ taskID, projectDirectory: dir.path })
+      const bundle = visualBundle(taskID, dir.path, [evidenceID])
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [
+          {
+            ...bundle,
+            pageCoverage: {
+              ...bundle.pageCoverage,
+              unexplainedBlankIntervals: [
+                {
+                  id: "blank_faq_footer_gap",
+                  label: "FAQ to footer empty filler",
+                  y: 4120,
+                  height: 465,
+                  sourceRefs: ["web-clone-source/reference.png"],
+                  evidenceRefs: [evidenceID],
+                  notes: "Source content is expected here; implementation left a filler gap.",
+                },
+              ],
+            },
+          },
+        ],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("unexplained blank interval FAQ to footer empty filler")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects declared page coverage gaps", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_declared_gap"
+      const evidenceID = await seedTaskWithReferenceComparison({ taskID, projectDirectory: dir.path })
+      const bundle = visualBundle(taskID, dir.path, [evidenceID])
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [
+          {
+            ...bundle,
+            pageCoverage: {
+              ...bundle.pageCoverage,
+              coveredIntervals: [
+                {
+                  ...bundle.pageCoverage.coveredIntervals[0],
+                  height: 400,
+                },
+              ],
+            },
+          },
+        ],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("pageCoverage: uncovered source-reference interval y=400 height=500")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects evidence-backed coverage gaps", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_evidence_gap"
+      const evidenceID = await seedTaskWithReferenceComparison({
+        taskID,
+        projectDirectory: dir.path,
+        sourceHeight: 400,
+      })
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [visualBundle(taskID, dir.path, [evidenceID])],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("evidence-backed: uncovered source-reference interval y=400 height=500")
     },
   })
 }, 20_000)

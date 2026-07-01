@@ -168,13 +168,30 @@ describe("visual-qa final blocker-based acceptance", () => {
             appURL: "http://127.0.0.1:4173/",
             projectDirectory: "/tmp/project",
           },
-          inspection: {
-            reviewedAt: "2026-06-21T00:00:00.000Z",
-            status: "passing",
-            blockerCount: 0,
-            notes: "Reviewed.",
-          },
-          regions: [
+            inspection: {
+              reviewedAt: "2026-06-21T00:00:00.000Z",
+              status: "passing",
+              blockerCount: 0,
+              notes: "Reviewed.",
+            },
+            pageCoverage: {
+              coordinateSpace: "source_reference_image_px",
+              implementationUse: "evidence_only",
+              requiredRegionIDs: ["region_header"],
+              coveredIntervals: [
+                {
+                  id: "coverage_full_reference",
+                  label: "Full reference page",
+                  y: 0,
+                  height: 900,
+                  regionIDs: ["region_header"],
+                  evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+                  notes: "Required evidence covers the full source reference height.",
+                },
+              ],
+              unexplainedBlankIntervals: [],
+            },
+            regions: [
             {
               id: "region_header",
               label: "Header",
@@ -260,6 +277,23 @@ function visualEvidenceBundle() {
       status: "passing",
       blockerCount: 0,
       notes: "Reviewed.",
+    },
+    pageCoverage: {
+      coordinateSpace: "source_reference_image_px",
+      implementationUse: "evidence_only",
+      requiredRegionIDs: ["region_header"],
+      coveredIntervals: [
+        {
+          id: "coverage_full_reference",
+          label: "Full reference page",
+          y: 0,
+          height: 900,
+          regionIDs: ["region_header"],
+          evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+          notes: "Required evidence covers the full source reference height.",
+        },
+      ],
+      unexplainedBlankIntervals: [],
     },
     regions: [
       {

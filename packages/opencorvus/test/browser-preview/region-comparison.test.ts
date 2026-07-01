@@ -191,6 +191,8 @@ describe("browser preview region comparison", () => {
         expect(result.manifestPath).toContain(".opencorvus/r/")
         expect(result.regions[0].artifacts?.side_by_side).toEndWith("side-by-side.png")
         expect(result.regions[0].implementation_bbox?.width).toBeGreaterThan(250)
+        expect(result.regions[0].content?.source.non_white_pixel_ratio).toBeGreaterThan(0)
+        expect(result.regions[0].content?.implementation.unique_color_count).toBeGreaterThan(1)
         expect(await fileExists(resolveRuntimeRelativePath(tmp.path, result.regions[0].artifacts!.source_crop))).toBe(
           true,
         )

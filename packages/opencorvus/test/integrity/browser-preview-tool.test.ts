@@ -204,7 +204,7 @@ describe("integrity browser preview tool surface", () => {
     })
   })
 
-  test("pass consensus is recorded with advisory when required visual evidence is missing", async () => {
+  test("pass consensus is rejected when required visual evidence is missing", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -219,10 +219,9 @@ describe("integrity browser preview tool surface", () => {
         })
         const result = await submitRegisteredIntegrityReport(kit.tools, passConsensusReport())
 
-        expect(String(result)).toContain("RECORDED")
-        expect(String(result)).toContain("ADVISORIES")
+        expect(String(result)).toContain("Error: pass verdict requires passing task-scoped VisualEvidenceBundle evidence")
         expect(String(result)).toContain("VisualEvidenceBundle")
-        expect((collector as { report?: unknown }).report).toBeDefined()
+        expect((collector as { report?: unknown }).report).toBeUndefined()
       },
     })
   })

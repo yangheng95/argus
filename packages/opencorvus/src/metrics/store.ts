@@ -39,7 +39,7 @@ interface BaselineSpecInput {
   floor: number
   weight: number
   gate_class: "blocking" | "diagnostic" | "efficiency"
-  evaluator_kind: "shell" | "judge" | "query" | "aggregator"
+  evaluator_kind: "shell" | "judge" | "prebuilt" | "query" | "aggregator"
   evaluator_config: Record<string, unknown>
   source_requirement_ids: string[]
 }

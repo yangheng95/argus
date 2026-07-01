@@ -110,8 +110,13 @@ describe("web-clone source skeleton", () => {
     expect(componentTree.components.length).toBeGreaterThan(0)
     expect(contentModel.tables.length).toBe(1)
     expect(styleProfile.purpose).toBe("web-clone-style-profile")
+    expect(styleProfile.policy.coordinateSpace).toBe("source_capture_viewport_px")
+    expect(styleProfile.policy.boundsImplementationUse).toBe("evidence_only")
     expect(styleProfile.regions.length).toBeGreaterThan(0)
     expect(styleProfile.regions[0].styleSummary).toBeDefined()
+    expect(styleProfile.regions[0].implementationGuidance.join("\n")).toContain(
+      "bounds as source-capture crop/region identity evidence only",
+    )
     expect(contentModel.sourceComponentPatterns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

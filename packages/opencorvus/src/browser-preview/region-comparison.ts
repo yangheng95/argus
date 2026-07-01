@@ -5,6 +5,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "@/util/pixel-stats"
 import { evaluateVisual, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visual/evaluate"
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
@@ -134,6 +135,23 @@ export const BrowserPreviewRegionComparisonResult = z.object({
           implementation_matches_source_size: z.boolean(),
         })
         .optional(),
+      content: z
+        .object({
+          source: z
+            .object({
+              non_white_pixel_ratio: z.number(),
+              unique_color_count: z.number().int().nonnegative(),
+            })
+            .strict(),
+          implementation: z
+            .object({
+              non_white_pixel_ratio: z.number(),
+              unique_color_count: z.number().int().nonnegative(),
+            })
+            .strict(),
+        })
+        .strict()
+        .optional(),
       artifacts: z
         .object({
           source_crop: z.string(),
@@ -162,6 +180,11 @@ type TrueSizeRegionVisualReport = {
   diffImageDataUrl?: string
   sourceSize: BrowserPreviewImageSizeValue
   implementationSize: BrowserPreviewImageSizeValue
+}
+
+type RegionContentMetrics = {
+  non_white_pixel_ratio: number
+  unique_color_count: number
 }
 
 type BrowserPreviewRegionComparisonInput = {
@@ -445,6 +468,10 @@ async function materializeRegionComparison(input: {
       visualReport.implementationSize.width === visualReport.sourceSize.width &&
       visualReport.implementationSize.height === visualReport.sourceSize.height,
   }
+  const content = {
+    source: await measureRegionContent(sourceCrop),
+    implementation: await measureRegionContent(implementationCrop),
+  }
   const visualPassed = visualReport.overallScore >= WEBPAGE_EVALUATE_PASS_SCORE
   const completed = coverage.implementation_matches_source_size && visualPassed
   const reason = coverage.implementation_matches_source_size
@@ -469,6 +496,7 @@ async function materializeRegionComparison(input: {
     artifact_note: TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
     visual,
     coverage,
+    content,
     artifacts,
     diagnostics: [
       TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
@@ -476,6 +504,14 @@ async function materializeRegionComparison(input: {
         ? `reference comparison completed for ${input.binding.region_id}: implementation crop size matches source region and visual score ${visualReport.overallScore}/100 meets ${WEBPAGE_EVALUATE_PASS_SCORE}/100`
         : `reference comparison failed for ${input.binding.region_id}: ${reason}`,
     ],
+  }
+}
+
+async function measureRegionContent(filePath: string): Promise<RegionContentMetrics> {
+  const png = await decodePNG(filePath)
+  return {
+    non_white_pixel_ratio: nonWhiteDensity(png),
+    unique_color_count: uniqueColorBucketCount(png),
   }
 }
 

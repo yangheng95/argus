@@ -81,6 +81,8 @@ async function register(tools: any, kind: "section" | "token", i: number) {
       position: "top",
       dimensions: "100%",
       layout_method: "flex",
+      coordinate_space: "implementation_layout",
+      implementation_use: "visible_layout_constraint",
       applies_to: "body",
       severity: "must",
     })

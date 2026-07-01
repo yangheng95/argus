@@ -907,7 +907,8 @@ function buildStyleProfile(
       assetRefs,
       implementationGuidance: [
         "Read this region profile before editing the matching component/style files.",
-        "Use bounds, computed typography, spacing, border, color, source node ids, selector refs, and assets as implementation facts.",
+        "Use bounds as source-capture crop/region identity evidence only; use computed typography, spacing, border, color, source node ids, selector refs, and assets as implementation facts.",
+        "Do not turn source-capture x/y/height/full-page geometry into CSS position, spacer, min-height, footer-y, or document-height targets.",
         "Use source-skeleton/critical.css for exact declarations and full-source.css only for targeted missing details.",
         implementationHintForSegment(segment),
       ],
@@ -928,6 +929,8 @@ function buildStyleProfile(
     policy: {
       sourceOfTruth: "deterministic browser/DOM/CSS evidence grouped by source region",
       consumer: "frontend_design, frontend_research, requirements, architect, and build agents",
+      coordinateSpace: "source_capture_viewport_px",
+      boundsImplementationUse: "evidence_only",
       noParallelStyleSummary: true,
     },
     regions,

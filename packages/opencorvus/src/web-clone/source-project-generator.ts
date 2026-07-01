@@ -210,6 +210,8 @@ interface SourceDomReplacementPlanItem {
   sourceMap: {
     sourceNodeId?: string
     sourceSegmentId?: string
+    coordinateSpace: "source_capture_viewport_px"
+    implementationUse: "evidence_only"
     bounds?: SourceBounds
     domRegion: string
     styleSources: string[]
@@ -6446,6 +6448,8 @@ function buildSourceDomReplacementPlan(
       sourceMap: {
         sourceNodeId: region.sourceNodeId,
         sourceSegmentId: region.sourceSegmentId,
+        coordinateSpace: "source_capture_viewport_px",
+        implementationUse: "evidence_only",
         bounds: region.sourceBounds,
         domRegion: region.filePath,
         styleSources,
@@ -6590,7 +6594,7 @@ function sourceDomVerticalSliceSteps(
   kind: SourceDomReplacementPlanItem["replacementKind"],
 ): string[] {
   return [
-    `Read ${region.filePath} plus sourceMap evidence for source ids, text, classes, and asset references.`,
+    `Read ${region.filePath} plus sourceMap evidence for source ids, text, classes, asset references, and evidence-only source-capture bounds.`,
     "Read web-clone-source/source-ir/style-profile.json for this source node/segment before editing layout CSS.",
     `Extract the visible data for ${recommendedComponentName} into sourceData.ts or a small typed module instead of duplicating JSX literals.`,
     `Render ${recommendedComponentName} as a semantic component with loops/props/states appropriate for ${kind}.`,
@@ -7323,10 +7327,10 @@ function renderSourceDomIterationStateTs(
       evidenceMethod: visualIteration.evidenceMethod,
       viewportMatrix,
       evidenceRule:
-        "Do not delete a source-dom region after replacement until desktop-reference has inspected preview screenshot evidence. Non-desktop review requires an explicitly authorized multi-end migration scope and matching source evidence.",
+        "Do not delete a source-dom region after replacement until desktop-reference has inspected preview screenshot evidence. Source-capture x/y/w/h bounds are evidence-only crop and region identity facts, not CSS position, spacer, page-height, or footer-y targets. Non-desktop review requires an explicitly authorized multi-end migration scope and matching source evidence.",
     },
     recommendedLoop: [
-      `Adopt the current source project as the visual baseline and compare the desktop visual iteration viewport (${viewportNames}) against reference.png or matching reference artifacts.`,
+      `Adopt the current source project as the visual baseline and compare the desktop visual iteration viewport (${viewportNames}) against reference.png or matching reference artifacts; treat source-capture geometry as evidence-only.`,
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
       "Delete the replaced source-dom region only after rendered screenshot inspection is stable for the unchanged surrounding surface.",
       "Review the replacement against source evidence and rendered preview screenshots after each region replacement.",
@@ -7437,7 +7441,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- `source-ir/style-profile.json` for region-scoped typography, spacing, color, selector, asset, and implementation guidance",
     "- `assets/manifest.json` for sidecar asset references",
     "- `src/data/sourceDomRegions.ts` for generated-region size, text preview, and replacement priority metrics",
-    "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, sourceMap evidence, data/style/asset/visual sources, generated cleanup targets, verticalSliceSteps, and parity guards",
+    "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, sourceMap evidence, evidence-only source-capture bounds, data/style/asset/visual sources, generated cleanup targets, verticalSliceSteps, and parity guards",
     "- `src/data/sourceDomIterationState.ts` for static replacement progress metadata: semantic replacements already produced, remaining source-dom debt, and the next candidate region",
     "- `src/data/sourceProjectManifest.json` for the desktop visual iteration viewport and generated-source ownership rules",
     "- `src/data/sourceSvgAssetGroups.ts` for large SVG path runs that are data-driven through `SourceAssetPathGroup` instead of hand-maintained TSX repetition",
@@ -7451,6 +7455,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- Refine this baseline region by region while checking against `reference.png`.",
     `- Desktop visual iteration viewport: ${renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix)}`,
     `- Layout width contract: ${renderSourceProjectLayoutWidthContract(visualIteration.layoutWidthContract)}`,
+    "- Source-capture `x/y/w/h`, full-page height, scrollY, and footer transition coordinates are evidence-only crop/comparison facts. Do not convert them into CSS `top`, `height`, `min-height`, margin, padding, spacer, footer-y, or document-height implementation targets.",
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use source evidence review and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",
     "",
@@ -7784,10 +7789,10 @@ async function buildSourceProjectLayoutWidthContract(input: {
         : "unknown"
   const rule =
     mode === "full_width"
-      ? "Treat the page canvas and major bands as viewport-width; do not wrap the whole page in a fixed max-width shell. Preserve internal gutters, columns, and cards from region evidence."
+      ? "Treat the page canvas and major bands as viewport-width for horizontal width mode only; do not wrap the whole page in a fixed max-width shell. Preserve internal gutters, columns, and cards from region evidence. This width contract does not impose page height, footer y, scrollY, or blank vertical filler."
       : mode === "centered_container"
-        ? "Treat the page as a centered content shell; preserve the measured container width and gutters from layout evidence instead of expanding all sections to the viewport."
-        : "Width mode is not proven by layout-map/page.ir evidence; inspect reference pixels and layout bounds before choosing a page container width."
+        ? "Treat the page as a centered content shell for horizontal width mode only; preserve the measured container width and gutters from layout evidence instead of expanding all sections to the viewport. This width contract does not impose page height, footer y, scrollY, or blank vertical filler."
+        : "Width mode is not proven by layout-map/page.ir evidence; inspect reference pixels and layout bounds before choosing a page container width. Do not infer page height, footer y, scrollY, or blank vertical filler from this contract."
   return {
     mode,
     viewportWidth: input.viewportWidth,

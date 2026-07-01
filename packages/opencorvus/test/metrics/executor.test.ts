@@ -1,16 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import os from "os"
 import path from "path"
+import fs from "node:fs/promises"
 import { Database } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { executeMetrics, normalize, type JudgeRunner } from "../../src/metrics/executor"
 import { Shell } from "../../src/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { readResultsForIteration, registerBaselineSpec, writeMetricResult } from "../../src/metrics/store"
 import { resetDatabase } from "../fixture/db"
 import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
+import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
+import { tmpdir } from "../fixture/fixture"
 
 let projectID = ""
 let taskID = ""
@@ -79,6 +84,23 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
       blockerCount: 0,
       notes: "No production blockers remain.",
     },
+    pageCoverage: {
+      coordinateSpace: "source_reference_image_px",
+      implementationUse: "evidence_only",
+      requiredRegionIDs: ["region_header"],
+      coveredIntervals: [
+        {
+          id: "coverage_full_reference",
+          label: "Full reference page",
+          y: 0,
+          height: 900,
+          regionIDs: ["region_header"],
+          evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+          notes: "Required evidence covers the full source reference height.",
+        },
+      ],
+      unexplainedBlankIntervals: [],
+    },
     regions: [
       {
         id: "region_header",
@@ -90,12 +112,106 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
         cropIntent: "full-region",
         required: true,
         status: "passing",
-        evidenceRefs: ["webpage-evidence/rendered.png", "visual-qa-report.json"],
+        evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
         notes: "Header matches the reference.",
       },
     ],
   }
   return { ...bundle, ...overrides }
+}
+
+function visualBundleWithReferenceComparison(input: { projectDirectory: string; evidenceID: string }): VisualEvidenceBundle {
+  const bundle = visualBundle()
+  const evidenceRefs = [`browser_preview_evidence:${input.evidenceID}`]
+  return {
+    ...bundle,
+    rendered: {
+      ...bundle.rendered,
+      projectDirectory: input.projectDirectory,
+    },
+    pageCoverage: {
+      ...bundle.pageCoverage,
+      coveredIntervals: bundle.pageCoverage.coveredIntervals.map((interval) => ({
+        ...interval,
+        evidenceRefs,
+      })),
+    },
+    regions: bundle.regions.map((region) => ({
+      ...region,
+      evidenceRefs,
+    })),
+  }
+}
+
+async function seedMetricsReferenceComparisonEvidence(input: {
+  projectDirectory: string
+  blankImplementation?: boolean
+}): Promise<string> {
+  const artifactDir = ProjectRuntimePaths.taskAbsolute(input.projectDirectory, taskID, "bp", "metrics-visual")
+  await fs.mkdir(artifactDir, { recursive: true })
+  const sourceCrop = path.join(artifactDir, "source.png")
+  const implementationCrop = path.join(artifactDir, "implementation.png")
+  const sideBySide = path.join(artifactDir, "side-by-side.png")
+  await fs.writeFile(sourceCrop, "source")
+  await fs.writeFile(implementationCrop, "implementation")
+  await fs.writeFile(sideBySide, "side-by-side")
+  const target = await persistTestBrowserPreviewTarget({
+    taskID,
+    url: "http://127.0.0.1:4173/",
+  })
+  const implementationContent = input.blankImplementation
+    ? { non_white_pixel_ratio: 0, unique_color_count: 1 }
+    : { non_white_pixel_ratio: 0.12, unique_color_count: 16 }
+  return persistBrowserPreviewEvidence({
+    projectRoot: input.projectDirectory,
+    taskID,
+    targetID: target.id,
+    viewportID: "desktop-primary",
+    operationKind: "reference-comparison",
+    regionID: "region_header",
+    cropIntent: "full-region",
+    status: "passed",
+    summary: "Reference comparison passed.",
+    capture: {
+      operation: "reference-comparison",
+      region: {
+        region_id: "region_header",
+        viewport_id: "desktop-primary",
+        crop_intent: "full-region",
+        source_bbox: { x: 0, y: 0, width: 1440, height: 900 },
+        implementation_bbox: { x: 0, y: 0, width: 1440, height: 900 },
+        source_image_size: { width: 1440, height: 900 },
+        implementation_viewport: { width: 1440, height: 900 },
+        visual: {
+          dimensions_match: true,
+          total_pixels: 1296000,
+          overall_score: input.blankImplementation ? 0 : 99,
+          ssim_score: input.blankImplementation ? 0 : 0.99,
+          pixel_diff_percent: input.blankImplementation ? 100 : 1,
+          mismatched_pixels: input.blankImplementation ? 1296000 : 100,
+        },
+        coverage: {
+          source_width: 1440,
+          source_height: 900,
+          implementation_width: 1440,
+          implementation_height: 900,
+          implementation_covers_source: true,
+          implementation_matches_source_size: true,
+        },
+        content: {
+          source: { non_white_pixel_ratio: 0.12, unique_color_count: 18 },
+          implementation: implementationContent,
+        },
+        diagnostics: [],
+      },
+    },
+    artifactPaths: {
+      source_crop: sourceCrop,
+      implementation_crop: implementationCrop,
+      side_by_side: sideBySide,
+    },
+    diagnostics: [],
+  })
 }
 
 beforeEach(async () => {
@@ -453,6 +569,75 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
     expect(outcome.results[0].evidence_fresh).toBe(true)
     expect(outcome.results[0].evidence_ref).toContain("visual_evidence_bundle=veb_desktop")
     expect(outcome.results[0].evidence_ref).toContain("reference=webpage-evidence/reference.png")
+  })
+
+  test("prebuilt visual-evidence-bundle passes with evidence-backed full reference coverage", async () => {
+    registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "visual_prebuilt",
+      description: "prebuilt visual evidence bundle validator",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0.5,
+      weight: 1,
+      gate_class: "blocking",
+      evaluator_kind: "prebuilt",
+      evaluator_config: { name: "visual-evidence-bundle" },
+      source_requirement_ids: ["REQ-visual"],
+    })
+    await using dir = await tmpdir()
+    const evidenceID = await seedMetricsReferenceComparisonEvidence({ projectDirectory: dir.path })
+    const bundle = visualBundleWithReferenceComparison({ projectDirectory: dir.path, evidenceID })
+
+    const outcome = await executeMetrics({
+      task_id: taskID,
+      iteration: 0,
+      acceptance: { visual_evidence: [bundle] },
+    })
+
+    expect(outcome.results[0].raw_value).toBe(1)
+    expect(outcome.results[0].met_target).toBe(true)
+    expect(outcome.results[0].evidence_fresh).toBe(true)
+    expect(outcome.results[0].evidence_ref).toContain("prebuilt://visual-evidence-bundle passed")
+  })
+
+  test("prebuilt visual-evidence-bundle rejects blank implementation content metrics", async () => {
+    registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "visual_prebuilt_blank",
+      description: "prebuilt visual evidence bundle validator",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0.5,
+      weight: 1,
+      gate_class: "blocking",
+      evaluator_kind: "prebuilt",
+      evaluator_config: { name: "visual-evidence-bundle" },
+      source_requirement_ids: ["REQ-visual"],
+    })
+    await using dir = await tmpdir()
+    const evidenceID = await seedMetricsReferenceComparisonEvidence({
+      projectDirectory: dir.path,
+      blankImplementation: true,
+    })
+    const bundle = visualBundleWithReferenceComparison({ projectDirectory: dir.path, evidenceID })
+
+    const outcome = await executeMetrics({
+      task_id: taskID,
+      iteration: 0,
+      acceptance: { visual_evidence: [bundle] },
+    })
+
+    expect(outcome.results[0].raw_value).toBe(0)
+    expect(outcome.results[0].met_target).toBe(false)
+    expect(outcome.results[0].evidence_fresh).toBe(true)
+    expect(outcome.results[0].evidence_ref).toContain("implementation content metrics indicate a blank crop")
   })
 })
 

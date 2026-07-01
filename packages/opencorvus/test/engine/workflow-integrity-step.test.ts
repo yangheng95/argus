@@ -878,6 +878,23 @@ describe("pipeline workflow review topology", () => {
           blockerCount: 0,
           notes: "Bundle declares required reference region.",
         },
+        pageCoverage: {
+          coordinateSpace: "source_reference_image_px",
+          implementationUse: "evidence_only",
+          requiredRegionIDs: ["dashboard"],
+          coveredIntervals: [
+            {
+              id: "coverage_full_reference",
+              label: "Full reference page",
+              y: 0,
+              height: 900,
+              regionIDs: ["dashboard"],
+              evidenceRefs: ["browser_preview_evidence:art_missing_comparison"],
+              notes: "Required evidence covers the full source reference height.",
+            },
+          ],
+          unexplainedBlankIntervals: [],
+        },
         regions: [
           {
             id: "dashboard",

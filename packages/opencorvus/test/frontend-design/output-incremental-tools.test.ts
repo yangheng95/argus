@@ -318,6 +318,52 @@ test("submit_frontend_template exposes a small finalizer schema", () => {
   expect(schema.properties).not.toHaveProperty("component_reuse_plan")
 })
 
+test("register_layout_spec rejects source-capture geometry before it enters visual requirements", async () => {
+  const kit = createFrontendTemplateOutputTools()
+
+  const rejectedVisible = await callTool(kit.tools, "register_layout_spec", {
+    id: "vis-layout-source-footer-y",
+    title: "Source footer y",
+    section_role: "footer",
+    position: "source y=5222",
+    dimensions: "source height 976px",
+    layout_method: "flow",
+    coordinate_space: "source_capture_viewport_px",
+    implementation_use: "visible_layout_constraint",
+    applies_to: "web-clone-source/reference.png",
+    severity: "must",
+  })
+  expect(rejectedVisible).toContain("source_capture_viewport_px geometry is source evidence")
+
+  const rejectedEvidenceOnly = await callTool(kit.tools, "register_layout_spec", {
+    id: "vis-layout-source-footer-y-evidence",
+    title: "Source footer y evidence",
+    section_role: "footer",
+    position: "source y=5222",
+    dimensions: "source height 976px",
+    layout_method: "flow",
+    coordinate_space: "source_capture_viewport_px",
+    implementation_use: "evidence_only",
+    applies_to: "web-clone-source/reference.png",
+    severity: "must",
+  })
+  expect(rejectedEvidenceOnly).toContain("source_capture_viewport_px geometry is source evidence")
+
+  const accepted = await callTool(kit.tools, "register_layout_spec", {
+    id: "vis-layout-header",
+    title: "Header layout",
+    section_role: "header",
+    position: "top",
+    dimensions: "full-width 64px height",
+    layout_method: "sticky",
+    coordinate_space: "implementation_layout",
+    implementation_use: "visible_layout_constraint",
+    applies_to: "header",
+    severity: "must",
+  })
+  expect(accepted).toContain("OK")
+})
+
 test("static HTML screenshot helper owns navigation by browser inactivity", () => {
   const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/output-tools.ts"), "utf8")
 
