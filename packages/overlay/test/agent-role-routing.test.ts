@@ -112,6 +112,9 @@ test("ordered message parts exclude control-only step boundaries before CardPart
       { id: "prt_text_empty", type: "text", text: "" },
       { id: "prt_text_visible", type: "text", text: "visible text" },
       { id: "prt_step_finish", type: "step-finish" },
+      { id: "prt_compaction", type: "compaction" },
+      { id: "prt_snapshot", type: "snapshot" },
+      { id: "prt_retry", type: "retry" },
       { id: "prt_reasoning_empty", type: "reasoning", text: "" },
       { id: "prt_boundary", type: "boundary" },
       { id: "prt_reasoning_visible", type: "reasoning", text: "visible reasoning" },
@@ -135,6 +138,10 @@ test("message part classification separates protocol controls from rendered sepa
   expect(isProtocolControlMessagePart({ type: "boundary" })).toBe(false)
   expect(isBoundaryMessagePart({ type: "boundary" })).toBe(true)
   expect(isCardBodyMessagePart({ type: "boundary" })).toBe(false)
+  expect(isCardBodyMessagePart({ type: "compaction" })).toBe(false)
+  expect(messagePartHasDisplayContent({ type: "compaction", auto: true })).toBe(false)
+  expect(isCardBodyMessagePart({ type: "snapshot", snapshot: "state" })).toBe(false)
+  expect(isCardBodyMessagePart({ type: "retry", attempt: 1 })).toBe(false)
 
   expect(isCardBodyMessagePart({ type: "text", text: "" })).toBe(true)
   expect(messagePartHasDisplayContent({ type: "text", text: "" })).toBe(false)

@@ -16,6 +16,38 @@ export const PROTOCOL_VERSION = 2 as const
 
 export const SCREENSHOT_BROWSER_THUMBNAIL_VARIANT = "screenshot-browser-thumbnail" as const
 
+// ── Conversation message part projection ──
+
+export const CONVERSATION_DISPLAY_MESSAGE_PART_TYPES = [
+  "text",
+  "part-error",
+  "reasoning",
+  "tool",
+  "patch",
+  "file",
+  "interaction-question",
+  "interaction-permission",
+  "subtask",
+] as const
+
+export const CONVERSATION_SEPARATOR_MESSAGE_PART_TYPES = ["boundary"] as const
+
+export type ConversationDisplayMessagePartType = (typeof CONVERSATION_DISPLAY_MESSAGE_PART_TYPES)[number]
+export type ConversationSeparatorMessagePartType = (typeof CONVERSATION_SEPARATOR_MESSAGE_PART_TYPES)[number]
+
+export function isConversationDisplayMessagePartType(type: string): type is ConversationDisplayMessagePartType {
+  return (CONVERSATION_DISPLAY_MESSAGE_PART_TYPES as readonly string[]).includes(type)
+}
+
+export function isConversationRenderableMessagePartType(
+  type: string,
+): type is ConversationDisplayMessagePartType | ConversationSeparatorMessagePartType {
+  return (
+    isConversationDisplayMessagePartType(type) ||
+    (CONVERSATION_SEPARATOR_MESSAGE_PART_TYPES as readonly string[]).includes(type)
+  )
+}
+
 // ── Server route directory policy ──
 
 /**

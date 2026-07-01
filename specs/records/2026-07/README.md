@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-compaction-part-card-projection.md](2026-07-02-compaction-part-card-projection.md) records the strict projection repair for completed compaction marker parts reaching `CardParts` as unsupported body content.
 - [2026-07-02-frontend-innovate-sloppy-review.md](2026-07-02-frontend-innovate-sloppy-review.md) records the independent-agent review of the overstated Frontend Innovate delivery, including the mocked-E2E boundary, reset violation, and required remediation before the expert squad can be treated as complete.
 - [2026-07-01-frontend-innovate-design-philosophy.md](2026-07-01-frontend-innovate-design-philosophy.md) records the external design research, Claude Code frontend-design plugin reference, prompt/skill replacement plan, and existing-URL redesign benchmark for the Frontend Innovate expert squad.
 - [2026-07-01-v0.0.1beta-history-rewrite.md](2026-07-01-v0.0.1beta-history-rewrite.md) records the branch creation, current-content commit, commit-message rewrite, verification, and git-cc push plan for `v0.0.1beta`.

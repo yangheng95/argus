@@ -1,5 +1,9 @@
+import {
+  isConversationDisplayMessagePartType,
+  isConversationRenderableMessagePartType,
+} from "@opencorvus-ai/transport-protocol"
+
 const CONTROL_PROTOCOL_MESSAGE_PART_TYPES = new Set(["step-start", "step-finish"])
-const NON_PROJECTABLE_MESSAGE_PART_TYPES = new Set([...CONTROL_PROTOCOL_MESSAGE_PART_TYPES, "boundary"])
 
 export function messagePartType(part: any): string {
   return String(part?.type || "")
@@ -14,9 +18,13 @@ export function isBoundaryMessagePart(part: any): boolean {
   return messagePartType(part) === "boundary"
 }
 
+export function isCardRenderableMessagePartType(type: string): boolean {
+  return isConversationRenderableMessagePartType(type)
+}
+
 export function isCardBodyMessagePart(part: any): boolean {
   const type = messagePartType(part)
-  return Boolean(type && !NON_PROJECTABLE_MESSAGE_PART_TYPES.has(type))
+  return Boolean(type && isConversationDisplayMessagePartType(type))
 }
 
 export function messagePartHasDisplayContent(part: any): boolean {

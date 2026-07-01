@@ -5,6 +5,8 @@ import {
   SCREENSHOT_BROWSER_THUMBNAIL_VARIANT,
   WEBVIEW_MESSAGE_TYPES,
   base64ToUint8,
+  isConversationDisplayMessagePartType,
+  isConversationRenderableMessagePartType,
   isExtensionMessage,
   isWebviewMessage,
   routeRequiresProjectDirectory,
@@ -344,5 +346,32 @@ describe("route directory policy", () => {
     expect(routeRequiresProjectDirectory("/task/abc/project-archive", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc/browser-preview", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc/conversation", "POST")).toBe(true)
+  })
+})
+
+describe("conversation message part projection", () => {
+  test("rendered body parts exclude durable control markers", () => {
+    for (const type of [
+      "text",
+      "part-error",
+      "reasoning",
+      "tool",
+      "patch",
+      "file",
+      "interaction-question",
+      "interaction-permission",
+      "subtask",
+    ]) {
+      expect(isConversationDisplayMessagePartType(type)).toBe(true)
+      expect(isConversationRenderableMessagePartType(type)).toBe(true)
+    }
+
+    expect(isConversationDisplayMessagePartType("boundary")).toBe(false)
+    expect(isConversationRenderableMessagePartType("boundary")).toBe(true)
+
+    for (const type of ["compaction", "snapshot", "agent", "retry", "step-start", "step-finish", "unknown"]) {
+      expect(isConversationDisplayMessagePartType(type)).toBe(false)
+      expect(isConversationRenderableMessagePartType(type)).toBe(false)
+    }
   })
 })

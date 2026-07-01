@@ -9,24 +9,11 @@ import { shortRelativePath } from "../utils/tool"
 import { selectedTaskDirectory } from "../store/board"
 import { toolToCardNode } from "../utils/tool-card-node"
 import { t } from "../utils/i18n"
-import { isBoundaryMessagePart } from "../utils/message-part"
-
-const KNOWN_PART_TYPES = new Set([
-  "boundary",
-  "text",
-  "part-error",
-  "reasoning",
-  "tool",
-  "patch",
-  "file",
-  "interaction-question",
-  "interaction-permission",
-  "subtask",
-])
+import { isBoundaryMessagePart, isCardRenderableMessagePartType } from "../utils/message-part"
 
 function unsupportedPartFallback(part: any) {
   const type = String(part?.type || "")
-  if (KNOWN_PART_TYPES.has(type)) return null
+  if (isCardRenderableMessagePartType(type)) return null
   throw new Error(`CardParts unsupported part type: ${type || "<missing>"}`)
 }
 
