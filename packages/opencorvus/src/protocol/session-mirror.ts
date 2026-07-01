@@ -293,6 +293,22 @@ export function mapSessionBusEvent(
       payload,
     }
   }
+  if (event.type === Session.Event.Diff.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
+    return {
+      type: "session.diff",
+      summary: "Session diff updated",
+      payload,
+    }
+  }
+  if (event.type === Session.Event.ConfigChanged.type) {
+    const payload = stampSessionEventPayload(sessionID, props)
+    return {
+      type: "config.changed",
+      summary: "Session config changed",
+      payload,
+    }
+  }
   if (event.type === Message.Event.Updated.type) {
     const payload = stampSessionPayload(sessionID, props)
     const info = payload.info as Record<string, unknown>
@@ -384,11 +400,7 @@ export function mapSessionBusEvent(
       payload,
     }
   }
-  return {
-    type: event.type,
-    summary: event.type,
-    payload: props,
-  }
+  return
 }
 
 async function shouldMirrorSessionScopedStream(sessionID: string): Promise<boolean> {

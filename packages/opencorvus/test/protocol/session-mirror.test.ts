@@ -353,6 +353,142 @@ describe("session mirror", () => {
     })
   })
 
+  test("stamps session diff and config changes with session order keys", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const diff = mapSessionBusEvent(
+          {
+            type: Session.Event.Diff.type,
+            properties: {
+              sessionID: sidebar.id,
+              diff: [],
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+        const configChanged = mapSessionBusEvent(
+          {
+            type: Session.Event.ConfigChanged.type,
+            properties: {
+              sessionID: sidebar.id,
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(diff?.type).toBe("session.diff")
+        expect(diff?.payload?.orderKey).toContain(":session:")
+        expect(diff?.payload?.channel).toBe("assistant")
+        expect(diff?.payload?.resolvedRole).toBe("assistant")
+        expect(diff?.payload?.diff).toEqual([])
+        expect(configChanged?.type).toBe("config.changed")
+        expect(configChanged?.payload?.orderKey).toContain(":session:")
+        expect(configChanged?.payload?.channel).toBe("assistant")
+        expect(configChanged?.payload?.resolvedRole).toBe("assistant")
+      },
+    })
+  })
+
+  test("does not default-project unsupported session bus events", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const mapped = mapSessionBusEvent(
+          {
+            type: "session.unsupported",
+            properties: {
+              sessionID: sidebar.id,
+            },
+          },
+          { sessionID: sidebar.id },
+        )
+
+        expect(mapped).toBeUndefined()
+      },
+    })
+  })
+
+  test("session diff does not stop later assistant part mirroring", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const info = await Session.updateMessage(
+          assistantMessageFixture({
+            id: "msg_sidebar_diff_assistant",
+            sessionID: sidebar.id,
+            created: Date.now(),
+            parentID: "msg_sidebar_diff_user",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "coding-assistant",
+            cwd: tmp.path,
+          }),
+        )
+        const mirrorErrors: string[] = []
+        const mirrored: Array<{ type: string; payload: Record<string, any> }> = []
+        const stopProtocol = ProtocolStore.subscribeEvents(
+          (event) => {
+            mirrored.push({ type: event.type, payload: event.payload ?? {} })
+          },
+          { aggregate: "session", sessionID: sidebar.id },
+        )
+        const stopMirror = subscribeSessionMirror(sidebar.id, (error) => {
+          mirrorErrors.push(error instanceof Error ? error.message : String(error))
+        })
+
+        try {
+          await expectNoProcessErrors(async () => {
+            GlobalBus.emit("event", {
+              directory: tmp.path,
+              payload: {
+                type: Session.Event.Diff.type,
+                properties: {
+                  sessionID: sidebar.id,
+                  diff: [],
+                },
+              },
+            })
+            await Session.updatePart({
+              id: "prt_sidebar_after_diff",
+              messageID: info.id,
+              sessionID: sidebar.id,
+              type: "text",
+              text: "assistant text after diff",
+            })
+            await waitFor(() => mirrored.some((event) => event.type === "message.part.updated"))
+          })
+
+          expect(mirrorErrors).toEqual([])
+          expect(mirrored.map((event) => event.type)).toContain("session.diff")
+          const partUpdated = mirrored.find((event) => event.type === "message.part.updated")
+          expect(partUpdated?.payload.part.text).toBe("assistant text after diff")
+        } finally {
+          stopMirror()
+          stopProtocol()
+        }
+      },
+    })
+  })
+
   test("stamps standalone question events with a top-level interaction order key", async () => {
     await using tmp = await tmpdir({ git: true })
 
