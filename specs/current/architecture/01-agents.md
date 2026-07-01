@@ -53,7 +53,7 @@
 - `kind="workflow"`：默认路径，走完整 Task Control Loop（Orchestrator 决策 → Workflow 模板）。
 - `kind="build"`：跳过 Orchestrator 分解 / 计划 / 评估，直接运行 build agent。用于一次性编辑、Q&A、简单修复。仍占用 `engine_task` 行，享受统一的 cancel / list / audit。
 
-**没有独立的 `build-dispatch.ts` 文件**：`engine_task.kind="build"` 的快通道路由由 `orchestrator/agent.ts` 的 direct workflow 选择、`orchestrator/tools.ts` 的 `build` tool、`build/agent.ts` 的 `BuildAgent.run`、以及 `engine/workflow.ts` 的 `WorkflowRegistry.resolve` / `direct` 模板共同承担；`goal/runner.ts` 只导出 `cleanupGoalWorkspace`，负责目标 worktree 生命周期末端清理，不承担 dispatch、worktree 创建或 executor 调用。
+**没有独立的 `build-dispatch.ts` 文件**：`engine_task.kind="build"` 的快通道路由由 `orchestrator/agent.ts` 的 direct workflow 选择、`orchestrator/tools.ts` 的 `build` tool、`build/agent.ts` 的 `BuildAgent.run`、以及 `engine/workflow.ts` 的 `WorkflowRegistry.resolve` / `direct` 模板共同承担；task-level direct build 以当前项目目录作为 caller-owned `workDir`，不创建新的 git worktree；goal-scoped build 才创建或复用 managed worktree；`goal/runner.ts` 只导出 `cleanupGoalWorkspace`，负责目标 worktree 生命周期末端清理，不承担 dispatch、worktree 创建或 executor 调用。
 
 ## MiniWorkflow — 两个声明式模板
 
@@ -82,7 +82,7 @@ orchestrator/loop.ts — runTaskLoop()
                   ▼
         ┌─────────────────────────┐
         │  build tool             │  orchestrator/tools.ts (build:)
-        │  创建/复用 worktree      │  调 BuildAgent.run
+        │  goal 创建/复用 worktree  │  direct 使用当前 workDir
         │  (旧 goal pool / pipeline executor
         │   已删除，执行职责在 build tool + BuildAgent)
         └─────────────────┬───────┘
@@ -129,7 +129,7 @@ orchestrator/loop.ts — runTaskLoop()
 | Frontend Research     | `frontend-research/agent.ts`                                                                                                                                                         | 网页 URL → 直接调查 prepared evidence 与源页面、汇总功能/视觉/layout/style/interaction/content/fidelity evidence brief；按网页调查作用域一次性产出 brief，后续修复消费该 brief，不重复执行 frontend-research | 有网页功能/视觉研究需求的前端或 PRD/SPEC/report 任务                                                |
 | Goal Workload Analyst | `goal-workload-analyst/agent.ts`                                                                                                                                                     | 只读 goal 定型复核：深读 frontend template / contract graph / reference coverage，逐 goal 产反低估清单、验证清单与 `decomposition_concern`；不创建/修改 goal、不写代码、不作为 gate                          | Architect 产出 goal graph 后，特别是网页复刻、复杂 UI 或大型重构任务                                |
 | Integrity Reviewer    | `integrity/team-agent.ts`                                                                                                                                                            | 对抗性 integrity review team：根据真实任务面动态选择 reviewer，复核 requirement scope、runtime evidence、实现质量与验收风险，输出 pass / non-pass 报告；旧固定维度 review 与 prosecutor 职责已并入此 team                               | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent）                          |
-| Build                 | `build/agent.ts`（`BuildAgent.run`；同包 `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（`cleanupGoalWorkspace` 清理）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | `BuildAgent.run` 创建/接管 worktree、调用 `ExecutorRegistry.requireCoding` 并实际写代码；通过 task-scoped backend browser evidence 或 Browser MCP screenshot/observe 获取运行时截图证据；`goal/runner.ts` 不创建 worktree、不调用 executor | Orchestrator 通过 `build` tool 调起                                                                 |
+| Build                 | `build/agent.ts`（`BuildAgent.run`；同包 `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（`cleanupGoalWorkspace` 清理）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | goal-scoped `BuildAgent.run` 创建/接管 managed worktree；task-level direct build 接收当前项目目录作为 caller-owned `workDir`，不创建新 worktree；调用 `ExecutorRegistry.requireCoding` 并实际写代码；通过 task-scoped backend browser evidence 或 Browser MCP screenshot/observe 获取运行时截图证据；`goal/runner.ts` 不创建 worktree、不调用 executor | Orchestrator 通过 `build` tool 调起                                                                 |
 
 > Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory
 > 工具（add*task / update_task / scratchpad*\*），任何 agent 都可以挂载它来管理自己的子

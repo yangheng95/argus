@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-direct-build-current-worktree.md](2026-07-02-direct-build-current-worktree.md) records the task-level direct build dispatch repair so `directBuildIntent="modify_files"` uses the current project worktree instead of creating a new managed worktree.
 - [2026-07-02-single-agent-vs-opencorvus-clear-drawio.md](2026-07-02-single-agent-vs-opencorvus-clear-drawio.md) records the replacement clear Draw.io architecture comparison for traditional single-agent coding assistants versus OpenCorvus multi-agent orchestration.
 - [2026-07-02-agent-team-investment-drawio.md](2026-07-02-agent-team-investment-drawio.md) records the deleted/superseded executive investment Draw.io artifact.
 - [2026-07-02-compaction-part-card-projection.md](2026-07-02-compaction-part-card-projection.md) records the strict projection repair for completed compaction marker parts reaching `CardParts` as unsupported body content.

@@ -1813,7 +1813,7 @@ async function markBuildSlotAcquired(
   sessionID = `ses_build_mock_${Date.now()}_${Math.random().toString(36).slice(2)}`,
 ) {
   await input.onSessionCreated?.(sessionID, {
-    worktreeDir: input.managedWorktree?.directory,
+    worktreeDir: input.managedWorktree?.directory ?? input.workDir,
     worktreeBranch: input.managedWorktree?.branch,
     worktreeBaseRef: input.managedWorktree?.baseRef,
   })
@@ -11860,6 +11860,7 @@ describe("orchestrator tools", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     let capturedContext: any
     let capturedTarget: any
+    let capturedRunInput: any
 
     await Instance.provide({
       directory: tmp.path,
@@ -11981,6 +11982,7 @@ describe("orchestrator tools", () => {
 
         buildAgentRunImpl = async (input: any) => {
           await markBuildSlotAcquired(input, `ses_direct_build_feedback_${stamp}`)
+          capturedRunInput = input
           capturedContext = input.context
           capturedTarget = input.target
           return {
@@ -11998,7 +12000,7 @@ describe("orchestrator tools", () => {
               commit_ref: "abc1234",
             },
             sessionID: `ses_direct_build_feedback_${stamp}`,
-            worktreeDir: input.managedWorktree?.directory ?? Instance.directory,
+            worktreeDir: input.workDir ?? input.managedWorktree?.directory ?? Instance.directory,
             worktreeBranch: input.managedWorktree?.branch,
             worktreeBaseRef: input.managedWorktree?.baseRef,
           }
@@ -12030,6 +12032,8 @@ describe("orchestrator tools", () => {
       kind: "request",
       text: "Repair the market tabs using the latest Visual QA report.",
     })
+    expect(capturedRunInput?.workDir).toBe(tmp.path)
+    expect(capturedRunInput?.managedWorktree).toBeUndefined()
     expect(capturedContext?.requirements?.map((row: any) => row.id)).toEqual(["REQ-visual-replica"])
     expect(capturedContext?.requirements?.[0]?.description).toContain("source page layout density")
     expect(capturedContext?.visualQaFeedback).toContain("Latest failed Visual QA report for Build repair")

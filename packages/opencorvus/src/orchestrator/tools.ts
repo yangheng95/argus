@@ -12790,9 +12790,11 @@ export function createOrchestratorTools(input: {
         }
 
         // Phase 5-c: delegate to BuildAgent.run. It owns the child session
-        // (kind=build), creates an isolated worktree (parallel-safe for
-        // multi-goal fan-out), gates concurrency via AgentSemaphore, and
-        // returns a structured BuildResult the orchestrator can judge.
+        // (kind=build), gates concurrency via AgentSemaphore, and returns a
+        // structured BuildResult the orchestrator can judge. Goal-scoped
+        // builds use managed worktrees for parallel fan-out; task-level
+        // direct builds edit the current project directory as caller-owned
+        // workDir instead of creating an extra worktree.
         //
         // For goalID path, build the structured BuildTarget from the DB row
         // so the agent receives acceptance_specs / owned_paths / depends_on
@@ -12872,6 +12874,7 @@ export function createOrchestratorTools(input: {
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
+          let directBuildWorkDir: string | undefined
           let existingBuildSessionID: string | undefined
           if (attachedGoalID) {
             const { findGoal, findRequirements, listGoals, findGoalLatestWorkspace } = await import("@/engine/store")
@@ -13167,6 +13170,7 @@ export function createOrchestratorTools(input: {
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+            directBuildWorkDir = projectDir
             const frontendDesign = renderFrontendDesignHandoffReference(taskID, {
               pathMode: "absolute",
               projectDir,
@@ -13410,6 +13414,7 @@ export function createOrchestratorTools(input: {
                 parentSessionID: input.agentSessionID,
                 existingSessionID: existingBuildSessionID,
                 signal: input.signal,
+                workDir: directBuildWorkDir,
                 managedWorktree,
                 onSessionCreated: openGoalRunForBuildSession,
               })

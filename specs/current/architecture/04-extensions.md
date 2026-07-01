@@ -40,14 +40,14 @@
 **调用链**：
 
 ```
-Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
+Orchestrator build tool → build/agent.ts (LLM 决策；goal build 使用 Worktree.create，task-level direct build 使用当前 caller-owned workDir) →
    ExecutorRegistry.requireCoding() → external coding executor → diff evidence
    + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
 
 （旧 pipeline executor 与 goal-pool 模块已删除。`goal/runner.ts` 只导出
-`cleanupGoalWorkspace`，不承担 worktree 创建或 executor dispatch 职责；worktree 创建走
-`BuildAgent.run` 内的 `Worktree.create`，external coding executor 调用走 `ExecutorRegistry.requireCoding`。）
+`cleanupGoalWorkspace`，不承担 worktree 创建或 executor dispatch 职责；goal-scoped worktree 创建走
+`BuildAgent.run` 内的 `Worktree.create`，task-level direct build 由 orchestrator 传入当前项目 `workDir`，external coding executor 调用走 `ExecutorRegistry.requireCoding`。）
 
 ## Plugin —— 非执行器插件
 
