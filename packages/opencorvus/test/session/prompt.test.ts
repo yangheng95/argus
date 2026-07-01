@@ -1,6 +1,8 @@
 import path from "path"
+import fs from "node:fs/promises"
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { fileURLToPath, pathToFileURL } from "url"
+import sharp from "sharp"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -12,6 +14,68 @@ import { LSP } from "../../src/lsp"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+const providerModel: Provider.Model = {
+  id: "test-model",
+  providerID: "test",
+  api: {
+    id: "test-model",
+    url: "https://example.com",
+    npm: "@ai-sdk/openai",
+  },
+  name: "Test Model",
+  capabilities: {
+    temperature: true,
+    reasoning: false,
+    attachment: false,
+    toolcall: true,
+    input: {
+      text: true,
+      audio: false,
+      image: true,
+      video: false,
+      pdf: false,
+    },
+    output: {
+      text: true,
+      audio: false,
+      image: false,
+      video: false,
+      pdf: false,
+    },
+    interleaved: false,
+  },
+  cost: {
+    input: 0,
+    output: 0,
+    cache: {
+      read: 0,
+      write: 0,
+    },
+  },
+  limit: {
+    context: 0,
+    input: 0,
+    output: 0,
+  },
+  status: "active",
+  options: {},
+  headers: {},
+  release_date: "2026-01-01",
+}
+
+async function pngImage(width: number, height: number): Promise<Buffer> {
+  const svg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+      `<rect width="${width}" height="${height}" fill="white"/>` +
+      `<rect x="0" y="0" width="1" height="1" fill="black"/>` +
+      `<rect x="${width - 1}" y="${height - 1}" width="1" height="1" fill="black"/>` +
+      `<rect x="0" y="${height - 1}" width="1" height="1" fill="black"/>` +
+      `<rect x="${width - 1}" y="${height - 1}" width="1" height="1" fill="black"/>` +
+      `</svg>`,
+  )
+  return await sharp(svg).png().toBuffer()
+}
 
 describe("session.prompt missing file", () => {
   afterEach(() => {
@@ -63,6 +127,60 @@ describe("session.prompt missing file", () => {
         expect(located).toBeTruthy()
         const roundTrip = await AttachmentStore.read(located!.projectID, located!.name)
         expect(roundTrip.equals(pngBytes)).toBe(true)
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("materializes staged reference file parts before provider replay reads attachments", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+        const pngBytes = await pngImage(16, 16)
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "source.png")
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
+        const staged = await AttachmentStore.stageToWorktree(Instance.project.id, [original], worktreeDir)
+        const originalLocation = AttachmentStore.nameFromUrl(original.url)
+        if (!originalLocation) throw new Error("expected original attachment location")
+        const originalAbs = AttachmentStore.resolveAbsolute(originalLocation.projectID, originalLocation.name)
+        if (!originalAbs) throw new Error("expected original attachment path")
+        await fs.rm(originalAbs, { force: true })
+        await fs.rm(`${originalAbs}.metadata.json`, { force: true })
+
+        const [stagedPart] = AttachmentStore.filePartsFromStagedReferences(staged)
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "coding",
+          noReply: true,
+          parts: [{ type: "text", text: "use the staged reference" }, stagedPart],
+        })
+
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        const filePart = stored.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+
+        expect(filePart.url.startsWith("file:")).toBe(false)
+        const recreated = AttachmentStore.nameFromUrl(filePart.url)
+        expect(recreated).toBeTruthy()
+        expect(await AttachmentStore.read(recreated!.projectID, recreated!.name)).toEqual(pngBytes)
+
+        const modelMessages = await Message.toModelMessages([stored], providerModel)
+        const wire = JSON.stringify(modelMessages)
+        expect(wire).toContain(`data:image/png;base64,${pngBytes.toString("base64")}`)
 
         await Session.remove(session.id)
       },

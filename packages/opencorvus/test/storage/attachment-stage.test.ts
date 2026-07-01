@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
@@ -182,5 +183,26 @@ describe("AttachmentStore.stageToWorktree", () => {
 
   test("STAGED_REFERENCES_SUBDIR is the conventional 'references' string", () => {
     expect(AttachmentStore.STAGED_REFERENCES_SUBDIR).toBe("references")
+  })
+
+  test("filePartsFromStagedReferences emits file URLs for staged byte sources", () => {
+    const absPath = path.join(process.cwd(), "references", "source-reference.png")
+    const parts = AttachmentStore.filePartsFromStagedReferences([
+      {
+        relPath: "references/source-reference.png",
+        absPath,
+        mime: "image/png",
+        originalFilename: "url-www.example.png",
+      },
+    ])
+
+    expect(parts).toEqual([
+      {
+        type: "file",
+        url: pathToFileURL(absPath).href,
+        mime: "image/png",
+        filename: "source-reference.png",
+      },
+    ])
   })
 })

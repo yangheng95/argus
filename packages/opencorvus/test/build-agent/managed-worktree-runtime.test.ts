@@ -105,6 +105,17 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
+  test("managed build prompt file parts are sourced from staged references", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/agent.ts"), "utf8")
+
+    expect(source).toContain("stagedFilePartsForPrompt = AttachmentStore.filePartsFromStagedReferences")
+    expect(source).toContain("stagedFilePartsForPrompt !== undefined")
+    expect(source).not.toContain(
+      "const inline = await AttachmentStore.inlineFileParts(allMultimodal)\n" +
+        "              // Three layers of context for attachments",
+    )
+  })
+
   test("external executors receive primary runtimeDir and distinct worktreeDir", async () => {
     await using tmp = await tmpdir({ git: true })
 

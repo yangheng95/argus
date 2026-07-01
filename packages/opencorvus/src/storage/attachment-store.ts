@@ -1,6 +1,7 @@
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT as SHARED_SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
@@ -523,6 +524,19 @@ export namespace AttachmentStore {
     mime: string
     /** Original filename (when present), preserved verbatim before staging. */
     originalFilename?: string
+  }
+
+  /** Convert staged worktree-local references into prompt file parts.
+   *  Managed Build uses this after stageToWorktree succeeds so provider-bound
+   *  bytes come from the staged file, not a second read of the original
+   *  content-addressed attachment blob. */
+  export function filePartsFromStagedReferences(staged: readonly StagedAttachment[]): InlineFilePart[] {
+    return staged.map((item) => ({
+      type: "file" as const,
+      url: pathToFileURL(item.absPath).href,
+      mime: item.mime,
+      filename: path.basename(item.relPath),
+    }))
   }
 
   /** Subdirectory under each build worktree where staged user-contract

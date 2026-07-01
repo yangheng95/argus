@@ -549,41 +549,6 @@ export namespace BuildAgent {
 
       const buildReferenceAttachments = collectBuildReferenceAttachments(input.task)
       const retryingExistingBuildSession = Boolean(input.existingSessionID)
-
-      // Stage authoritative visual/reference attachments into `<worktree>/references/`
-      // so the build agent can pass worktree-LOCAL relative paths to tools
-      // whose sandbox checks reject paths outside the worktree. The staging
-      // contract is owned by AttachmentStore (rule 22
-      // — single source for "where staged attachments live"); this build
-      // agent path just invokes it. Caller-owned worktrees (input.workDir)
-      // skip — the caller is responsible for staging in that path.
-      let stagedAttachments: AttachmentStore.StagedAttachment[] = []
-      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && buildReferenceAttachments.length > 0) {
-        try {
-          stagedAttachments = await AttachmentStore.stageToWorktree(
-            Instance.project.id,
-            buildReferenceAttachments,
-            worktreeDir,
-          )
-          if (stagedAttachments.length > 0) {
-            log.info("build agent: staged reference attachments into worktree references/", {
-              taskID: input.task.id,
-              count: stagedAttachments.length,
-              worktreeDir,
-            })
-          }
-        } catch (err) {
-          // Hard fail (rule 1) — without staging the build agent is back to
-          // the discover-and-cp dance and downstream tool calls will fail
-          // sandbox checks. Surface so the orchestrator marks the build as
-          // failed instead of silently degrading.
-          throw new Error(
-            `build agent: failed to stage task attachments into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
-            { cause: err instanceof Error ? err : undefined },
-          )
-        }
-      }
-
       const promptContext = input.context
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
@@ -610,15 +575,50 @@ export namespace BuildAgent {
             (a) => typeof a?.url === "string" && typeof a?.mime === "string",
           ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
       const allMultimodal = [...taskAttachments, ...retryAttachments]
+
+      // Stage authoritative visual/reference attachments into `<worktree>/references/`
+      // so the build agent can pass worktree-local relative paths to tools
+      // whose sandbox checks reject paths outside the worktree. For managed
+      // worktrees, the staged file is also the provider-bound byte source:
+      // SessionPrompt materializes these file:// parts back through
+      // AttachmentStore.writeFromPath, so Build no longer reads the original
+      // content-addressed blob a second time after staging.
+      let stagedAttachments: AttachmentStore.StagedAttachment[] = []
+      let stagedFilePartsForPrompt: AttachmentStore.InlineFilePart[] | undefined
+      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && allMultimodal.length > 0) {
+        try {
+          stagedAttachments = await AttachmentStore.stageToWorktree(Instance.project.id, allMultimodal, worktreeDir)
+          stagedFilePartsForPrompt = AttachmentStore.filePartsFromStagedReferences(stagedAttachments)
+          if (stagedAttachments.length > 0) {
+            log.info("build agent: staged reference attachments into worktree references/", {
+              taskID: input.task.id,
+              count: stagedAttachments.length,
+              worktreeDir,
+            })
+          }
+        } catch (err) {
+          // Hard fail (rule 1) — without staging the build agent is back to
+          // the discover-and-cp dance and downstream tool calls will fail
+          // sandbox checks. Surface so the orchestrator marks the build as
+          // failed instead of silently degrading.
+          throw new Error(
+            `build agent: failed to stage task attachments into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err instanceof Error ? err : undefined },
+          )
+        }
+      }
       const buildUserPartsFn =
         allMultimodal.length > 0
           ? async () => {
               const text = buildPromptText()
-              const inline = await AttachmentStore.inlineFileParts(allMultimodal)
+              const inline =
+                stagedFilePartsForPrompt !== undefined
+                  ? stagedFilePartsForPrompt
+                  : await AttachmentStore.inlineFileParts(allMultimodal)
               // Three layers of context for attachments, each with a different
-              // role and required to coexist (rule 22 — staging doesn't
-              // replace inlining; inlining doesn't replace listing):
-              //   1. inline file parts → the LLM physically sees the pixels
+              // role and required to coexist:
+              //   1. file parts → the LLM physically sees the pixels; managed
+              //      builds source these parts from staged references/
               //   2. renderStagedList → tells the LLM the worktree-local path
               //      so it can pass them to sandbox-checked tools
               //   3. renderAttachmentInventory → textual ledger of EVERY
