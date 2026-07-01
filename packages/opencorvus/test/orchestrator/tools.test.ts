@@ -2293,7 +2293,7 @@ describe("orchestrator tools", () => {
           project_id: projectID,
           source: "test",
           title: "Select expert squad",
-          request: "Use the frontend innovate expert squad for product-grade design synthesis.",
+          request: "Use the frontend innovate expert squad for an existing URL redesign with aesthetic, professional, and convenient user-task goals.",
           kind: "workflow",
           priority: "normal",
           time_created: now,
@@ -2323,7 +2323,8 @@ describe("orchestrator tools", () => {
         const result = await tools.select_expert_squad.execute(
           {
             profile_id: "frontend-innovate",
-            reason: "The current task requires product-grade design synthesis from Figma and screenshots.",
+            reason:
+              "The current task requires existing URL redesign from Figma, screenshots, task convenience, and accessibility evidence.",
           },
           buildToolOptions("select_expert_squad"),
         )
@@ -13033,7 +13034,7 @@ describe("orchestrator tools", () => {
             projectName: "Frontend innovate flow",
             taskTitle: "Frontend innovate flow",
             request:
-              "Create a Frontend Innovate expert squad flow for a product-grade enterprise market webpage from source-page investigation and HTML material. The operator explicitly asks for multiple Build brainstorm drafts.",
+              "Create a Frontend Innovate expert squad flow to redesign an existing enterprise market webpage from aesthetic, professional, and convenient perspectives using source-page investigation and HTML material. The operator explicitly asks for multiple Build brainstorm drafts.",
             goalTitle: "Build operator console draft",
             goalSlug: "build-operator-console-draft",
             objective:
@@ -13052,10 +13053,10 @@ describe("orchestrator tools", () => {
                   id: "REQ-frontend-innovate",
                   title: "Frontend Innovate product surface",
                   description:
-                    "The enterprise webpage must be implemented from manifest-backed design directions and anti-slop review.",
+                    "The enterprise webpage redesign must be implemented from manifest-backed design directions and rejected generic traits review.",
                   acceptance: [
-                    "Frontend Design records directions, selected direction, and anti-slop review.",
-                    "Build drafts and selected implementation are verified before Visual QA and Integrity.",
+                    "Frontend Design records user-task audit, directions, selected direction, and rejected generic traits review.",
+                    "Build drafts and selected implementation are verified with screenshot, keyboard/focus, accessibility, and state evidence before Visual QA and Integrity.",
                   ],
                   evidence_refs: ["design_resource_manifest"],
                   non_goals: [],
@@ -13128,7 +13129,9 @@ describe("orchestrator tools", () => {
           expect(skillLoad.output).toContain('<skill_content name="frontend-innovate-expert-squad">')
           expect(skillLoad.output).toContain('profile_id: "frontend-innovate"')
           expect(skillLoad.output).toContain("multiple Build brainstorm drafts")
-          expect(skillLoad.output).toContain("Anti-Slop Review")
+          expect(skillLoad.output).toContain("Design Philosophy Contract")
+          expect(skillLoad.output).toContain("Existing URL Redesign Flow")
+          expect(skillLoad.output).toContain("Web Content Accessibility Guidelines")
 
           frontendResearchRunImpl = async (input: any) => {
             frontendResearchInput = input
@@ -13148,7 +13151,7 @@ describe("orchestrator tools", () => {
                   request: input.request,
                 }),
                 summary:
-                  "Frontend Innovate source page investigation identified enterprise command center information architecture.",
+                  "Frontend Innovate source page investigation identified enterprise command center information architecture, primary task friction, and accessibility risks.",
               },
             }
           }
@@ -13175,7 +13178,7 @@ describe("orchestrator tools", () => {
               designSystem: "Enterprise market command system",
               techStack: ["React", "CSS modules", "local data fixtures"],
               frontendTemplate:
-                "Implement direction-operator-console: dense enterprise market command center with audit-ready panels and source-backed HTML material.",
+                "Implement direction-operator-console: redesign the existing enterprise market command center around the primary monitor-risk-allocate path with audit-ready panels and source-backed HTML material.",
               finalAcceptanceMode: "maintainable_replacement_required",
               fillableModules: "market overview, risk queue, allocation grid, compliance trail",
               componentInventory: "MarketShell, AllocationGrid, RiskQueue, AuditTimeline",
@@ -13196,7 +13199,7 @@ describe("orchestrator tools", () => {
               baselineReplacementPlan: [],
               implementationPhaseOutcomes: [],
               qualityProjectContract:
-                "Selected direction direction-operator-console must ship as semantic enterprise product UI, not generic cards.",
+                "Selected direction direction-operator-console must ship as semantic enterprise product UI with visible task hierarchy, keyboard/focus states, and screenshot proof, not generic cards.",
               materialInventory: "design_resource_manifest includes reference.html as the source HTML design material.",
               frontendProject: {
                 status: "not_created",
@@ -13209,13 +13212,14 @@ describe("orchestrator tools", () => {
               },
               visualConsistencyContract:
                 "Selected design direction direction-operator-console wins; reject generic card-heavy dashboards.",
-              uiDataContract: "Use local fixture rows for positions, alerts, allocation, and compliance events.",
+              uiDataContract:
+                "Use local fixture rows for positions, alerts, allocation, and compliance events, including loading, empty, and error states.",
               templateIterationNotes: [
-                "Compared operator-console and editorial-dashboard directions against the HTML material.",
-                "Selected operator-console after anti-slop review of generic card layouts.",
+                "Audited the existing URL by primary user task, information architecture, visual hierarchy, state coverage, and accessibility risk before comparing directions.",
+                "Selected operator-console after rejected-traits review of generic card layouts that weakened the monitor-risk-allocate workflow.",
               ],
               completenessReview:
-                "Frontend Innovate handoff is complete: two directions, selected direction, anti-slop review, and manifest-backed HTML material.",
+                "Frontend Innovate handoff is complete: existing URL task audit, two directions, selected direction, rejected generic traits review, accessibility expectations, and manifest-backed HTML material.",
               referenceArtifacts: ["reference.html", "design_resource_manifest"],
               openQuestions: [],
               report: {
@@ -13226,8 +13230,11 @@ describe("orchestrator tools", () => {
                   "- direction-editorial-dashboard: narrative overview rejected for lower operational density.",
                   "## Selected Design Direction",
                   "direction-operator-console",
-                  "## Anti-Slop Review",
+                  "## Rejected Generic Traits Review",
                   "- anti-slop-generic-cards: rejected generic card-heavy SaaS layout.",
+                  "## Existing URL Redesign Evidence",
+                  "- primary_path: monitor risk, allocate exposure, verify compliance trail.",
+                  "- accessibility: keyboard focus, visible status, and error recovery must be verified.",
                   "## Design Resource Manifest",
                   "design_resource_manifest includes reference.html.",
                 ].join("\n"),
@@ -13264,7 +13271,8 @@ describe("orchestrator tools", () => {
                   {
                     name: `render verification for ${targetID}`,
                     passed: true,
-                    detail: "mocked rendered verification passed",
+                    detail:
+                      "mocked rendered screenshot, keyboard/focus path, loading/empty/error states, and accessibility verification passed",
                   },
                 ],
                 commit_ref: `abc${buildSessions.length}${stamp.slice(-4)}`,
@@ -13307,7 +13315,17 @@ describe("orchestrator tools", () => {
                     ref: "browser-preview:frontend-innovate-selected",
                     viewport: { width: 1280, height: 720 },
                     state: "default",
-                    note: "Selected direction rendered without generic card slop.",
+                    note:
+                      "Selected direction rendered the monitor-risk-allocate path with clear hierarchy, keyboard focus, and non-generic component structure.",
+                  },
+                  {
+                    check_ids: ["check-main-surface"],
+                    type: "other" as const,
+                    ref: "browser-preview:frontend-innovate-keyboard-path",
+                    viewport: { width: 1280, height: 720 },
+                    state: "keyboard-focus",
+                    note:
+                      "Keyboard path reached the risk queue, allocation grid, and compliance trail without hidden controls.",
                   },
                 ],
               },
@@ -13334,6 +13352,8 @@ describe("orchestrator tools", () => {
             integrityInput = input
             expect(input.frontendDesign).toContain("direction-operator-console")
             expect(input.frontendDesign).toContain("anti-slop-generic-cards")
+            expect(input.frontendDesign).toContain("Existing URL Redesign Evidence")
+            expect(input.frontendDesign).toContain("keyboard focus")
             expect(input.visualQa).toContain("effective_accepted=true")
             expect(JSON.stringify(input.replayContext)).toContain(selectedImplementationGoalID)
             return integrityTeamResult({
@@ -13352,7 +13372,8 @@ describe("orchestrator tools", () => {
           const selected = await tools.select_expert_squad.execute(
             {
               profile_id: "frontend-innovate",
-              reason: "The task requires product-grade design synthesis from HTML material and multiple Build drafts.",
+              reason:
+                "The task requires existing URL redesign from aesthetic/professional/convenient goals, HTML material, accessibility expectations, and multiple Build drafts.",
             },
             buildToolOptions("frontend_innovate_select"),
           )
@@ -13365,13 +13386,15 @@ describe("orchestrator tools", () => {
             {
               reason: "Investigate the source page before design convergence.",
               source_urls: [sourceURL],
-              focus: "Enterprise command center IA, density, interaction states, and evidence gaps.",
+              focus:
+                "Enterprise command center information architecture, primary task convenience, visual hierarchy, accessibility risks, interaction states, and evidence gaps.",
             },
             buildToolOptions("frontend_innovate_research"),
           )
           expect(toolText(researchResult)).toContain("Frontend research brief persisted")
           expect(frontendResearchInput.sourceUrls).toEqual([sourceURL])
-          expect(frontendResearchInput.focus).toContain("Enterprise command center IA")
+          expect(frontendResearchInput.focus).toContain("Enterprise command center information architecture")
+          expect(frontendResearchInput.focus).toContain("primary task convenience")
           expect(
             Database.use((db) =>
               db

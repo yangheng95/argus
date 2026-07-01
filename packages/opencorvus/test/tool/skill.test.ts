@@ -371,7 +371,9 @@ Use this skill.
           expect(innovate.output).toContain('profile_id: "frontend-innovate"')
           expect(innovate.output).toContain("multiple Build brainstorm drafts")
           expect(innovate.output).toContain("not a competing source of final truth")
-          expect(innovate.output).toContain("Anti-Slop Review")
+          expect(innovate.output).toContain("Design Philosophy Contract")
+          expect(innovate.output).toContain("Existing URL Redesign Flow")
+          expect(innovate.output).toContain("rejected shallow or generic draft traits")
         },
       })
     } finally {

@@ -318,7 +318,7 @@ export const DesignDirectionSchema = z
     name: z.string().min(1).describe("Short name for the design direction."),
     concept: z.string().min(1).describe("Product/enterprise design concept and audience fit."),
     evidence_refs: SourceReferenceListSchema.default([]).describe("Screenshots, HTML, Figma, or manifest refs inspected."),
-    tradeoffs: z.string().min(1).describe("Why this direction is strong or weak against product-grade criteria."),
+    tradeoffs: z.string().min(1).describe("Why this direction is strong or weak against the page job and product task criteria."),
     implementation_notes: z.string().min(1).describe("What Build would need to implement this direction."),
   })
   .strict()
@@ -474,7 +474,7 @@ export const FrontendTemplateFinalSchema = z
       .array(AntiSlopReviewItemSchema)
       .default([])
       .describe(
-        "Rejected shallow/generic design traits and the resource-backed corrections. Frontend Innovate tasks should use this before handoff.",
+        "Rejected shallow/generic design traits and the resource-backed corrections. Frontend Innovate tasks use this selected-direction review before handoff.",
       ),
     fillable_modules: OptionalMarkdownField(
       "Modules/slots frontend_design filled or left as explicit source debt: page modules, data modules, interactions, state, adapters, and verification modules.",

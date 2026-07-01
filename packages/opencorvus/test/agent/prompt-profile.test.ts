@@ -152,6 +152,9 @@ describe("prompt profiles", () => {
     )
     expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain("webpage or product UI tasks")
     expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
+      "existing URL redesign from aesthetic/professional/convenient goals",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
       "Use Build brainstorm drafts only when the current operator explicitly asks",
     )
     expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).not.toContain(
@@ -162,6 +165,10 @@ describe("prompt profiles", () => {
       "only when the current operator explicitly asks",
     )
     expect(PromptProfile.builtIns["frontend-innovate"].agents.integrity).toContain("rejected-traits review")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
+      "user task, page job, information architecture",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain("keyboard/focus behavior")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("repair local deps")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("rerun original command")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
@@ -191,6 +198,7 @@ describe("prompt profiles", () => {
     expect(PromptProfile.overlayFor("coding", config)).toContain("design-resource synthesis")
     expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("competing directions")
     expect(PromptProfile.overlayFor("frontend-design", config)).toContain("implementation-ready product design handoff")
+    expect(PromptProfile.overlayFor("frontend-design", config)).toContain("existing URL redesigns")
     expect(PromptProfile.overlayFor("visual-qa", config)).toContain("selected-direction match")
   })
 
@@ -215,9 +223,16 @@ describe("prompt profiles", () => {
     expect(profileText).toContain("selected implementation handoff")
     expect(profileText).toContain("rendered evidence review")
     expect(profileText).toContain("accessibility/data constraints")
+    expect(profileText).toContain("aesthetic, professional, and convenient")
+    expect(profileText).toContain("source url evidence")
+    expect(profileText).toContain("web content accessibility guidelines")
     expect(skillText).toContain("direction selection review")
     expect(skillText).toContain("design-resource synthesis")
     expect(skillText).toContain("rendered verification")
+    expect(skillText).toContain("design philosophy contract")
+    expect(skillText).toContain("existing url redesign flow")
+    expect(skillText).toContain("web content accessibility guidelines")
+    expect(skillText).toContain("popular claude code design skills and plugins")
 
     for (const fragment of forbidden) {
       expect(profileText.includes(fragment), `frontend-innovate profile contains ${fragment}`).toBe(false)

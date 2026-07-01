@@ -664,7 +664,7 @@ test("update_frontend tools assemble and finalize the canonical frontend templat
   expect(kit.getCollector().final?.implementation_phase_outcomes).toHaveLength(5)
   expect(kit.buildReport().detail).toContain("## Design Directions")
   expect(kit.buildReport().detail).toContain("## Selected Design Direction\ndirection-operator-console")
-  expect(kit.buildReport().detail).toContain("## Anti-Slop Review")
+  expect(kit.buildReport().detail).toContain("## Rejected Generic Traits Review")
 })
 
 test("frontend design directions must be selected before final submit", async () => {
@@ -705,7 +705,7 @@ test("ordinary frontend template submit does not require frontend innovate direc
   expect(kit.getCollector().final?.anti_slop_review).toEqual([])
 })
 
-test("frontend innovate submit requires multiple directions, selection, and anti-slop review", async () => {
+test("frontend innovate submit requires multiple directions, selection, and rejected-traits review", async () => {
   const missingDirections = await registerMinimalFrontendResult(
     createFrontendTemplateOutputTools({ requireFrontendInnovateContract: true }),
     {

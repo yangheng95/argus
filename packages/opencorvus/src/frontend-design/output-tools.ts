@@ -367,7 +367,7 @@ function renderDesignDirections(items: readonly FrontendTemplateFinal["design_di
 }
 
 function renderAntiSlopReview(items: readonly FrontendTemplateFinal["anti_slop_review"][number][]): string {
-  if (items.length === 0) return "- no anti-slop review rows submitted"
+  if (items.length === 0) return "- no rejected generic traits review rows submitted"
   return items
     .map((item) =>
       [
@@ -803,7 +803,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Final Acceptance Mode\n${collector.final.final_acceptance_mode}`,
       `## Design Directions\n${renderDesignDirections(collector.final.design_directions)}`,
       `## Selected Design Direction\n${collector.final.selected_design_direction_id || "- none"}`,
-      `## Anti-Slop Review\n${renderAntiSlopReview(collector.final.anti_slop_review)}`,
+      `## Rejected Generic Traits Review\n${renderAntiSlopReview(collector.final.anti_slop_review)}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
       `## Implementation Phase Outcomes\n${renderImplementationPhaseOutcomes(collector.final.implementation_phase_outcomes)}`,
@@ -1981,7 +1981,7 @@ export function createFrontendTemplateOutputTools(
 
     update_frontend_anti_slop_review: tool({
       description:
-        "Update one anti-slop review row naming a shallow/generic design trait rejected from the final direction and the resource-backed correction.",
+        "Update one rejected-traits review row naming a shallow/generic design trait rejected from the final direction and the resource-backed correction.",
       inputSchema: ToolAntiSlopReviewItemSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
@@ -1989,7 +1989,7 @@ export function createFrontendTemplateOutputTools(
         const items = arrayField<typeof input>(collector.draft, "anti_slop_review")
         const mode = upsertByStringKey(items, input, "id")
         collector.semantic_error = undefined
-        return `OK: anti-slop review "${input.id}" ${mode} (${items.length} total)`
+        return `OK: rejected-traits review "${input.id}" ${mode} (${items.length} total)`
       },
     }),
 

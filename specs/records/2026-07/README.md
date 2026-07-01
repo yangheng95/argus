@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-01-frontend-innovate-design-philosophy.md](2026-07-01-frontend-innovate-design-philosophy.md) records the external design research, Claude Code frontend-design plugin reference, prompt/skill replacement plan, and existing-URL redesign benchmark for the Frontend Innovate expert squad.
 - [2026-07-01-v0.0.1beta-history-rewrite.md](2026-07-01-v0.0.1beta-history-rewrite.md) records the branch creation, current-content commit, commit-message rewrite, verification, and git-cc push plan for `v0.0.1beta`.
 - [2026-07-01-scroll-slice-smooth-scroll-root-repair.md](2026-07-01-scroll-slice-smooth-scroll-root-repair.md) records the root repair for scroll-slice screenshot comparison failures caused by page-level smooth scrolling.
 - [2026-07-01-full-repo-batch-repair.md](2026-07-01-full-repo-batch-repair.md) records the current full-repository batch repair, validation, commit, and push plan.
