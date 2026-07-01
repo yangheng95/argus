@@ -66,6 +66,15 @@ async function seedRootSession(sessionID: string, text = "initial request") {
   })
 }
 
+function mockDispatchTaskLoopAccepted(result: "started" | "queued" = "started") {
+  return spyOn(Queue, "dispatchTaskLoop").mockImplementation(
+    async (input: Parameters<typeof Queue.dispatchTaskLoop>[0]) => {
+      await input.beforeAcceptedWake?.({ taskID: input.taskID, result })
+      return result
+    },
+  )
+}
+
 async function seedActiveAndCompletedSameCwdTasks() {
   const activeTaskID = Identifier.ascending("task")
   const completedTaskID = Identifier.ascending("task")
@@ -364,7 +373,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "retry through message" })
@@ -449,6 +458,19 @@ describe("task message routes", () => {
           },
         })
         expect(dispatchTaskLoop.mock.calls[0]?.[0]).not.toHaveProperty("interrupt")
+        const wakeRows = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+        ).filter((row) => row.kind === "operator_message_wake")
+        expect(wakeRows).toHaveLength(1)
+        expect(wakeRows[0]).toMatchObject({
+          label: "started",
+          payload: {
+            task_id: taskID,
+            message_id: body.user_message?.info.id,
+            source: "panel",
+            wake_status: "started",
+          },
+        })
 
         // V35: row state is no longer "failed" (we seeded an active
         // task) — assertion on "row stays failed" is dropped.
@@ -492,7 +514,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "reject targeted message" })
@@ -549,7 +571,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "profile message" })
@@ -615,7 +637,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "empty task message" })
@@ -676,7 +698,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const completedAt = now + 1
@@ -742,7 +764,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "resume envelope" })
@@ -810,7 +832,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "cancelled task" })
@@ -976,6 +998,77 @@ describe("task message routes", () => {
     })
   })
 
+  test("POST /task/:taskID/message records failed wake commitment when scheduler ignores the wake", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("ignored")
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "ignored operator wake" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "ignored operator wake",
+              request: "ignored operator wake",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "继续，但调度器拒绝这个 wake。",
+            source: "panel",
+          }),
+        })
+
+        expect(response.status).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string }; name?: string }
+        expect(body.data?.message ?? body.name ?? "").toContain("operator message was recorded")
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        const messages = await Session.messages({ sessionID: root.id })
+        const latest = messages.at(-1)
+        expect(latest?.parts[0]).toMatchObject({
+          type: "text",
+          text: "继续，但调度器拒绝这个 wake。",
+        })
+        const wakeRows = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+        ).filter((row) => row.kind === "operator_message_wake")
+        expect(wakeRows).toHaveLength(1)
+        expect(wakeRows[0]).toMatchObject({
+          label: "failed",
+          payload: {
+            task_id: taskID,
+            message_id: latest?.info.id,
+            source: "panel",
+            wake_status: "failed",
+          },
+        })
+      },
+    })
+  })
+
   test("POST /task/:taskID/message rejects empty text without attachments before creating a message card", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
@@ -1091,7 +1184,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "completed task" })
@@ -1240,7 +1333,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "attachment message" })
@@ -1358,7 +1451,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const writeAttachment = spyOn(AttachmentStore, "write")
         const now = Date.now()
         const taskID = Identifier.ascending("task")
@@ -1418,7 +1511,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/inject queues behind live build ownership without aborting it", async () => {
+  test("POST /task/:taskID/inject starts root wake with live build ownership without aborting it", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -1519,9 +1612,14 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({
+          appended: true,
+          orchestratorWoken: true,
+          executorResumed: false,
+        })
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(interruptTaskLoop).not.toHaveBeenCalled()
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
         expect(findGoalRun(goalRunID)?.status).toBe("running")
 
@@ -1537,7 +1635,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message queues behind multiple live build owners without aborting them", async () => {
+  test("POST /task/:taskID/message starts root wake with multiple live build owners without aborting them", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -1600,14 +1698,20 @@ describe("task message routes", () => {
         expect(response.status).toBe(200)
         const body = (await response.json()) as {
           user_message?: { info: { id: string; extra?: Record<string, unknown> } }
+          message?: string
+          wake_status?: string
+          should_resume?: boolean
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(interruptTaskLoop).not.toHaveBeenCalled()
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(2)
         for (const owner of owners) {
           expect(findGoalRun(owner.goalRunID)?.status).toBe("running")
         }
+        expect(body.message).toBe("Operator note recorded. Task wake dispatched.")
+        expect(body.wake_status).toBe("started")
+        expect(body.should_resume).toBe(true)
         expect(body.user_message?.info.extra).toEqual({
           operator_message: {
             source: "panel",
@@ -1712,7 +1816,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "inject terminal" })
@@ -1784,7 +1888,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
+        const dispatchTaskLoop = mockDispatchTaskLoopAccepted("started")
         let resumeCalls = 0
         ExecutorRegistry.register("opencorvus", {
           capabilities: () => ({

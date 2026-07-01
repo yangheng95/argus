@@ -251,6 +251,20 @@ describe("MCP prompt and resource listing", () => {
     })
   })
 
+  test("status probes connected clients and marks later tool-list closure failed", async () => {
+    await withRemoteMcp(async () => {
+      await expect(MCP.tools()).resolves.toEqual({})
+      expect((await MCP.status()).remote).toEqual({ status: "connected" })
+
+      toolErrorAfterStartup = new Error("status tool list unavailable after connect")
+
+      const status = await MCP.status()
+      expect(status.remote).toEqual({ status: "failed", error: "status tool list unavailable after connect" })
+      expect(closeCalls).toBeGreaterThan(0)
+      expect(transportCloseCalls).toBeGreaterThan(0)
+    })
+  })
+
   test("prompt list failures mark and close the server instead of returning an empty map", async () => {
     promptError = new Error("prompt list unavailable")
 

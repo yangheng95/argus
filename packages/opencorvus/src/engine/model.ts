@@ -225,11 +225,11 @@ const TaskAttachmentInput = z
  * carries this small, URL-addressable reference. Agents that need the raw
  * bytes for multimodal LLM input read them back through AttachmentStore.
  *
- * `intent` lets evaluator gates and downstream agents consume the same
+ * `intent` lets evidence consumers and downstream agents consume the same
  * attachment store with different semantics. Today three intents are wired:
- *   - "visual_reference" — picked up by the deliver-time visual SSIM gate
+ *   - "visual_reference" — visual/reference evidence for review agents
  *     (user-uploaded screenshots, Figma frames, URL screenshots).
- *   - "design_token"     — frontend-design input only, not a verification gate.
+ *   - "design_token"     — frontend-design input only, not a verification verdict.
  *   - "spec_artifact"    — generic supporting material (request docs etc).
  * Other intents may appear later (api_contract, test_fixture, …); leaving
  * the field free-form keeps that extension cheap. Missing intent defaults
@@ -915,10 +915,17 @@ export const TaskBoardGoalWorkflow = z.object({
 // TaskBoard — full board projection
 // ---------------------------------------------------------------------------
 
+export const TaskProject = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  worktree: z.string(),
+})
+
 export const TaskBoard = z.object({
   lastSequence: z.number().optional(),
   snapshotVersion: z.string().min(1),
   task: Task,
+  project: TaskProject.optional(),
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
   run: Run.optional(),
@@ -950,12 +957,6 @@ export const TaskBoard = z.object({
    *  and exposed here so acceptance and contract-audit readers use the same
    *  source. */
   criteriaResults: EvaluationCheck.array().optional(),
-})
-
-export const TaskProject = z.object({
-  id: z.string(),
-  name: z.string().optional(),
-  worktree: z.string(),
 })
 
 export const ProjectTaskSummary = z.object({
@@ -1612,10 +1613,9 @@ export const Event = {
    *  Carries the per-dimension breakdown (requirement_fidelity / technical_feasibility
    *  / hallucination / solution_quality) plus the cross-dimension union of
    *  issues / corrections / missing goals so the overlay can render a native
-   *  verdict card. The runtime derives `verdict` from final acceptance plus
-   *  per-dimension blockers: advisory-only concerns can still pass, while
-   *  repair-bearing concerns, needs_correction dimensions, or rejected
-   *  acceptance block completion. The LLM does NOT supply a top-level verdict.
+   *  verdict card. The runtime derives evidence verdicts for display from
+   *  submitted report fields and blockers; those evidence verdicts do not own
+   *  task lifecycle completion. The LLM does NOT supply a top-level lifecycle verdict.
    *  Issue rows carry optional `requirement_ids` and `spec_ids` so the overlay
    *  can chip-render REQ-N / acc-* references and downstream consumers can
    *  navigate from a fidelity issue to the failing REQ row or acceptance spec

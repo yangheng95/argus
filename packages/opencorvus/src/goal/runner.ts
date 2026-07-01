@@ -7,6 +7,7 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
 import { Ownership } from "@/engine/ownership"
+import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 const log = Log.create({ service: "goal-runner" })
 
@@ -82,6 +83,16 @@ export async function cleanupGoalWorkspace(directory?: string) {
         fn: () => Instance.dispose(),
       }),
     )
+    const processCleanup = await timed("ProcessSupervisor.disposeLiveProcessesUnder", () =>
+      ProcessSupervisor.disposeLiveProcessesUnder(directory),
+    )
+    if (processCleanup.disposed > 0) {
+      log.info("cleanupGoalWorkspace disposed live supervised processes", {
+        directory,
+        disposed: processCleanup.disposed,
+        pids: processCleanup.pids,
+      })
+    }
 
     if (isWorktree) {
       await timed("Worktree.remove", () => Worktree.remove({ directory }))

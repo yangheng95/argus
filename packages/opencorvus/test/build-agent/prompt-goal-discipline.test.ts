@@ -103,7 +103,7 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("bound to the current goal, region, or delivered surface")
     expect(normalized).toContain("do not rely only on global shared screenshots")
     expect(normalized).toContain("DOM text checks, console-clean runtime diagnostics, or benchmark scores")
-    expect(normalized).toContain("When retry guidance, acceptance feedback, or a Visual QA report includes `problem_dom_regions`")
+    expect(normalized).toContain("When retry guidance or Visual QA feedback includes `problem_dom_regions`")
     expect(normalized).toContain("Document Object Model")
     expect(normalized).toContain("selector/locator, DOM path, bounded HTML excerpt")
     expect(normalized).toContain("code-search terms")

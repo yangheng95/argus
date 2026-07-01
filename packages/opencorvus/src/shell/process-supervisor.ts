@@ -29,12 +29,35 @@ export namespace ProcessSupervisor {
 
   type Factory = (opts: SpawnOptions) => Promise<Handle>
   type WindowsHelperResolver = () => Promise<string | undefined>
+  type LiveHandle = {
+    id: number
+    pid: number
+    cwd: string
+    handle: Handle
+  }
 
   let factory: Factory | undefined
   let windowsHelperResolver: WindowsHelperResolver | undefined
+  let nextLiveHandleID = 1
+  const liveHandles = new Map<number, LiveHandle>()
 
   export async function spawnShell(opts: SpawnOptions): Promise<Handle> {
-    return await (factory ?? defaultSpawnShell)(opts)
+    const handle = await (factory ?? defaultSpawnShell)(opts)
+    return trackLiveHandle(opts, handle)
+  }
+
+  export async function disposeLiveProcessesUnder(directory: string): Promise<{ disposed: number; pids: number[] }> {
+    const target = normalizeCwd(directory)
+    const matches = Array.from(liveHandles.values()).filter((entry) => Filesystem.contains(target, entry.cwd))
+    const results = await Promise.allSettled(matches.map((entry) => entry.handle.dispose()))
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    if (failures.length > 0) {
+      const details = failures.map((failure) => String(failure.reason)).join("; ")
+      throw new Error(
+        `Failed to dispose ${failures.length}/${matches.length} live supervised process(es) under ${directory}: ${details}`,
+      )
+    }
+    return { disposed: matches.length, pids: matches.map((entry) => entry.pid) }
   }
 
   export function setFactoryForTest(next: Factory | undefined) {
@@ -56,6 +79,38 @@ export namespace ProcessSupervisor {
   async function defaultSpawnShell(opts: SpawnOptions): Promise<Handle> {
     if (process.platform === "win32") return await spawnWindows(opts)
     return spawnUnix(opts)
+  }
+
+  function normalizeCwd(cwd: string) {
+    return path.resolve(Filesystem.windowsPath(cwd))
+  }
+
+  function trackLiveHandle(opts: SpawnOptions, handle: Handle): Handle {
+    if (!opts.cwd) return handle
+    const id = nextLiveHandleID++
+    const cwd = normalizeCwd(opts.cwd)
+    let unregistered = false
+    const unregister = () => {
+      if (unregistered) return
+      unregistered = true
+      liveHandles.delete(id)
+    }
+    const exited = handle.exited.finally(unregister)
+    const tracked: Handle = {
+      pid: handle.pid,
+      stdin: handle.stdin,
+      stdout: handle.stdout,
+      stderr: handle.stderr,
+      exited,
+      terminate: () => handle.terminate(),
+      dispose: async () => {
+        await handle.dispose()
+        unregister()
+      },
+      unref: () => handle.unref(),
+    }
+    liveHandles.set(id, { id, pid: handle.pid, cwd, handle: tracked })
+    return tracked
   }
 
   function spawnUnix(opts: SpawnOptions): Handle {

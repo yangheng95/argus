@@ -438,22 +438,62 @@ export namespace MCP {
     }
   }
 
+  async function markClientListFailure(
+    state: McpState,
+    clientName: string,
+    label: "tools" | "prompts" | "resources",
+    error: unknown,
+  ): Promise<Status> {
+    const message = errorMessage(error)
+    log.error(`failed to get ${label}`, { clientName, error: message })
+    const status = {
+      status: "failed" as const,
+      error: message,
+    }
+    state.status[clientName] = status
+    await closeConnection(clientName, state.connections[clientName])
+    delete state.connections[clientName]
+    delete state.clients[clientName]
+    return status
+  }
+
   async function failClientList(
     state: McpState,
     clientName: string,
     label: "tools" | "prompts" | "resources",
     error: unknown,
   ): Promise<never> {
-    const message = errorMessage(error)
-    log.error(`failed to get ${label}`, { clientName, error: message })
-    state.status[clientName] = {
-      status: "failed" as const,
-      error: message,
-    }
-    await closeConnection(clientName, state.connections[clientName])
-    delete state.connections[clientName]
-    delete state.clients[clientName]
+    await markClientListFailure(state, clientName, label, error)
     throw error
+  }
+
+  async function validateConnectedClientsForStatus(
+    state: McpState,
+    config: NonNullable<Config.Info["mcp"]>,
+    defaultTimeout?: number,
+  ) {
+    await Promise.all(
+      entries(config).map(async ([clientName, entry]) => {
+        if (!isMcpConfigured(entry)) return
+        if (entry.enabled === false) return
+        if (state.status[clientName]?.status !== "connected") return
+        const client = state.clients[clientName]
+        if (!client) {
+          state.status[clientName] = {
+            status: "failed",
+            error: "MCP status connected without an active client",
+          }
+          delete state.connections[clientName]
+          return
+        }
+        const timeout = effectiveTimeout(entry, defaultTimeout)
+        try {
+          await client.listTools(undefined, mcpRequestOptions(timeout))
+        } catch (error) {
+          await markClientListFailure(state, clientName, "tools", error)
+        }
+      }),
+    )
   }
 
   // Helper function to fetch prompts for a specific client
@@ -784,6 +824,7 @@ export namespace MCP {
     const cfg = await Config.get()
     const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
     startConfiguredConnections(s, config)
+    await validateConnectedClientsForStatus(s, config, cfg.experimental?.mcp_timeout)
     const result: Record<string, Status> = {}
 
     // Include all configured MCPs from config, not just connected ones

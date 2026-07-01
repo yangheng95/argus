@@ -174,6 +174,11 @@ function appendRetryFeedbackOnce(input: {
   const decisionLog = createDecisionLog(input.taskID)
   const existing = decisionLog.readByKey(input.key)
   if (existing?.value === input.value) return false
+  if (existing?.value.includes(input.value)) return false
+  if (existing) {
+    const existingTerminalDetail = retryTerminalDetail(existing.value)
+    if (existingTerminalDetail && !input.value.includes(existingTerminalDetail)) return false
+  }
   decisionLog.append({
     goalID: input.goalID,
     phase: "retry",
@@ -182,6 +187,13 @@ function appendRetryFeedbackOnce(input: {
     reason: existing ? `${input.reason}; supersedes decision_log ${existing.id}` : input.reason,
   })
   return true
+}
+
+function retryTerminalDetail(value: string): string | undefined {
+  const trimmed = value.trim()
+  const direct = trimmed.match(/^Terminal error:\s*(.+)$/s)?.[1]?.trim()
+  if (direct) return direct
+  return trimmed.match(/^Previous goal_run\s+\S+\s+terminal error \(status=[^)]+\):\s*([^\n]+)/s)?.[1]?.trim()
 }
 
 function appendBuildRetryFeedbackForPriorRun(input: {

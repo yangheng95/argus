@@ -81,6 +81,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.cancel_subagent.description).toContain("Do not use this to answer a pending A2A coordination request")
     expect(tools.cancel_subagent.description).toContain("respond_agent_coordination")
     expect(tools.cancel_subagent.description).toContain("cancel_worker")
+    expect(tools.cancel_subagent.description).toContain("Missing root build ownership is not child lifecycle evidence")
+    expect(tools.cancel_subagent.description).not.toContain("recover_stale")
   })
 
   test("removed child-session steering tool is not exposed", () => {
@@ -253,7 +255,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("NOT build")
     expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
 
-    expect(tools.visual_qa.description).toContain("final frontend visual GUI and functional product review agent")
+    expect(tools.visual_qa.description).toContain("frontend visual GUI and functional product review agent")
     expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
     expect(tools.visual_qa.description).toContain("Use once near task completion")
     expect(tools.visual_qa.description).toContain("after all blocking build work is terminal")
@@ -528,7 +530,6 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       "session_id",
       "goal_id",
       "goal_run_id",
-      "mode",
       "reason",
     ])
   })

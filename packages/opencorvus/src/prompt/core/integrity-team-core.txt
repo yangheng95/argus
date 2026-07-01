@@ -162,6 +162,8 @@ Submission contracts:
 
 The final consensus is the only integrity review output. It must include
 `teamReportMarkdown`, reviewer reports, findings, review rounds, required
-repairs, and unresolved disagreements. Do not emit separate dimension verdicts
-or a separate acceptance verdict object; runtime/acceptance evidence belongs
-inside findings and the team report.
+repairs, and unresolved disagreements. The report may distinguish
+advisory-only concerns from repair-bearing concerns, but that distinction is
+report evidence for the orchestrator rather than a host-side gate. Do not emit
+separate dimension verdicts or a separate acceptance verdict object;
+runtime/acceptance evidence belongs inside findings and the team report.

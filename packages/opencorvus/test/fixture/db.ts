@@ -1,4 +1,3 @@
-import { rm } from "fs/promises"
 import os from "os"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -19,50 +18,14 @@ function assertTestDatabasePath(dbPath: string) {
   )
 }
 
-function isBusyRemovalError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error.code === "EBUSY" || error.code === "EPERM")
-  )
-}
-
-async function removeDatabaseFile(file: string) {
-  const started = Date.now()
-  let attempt = 0
-  let lastBusyError: unknown
-  for (;;) {
-    try {
-      await rm(file, { force: true })
-      return
-    } catch (error) {
-      if (!isBusyRemovalError(error)) throw error
-      lastBusyError = error
-      const elapsed = Date.now() - started
-      if (elapsed >= TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS) {
-        const message = error instanceof Error ? error.message : String(error)
-        throw new Error(
-          `Timed out removing locked test database file after ${elapsed}ms and ${attempt + 1} attempts: ${file}. Last busy error: ${message}`,
-          { cause: lastBusyError },
-        )
-      }
-      Database.close()
-      Bun.gc(true)
-      await Bun.sleep(Math.min(100 + attempt * 25, 500))
-      attempt++
-    }
-  }
-}
-
 export async function resetDatabase() {
   await Instance.disposeAll().catch(() => undefined)
   Database.close()
+  await Database.awaitEffectIdle(TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS)
+  Database.close()
   const dbPath = Database.Path()
   assertTestDatabasePath(dbPath)
-  await removeDatabaseFile(`${dbPath}-wal`)
-  await removeDatabaseFile(`${dbPath}-shm`)
-  await removeDatabaseFile(dbPath)
+  Database.rebuildSqlite(() => {})
 }
 
 export function rebuildTestDatabase() {

@@ -222,6 +222,22 @@ describe("session.message.toModelMessage", () => {
     ).toBe(true)
   })
 
+  test("terminal tool state requires end time after start time", () => {
+    const baseCompleted = {
+      status: "completed",
+      input: {},
+      output: "done",
+      title: "Done",
+      metadata: {},
+    }
+    expect(Message.ToolStateCompleted.safeParse({ ...baseCompleted, time: { start: 100, end: 100 } }).success).toBe(
+      false,
+    )
+    expect(Message.ToolStateCompleted.safeParse({ ...baseCompleted, time: { start: 100, end: 101 } }).success).toBe(
+      true,
+    )
+  })
+
   test("rejects text visibility split flags at the message boundary", () => {
     const base = {
       ...basePart("m-user", "p1"),
@@ -576,9 +592,11 @@ describe("session.message.toModelMessage", () => {
         })
         expect(modelDimensions.width).toBeLessThan(originalDimensions!.width)
         expect(modelDimensions.height).toBeLessThan(originalDimensions!.height)
-        expect((result[0].content as Array<{ type: string; text?: string }>).some((part) => part.text?.includes("Resized full.png"))).toBe(
-          true,
-        )
+        expect(
+          (result[0].content as Array<{ type: string; text?: string }>).some((part) =>
+            part.text?.includes("Resized full.png"),
+          ),
+        ).toBe(true)
       },
     })
   }, 20000)

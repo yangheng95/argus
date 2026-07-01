@@ -16,6 +16,15 @@ async function pause(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function waitFor(predicate: () => boolean | Promise<boolean>) {
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await pause(25)
+  }
+  expect(await predicate()).toBe(true)
+}
+
 describe("MCP status auto startup", () => {
   test("status starts configured local MCP processes asynchronously", async () => {
     await using tmp = await tmpdir({
@@ -47,8 +56,7 @@ describe("MCP status auto startup", () => {
 
         expect(status.browser).toEqual({ status: "disabled" })
         expect(status.marker).toEqual({ status: "connecting" })
-        await pause(300)
-        expect(await exists(marker)).toBe(true)
+        await waitFor(async () => exists(marker))
       },
     })
   })
@@ -83,7 +91,7 @@ describe("MCP status auto startup", () => {
 
         await expect(MCP.tools()).rejects.toThrow()
 
-        expect(await exists(marker)).toBe(true)
+        await waitFor(async () => exists(marker))
         const status = await MCP.status()
         expect(status.marker.status).toBe("failed")
       },

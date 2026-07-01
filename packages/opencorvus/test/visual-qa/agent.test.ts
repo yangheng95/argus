@@ -60,9 +60,9 @@ describe("visual-qa agent", () => {
       buildEvidence: "Build report",
       previewCommand: "npm run dev",
     })
-    expect(prompt).toContain("final frontend visual GUI and functional product review")
+    expect(prompt).toContain("frontend visual GUI and functional product review")
     expect(prompt).toContain("Visual QA and integrity are peer post-build review agents")
-    expect(prompt).toContain("focused frontend visual/product-design evidence")
+    expect(prompt).toContain("focused frontend visual/product-design review evidence")
     expect(prompt).toContain("GUI means Graphical User Interface")
     expect(prompt).not.toContain("UX means User Experience")
     expect(prompt).toContain("picky professional product designer")

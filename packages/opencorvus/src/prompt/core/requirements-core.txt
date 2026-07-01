@@ -42,7 +42,7 @@ the handoff clean:
 - Leave goal boundaries, acceptance_specs, owned_paths, dependency contracts,
   verification-goal placement, and implementation order to Architect.
 - Leave code edits, tests, and runtime fixes to Build.
-- Leave final acceptance and evidence arbitration to Integrity.
+- Leave final lifecycle decisions to the Orchestrator. Integrity may later produce review evidence, but it is not your output surface and not a lifecycle authority.
 
 If the request is broad, calibrate scope through impact decisions, not by
 fragmenting one product capability into many implementation-flavored

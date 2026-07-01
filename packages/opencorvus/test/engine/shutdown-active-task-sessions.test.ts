@@ -126,6 +126,8 @@ describe("shutdown aborts active task-owned sessions", () => {
         if (part?.type !== "tool") throw new Error("expected tool part")
         expect(part.state.status).toBe("error")
         expect(part.state.failure.message).toBe(reason)
+        expect(part.state.time.start).toBe(now)
+        expect(part.state.time.end).toBeGreaterThan(now)
       },
     })
   })
@@ -190,12 +192,13 @@ describe("shutdown aborts active task-owned sessions", () => {
     let taskID = ""
     let rootID = ""
     let messageID = ""
+    let now = 0
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         ensureTaskMessageProtocolBridge()
-        const now = Date.now()
+        now = Date.now()
         taskID = `tsk_shutdown_legacy_global_${now}`
         const root = await Session.create({
           kind: "root",
@@ -287,5 +290,7 @@ describe("shutdown aborts active task-owned sessions", () => {
     if (part?.type !== "tool") throw new Error("expected tool part")
     expect(part.state.status).toBe("error")
     expect(part.state.failure.message).toBe(reason)
+    expect(part.state.time.start).toBe(now)
+    expect(part.state.time.end).toBeGreaterThan(now)
   })
 })

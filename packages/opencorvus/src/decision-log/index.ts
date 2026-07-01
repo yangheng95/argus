@@ -212,7 +212,7 @@ export function createDecisionLog(taskID: string): DecisionLog {
           .select()
           .from(DecisionLogTable)
           .where(eq(DecisionLogTable.task_id, taskID))
-          .orderBy(DecisionLogTable.time_created)
+          .orderBy(DecisionLogTable.time_created, DecisionLogTable.id)
           .all(),
       ).map(rowToEntry)
     },
@@ -223,7 +223,7 @@ export function createDecisionLog(taskID: string): DecisionLog {
           .select()
           .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
-          .orderBy(DecisionLogTable.time_created)
+          .orderBy(DecisionLogTable.time_created, DecisionLogTable.id)
           .all(),
       ).map(rowToEntry)
     },
@@ -237,7 +237,7 @@ export function createDecisionLog(taskID: string): DecisionLog {
           .select()
           .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
-          .orderBy(DecisionLogTable.time_created)
+          .orderBy(DecisionLogTable.time_created, DecisionLogTable.id)
           .all(),
       )
         .filter((row) => row.goal_id === null || row.goal_id === goalID)
@@ -250,7 +250,7 @@ export function createDecisionLog(taskID: string): DecisionLog {
           .select()
           .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.key, key)))
-          .orderBy(desc(DecisionLogTable.time_created))
+          .orderBy(desc(DecisionLogTable.time_created), desc(DecisionLogTable.id))
           .get(),
       )
       return row ? rowToEntry(row) : undefined

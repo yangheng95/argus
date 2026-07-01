@@ -134,7 +134,6 @@ import {
   findLatestArchitectContractGraphArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestIntegrityAttemptArtifact,
-  integrityAttemptVerdict,
   findLatestAcceptanceVerdictArtifact,
   findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
@@ -157,7 +156,7 @@ import { isLiveGoalRunStatus, isLiveRunStatus, isTerminalGoalRunStatus } from "@
 import { isGoalRunOrphaned } from "@/engine/orphan"
 import { processOwner } from "@/engine/lease"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
-import { blockActiveRunForTask, terminalTask, updateRun, updateTask } from "@/engine/state"
+import { terminalTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 import {
   completeOrchestratorToolOwnership,
@@ -254,6 +253,27 @@ export const ORCHESTRATOR_WAIT_RECOMMENDED_MS = WAIT_RECOMMENDED_MS
 export const ORCHESTRATOR_WAIT_MAX_MS = WAIT_MAX_MS
 
 const log = Log.create({ service: "task-tools" })
+
+function markPersistedStageSessionFailed(input: {
+  stage: string
+  taskID: string
+  sessionID?: string
+  error: string
+}): boolean {
+  if (!input.sessionID) return false
+  const sessionRow = Database.use((db) =>
+    db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.id, input.sessionID!)).get(),
+  )
+  if (!sessionRow) {
+    log.warn(`${input.stage}: child session id was reported before persistence; terminal session.status skipped`, {
+      taskID: input.taskID,
+      sessionID: input.sessionID,
+    })
+    return false
+  }
+  SessionStatus.set(input.sessionID, { type: "terminal", reason: "error", error: input.error })
+  return true
+}
 
 function latestDecisionEntriesByKey(entries: DecisionEntry[]): DecisionEntry[] {
   const latest = new Map<string, DecisionEntry>()
@@ -1803,8 +1823,12 @@ type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
 
 const CompleteTaskInputSchema = z
   .object({
-    integrity_attempt_id: z.string().min(1).describe("Latest post-build pass integrity_attempt artifact id"),
-    summary: z.string().optional().describe("Short terminal summary for the task lifecycle event"),
+    summary: z
+      .string()
+      .min(1)
+      .describe(
+        "Orchestrator-owned terminal completion summary. Cite the evidence you used, including Integrity or Visual QA reports when relevant.",
+      ),
   })
   .strict()
 
@@ -2018,7 +2042,7 @@ function resolveSubagentControlTarget(input: {
     }
     if (!goalRun.session_id) {
       throw new Error(
-        `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or finalize the stale attempt before controlling it.`,
+        `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or reach terminal evidence before controlling it.`,
       )
     }
     const liveOwner = findLiveBuildOwnershipByGoalRun({ taskID: input.taskID, goalRunID: goalRun.id })
@@ -2043,7 +2067,7 @@ function resolveSubagentControlTarget(input: {
     }
     if (!goalRun.session_id) {
       throw new Error(
-        `goal_run ${input.goalRunID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before controlling it.`,
+        `goal_run ${input.goalRunID} has no child session_id yet; wait for the build session to start or reach terminal evidence before controlling it.`,
       )
     }
     return {
@@ -4608,14 +4632,17 @@ function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
   return lines.join("\n")
 }
 
+export function composeLatestVisualQaFeedbackForBuild(input: { taskID: string }): string | undefined {
+  return renderVisualQaProblemDomFeedback(input.taskID)
+}
+
 export async function composeLatestAcceptanceFeedbackForBuild(input: {
   taskID: string
   goalID?: string
 }): Promise<string | undefined> {
-  const visualQaFeedback = renderVisualQaProblemDomFeedback(input.taskID)
   const verdictArtifact = findLatestAcceptanceVerdictArtifact(input.taskID)
   const verdictPayload = (verdictArtifact?.payload ?? {}) as Record<string, unknown>
-  if (!verdictArtifact || verdictPayload.verdict !== "rejected") return visualQaFeedback
+  if (!verdictArtifact || verdictPayload.verdict !== "rejected") return undefined
 
   const rejectionDetails = Array.isArray(verdictPayload.rejection_details)
     ? (verdictPayload.rejection_details as Array<Record<string, unknown>>)
@@ -4646,7 +4673,7 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
     })),
     scope: input.goalID ? "goal" : "integrated_tree",
   })
-  return [acceptanceFeedback, visualQaFeedback].filter((value): value is string => Boolean(value)).join("\n\n")
+  return acceptanceFeedback
 }
 
 async function composeIntegrityFeedbackMarkdownForBuild(input: {
@@ -5450,12 +5477,12 @@ export function createOrchestratorTools(input: {
           `Do not treat an older artifact as the current verdict until recovery or explicit user confirmation.`
         : outcome.verdict === "pass" && outcome.phase === "post_build"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-            `Pass evidence persisted; call complete_task with integrity_attempt_id=${outcome.integrityAttemptID ?? "(missing)"} to complete the task.`
+            `Pass report persisted. Use this report as evidence when you decide whether to call complete_task with a completion summary.`
           : outcome.verdict === "pass"
             ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
-              `Pre-build integrity passed, but task is not complete until post-build pass evidence exists and complete_task records the terminal decision.`
+              `Pre-build integrity passed; this is review evidence, not a terminal lifecycle decision.`
             : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
-              `Task is not accepted. Nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+              `Nothing in code supersedes goals, opens new attempts, blocks the run, or mutates the graph based on this verdict. ` +
               `Read the full markdown below and choose modify_goal / build({goalID}) / architect / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
@@ -6883,9 +6910,12 @@ export function createOrchestratorTools(input: {
         pointerReason: dispatch.reason,
       })
       if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
-      if (runnerSessionID) {
-        SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
-      }
+      markPersistedStageSessionFailed({
+        stage: "frontend_research",
+        taskID,
+        sessionID: runnerSessionID,
+        error: msg,
+      })
       log.error("frontend_research tool failed", { taskID, error: msg })
       return {
         status: "failed",
@@ -6996,9 +7026,12 @@ export function createOrchestratorTools(input: {
         pointerReason: dispatch.reason,
       })
       if (continuationResult) return { result: continuationResult, status: "continuation", sessionID: runnerSessionID }
-      if (runnerSessionID) {
-        SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
-      }
+      markPersistedStageSessionFailed({
+        stage: "deep_research",
+        taskID,
+        sessionID: runnerSessionID,
+        error: msg,
+      })
       log.error("deep_research tool failed", { taskID, error: msg })
       throw err
     }
@@ -8321,19 +8354,19 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Visual QA — final frontend GUI product review and focused repair
+    // Visual QA — frontend GUI product review and focused repair
     // -----------------------------------------------------------------------
 
     visual_qa: tool({
       description:
-        "Dedicated final frontend visual GUI and functional product review agent. GUI means Graphical User Interface. " +
-        "Use once near task completion after all blocking build work is terminal and before final task acceptance: screenshot comparison, screen-by-screen desktop screenshots, explicitly requested non-desktop screenshots, " +
+        "Dedicated frontend visual GUI and functional product review agent. GUI means Graphical User Interface. " +
+        "Use once near task completion after all blocking build work is terminal and before the Orchestrator lifecycle decision: screenshot comparison, screen-by-screen desktop screenshots, explicitly requested non-desktop screenshots, " +
         "interaction-state checks, console/network review, or direct repair of visual or functional defects. " +
         "It consumes task-scoped frontend_design/build evidence plus any prior integrity evidence and repairs coarse-to-fine: component truth and visible functionality first, layout/composition second, micro-style polish last. " +
         "It reviews from a picky professional design QA perspective, lists production_blockers when the product cannot generate or ship, and does not use visual scores, one-shot whole-page screenshots, or judge verdicts as the verdict. " +
         "If it returns accepted=false with unresolved_code_module_problems, the scheduler must decide whether to repair in the current task or call propose_task from that evidence. " +
         "It may use skills, bash/edit/write/apply_patch, and task-scoped browser_preview evidence. " +
-        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance authority; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
+        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance authority. Visual QA and integrity are peer review agents; neither one replaces the Orchestrator lifecycle decision, Visual QA does not replace integrity, Visual QA is not integrity's workflow prerequisite, and neither one is the other's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
       execute: async ({ reason, focus, app_url, preview_command, continuation_artifact_id }) => {
         const task = requireTask(taskID)
@@ -8369,7 +8402,7 @@ export function createOrchestratorTools(input: {
         "architect graph and delivered system. The supervisor creates task-specific reviewer " +
         "sessions, reviewers freely inspect/test within read-only evidence tools, and the final " +
         "output is a consensus team report with findings, evidence, required repairs, and unresolved " +
-        "disagreements. A post-build pass verdict records completion evidence; call complete_task with the returned integrity_attempt_id to record task completion. Non-pass findings " +
+        "disagreements. A post-build pass verdict records review evidence for the Orchestrator's completion decision; it does not complete or block the task by itself. Non-pass findings " +
         "are persisted as evidence only: this review never rewrites requirements, " +
         "never upserts goals, and the host never auto-supersedes attempts or " +
         "auto-routes findings — you read the markdown and choose modify_goal / " +
@@ -8395,19 +8428,6 @@ export function createOrchestratorTools(input: {
             outcome.verdict === "pass" &&
             outcome.phase === "post_build"
           )
-          if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
-            await blockActiveRunForTask(taskID, {
-              blockingReason: "integrity artifact_missing",
-              error: outcome.artifactMissing.error,
-              summary: "Run blocked by missing integrity attempt artifact",
-            })
-          } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
-            await blockActiveRunForTask(taskID, {
-              blockingReason: `integrity verdict ${outcome.verdict}`,
-              error: outcome.summary,
-              summary: "Run blocked by non-pass integrity verdict",
-            })
-          }
           return renderIntegrityOutcome(outcome)
         } finally {
           await trackStepComplete("integrity", undefined, integrityStepFailed)
@@ -8420,7 +8440,8 @@ export function createOrchestratorTools(input: {
     // terminal report.  Specs: fact-check agent contract §4.3.
     //
     // Trigger rule (rule 13 — you, the orchestrator LLM, decide):
-    //   You MAY call fact_check after integrity verdict = pass when
+    //   You MAY call fact_check after the current task evidence is otherwise
+    //   ready for completion when
     //   the upstream worker's terminal report has fact_check_items.length > 0
     //   OR the worker's narrative makes load-bearing factual claims about
     //   external systems.  The tool dedupes automatically across repeats;
@@ -8431,7 +8452,7 @@ export function createOrchestratorTools(input: {
     fact_check: tool({
       description:
         "Verify factual claims a worker agent registered in its terminal report. " +
-        "Use when (1) integrity verdict=pass AND (2) the worker's terminal report has " +
+        "Use when current durable task evidence is otherwise ready for completion and the worker's terminal report has " +
         "non-empty fact_check_items OR makes load-bearing factual claims about external " +
         "systems (APIs, library versions, third-party protocols, numbers, paths). " +
         "Pass target_session_id from the current task; target_agent is derived from that session " +
@@ -8439,8 +8460,7 @@ export function createOrchestratorTools(input: {
         "The tool dedupes automatically across repeated calls — you do NOT need to " +
         "track 'already checked'.  If the target session is still streaming, the tool " +
         "will reject; retry after it finishes.\n" +
-        "DO NOT call for trivial / opinion / preference outputs, or when integrity " +
-        "verdict ≠ pass.\n" +
+        "DO NOT call for trivial / opinion / preference outputs, or when current task evidence still requires repair.\n" +
         "After fact_check returns:\n" +
         "- verdict=clean → proceed.\n" +
         "- verdict=minor_corrections → quote corrections in your next user-facing " +
@@ -9531,51 +9551,19 @@ export function createOrchestratorTools(input: {
 
     complete_task: tool({
       description:
-        "Terminal task lifecycle decision: mark the task completed from the latest post-build pass integrity_attempt evidence. " +
-        "Call this only after integrity returns verdict=pass, phase=post_build, and an integrity_attempt_id. " +
-        "The tool rejects missing, stale, wrong-phase, or non-pass evidence without mutating the task.",
+        "Terminal task lifecycle decision: mark the task completed from the Orchestrator's current task evidence and explicit summary. " +
+        "Integrity, Visual QA, build reports, tests, and operator notes are evidence inputs; none of them is a host-side completion lock. " +
+        "Call this only when you, the Orchestrator, have decided the task is complete from the current durable task snapshot.",
       inputSchema: CompleteTaskInputSchema,
-      execute: async ({ integrity_attempt_id, summary }, options) => {
+      execute: async ({ summary }, options) => {
         requireOrchestratorToolExecutionContext(options, "complete_task")
         const task = requireTask(taskID)
         const taskStatus = deriveTaskStatus(task)
         if (isTaskTerminal(task)) {
           return `complete_task rejected: task ${taskID} is already terminal with status=${taskStatus}.`
         }
-        const activeSpec = findActiveSpecForTask(taskID)
-        if (!activeSpec) {
-          return `complete_task rejected: task ${taskID} has no active spec snapshot. Run architect and integrity before completing.`
-        }
-        const latest = findLatestIntegrityAttemptArtifact({
-          taskID,
-          specSnapshotID: activeSpec.id,
-          phase: "post_build",
-        })
-        if (!latest) {
-          return (
-            `complete_task rejected: no post_build integrity_attempt exists for ` +
-            `task=${taskID} spec_snapshot_id=${activeSpec.id}.`
-          )
-        }
-        if (latest.artifactID !== integrity_attempt_id) {
-          return (
-            `complete_task rejected: integrity_attempt_id=${integrity_attempt_id} is not the latest ` +
-            `post_build integrity attempt for task=${taskID} spec_snapshot_id=${activeSpec.id}; latest=${latest.artifactID}.`
-          )
-        }
-        const verdict = integrityAttemptVerdict(latest)
-        if (verdict !== "pass") {
-          return (
-            `complete_task rejected: latest post_build integrity_attempt=${latest.artifactID} ` +
-            `has verdict=${verdict ?? "unknown"}, not pass.`
-          )
-        }
-
-        const cleanedSummary = summary?.trim()
-        const terminalSummary =
-          cleanedSummary && cleanedSummary.length > 0
-            ? cleanedSummary
-            : `Task completed from post-build integrity_attempt ${integrity_attempt_id}`
+        const terminalSummary = summary.trim()
+        if (!terminalSummary) return "complete_task rejected: summary is required."
         await terminalTask(task, { status: "completed", error: null, time_completed: Date.now() }, terminalSummary, {
           projectDir: taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id }),
         })
@@ -9583,17 +9571,17 @@ export function createOrchestratorTools(input: {
         const cleaned = await cleanupTerminalGoalWorkspaces("complete_task")
         const { interruptTaskLoop } = await import("@/orchestrator/loop")
         interruptTaskLoop(taskID, "task completed")
-        return `Task ${taskID} completed from integrity_attempt ${integrity_attempt_id}.${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
+        return `Task ${taskID} completed: ${terminalSummary}${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
       },
     }),
 
     fail_task: tool({
       description:
         "Terminal task lifecycle decision: mark the task as failed when no responsible same-task repair remains for evidence the orchestrator can see. " +
-        "Typical triggers: (a) integrity history shows >= 3 consecutive rounds with the same persistent blocking root AND modify_goal / architect / question have already been tried inside this task for the same root; " +
-        "(b) a hard external blocker the repository cannot supply, such as missing credentials the user already declined to provide or unavailable hardware. " +
-        "Not for: a single non-pass integrity round, a transient build error, or a guess that the task is hopeless without integrity evidence. " +
-        "Pair with a concrete history excerpt in the error field, including the persistent-root label from read_context Integrity history.",
+        "Typical triggers: a hard external blocker the repository cannot supply, a persistent blocking root proven by integrity history, or durable task evidence proving the remaining work is outside this task's authority after responsible same-task repair paths have been exhausted. " +
+        "Integrity reports are evidence, not a failure trigger by themselves. " +
+        "Not for: a single non-pass review, a transient build error, or a guess that the task is hopeless. " +
+        "Pair with a concrete history excerpt in the error field.",
       inputSchema: z.object({
         error: z.string().describe("Why the task failed"),
       }),
@@ -12175,8 +12163,9 @@ export function createOrchestratorTools(input: {
 
     cancel_subagent: tool({
       description:
-        "Abort a specific child agent session, or recover a stale live-owned build via mode='recover_stale'. " +
-        "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal, architect, propose_task, fail_task, or question. " +
+        "Abort a specific live-owned child agent session when explicit cancellation evidence requires it. " +
+        "Missing root build ownership is not child lifecycle evidence and must not be used to cancel a running build. " +
+        "After cancellation, explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal, architect, propose_task, fail_task, or question. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly. " +
         "Do not use this to answer a pending A2A coordination request; use respond_agent_coordination decision='cancel_worker' so the cancellation is bound to request/response/action artifacts.",
       inputSchema: z
@@ -12192,12 +12181,6 @@ export function createOrchestratorTools(input: {
             .min(1)
             .optional()
             .describe("Live goal_run id whose child session should be cancelled."),
-          mode: z
-            .enum(["cancel", "recover_stale"])
-            .optional()
-            .describe(
-              "Use 'cancel' for explicit cancellation. Use 'recover_stale' only when evidence shows a live-owned build is no longer executing; this refuses streaming/retry sessions.",
-            ),
           reason: z
             .string()
             .describe("Why this child session must be cancelled before re-dispatching the same stage/goal"),
@@ -12206,7 +12189,7 @@ export function createOrchestratorTools(input: {
           message: "cancel_subagent requires session_id, goal_id, or goal_run_id",
           path: ["session_id"],
         }),
-      execute: async ({ session_id, goal_id, goal_run_id, mode, reason }) => {
+      execute: async ({ session_id, goal_id, goal_run_id, reason }) => {
         const target = resolveSubagentControlTarget({
           taskID,
           sessionID: session_id,
@@ -12236,51 +12219,36 @@ export function createOrchestratorTools(input: {
           (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
           findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
         const usesLiveOwnershipControl = AgentRoleContract.usesLiveOrchestratorToolOwnershipControl(kind)
-        const staleRecovery = mode === "recover_stale"
-        if (staleRecovery && !usesLiveOwnershipControl) {
-          return `Error: cancel_subagent mode='recover_stale' only handles sessions with live tool ownership control; ${target.sessionID} has kind=${kind}.`
-        }
-        if (staleRecovery && usesLiveOwnershipControl && !liveOwner) {
+        if (usesLiveOwnershipControl && !liveOwner) {
           const targetGoalRun = target.goalRunID ? findGoalRun(target.goalRunID) : undefined
           if (targetGoalRun && isLiveGoalRunStatus(targetGoalRun.status)) {
             return (
-              `Error: cancel_subagent mode='recover_stale' refused because ${target.source} has live ` +
+              `Error: cancel_subagent refused because ${target.source} has live ` +
               `goal_run ${targetGoalRun.id} status=${targetGoalRun.status}, but no live root build ownership. ` +
               "Root build ownership only proves the dispatch tool lifecycle, not the child build lifecycle. " +
-              "Use durable goal_run/session/refill evidence, or use mode='cancel' only for explicit cancellation."
+              "Missing ownership is not cancellation evidence; wait for terminal goal refill or session evidence, or cancel the task explicitly."
             )
           }
           if (targetGoalRun) {
             return (
               `No live build ownership found for ${target.source}; goal_run ${targetGoalRun.id} is ` +
-              `${targetGoalRun.status}. Stale recovery did not mutate the worker.`
+              `${targetGoalRun.status}. No state mutated.`
             )
           }
-          return `No live build ownership found for ${target.source}; no goal_run lifecycle fact was available to recover.`
+          return `No live build ownership found for ${target.source}; no goal_run lifecycle fact was available. No state mutated.`
         }
         if (usesLiveOwnershipControl && liveOwner) {
-          if (staleRecovery) {
-            const currentStatus = SessionStatus.get(target.sessionID)
-            if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
-              return (
-                `Error: cancel_subagent refused stale recovery because session ${target.sessionID} is ${currentStatus.type}. ` +
-                "Leave the live child running and return to this orchestration only after terminal refill or operator evidence, or use mode='cancel' for explicit operator cancellation."
-              )
-            }
-          }
           const goalFact = await cancelLiveOwnedBuild({
             taskID,
             sessionID: target.sessionID,
             goalRunID: target.goalRunID,
             owner: liveOwner,
             reason,
-            originSite: staleRecovery
-              ? "orchestrator.tools.cancel-subagent-stale-recovery"
-              : "orchestrator.tools.cancel-subagent-live-build",
-            metadata: staleRecovery ? { stale_recovery: true } : { cancelled_live_build: true },
+            originSite: "orchestrator.tools.cancel-subagent-live-build",
+            metadata: { cancelled_live_build: true },
           })
           return (
-            `${staleRecovery ? "Recovered stale live-owned build" : "Cancelled live-owned build session"} ${target.sessionID} (kind=${kind}). ` +
+            `Cancelled live-owned build session ${target.sessionID} (kind=${kind}). ` +
             `source=${target.source}. ownership=${liveOwner.ownershipID}. Reason: ${reason}.` +
             goalFact +
             " If you still need work from it, re-dispatch the same stage/goal under the same contract explicitly."
@@ -12684,8 +12652,8 @@ export function createOrchestratorTools(input: {
         "through build. " +
         "For `build({ goalID })`, the tool returns after the child build session and goal_run have started; terminal completion arrives later as goal_run/acceptance/decision-log evidence and a terminal refill wake. " +
         "For task-level direct builds, the tool returns the terminal build report. Build does NOT auto-complete " +
-        "workflow tasks. The final review is `integrity`, and it is valid only after all blocking builds " +
-        "are terminal. A post-build pass returns evidence for explicit complete_task; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
+        "workflow tasks. Integrity is an optional final review surface after all blocking builds " +
+        "are terminal. A post-build pass returns evidence for the Orchestrator completion decision; non-pass integrity returns session-bound review evidence to this same reasoning turn; " +
         'choose the next action from that evidence. If read_context({scope:"integrity_history"}) surfaces integrity status=artifact_missing, ' +
         "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
@@ -13099,6 +13067,7 @@ export function createOrchestratorTools(input: {
               taskID,
               goalID: goal.id,
             })
+            const visualQaFeedback = composeLatestVisualQaFeedbackForBuild({ taskID })
             const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
               taskID,
               activeSpecSnapshotID: activeSpecForContext?.id,
@@ -13110,7 +13079,7 @@ export function createOrchestratorTools(input: {
             // re-painting from text alone.
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
-              enabled: retryEntries.length > 0 || Boolean(acceptanceFeedback),
+              enabled: retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
@@ -13140,6 +13109,7 @@ export function createOrchestratorTools(input: {
               fidelity: scopedFidelityForBuildGoal({ goalID: goal.id, fidelity: taskFidelity }),
               retryGuidance: requestText.length > 0 ? requestText : undefined,
               integrityFeedback,
+              visualQaFeedback,
               retryFeedback,
               acceptanceFeedback,
               retryAttachments,
@@ -13153,13 +13123,16 @@ export function createOrchestratorTools(input: {
             target = { kind: "request", text: requestText }
             const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
             const activeSpecForContext = findActiveSpecForTask(taskID)
+            const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
+            const requirements = reqRows.map(parsedRequirementFromRow)
+            const visualQaFeedback = composeLatestVisualQaFeedbackForBuild({ taskID })
             const integrityFeedback = await composeIntegrityFeedbackMarkdownForBuild({
               taskID,
               activeSpecSnapshotID: activeSpecForContext?.id,
             })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
-              enabled: Boolean(acceptanceFeedback),
+              enabled: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
@@ -13172,18 +13145,22 @@ export function createOrchestratorTools(input: {
               request: task.request,
             })
             context =
+              requirements.length > 0 ||
               integrityFeedback ||
+              visualQaFeedback ||
               acceptanceFeedback ||
               retryAttachments ||
               designSpecs ||
               frontendResearch.trim().length > 0 ||
               frontendDesign.trim().length > 0
                 ? {
+                    requirements: requirements.length > 0 ? requirements : undefined,
                     designSpecs,
                     frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
                     frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
                     projectDir,
                     integrityFeedback,
+                    visualQaFeedback,
                     acceptanceFeedback,
                     retryAttachments,
                   }
@@ -13718,16 +13695,18 @@ export function createOrchestratorTools(input: {
                   goalRunID,
                   error: cleanupMessage,
                 })
-                const currentGoalRun = findGoalRun(goalRunID)
-                if (currentGoalRun?.status === "completed") {
-                  updateGoalRun(goalRunID, {
-                    status: "failed",
-                    error: `completed worktree cleanup failed: ${cleanupMessage}`,
-                    time_completed: Date.now(),
-                  })
-                }
+                createDecisionLog(taskID).append({
+                  phase: "build",
+                  goalID: attachedGoalID,
+                  key: `completed_worktree_cleanup_failed_${goalRunID}`,
+                  value:
+                    `goal_run ${goalRunID} stayed completed after delivered build output; ` +
+                    `completed worktree cleanup failed: ${cleanupMessage}`,
+                  reason:
+                    "Completed worktree cleanup is a post-delivery lifecycle diagnostic, not a build acceptance failure.",
+                })
+                completedGoalWorkspaceCleanupLine = `\n- completed_worktree_cleanup_failed: ${cleanupMessage}`
                 closeBuildOwnership("failed", cleanupMessage)
-                throw cleanupErr
               }
             }
 
@@ -13883,8 +13862,8 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
               `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
-              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call \`propose_task\` from that evidence only at terminal handoff. ` +
-              `Call \`integrity\` as the final review after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. On post-build pass, call \`complete_task\` with the returned integrity_attempt_id. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
+              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before the Orchestrator lifecycle decision. If visual_qa returns accepted=false with unresolved_code_module_problems, decide whether to repair in the current task or call \`propose_task\` from that evidence only at terminal handoff. ` +
+              `Call \`integrity\` as a review report after all blocking builds are terminal when adversarial system review evidence is needed; visual_qa and integrity are peer review agents, not replacements for each other. Use Integrity's report as evidence, then decide explicitly whether to repair, ask, fail, propose follow-up, or call \`complete_task\` with a completion summary. Before completing the task, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
             )
           }
 

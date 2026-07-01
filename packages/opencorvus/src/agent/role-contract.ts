@@ -465,7 +465,7 @@ export namespace AgentRoleContract {
       archetype: "worker",
       controlSurface: "task-worker",
       description:
-        "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
+        "Integrity reviewer. Audits requirement and goal integrity and produces session-bound pass or non-pass review reports, including runtime, frontend, visual, and rejection-detail evidence.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",

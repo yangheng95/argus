@@ -252,6 +252,59 @@ describe("shell process supervisor contract", () => {
     }
   })
 
+  test("disposes live supervised handles under a workspace without touching siblings", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-live-"))
+    const workspace = path.join(root, "worktree")
+    const nested = path.join(workspace, "src")
+    const sibling = path.join(root, "sibling")
+    await fs.mkdir(nested, { recursive: true })
+    await fs.mkdir(sibling, { recursive: true })
+
+    const disposed: number[] = []
+    let nextPid = 12_000
+    const restore = ProcessSupervisor.setFactoryForTest(async () => {
+      const handlePid = nextPid++
+      let handleDisposed = false
+      return {
+        pid: handlePid,
+        stdin: null,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        exited: new Promise<number>(() => {}),
+        terminate: async () => {},
+        dispose: async () => {
+          if (handleDisposed) return
+          handleDisposed = true
+          disposed.push(handlePid)
+        },
+        unref: () => {},
+      }
+    })
+
+    let workspaceHandle: ProcessSupervisor.Handle | undefined
+    let nestedHandle: ProcessSupervisor.Handle | undefined
+    let siblingHandle: ProcessSupervisor.Handle | undefined
+    try {
+      workspaceHandle = await ProcessSupervisor.spawnShell({ command: "serve", shell: "sh", cwd: workspace })
+      nestedHandle = await ProcessSupervisor.spawnShell({ command: "serve", shell: "sh", cwd: nested })
+      siblingHandle = await ProcessSupervisor.spawnShell({ command: "serve", shell: "sh", cwd: sibling })
+
+      const result = await ProcessSupervisor.disposeLiveProcessesUnder(workspace)
+
+      expect(result.disposed).toBe(2)
+      const expectedPids = [workspaceHandle.pid, nestedHandle.pid].sort((a, b) => a - b)
+      expect([...result.pids].sort((a, b) => a - b)).toEqual(expectedPids)
+      expect([...disposed].sort((a, b) => a - b)).toEqual(expectedPids)
+      expect(disposed).not.toContain(siblingHandle.pid)
+    } finally {
+      await workspaceHandle?.dispose().catch(() => {})
+      await nestedHandle?.dispose().catch(() => {})
+      await siblingHandle?.dispose().catch(() => {})
+      restore()
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("shell cleanup no longer invokes taskkill or shell killTree", async () => {
     const shellSource = await Bun.file(new URL("../src/shell/shell.ts", import.meta.url)).text()
     expect(shellSource).not.toContain("taskkill")

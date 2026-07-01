@@ -3,7 +3,10 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { composeLatestAcceptanceFeedbackForBuild } from "../../src/orchestrator/tools"
+import {
+  composeLatestAcceptanceFeedbackForBuild,
+  composeLatestVisualQaFeedbackForBuild,
+} from "../../src/orchestrator/tools"
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -151,7 +154,7 @@ describe("orchestrator build feedback context", () => {
     })
   })
 
-  test("hydrates build retry feedback from latest failed visual QA problem DOM report", async () => {
+  test("hydrates first-class build feedback from latest failed visual QA problem DOM report", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -285,15 +288,17 @@ describe("orchestrator build feedback context", () => {
           reason: "Dedicated frontend GUI and functional QA report from session ses_visual_qa_feedback",
         })
 
-        const feedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
+        const acceptanceFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
+        const feedback = composeLatestVisualQaFeedbackForBuild({ taskID })
 
-        expect(feedback).toContain("Latest failed Visual QA report for Build repair")
-        expect(feedback).toContain("problem_dom_regions: 1")
-        expect(feedback).toContain("blocker-hero-overlap")
-        expect(feedback).toContain('locator: main [data-testid="hero-tabs"]')
-        expect(feedback).toContain('outer_html_excerpt: <nav data-testid="hero-tabs"')
-        expect(feedback).toContain("computed_style: display=flex; overflow=hidden; margin-top=-32px")
-        expect(feedback).toContain("code_search_terms: hero-tabs, market-hero, is-clipped")
+        expect(acceptanceFeedback).toBeUndefined()
+        expect(feedback ?? "").toContain("Latest failed Visual QA report for Build repair")
+        expect(feedback ?? "").toContain("problem_dom_regions: 1")
+        expect(feedback ?? "").toContain("blocker-hero-overlap")
+        expect(feedback ?? "").toContain('locator: main [data-testid="hero-tabs"]')
+        expect(feedback ?? "").toContain('outer_html_excerpt: <nav data-testid="hero-tabs"')
+        expect(feedback ?? "").toContain("computed_style: display=flex; overflow=hidden; margin-top=-32px")
+        expect(feedback ?? "").toContain("code_search_terms: hero-tabs, market-hero, is-clipped")
       },
     })
   })

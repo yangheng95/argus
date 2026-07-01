@@ -197,6 +197,28 @@ export namespace Message {
   })
   export type ReasoningPart = z.infer<typeof ReasoningPart>
 
+  export const PartErrorIssue = z
+    .object({
+      path: z.string(),
+      message: z.string(),
+    })
+    .meta({
+      ref: "PartErrorIssue",
+    })
+  export type PartErrorIssue = z.infer<typeof PartErrorIssue>
+
+  export const PartErrorPart = PartBase.extend({
+    type: z.literal("part-error"),
+    title: z.string(),
+    message: z.string(),
+    issues: z.array(PartErrorIssue),
+    originalType: z.string().optional(),
+    originalTool: z.string().optional(),
+  }).meta({
+    ref: "PartErrorPart",
+  })
+  export type PartErrorPart = z.infer<typeof PartErrorPart>
+
   const FilePartSourceBase = z.object({
     text: z
       .object({
@@ -384,6 +406,10 @@ export namespace Message {
       }),
       attachments: FilePart.array().optional(),
     })
+    .refine((state) => state.time.end > state.time.start, {
+      message: "tool terminal end time must be later than start time",
+      path: ["time", "end"],
+    })
     .meta({
       ref: "ToolStateCompleted",
     })
@@ -399,6 +425,10 @@ export namespace Message {
         start: z.number(),
         end: z.number(),
       }),
+    })
+    .refine((state) => state.time.end > state.time.start, {
+      message: "tool terminal end time must be later than start time",
+      path: ["time", "end"],
     })
     .meta({
       ref: "ToolStateError",
@@ -458,6 +488,7 @@ export namespace Message {
   export const Part = z
     .discriminatedUnion("type", [
       TextPart,
+      PartErrorPart,
       SubtaskPart,
       ReasoningPart,
       FilePart,
@@ -478,6 +509,7 @@ export namespace Message {
   export const VisiblePart = z
     .discriminatedUnion("type", [
       TextPart.extend({ orderKey: z.string().min(1) }),
+      PartErrorPart.extend({ orderKey: z.string().min(1) }),
       SubtaskPart.extend({ orderKey: z.string().min(1) }),
       ReasoningPart.extend({ orderKey: z.string().min(1) }),
       FilePart.extend({ orderKey: z.string().min(1) }),
@@ -1168,6 +1200,32 @@ export namespace Message {
     )
   }
 
+  function persistedPartCorruption(row: typeof PartTable.$inferSelect, error: z.ZodError): Message.PartErrorPart {
+    const issues = error.issues.map((issue) => ({
+      path: issue.path.join(".") || "<root>",
+      message: issue.message,
+    }))
+    const issueText = issues.map((issue) => `${issue.path}: ${issue.message}`).join("; ")
+    const data: Record<string, unknown> =
+      row.data && typeof row.data === "object" && !Array.isArray(row.data) ? row.data : {}
+    return {
+      id: row.id,
+      sessionID: row.session_id,
+      messageID: row.message_id,
+      orderKey: timelineOrderKey({
+        domain: "part",
+        time: row.time_created,
+        id: row.id,
+      }),
+      type: "part-error",
+      title: "Persisted message part is corrupt",
+      message: `Persisted part ${row.id} violates Message.VisiblePart: ${issueText}`,
+      issues,
+      ...(typeof data.type === "string" ? { originalType: data.type } : {}),
+      ...(typeof data.tool === "string" ? { originalTool: data.tool } : {}),
+    }
+  }
+
   function persistedPart(row: typeof PartTable.$inferSelect): Message.Part {
     const part = {
       ...row.data,
@@ -1182,10 +1240,7 @@ export namespace Message {
     }
     const parsed = VisiblePart.safeParse(part)
     if (!parsed.success) {
-      const issues = parsed.error.issues
-        .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
-        .join("; ")
-      throw new Error(`Session.persistedPart: persisted part ${row.id} violates Message.VisiblePart: ${issues}`)
+      return persistedPartCorruption(row, parsed.error)
     }
     return parsed.data
   }

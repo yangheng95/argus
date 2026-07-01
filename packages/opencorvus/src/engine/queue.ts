@@ -35,6 +35,7 @@ const DEAD_OWNER_QUEUE_CONVERGENCE_REASON = "Directory queue: previous owner pro
 // (claimNextForCwd), but interrupt-driven replacement can briefly overlap an
 // old loop that is unwinding with the new wake that supersedes it.
 const loopInFlight = new Map<string, number>()
+const loopCompletionHooksForTest = new Set<Promise<void>>()
 
 type QueuedOperatorWakePayload = {
   wake_id: string
@@ -261,6 +262,10 @@ function isOperatorWakeEvent(event: OrchestratorEvent | undefined): boolean {
   return Boolean(event?.operatorIntent || event?.operatorMessage || event?.coordinationRequest)
 }
 
+function isOperatorMessageWakeEvent(event: OrchestratorEvent | undefined): boolean {
+  return Boolean(event?.operatorMessage)
+}
+
 function suppressPassiveStreamErrorWake(taskID: string, event: OrchestratorEvent | undefined): boolean {
   if (isOperatorWakeEvent(event)) return false
   if (event?.lifecycleFact) return false
@@ -421,24 +426,15 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
  */
 function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<void>): void {
   retainLoop(taskID)
-  void loopPromise
-    .finally(() => {
+  const completionHook = loopPromise
+    .finally(async () => {
       releaseLoop(taskID)
-      // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
-      // `.finally` re-entry doesn't stack synchronously.
-      queueMicrotask(() => {
-        void (async () => {
-          if (await drainQueuedTaskEventIfUnowned(taskID)) return
-          await advanceQueue(cwd)
-        })().catch((err) => {
-          const error = Database.normalizeError(err, "engine.queue.advanceQueue.afterLoop")
-          log.error("advanceQueue failed after loop exit", {
-            cwd,
-            error: error instanceof Error ? error.message : String(error),
-            errorName: error instanceof Error ? error.name : undefined,
-          })
-        })
-      })
+      // Yield once so `advanceQueue` → `startLoopForTask` → `.finally`
+      // re-entry doesn't stack synchronously, while keeping the async
+      // completion hook observable for tests and diagnostics.
+      await Promise.resolve()
+      if (await drainQueuedTaskEventIfUnowned(taskID)) return
+      await advanceQueue(cwd)
     })
     .catch((err) => {
       const error = Database.normalizeError(err, "engine.queue.loopCompletion")
@@ -449,6 +445,18 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
         errorName: error instanceof Error ? error.name : undefined,
       })
     })
+  loopCompletionHooksForTest.add(completionHook)
+  void completionHook.finally(() => {
+    loopCompletionHooksForTest.delete(completionHook)
+  })
+}
+
+export async function waitForQueueCompletionHooksForTest(): Promise<void> {
+  for (;;) {
+    const pending = [...loopCompletionHooksForTest]
+    if (pending.length === 0) return
+    await Promise.allSettled(pending)
+  }
 }
 
 export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boolean> {
@@ -852,7 +860,7 @@ export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<Di
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
-  if (liveOwners.length > 0) {
+  if (liveOwners.length > 0 && !isOperatorMessageWakeEvent(input.event)) {
     if (input.event) enqueueTaskEvent(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,
@@ -861,6 +869,12 @@ export async function dispatchTaskLoop(input: DispatchTaskLoopInput): Promise<Di
     await consumePendingWaitCronForAcceptedWake(task, "task wake accepted behind live orchestrator tool ownership")
     await input.beforeAcceptedWake?.({ taskID: task.id, result: "queued" })
     return "queued"
+  }
+  if (liveOwners.length > 0) {
+    log.info("dispatchTaskLoop: starting operator message wake while live orchestrator tool ownership remains active", {
+      taskID: task.id,
+      liveOwners: liveOwners.map((owner) => owner.ownershipID),
+    })
   }
 
   // Task is already active — inject a new wake event into the existing loop

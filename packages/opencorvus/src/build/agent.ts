@@ -206,6 +206,11 @@ export namespace BuildAgent {
      *  Build renders it before retry guidance because workflow integrity findings
      *  outrank the orchestrator's hand-written summary. */
     integrityFeedback?: string
+    /** Pre-rendered Visual Quality Assurance (QA) repair report composed from
+     *  the latest failed visual_qa decision-log report. This is separate from
+     *  acceptanceFeedback because Visual QA is peer review evidence, not a
+     *  host acceptance verdict. */
+    visualQaFeedback?: string
     /** First-class retry guidance from the orchestrator LLM for this
      *  specific attempt (passed via the `request` field on the `build`
      *  tool, which used to overwrite `target.objective` before retry
@@ -2888,7 +2893,12 @@ export function buildRetryFeedbackPrompt(
   context?: BuildAgent.BuildContext,
   _taskID?: string,
 ): string {
-  const persistedFacts = [context?.retryFeedback, context?.integrityFeedback, context?.acceptanceFeedback]
+  const persistedFacts = [
+    context?.retryFeedback,
+    context?.integrityFeedback,
+    context?.visualQaFeedback,
+    context?.acceptanceFeedback,
+  ]
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter((value) => value.length > 0)
   if (persistedFacts.length > 0) return persistedFacts.join("\n\n")

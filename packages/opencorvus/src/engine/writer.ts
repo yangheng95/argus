@@ -277,6 +277,13 @@ export interface AbortProcessLiveExecutionResult extends AbortActiveTasksResult,
   corruptTasks: number
 }
 
+function terminalToolTime(start: number, observedAt = Date.now()): { start: number; end: number } {
+  return {
+    start,
+    end: Math.max(observedAt, start + 1),
+  }
+}
+
 async function abortOpenToolParts(sessionID: string, reason: string): Promise<number> {
   const messages = await Session.messages({ sessionID })
   let updated = 0
@@ -286,7 +293,7 @@ async function abortOpenToolParts(sessionID: string, reason: string): Promise<nu
       if (part.type !== "tool") continue
       if (part.state.status === "completed" || part.state.status === "error") continue
       const now = Date.now()
-      const start = part.state.status === "running" ? part.state.time.start : now
+      const start = part.state.time.start
       await Session.updatePart({
         ...part,
         state: {
@@ -303,10 +310,7 @@ async function abortOpenToolParts(sessionID: string, reason: string): Promise<nu
               callID: part.callID,
             },
           }),
-          time: {
-            start,
-            end: now,
-          },
+          time: terminalToolTime(start, now),
         },
       })
       updated += 1
@@ -365,10 +369,7 @@ async function abortOwnedToolPart(input: {
         ...(part.state.status === "running" ? (part.state.metadata ?? {}) : {}),
         ...(input.metadata ?? {}),
       },
-      time: {
-        start,
-        end: now,
-      },
+      time: terminalToolTime(start, now),
     },
   })
   return 1

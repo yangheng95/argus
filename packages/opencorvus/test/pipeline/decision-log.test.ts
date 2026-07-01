@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 import { createDecisionLog } from "../../src/decision-log"
+import { DecisionLogTable } from "../../src/decision-log/schema"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -86,6 +87,51 @@ describe("DecisionLog.append failure visibility", () => {
         expect(source).not.toContain(phrase)
       }
     }
+  })
+})
+
+describe("DecisionLog deterministic ordering", () => {
+  beforeEach(async () => {
+    await resetDatabase()
+  })
+
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
+  test("readByKey uses the decision id as the same-millisecond latest tie-breaker", () => {
+    const taskID = "tsk_decision_log_same_millisecond"
+    Database.use((db) => {
+      db.insert(DecisionLogTable)
+        .values({
+          id: "decision_log_0001",
+          task_id: taskID,
+          goal_id: null,
+          phase: "retry",
+          key: "same_key",
+          value: "first value",
+          reason: "first insert in the same millisecond",
+          time_created: 10,
+        })
+        .run()
+      db.insert(DecisionLogTable)
+        .values({
+          id: "decision_log_0002",
+          task_id: taskID,
+          goal_id: null,
+          phase: "retry",
+          key: "same_key",
+          value: "second value",
+          reason: "second insert in the same millisecond",
+          time_created: 10,
+        })
+        .run()
+    })
+
+    const log = createDecisionLog(taskID)
+
+    expect(log.read().map((entry) => entry.value)).toEqual(["first value", "second value"])
+    expect(log.readByKey("same_key")?.value).toBe("second value")
   })
 })
 

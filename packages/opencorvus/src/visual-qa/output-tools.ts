@@ -224,7 +224,7 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
   const tools = {
     submit_visual_qa_report: tool({
       description:
-        "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
+        "Submit the frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
         "Use accepted=true only with fresh visual and functional evidence, no open critical/major findings, no production_blockers, and no unresolved_code_module_problems. " +
         "When visual blockers map to rendered Document Object Model (DOM) nodes, include problem_dom_regions with selectors, HTML excerpts, computed styles, and code search terms for Build. " +
         "When unrepairable production blockers expose a code-module issue, submit accepted=false and report unresolved_code_module_problems instead of requesting a new task.",

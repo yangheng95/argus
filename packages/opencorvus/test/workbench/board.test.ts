@@ -111,6 +111,11 @@ test("compileBoard does not retain a mutable process board between hydrations", 
       expect(before.task.kind).toBe("workflow")
       expect(before.task.queue).toEqual({ order: 0 })
       expect(before.task.request).toBe("initial request")
+      expect(before.project).toEqual({
+        id: projectID,
+        name: "Board no process cache",
+        worktree: tmp.path,
+      })
 
       before.task.request = "mutated in memory"
 

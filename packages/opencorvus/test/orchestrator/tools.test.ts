@@ -83,6 +83,7 @@ import { EffectiveConfig } from "../../src/config/effective"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Provider } from "../../src/provider/provider"
 import { createRun } from "../../src/engine/writer"
+import * as EngineWriter from "../../src/engine/writer"
 import { hooks, terminalTask, updateRun } from "../../src/engine/state"
 import { EngineInteraction } from "../../src/engine/interaction"
 import { ExecutorRegistry } from "../../src/executor/registry"
@@ -2369,7 +2370,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("post-build integrity pass records evidence but does not complete the task", async () => {
+  test("post-build integrity pass records report evidence but does not complete the task", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_integrity_no_auto_complete_${stamp}`
@@ -2421,7 +2422,8 @@ describe("orchestrator tools", () => {
         )
 
         const text = toolText(result)
-        expect(text).toContain("complete_task")
+        expect(text).toContain("Pass report persisted")
+        expect(text).toContain("completion summary")
         expect(text).toContain("integrity_attempt_id")
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
         const latest = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID, phase: "post_build" })
@@ -2430,7 +2432,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("complete_task completes only from the latest post-build pass integrity attempt", async () => {
+  test("complete_task completes from explicit orchestrator summary without requiring integrity attempt", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_complete_task_${stamp}`
@@ -2469,19 +2471,6 @@ describe("orchestrator tools", () => {
           summary: "active run",
           now,
         })
-        const artifactID = recordIntegrityAttempt({
-          taskID,
-          sessionID: "ses_complete_task_integrity",
-          lineage: activeOnlyLineage(taskID, specID),
-          verdict: "pass",
-          phase: "post_build",
-          reviewers: [{ reviewerID: "acceptance_surface", scope: "Acceptance", verdict: "pass" }],
-          findings: [],
-          requiredRepairs: [],
-          unresolvedDisagreements: [],
-          teamReportMarkdown: "Post-build pass",
-          now: now + 1,
-        })
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -2489,11 +2478,12 @@ describe("orchestrator tools", () => {
         })
 
         const result = await tools.complete_task.execute(
-          { integrity_attempt_id: artifactID, summary: "Explicit completion" },
+          { summary: "Explicit Orchestrator completion from durable task evidence" },
           buildToolOptions("complete_task"),
         )
 
         expect(toolText(result)).toContain(`Task ${taskID} completed`)
+        expect(toolText(result)).toContain("Explicit Orchestrator completion from durable task evidence")
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("completed")
         expect(findRun(run.id)?.status).toBe("completed")
         expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task completed")
@@ -2501,7 +2491,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("complete_task rejects stale, non-pass, and pre-build integrity evidence without terminal mutation", async () => {
+  test("complete_task rejects empty summary and terminal tasks without an integrity evidence gate", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_complete_task_reject_${stamp}`
@@ -2534,64 +2524,26 @@ describe("orchestrator tools", () => {
           agentSessionID: parent.id,
           signal: new AbortController().signal,
         })
-        const missingResult = await tools.complete_task.execute(
-          { integrity_attempt_id: "artifact_missing" },
-          buildToolOptions("complete_task_missing"),
+        const emptySummaryResult = await tools.complete_task.execute(
+          { summary: "   " },
+          buildToolOptions("complete_task_empty_summary"),
         )
-        expect(toolText(missingResult)).toContain("no post_build integrity_attempt exists")
+
+        expect(toolText(emptySummaryResult)).toContain("summary is required")
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
 
-        const preBuildPassID = recordIntegrityAttempt({
-          taskID,
-          sessionID: "ses_complete_task_pre_build",
-          lineage: activeOnlyLineage(taskID, specID),
-          verdict: "pass",
-          phase: "pre_build",
-          reviewers: [{ reviewerID: "structure", scope: "Structure", verdict: "pass" }],
-          findings: [],
-          teamReportMarkdown: "Pre-build pass",
-          now: now + 1,
-        })
-        const stalePassID = recordIntegrityAttempt({
-          taskID,
-          sessionID: "ses_complete_task_stale_pass",
-          lineage: activeOnlyLineage(taskID, specID),
-          verdict: "pass",
-          phase: "post_build",
-          reviewers: [{ reviewerID: "acceptance_surface", scope: "Acceptance", verdict: "pass" }],
-          findings: [],
-          teamReportMarkdown: "Stale post-build pass",
-          now: now + 2,
-        })
-        const latestNonPassID = recordIntegrityAttempt({
-          taskID,
-          sessionID: "ses_complete_task_latest_non_pass",
-          lineage: activeOnlyLineage(taskID, specID),
-          verdict: "needs_correction",
-          phase: "post_build",
-          reviewers: [{ reviewerID: "acceptance_surface", scope: "Acceptance", verdict: "needs_correction" }],
-          findings: [integrityFinding({ id: "CT-1", description: "Latest review found a blocker." })],
-          teamReportMarkdown: "Latest post-build needs correction",
-          now: now + 3,
-        })
+        const completed = await tools.complete_task.execute(
+          { summary: "Completed by Orchestrator after reviewing durable evidence" },
+          buildToolOptions("complete_task"),
+        )
+        expect(toolText(completed)).toContain(`Task ${taskID} completed`)
 
-        const preBuildResult = await tools.complete_task.execute(
-          { integrity_attempt_id: preBuildPassID },
-          buildToolOptions("complete_task_pre_build"),
+        const terminalResult = await tools.complete_task.execute(
+          { summary: "duplicate completion" },
+          buildToolOptions("complete_task_terminal"),
         )
-        const staleResult = await tools.complete_task.execute(
-          { integrity_attempt_id: stalePassID },
-          buildToolOptions("complete_task_stale"),
-        )
-        const nonPassResult = await tools.complete_task.execute(
-          { integrity_attempt_id: latestNonPassID },
-          buildToolOptions("complete_task_non_pass"),
-        )
-
-        expect(toolText(preBuildResult)).toContain("not the latest post_build integrity attempt")
-        expect(toolText(staleResult)).toContain("not the latest post_build integrity attempt")
-        expect(toolText(nonPassResult)).toContain("not pass")
-        expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
+        expect(toolText(terminalResult)).toContain(`Task ${taskID} is terminal (status=completed)`)
+        expect(toolText(terminalResult)).toContain("complete_task was not executed")
       },
     })
   })
@@ -2886,9 +2838,83 @@ describe("orchestrator tools", () => {
         expect(toolText(result)).toContain("rendered webpage evidence capture failed")
         expect(toolText(result)).toContain("https://example.com/page")
         expect(SessionStatus.get("ses_frontend_research_failed_startup")).toEqual({
+          type: "idle",
+        })
+      },
+    })
+  })
+
+  test("frontend_research marks a persisted failed child session terminal", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_frontend_research_persisted_failure_${stamp}`
+    const taskID = `tsk_frontend_research_persisted_failure_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research persisted failure parent" })
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Frontend research persisted failure project",
+              sandboxes: "[]",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research persisted failure task",
+              request: "Investigate a webpage before implementation.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let childSessionID = ""
+        frontendResearchRunImpl = async (input: any) => {
+          const child = await Session.create({
+            kind: "frontend-research",
+            parentID: parent.id,
+            title: "frontend research failed child",
+          })
+          childSessionID = child.id
+          input.onSessionCreated?.(child.id)
+          throw new Error("frontend research agent crashed after session persistence")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.frontend_research.execute(
+          {
+            reason: "Need visible webpage investigation packets.",
+            source_urls: ["https://example.com/page"],
+          },
+          buildToolOptions("frontend_research"),
+        )
+
+        expect(toolText(result)).toContain("Frontend research failed before producing an artifact.")
+        expect(toolText(result)).toContain(`- session: ${childSessionID}`)
+        expect(toolText(result)).toContain("frontend research agent crashed after session persistence")
+        expect(SessionStatus.get(childSessionID)).toEqual({
           type: "terminal",
           reason: "error",
-          error: "rendered webpage evidence capture failed",
+          error: "frontend research agent crashed after session persistence",
         })
       },
     })
@@ -5472,7 +5498,7 @@ describe("orchestrator tools", () => {
             .set({
               attachments: [
                 {
-                  sha: "sha_frontend_design_ref",
+                  sha: "8".repeat(64),
                   url: "attachment://frontend-design-reference.png",
                   mime: "image/png",
                   size: 12,
@@ -5538,7 +5564,7 @@ describe("orchestrator tools", () => {
         expect(frontendDesignInput.parentSessionID).toBe(parent.id)
         expect(frontendDesignInput.taskID).toBe(taskID)
         expect(frontendDesignInput.request).toBe("Runtime-contract frontend-design worker asks for redispatch")
-        expect(frontendDesignInput.attachments?.[0]?.sha).toBe("sha_frontend_design_ref")
+        expect(frontendDesignInput.attachments?.[0]?.sha).toBe("8".repeat(64))
         expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
           "responded",
         )
@@ -9728,7 +9754,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("cancel_subagent aborts a live goal attempt by child session", async () => {
+  test("cancel_subagent refuses a live build goal attempt without live ownership", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_cancel_subagent_${stamp}`
@@ -9743,10 +9769,10 @@ describe("orchestrator tools", () => {
       worktree: tmp.path,
       projectName: "cancel_subagent goal session",
       taskTitle: "cancel_subagent goal session",
-      request: "Cancel a wedged build child session and re-dispatch later",
-      goalTitle: "Cancel stale child session",
-      goalSlug: "cancel-stale-child-session",
-      objective: "Abort the live goal attempt tied to the child build session",
+      request: "Do not cancel a live build child session from missing root ownership",
+      goalTitle: "Do not cancel missing ownership child session",
+      goalSlug: "do-not-cancel-missing-ownership-child-session",
+      objective: "Keep the live goal attempt running when only root ownership is missing",
       now,
     })
 
@@ -9783,26 +9809,27 @@ describe("orchestrator tools", () => {
           await tools.cancel_subagent.execute(
             {
               session_id: child.id,
-              reason: "child made no useful progress; abort the stale child before re-dispatch",
+              reason: "root ownership is missing, but that is not child lifecycle evidence",
             },
             buildToolOptions(),
           ),
         )
 
-        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-        expect(findGoalRun(goalRunID)?.error).toContain("cancel_subagent:")
-        expect(toolText(result)).toContain(`Cancelled sub-agent session ${child.id}`)
-        expect(toolText(result)).toContain(`goal_run ${goalRunID} aborted`)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(findGoalRun(goalRunID)?.error).toBeNull()
+        expect(result).toContain("Error: cancel_subagent refused")
+        expect(result).toContain(`goal_run ${goalRunID} status=running`)
+        expect(result).toContain("Missing ownership is not cancellation evidence")
       },
     })
   })
 
-  test("cancel_subagent recover_stale refuses live goal run with no root ownership", async () => {
+  test("cancel_subagent refuses live goal run with no root ownership", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_cancel_subagent_recover_no_owner_${stamp}`
-    const taskID = `tsk_cancel_subagent_recover_no_owner_${stamp}`
-    const goalID = `gol_cancel_subagent_recover_no_owner_${stamp}`
+    const projectID = `project_cancel_subagent_no_owner_${stamp}`
+    const taskID = `tsk_cancel_subagent_no_owner_${stamp}`
+    const goalID = `gol_cancel_subagent_no_owner_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -9810,11 +9837,11 @@ describe("orchestrator tools", () => {
       goalID,
       sessionID: null,
       worktree: tmp.path,
-      projectName: "cancel_subagent recover_stale no owner",
-      taskTitle: "cancel_subagent recover_stale no owner",
-      request: "Recover stale must not treat missing root ownership as child lifecycle proof",
-      goalTitle: "Recover stale no owner",
-      goalSlug: "recover-stale-no-owner",
+      projectName: "cancel_subagent no owner",
+      taskTitle: "cancel_subagent no owner",
+      request: "Cancellation must not treat missing root ownership as child lifecycle proof",
+      goalTitle: "Cancel no owner",
+      goalSlug: "cancel-no-owner",
       objective: "Keep live child lifecycle facts separate from root tool ownership",
       now,
     })
@@ -9822,12 +9849,12 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "recover_stale parent" })
+        const parent = await Session.create({ kind: "root", title: "cancel no owner parent" })
         const child = await Session.create({
           kind: "build",
           parentID: parent.id,
           goalID,
-          title: "recover_stale child",
+          title: "cancel no owner child",
         })
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
@@ -9850,15 +9877,15 @@ describe("orchestrator tools", () => {
           await tools.cancel_subagent.execute(
             {
               session_id: child.id,
-              mode: "recover_stale",
               reason: "no live ownership row was found",
             },
             buildToolOptions(),
           ),
         )
 
-        expect(result).toContain("mode='recover_stale' refused")
+        expect(result).toContain("Error: cancel_subagent refused")
         expect(result).toContain(`goal_run ${goalRunID} status=running`)
+        expect(result).toContain("Root build ownership only proves the dispatch tool lifecycle")
         expect(findGoalRun(goalRunID)?.status).toBe("running")
       },
     })
@@ -11112,12 +11139,12 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("cancel_subagent recover_stale mode closes live ownership and aborts the wedged goal attempt", async () => {
+  test("cancel_subagent cancels live-owned build by goal_run_id", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_cancel_subagent_recover_stale_${stamp}`
-    const taskID = `tsk_cancel_subagent_recover_stale_${stamp}`
-    const goalID = `gol_cancel_subagent_recover_stale_${stamp}`
+    const projectID = `project_cancel_subagent_live_owned_${stamp}`
+    const taskID = `tsk_cancel_subagent_live_owned_${stamp}`
+    const goalID = `gol_cancel_subagent_live_owned_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -11125,24 +11152,24 @@ describe("orchestrator tools", () => {
       goalID,
       sessionID: null,
       worktree: tmp.path,
-      projectName: "recover stale build",
-      taskTitle: "recover stale build",
-      request: "Recover a build that no longer has active execution",
-      goalTitle: "Recover stale build goal",
-      goalSlug: "cancel-subagent-recover-stale-goal",
-      objective: "Close stale build ownership so the goal can retry",
+      projectName: "cancel live-owned build",
+      taskTitle: "cancel live-owned build",
+      request: "Cancel a live-owned build when explicit cancellation evidence requires it",
+      goalTitle: "Cancel live-owned build goal",
+      goalSlug: "cancel-subagent-live-owned-goal",
+      objective: "Close live build ownership and abort the goal run",
       now,
     })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "recover stale parent" })
+        const parent = await Session.create({ kind: "root", title: "cancel live-owned parent" })
         const child = await Session.create({
           kind: "build",
           parentID: parent.id,
           goalID,
-          title: "recover stale child",
+          title: "cancel live-owned child",
         })
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
@@ -11154,16 +11181,16 @@ describe("orchestrator tools", () => {
           runID,
           sessionID: child.id,
         })
-        const orchestratorMessageID = `msg_cancel_subagent_recover_stale_${stamp}`
-        const toolPartID = `prt_cancel_subagent_recover_stale_${stamp}`
-        const toolCallID = `cal_cancel_subagent_recover_stale_${stamp}`
+        const orchestratorMessageID = `msg_cancel_subagent_live_owned_${stamp}`
+        const toolPartID = `prt_cancel_subagent_live_owned_${stamp}`
+        const toolCallID = `cal_cancel_subagent_live_owned_${stamp}`
         await Session.persistMessage({
           info: {
             id: orchestratorMessageID,
             sessionID: parent.id,
             role: "assistant",
             time: { created: now },
-            parentID: `msg_user_cancel_subagent_recover_stale_${stamp}`,
+            parentID: `msg_user_cancel_subagent_live_owned_${stamp}`,
             providerID: "test-provider",
             modelID: "test-model",
             agent: "orchestrator",
@@ -11220,14 +11247,13 @@ describe("orchestrator tools", () => {
           await tools.cancel_subagent.execute(
             {
               goal_run_id: goalRunID,
-              mode: "recover_stale",
-              reason: "operator note arrived after the build session stopped producing events",
+              reason: "operator explicitly requested cancellation of this live-owned build session",
             },
             buildToolOptions("cancel_subagent"),
           ),
         )
 
-        expect(toolText(result)).toContain(`Recovered stale live-owned build ${child.id}`)
+        expect(toolText(result)).toContain(`Cancelled live-owned build session ${child.id}`)
         expect(toolText(result)).toContain(`ownership=${ownershipPayload.ownership_id}`)
         expect(toolText(result)).toContain(`goal_run ${goalRunID} aborted`)
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
@@ -11242,12 +11268,12 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("cancel_subagent recover_stale mode refuses a build session that is still streaming", async () => {
+  test("cancel_subagent refuses active build session when live ownership is missing", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_recover_streaming_build_${stamp}`
-    const taskID = `tsk_recover_streaming_build_${stamp}`
-    const goalID = `gol_recover_streaming_build_${stamp}`
+    const projectID = `project_cancel_streaming_no_owner_${stamp}`
+    const taskID = `tsk_cancel_streaming_no_owner_${stamp}`
+    const goalID = `gol_cancel_streaming_no_owner_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -11255,24 +11281,24 @@ describe("orchestrator tools", () => {
       goalID,
       sessionID: null,
       worktree: tmp.path,
-      projectName: "recover streaming build",
-      taskTitle: "recover streaming build",
-      request: "Do not recover an actively streaming build",
-      goalTitle: "Recover streaming build goal",
-      goalSlug: "recover-streaming-build-goal",
-      objective: "Refuse recovery while the build session is active",
+      projectName: "cancel streaming no owner",
+      taskTitle: "cancel streaming no owner",
+      request: "Do not cancel an active build when only root ownership is missing",
+      goalTitle: "Cancel streaming no-owner build goal",
+      goalSlug: "cancel-streaming-no-owner-build-goal",
+      objective: "Refuse cancellation while the build session is active but unowned by root dispatch",
       now,
     })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "recover streaming parent" })
+        const parent = await Session.create({ kind: "root", title: "cancel streaming no owner parent" })
         const child = await Session.create({
           kind: "build",
           parentID: parent.id,
           goalID,
-          title: "recover streaming child",
+          title: "cancel streaming no owner child",
         })
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
@@ -11281,25 +11307,6 @@ describe("orchestrator tools", () => {
           taskID,
           goalID,
           sessionID: child.id,
-        })
-        const ownershipPayload = createOrchestratorToolOwnershipPayload({
-          taskID,
-          orchestratorSessionID: parent.id,
-          orchestratorMessageID: `msg_recover_streaming_build_${stamp}`,
-          toolCallID: `cal_recover_streaming_build_${stamp}`,
-          toolPartID: `prt_recover_streaming_build_${stamp}`,
-          childSessionID: child.id,
-          scope: "goal",
-          goalID,
-          goalRunID,
-          now,
-        })
-        insertOrchestratorToolOwnershipArtifact({
-          taskID,
-          goalRunID,
-          label: "tool-ownership-start",
-          payload: ownershipPayload,
-          now,
         })
         SessionStatus.set(child.id, { type: "streaming" })
 
@@ -11313,28 +11320,27 @@ describe("orchestrator tools", () => {
           await tools.cancel_subagent.execute(
             {
               goal_id: goalID,
-              mode: "recover_stale",
-              reason: "should not abort an active stream",
+              reason: "root ownership is absent but active session status is still streaming",
             },
-            buildToolOptions("recover_streaming_build"),
+            buildToolOptions("cancel_streaming_no_owner"),
           ),
         )
 
-        expect(toolText(result)).toContain("refused stale recovery because session")
-        expect(toolText(result)).toContain("streaming")
+        expect(toolText(result)).toContain("Error: cancel_subagent refused")
+        expect(toolText(result)).toContain("Missing ownership is not cancellation evidence")
         expect(findGoalRun(goalRunID)?.status).toBe("running")
-        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
         SessionStatus.set(child.id, { type: "terminal", reason: "aborted", error: "test cleanup" })
       },
     })
   })
 
-  test("cancel_subagent recover_stale mode is a no-op when the build session has no live ownership", async () => {
+  test("cancel_subagent is a no-op when the build session has no live ownership or goal run", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_recover_no_owner_${stamp}`
-    const taskID = `tsk_recover_no_owner_${stamp}`
-    const goalID = `gol_recover_no_owner_${stamp}`
+    const projectID = `project_cancel_no_owner_${stamp}`
+    const taskID = `tsk_cancel_no_owner_${stamp}`
+    const goalID = `gol_cancel_no_owner_${stamp}`
 
     insertWorkflowTaskWithGoal({
       projectID,
@@ -11342,11 +11348,11 @@ describe("orchestrator tools", () => {
       goalID,
       sessionID: null,
       worktree: tmp.path,
-      projectName: "recover no owner",
-      taskTitle: "recover no owner",
+      projectName: "cancel no owner",
+      taskTitle: "cancel no owner",
       request: "No-op when there is no live build ownership",
-      goalTitle: "Recover no owner goal",
-      goalSlug: "recover-no-owner-goal",
+      goalTitle: "Cancel no owner goal",
+      goalSlug: "cancel-no-owner-goal",
       objective: "Do not mutate state without live ownership",
       now,
     })
@@ -11354,12 +11360,12 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "recover no owner parent" })
+        const parent = await Session.create({ kind: "root", title: "cancel no owner parent" })
         const child = await Session.create({
           kind: "build",
           parentID: parent.id,
           goalID,
-          title: "recover no owner child",
+          title: "cancel no owner child",
         })
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
@@ -11375,10 +11381,9 @@ describe("orchestrator tools", () => {
           await tools.cancel_subagent.execute(
             {
               session_id: child.id,
-              mode: "recover_stale",
-              reason: "there is no live ownership to recover",
+              reason: "there is no live ownership to cancel",
             },
-            buildToolOptions("recover_no_owner"),
+            buildToolOptions("cancel_no_owner"),
           ),
         )
 
@@ -11605,6 +11610,169 @@ describe("orchestrator tools", () => {
         expect(toolText(result)).not.toContain(["inspect", "only"].join("_"))
       },
     })
+  })
+
+  test("workflow task-level direct build receives active requirements and Visual QA feedback", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_direct_build_feedback_${stamp}`
+    const goalID = `gol_direct_build_feedback_${stamp}`
+    const specID = `spec_direct_build_feedback_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    let capturedContext: any
+    let capturedTarget: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "direct build visual QA feedback test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Direct build visual QA feedback test",
+          taskTitle: "Direct build feedback task",
+          request: "Repair the market page replica after visual QA.",
+          goalTitle: "Replica repair goal",
+          goalSlug: "replica-repair-goal",
+          objective: "Repair the market page visual structure.",
+          now,
+          specID,
+          insertProject: false,
+        })
+        Database.use((db) =>
+          insertRequirements(db, {
+            taskID,
+            specSnapshotID: specID,
+            now,
+            requirements: [
+              {
+                id: "REQ-visual-replica",
+                title: "Visual replica fidelity",
+                description: "The market page replica preserves the source page layout density and tab hierarchy.",
+                acceptance: ["Desktop screenshot comparison shows the tab hierarchy and spacing match the source page."],
+                evidence_refs: ["frontend_design:desktop-reference"],
+                non_goals: ["Do not redesign the page into a new marketing layout."],
+                priority: "blocking",
+              },
+            ],
+          }),
+        )
+
+        const visualQaRecord: any = minimalVisualQaDecisionRecord()
+        visualQaRecord.report.accepted = false
+        visualQaRecord.report.summary = "Market tab row is clipped and spacing is too loose."
+        visualQaRecord.report.production_blockers = [
+          {
+            id: "blocker-market-tabs",
+            principle_ids: ["reference-structure"],
+            region: "market tabs",
+            reason: "The tab row does not match the source hierarchy.",
+            impact: "The first viewport reads as a redesigned page instead of a replica.",
+            required_correction: "Restore tab row spacing and hierarchy from the source page.",
+            source_refs: ["frontend_design:desktop-reference"],
+            evidence_refs: ["screenshot://local/market-tabs.png"],
+          },
+        ]
+        visualQaRecord.report.problem_dom_regions = [
+          {
+            id: "dom-market-tabs",
+            blocker_ids: ["blocker-market-tabs"],
+            region: "market tabs",
+            route: "/markets/usa/",
+            viewport: { width: 1440, height: 900 },
+            locator: "main [data-testid=\"market-tabs\"]",
+            dom_path: "body > div#root > main > nav.market-tabs",
+            outer_html_excerpt: '<nav data-testid="market-tabs" class="market-tabs loose">Stocks ETFs Bonds</nav>',
+            ancestor_context: ["main class=market-page"],
+            sibling_context: ["h1 United States", "section class=index-overview"],
+            text_content: "Stocks ETFs Bonds",
+            role: "navigation",
+            accessible_name: "Market categories",
+            bbox: { x: 64, y: 174, width: 900, height: 42 },
+            computed_style: { display: "flex", gap: "32px", "margin-top": "40px" },
+            attributes: { class: "market-tabs loose", "data-testid": "market-tabs" },
+            code_search_terms: ["market-tabs", "MarketTabs", "loose"],
+            evidence_refs: ["screenshot://local/market-tabs.png"],
+            notes: "Repair the tab component before repainting adjacent overview cards.",
+          },
+        ]
+        visualQaRecord.acceptance = {
+          submittedAccepted: false,
+          effectiveAccepted: false,
+          selfReportIssues: [],
+          blockingIssues: ["Visual QA reported blocker-market-tabs."],
+        }
+        createDecisionLog(taskID).append({
+          phase: "visual_qa",
+          key: `report_${now}`,
+          value: JSON.stringify(visualQaRecord, null, 2),
+          reason: "Latest failed Visual Quality Assurance report for direct build feedback.",
+        })
+
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input, `ses_direct_build_feedback_${stamp}`)
+          capturedContext = input.context
+          capturedTarget = input.target
+          return {
+            result: {
+              status: "passed",
+              summary: "Direct build consumed active requirements and Visual QA feedback.",
+              files_changed: [
+                {
+                  path: "src/components/MarketTabs.tsx",
+                  summary: "Repaired market tab hierarchy.",
+                  reason: "Visual QA blocker and active requirement required tab hierarchy repair.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: `ses_direct_build_feedback_${stamp}`,
+            worktreeDir: input.managedWorktree?.directory ?? Instance.directory,
+            worktreeBranch: input.managedWorktree?.branch,
+            worktreeBaseRef: input.managedWorktree?.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Repair the market tabs using the latest Visual QA report.",
+            reason: "Task-level rework after Visual QA failure.",
+            directBuildIntent: "modify_files",
+          },
+          buildToolOptions(),
+        )
+
+        expect(toolText(result)).toContain("Build agent finished (status=passed")
+        await waitForCondition("direct build captured context", () => Boolean(capturedContext))
+      },
+    })
+
+    expect(capturedTarget).toMatchObject({
+      kind: "request",
+      text: "Repair the market tabs using the latest Visual QA report.",
+    })
+    expect(capturedContext?.requirements?.map((row: any) => row.id)).toEqual(["REQ-visual-replica"])
+    expect(capturedContext?.requirements?.[0]?.description).toContain("source page layout density")
+    expect(capturedContext?.visualQaFeedback).toContain("Latest failed Visual QA report for Build repair")
+    expect(capturedContext?.visualQaFeedback).toContain("blocker-market-tabs")
+    expect(capturedContext?.visualQaFeedback).toContain('locator: main [data-testid="market-tabs"]')
+    expect(capturedContext?.visualQaFeedback).toContain("code_search_terms: market-tabs, MarketTabs, loose")
+    expect(capturedContext?.acceptanceFeedback).toBeUndefined()
   })
 
   test("workflow task-level investigation build is rejected before starting build agent", async () => {
@@ -13033,7 +13201,7 @@ describe("orchestrator tools", () => {
       if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
       else process.env.OPENCORVUS_TEST_HOME = home
     }
-  })
+  }, 30000)
 
   test("goal build re-reads dependency status before dispatch", async () => {
     const now = Date.now()
@@ -14127,7 +14295,7 @@ describe("orchestrator tools", () => {
         await waitForGoalStatus(goalID, "failed")
         expect(observedExistingSessionID).toBe(priorSessionID)
         expect(observedRetryFeedback).toBe(
-          `Previous goal_run ${priorGoalRunID} terminal error (status=failed): prior build failed`,
+          `Previous goal_run ${priorGoalRunID} terminal error (status=failed): exact retry failure from persisted facts`,
         )
         expect(String(observedRetryFeedback)).not.toContain("AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT")
         expect(String(observedRetryFeedback)).not.toContain("Terminal error:")
@@ -15275,7 +15443,7 @@ describe("orchestrator tools", () => {
     })
   }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
-  test("goal build success fails visibly when completed workspace cleanup is refused", async () => {
+  test("goal build success records completed workspace cleanup refusal without failing the goal", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -15322,11 +15490,14 @@ describe("orchestrator tools", () => {
               commit_ref: "abc1234",
             },
             sessionID: "ses_goal_cleanup_refused",
-            worktreeDir: tmp.path,
-            worktreeBranch: "opencorvus/not-a-goal-worktree",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
             worktreeBaseRef: input.managedWorktree.baseRef,
           }
         }
+        spyOn(EngineWriter, "cleanupGoalWorkspaceForGoal").mockImplementationOnce(async () => {
+          throw new Error("WorktreeRemoveFailedError: EBUSY: resource busy or locked, rm 'managed-worktree'")
+        })
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -15344,12 +15515,22 @@ describe("orchestrator tools", () => {
         )
 
         expectGoalBuildStarted(result)
-        await waitForGoalStatus(goalID, "failed")
-        expect(await Filesystem.exists(tmp.path)).toBe(true)
-        expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
-        expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(tmp.path)
-        expect(listGoalRunsByGoal(goalID)[0]?.error).toContain("completed worktree cleanup failed")
-        expect(listGoalRunsByGoal(goalID)[0]?.error).toContain("outside goal workspace roots")
+        const goalRunID = listGoalRunsByGoal(goalID)[0]?.id
+        expect(goalRunID).toBeString()
+        const diagnosticKey = `completed_worktree_cleanup_failed_${goalRunID}`
+        await waitForCondition("completed workspace cleanup refusal recorded", async () => {
+          return goalStatusByID(goalID) === "passed" && !!createDecisionLog(taskID).readByKey(diagnosticKey)
+        })
+        const goalRun = listGoalRunsByGoal(goalID)[0]
+        expect(goalRun?.status).toBe("completed")
+        expect(goalRun?.error).toBeNull()
+        expect(goalRun?.workspace_dir).toContain(".opencorvus")
+        expect(goalRun?.workspace_dir).toContain("worktree")
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(goalRun?.workspace_dir)
+        expect(await Filesystem.exists(goalRun?.workspace_dir ?? "")).toBe(true)
+        const diagnostic = createDecisionLog(taskID).readByKey(diagnosticKey)
+        expect(diagnostic?.value).toContain("completed worktree cleanup failed")
+        expect(diagnostic?.value).toContain("EBUSY")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
       },
     })

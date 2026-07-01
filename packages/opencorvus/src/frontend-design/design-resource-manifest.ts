@@ -138,7 +138,9 @@ function inferOrigin(input: DesignResourceFileRef): DesignResourceOrigin {
   if (input.source === "material") return "material"
   if (input.source === "url-screenshot") return "url_screenshot"
   if (input.source === "browser-preview") return "browser_preview"
-  if (!input.source || input.source === "user-upload" || input.source === "figma") return "attachment"
+  if (!input.source || input.source === "user" || input.source === "user-upload" || input.source === "figma") {
+    return "attachment"
+  }
   throw new Error(`unsupported design resource source '${input.source}' for ${input.filename ?? input.url}`)
 }
 

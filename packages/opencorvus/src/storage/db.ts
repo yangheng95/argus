@@ -523,24 +523,60 @@ export namespace Database {
   }>("database")
 
   const effectLog = Log.create({ service: "db-effect" })
+  const activeEffects = new Set<Promise<void>>()
+  let effectActivityVersion = 0
+
+  function markEffectActivity() {
+    effectActivityVersion++
+  }
+
+  function delay(ms: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms))
+  }
+
+  function trackEffect(result: Promise<unknown>) {
+    let tracked: Promise<void>
+    tracked = Promise.resolve(result)
+      .then(
+        () => undefined,
+        (err) => {
+          effectLog.warn("post-commit effect failed", { error: err instanceof Error ? err.message : String(err) })
+        },
+      )
+      .finally(() => {
+        activeEffects.delete(tracked)
+        markEffectActivity()
+      })
+    activeEffects.add(tracked)
+    markEffectActivity()
+  }
+
+  function isPromiseLike(value: unknown): value is Promise<unknown> {
+    return (
+      (typeof value === "object" || typeof value === "function") &&
+      value !== null &&
+      "then" in value &&
+      typeof value.then === "function"
+    )
+  }
+
+  function runEffect(fn: () => void | Promise<void>) {
+    try {
+      const result = fn()
+      if (isPromiseLike(result)) {
+        trackEffect(result)
+      }
+    } catch (err) {
+      effectLog.warn("post-commit effect threw synchronously", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 
   /** Execute post-commit effects, catching and logging any failures. */
   function drainEffects(effects: (() => void | Promise<void>)[]) {
     for (const fn of effects) {
-      try {
-        const result = fn()
-        // If the effect returns a Promise (e.g. Bus.publish), attach a catch
-        // so unhandled rejections don't crash the process and failures are logged.
-        if (result && typeof (result as any).then === "function") {
-          ;(result as Promise<unknown>).catch((err) => {
-            effectLog.warn("post-commit effect failed", { error: err instanceof Error ? err.message : String(err) })
-          })
-        }
-      } catch (err) {
-        effectLog.warn("post-commit effect threw synchronously", {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
+      runEffect(fn)
     }
   }
 
@@ -569,16 +605,32 @@ export namespace Database {
     try {
       ctx.use().effects.push(fn)
     } catch {
-      try {
-        const result = fn()
-        if (result && typeof (result as any).then === "function") {
-          ;(result as Promise<unknown>).catch((err) => {
-            effectLog.warn("immediate effect failed", { error: err instanceof Error ? err.message : String(err) })
-          })
-        }
-      } catch (err) {
-        effectLog.warn("immediate effect threw", { error: err instanceof Error ? err.message : String(err) })
+      runEffect(fn)
+    }
+  }
+
+  export async function awaitEffectIdle(idleTimeoutMs: number) {
+    if (!Number.isInteger(idleTimeoutMs) || idleTimeoutMs <= 0) {
+      throw new Error(`Database.awaitEffectIdle: invalid idleTimeoutMs ${idleTimeoutMs}`)
+    }
+
+    let lastActivityVersion = effectActivityVersion
+    let idleDeadline = Date.now() + idleTimeoutMs
+    while (activeEffects.size > 0) {
+      if (effectActivityVersion !== lastActivityVersion) {
+        lastActivityVersion = effectActivityVersion
+        idleDeadline = Date.now() + idleTimeoutMs
       }
+
+      const remaining = idleDeadline - Date.now()
+      if (remaining <= 0) {
+        throw new Error(
+          `Database.awaitEffectIdle: ${activeEffects.size} post-commit effect(s) still active after ${idleTimeoutMs}ms without effect activity`,
+        )
+      }
+
+      const snapshot = [...activeEffects]
+      await Promise.race([Promise.allSettled(snapshot).then(() => undefined), delay(Math.min(50, remaining))])
     }
   }
 

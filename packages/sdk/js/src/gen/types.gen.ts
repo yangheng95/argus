@@ -1801,6 +1801,11 @@ export type VisibleMessage =
       finish?: string
     }
 
+export type PartErrorIssue = {
+  path: string
+  message: string
+}
+
 export type FilePartSourceText = {
   value: string
   start: number
@@ -1934,6 +1939,18 @@ export type VisibleMessagePart =
       metadata?: {
         [key: string]: unknown
       }
+    }
+  | {
+      id: string
+      sessionID: string
+      messageID: string
+      orderKey: string
+      type: "part-error"
+      title: string
+      message: string
+      issues: Array<PartErrorIssue>
+      originalType?: string
+      originalTool?: string
     }
   | {
       id: string
@@ -2110,6 +2127,19 @@ export type TextPart = {
   }
 }
 
+export type PartErrorPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  orderKey?: string
+  type: "part-error"
+  title: string
+  message: string
+  issues: Array<PartErrorIssue>
+  originalType?: string
+  originalTool?: string
+}
+
 export type SubtaskPart = {
   id: string
   sessionID: string
@@ -2238,6 +2268,7 @@ export type CompactionPart = {
 
 export type Part =
   | TextPart
+  | PartErrorPart
   | SubtaskPart
   | ReasoningPart
   | FilePart
@@ -13585,6 +13616,11 @@ export type TaskConversationResponses = {
           completed?: number
         }
       }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      }
       spec?: {
         content: string
         file?: string
@@ -14712,6 +14748,11 @@ export type TaskBoardResponses = {
         started?: number
         completed?: number
       }
+    }
+    project?: {
+      id: string
+      name?: string
+      worktree: string
     }
     spec?: {
       content: string

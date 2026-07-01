@@ -347,7 +347,7 @@ describe("core prompt hygiene", () => {
     expect(workflow).not.toContain("evaluator as plan/build/evaluate phases")
     expect(workflow).not.toContain("per-goal[build + architecture_review]")
     expect(workflow).not.toContain("goal build ???????? architecture_review")
-    expect(workflow).toContain("integrity 做 session-bound final review boundary")
+    expect(workflow).toContain("integrity 是 session-bound review report")
     expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(workflow).toContain("最终 review")
     expect(workflow).toContain("materialization/source handoff")
@@ -365,9 +365,7 @@ describe("core prompt hygiene", () => {
     expect(integrityFlat).toContain("Every finding MUST carry at least one of")
     expect(integrityFlat).toContain("requirementIDs")
     expect(integrityFlat).toContain("Do not retrofit a REQ-N tag")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain(
-      "Integrity is the final adversarial acceptance evidence producer",
-    )
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("Integrity is an adversarial review report producer")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
     expect(tools).not.toContain("Diagnostic-only findings require upstream repair")
@@ -1000,7 +998,7 @@ describe("core prompt hygiene", () => {
   test("visual-qa core prompt stays focused on GUI fidelity and functional testing", async () => {
     const text = await readPrompt("visualQa")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("final visual GUI and functional product-review agent")
+    expect(normalized).toContain("visual GUI and functional product-review agent")
     expect(normalized).toContain("Run once near task completion")
     expect(normalized).toContain("GUI means Graphical User Interface")
     expect(normalized).toContain("picky professional product designer and design QA reviewer")
@@ -1072,7 +1070,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
-    expect(normalized).toContain("Keep `integrity` as the final system-completeness acceptance review boundary")
+    expect(normalized).toContain("Use `integrity` as an optional system-completeness review report")
     expect(normalized).toContain("If it reports unresolved_code_module_problems")
     expect(normalized).toContain(
       "the scheduler must decide whether same-task repair, question, fail_task, or `propose_task`",
@@ -1115,7 +1113,7 @@ describe("core prompt hygiene", () => {
     const source = await readSource("orchestrator/agent.ts")
     const normalized = text.replace(/\s+/g, " ")
     const sourceNormalized = source.replace(/\s+/g, " ")
-    expect(normalized).toContain("Integrity is the final adversarial acceptance evidence producer")
+    expect(normalized).toContain("Integrity is an adversarial review report producer")
     expect(normalized).toContain("no separate final acceptance object")
     expect(normalized).toContain("The host no longer runs a host-owned final acceptance object")
     expect(normalized).toContain("Non-pass `integrity` returns evidence for the next orchestrator decision")
@@ -1239,22 +1237,23 @@ describe("core prompt hygiene", () => {
       "If a pending worker coordination request asks for cancellation, answer that request through `respond_agent_coordination` with decision `cancel_worker`",
     )
     expect(normalized).toContain("Do not use `cancel_subagent` to answer or bypass a pending A2A request")
+    expect(normalized).toContain("Missing root build ownership is not child lifecycle evidence")
+    expect(normalized).toContain("Do not self-initiate `cancel_subagent` unless")
+    expect(normalized).not.toContain("recover_stale")
     expect(normalized).not.toContain(
       "unless a target-scoped operator command or pending worker coordination request explicitly asks for cancellation",
     )
   })
 
-  test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
+  test("orchestrator prompt keeps terminal lifecycle under explicit orchestrator decision", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain(
-      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict",
+      "Pipeline workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
     )
     expect(normalized).toContain("There is no `deliver` or `publish_acceptance` tool")
-    expect(normalized).toContain("you call `complete_task` with the returned `integrity_attempt_id`")
-    expect(normalized).toContain(
-      "A post-build pass result is still not an engine terminal write until `complete_task` succeeds",
-    )
+    expect(normalized).toContain("call `complete_task` with a concrete completion summary")
+    expect(normalized).toContain("none of them is a host-side completion lock")
     expect(normalized).toContain("`completed`, `failed`, and `cancelled` are terminal for self-wakes")
     expect(normalized).toContain(
       "External operator messages, injected messages, retry, and replan are explicit wake requests",
@@ -1263,6 +1262,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("Only an accepted host-arbiter verdict completes the task")
     expect(normalized).not.toContain("acceptance has accepted and been published")
     expect(normalized).not.toContain("publish_acceptance remains the normal terminal path")
+    expect(normalized).not.toContain("with the returned `integrity_attempt_id`")
   })
 
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
@@ -1372,21 +1372,21 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("evidence, not trusted truth")
     expect(normalized).toContain("If they contradict the original request or the repository baseline")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
-    expect(orchestrator.replace(/\s+/g, " ")).toContain("produces final completion evidence")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("produces review evidence")
     expect(orchestrator.replace(/\s+/g, " ")).toContain(
-      "Pipeline workflow tasks complete only after the `integrity` reviewer returns a post-build pass verdict",
+      "Pipeline workflow tasks complete only when you, the Orchestrator, decide the current durable task evidence satisfies the user request",
     )
     expect(architect).toContain(
-      "final workflow review boundary to audit the original user request, requirements extraction, and built system",
+      "workflow review report to audit the original user request, requirements extraction, and built system",
     )
     expect(architect).not.toContain("integrity reviewer before build")
   })
 
   test("orchestrator prompt forbids final integrity while non-terminal goals remain", async () => {
     const text = await readPrompt("orchestrator")
-    // The pre-integrity audit ritual must enumerate every goal explicitly and
+    // The pre-review audit ritual must enumerate every goal explicitly and
     // the verification-goal blanket exception must stay gone.
-    expect(text).toContain("## Pre-integrity Audit")
+    expect(text).toContain("## Pre-review Audit")
     expect(text).toContain("enumerate every goal id with its current status")
     // The buggy old "verification-only as terminal for this gate" exception
     // must be removed — it was the documentation mistake that authorised

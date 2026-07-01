@@ -296,10 +296,10 @@ describe("pipeline workflow review topology", () => {
     expect(text).not.toContain("evaluator as plan/build/evaluate phases")
     expect(text).not.toContain("per-goal[build + architecture_review]")
     expect(text).not.toContain("goal build 完成后自动跑一次 architecture_review")
-    expect(text).toContain("Pipeline 的最终 review boundary 是 `integrity`")
+    expect(text).toContain("Pipeline 的 review report surface 是 `integrity`")
     expect(text).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
-    expect(text).toContain("最终系统完整性 review boundary")
-    expect(text).toContain("所有 blocking build terminal 后、final acceptance 前的一次性 GUI")
+    expect(text).toContain("系统完整性 review report")
+    expect(text).toContain("所有 blocking build terminal 后、最终调度决定前的一次性 GUI")
     expect(text).not.toContain("post-integrity 前端 GUI 修复")
   })
 
@@ -1455,19 +1455,19 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.build).toBeUndefined()
   })
 
-  test("projects needs_correction integrity as failed because integrity is the final review boundary", () => {
+  test("projects needs_correction integrity report as completed review evidence", () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `proj_workflow_integrity_failed_${stamp}`
-    const taskID = `tsk_workflow_integrity_failed_${stamp}`
-    const specID = `spec_workflow_integrity_failed_${stamp}`
+    const projectID = `proj_workflow_integrity_report_${stamp}`
+    const taskID = `tsk_workflow_integrity_report_${stamp}`
+    const specID = `spec_workflow_integrity_report_${stamp}`
 
     Database.use((db) => {
       db.insert(ProjectTable)
         .values({
           id: projectID,
           worktree: process.cwd(),
-          name: "Workflow integrity failed projection test",
+          name: "Workflow integrity report projection test",
           sandboxes: [],
           time_created: now,
           time_updated: now,
@@ -1478,8 +1478,8 @@ describe("pipeline workflow review topology", () => {
           id: taskID,
           project_id: projectID,
           source: "test",
-          title: "Workflow integrity failed status",
-          request: "Show integrity stage as failed when correction is required",
+          title: "Workflow integrity report status",
+          request: "Show integrity stage as completed when correction evidence is recorded",
           kind: "workflow",
           priority: "normal",
           time_created: now,
@@ -1504,7 +1504,7 @@ describe("pipeline workflow review topology", () => {
 
     recordIntegrityAttempt({
       taskID,
-      sessionID: "ses_integrity_projection_failed",
+      sessionID: "ses_integrity_projection_report",
       lineage: {
         taskID,
         activeSpecSnapshotID: specID,
@@ -1527,15 +1527,15 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.integrity?.status).toBe("failed")
+    expect(taskSteps.integrity?.status).toBe("completed")
   })
 
-  test("projects historical top-level concerns payload with correction work as failed", () => {
+  test("projects historical top-level concerns payload with correction work as completed review evidence", () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `proj_workflow_integrity_concern_failed_${stamp}`
-    const taskID = `tsk_workflow_integrity_concern_failed_${stamp}`
-    const specID = `spec_workflow_integrity_concern_failed_${stamp}`
+    const projectID = `proj_workflow_integrity_concern_report_${stamp}`
+    const taskID = `tsk_workflow_integrity_concern_report_${stamp}`
+    const specID = `spec_workflow_integrity_concern_report_${stamp}`
 
     Database.use((db) => {
       db.insert(ProjectTable)
@@ -1554,7 +1554,7 @@ describe("pipeline workflow review topology", () => {
           project_id: projectID,
           source: "test",
           title: "Workflow integrity correction status",
-          request: "Show integrity stage as failed when concerns contain correction work",
+          request: "Show integrity stage as completed when concerns contain correction work",
           kind: "workflow",
           priority: "normal",
           time_created: now,
@@ -1583,7 +1583,7 @@ describe("pipeline workflow review topology", () => {
     // persisted non-pass artifacts that already carry top-level `concerns`.
     recordIntegrityAttempt({
       taskID,
-      sessionID: "ses_integrity_projection_concern_failed",
+      sessionID: "ses_integrity_projection_concern_report",
       lineage: {
         taskID,
         activeSpecSnapshotID: specID,
@@ -1606,6 +1606,6 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.integrity?.status).toBe("failed")
+    expect(taskSteps.integrity?.status).toBe("completed")
   })
 })

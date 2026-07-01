@@ -83,20 +83,31 @@ test("design resource manifest indexes Figma, HTML, and webpage evidence through
         intent: "visual_reference",
         source: "material",
       },
+      {
+        sha: "d".repeat(64),
+        url: "attachment://operator-reference.png",
+        mime: "image/png",
+        size: 32,
+        filename: "operator-reference.png",
+        intent: "visual_reference",
+        source: "user",
+      },
     ],
   })
 
-  expect(manifest.entries.map((entry) => entry.kind)).toEqual(["figma_screenshot", "figma_variables", "html"])
+  expect(manifest.entries.map((entry) => entry.kind)).toEqual(["figma_screenshot", "figma_variables", "html", "image"])
   expect(manifest.entries[0]?.origin).toBe("figma_mcp")
   expect(manifest.entries[1]?.intent).toBe("design_tokens")
   expect(manifest.entries[2]?.origin).toBe("material")
   expect(manifest.entries[2]?.size).toBe(240)
+  expect(manifest.entries[3]?.origin).toBe("attachment")
   expect(manifest.entries.every((entry) => entry.artifact_paths.includes("webpage-evidence/sourceProjectManifest.json")))
     .toBe(true)
   expect(designResourceManifestFileRefs(manifest).map((entry) => entry.source)).toEqual([
     "figma-mcp",
     "figma-mcp",
     "material",
+    "design-resource-manifest",
   ])
   expect(designResourceManifestFileRefs(manifest)[2]).toMatchObject({
     url: "attachment://reference.html",
@@ -111,7 +122,7 @@ test("design resource manifest indexes Figma, HTML, and webpage evidence through
     db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.id, artifactID)).get(),
   )
   expect(row?.kind).toBe("design_resource_manifest")
-  expect((row?.payload as any).entries).toHaveLength(3)
+  expect((row?.payload as any).entries).toHaveLength(4)
 })
 
 test("design resource manifest rejects unsupported resource MIME instead of indexing it loosely", () => {

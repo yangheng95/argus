@@ -29,7 +29,7 @@ Do not solve downstream responsibilities here:
 - Frontend Research owns source-page investigation and Page Skeleton Blueprint evidence; Frontend Design owns visual frontend template synthesis from prepared evidence.
 - Architect owns goal graph, acceptance specs, owned paths, and contracts.
 - Build owns implementation.
-- Integrity owns final workflow acceptance evidence inside its own review session.
+- Integrity owns optional workflow review evidence inside its own review session; Orchestrator owns final lifecycle decisions.
 
 When prior integrity/build evidence exists, summarize the delta the user is
 responding to; do not relitigate the whole task unless the latest message

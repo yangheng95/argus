@@ -4,6 +4,7 @@ export interface BuildPromptOverlayContext {
   frontendResearch?: string
   frontendDesign?: string
   integrityFeedback?: string
+  visualQaFeedback?: string
   acceptanceFeedback?: string
   designSpecs?: readonly unknown[]
   taskID?: string
@@ -106,12 +107,22 @@ function renderIntegrityReworkOverlay(integrityFeedback: string): string {
   ].join("\n")
 }
 
+function renderVisualQaRepairOverlay(visualQaFeedback: string): string {
+  return [
+    "## Visual QA Repair Overlay",
+    "",
+    "The latest failed Visual Quality Assurance (QA) report supplied these task-specific visual/product blockers. Treat production blockers and problem DOM regions as must-fix repair instructions for this attempt.",
+    "Use `problem_dom_regions` as the first source-code repair map: locator, Document Object Model (DOM) path, HTML excerpt, computed styles, attributes, bbox, and code-search terms. After repair, prove the blocker is gone with fresh screenshot or comparison evidence; DOM text alone is not visual proof.",
+    "",
+    visualQaFeedback.trim(),
+  ].join("\n")
+}
+
 function renderAcceptanceRepairOverlay(acceptanceFeedback: string): string {
   return [
     "## Acceptance Repair Overlay",
     "",
     "The persisted acceptance review supplied the following rejection packet. Use it as task-specific repair evidence; do not replace the goal/request contract with a generic summary.",
-    "If it includes `problem_dom_regions`, use those rendered Document Object Model (DOM) selectors, HTML excerpts, computed styles, attributes, and code-search terms as the first source-code repair map, then prove the visual fix with fresh screenshot or comparison evidence.",
     "",
     acceptanceFeedback.trim(),
   ].join("\n")
@@ -146,6 +157,11 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
   if (hasText(context?.integrityFeedback)) {
     ids.push("integrity-rework")
     sections.push(renderIntegrityReworkOverlay(context.integrityFeedback))
+  }
+
+  if (hasText(context?.visualQaFeedback)) {
+    ids.push("visual-qa-repair")
+    sections.push(renderVisualQaRepairOverlay(context.visualQaFeedback))
   }
 
   if (hasText(context?.acceptanceFeedback)) {

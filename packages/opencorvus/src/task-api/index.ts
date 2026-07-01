@@ -202,6 +202,7 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 const log = Log.create({ service: "assistant" })
 
 type TaskMessageWakeStatus = Extract<DispatchTaskLoopResult, "started" | "queued"> | "not_woken"
+type OperatorMessageWakeLabel = Extract<DispatchTaskLoopResult, "started" | "queued"> | "failed"
 
 export const TaskEmptyMessageError = NamedError.create(
   "TaskEmptyMessageError",
@@ -793,10 +794,7 @@ function latestPersistedSessionStatus(sessionID: string): SessionStatus.Info | u
   return parsed.success ? parsed.data : undefined
 }
 
-async function resolveOperatorSteerTarget(input: {
-  task: TaskRow
-  sessionID: string
-}): Promise<{
+async function resolveOperatorSteerTarget(input: { task: TaskRow; sessionID: string }): Promise<{
   session: Awaited<ReturnType<typeof Session.get>>
   agent: string
   goalID?: string
@@ -965,23 +963,65 @@ async function appendAndWakeTaskOperatorMessage(input: {
   const wakeTask = await openTaskForOperatorWake(task, "Operator message reopened task")
   await reopenActiveRunForOperatorWake(wakeTask, "Operator message reopened blocked run")
 
-  const dispatchResult = await dispatchTaskLoop({
-    taskID: input.taskID,
-    event: {
-      note: OrchestratorEventNote.operatorMessage({
-        text: input.text,
-        attachmentSummary: input.attachmentSummary,
-      }),
-      operatorMessage: {
-        text: input.text,
-        attachmentSummary: input.attachmentSummary,
-        source,
-        messageID: userMessage.info.id,
-      },
+  const event = {
+    note: OrchestratorEventNote.operatorMessage({
+      text: input.text,
+      attachmentSummary: input.attachmentSummary,
+    }),
+    operatorMessage: {
+      text: input.text,
+      attachmentSummary: input.attachmentSummary,
+      source,
+      messageID: userMessage.info.id,
     },
-  })
+  }
+  let acceptedWakeRecorded = false
+  let dispatchResult: DispatchTaskLoopResult
+  try {
+    dispatchResult = await dispatchTaskLoop({
+      taskID: input.taskID,
+      event,
+      beforeAcceptedWake: async ({ result }) => {
+        recordOperatorMessageWake({
+          taskID: input.taskID,
+          messageID: userMessage.info.id,
+          source,
+          wakeStatus: result,
+        })
+        acceptedWakeRecorded = true
+      },
+    })
+  } catch (error) {
+    recordOperatorMessageWake({
+      taskID: input.taskID,
+      messageID: userMessage.info.id,
+      source,
+      wakeStatus: "failed",
+      error,
+    })
+    throw error
+  }
   if (dispatchResult === "ignored") {
+    recordOperatorMessageWake({
+      taskID: input.taskID,
+      messageID: userMessage.info.id,
+      source,
+      wakeStatus: "failed",
+      error: new Error(`dispatchTaskLoop returned ignored for operator message ${userMessage.info.id}`),
+    })
     throw new Error(`Task ${input.taskID} operator message was recorded, but the orchestrator wake was ignored.`)
+  }
+  if (!acceptedWakeRecorded) {
+    recordOperatorMessageWake({
+      taskID: input.taskID,
+      messageID: userMessage.info.id,
+      source,
+      wakeStatus: "failed",
+      error: new Error(`dispatchTaskLoop returned ${dispatchResult} without accepting operator message wake`),
+    })
+    throw new Error(
+      `Task ${input.taskID} operator message ${userMessage.info.id} dispatch returned ${dispatchResult} without wake acceptance.`,
+    )
   }
 
   return {
@@ -990,6 +1030,47 @@ async function appendAndWakeTaskOperatorMessage(input: {
     resumed: dispatchResult === "started",
     wakeStatus: dispatchResult,
   }
+}
+
+function recordOperatorMessageWake(input: {
+  taskID: string
+  messageID: string
+  source: string
+  wakeStatus: OperatorMessageWakeLabel
+  error?: unknown
+}): void {
+  const now = Date.now()
+  const error =
+    input.error instanceof Error
+      ? { name: input.error.name, message: input.error.message }
+      : input.error === undefined
+        ? undefined
+        : { name: "Error", message: String(input.error) }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        acceptance_id: null,
+        kind: "operator_message_wake",
+        label: input.wakeStatus,
+        payload: {
+          task_id: input.taskID,
+          message_id: input.messageID,
+          source: input.source,
+          wake_status: input.wakeStatus,
+          time_recorded: now,
+          recorded_by_process_id: process.pid,
+          ...(error ? { error } : {}),
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
 }
 
 function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachments: readonly unknown[] = []) {

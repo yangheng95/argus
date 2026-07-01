@@ -8,7 +8,7 @@
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
  * Pipeline 以 build 做实现、以 visual_qa 做 frontend post-build review evidence，
- * 以 integrity 做 session-bound final review boundary。旧 host acceptance mechanism 已禁用，不再作为推荐 workflow 的验收步骤。
+ * 以 integrity 做 session-bound review report。旧 host acceptance mechanism 已禁用，不再作为推荐 workflow 的验收步骤。
  *
  * MiniWorkflow 不是状态机，不是固定 pipeline。Orchestrator 仍可基于 agent 推理偏离推荐
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
@@ -25,7 +25,6 @@ import {
   findActiveSpecForTask,
   findLatestFrontendResearchBriefArtifact,
   findLatestIntegrityAttemptArtifact,
-  integrityAttemptVerdict,
   findRuns,
   findTask,
   listGoals,
@@ -164,8 +163,8 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity；
- *  visual_qa 是所有 blocking build terminal 后、final acceptance 前的一次性前端视觉/产品审查证据；integrity 是 session-bound final review boundary：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity → orchestrator lifecycle decision；
+ *  visual_qa 是所有 blocking build terminal 后、最终调度决定前的一次性前端视觉/产品审查证据；integrity 是 session-bound review report：pass / non-pass 都只返回证据，完成与失败由编排器显式决定。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
@@ -248,7 +247,7 @@ const PIPELINE: MiniWorkflow = {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "所有 blocking build terminal 后、final acceptance 前的一次性 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
+      hint: "所有 blocking build terminal 后、最终调度决定前的一次性 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；优先做截图对比和逐屏截图分析，禁止用一次性整页截图 judge 当结论；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -257,7 +256,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "最终系统完整性 review boundary：在所有 blocking goal build 完成后调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass 完成任务；非 pass 返回可操作反馈，orchestrator 显式选择 modify_goal / build / architect / fail_task。",
+      hint: "系统完整性 review report：在所有 blocking goal build 完成后按证据需要调用。Integrity 在自己的 session 内审查 requirement mining、语义完整性、contract graph 与 delivered system。pass / non-pass 都只返回可操作报告，orchestrator 显式选择 complete_task / modify_goal / build / architect / propose_task / question / fail_task。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -390,9 +389,7 @@ function taskStepStatusByTool(
         specSnapshotID: activeSpec.id,
         phase: "post_build",
       })
-      const verdict = integrityAttemptVerdict(latest)
-      if (!verdict) return "pending"
-      return verdict === "pass" ? "completed" : "failed"
+      return latest ? "completed" : "pending"
     }
     case "visual_qa":
       return visualQaProjectedStatus(taskID)
@@ -563,10 +560,10 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   }
 
   lines.push("")
-  lines.push(
-    "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
-      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最终 review boundary 是 `integrity`；" +
-      "integrity pass 完成任务，非 pass 返回 session-bound review evidence，下一步由编排器基于证据决定。",
+    lines.push(
+      "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
+      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的 review report surface 是 `integrity`；" +
+      "integrity pass / non-pass 都只返回 session-bound review evidence，完成、修复、提问、拆 follow-up 或失败由编排器基于证据显式决定。",
   )
 
   return lines.join("\n")

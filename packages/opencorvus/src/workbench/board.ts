@@ -48,6 +48,7 @@ import { timelineOrderKey } from "@/timeline/order"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
+import { Project } from "@/project/project"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -200,11 +201,19 @@ function buildBoard(
   // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
   // Step status is projected fresh from DB rows each render (no FSM cache).
   const workflowFields = buildWorkflowFields(task, goals)
+  const project = Project.get(task.project_id)
 
   return {
     snapshotVersion,
     lastSequence,
     ...workflowFields,
+    project: project
+      ? {
+          id: project.id,
+          name: project.name,
+          worktree: project.worktree,
+        }
+      : undefined,
     spec: specSnapshot,
     task: viewTask(task, { directory }),
     plan: plan

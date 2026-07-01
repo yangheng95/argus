@@ -166,9 +166,9 @@ beforeEach(async () => {
   await resetDatabase()
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   projectID = `proj_sna_${stamp}`
-  taskID = `task_sna_${stamp}`
+  taskID = `tsk_sna_${stamp}`
   runID = `run_sna_${stamp}`
-  goalID = `goal_sna_${stamp}`
+  goalID = `gol_sna_${stamp}`
   seedBaseline()
 })
 
@@ -355,7 +355,9 @@ describe("Goal.startNewAttempt — options", () => {
       .filter((entry) => entry.goalID === goalID)
     expect(retryEntries).toHaveLength(1)
     expect(retryEntries[0]?.key).toBe(`build_retry_previous_${gr}`)
+    expect(retryEntries[0]?.value).toContain(`Previous goal_run ${gr} terminal error`)
     expect(retryEntries[0]?.value).toContain("merge_back conflict in IndustryCardListMTts.tsx")
+    expect(retryEntries[0]?.value).not.toContain("Terminal error: merge_back conflict")
   })
 
   test("ensureBuildRetryFeedbackForGoal writes retry feedback before prompt context is composed", () => {
@@ -384,6 +386,7 @@ describe("Goal.startNewAttempt — options", () => {
       .readByPhase("retry")
       .filter((entry) => entry.goalID === goalID)
     expect(retryEntries).toHaveLength(1)
+    expect(retryEntries[0]?.value).toContain(`Previous goal_run ${gr} terminal error`)
     expect(retryEntries[0]?.value).toContain("Merge left worktree in MERGING state")
     expect(retryEntries[0]?.value).toContain("merge_back hit conflicts on one file")
     expect(retryEntries[0]?.value).toContain("Resolve markers in the same worktree before retrying.")
@@ -402,6 +405,84 @@ describe("Goal.startNewAttempt — options", () => {
         .readByPhase("retry")
         .filter((entry) => entry.goalID === goalID),
     ).toHaveLength(1)
+  })
+
+  test("ensureBuildRetryFeedbackForGoal appends clarified retry feedback over old ambiguous text", () => {
+    const gr = `grun_retry_clarified_${Date.now()}`
+    insertGoalRun({ id: gr, status: "failed", error: "MCP server browser failed to connect: Not connected" })
+    const log = createDecisionLog(taskID)
+    log.append({
+      goalID,
+      phase: "retry",
+      key: `build_retry_previous_${gr}`,
+      value: "Terminal error: MCP server browser failed to connect: Not connected",
+      reason: "old ambiguous retry text",
+    })
+
+    const created = ensureBuildRetryFeedbackForGoal({
+      taskID,
+      goalID,
+      source: "test.retry_clarification",
+    })
+
+    expect(created).toBe(true)
+    const retryEntries = log.readByPhase("retry").filter((entry) => entry.goalID === goalID)
+    expect(retryEntries).toHaveLength(2)
+    const latest = log.readByKey(`build_retry_previous_${gr}`)
+    expect(latest?.value).toContain(`Previous goal_run ${gr} terminal error`)
+    expect(latest?.value).toContain("MCP server browser failed to connect: Not connected")
+    expect(latest?.value).not.toBe("Terminal error: MCP server browser failed to connect: Not connected")
+    expect(latest?.reason).toContain("supersedes decision_log")
+  })
+
+  test("ensureBuildRetryFeedbackForGoal preserves precise terminal retry evidence", () => {
+    const gr = `grun_retry_precise_${Date.now()}`
+    insertGoalRun({ id: gr, status: "failed", error: "prior build failed" })
+    const log = createDecisionLog(taskID)
+    const precise = "Terminal error: exact context overflow failure from persisted facts"
+    log.append({
+      goalID,
+      phase: "retry",
+      key: `build_retry_previous_${gr}`,
+      value: precise,
+      reason: "precise retry evidence",
+    })
+
+    const created = ensureBuildRetryFeedbackForGoal({
+      taskID,
+      goalID,
+      source: "test.retry_precise_preserve",
+    })
+
+    expect(created).toBe(false)
+    const retryEntries = log.readByPhase("retry").filter((entry) => entry.goalID === goalID)
+    expect(retryEntries).toHaveLength(1)
+    expect(log.readByKey(`build_retry_previous_${gr}`)?.value).toBe(precise)
+  })
+
+  test("ensureBuildRetryFeedbackForGoal preserves clarified precise retry evidence", () => {
+    const gr = `grun_retry_clarified_precise_${Date.now()}`
+    insertGoalRun({ id: gr, status: "failed", error: "prior build failed" })
+    const log = createDecisionLog(taskID)
+    const precise = `Previous goal_run ${gr} terminal error (status=failed): exact retry failure from persisted facts`
+    log.append({
+      goalID,
+      phase: "retry",
+      key: `build_retry_previous_${gr}`,
+      value: precise,
+      reason: "clarified precise retry evidence",
+    })
+
+    const created = ensureBuildRetryFeedbackForGoal({
+      taskID,
+      goalID,
+      source: "test.retry_clarified_precise_preserve",
+    })
+
+    expect(created).toBe(false)
+    const retryEntries = log.readByPhase("retry").filter((entry) => entry.goalID === goalID)
+    expect(retryEntries).toHaveLength(1)
+    expect(log.readByKey(`build_retry_previous_${gr}`)?.value).toBe(precise)
   })
 
   test("finalizeBuildAttempt preserves workspace branch when failed finalize omits it", () => {

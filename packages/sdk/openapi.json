@@ -28235,6 +28235,24 @@
                             "time"
                           ]
                         },
+                        "project": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "worktree": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "worktree"
+                          ]
+                        },
                         "spec": {
                           "type": "object",
                           "properties": {
@@ -32749,6 +32767,24 @@
                         "status",
                         "priority",
                         "time"
+                      ]
+                    },
+                    "project": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "worktree": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "worktree"
                       ]
                     },
                     "spec": {
@@ -49368,6 +49404,21 @@
           }
         ]
       },
+      "PartErrorIssue": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ]
+      },
       "FilePartSourceText": {
         "type": "object",
         "properties": {
@@ -49858,6 +49909,56 @@
               "text"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string"
+              },
+              "orderKey": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "part-error"
+              },
+              "title": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PartErrorIssue"
+                }
+              },
+              "originalType": {
+                "type": "string"
+              },
+              "originalTool": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "sessionID",
+              "messageID",
+              "orderKey",
+              "type",
+              "title",
+              "message",
+              "issues"
+            ]
           },
           {
             "type": "object",
@@ -50511,6 +50612,54 @@
         ],
         "additionalProperties": false
       },
+      "PartErrorPart": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "messageID": {
+            "type": "string"
+          },
+          "orderKey": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "part-error"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartErrorIssue"
+            }
+          },
+          "originalType": {
+            "type": "string"
+          },
+          "originalTool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "messageID",
+          "type",
+          "title",
+          "message",
+          "issues"
+        ]
+      },
       "SubtaskPart": {
         "type": "object",
         "properties": {
@@ -50956,6 +51105,9 @@
         "anyOf": [
           {
             "$ref": "#/components/schemas/TextPart"
+          },
+          {
+            "$ref": "#/components/schemas/PartErrorPart"
           },
           {
             "$ref": "#/components/schemas/SubtaskPart"

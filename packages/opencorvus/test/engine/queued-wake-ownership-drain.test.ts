@@ -640,7 +640,7 @@ describe("queued wake ownership drain", () => {
     })
   })
 
-  test("operator message wakes queued behind live ownership drain in order", async () => {
+  test("operator message wakes start immediately while live ownership remains active", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -666,7 +666,7 @@ describe("queued wake ownership drain", () => {
               project_id: Instance.project.id,
               source: "test",
               title: "operator wake queue task",
-              request: "operator messages must remain ordered behind live ownership",
+              request: "operator messages must wake the root immediately while live ownership remains active",
               priority: "normal",
               time_started: now,
               time_created: now,
@@ -683,7 +683,7 @@ describe("queued wake ownership drain", () => {
               task_id: taskID,
               title: "Live goal",
               slug: "live-goal",
-              objective: "Prove queued operator messages drain in order.",
+              objective: "Prove operator messages do not wait for live ownership to clear.",
               acceptance_specs: [],
               owned_paths: [],
               depends_on: [],
@@ -733,7 +733,7 @@ describe("queued wake ownership drain", () => {
           event: {
             note: "first operator message",
             operatorMessage: {
-              text: "first queued operator message",
+              text: "first immediate operator message",
               source: "api_message",
               messageID: `msg_operator_first_${now}`,
             },
@@ -744,36 +744,22 @@ describe("queued wake ownership drain", () => {
           event: {
             note: "second operator message",
             operatorMessage: {
-              text: "second queued operator message",
+              text: "second immediate operator message",
               source: "api_message",
               messageID: `msg_operator_second_${now}`,
             },
           },
         })
-        expect(first).toBe("queued")
-        expect(second).toBe("queued")
-        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 2 })
-
-        release!()
-        await holdLoop
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 2 })
-
-        completeOrchestratorToolOwnership({
-          taskID,
-          ownershipID: ownershipPayload.ownership_id,
-          outcome: "completed",
-          now: now + 1,
-        })
+        expect(first).toBe("started")
+        expect(second).toBe("started")
         await waitForMockCalls(runTaskLoop, 3)
-
         expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0, events: 0 })
+        expect(queuedOperatorWakeLabels(taskID)).toEqual([])
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
           event: {
             operatorMessage: {
-              text: "first queued operator message",
+              text: "first immediate operator message",
               messageID: `msg_operator_first_${now}`,
             },
           },
@@ -782,11 +768,27 @@ describe("queued wake ownership drain", () => {
           taskID,
           event: {
             operatorMessage: {
-              text: "second queued operator message",
+              text: "second immediate operator message",
               messageID: `msg_operator_second_${now}`,
             },
           },
         })
+
+        release!()
+        await holdLoop
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(3)
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0, events: 0 })
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(3)
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0, events: 0 })
       },
     })
   })

@@ -3383,7 +3383,7 @@ describe("task conversation routes", () => {
 
   test("GET /task/:taskID/conversation hydrates transcript from the task project, not the request directory", async () => {
     await using taskProject = await tmpdir({ git: true })
-    await using selectedProject = await tmpdir({ git: true })
+    await using selectedProject = await tmpdir()
 
     const app = Server.App()
     const ids = await Instance.provide({
@@ -3472,6 +3472,121 @@ describe("task conversation routes", () => {
         placement: "top_level",
       }),
     )
+  })
+
+  test("GET /task/:taskID/conversation returns visible diagnostics for corrupt persisted parts", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "corrupt part hydrate root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "corrupt part build",
+        })
+        const now = Date.now()
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "corrupt part hydrate task",
+              request: "corrupt part hydrate task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const messageID = Identifier.ascending("message")
+        const partID = Identifier.ascending("part")
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: build.id,
+          role: "assistant",
+          time: { created: now + 1, completed: now + 2 },
+          parentID: "",
+          modelID: "agent",
+          providerID: "agent",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            total: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+
+        Database.use((db) =>
+          db
+            .insert(PartTable)
+            .values({
+              id: partID,
+              message_id: messageID,
+              session_id: build.id,
+              time_created: now + 1,
+              time_updated: now + 2,
+              data: {
+                type: "tool",
+                tool: "browser_preview",
+                callID: "call_corrupt_browser_preview",
+                state: {
+                  status: "error",
+                  input: {},
+                  failure: {
+                    kind: "tool-execute-error",
+                    name: "tool-execution",
+                    message: "Server shutdown: http.shutdown",
+                    originSite: "engine.writer.abort-open-tool-parts",
+                    classification: "tool-execution",
+                  },
+                  time: { start: now + 2, end: now + 2 },
+                },
+              } as any,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/conversation?tail_limit=8`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        const responseText = await response.text()
+        expect({ status: response.status, body: responseText }).toMatchObject({ status: 200 })
+        const body = JSON.parse(responseText) as {
+          transcript?: Array<{ info?: { id?: string }; parts?: any[] }>
+          view?: { messages?: Array<{ messageID?: string }> }
+        }
+        const hydrated = body.transcript?.find((message) => message.info?.id === messageID)
+        expect(hydrated?.parts?.[0]).toMatchObject({
+          id: partID,
+          type: "part-error",
+          originalType: "tool",
+          originalTool: "browser_preview",
+        })
+        expect(String(hydrated?.parts?.[0]?.message || "")).toContain(
+          `Persisted part ${partID} violates Message.VisiblePart`,
+        )
+        expect(body.view?.messages?.some((message) => message.messageID === messageID)).toBe(true)
+      },
+    })
   })
 
   test("GET /task/:taskID/conversation hydrates a stale record after the project directory is deleted", async () => {
@@ -4052,6 +4167,7 @@ describe("task conversation routes", () => {
         if (part?.type !== "text") throw new Error("expected text part")
         expect(part.metadata?.overlay_direct_reply).toBe(true)
         expect(part.text).toBe("请把验收标准补充得更具体")
+        await SessionPrompt.waitForFinish(requirements.id)
       },
     })
   })

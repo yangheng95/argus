@@ -8,6 +8,7 @@ import {
   queuedTaskEventStats,
   reorderQueuedTasksForCwd,
   taskCwd,
+  waitForQueueCompletionHooksForTest,
 } from "../../src/engine/queue"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { processOwner } from "../../src/engine/lease"
@@ -78,25 +79,33 @@ import { Orchestrator } from "../../src/orchestrator/agent"
 import { Database, eq } from "../../src/storage/db"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
-import { resetDatabase } from "../fixture/db"
+import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { expectNoProcessErrors } from "../fixture/process-errors"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+const ENGINE_QUEUE_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
+
 describe("engine queue", () => {
-  afterEach(async () => {
-    mock.restore()
-    await resetDatabase()
-  })
+  afterEach(
+    async () => {
+      await waitForQueueCompletionHooksForTest()
+      mock.restore()
+      await resetDatabase()
+    },
+    { timeout: ENGINE_QUEUE_TEST_TIMEOUT_MS },
+  )
 
   test("loop completion finally promise is observed", async () => {
     const source = await Bun.file(new URL("../../src/engine/queue.ts", import.meta.url)).text()
     const attach = source.slice(source.indexOf("function attachLoopCompletion"))
-    expect(attach).toContain("void loopPromise")
-    expect(attach).toContain(".finally(() => {")
+    expect(attach).toContain("const completionHook = loopPromise")
+    expect(attach).toContain(".finally(async () => {")
     expect(attach).toContain(".catch((err) => {")
-    expect(attach.indexOf(".finally(() => {")).toBeLessThan(attach.indexOf(".catch((err) => {"))
+    expect(attach).toContain("loopCompletionHooksForTest.add(completionHook)")
+    expect(attach).toContain("completionHook.finally(() => {")
+    expect(attach.indexOf(".finally(async () => {")).toBeLessThan(attach.indexOf(".catch((err) => {"))
   })
 
   test("background dispatch contains database unavailable rejection", async () => {
@@ -154,6 +163,73 @@ describe("engine queue", () => {
           event: { note: "caller-supplied note" },
         })
         expect(taskStatus(taskID)).toBe("active")
+      },
+    })
+  })
+
+  test("operator message active re-entry records a started wake commitment", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "operator started task" })
+        await seedRootSession(root.id)
+        const now = Date.now()
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "operator started task",
+              request: "operator started task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const result = await EngineService.handleTaskMessage(taskID, {
+          text: "马上重新看当前要求。",
+          source: "panel",
+        })
+        await waitForMockCalls(runTaskLoop, 1)
+
+        expect(result).toMatchObject({
+          wake_status: "started",
+          should_resume: true,
+        })
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            operatorMessage: {
+              text: "马上重新看当前要求。",
+              source: "panel",
+              messageID: result.user_message.info.id,
+            },
+          },
+        })
+        const wakeRows = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+        ).filter((row) => row.kind === "operator_message_wake")
+        expect(wakeRows).toHaveLength(1)
+        expect(wakeRows[0]).toMatchObject({
+          label: "started",
+          payload: {
+            task_id: taskID,
+            message_id: result.user_message.info.id,
+            source: "panel",
+            wake_status: "started",
+          },
+        })
       },
     })
   })
@@ -1396,9 +1472,18 @@ describe("engine queue", () => {
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(result).toBe("queued")
+        expect(result).toBe("started")
         expect(interruptTaskLoop).not.toHaveBeenCalled()
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            operatorMessage: {
+              text: "re-evaluate the active build evidence",
+              source: "panel",
+            },
+          },
+        })
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(2)
         for (const owner of owners) {
           expect(findGoalRun(owner.goalRunID)?.status).toBe("running")
@@ -1518,7 +1603,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("task message response reports queued wake while live ownership blocks scheduler start", async () => {
+  test("task message response starts immediate root wake while live ownership remains running", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -1538,8 +1623,8 @@ describe("engine queue", () => {
               project_id: Instance.project.id,
               session_id: root.id,
               source: "test",
-              title: "task message queued behind live owner",
-              request: "operator task message must not pretend the scheduler already ran",
+              title: "task message immediate wake with live owner",
+              request: "operator task message must wake the root without cancelling live ownership",
               priority: "normal",
               time_started: now,
               time_created: now,
@@ -1606,21 +1691,13 @@ describe("engine queue", () => {
 
         expect(result).toMatchObject({
           kind: "note",
-          message: "Operator note recorded. Task wake queued behind active agent ownership.",
-          wake_status: "queued",
-          should_resume: false,
+          message: "Operator note recorded. Task wake dispatched.",
+          wake_status: "started",
+          should_resume: true,
         })
-        expect(runTaskLoop).not.toHaveBeenCalled()
-        const pendingWakeRows = Database.use((db) =>
-          db
-            .select({ label: EngineArtifactTable.label, payload: EngineArtifactTable.payload })
-            .from(EngineArtifactTable)
-            .where(eq(EngineArtifactTable.task_id, taskID))
-            .all()
-            .filter((row) => row.label === "pending" && (row.payload as { event?: unknown }).event),
-        )
-        expect(pendingWakeRows).toHaveLength(1)
-        expect(pendingWakeRows[0]?.payload).toMatchObject({
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
           event: {
             operatorMessage: {
               text: "改成手机版布局 html",
@@ -1629,6 +1706,30 @@ describe("engine queue", () => {
             },
           },
         })
+        const pendingWakeRows = Database.use((db) =>
+          db
+            .select({ label: EngineArtifactTable.label, payload: EngineArtifactTable.payload })
+            .from(EngineArtifactTable)
+            .where(eq(EngineArtifactTable.task_id, taskID))
+            .all()
+            .filter((row) => row.label === "pending" && (row.payload as { event?: unknown }).event),
+        )
+        expect(pendingWakeRows).toHaveLength(0)
+        const wakeCommitments = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+        ).filter((row) => row.kind === "operator_message_wake")
+        expect(wakeCommitments).toHaveLength(1)
+        expect(wakeCommitments[0]).toMatchObject({
+          label: "started",
+          payload: {
+            task_id: taskID,
+            message_id: result.user_message.info.id,
+            source: "panel",
+            wake_status: "started",
+          },
+        })
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
 
         const messages = await Session.messages({ sessionID: root.id })
         expect(messages[messages.length - 1]?.info.id).toBe(result.user_message.info.id)
@@ -1643,17 +1744,8 @@ describe("engine queue", () => {
           outcome: "completed",
           now: now + 1,
         })
-        await waitForMockCalls(runTaskLoop, 1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
-          taskID,
-          event: {
-            operatorMessage: {
-              text: "改成手机版布局 html",
-              source: "panel",
-              messageID: result.user_message.info.id,
-            },
-          },
-        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   })

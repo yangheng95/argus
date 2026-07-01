@@ -10,7 +10,7 @@ describe("visual-qa final blocker-based acceptance", () => {
   test("core prompt scopes reference parity to explicit task evidence", () => {
     const normalized = VISUAL_QA_CORE.replace(/\s+/g, " ")
 
-    expect(normalized).toContain("final visual GUI and functional product-review agent")
+    expect(normalized).toContain("visual GUI and functional product-review agent")
     expect(normalized).toContain("Run once near task completion")
     expect(normalized).toContain(
       "Reference parity is in scope only when the task, goal, or acceptance evidence explicitly requires it",
@@ -84,7 +84,7 @@ describe("visual-qa final blocker-based acceptance", () => {
       reason: "Need strict reference comparison.",
     })
 
-    expect(prompt).toContain("final frontend visual GUI and functional product review")
+    expect(prompt).toContain("frontend visual GUI and functional product review")
     expect(prompt).toContain("Reference/clone fidelity is in scope only when")
     expect(prompt).toContain("professional product designer and design QA reviewer")
     expect(prompt).toContain("Do not chase visual scores or external judge verdicts")

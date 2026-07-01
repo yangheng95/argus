@@ -254,7 +254,7 @@ test("visible message.part.updated bus events reject missing part orderKey", asy
   })
 })
 
-test("persisted pending tool parts require backend start time before transcript reads", async () => {
+test("corrupt persisted part rows surface as visible part-error diagnostics", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -306,9 +306,25 @@ test("persisted pending tool parts require backend start time before transcript 
           .run()
       })
 
-      await expect(Session.messages({ sessionID: session.id })).rejects.toThrow(
-        /persisted part .* violates Message\.VisiblePart: state\.time/,
-      )
+      const messages = await Session.messages({ sessionID: session.id })
+      expect(messages).toHaveLength(1)
+      const part = messages[0].parts[0]
+      expect(part.type).toBe("part-error")
+      if (part.type !== "part-error") throw new Error("expected part-error")
+      expect(part.id).toBe(partID)
+      expect(part.sessionID).toBe(session.id)
+      expect(part.messageID).toBe(messageID)
+      expect(part.orderKey).toContain(`part:${partID}`)
+      expect(part.originalType).toBe("tool")
+      expect(part.originalTool).toBe("register_decision")
+      expect(part.message).toContain(`Persisted part ${partID} violates Message.VisiblePart`)
+      expect(part.issues.some((issue) => issue.path.startsWith("state.time"))).toBe(true)
+
+      const directParts = await Message.parts(messageID)
+      expect(directParts[0]).toEqual(part)
+
+      const latest = await Message.latestAcrossSessions({ sessionIDs: [session.id], limit: 4 })
+      expect(latest[0].parts[0]).toEqual(part)
     },
   })
 })

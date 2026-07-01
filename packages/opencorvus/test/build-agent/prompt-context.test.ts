@@ -19,12 +19,40 @@ describe("build agent prompt context", () => {
 
     expect(prompt).toContain("## Acceptance Repair Overlay")
     expect(prompt).toContain("review:contract_audit")
+    expect(prompt).not.toContain("Visual Quality Assurance (QA)")
+    expect(prompt).not.toContain("problem_dom_regions")
+    expect(prompt).not.toContain("Canonical acceptance feedback packet")
+    expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
+  })
+
+  test("request-path build receives failed Visual QA feedback as a first-class repair overlay", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Repair the page after visual QA.",
+      },
+      {
+        visualQaFeedback:
+          "Latest failed Visual QA report for Build repair.\n" +
+          "production_blockers: 1\n" +
+          "problem_dom_regions: 1\n" +
+          "- dom-hero-tabs region=hero navigation boundary\n" +
+          '  locator: main [data-testid="hero-tabs"]\n' +
+          "  computed_style: display=flex; overflow=hidden; margin-top=-32px\n" +
+          "  code_search_terms: hero-tabs, market-hero, is-clipped",
+      },
+    )
+
+    expect(prompt).toContain("## Visual QA Repair Overlay")
+    expect(prompt).toContain("Visual Quality Assurance (QA)")
     expect(prompt).toContain("problem_dom_regions")
     expect(prompt).toContain("Document Object Model (DOM)")
     expect(prompt).toContain("code-search terms")
     expect(prompt).toContain("fresh screenshot or comparison evidence")
-    expect(prompt).not.toContain("Canonical acceptance feedback packet")
-    expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
+    expect(prompt).toContain('locator: main [data-testid="hero-tabs"]')
+    expect(prompt).toContain("code_search_terms: hero-tabs, market-hero, is-clipped")
+    expect(prompt.indexOf("## Visual QA Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
+    expect(prompt).not.toContain("## Acceptance Repair Overlay")
   })
 
   test("goal-path build receives canonical acceptance feedback separately from retry summary", () => {
@@ -50,6 +78,43 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("contract_audit_failure")
     expect(prompt).not.toContain("Raw verdict artifact JSON")
     expect(prompt.indexOf("Scoped acceptance rejection")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
+  })
+
+  test("goal-path build receives Visual QA feedback separately from acceptance feedback", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_market_tabs",
+        title: "Market tabs",
+        objective: "Repair the market tabs visual structure.",
+        requirement_ids: [],
+        acceptance_specs: ["tabs match visual reference"],
+        owned_paths: ["src/components/MarketTabs.tsx"],
+        depends_on: [],
+      },
+      {
+        retryFeedback: "Old coordinator summary.",
+        visualQaFeedback:
+          "Latest failed Visual QA report for Build repair.\n" +
+          "Production blockers:\n" +
+          "- blocker-tabs region=market tabs required_correction=Restore tab spacing evidence_refs=screenshot://tabs.png\n" +
+          "Problem DOM Regions:\n" +
+          "- dom-tabs region=market tabs\n" +
+          "  code_search_terms: MarketTabs, tab-row",
+        acceptanceFeedback: "Scoped acceptance rejection: visual reference artifact missing.",
+      },
+    )
+
+    expect(prompt).toContain("Old coordinator summary.")
+    expect(prompt).toContain("## Visual QA Repair Overlay")
+    expect(prompt).toContain("blocker-tabs")
+    expect(prompt).toContain("code_search_terms: MarketTabs, tab-row")
+    expect(prompt).toContain("## Acceptance Repair Overlay")
+    expect(prompt).toContain("visual reference artifact missing")
+    expect(prompt.indexOf("## Visual QA Repair Overlay")).toBeLessThan(
+      prompt.indexOf("## Acceptance Repair Overlay"),
+    )
+    expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Goal: Market tabs"))
   })
 
   /**
@@ -260,6 +325,7 @@ describe("build agent prompt context", () => {
           "## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)\n\n" +
           "- **BF-retry**: retry still lacks storage validation.",
         retryFeedback: "Prior attempt failed.",
+        visualQaFeedback: "Latest failed Visual QA report for Build repair.\nproblem_dom_regions: 1",
         acceptanceFeedback: "Acceptance rejected.",
       },
     )
@@ -267,11 +333,17 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Prior attempt failed.")
     expect(prompt).toContain("## Persistent Integrity Findings")
     expect(prompt).toContain("BF-retry")
+    expect(prompt).toContain("Latest failed Visual QA report")
+    expect(prompt).toContain("problem_dom_regions: 1")
     expect(prompt).toContain("Acceptance rejected.")
     expect(prompt.indexOf("Prior attempt failed.")).toBeLessThan(prompt.indexOf("## Persistent Integrity Findings"))
-    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(prompt.indexOf("Acceptance rejected."))
+    expect(prompt.indexOf("## Persistent Integrity Findings")).toBeLessThan(
+      prompt.indexOf("Latest failed Visual QA report"),
+    )
+    expect(prompt.indexOf("Latest failed Visual QA report")).toBeLessThan(prompt.indexOf("Acceptance rejected."))
     expect(prompt).not.toContain("## Task-Specific Build Overlays")
     expect(prompt).not.toContain("## Prior Attempt Failure Facts")
+    expect(prompt).not.toContain("## Visual QA Repair Overlay")
     expect(prompt).not.toContain("## Acceptance Repair Overlay")
     expect(prompt).not.toContain("## Required Fix")
     expect(prompt).not.toContain("## Instructions")

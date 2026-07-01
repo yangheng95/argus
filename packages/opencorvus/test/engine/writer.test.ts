@@ -10,6 +10,8 @@ import { abortLiveExecutionForTask, cleanupGoalWorkspaceForGoal } from "../../sr
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { ProcessSupervisor } from "../../src/shell/process-supervisor"
+import { PassThrough } from "stream"
 
 const WRITER_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
@@ -111,6 +113,117 @@ describe("engine writer goal workspace cleanup", () => {
         expect(await Filesystem.exists(worktree.directory)).toBe(false)
         expect(findGoalLatestWorkspace(goalID).directory).toBeNull()
         expect(findGoalLatestWorkspace(goalID).branch).toBeNull()
+      },
+    })
+  })
+
+  test("cleanupGoalWorkspaceForGoal disposes live supervised processes before removing a completed goal worktree", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const projectID = Instance.project.id
+        const taskID = `task_writer_process_${now}`
+        const goalID = `goal_writer_process_${now}`
+
+        Database.transaction((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Writer Test",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoNothing()
+            .run()
+
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "writer cleanup process task",
+              request: "cleanup workspace process",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "cleanup process goal",
+              slug: "cleanup-process-goal",
+              objective: "verify process quiescence before cleanup",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "completed",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const worktree = await Worktree.create({ name: `writer-process-${now.toString(36)}` })
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          workspaceDir: worktree.directory,
+          workspaceBranch: worktree.branch,
+          status: "completed",
+          now,
+        })
+
+        let disposeCalls = 0
+        const restore = ProcessSupervisor.setFactoryForTest(async () => {
+          let disposed = false
+          return {
+            pid: 31_000,
+            stdin: null,
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+            exited: new Promise<number>(() => {}),
+            terminate: async () => {},
+            dispose: async () => {
+              if (disposed) return
+              disposed = true
+              disposeCalls++
+            },
+            unref: () => {},
+          }
+        })
+        let handle: ProcessSupervisor.Handle | undefined
+        try {
+          handle = await ProcessSupervisor.spawnShell({
+            command: "serve",
+            shell: "sh",
+            cwd: worktree.directory,
+          })
+
+          const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
+
+          expect(cleaned).toBe(true)
+          expect(disposeCalls).toBe(1)
+          expect(await Filesystem.exists(worktree.directory)).toBe(false)
+          expect(findGoalLatestWorkspace(goalID).directory).toBeNull()
+          expect(findGoalLatestWorkspace(goalID).branch).toBeNull()
+        } finally {
+          await handle?.dispose().catch(() => {})
+          restore()
+        }
       },
     })
   })
