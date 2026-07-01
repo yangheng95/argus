@@ -20,12 +20,33 @@ import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+const DEFAULT_VISUAL_QA_CHECK_ID = "check_dashboard_desktop"
+
+function visualQaCheckItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: DEFAULT_VISUAL_QA_CHECK_ID,
+    category: "reference-structure",
+    question: "Does the dashboard desktop surface match the accepted visual requirements?",
+    region: "dashboard",
+    status: "passed",
+    expected: "Dashboard desktop surface is visually complete and supported by fresh screenshot evidence.",
+    observed: "Dashboard desktop surface was checked with a fresh screenshot.",
+    viewports: [{ width: 1440, height: 900 }],
+    states: ["default"],
+    source_refs: ["visual_qa"],
+    evidence_refs: ["artifacts/dashboard.png"],
+    ...overrides,
+  }
+}
+
 function visualQaReport(overrides: Record<string, unknown> = {}) {
   return {
     accepted: true,
     summary: "Visual QA report accepted.",
+    check_items: [visualQaCheckItem()],
     coverage: [
       {
+        check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
         region: "dashboard",
         viewports: [{ width: 1440, height: 900 }],
         states: ["default"],
@@ -40,6 +61,7 @@ function visualQaReport(overrides: Record<string, unknown> = {}) {
     repairs: [],
     evidence: [
       {
+        check_ids: [DEFAULT_VISUAL_QA_CHECK_ID],
         type: "screenshot",
         ref: "artifacts/dashboard.png",
         viewport: { width: 1440, height: 900 },
@@ -489,44 +511,11 @@ describe("pipeline workflow review topology", () => {
       phase: "visual_qa",
       key: "report_1",
       value: JSON.stringify(
-        visualQaDecisionRecord({
-          accepted: true,
-          summary: "Full visual QA report accepted.",
-          coverage: [
-            {
-              region: "dashboard",
-              viewports: [{ width: 1440, height: 900 }],
-              states: ["default"],
-              source_refs: ["visual_qa"],
-              evidence_refs: ["artifacts/dashboard.png"],
-              notes: "Checked the dashboard surface.",
-            },
-          ],
-          findings: [],
-          production_blockers: [],
-          unresolved_code_module_problems: [],
-          repairs: [],
-          evidence: [
-            {
-              type: "screenshot",
-              ref: "artifacts/dashboard.png",
-              viewport: { width: 1440, height: 900 },
-              state: "default",
-              note: "Fresh visual QA screenshot.",
-            },
-          ],
-          reference_parity: {
-            required: false,
-            required_regions: [],
-            reference_comparison_evidence_refs: [],
-            missing_regions: [],
-            blocker_ids: [],
-          },
-          commands: [],
-          changed_files: [],
-          open_questions: [],
-          fact_check_items: [],
-        }),
+        visualQaDecisionRecord(
+          visualQaReport({
+            summary: "Full visual QA report accepted.",
+          }),
+        ),
       ),
       reason: "Dedicated frontend GUI and functional QA report.",
     })
