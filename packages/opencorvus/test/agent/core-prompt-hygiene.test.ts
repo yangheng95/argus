@@ -1097,16 +1097,23 @@ describe("core prompt hygiene", () => {
 
   test("orchestrator prompt does not rerun successful requirements before architect", async () => {
     const text = await readPrompt("orchestrator")
+    const toolsSource = await readSource("orchestrator/tools.ts")
     const normalized = text.replace(/\s+/g, " ")
+    const toolsNormalized = toolsSource.replace(/\s+/g, " ")
     expect(normalized).toContain("After a successful `requirements` result, call `architect` next")
-    expect(normalized).toContain("Do not call `requirements` again unless an operator message changed scope")
     expect(normalized).toContain(
-      "concrete task evidence proves the active REQ snapshot is invalid before execution has begun",
+      "Before any execution has begun, call `requirements` again only when a real operator message changed scope",
     )
-    expect(normalized).toContain("If execution has begun and the REQ snapshot is fundamentally wrong")
+    expect(normalized).toContain("Once any goal/build execution has begun, never call `requirements` again in this task")
     expect(normalized).toContain(
-      "use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place",
+      "when the active REQ snapshot omitted load-bearing request constraints, use `propose_task`",
     )
+    expect(normalized).toContain("Do not label the next goal stale and restart requirements")
+    expect(normalized).not.toContain("Do not call `requirements` again unless an operator message changed scope")
+    expect(toolsNormalized).toContain(
+      "Once any goal/build execution has begun, never rerun `requirements` in this task",
+    )
+    expect(toolsNormalized).toContain("active REQ snapshot omitted load-bearing request constraints")
   })
 
   test("orchestrator prompt routes non-pass integrity fixes through explicit repair", async () => {

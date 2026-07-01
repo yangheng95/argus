@@ -385,7 +385,7 @@ contract.
   workflow step or final document writer.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
-- After a successful `requirements` result, call `architect` next. Do not call `requirements` again unless an operator message changed scope, or concrete task evidence proves the active REQ snapshot is invalid before execution has begun. If execution has begun and the REQ snapshot is fundamentally wrong, use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place.
+- After a successful `requirements` result, call `architect` next. Before any execution has begun, call `requirements` again only when a real operator message changed scope or concrete task evidence proves the active REQ snapshot is invalid. Once any goal/build execution has begun, never call `requirements` again in this task: handle point corrections with `modify_goal`, `add_goal`, or targeted `build`; when the active REQ snapshot omitted load-bearing request constraints, use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place. Do not label the next goal stale and restart requirements.
 - `architect`: produce or repair the executable goal graph and graph contracts.
 - `workload_analysis`: optional read-only goal-sizing reviewer after `architect`,
   before `build`. Deep-reads the full template; per goal emits a workload brief

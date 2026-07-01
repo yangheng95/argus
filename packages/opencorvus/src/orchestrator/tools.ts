@@ -7321,8 +7321,8 @@ export function createOrchestratorTools(input: {
         "guess.\n" +
         "SKIP WHEN: a previous `requirements` result already succeeded and the active " +
         "spec snapshot still matches the current user scope; call `architect` next. " +
-        "Only rerun after an operator scope change or concrete evidence that the active REQ snapshot is invalid. " +
-        "If the workflow contract is fundamentally wrong after execution has begun, create a separate inheriting workflow task with `propose_task` instead of rerunning earlier stages in place.\n" +
+        "Before any execution has begun, rerun only after an operator scope change or concrete evidence that the active REQ snapshot is invalid. " +
+        "Once any goal/build execution has begun, never rerun `requirements` in this task; repair point issues with goal/build tools or create a separate inheriting workflow task with `propose_task` when the active REQ snapshot omitted load-bearing request constraints.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and integrity has enough " +
         "signal in the request and build evidence to verify. Frontend evidence tools are available candidates when the full task context " +
