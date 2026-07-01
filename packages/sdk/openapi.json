@@ -55128,6 +55128,15 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "checkIDs": {
+                            "description": "Registered Integrity check item IDs that support this review row.",
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
                           "kind": {
                             "description": "Evidence tool or inspection category.",
                             "type": "string",
@@ -55150,6 +55159,7 @@
                           }
                         },
                         "required": [
+                          "checkIDs",
                           "kind",
                           "target",
                           "purpose",
@@ -55164,6 +55174,15 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "checkIDs": {
+                            "description": "Registered Integrity check item IDs that support this review row.",
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
                           "requirementID": {
                             "description": "Singular coverage anchor such as REQ-1. Do not use requirementIDs here.",
                             "type": "string",
@@ -55194,6 +55213,7 @@
                           }
                         },
                         "required": [
+                          "checkIDs",
                           "status",
                           "evidence"
                         ],
@@ -55204,22 +55224,10 @@
                       "default": [],
                       "type": "array",
                       "items": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    },
-                    "findings": {
-                      "default": [],
-                      "type": "array",
-                      "items": {
                         "type": "object",
                         "properties": {
-                          "id": {
-                            "type": "string",
-                            "minLength": 1
-                          },
                           "checkIDs": {
-                            "description": "Registered Integrity check item IDs that exposed this finding.",
+                            "description": "Registered Integrity check item IDs that support this review row.",
                             "minItems": 1,
                             "type": "array",
                             "items": {
@@ -55227,147 +55235,14 @@
                               "minLength": 1
                             }
                           },
-                          "severity": {
-                            "type": "string",
-                            "enum": [
-                              "blocking",
-                              "advisory"
-                            ]
-                          },
-                          "verdictImpact": {
-                            "type": "string",
-                            "enum": [
-                              "pass",
-                              "concerns",
-                              "needs_correction"
-                            ]
-                          },
-                          "fingerprint": {
+                          "note": {
                             "type": "string",
                             "minLength": 1
-                          },
-                          "canonicalSymptom": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "title": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "description": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "evidence": {
-                            "minItems": 1,
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "targetIDs": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "requirementIDs": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "specIDs": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "userRequestQuotes": {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "filePaths": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "affectedSymbols": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "repair": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "verify": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "sourceFindingIDs": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "priorAttemptRefs": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "reviewers": {
-                            "default": [],
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "minLength": 1
-                            }
-                          },
-                          "consensus": {
-                            "default": "agreed",
-                            "type": "string",
-                            "enum": [
-                              "agreed",
-                              "disputed",
-                              "unresolved"
-                            ]
                           }
                         },
                         "required": [
-                          "id",
                           "checkIDs",
-                          "severity",
-                          "verdictImpact",
-                          "title",
-                          "description",
-                          "evidence",
-                          "repair"
+                          "note"
                         ],
                         "additionalProperties": false
                       }

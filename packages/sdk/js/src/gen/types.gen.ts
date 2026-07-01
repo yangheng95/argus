@@ -3345,6 +3345,10 @@ export type EventIntegrityReviewCompleted = {
       }
       drilldowns?: Array<{
         /**
+         * Registered Integrity check item IDs that support this review row.
+         */
+        checkIDs: Array<string>
+        /**
          * Evidence tool or inspection category.
          */
         kind: string
@@ -3363,6 +3367,10 @@ export type EventIntegrityReviewCompleted = {
       }>
       coverage?: Array<{
         /**
+         * Registered Integrity check item IDs that support this review row.
+         */
+        checkIDs: Array<string>
+        /**
          * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
          */
         requirementID?: string
@@ -3380,32 +3388,12 @@ export type EventIntegrityReviewCompleted = {
         status: "covered" | "missing" | "inconclusive"
         evidence: string
       }>
-      evidence?: Array<string>
-      findings?: Array<{
-        id: string
+      evidence?: Array<{
         /**
-         * Registered Integrity check item IDs that exposed this finding.
+         * Registered Integrity check item IDs that support this review row.
          */
         checkIDs: Array<string>
-        severity: "blocking" | "advisory"
-        verdictImpact: "pass" | "concerns" | "needs_correction"
-        fingerprint?: string
-        canonicalSymptom?: string
-        title: string
-        description: string
-        evidence: Array<string>
-        targetIDs?: Array<string>
-        requirementIDs?: Array<string>
-        specIDs?: Array<string>
-        userRequestQuotes?: Array<string>
-        filePaths?: Array<string>
-        affectedSymbols?: Array<string>
-        repair: string
-        verify?: Array<string>
-        sourceFindingIDs?: Array<string>
-        priorAttemptRefs?: Array<string>
-        reviewers?: Array<string>
-        consensus?: "agreed" | "disputed" | "unresolved"
+        note: string
       }>
       openQuestions?: Array<string>
     }>
