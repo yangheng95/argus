@@ -7,6 +7,8 @@ export type IntegrityVerdict = z.infer<typeof IntegrityVerdictSchema>
 export const IntegrityCoverageStatusValues = ["covered", "missing", "inconclusive"] as const
 export const IntegrityCoverageStatusSchema = z.enum(IntegrityCoverageStatusValues)
 export type IntegrityCoverageStatus = z.infer<typeof IntegrityCoverageStatusSchema>
+export const IntegrityCheckItemStatusSchema = z.enum(["passed", "failed", "inconclusive"])
+export type IntegrityCheckItemStatus = z.infer<typeof IntegrityCheckItemStatusSchema>
 
 export const IntegrityReviewerPlanSchema = z
   .object({
@@ -55,9 +57,33 @@ export const IntegrityReviewerPlanSchema = z
 export type IntegrityReviewerPlan = z.infer<typeof IntegrityReviewerPlanSchema>
 export type IntegrityReviewerScope = IntegrityReviewerPlan["reviewers"][number]
 
+export const IntegrityCheckItemSchema = z
+  .object({
+    id: z.string().min(1),
+    reviewerID: z.string().min(1).optional(),
+    category: z.string().min(1).describe("Review category such as requirement, acceptance-spec, visual-evidence, runtime, code, or integration."),
+    target: z.string().min(1).describe("Concrete requirement, acceptance spec, goal, file, route, command, or evidence surface checked."),
+    question: z.string().min(1).describe("Concrete falsification question inspected for this check."),
+    status: IntegrityCheckItemStatusSchema,
+    expected: z.string().min(1),
+    observed: z.string().min(1),
+    evidence: z.array(z.string().min(1)).min(1),
+    requirementIDs: z.array(z.string().min(1)).default([]),
+    specIDs: z.array(z.string().min(1)).default([]),
+    targetIDs: z.array(z.string().min(1)).default([]),
+    userRequestQuotes: z.array(z.string().min(1)).default([]),
+  })
+  .strict()
+
+export type IntegrityCheckItem = z.infer<typeof IntegrityCheckItemSchema>
+
 export const IntegrityFindingSchema = z
   .object({
     id: z.string().min(1),
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs that exposed this finding."),
     severity: z.enum(["blocking", "advisory"]),
     verdictImpact: IntegrityVerdictSchema,
     fingerprint: z.string().min(1).optional(),
@@ -85,6 +111,10 @@ export type IntegrityFinding = z.infer<typeof IntegrityFindingSchema>
 export const IntegrityReviewerReportSchema = z
   .object({
     reviewerID: z.string().min(1),
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs this reviewer report summarizes."),
     scope: z.string().min(1),
     verdict: IntegrityVerdictSchema,
     summary: z.string().min(1),
@@ -177,6 +207,10 @@ export type IntegrityReviewRound = z.infer<typeof IntegrityReviewRoundSchema>
 export const IntegrityRequiredRepairSchema = z
   .object({
     id: z.string().min(1),
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs that require this repair."),
     fingerprint: z.string().min(1).optional(),
     severity: z.enum(["blocking", "advisory"]).default("blocking"),
     title: z.string().min(1).optional(),
@@ -200,6 +234,10 @@ export type IntegrityRequiredRepair = z.infer<typeof IntegrityRequiredRepairSche
 export const IntegrityUnresolvedDisagreementSchema = z
   .object({
     id: z.string().min(1),
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs involved in this disagreement."),
     description: z.string().min(1),
     reviewerIDs: z.array(z.string().min(1)).min(2),
     consequence: z.string().min(1),
@@ -208,37 +246,46 @@ export const IntegrityUnresolvedDisagreementSchema = z
 
 export type IntegrityUnresolvedDisagreement = z.infer<typeof IntegrityUnresolvedDisagreementSchema>
 
+export const IntegrityCoverageAuditRowSchema = z
+  .object({
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs that support this coverage audit row."),
+    promise: z.string().min(1),
+    reviewerIDs: z.array(z.string().min(1)).default([]),
+    status: IntegrityCoverageStatusSchema.describe(
+      "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
+    ),
+    notes: z.string().min(1),
+  })
+  .strict()
+
+export type IntegrityCoverageAuditRow = z.infer<typeof IntegrityCoverageAuditRowSchema>
+
+export const IntegrityUninspectedRiskSchema = z
+  .object({
+    checkIDs: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Registered Integrity check item IDs that left this risk uninspected."),
+    risk: z.string().min(1),
+    reason: z.string().min(1),
+    action: z.enum(["block", "re-review", "advisory"]),
+  })
+  .strict()
+
+export type IntegrityUninspectedRisk = z.infer<typeof IntegrityUninspectedRiskSchema>
+
 export const IntegrityTeamReportSchema = z
   .object({
     verdict: IntegrityVerdictSchema,
     summary: z.string().min(1),
     teamReportMarkdown: z.string().min(1),
+    checkItems: z.array(IntegrityCheckItemSchema).default([]),
     reviewers: z.array(IntegrityReviewerReportSchema).min(2),
-    coverageAudit: z
-      .array(
-        z
-          .object({
-            promise: z.string().min(1),
-            reviewerIDs: z.array(z.string().min(1)).default([]),
-            status: IntegrityCoverageStatusSchema.describe(
-              "Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.",
-            ),
-            notes: z.string().min(1),
-          })
-          .strict(),
-      )
-      .default([]),
-    uninspectedRisks: z
-      .array(
-        z
-          .object({
-            risk: z.string().min(1),
-            reason: z.string().min(1),
-            action: z.enum(["block", "re-review", "advisory"]),
-          })
-          .strict(),
-      )
-      .default([]),
+    coverageAudit: z.array(IntegrityCoverageAuditRowSchema).default([]),
+    uninspectedRisks: z.array(IntegrityUninspectedRiskSchema).default([]),
     findings: z.array(IntegrityFindingSchema).default([]),
     rounds: z.array(IntegrityReviewRoundSchema).default([]),
     requiredRepairs: z.array(IntegrityRequiredRepairSchema).default([]),

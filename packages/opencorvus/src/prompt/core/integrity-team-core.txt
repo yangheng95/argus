@@ -66,7 +66,10 @@ Evidence requirements:
 - Before a pass or concerns verdict, each reviewer must have tried to falsify
   the deliverable within its scope: name the request promise being tested, the
   failure hypothesis, the evidence that would expose the failure, and the
-  pass/finding criterion. Record the concrete inspections in `drilldowns[]`,
+  pass/finding criterion. First register the concrete inspection as an
+  Integrity check item with `register_integrity_check_item`, then reference its
+  `checkIDs` from reviewer reports, coverage audit rows, findings, repairs,
+  disagreements, and risks. Record the concrete inspections in `drilldowns[]`,
   `coverage[]`, and `evidence[]`. If tools are available but a high-risk surface
   was not inspected, report it as `uninspectedRisks`/coverage `inconclusive`;
   do not convert the gap into a positive summary.
@@ -158,11 +161,16 @@ Submission contracts:
 
 - Supervisor planning must call `submit_integrity_review_plan`.
 - Independent reviewers must call `submit_reviewer_report`.
-- Supervisor consensus must call `submit_integrity_consensus`.
+- Supervisor consensus must build the report through `register_integrity_check_item`
+  and the other `register_integrity_*` tools, then call `submit_integrity_consensus`.
+  The final submit call only carries `verdict`, `summary`, and
+  `teamReportMarkdown`; do not place reviewer reports, findings, coverage audit,
+  repairs, or other arrays in that final payload.
 
-The final consensus is the only integrity review output. It must include
-`teamReportMarkdown`, reviewer reports, findings, review rounds, required
-repairs, and unresolved disagreements. The report may distinguish
+The final consensus is the only integrity review output. The registered report
+must include `teamReportMarkdown`, check items, reviewer reports, findings,
+review rounds, required repairs, and unresolved disagreements when those are
+present. The report may distinguish
 advisory-only concerns from repair-bearing concerns, but that distinction is
 report evidence for the orchestrator rather than a host-side gate. Do not emit
 separate dimension verdicts or a separate acceptance verdict object;

@@ -1,4 +1,5 @@
 import { tool, type ToolSet } from "ai"
+import z from "zod"
 import TEAM_CORE from "@/prompt/core/integrity-team-core.txt"
 import { runAgentSession } from "@/agent/runner"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
@@ -7,6 +8,7 @@ import type { Tool } from "@/tool/tool"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import { FactCheckItemSchema } from "@/fact-check/schema"
 import {
   summarizeVisualEvidenceBundle,
   validateVisualEvidenceBundleReferenceComparisons,
@@ -41,9 +43,18 @@ import { renderIntegrityReplayContextPrompt, type IntegrityReplayContext } from 
 import { renderSharedIntegrityPromptContext, sanitizeIntegrityPromptText } from "./shared-prompt"
 import type { RequirementStatusRow } from "./requirement-status"
 import {
+  IntegrityCheckItemSchema,
+  IntegrityCoverageAuditRowSchema,
   IntegrityReviewCompletedPayloadSchema,
   IntegrityCoverageStatusValues,
+  IntegrityVerdictSchema,
+  IntegrityFindingSchema,
+  IntegrityRequiredRepairSchema,
+  IntegrityReviewRoundSchema,
+  IntegrityReviewerReportSchema,
   IntegrityTeamReportSchema,
+  IntegrityUnresolvedDisagreementSchema,
+  IntegrityUninspectedRiskSchema,
   type IntegrityFinding,
   type IntegrityRequiredRepair,
   type IntegrityReviewCompletedPayload,
@@ -188,7 +199,133 @@ export type ReviewPromptInput = {
   taskID?: string
 }
 
-type ConsensusCollector = { report?: IntegrityTeamReport }
+type ConsensusCollector = {
+  checkItems: IntegrityTeamReport["checkItems"]
+  reviewers: IntegrityTeamReport["reviewers"]
+  coverageAudit: IntegrityTeamReport["coverageAudit"]
+  uninspectedRisks: IntegrityTeamReport["uninspectedRisks"]
+  findings: IntegrityTeamReport["findings"]
+  rounds: IntegrityTeamReport["rounds"]
+  requiredRepairs: IntegrityTeamReport["requiredRepairs"]
+  unresolvedDisagreements: IntegrityTeamReport["unresolvedDisagreements"]
+  fact_check_items: IntegrityTeamReport["fact_check_items"]
+  report?: IntegrityTeamReport
+}
+
+function emptyConsensusCollector(): ConsensusCollector {
+  return {
+    checkItems: [],
+    reviewers: [],
+    coverageAudit: [],
+    uninspectedRisks: [],
+    findings: [],
+    rounds: [],
+    requiredRepairs: [],
+    unresolvedDisagreements: [],
+    fact_check_items: [],
+  }
+}
+
+const SubmitIntegrityConsensusSchema = z
+  .object({
+    verdict: IntegrityVerdictSchema,
+    summary: z.string().min(1),
+    teamReportMarkdown: z.string().min(1),
+  })
+  .strict()
+
+function upsertByID<T extends { id: string }>(items: T[], item: T): "registered" | "overwritten" {
+  const existingIdx = items.findIndex((row) => row.id === item.id)
+  if (existingIdx >= 0) {
+    items[existingIdx] = item
+    return "overwritten"
+  }
+  items.push(item)
+  return "registered"
+}
+
+function upsertByRoundID(
+  items: IntegrityTeamReport["rounds"],
+  item: IntegrityTeamReport["rounds"][number],
+): "registered" | "overwritten" {
+  const existingIdx = items.findIndex((row) => row.roundID === item.roundID)
+  if (existingIdx >= 0) {
+    items[existingIdx] = item
+    return "overwritten"
+  }
+  items.push(item)
+  return "registered"
+}
+
+function integrityUnknownCheckIDIssues(
+  report: IntegrityTeamReport,
+  label: string,
+  id: string,
+  checkIDs: readonly string[],
+): string[] {
+  const known = new Set(report.checkItems.map((item) => item.id))
+  if (checkIDs.length === 0) return [`${label} "${id}" has no checkIDs; register a check item and reference it.`]
+  const unknown = checkIDs.filter((checkID) => !known.has(checkID))
+  return unknown.length > 0 ? [`${label} "${id}" references unknown checkIDs: ${unknown.join(", ")}.`] : []
+}
+
+function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: ParsedRequirement[]): string[] {
+  const issues: string[] = []
+  if (report.checkItems.length === 0) {
+    issues.push("integrity report has no registered checkItems; register each inspected requirement/problem first.")
+    return issues
+  }
+  const checkByID = new Map(report.checkItems.map((item) => [item.id, item]))
+  const activeRequirementIDs = (requirements ?? []).map((requirement) => requirement.id)
+  for (const requirementID of activeRequirementIDs) {
+    const covered = report.checkItems.some((item) => item.requirementIDs.includes(requirementID))
+    if (!covered) {
+      issues.push(`active requirement ${requirementID} has no registered integrity check item.`)
+    }
+  }
+  const unresolvedCheckIDs = report.checkItems
+    .filter((item) => item.status === "failed" || item.status === "inconclusive")
+    .map((item) => item.id)
+  if (report.verdict === "pass" && unresolvedCheckIDs.length > 0) {
+    issues.push(`pass verdict was submitted with failed/inconclusive checkItems: ${unresolvedCheckIDs.join(", ")}.`)
+  }
+  const rows: Array<{ label: string; id: string; checkIDs: string[] }> = [
+    ...report.reviewers.map((row) => ({ label: "reviewer", id: row.reviewerID, checkIDs: row.checkIDs })),
+    ...report.findings.map((row) => ({ label: "finding", id: row.id, checkIDs: row.checkIDs })),
+    ...report.requiredRepairs.map((row) => ({ label: "requiredRepair", id: row.id, checkIDs: row.checkIDs })),
+    ...report.coverageAudit.map((row, index) => ({
+      label: "coverageAudit",
+      id: `${row.promise}#${index + 1}`,
+      checkIDs: row.checkIDs,
+    })),
+    ...report.uninspectedRisks.map((row, index) => ({
+      label: "uninspectedRisk",
+      id: `${row.risk}#${index + 1}`,
+      checkIDs: row.checkIDs,
+    })),
+    ...report.unresolvedDisagreements.map((row) => ({
+      label: "unresolvedDisagreement",
+      id: row.id,
+      checkIDs: row.checkIDs,
+    })),
+    ...report.reviewers.flatMap((reviewer) =>
+      reviewer.findings.map((finding) => ({
+        label: `reviewerFinding:${reviewer.reviewerID}`,
+        id: finding.id,
+        checkIDs: finding.checkIDs,
+      })),
+    ),
+  ]
+  for (const row of rows) issues.push(...integrityUnknownCheckIDIssues(report, row.label, row.id, row.checkIDs))
+  for (const finding of report.findings) {
+    if (finding.severity !== "blocking") continue
+    const linked = finding.checkIDs.map((checkID) => checkByID.get(checkID)).filter((item) => item !== undefined)
+    if (linked.length > 0 && linked.every((item) => item.status === "passed")) {
+      issues.push(`blocking finding "${finding.id}" references only passed checkItems; blockers require a failed or inconclusive check.`)
+    }
+  }
+  return issues
+}
 
 const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
 const INTEGRITY_CONSENSUS_REVIEWER_REPORTS_MAX_CHARS = 18_000
@@ -262,7 +399,7 @@ export async function reviewIntegrity(input: {
     ? reviewIDForIntegrity(input.continuation.sessionID)
     : undefined
 
-  const collector: ConsensusCollector = {}
+  const collector = emptyConsensusCollector()
   const out = await runAgentSession<ConsensusCollector>({
     kind: "integrity",
     core: withFactCheckRegistration(TEAM_CORE),
@@ -389,12 +526,131 @@ async function createSingleSessionIntegrityToolKit(input: {
     tools: {
       ...evidenceTools,
       ...previewTools,
-      submit_integrity_consensus: tool({
-        description: `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. Every reviewers[] entry must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], and investigationPlan.passCriteria[]. Every active Requirements-produced REQ-N must appear in reviewer coverage, findings, or requiredRepairs before final verdict. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
-        inputSchema: IntegrityTeamReportSchema,
+      register_integrity_check_item: tool({
+        description:
+          "Register one concrete Integrity check item before reporting reviewer coverage, findings, repairs, or final verdict. Every active requirement must be covered by at least one check item.",
+        inputSchema: IntegrityCheckItemSchema,
         execute: async (raw) => {
-          const parsed = IntegrityTeamReportSchema.safeParse(raw)
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const item = IntegrityCheckItemSchema.parse(raw)
+          const status = upsertByID(input.collector.checkItems, item)
+          return `OK: integrity checkItem "${item.id}" ${status} (${input.collector.checkItems.length} total)`
+        },
+      }),
+      register_integrity_reviewer_report: tool({
+        description:
+          "Register one reviewer report tied to registered checkIDs. Do not put unregistered findings here; register findings separately too.",
+        inputSchema: IntegrityReviewerReportSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const report = IntegrityReviewerReportSchema.parse(raw)
+          const existingIdx = input.collector.reviewers.findIndex((row) => row.reviewerID === report.reviewerID)
+          if (existingIdx >= 0) {
+            input.collector.reviewers[existingIdx] = report
+            return `OK: integrity reviewer "${report.reviewerID}" overwritten (${input.collector.reviewers.length} total)`
+          }
+          input.collector.reviewers.push(report)
+          return `OK: integrity reviewer "${report.reviewerID}" registered (${input.collector.reviewers.length} total)`
+        },
+      }),
+      register_integrity_coverage_audit: tool({
+        description: "Register one coverage-audit row tied to registered checkIDs.",
+        inputSchema: IntegrityCoverageAuditRowSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const row = IntegrityCoverageAuditRowSchema.parse(raw)
+          input.collector.coverageAudit.push(row)
+          return `OK: integrity coverageAudit row registered (${input.collector.coverageAudit.length} total)`
+        },
+      }),
+      register_integrity_uninspected_risk: tool({
+        description: "Register one uninspected risk tied to registered checkIDs.",
+        inputSchema: IntegrityUninspectedRiskSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const row = IntegrityUninspectedRiskSchema.parse(raw)
+          input.collector.uninspectedRisks.push(row)
+          return `OK: integrity uninspectedRisk registered (${input.collector.uninspectedRisks.length} total)`
+        },
+      }),
+      register_integrity_finding: tool({
+        description: "Register one Integrity finding tied to registered checkIDs.",
+        inputSchema: IntegrityFindingSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const finding = IntegrityFindingSchema.parse(raw)
+          const status = upsertByID(input.collector.findings, finding)
+          return `OK: integrity finding "${finding.id}" ${status} (${input.collector.findings.length} total)`
+        },
+      }),
+      register_integrity_round: tool({
+        description: "Register one Integrity review round summary.",
+        inputSchema: IntegrityReviewRoundSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const round = IntegrityReviewRoundSchema.parse(raw)
+          const status = upsertByRoundID(input.collector.rounds, round)
+          return `OK: integrity round "${round.roundID}" ${status} (${input.collector.rounds.length} total)`
+        },
+      }),
+      register_integrity_required_repair: tool({
+        description: "Register one required repair tied to registered checkIDs and finding IDs.",
+        inputSchema: IntegrityRequiredRepairSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const repair = IntegrityRequiredRepairSchema.parse(raw)
+          const status = upsertByID(input.collector.requiredRepairs, repair)
+          return `OK: integrity requiredRepair "${repair.id}" ${status} (${input.collector.requiredRepairs.length} total)`
+        },
+      }),
+      register_integrity_unresolved_disagreement: tool({
+        description: "Register one unresolved disagreement tied to registered checkIDs.",
+        inputSchema: IntegrityUnresolvedDisagreementSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const disagreement = IntegrityUnresolvedDisagreementSchema.parse(raw)
+          const status = upsertByID(input.collector.unresolvedDisagreements, disagreement)
+          return `OK: integrity unresolvedDisagreement "${disagreement.id}" ${status} (${input.collector.unresolvedDisagreements.length} total)`
+        },
+      }),
+      register_integrity_fact_check_item: tool({
+        description: "Register one factual claim that Integrity could not verify in-session.",
+        inputSchema: FactCheckItemSchema,
+        execute: async (raw) => {
+          if (input.collector.report) return "Error: integrity review already submitted; collector is closed."
+          const item = FactCheckItemSchema.parse(raw)
+          input.collector.fact_check_items.push(item)
+          return `OK: integrity fact_check_item registered (${input.collector.fact_check_items.length} total)`
+        },
+      }),
+      submit_integrity_consensus: tool({
+        description: `Finalize the final integrity review from registered check items and report rows. Do not pass reviewers, findings, coverageAudit, requiredRepairs, checkItems, or other arrays in this final call; register them first. Produce multiple independent reviewer reports via register_integrity_reviewer_report without spawning reviewer sessions. Every reviewer report must include investigationPlan.requestPromise, investigationPlan.hypothesis, investigationPlan.evidencePlan[], passCriteria[], and checkIDs. Every active Requirements-produced REQ-N must have a registered check item before final verdict. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
+        inputSchema: SubmitIntegrityConsensusSchema,
+        execute: async (raw) => {
+          const finalParsed = SubmitIntegrityConsensusSchema.safeParse(raw)
+          if (!finalParsed.success) {
+            return `Error: submit_integrity_consensus accepts only verdict, summary, and teamReportMarkdown after register_* calls: ${finalParsed.error.message}`
+          }
+          const final = finalParsed.data
+          const parsed = IntegrityTeamReportSchema.safeParse({
+            verdict: final.verdict,
+            summary: final.summary,
+            teamReportMarkdown: final.teamReportMarkdown,
+            checkItems: input.collector.checkItems,
+            reviewers: input.collector.reviewers,
+            coverageAudit: input.collector.coverageAudit,
+            uninspectedRisks: input.collector.uninspectedRisks,
+            findings: input.collector.findings,
+            rounds: input.collector.rounds,
+            requiredRepairs: input.collector.requiredRepairs,
+            unresolvedDisagreements: input.collector.unresolvedDisagreements,
+            fact_check_items: input.collector.fact_check_items,
+          })
           if (!parsed.success) return `Error: integrity review failed schema validation: ${parsed.error.message}`
+          const checkGraphIssues = integrityCheckGraphIssues(parsed.data, input.requirements)
+          if (checkGraphIssues.length > 0) {
+            return `Error: integrity review check graph is incomplete: ${checkGraphIssues.join("; ")}`
+          }
           const requirementCoverageIssues = integrityRequirementCoverageIssues(parsed.data, input.requirements)
           if (requirementCoverageIssues.length > 0) {
             return `Error: integrity review omitted active requirement coverage: ${requirementCoverageIssues.join("; ")}`
@@ -509,6 +765,7 @@ async function createIntegrityTool(info: Tool.Info, input: { taskID: string; sig
 
 export const IntegrityTestHooks = {
   createSingleSessionIntegrityToolKit,
+  emptyConsensusCollector,
 }
 
 export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
@@ -541,7 +798,8 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
     [
       "Perform the integrity review in this single streaming session. Do not spawn reviewer sessions and do not ask for a separate planning phase.",
       "Internally choose 2-4 task-specific reviewer perspectives from the actual request, REQ rows, goals, acceptance specs, changed directories, runtime evidence, prior attempts, and risk surface.",
-      "Represent those perspectives as `reviewers[]` in the final `submit_integrity_consensus` payload. Each reviewer report must be evidence-backed and scoped; do not duplicate the same finding under several reviewer names.",
+      "For every concrete promise, surface, or suspected defect you inspect, first call `register_integrity_check_item` with the evidence-backed status. Every active REQ-N must be covered by at least one registered check item.",
+      "Represent reviewer perspectives with `register_integrity_reviewer_report`, and make each reviewer report cite the checkIDs it summarizes. Register findings, required repairs, coverage audit rows, risks, rounds, disagreements, and fact-check items through their dedicated register_integrity_* tools; do not put arrays in the final submit call.",
       "Use 2 reviewer reports for narrow re-reviews. Use 3-4 reviewer reports for broad first reviews or broad changed surfaces. Do not default to five reviewers and do not use fixed dimensions.",
       "Before final verdict, compare the reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
       "Compare current evidence against prior attempts. A repeated blocker should stay persistent/regressed when evidence supports that; do not suppress a prior blocker merely because the current reviewer label differs.",
@@ -555,8 +813,8 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
     buildIntegrityEvidencePrompt(input),
     "Use scoped evidence tools for the initial falsification pass: inspect overview, changed directories, goal summary, executor reports, and then exact files/diffs/runtime/visual evidence for the reviewer perspectives that matter. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
     "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces no reviewer actually inspected.",
-    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use `status:\"missing\"` or `status:\"inconclusive\"` coverage rows instead of silently skipping a REQ-N.",
-    "Call submit_integrity_consensus exactly once.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use `status:\"missing\"` or `status:\"inconclusive\"` coverage rows instead of silently skipping a REQ-N.",
+    "Call submit_integrity_consensus exactly once after all register_integrity_* calls. The final submit call only sets verdict, summary, and teamReportMarkdown.",
   ].join("\n\n")
 }
 
@@ -613,8 +871,8 @@ export function buildSupervisorConsensusPrompt(
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
     "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked. If a reviewer report only summarizes executor claims without falsification-oriented drilldown, treat that surface as uninspected.",
-    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use missing/inconclusive coverage rows instead of silently skipping a REQ-N.",
-    "Call submit_integrity_consensus exactly once.",
+    "Every active Requirements-produced REQ-N rendered in this prompt must appear at least once in registered check item requirementIDs and at least once in reviewer `coverage[]`, `findings[].requirementIDs`, or `requiredRepairs[].requirementIDs`. Use missing/inconclusive coverage rows instead of silently skipping a REQ-N.",
+    "Call submit_integrity_consensus exactly once after all register_integrity_* calls. The final submit call only sets verdict, summary, and teamReportMarkdown.",
   ].join("\n\n")
 }
 
@@ -1029,6 +1287,7 @@ function normalizeManifestFinding(
     id: prior?.id ?? finding.id,
     fingerprint,
     canonicalSymptom,
+    checkIDs: stableList(finding.checkIDs ?? []),
     affectedSymbols: stableList(finding.affectedSymbols ?? []),
     verify: defaultIntegrityVerify(finding),
     sourceFindingIDs: stableList([...(finding.sourceFindingIDs ?? []), finding.id, ...(prior ? [prior.id] : [])]),
@@ -1071,6 +1330,7 @@ function normalizeManifestRepair(
     specIDs: stableList([...(repair.specIDs ?? []), ...(linkedFinding?.specIDs ?? [])]),
     filePaths: stableList([...(repair.filePaths ?? []), ...(linkedFinding?.filePaths ?? [])]),
     affectedSymbols: stableList([...(repair.affectedSymbols ?? []), ...(linkedFinding?.affectedSymbols ?? [])]),
+    checkIDs: stableList([...(repair.checkIDs ?? []), ...(linkedFinding?.checkIDs ?? [])]),
     repair: repair.repair ?? linkedFinding?.repair ?? repair.description,
     verify: defaultIntegrityVerify({
       ...repair,
@@ -1092,6 +1352,7 @@ function repairFromFinding(finding: IntegrityFinding): IntegrityRequiredRepair {
     id: `repair-${finding.id}`,
     fingerprint: finding.fingerprint,
     severity: finding.severity,
+    checkIDs: finding.checkIDs,
     title: finding.title,
     canonicalSymptom: finding.canonicalSymptom,
     description: finding.repair,
@@ -1109,8 +1370,10 @@ function repairFromFinding(finding: IntegrityFinding): IntegrityRequiredRepair {
 }
 
 function createNoGoalsResult(): IntegrityResult {
+  const checkID = "check-no-goals-produced"
   const finding: IntegrityFinding = {
     id: "no-goals-produced",
+    checkIDs: [checkID],
     severity: "blocking",
     verdictImpact: "needs_correction",
     title: "No goals produced",
@@ -1131,6 +1394,7 @@ function createNoGoalsResult(): IntegrityResult {
   const reviewers: IntegrityReviewerReport[] = [
     {
       reviewerID: "contract-reviewer",
+      checkIDs: [checkID],
       scope: "Goal graph existence",
       verdict: "needs_correction",
       summary: "No goal contracts exist.",
@@ -1148,6 +1412,7 @@ function createNoGoalsResult(): IntegrityResult {
     },
     {
       reviewerID: "completion-reviewer",
+      checkIDs: [checkID],
       scope: "User request completion",
       verdict: "needs_correction",
       summary: "Completion cannot be reviewed without goals.",
@@ -1169,9 +1434,26 @@ function createNoGoalsResult(): IntegrityResult {
     summary: "Integrity needs correction: no goals produced.",
     teamReportMarkdown:
       "### Integrity team review (verdict=needs_correction)\n\nBlocking: no goal contracts exist. Run architect again before review.",
+    checkItems: [
+      {
+        id: checkID,
+        category: "contract",
+        target: "active goal contract list",
+        question: "Does the active spec snapshot contain reviewable goal contracts?",
+        status: "failed",
+        expected: "At least one goal contract exists for the active task.",
+        observed: "The active spec snapshot has no goal contracts.",
+        evidence: ["Goal contract list is empty."],
+        requirementIDs: [],
+        specIDs: [],
+        targetIDs: [],
+        userRequestQuotes: [],
+      },
+    ],
     reviewers,
     coverageAudit: [
       {
+        checkIDs: [checkID],
         promise: "Active task has goal contracts before integrity review.",
         reviewerIDs: reviewers.map((r) => r.reviewerID),
         status: "missing",
@@ -1180,6 +1462,7 @@ function createNoGoalsResult(): IntegrityResult {
     ],
     uninspectedRisks: [
       {
+        checkIDs: [checkID],
         risk: "User request completion cannot be inspected without goal contracts.",
         reason: "The active spec snapshot has no goals.",
         action: "block",
@@ -1197,6 +1480,7 @@ function createNoGoalsResult(): IntegrityResult {
     requiredRepairs: [
       {
         id: "repair-no-goals",
+        checkIDs: [checkID],
         severity: "blocking",
         title: "No goals produced",
         description: "Create goal contracts for the active spec snapshot.",
@@ -1252,6 +1536,7 @@ function emitIntegrityEvent(
     verdict: result.verdict,
     summary: result.summary,
     teamReportMarkdown: result.teamReportMarkdown,
+    checkItems: result.checkItems,
     reviewers: result.reviewers,
     coverageAudit: result.coverageAudit,
     uninspectedRisks: result.uninspectedRisks,

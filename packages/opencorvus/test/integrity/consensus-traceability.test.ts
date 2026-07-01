@@ -29,6 +29,7 @@ const untracedReviewerFinding = {
 
 const untracedReviewerReport = {
   reviewerID: "scope",
+  checkIDs: ["check_scope_traceability"],
   scope: "Scope reviewer",
   verdict: "needs_correction",
   summary: "Bundle size concern is untraced.",
@@ -40,11 +41,19 @@ const untracedReviewerReport = {
 
 const runtimeReviewerReport = {
   reviewerID: "runtime",
+  checkIDs: ["check_runtime_req_1"],
   scope: "Runtime reviewer",
   verdict: "pass",
   summary: "Runtime evidence is scoped and passes.",
   investigationPlan,
   evidence: ["REQ-1 and acc-chat both name the chat response behavior."],
+  coverage: [
+    {
+      requirementID: "REQ-1",
+      status: "covered",
+      evidence: "REQ-1 and acc-chat both name the chat response behavior.",
+    },
+  ],
   findings: [],
   openQuestions: [],
 } as const
@@ -109,24 +118,54 @@ mock.module("@/agent/runner", () => ({
       await input.toolKit.tools.submit_reviewer_report.execute(report)
     } else if (input.terminalTool.toolName === "submit_integrity_consensus") {
       capturedConsensusPrompt = input.buildUserPrompt()
+      await input.toolKit.tools.register_integrity_check_item.execute({
+        id: "check_scope_traceability",
+        reviewerID: "scope",
+        category: "traceability",
+        target: "untraced reviewer concern",
+        question: "Is the bundle-size concern anchored to the request, REQ, or acceptance spec?",
+        status: "passed",
+        expected: "Untraced concerns are dropped from final findings.",
+        observed: "The untraced bundle-size concern was dropped from final findings.",
+        evidence: ["No requirement, acceptance spec, or original request quote names bundle size."],
+      })
+      await input.toolKit.tools.register_integrity_check_item.execute({
+        id: "check_runtime_req_1",
+        reviewerID: "runtime",
+        category: "requirement",
+        target: "REQ-1",
+        question: "Does the runtime evidence satisfy REQ-1 and acc-chat?",
+        status: "passed",
+        expected: "Assistant replies are visible in the chat transcript.",
+        observed: "REQ-1 and acc-chat both name the chat response behavior.",
+        evidence: ["REQ-1 and acc-chat both name the chat response behavior."],
+        requirementIDs: ["REQ-1"],
+        specIDs: ["acc-chat"],
+        targetIDs: ["goal_chat"],
+      })
+      await input.toolKit.tools.register_integrity_reviewer_report.execute({
+        ...untracedReviewerReport,
+        findings: [],
+      })
+      await input.toolKit.tools.register_integrity_reviewer_report.execute(runtimeReviewerReport)
+      await input.toolKit.tools.register_integrity_coverage_audit.execute({
+        checkIDs: ["check_runtime_req_1"],
+        promise: "REQ-1 assistant replies render.",
+        reviewerIDs: ["runtime"],
+        status: "covered",
+        notes: "Runtime reviewer covered REQ-1 and acc-chat.",
+      })
+      await input.toolKit.tools.register_integrity_round.execute({
+        roundID: "traceability-consensus",
+        prompt: "Remove untraced concerns from final consensus.",
+        reviewerIDs: ["scope", "runtime"],
+        outcome: "Dropped untraced bundle-size concern.",
+      })
       await input.toolKit.tools.submit_integrity_consensus.execute({
         verdict: "pass",
         summary: "Only traced findings may survive consensus; no traced finding remains.",
         teamReportMarkdown:
           "### Integrity team review\n\nUntraced bundle-size concern was dropped from final findings.",
-        reviewers: [untracedReviewerReport, runtimeReviewerReport],
-        findings: [],
-        rounds: [
-          {
-            roundID: "traceability-consensus",
-            prompt: "Remove untraced concerns from final consensus.",
-            reviewerIDs: ["scope", "runtime"],
-            outcome: "Dropped untraced bundle-size concern.",
-          },
-        ],
-        requiredRepairs: [],
-        unresolvedDisagreements: [],
-        fact_check_items: [],
       })
     } else {
       throw new Error(`unexpected terminal tool ${input.terminalTool.toolName}`)
@@ -196,7 +235,7 @@ describe("integrity consensus traceability discipline", () => {
 
     expect(capturedConsensusPrompt).toContain("Perform the integrity review in this single streaming session")
     expect(capturedConsensusPrompt).toContain("must be removed from the final report")
-    expect(result.reviewers[0]?.findings[0]).toMatchObject(untracedReviewerFinding)
+    expect(result.reviewers[0]?.findings).toEqual([])
     expect(result.findings).toEqual([])
     expect(result.issues).toEqual([])
     expect(result.verdict).toBe("pass")

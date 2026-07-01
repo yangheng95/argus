@@ -76,62 +76,88 @@ mock.module("@/agent/runner", () => ({
         openQuestions: [],
       }
     } else if (input.terminalTool.toolName === "submit_integrity_consensus") {
-      collector.report = {
+      await input.toolKit.tools.register_integrity_check_item.execute({
+        id: "check_storage",
+        reviewerID: "rev_storage",
+        category: "requirement",
+        target: "REQ-3",
+        question: "Does storage persistence satisfy REQ-3 without improper severity promotion?",
+        status: "failed",
+        expected: "Normal chat conversations persist after refresh.",
+        observed: "Stub intentionally emits a promotion for prompt capture.",
+        evidence: ["prompt capture test"],
+        requirementIDs: ["REQ-3"],
+        targetIDs: ["goal_storage"],
+      })
+      await input.toolKit.tools.register_integrity_check_item.execute({
+        id: "check_scope",
+        reviewerID: "rev_scope",
+        category: "scope",
+        target: "maturity request wording",
+        question: "Was maturity kept bounded to explicit requirements?",
+        status: "passed",
+        expected: "Maturity is not expanded into unbounded blockers.",
+        observed: "Prompt capture preserves scope-bounded maturity guidance.",
+        evidence: ["prompt capture test"],
+      })
+      await input.toolKit.tools.register_integrity_reviewer_report.execute({
+        reviewerID: "rev_storage",
+        checkIDs: ["check_storage"],
+        scope: "Storage quota advisory replay",
+        verdict: "needs_correction",
+        summary: "rev_storage submitted a canned report.",
+        investigationPlan,
+        coverage: [
+          {
+            requirementID: "REQ-3",
+            status: "missing",
+            evidence: "Stub intentionally emits a promotion for prompt capture.",
+          },
+        ],
+        evidence: ["prompt capture test"],
+        findings: [],
+        openQuestions: [],
+      })
+      await input.toolKit.tools.register_integrity_reviewer_report.execute({
+        reviewerID: "rev_scope",
+        checkIDs: ["check_scope"],
+        scope: "Scope-bounded maturity evidence",
+        verdict: "concerns",
+        summary: "rev_scope submitted a canned report.",
+        investigationPlan,
+        evidence: ["prompt capture test"],
+        findings: [],
+        openQuestions: [],
+      })
+      await input.toolKit.tools.register_integrity_finding.execute({
+        id: "BF-1",
+        checkIDs: ["check_storage"],
+        severity: "blocking",
+        verdictImpact: "needs_correction",
+        title: "Canned promotion attempt",
+        description: "Stub intentionally emits a promotion.",
+        evidence: ["prompt capture test"],
+        targetIDs: ["goal_storage"],
+        requirementIDs: [],
+        specIDs: [],
+        filePaths: ["src/services/storage.ts"],
+        repair: "The LLM should reconcile severity from the prompt.",
+        reviewers: ["rev_storage"],
+        consensus: "disputed",
+      })
+      await input.toolKit.tools.register_integrity_required_repair.execute({
+        id: "repair-stub",
+        checkIDs: ["check_storage"],
+        description: "Exercise submission path.",
+        evidence: ["prompt capture test"],
+        targetIDs: ["goal_storage"],
+        filePaths: ["src/services/storage.ts"],
+      })
+      await input.toolKit.tools.submit_integrity_consensus.execute({
         verdict: "needs_correction",
         summary: "Consensus prompt captured.",
         teamReportMarkdown: "Consensus prompt captured.",
-        reviewers: [
-          {
-            reviewerID: "rev_storage",
-            scope: "Storage quota advisory replay",
-            verdict: "needs_correction",
-            summary: "rev_storage submitted a canned report.",
-            investigationPlan,
-            evidence: ["prompt capture test"],
-            findings: [],
-            openQuestions: [],
-          },
-          {
-            reviewerID: "rev_scope",
-            scope: "Scope-bounded maturity evidence",
-            verdict: "concerns",
-            summary: "rev_scope submitted a canned report.",
-            investigationPlan,
-            evidence: ["prompt capture test"],
-            findings: [],
-            openQuestions: [],
-          },
-        ],
-        findings: [
-          {
-            id: "BF-1",
-            severity: "blocking",
-            verdictImpact: "needs_correction",
-            title: "Canned promotion attempt",
-            description: "Stub intentionally emits a promotion.",
-            evidence: ["prompt capture test"],
-            targetIDs: ["goal_storage"],
-            requirementIDs: [],
-            specIDs: [],
-            filePaths: ["src/services/storage.ts"],
-            repair: "The LLM should reconcile severity from the prompt.",
-            reviewers: ["rev_storage"],
-            consensus: "disputed",
-          },
-        ],
-        rounds: [],
-        requiredRepairs: [
-          {
-            id: "repair-stub",
-            description: "Exercise submission path.",
-            evidence: ["prompt capture test"],
-            targetIDs: ["goal_storage"],
-            filePaths: ["src/services/storage.ts"],
-          },
-        ],
-        unresolvedDisagreements: [],
-        fact_check_items: [],
-      }
+      })
     }
     return { collector, session }
   },

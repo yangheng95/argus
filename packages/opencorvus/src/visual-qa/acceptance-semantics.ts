@@ -18,6 +18,15 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
   if (report.coverage.length === 0) {
     issues.push("accepted=true was submitted without coverage items naming checked regions/viewports/states.")
   }
+  if (report.check_items.length === 0) {
+    issues.push("accepted=true was submitted without registered visual QA check_items.")
+  }
+  const unresolvedChecks = report.check_items
+    .filter((item) => item.status === "failed" || item.status === "inconclusive")
+    .map((item) => item.id)
+  if (unresolvedChecks.length > 0) {
+    issues.push(`accepted=true was submitted with failed/inconclusive check_items: ${unresolvedChecks.join(", ")}.`)
+  }
   const openBlocking = visualQaOpenBlockingFindings(report)
   if (openBlocking.length > 0) {
     issues.push(

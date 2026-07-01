@@ -12,16 +12,58 @@ import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+const DEFAULT_CHECK_ID = "check_primary_visual_surface"
+
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
+}
+
+function checkItem(
+  overrides: Partial<VisualQaReport["check_items"][number]> = {},
+): VisualQaReport["check_items"][number] {
+  return {
+    id: DEFAULT_CHECK_ID,
+    category: "component-truth",
+    question: "Does the rendered surface match the task-owned visual and functional evidence?",
+    region: "home/table",
+    status: "passed",
+    expected: "The table density, state, and screenshot evidence match the task contract.",
+    observed: "Fresh evidence shows the table density, state, and screenshot evidence match the task contract.",
+    viewports: [{ width: 1440, height: 900 }],
+    states: ["default"],
+    source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+    evidence_refs: ["artifacts/desktop.png"],
+    ...overrides,
+  }
+}
+
+function referenceCheckItem(
+  referenceRegionKey: string,
+  evidenceRef: string,
+  overrides: Partial<VisualQaReport["check_items"][number]> = {},
+): VisualQaReport["check_items"][number] {
+  return checkItem({
+    id: `check_${referenceRegionKey.replace(/[^a-zA-Z0-9]+/g, "_")}`,
+    category: "reference-structure",
+    question: `Does ${referenceRegionKey} match the authoritative reference region?`,
+    region: referenceRegionKey.split("@")[0] || referenceRegionKey,
+    reference_region_key: referenceRegionKey,
+    expected: "The implementation matches the authoritative reference crop for this region and viewport.",
+    observed: "Fresh reference comparison evidence was inspected for this region and viewport.",
+    source_refs: ["reference.png"],
+    evidence_refs: [evidenceRef],
+    ...overrides,
+  })
 }
 
 function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
   return {
     accepted: true,
     summary: "Desktop and mobile UI surfaces passed visual QA.",
+    check_items: [checkItem()],
     coverage: [
       {
+        check_ids: [DEFAULT_CHECK_ID],
         region: "home/table",
         viewports: [{ width: 1440, height: 900 }],
         states: ["default", "narrow"],
@@ -37,6 +79,7 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     repairs: [],
     evidence: [
       {
+        check_ids: [DEFAULT_CHECK_ID],
         type: "screenshot",
         ref: "artifacts/desktop.png",
         viewport: { width: 1440, height: 900 },
@@ -64,6 +107,28 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     fact_check_items: [],
     ...overrides,
   }
+}
+
+async function submitReport(kit: ReturnType<typeof createVisualQaOutputTools>, report: VisualQaReport): Promise<string> {
+  for (const item of report.check_items) await callTool(kit.tools, "register_visual_qa_check_item", item)
+  for (const row of report.coverage) await callTool(kit.tools, "register_visual_qa_coverage", row)
+  for (const row of report.evidence) await callTool(kit.tools, "register_visual_qa_evidence", row)
+  for (const row of report.findings) await callTool(kit.tools, "register_visual_qa_finding", row)
+  for (const row of report.production_blockers) await callTool(kit.tools, "register_visual_qa_production_blocker", row)
+  for (const row of report.unresolved_code_module_problems) {
+    await callTool(kit.tools, "register_visual_qa_unresolved_code_module_problem", row)
+  }
+  for (const row of report.problem_dom_regions) await callTool(kit.tools, "register_visual_qa_problem_dom_region", row)
+  for (const row of report.repairs) await callTool(kit.tools, "register_visual_qa_repair", row)
+  for (const row of report.commands) await callTool(kit.tools, "register_visual_qa_command", row)
+  for (const file of report.changed_files) await callTool(kit.tools, "register_visual_qa_changed_file", { file })
+  for (const question of report.open_questions) await callTool(kit.tools, "register_visual_qa_open_question", { question })
+  for (const item of report.fact_check_items) await callTool(kit.tools, "register_visual_qa_fact_check_item", item)
+  await callTool(kit.tools, "set_visual_qa_reference_parity", report.reference_parity)
+  return callTool(kit.tools, "submit_visual_qa_report", {
+    accepted: report.accepted,
+    summary: report.summary,
+  })
 }
 
 afterEach(async () => {
@@ -125,7 +190,7 @@ async function seedReferenceComparisonEvidence(input: {
 describe("visual-qa output tools", () => {
   test("records accepted report with missing evidence and coverage as effective failure", async () => {
     const kit = createVisualQaOutputTools()
-    const result = await callTool(kit.tools, "submit_visual_qa_report", validReport({ evidence: [], coverage: [] }))
+    const result = await submitReport(kit, validReport({ evidence: [], coverage: [] }))
 
     expect(result).toContain("RECORDED")
     expect(result).toContain("effective_accepted=false")
@@ -138,12 +203,12 @@ describe("visual-qa output tools", () => {
 
   test("records accepted report without screenshot-bearing evidence as effective failure", async () => {
     const kit = createVisualQaOutputTools()
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
         evidence: [
           {
+            check_ids: [DEFAULT_CHECK_ID],
             type: "command",
             ref: "node node_modules/playwright/cli.js test visual.spec.ts",
             note: "Command output only; no screenshot artifact was inspected.",
@@ -161,13 +226,26 @@ describe("visual-qa output tools", () => {
 
   test("records accepted report with blockers and unresolved module problems as effective failure", async () => {
     const kit = createVisualQaOutputTools()
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
+        check_items: [
+          checkItem(),
+          checkItem({
+            id: "check_map_fidelity",
+            status: "failed",
+            region: "world economy map",
+            question: "Is the economy map rendered as the required choropleth surface?",
+            expected: "The map uses the source-backed topology implementation.",
+            observed: "The rendered map is a low-fidelity placeholder.",
+            evidence_refs: ["artifacts/map.png"],
+            required_correction: "Replace the simplified map with the source-backed topology implementation.",
+          }),
+        ],
         production_blockers: [
           {
             id: "blocker_map_fidelity",
+            check_ids: ["check_map_fidelity"],
             principle_ids: ["component-truth"],
             region: "world economy map",
             reason: "The map is a low-fidelity placeholder instead of the required choropleth surface.",
@@ -180,6 +258,7 @@ describe("visual-qa output tools", () => {
         unresolved_code_module_problems: [
           {
             id: "problem_map_module",
+            check_ids: ["check_map_fidelity"],
             code_module_reference: {
               entity: "packages/app/src/components/EconomyMap.tsx",
               problem:
@@ -206,10 +285,10 @@ describe("visual-qa output tools", () => {
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop"],
     })
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", "artifacts/desktop.png")],
         reference_parity: {
           required: true,
           required_regions: ["region_header@desktop"],
@@ -261,12 +340,13 @@ describe("visual-qa output tools", () => {
             referenceParityRequired: true,
             requiredReferenceRegions: ["region_header@desktop"],
           })
-          const result = await callTool(
-            kit.tools,
-            "submit_visual_qa_report",
+          const result = await submitReport(
+            kit,
             validReport({
+              check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
               evidence: [
                 {
+                  check_ids: ["check_region_header_desktop"],
                   type: "reference_comparison",
                   ref: evidenceID,
                   viewport: { width: 1440, height: 900 },
@@ -276,6 +356,7 @@ describe("visual-qa output tools", () => {
               ],
               coverage: [
                 {
+                  check_ids: ["check_region_header_desktop"],
                   region: "region_header",
                   viewports: [{ width: 1440, height: 900 }],
                   states: ["default"],
@@ -324,12 +405,13 @@ describe("visual-qa output tools", () => {
           referenceParityRequired: true,
           requiredReferenceRegions: ["region_header@desktop"],
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -339,6 +421,7 @@ describe("visual-qa output tools", () => {
             ],
             coverage: [
               {
+                check_ids: ["check_region_header_desktop"],
                 region: "region_header",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
@@ -383,12 +466,13 @@ describe("visual-qa output tools", () => {
           referenceParityRequired: true,
           requiredReferenceRegions: ["region_header@desktop"],
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -431,12 +515,13 @@ describe("visual-qa output tools", () => {
           projectRoot: tmp.path,
           referenceParityRequired: true,
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -482,12 +567,13 @@ describe("visual-qa output tools", () => {
           referenceParityRequired: true,
           requiredReferenceRegions: ["region_header@desktop"],
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -531,12 +617,13 @@ describe("visual-qa output tools", () => {
           referenceParityRequired: true,
           requiredReferenceRegions: ["region_header@desktop", "region_table@desktop"],
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -582,12 +669,13 @@ describe("visual-qa output tools", () => {
           referenceParityRequired: true,
           requiredReferenceRegions: ["region_header@desktop"],
         })
-        const result = await callTool(
-          kit.tools,
-          "submit_visual_qa_report",
+        const result = await submitReport(
+          kit,
           validReport({
+            check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
               {
+                check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
                 ref: evidenceID,
                 viewport: { width: 1440, height: 900 },
@@ -597,6 +685,7 @@ describe("visual-qa output tools", () => {
             ],
             coverage: [
               {
+                check_ids: ["check_region_header_desktop"],
                 region: "region_header",
                 viewports: [{ width: 1440, height: 900 }],
                 states: ["default"],
@@ -626,9 +715,8 @@ describe("visual-qa output tools", () => {
 
   test("records failed report without blockers as blocker feedback", async () => {
     const kit = createVisualQaOutputTools()
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
         accepted: false,
         findings: [],
@@ -645,14 +733,29 @@ describe("visual-qa output tools", () => {
 
   test("failed report renders production blockers and unresolved module problems in the terminal report", async () => {
     const kit = createVisualQaOutputTools()
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
         accepted: false,
+        check_items: [
+          checkItem(),
+          checkItem({
+            id: "check_hero_hierarchy",
+            category: "reference-structure",
+            question: "Does the hero hierarchy match the authoritative reference?",
+            region: "hero",
+            status: "failed",
+            expected: "The hero heading scale, spacing, and section order match the reference.",
+            observed: "The hero heading is too small and compressed compared with the reference.",
+            source_refs: ["reference.png"],
+            evidence_refs: ["artifacts/hero.png"],
+            required_correction: "Restore the reference heading scale, spacing, and section order.",
+          }),
+        ],
         production_blockers: [
           {
             id: "blocker_density",
+            check_ids: ["check_hero_hierarchy"],
             principle_ids: ["reference-structure", "visual-hierarchy-readability"],
             region: "hero",
             reason: "The visual hierarchy no longer matches the authoritative reference.",
@@ -665,6 +768,7 @@ describe("visual-qa output tools", () => {
         unresolved_code_module_problems: [
           {
             id: "problem_hero_hierarchy",
+            check_ids: ["check_hero_hierarchy"],
             code_module_reference: {
               entity: "packages/app/src/components/Hero.tsx",
               problem: "The hero component hierarchy no longer matches the authoritative reference.",
@@ -677,6 +781,7 @@ describe("visual-qa output tools", () => {
         problem_dom_regions: [
           {
             id: "dom_hero_heading",
+            check_ids: ["check_hero_hierarchy"],
             blocker_ids: ["blocker_density"],
             region: "hero",
             route: "/",
@@ -731,12 +836,16 @@ describe("visual-qa output tools", () => {
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop", "region_footer@desktop"],
     })
-    const result = await callTool(
-      kit.tools,
-      "submit_visual_qa_report",
+    const result = await submitReport(
+      kit,
       validReport({
+        check_items: [
+          checkItem(),
+          referenceCheckItem("region_header@desktop", "browser_preview_evidence:art_header"),
+        ],
         evidence: [
           {
+            check_ids: ["check_region_header_desktop"],
             type: "reference_comparison",
             ref: "browser_preview_evidence:art_header",
             viewport: { width: 1440, height: 900 },
@@ -762,11 +871,25 @@ describe("visual-qa output tools", () => {
 
   test("duplicate submit is still rejected after the report is recorded", async () => {
     const kit = createVisualQaOutputTools()
-    await callTool(kit.tools, "submit_visual_qa_report", validReport())
+    await submitReport(kit, validReport())
 
-    const duplicate = await callTool(kit.tools, "submit_visual_qa_report", validReport({ summary: "second" }))
+    const duplicate = await callTool(kit.tools, "submit_visual_qa_report", {
+      accepted: true,
+      summary: "second",
+    })
 
     expect(duplicate).toContain("duplicate submit_visual_qa_report ignored")
     expect(kit.getCollector().final?.summary).not.toBe("second")
+  })
+
+  test("submit_visual_qa_report rejects the old full-report payload", async () => {
+    const kit = createVisualQaOutputTools()
+    const schema = kit.tools.submit_visual_qa_report.inputSchema as {
+      shape: Record<string, unknown>
+      safeParse(input: unknown): { success: boolean }
+    }
+
+    expect(Object.keys(schema.shape)).toEqual(["accepted", "summary"])
+    expect(schema.safeParse(validReport()).success).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { VisualQaTestHooks } from "../../src/visual-qa"
+import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
 import { BrowserPreviewReferenceRegionsTool } from "../../src/tool/browser-preview-reference-regions"
@@ -21,7 +22,7 @@ describe("visual-qa agent", () => {
           ...contextTools,
           ...implementationTools,
           ...utilityTools,
-          submit_visual_qa_report: {} as any,
+          ...createVisualQaOutputTools().tools,
         }
         VisualQaTestHooks.assertVisualQaStaticToolSurface(tools)
         expect(Object.keys(tools).sort()).toEqual([...VISUAL_QA_SESSION_TOOL_IDS].sort())

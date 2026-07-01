@@ -54947,6 +54947,105 @@
                 "type": "string",
                 "minLength": 1
               },
+              "checkItems": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reviewerID": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "category": {
+                      "description": "Review category such as requirement, acceptance-spec, visual-evidence, runtime, code, or integration.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target": {
+                      "description": "Concrete requirement, acceptance spec, goal, file, route, command, or evidence surface checked.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "question": {
+                      "description": "Concrete falsification question inspected for this check.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "passed",
+                        "failed",
+                        "inconclusive"
+                      ]
+                    },
+                    "expected": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "observed": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "evidence": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "requirementIDs": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "specIDs": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "targetIDs": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "userRequestQuotes": {
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "category",
+                    "target",
+                    "question",
+                    "status",
+                    "expected",
+                    "observed",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
               "reviewers": {
                 "minItems": 2,
                 "type": "array",
@@ -54956,6 +55055,15 @@
                     "reviewerID": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs this reviewer report summarizes.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
                     },
                     "scope": {
                       "type": "string",
@@ -55109,6 +55217,15 @@
                           "id": {
                             "type": "string",
                             "minLength": 1
+                          },
+                          "checkIDs": {
+                            "description": "Registered Integrity check item IDs that exposed this finding.",
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
                           },
                           "severity": {
                             "type": "string",
@@ -55279,6 +55396,15 @@
                 "items": {
                   "type": "object",
                   "properties": {
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs that support this coverage audit row.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
                     "promise": {
                       "type": "string",
                       "minLength": 1
@@ -55319,6 +55445,15 @@
                 "items": {
                   "type": "object",
                   "properties": {
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs that left this risk uninspected.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
                     "risk": {
                       "type": "string",
                       "minLength": 1
@@ -55353,6 +55488,15 @@
                     "id": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs that exposed this finding.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
                     },
                     "severity": {
                       "type": "string",
@@ -55544,6 +55688,15 @@
                       "type": "string",
                       "minLength": 1
                     },
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs that require this repair.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
                     "fingerprint": {
                       "type": "string",
                       "minLength": 1
@@ -55662,6 +55815,15 @@
                     "id": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "checkIDs": {
+                      "description": "Registered Integrity check item IDs involved in this disagreement.",
+                      "default": [],
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
                     },
                     "description": {
                       "type": "string",

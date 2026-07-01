@@ -3289,8 +3289,36 @@ export type EventIntegrityReviewCompleted = {
     verdict: "pass" | "concerns" | "needs_correction"
     summary: string
     teamReportMarkdown: string
+    checkItems?: Array<{
+      id: string
+      reviewerID?: string
+      /**
+       * Review category such as requirement, acceptance-spec, visual-evidence, runtime, code, or integration.
+       */
+      category: string
+      /**
+       * Concrete requirement, acceptance spec, goal, file, route, command, or evidence surface checked.
+       */
+      target: string
+      /**
+       * Concrete falsification question inspected for this check.
+       */
+      question: string
+      status: "passed" | "failed" | "inconclusive"
+      expected: string
+      observed: string
+      evidence: Array<string>
+      requirementIDs?: Array<string>
+      specIDs?: Array<string>
+      targetIDs?: Array<string>
+      userRequestQuotes?: Array<string>
+    }>
     reviewers: Array<{
       reviewerID: string
+      /**
+       * Registered Integrity check item IDs this reviewer report summarizes.
+       */
+      checkIDs?: Array<string>
       scope: string
       verdict: "pass" | "concerns" | "needs_correction"
       summary: string
@@ -3355,6 +3383,10 @@ export type EventIntegrityReviewCompleted = {
       evidence?: Array<string>
       findings?: Array<{
         id: string
+        /**
+         * Registered Integrity check item IDs that exposed this finding.
+         */
+        checkIDs?: Array<string>
         severity: "blocking" | "advisory"
         verdictImpact: "pass" | "concerns" | "needs_correction"
         fingerprint?: string
@@ -3378,6 +3410,10 @@ export type EventIntegrityReviewCompleted = {
       openQuestions?: Array<string>
     }>
     coverageAudit?: Array<{
+      /**
+       * Registered Integrity check item IDs that support this coverage audit row.
+       */
+      checkIDs?: Array<string>
       promise: string
       reviewerIDs?: Array<string>
       /**
@@ -3387,12 +3423,20 @@ export type EventIntegrityReviewCompleted = {
       notes: string
     }>
     uninspectedRisks?: Array<{
+      /**
+       * Registered Integrity check item IDs that left this risk uninspected.
+       */
+      checkIDs?: Array<string>
       risk: string
       reason: string
       action: "block" | "re-review" | "advisory"
     }>
     findings?: Array<{
       id: string
+      /**
+       * Registered Integrity check item IDs that exposed this finding.
+       */
+      checkIDs?: Array<string>
       severity: "blocking" | "advisory"
       verdictImpact: "pass" | "concerns" | "needs_correction"
       fingerprint?: string
@@ -3421,6 +3465,10 @@ export type EventIntegrityReviewCompleted = {
     }>
     requiredRepairs?: Array<{
       id: string
+      /**
+       * Registered Integrity check item IDs that require this repair.
+       */
+      checkIDs?: Array<string>
       fingerprint?: string
       severity?: "blocking" | "advisory"
       title?: string
@@ -3439,6 +3487,10 @@ export type EventIntegrityReviewCompleted = {
     }>
     unresolvedDisagreements?: Array<{
       id: string
+      /**
+       * Registered Integrity check item IDs involved in this disagreement.
+       */
+      checkIDs?: Array<string>
       description: string
       reviewerIDs: Array<string>
       consequence: string

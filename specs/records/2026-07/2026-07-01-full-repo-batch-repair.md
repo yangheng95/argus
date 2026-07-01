@@ -97,6 +97,12 @@ Root causes repaired during the full-repo pass:
 - Overlay skill-matrix available cells exposed add glyphs by default in compact
   views. Glyphs now appear on hover/focus/active combination while the hit area
   remains stable.
+- Visual QA and Integrity consensus could still be submitted as monolithic final
+  reports, which let conclusions drift away from the concrete checks, evidence,
+  and active requirements they claimed to satisfy. Both review surfaces now use
+  registration-first output tools: every coverage row, evidence row, finding,
+  blocker, repair, reviewer report, and consensus claim cites registered check
+  item IDs before the final accepted/verdict summary is submitted.
 
 Verification already run and passed:
 
@@ -122,3 +128,8 @@ Verification already run and passed:
 - `bun run overlay:i18n-check`
 - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
 - `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/visual-qa/output-tools.test.ts packages/opencorvus/test/visual-qa/negative-fixtures.test.ts packages/opencorvus/test/visual-qa/agent.test.ts packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/integrity/team-schema.test.ts packages/opencorvus/test/integrity/team-agent.test.ts packages/opencorvus/test/integrity/browser-preview-tool.test.ts packages/opencorvus/test/integrity/consensus-traceability.test.ts packages/opencorvus/test/integrity/severity-active-path.test.ts`
+- `bun test packages/opencorvus/test/agent/core-prompt-hygiene.test.ts packages/opencorvus/test/agent/integrity-prompt-repository-baseline.test.ts packages/opencorvus/test/agent/orchestrator-stale-recovery-prompt.test.ts`
+- `bun run --cwd packages/sdk/js build`
+- `bun run typecheck`
+- `git diff --check`

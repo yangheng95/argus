@@ -83,7 +83,7 @@ mock.module("@/agent/runner", () => ({
         openQuestions: [],
       }
     } else if (input.terminalTool.toolName === "submit_integrity_consensus") {
-      const result = await input.toolKit.tools.submit_integrity_consensus.execute(passTeamReport(), {})
+      const result = await submitRegisteredIntegrityReport(input.toolKit.tools, passTeamReport())
       terminalResults.push(String(result))
     }
     lifecycle?.dispose?.()
@@ -149,14 +149,47 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
   }
 }
 
-function passTeamReport() {
+function passTeamReport(input: { requirementIDs?: string[] } = {}) {
   return {
     verdict: "pass",
     summary: "Team passed",
     teamReportMarkdown: "Team passed",
+    checkItems: [
+      {
+        id: "check_surface_a",
+        reviewerID: "rev_a",
+        category: "runtime",
+        target: "Surface A",
+        question: "Does Surface A satisfy its scoped promise?",
+        status: "passed",
+        expected: "Surface A satisfies its scoped promise.",
+        observed: "Surface A evidence satisfies the scoped promise.",
+        evidence: ["inspect_integrity_evidence:surface-a"],
+        requirementIDs: input.requirementIDs ?? [],
+        specIDs: [],
+        targetIDs: [],
+        userRequestQuotes: [],
+      },
+      {
+        id: "check_surface_b",
+        reviewerID: "rev_b",
+        category: "runtime",
+        target: "Surface B",
+        question: "Does Surface B satisfy its scoped promise?",
+        status: "passed",
+        expected: "Surface B satisfies its scoped promise.",
+        observed: "Surface B evidence satisfies the scoped promise.",
+        evidence: ["inspect_integrity_evidence:surface-b"],
+        requirementIDs: input.requirementIDs ?? [],
+        specIDs: [],
+        targetIDs: [],
+        userRequestQuotes: [],
+      },
+    ],
     reviewers: [
       {
         reviewerID: "rev_a",
+        checkIDs: ["check_surface_a"],
         scope: "Surface A",
         verdict: "pass",
         summary: "rev_a passed",
@@ -167,6 +200,7 @@ function passTeamReport() {
       },
       {
         reviewerID: "rev_b",
+        checkIDs: ["check_surface_b"],
         scope: "Surface B",
         verdict: "pass",
         summary: "rev_b passed",
@@ -177,12 +211,59 @@ function passTeamReport() {
       },
     ],
     findings: [],
-    coverageAudit: [],
+    coverageAudit: [
+      {
+        checkIDs: ["check_surface_a", "check_surface_b"],
+        promise: "Task-scoped surfaces were reviewed.",
+        reviewerIDs: ["rev_a", "rev_b"],
+        status: "covered",
+        notes: "Both reviewer perspectives registered evidence-backed checks.",
+      },
+    ],
+    uninspectedRisks: [],
     rounds: [],
     requiredRepairs: [],
     unresolvedDisagreements: [],
     fact_check_items: [],
   }
+}
+
+async function submitRegisteredIntegrityReport(tools: Record<string, any>, report: ReturnType<typeof passTeamReport>) {
+  for (const item of report.checkItems) {
+    await tools.register_integrity_check_item.execute!(item, {})
+  }
+  for (const reviewer of report.reviewers) {
+    await tools.register_integrity_reviewer_report.execute!(reviewer, {})
+  }
+  for (const row of report.coverageAudit) {
+    await tools.register_integrity_coverage_audit.execute!(row, {})
+  }
+  for (const row of report.uninspectedRisks) {
+    await tools.register_integrity_uninspected_risk.execute!(row, {})
+  }
+  for (const row of report.findings) {
+    await tools.register_integrity_finding.execute!(row, {})
+  }
+  for (const row of report.rounds) {
+    await tools.register_integrity_round.execute!(row, {})
+  }
+  for (const row of report.requiredRepairs) {
+    await tools.register_integrity_required_repair.execute!(row, {})
+  }
+  for (const row of report.unresolvedDisagreements) {
+    await tools.register_integrity_unresolved_disagreement.execute!(row, {})
+  }
+  for (const row of report.fact_check_items) {
+    await tools.register_integrity_fact_check_item.execute!(row, {})
+  }
+  return tools.submit_integrity_consensus.execute!(
+    {
+      verdict: report.verdict,
+      summary: report.summary,
+      teamReportMarkdown: report.teamReportMarkdown,
+    },
+    {},
+  )
 }
 
 function reReviewReplayContext(): IntegrityReplayContext {
@@ -689,7 +770,7 @@ describe("integrity team-agent replay attempts", () => {
         evidence_refs: [],
       },
     ]
-    const collector = {}
+    const collector = IntegrityTestHooks.emptyConsensusCollector()
     const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
       collector,
       goals: [
@@ -708,12 +789,13 @@ describe("integrity team-agent replay attempts", () => {
       requirements,
     } as any)
 
-    const omitted = await kit.tools.submit_integrity_consensus.execute!(passTeamReport(), {} as any)
-    expect(String(omitted)).toContain("omitted active requirement coverage")
-    expect(String(omitted)).toContain("REQ-1, REQ-2")
+    const omitted = await submitRegisteredIntegrityReport(kit.tools, passTeamReport())
+    expect(String(omitted)).toContain("check graph is incomplete")
+    expect(String(omitted)).toContain("active requirement REQ-1")
+    expect(String(omitted)).toContain("active requirement REQ-2")
     expect((collector as any).report).toBeUndefined()
 
-    const report = passTeamReport()
+    const report = passTeamReport({ requirementIDs: ["REQ-1", "REQ-2"] })
     ;(report.reviewers[0] as any).coverage = [
       {
         requirementID: "REQ-1",
@@ -729,9 +811,25 @@ describe("integrity team-agent replay attempts", () => {
       },
     ]
 
-    const recorded = await kit.tools.submit_integrity_consensus.execute!(report, {} as any)
+    const recorded = await submitRegisteredIntegrityReport(kit.tools, report)
     expect(String(recorded)).toContain("RECORDED")
     expect((collector as any).report).toBeDefined()
+  })
+
+  test("submit_integrity_consensus rejects the old full-report payload", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector: IntegrityTestHooks.emptyConsensusCollector(),
+      goals: [],
+    } as any)
+
+    const schema = kit.tools.submit_integrity_consensus.inputSchema as {
+      safeParse: (value: unknown) => { success: boolean }
+    }
+    expect(schema.safeParse(passTeamReport()).success).toBe(false)
+
+    const result = await kit.tools.submit_integrity_consensus.execute!(passTeamReport(), {} as any)
+    expect(String(result)).toContain("accepts only verdict, summary, and teamReportMarkdown")
   })
 
   test("consensus prompt summarizes oversized reviewer reports instead of replaying full tool dumps", async () => {

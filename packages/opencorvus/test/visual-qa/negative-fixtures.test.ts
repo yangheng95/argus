@@ -5,6 +5,7 @@ import type { VisualQaReport } from "../../src/visual-qa/schema"
 
 const fixtureRoot = path.join(import.meta.dir, "fixtures", "negative-product-grade")
 const manifestPath = path.join(fixtureRoot, "manifest.json")
+const NEGATIVE_CHECK_ID = "check_negative_product_grade_fixture"
 
 interface NegativeFixtureManifest {
   description: string
@@ -32,8 +33,25 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
   return {
     accepted,
     summary: `${item.id} is a negative product-grade calibration fixture.`,
+    check_items: [
+      {
+        id: NEGATIVE_CHECK_ID,
+        category: item.blocker.principle_ids[0] ?? "component-truth",
+        question: `Does ${item.blocker.region} satisfy the product-grade visual contract?`,
+        region: item.blocker.region,
+        status: "failed",
+        expected: item.blocker.required_correction,
+        observed: item.blocker.reason,
+        viewports: [{ width: 1366, height: 768 }],
+        states: ["default"],
+        source_refs: ["fixture:negative-product-grade"],
+        evidence_refs: [imageRef],
+        required_correction: item.blocker.required_correction,
+      },
+    ],
     coverage: [
       {
+        check_ids: [NEGATIVE_CHECK_ID],
         region: item.blocker.region,
         viewports: [{ width: 1366, height: 768 }],
         states: ["default"],
@@ -46,6 +64,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
     production_blockers: [
       {
         ...item.blocker,
+        check_ids: [NEGATIVE_CHECK_ID],
         source_refs: ["fixture:negative-product-grade"],
         evidence_refs: [imageRef],
       },
@@ -55,6 +74,7 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
     repairs: [],
     evidence: [
       {
+        check_ids: [NEGATIVE_CHECK_ID],
         type: "screenshot",
         ref: imageRef,
         viewport: { width: 1366, height: 768 },
@@ -62,6 +82,13 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
         note: "Negative product-grade fixture screenshot.",
       },
     ],
+    reference_parity: {
+      required: false,
+      required_regions: [],
+      reference_comparison_evidence_refs: [],
+      missing_regions: [],
+      blocker_ids: [],
+    },
     commands: [],
     changed_files: [],
     open_questions: [],
@@ -71,7 +98,22 @@ function reportForFixture(item: NegativeFixtureManifest["cases"][number], accept
 
 async function callSubmit(report: VisualQaReport): Promise<string> {
   const kit = createVisualQaOutputTools()
-  return (await kit.tools.submit_visual_qa_report.execute!(report as never, {} as never)) as string
+  for (const item of report.check_items) {
+    await kit.tools.register_visual_qa_check_item.execute!(item as never, {} as never)
+  }
+  for (const row of report.coverage) {
+    await kit.tools.register_visual_qa_coverage.execute!(row as never, {} as never)
+  }
+  for (const row of report.production_blockers) {
+    await kit.tools.register_visual_qa_production_blocker.execute!(row as never, {} as never)
+  }
+  for (const row of report.evidence) {
+    await kit.tools.register_visual_qa_evidence.execute!(row as never, {} as never)
+  }
+  return (await kit.tools.submit_visual_qa_report.execute!(
+    { accepted: report.accepted, summary: report.summary } as never,
+    {} as never,
+  )) as string
 }
 
 describe("visual-qa negative product-grade fixtures", () => {
