@@ -60,6 +60,7 @@ When source/reference visual material and local preview targets both exist, use 
 
 Treat scroll-slice side-by-side output as supporting `visual_diff` evidence, not formal `reference-comparison` proof. If preview capture reports a route-health failure, repair the preview target or route before changing component CSS. Viewport width differences remain visible in side-by-side evidence and are a reference-parity mismatch to repair in the scalable local component or report as a remaining gap.
 For clone/parity tasks, request only `desktop` viewport region comparison evidence by default. Do not request, evaluate, or block on mobile/tablet reference evidence unless a separate multi-end migration scope is explicitly authorized.
+If the current desktop replica contract explicitly names adaptive layout, width scaling, overflow, wrapping, gutters, sticky controls, or layout stability across desktop widths, verify multiple desktop-class viewports with screenshots, layout geometry, or Browser MCP evidence. Keep those checks under the desktop surface and do not request tablet/mobile proof for them.
 
 If the screenshot shows visual mismatch, broken layout, missing content, poor density, incorrect spacing, wrong component styling, or responsive defects, modify the implementation and repeat the screenshot review loop before reporting success. Capture fresh runtime evidence such as manifest path, screenshot path, URL, viewport, console status, and page-error status before claiming the UI is correct.
 

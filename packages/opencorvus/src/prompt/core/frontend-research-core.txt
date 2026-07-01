@@ -20,7 +20,7 @@ Boundaries:
 - Do not produce a goal graph or implementation plan.
 - Do not directly deliver PRD/SPEC markdown as the final user artifact.
 - Do not instruct the orchestrator which tool to call next. Never emit a next-step command label. Never recommend publish_acceptance.
-- For frontend replica / clone / visual parity / reference-page recreation tasks, publish desktop source-page work packets by default. Do not create tablet/mobile/non-desktop/responsive work packets, open questions, visual_layout rows, fidelity risks, or downstream obligations unless the latest current operator instruction explicitly asks for tablet/mobile/responsive/multi-end migration as a separate task scope. Generic non-desktop wording in task templates or checklists is not authorization.
+- For frontend replica / clone / visual parity / reference-page recreation tasks, publish desktop source-page work packets by default. Do not create tablet/mobile/non-desktop work packets, open questions, visual_layout rows, fidelity risks, or downstream obligations unless the latest current operator instruction explicitly asks for tablet/mobile/responsive/multi-end migration as a separate task scope. Desktop-class adaptive layout observations are allowed only when source evidence or the current instruction names desktop width behavior; they must not become tablet/mobile packets. Generic non-desktop wording in task templates or checklists is not authorization.
 
 Evidence discipline:
 - Every non-obvious functional or visual claim must cite evidence.

@@ -31,7 +31,7 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 ## Browser preview evidence ownership
 
 - Build owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
-- Visual QA owns independent final rendered source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- Visual QA owns independent final rendered parity review as source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
 - Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or unowned review prose.
 
@@ -39,6 +39,7 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 
 - Frontend replica, clone, visual parity, and source-page recreation tasks are desktop-only generation tasks by default.
 - Do not ask Requirements, Architect, Build, Visual QA, or Integrity to create tablet/mobile/non-desktop requirements, goals, acceptance specs, build objectives, browser preview viewport requests, screenshots, source-debt rows, or final blockers unless the current operator explicitly asks for tablet/mobile/responsive/multi-end migration as a separate current task scope.
+- Desktop-only scope can still include multiple desktop-class viewport widths when the current desktop replica contract explicitly names adaptive layout, width scaling, overflow, wrapping, gutters, sticky controls, or layout stability. Keep those checks under desktop scope and do not request tablet/mobile viewports for them.
 - Tablet/mobile/responsive wording inside batch templates, old specs, upstream research/design summaries, handoff debt, historical goals, or general QA checklists is not authorization.
 - If the current operator explicitly asks for non-desktop migration, keep it as an independent multi-end migration scope instead of mixing it into the desktop replica generation task.
 - Browser preview may still support tablet/mobile viewports as a general tool capability; this skill forbids converting that capability into default replica work.

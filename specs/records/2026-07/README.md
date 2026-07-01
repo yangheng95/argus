@@ -9,3 +9,4 @@
 - [2026-07-01-frontend-replica-requirements-webpage-generation.md](2026-07-01-frontend-replica-requirements-webpage-generation.md) records the frontend-replica Requirements prompt coverage for webpage-generation requirements beyond responsive scope.
 - [2026-07-01-expert-squad-concrete-prompts.md](2026-07-01-expert-squad-concrete-prompts.md) records the removal of vague frontend-innovate expert-squad placeholder labels in favor of concrete task evidence and verification prompt contracts.
 - [2026-07-01-coding-assistant-session-diff-sse.md](2026-07-01-coding-assistant-session-diff-sse.md) records the Coding Assistant session SSE repair for `session.diff` stream closure before assistant parts.
+- [2026-07-01-frontend-replica-desktop-adaptive-viewports.md](2026-07-01-frontend-replica-desktop-adaptive-viewports.md) records the frontend-replica prompt distinction between desktop adaptive multi-viewport checks and non-desktop migration scope.

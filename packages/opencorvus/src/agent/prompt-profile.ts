@@ -128,7 +128,7 @@ export namespace PromptProfile {
         coding: expertOverlay(
           "Prioritize desktop source information architecture, module order, density, states, and source screenshot/DOM/computed-style correspondence. Do not introduce tablet/mobile scope unless the operator asks for a separate multi-end migration task.",
           "Treat target project primitives, business components, and code as reuse options only when they preserve source region layout, typography/spacing/color tokens, content density, and interaction semantics.",
-          "Verify the rendered component system against source screenshots, source structure evidence, computed style facts, and real states before claiming the replica is done.",
+          "When the desktop contract names adaptive layout, verify multiple desktop-class viewport widths before claiming the replica is done; this remains desktop scope, not tablet/mobile migration.",
         ),
         "coding-assistant": expertOverlay(
           "Answer replica questions in terms of source structure, component mapping, typography/spacing/color evidence, interaction semantics, and rendered screenshot proof.",
@@ -159,34 +159,34 @@ export namespace PromptProfile {
           "Write replica requirements as desktop observable truths: information architecture, module sequence, component states, source assets, rendered screenshot acceptance, and interaction outcomes.",
           "Register webpage-generation coverage beyond responsive behavior as explicit REQ or decision scope: source evidence binding, region completeness, visual style fidelity, interaction semantics, data/UI contracts, accessibility semantics, asset/media ownership, runtime integration, and browser verification evidence.",
           "Do not create tablet/mobile/non-desktop REQ rows from generic template, research, or handoff text; each requirement must bind to a source component, region, or state.",
-          "When responsive or multi-viewport generation is explicitly authorized, register viewport-specific layout/alignment requirements separately; otherwise keep the replica requirements desktop-only.",
+          "When the desktop replica contract includes adaptive/responsive layout, register desktop-class viewport layout/alignment requirements; otherwise keep default desktop-only and reserve tablet/mobile/non-desktop viewport requirements for separate multi-end migration.",
           "Each webpage-generation requirement must name the affected source component, region, or state with observable acceptance and non-goal boundaries; preserve broad coverage in scope decisions instead of hiding all concerns in one page-level payload.",
           "Require Component Interaction Matrix coverage for clickable, hoverable, focusable, sortable, filterable, chart, map, table, and popover surfaces before implementation is accepted.",
         ),
         architect: expertOverlay(
           "Turn replica requirements into desktop component boundaries, data flow, target project reuse decisions, and one accountable goal per meaningful component or region.",
-          "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; reject page-wide goals that omit source region/component ownership.",
+          "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; desktop adaptive viewport acceptance stays on desktop goals when the current contract names it.",
           "Preserve the source module order, density, visual token source, state model, and interaction contracts while mapping target project code reuse to each goal.",
         ),
         "frontend-design": expertOverlay(
           "Extract a desktop source-backed replica contract: information architecture, module order, density, spacing, typography, source assets, interactions, and preservation evidence.",
-          "Document Component Interaction Matrix coverage, target project reuse constraints, visual token ownership, state transitions, and evidence paths for each component or region.",
+          "Document Component Interaction Matrix coverage, target project reuse constraints, visual token ownership, state transitions, desktop adaptive viewport obligations, and evidence paths for each component or region.",
           "Mark non-desktop template language out of scope unless requested as separate migration, and make the handoff implementation-ready without changing the source page hierarchy.",
         ),
         "frontend-research": expertOverlay(
           "Produce a desktop source-backed replica brief that separates confirmed facts from assumptions and defines target surfaces, source assets, key interactions, and evidence gaps.",
-          "Capture reference screenshots, source structure evidence, computed styles, and interaction observations at the component or region level so Architect can create one goal per slice.",
+          "Capture reference screenshots, source structure evidence, computed styles, desktop width behavior, and interaction observations at the component or region level so Architect can create one goal per slice.",
           "Do not publish tablet/mobile work packets for default replica tasks; report missing source evidence instead of filling gaps with target project conventions.",
         ),
         build: expertOverlay(
           "Build approved desktop replica work without source drift, one scoped component or region goal at a time. Reuse target project components and business code only where they preserve source parity.",
-          "Implement real user interface, real state, and data-backed tables/charts/maps; concentrate source-derived visual tokens in the page source of truth and use browser_preview_reference_regions only for one source-binding module comparison when source and concrete local component regions exist.",
+          "Implement real user interface, real state, and data-backed tables/charts/maps; use browser_preview_reference_regions only for one source-binding module comparison when source and concrete local component regions exist, and capture desktop adaptive evidence across multiple desktop-class widths when the contract requires it.",
           "Use Browser MCP screenshot/observe tools for ordinary browser inspection, not a weakened duplicate screenshot tool. Do not use page-shell, whole-page, body/main/app-root locators as first-viewport reference-region proof; use browser_preview_compare_scroll_slices for first-viewport and page-slice visual_diff support. Treat non-desktop goals as scope defects; inspect manifest/lockfile and rerun original checks.",
         ),
         "visual-qa": expertOverlay(
-          "Audit desktop structure, spacing, density, typography, interactions, source assets, and component states against the exact source evidence and rendered target page.",
+          "Audit desktop structure, spacing, density, typography, interactions, source assets, component states, and any scoped desktop adaptive layout behavior against the exact source evidence and rendered target page.",
           "Own final module source-binding review with browser_preview_reference_regions when source and concrete local component regions exist; use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, and use browser_preview_compare_scroll_slices only for first-viewport and page-slice visual_diff support.",
-          "Do not require mobile/tablet evidence. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, or target project reuse proof is missing.",
+          "Do not require mobile/tablet evidence; if the desktop contract names adaptive layout, inspect multiple desktop-class widths and register multi-viewport alignment for those desktop viewports. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, or target project reuse proof is missing.",
         ),
         integrity: expertOverlay(
           "Treat replica delivery as incomplete unless desktop source structure, requested surface, component-per-goal request, interactions, rendered screenshots, and browser evidence are shown.",
@@ -195,7 +195,7 @@ export namespace PromptProfile {
         ),
         orchestrator: expertOverlay(
           "Keep replica decisions grounded in exact reference surface, source evidence, goals, acceptance, and the operator's component-per-goal request.",
-          "Assign downstream work so Build and Visual QA produce reference-region proof and scroll-slice supporting evidence, with source research and design evidence available before implementation.",
+          "Assign downstream work so Build and Visual QA produce reference-region proof and scroll-slice supporting evidence, plus scoped desktop adaptive viewport checks when the current desktop contract requires them.",
           "Keep template mobile text out of goals, preserve desktop source scope, and make target project reuse subordinate to source-page parity.",
         ),
       },

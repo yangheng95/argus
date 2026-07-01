@@ -289,7 +289,7 @@ describe("prompt profiles", () => {
     expect(prompt).toContain("asset/media ownership")
     expect(prompt).toContain("runtime integration")
     expect(prompt).toContain("browser verification evidence")
-    expect(prompt).toContain("viewport-specific layout/alignment requirements")
+    expect(prompt).toContain("desktop-class viewport layout/alignment requirements")
     expect(prompt).toContain("desktop-only")
   })
 
