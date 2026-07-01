@@ -3,30 +3,31 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenCorvus Agent Team Infrastructure Executive Map</title>
+    <title>OpenCorvus Agent Team Infrastructure Architecture Map</title>
     <style>
       :root {
-        --bg: #f3f0ea;
-        --paper: #fffdf8;
-        --paper-2: #f9f6ef;
-        --ink: #18202d;
-        --ink-soft: #38465a;
-        --muted: #687385;
-        --line: #d8d0c2;
-        --line-dark: #9d9486;
-        --navy: #193b59;
-        --navy-soft: #e2ebf2;
-        --copper: #9a5a32;
-        --copper-soft: #f1dfcf;
-        --moss: #446852;
-        --moss-soft: #dfe8dd;
-        --plum: #5b5577;
-        --plum-soft: #e8e4f1;
-        --steel: #526b7d;
-        --steel-soft: #e3ebef;
-        --signal: #b08a38;
-        --signal-soft: #f3ead3;
-        --shadow: 0 24px 50px rgba(24, 32, 45, 0.1);
+        --bg: #f2f4f1;
+        --paper: #ffffff;
+        --paper-2: #f6f7f4;
+        --ink: #1f2933;
+        --ink-soft: #3f4d57;
+        --muted: #6b7280;
+        --line: #d9ded7;
+        --line-dark: #b9c1b8;
+        --navy: #243447;
+        --navy-soft: #e7edf1;
+        --copper: #8a5a2b;
+        --copper-soft: #f2e8dc;
+        --moss: #486b4b;
+        --moss-soft: #e7efe6;
+        --plum: #5b5570;
+        --plum-soft: #ece9f1;
+        --steel: #526576;
+        --steel-soft: #e8edf0;
+        --signal: #476a8f;
+        --signal-soft: #e7eef5;
+        --shadow: 0 24px 52px rgba(31, 41, 51, 0.08);
+        --mono: ui-monospace, "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
       }
 
       * {
@@ -34,17 +35,9 @@
       }
 
       html {
-        background:
-          linear-gradient(90deg, rgba(24, 32, 45, 0.04) 1px, transparent 1px) 0 0 / 44px 44px,
-          linear-gradient(0deg, rgba(24, 32, 45, 0.035) 1px, transparent 1px) 0 0 / 44px 44px,
-          var(--bg);
+        background: linear-gradient(180deg, #f6f7f4 0%, var(--bg) 54%, #e9ede7 100%);
         color: var(--ink);
-        font-family:
-          "Segoe UI",
-          "Microsoft YaHei",
-          "PingFang SC",
-          system-ui,
-          sans-serif;
+        font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
       }
 
       body {
@@ -53,9 +46,9 @@
         overflow-x: hidden;
       }
 
-      a {
-        color: inherit;
-        text-decoration: none;
+      code,
+      .mono {
+        font-family: var(--mono);
       }
 
       .page {
@@ -66,14 +59,13 @@
 
       .masthead {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
+        grid-template-columns: minmax(0, 1fr) 384px;
         gap: 28px;
         align-items: end;
-        min-height: 136px;
-        padding: 24px 30px 24px;
+        padding: 24px 30px;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background: rgba(255, 253, 248, 0.94);
+        background: rgba(255, 255, 255, 0.94);
         box-shadow: var(--shadow);
       }
 
@@ -87,57 +79,67 @@
       }
 
       h1 {
-        max-width: 980px;
+        max-width: 1000px;
         margin: 0;
-        color: var(--ink);
-        font-size: 36px;
-        line-height: 1.14;
-        letter-spacing: 0;
+        font-size: 35px;
+        line-height: 1.16;
       }
 
       .lead {
         max-width: 1060px;
-        margin: 14px 0 0;
+        margin: 13px 0 0;
         color: var(--ink-soft);
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.72;
+      }
+
+      .lead b {
+        color: var(--ink);
+      }
+
+      .lead code {
+        color: var(--copper);
+        font-size: 12.5px;
       }
 
       .executive-note {
         border-left: 4px solid var(--navy);
-        padding: 14px 0 14px 18px;
+        padding: 12px 0 12px 18px;
       }
 
       .executive-note strong {
         display: block;
-        margin-bottom: 8px;
+        margin-bottom: 7px;
         color: var(--ink);
-        font-size: 15px;
+        font-size: 14px;
       }
 
       .executive-note p {
         margin: 0;
         color: var(--muted);
-        font-size: 13px;
-        line-height: 1.68;
+        font-size: 12.5px;
+        line-height: 1.66;
+      }
+
+      .executive-note .open-hint {
+        color: var(--copper);
+        font-weight: 700;
       }
 
       .metric-strip {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 0;
         overflow: hidden;
         margin: 16px 0 18px;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background: rgba(255, 253, 248, 0.92);
+        background: rgba(255, 255, 255, 0.92);
       }
 
       .metric {
-        min-height: 84px;
-        padding: 14px 14px 12px;
+        min-height: 92px;
+        padding: 14px 15px 13px;
         border-left: 1px solid var(--line);
-        background: transparent;
       }
 
       .metric:first-child {
@@ -146,19 +148,32 @@
 
       .metric em {
         display: block;
-        margin-bottom: 7px;
+        margin-bottom: 6px;
         color: var(--signal);
         font-style: normal;
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 750;
         line-height: 1;
       }
 
+      .metric b {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--ink);
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+
       .metric span {
         display: block;
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.48;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+
+      .metric code {
+        color: var(--copper);
+        font-size: 11px;
       }
 
       .executive-map {
@@ -166,36 +181,79 @@
         overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background:
-          linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(249, 246, 239, 0.96) 100%);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 247, 244, 0.96) 100%);
         box-shadow: var(--shadow);
       }
 
-      .map-title {
+      .map-hint {
         position: absolute;
-        left: 32px;
-        top: 26px;
-        z-index: 2;
-      }
-
-      .map-title h2 {
-        margin: 0 0 6px;
-        font-size: 20px;
-        letter-spacing: 0;
-      }
-
-      .map-title p {
-        max-width: 520px;
-        margin: 0;
+        top: 16px;
+        right: 18px;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
         color: var(--muted);
-        font-size: 12px;
-        line-height: 1.55;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .map-hint::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--copper);
       }
 
       .map-svg {
         display: block;
         width: 100%;
-        height: 760px;
+        height: auto;
+      }
+
+      .map-svg .hot {
+        cursor: pointer;
+      }
+
+      .map-svg .hot:hover {
+        opacity: 0.82;
+      }
+
+      .map-svg .hot:focus {
+        outline: none;
+      }
+
+      .map-svg .hot:focus-visible rect,
+      .map-svg .hot:focus-visible circle {
+        stroke: var(--copper);
+        stroke-width: 2.5;
+      }
+
+      .svg-h {
+        font-size: 19px;
+        font-weight: 760;
+        fill: var(--ink);
+      }
+
+      .svg-sub {
+        font-size: 12px;
+        fill: var(--muted);
+      }
+
+      .spine-title {
+        font-size: 15px;
+        font-weight: 760;
+        fill: var(--ink);
+      }
+
+      .spine-copy {
+        font-size: 11px;
+        fill: var(--ink-soft);
       }
 
       .plane-label {
@@ -204,283 +262,156 @@
         fill: var(--ink);
       }
 
-      .plane-note,
-      .small-copy {
+      .plane-note {
         font-size: 11px;
         fill: var(--muted);
       }
 
-      .micro-copy {
-        font-size: 10px;
-        fill: var(--muted);
-      }
-
       .node-title {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 750;
         fill: var(--ink);
       }
 
       .node-copy {
-        font-size: 11px;
+        font-size: 10.5px;
         fill: var(--ink-soft);
       }
 
-      .white-title {
-        font-size: 22px;
+      .micro-copy {
+        font-size: 9.5px;
+        fill: var(--muted);
+      }
+
+      .dark-title {
+        font-size: 16px;
         font-weight: 760;
         fill: #ffffff;
       }
 
-      .white-copy {
-        font-size: 12px;
-        fill: rgba(255, 255, 255, 0.82);
+      .dark-copy {
+        font-size: 10.5px;
+        fill: rgba(255, 255, 255, 0.86);
       }
 
-      .ring-label {
-        font-size: 12px;
-        font-weight: 700;
-        fill: var(--ink-soft);
-      }
-
-      .tag-text {
+      .group-label {
         font-size: 11px;
         font-weight: 700;
+        fill: var(--copper);
+        letter-spacing: 0.02em;
+      }
+
+      .pillar-title {
+        font-size: 15px;
+        font-weight: 760;
+        fill: var(--ink);
+      }
+
+      .pillar-copy {
+        font-size: 11.5px;
+        fill: var(--muted);
+      }
+
+      .role-link {
+        font-size: 11.5px;
+        font-weight: 650;
         fill: var(--ink-soft);
       }
 
-      .section {
-        margin-top: 18px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: rgba(255, 253, 248, 0.92);
-        box-shadow: 0 16px 36px rgba(24, 32, 45, 0.07);
+      .quiet-copy {
+        font-size: 10px;
+        fill: var(--muted);
       }
 
-      .section-header {
-        display: flex;
-        justify-content: space-between;
-        gap: 24px;
-        align-items: baseline;
-        padding: 18px 22px 14px;
-        border-bottom: 1px solid var(--line);
+      .flow-caption {
+        font-size: 10.5px;
+        font-weight: 650;
+        fill: var(--steel);
       }
 
-      .section-header h2 {
-        margin: 0;
-        font-size: 19px;
-        letter-spacing: 0;
+      .chip-text {
+        font-size: 11px;
+        font-weight: 650;
+        fill: var(--ink);
       }
 
-      .section-header p {
-        max-width: 680px;
-        margin: 0;
-        color: var(--muted);
+      .chip-sub {
+        font-size: 9px;
+        fill: var(--muted);
+      }
+
+      .band-label {
         font-size: 12px;
-        line-height: 1.55;
-        text-align: right;
+        font-weight: 700;
+        fill: var(--copper);
       }
 
-      .capability-field {
-        display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
-        gap: 0;
+      .edge-label {
+        font-size: 10px;
+        font-weight: 600;
+        fill: var(--steel);
       }
 
-      .field-panel {
-        min-height: 316px;
-        padding: 22px;
+      .map-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        padding: 12px 22px;
+        border-top: 1px solid var(--line);
+        background: var(--paper-2);
+        color: var(--muted);
+        font-size: 11px;
       }
 
-      .field-panel + .field-panel {
-        border-left: 1px solid var(--line);
-      }
-
-      .rail {
-        position: relative;
-        display: grid;
-        gap: 16px;
-        padding: 6px 0 0 28px;
-      }
-
-      .rail::before {
-        content: "";
-        position: absolute;
-        left: 9px;
-        top: 12px;
-        bottom: 12px;
-        width: 2px;
-        background: linear-gradient(180deg, var(--navy), var(--moss), var(--signal));
-      }
-
-      .rail-item {
-        position: relative;
-        display: grid;
-        grid-template-columns: 140px minmax(0, 1fr);
-        gap: 18px;
-        align-items: start;
-        min-height: 48px;
-      }
-
-      .rail-item::before {
-        content: "";
-        position: absolute;
-        left: -24px;
-        top: 5px;
+      .map-legend i {
+        display: inline-block;
         width: 12px;
         height: 12px;
-        border: 2px solid var(--paper);
-        border-radius: 50%;
-        background: var(--navy);
-        box-shadow: 0 0 0 1px var(--line-dark);
+        margin-right: 6px;
+        border: 1px solid var(--line-dark);
+        border-radius: 3px;
+        vertical-align: -1px;
       }
 
-      .rail-item:nth-child(2)::before,
-      .rail-item:nth-child(3)::before {
-        background: var(--moss);
-      }
-
-      .rail-item:nth-child(4)::before,
-      .rail-item:nth-child(5)::before {
-        background: var(--signal);
-      }
-
-      .rail-key {
-        color: var(--ink);
-        font-size: 13px;
-        font-weight: 750;
-        line-height: 1.35;
-      }
-
-      .rail-value {
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.62;
-      }
-
-      .portfolio {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .portfolio-item {
-        min-height: 96px;
-        padding: 14px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--paper-2);
-      }
-
-      .portfolio-item strong {
-        display: block;
-        margin-bottom: 8px;
-        color: var(--ink);
-        font-size: 13px;
-      }
-
-      .portfolio-item span {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.55;
-      }
-
-      .horizon {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0;
-      }
-
-      .horizon-stage {
-        min-height: 248px;
-        padding: 22px;
-        border-left: 1px solid var(--line);
-      }
-
-      .horizon-stage:first-child {
-        border-left: 0;
-      }
-
-      .stage-index {
-        display: inline-flex;
+      .guardrail-strip {
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        margin-bottom: 14px;
-        border-radius: 50%;
-        background: var(--ink);
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 760;
-      }
-
-      .horizon-stage h3 {
-        margin: 0 0 10px;
-        font-size: 16px;
-        letter-spacing: 0;
-      }
-
-      .horizon-stage p {
-        margin: 0 0 14px;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.62;
-      }
-
-      .horizon-stage ul {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        display: grid;
         gap: 8px;
+        margin-top: 18px;
+        padding: 14px 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 16px 36px rgba(31, 41, 51, 0.06);
       }
 
-      .horizon-stage li {
-        position: relative;
-        padding-left: 18px;
-        color: var(--ink-soft);
-        font-size: 12px;
-        line-height: 1.45;
-      }
-
-      .horizon-stage li::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0.58em;
-        width: 7px;
-        height: 1px;
-        background: var(--signal);
-      }
-
-      .source-ledger {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1px;
-        background: var(--line);
-        border-top: 1px solid var(--line);
-      }
-
-      .ledger-item {
-        min-height: 116px;
-        padding: 16px;
-        background: var(--paper);
-      }
-
-      .ledger-item strong {
-        display: block;
-        margin-bottom: 8px;
+      .guardrail-strip .gr-title {
+        margin-right: 6px;
         color: var(--ink);
-        font-size: 12px;
+        font-size: 12.5px;
+        font-weight: 700;
       }
 
-      .ledger-item span {
-        display: block;
-        color: var(--muted);
-        font-size: 11px;
-        line-height: 1.54;
+      .guardrail-strip .gr {
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper-2);
+        color: var(--ink-soft);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .guardrail-strip .gr::after {
+        content: " ›";
+        color: var(--copper);
+      }
+
+      .guardrail-strip .gr:hover {
+        background: var(--copper-soft);
+        color: var(--copper);
       }
 
       .footer {
@@ -489,13 +420,17 @@
         gap: 20px;
         align-items: center;
         margin-top: 18px;
-        padding: 18px 20px;
+        padding: 16px 20px;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background: rgba(255, 253, 248, 0.86);
+        background: rgba(255, 255, 255, 0.86);
         color: var(--muted);
         font-size: 11px;
-        line-height: 1.55;
+        line-height: 1.6;
+      }
+
+      .footer code {
+        color: var(--copper);
       }
 
       .boundary {
@@ -503,6 +438,7 @@
         flex-wrap: wrap;
         justify-content: flex-end;
         gap: 8px;
+        max-width: 540px;
       }
 
       .boundary span {
@@ -514,368 +450,1140 @@
         font-size: 10px;
         font-weight: 700;
       }
+
+      /* detail drawer */
+      .scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        background: rgba(31, 41, 51, 0.28);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+      }
+
+      .scrim.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        width: min(468px, 94vw);
+        height: 100vh;
+        background: var(--paper);
+        border-left: 1px solid var(--line-dark);
+        box-shadow: -30px 0 60px rgba(31, 41, 51, 0.18);
+        transform: translateX(102%);
+        transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .drawer.open {
+        transform: translateX(0);
+      }
+
+      .drawer-head {
+        position: relative;
+        padding: 24px 56px 16px 26px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .drawer-kicker {
+        color: var(--copper);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .drawer-title {
+        margin: 9px 0 0;
+        font-size: 21px;
+        line-height: 1.2;
+        color: var(--ink);
+      }
+
+      .drawer-close {
+        position: absolute;
+        top: 20px;
+        right: 18px;
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-2);
+        color: var(--ink-soft);
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .drawer-close:hover {
+        background: var(--copper-soft);
+        color: var(--copper);
+      }
+
+      .drawer-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 18px 26px 26px;
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.72;
+      }
+
+      .drawer-body p {
+        margin: 0 0 13px;
+      }
+
+      .drawer-body h4 {
+        margin: 18px 0 9px;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .drawer-body ul {
+        margin: 0 0 13px;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+      }
+
+      .drawer-body li {
+        position: relative;
+        padding-left: 18px;
+      }
+
+      .drawer-body li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.62em;
+        width: 8px;
+        height: 1px;
+        background: var(--signal);
+      }
+
+      .drawer-body code {
+        color: var(--copper);
+        font-size: 12px;
+      }
+
+      .drawer-body .kv {
+        margin: 0 0 13px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .drawer-body .kv div {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: 12px;
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+
+      .drawer-body .kv div:last-child {
+        border-bottom: 0;
+      }
+
+      .drawer-body .kv b {
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .drawer-src {
+        padding: 13px 26px;
+        border-top: 1px solid var(--line);
+        background: var(--paper-2);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.5;
+        word-break: break-word;
+      }
     </style>
   </head>
   <body>
     <main class="page">
       <header class="masthead" aria-labelledby="page-title">
         <div>
-          <p class="kicker">OpenCorvus Agent Team Infrastructure</p>
-          <h1 id="page-title">面向规模化智能交付的 Agent Team 架构画布</h1>
+          <p class="kicker">OpenCorvus · Agent Team Infrastructure</p>
+          <h1 id="page-title">OpenCorvus Agent Team 基建架构图</h1>
           <p class="lead">
-            这张图从 CEO 视角表达 OpenCorvus 的核心资产：一个由唯一调度脊柱、可扩展 Agent 家族、Skill / MCP / Memory 能力织网、专家团与证据化交付闭环组成的智能作业平台。它不是单个自动化脚本，而是一套可持续扩张的组织级 Agent 基建。
+            一张图读懂这套基建：目标统一入站 → Orchestrator 唯一调度 → 14 个 Agent 角色在独立 worktree 并行作业 → 一切沉淀为可审计证据。
+            这套调度脊柱、角色家族与数据底座<b>刻意保持通用</b>——<b>专家团只换一层领域 prompt</b>，同一组并行 agent team 即可承载众多业务，而不分叉调度。
           </p>
         </div>
-        <aside class="executive-note" aria-label="Executive reading">
-          <strong>阅读方式</strong>
+        <aside class="executive-note" aria-label="阅读方式">
+          <strong>这是一张可交互的地图</strong>
           <p>
-            从左到右看业务目标如何进入系统，从中心看 Agent Team 如何被统一调度和增强，从右侧看交付如何沉淀为证据、记忆和可审计资产。底部是架构单一来源，不是第二套流程。
+            主体就是下方的 Agent Team Operating Map：角色、专家团、执行器、证据底座都画在图里。
+            <span class="open-hint">点击任意组件，即可展开它的代码级细节。</span>
           </p>
         </aside>
       </header>
 
-      <section class="metric-strip" aria-label="Scale indicators">
+      <section class="metric-strip" aria-label="架构规模指标">
         <div class="metric">
           <em>1</em>
-          <span>唯一任务级调度者：Orchestrator 负责决策，避免多调度源分叉。</span>
+          <b>唯一调度者</b>
+          <span>Orchestrator 看完整上下文做一次可见决策，无第二个任务级调度源。</span>
         </div>
         <div class="metric">
-          <em>Role</em>
-          <span>AgentRoleContract 统一描述 Agent 家族、工具面、技能挂载与协作边界。</span>
+          <em>14</em>
+          <b>Agent 角色</b>
+          <span>各自带 LLM + 工具池，独立推理，依赖驱动并行。</span>
         </div>
         <div class="metric">
-          <em>Skill</em>
-          <span>通过 mounted_agents 精确挂载领域能力，能力可复用、可治理。</span>
+          <em>6</em>
+          <b>专家团</b>
+          <span>PromptProfile 内置档，换一层领域 prompt 承载不同业务。</span>
         </div>
         <div class="metric">
-          <em>MCP</em>
-          <span>MCP（Model Context Protocol，模型上下文协议）接入外部工具、资源和提示词。</span>
+          <em>2</em>
+          <b>声明式工作流</b>
+          <span><code>direct</code> / <code>pipeline</code> 是 hint，不是硬状态机。</span>
         </div>
         <div class="metric">
-          <em>A2A</em>
-          <span>A2A（Agent-to-Agent，Agent 间协作）保留 durable request / response / action。</span>
+          <em>13</em>
+          <b>engine 数据表</b>
+          <span>过程统一收敛为 <code>engine_artifact</code>，单一写入者。</span>
         </div>
         <div class="metric">
-          <em>Trace</em>
-          <span>Decision Log、engine_artifact、Trace、Bus、SSE 形成证据闭环。</span>
+          <em>4</em>
+          <b>扩展轴</b>
+          <span>Executor / Plugin / MCP / ACP，语义不同、互不替代。</span>
         </div>
       </section>
 
       <section class="executive-map" aria-labelledby="map-title">
-        <div class="map-title">
-          <h2 id="map-title">战略运营视图</h2>
-          <p>
-            主图把 OpenCorvus 看作一个 Agent Team Operating System：上层承接目标，中层组织智能作业，下层沉淀记忆、证据和扩展能力。
-          </p>
-        </div>
-
-        <svg class="map-svg" viewBox="0 0 1640 760" role="img" aria-labelledby="svg-title svg-desc">
-          <title id="svg-title">OpenCorvus Agent Team infrastructure executive architecture map</title>
+        <h2 id="map-title" hidden>Agent Team Operating Map</h2>
+        <span class="map-hint">点击任意组件展开细节</span>
+        <svg class="map-svg" viewBox="0 0 1640 1120" role="img" aria-labelledby="svg-title svg-desc">
+          <title id="svg-title">OpenCorvus Agent Team operating map</title>
           <desc id="svg-desc">
-            A three-plane architecture map showing mission ingress, the Orchestrator-led agent team mesh, capability fabric, memory, evidence, and delivery horizon.
+            A clickable map: mission ingress, the Orchestrator-led operating layer with the 14-role agent family,
+            the swappable expert-squad prompt overlay, the verification loop, and the evidence base plus four
+            extension axes.
           </desc>
           <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526b7d" />
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526576" />
             </marker>
-            <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#18202d" flood-opacity="0.14" />
-            </filter>
+            <marker id="arrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a5a2b" />
+            </marker>
           </defs>
 
-          <rect x="24" y="92" width="1592" height="190" rx="20" fill="#f9f6ef" stroke="#d8d0c2" />
-          <rect x="24" y="294" width="1592" height="274" rx="20" fill="#fffdf8" stroke="#d8d0c2" />
-          <rect x="24" y="580" width="1592" height="142" rx="20" fill="#f5f2ea" stroke="#d8d0c2" />
+          <text x="40" y="46" class="svg-h">Agent Team Operating Map</text>
+          <text x="40" y="68" class="svg-sub">
+            目标进入 → Orchestrator 唯一调度 → 14 角色并行作业 → 证据底座；专家团换一层领域 prompt，同一基建承载众多业务。每个节点可点击。
+          </text>
 
-          <text x="42" y="132" class="plane-label">01 目标进入与控制脊柱</text>
-          <text x="42" y="154" class="plane-note">UI（User Interface，用户界面）/ API（Application Programming Interface，应用程序接口）/ CLI（Command Line Interface，命令行接口）统一进入 EngineService。</text>
-          <text x="42" y="332" class="plane-label">02 Agent Team 智能作业层</text>
-          <text x="42" y="354" class="plane-note">Orchestrator 只做任务级调度；Agent 家族、专家团、技能和工具在同一可见消息流里协作。</text>
-          <text x="42" y="618" class="plane-label">03 能力织网与证据底座</text>
-          <text x="42" y="640" class="plane-note">Memory、Decision Log、engine_artifact、Trace、Bus、SSE（Server-Sent Events，服务器发送事件）支撑审计与复用。</text>
+          <rect x="24" y="92" width="1592" height="158" rx="22" fill="#ffffff" stroke="#d9ded7" />
+          <rect x="24" y="280" width="1592" height="560" rx="22" fill="#ffffff" stroke="#d9ded7" />
+          <rect x="24" y="870" width="1592" height="216" rx="22" fill="#f6f7f4" stroke="#d9ded7" />
 
-          <path d="M174 205 C320 205 398 214 506 308" fill="none" stroke="#526b7d" stroke-width="3" marker-end="url(#arrow)" />
-          <path d="M1130 384 C1232 320 1328 266 1468 220" fill="none" stroke="#526b7d" stroke-width="3" marker-end="url(#arrow)" />
-          <path d="M822 508 C858 570 942 618 1088 650" fill="none" stroke="#9a5a32" stroke-width="3" marker-end="url(#arrow)" />
-          <path d="M782 508 C724 578 614 636 462 660" fill="none" stroke="#446852" stroke-width="3" marker-end="url(#arrow)" />
+          <!-- ===== Plane 01 · ingress spine ===== -->
+          <text x="52" y="126" class="plane-label">01 · 目标进入与控制脊柱</text>
+          <text x="52" y="146" class="plane-note">三类入口只汇入一条 EngineService → engine_task → runTaskLoop 脊柱，后续调度只有 Orchestrator 一个决策点。</text>
 
-          <g filter="url(#soft-shadow)">
-            <path d="M120 174 C120 144 142 122 172 122 L354 122 C384 122 406 144 406 174 L406 236 C406 266 384 288 354 288 L172 288 C142 288 120 266 120 236 Z" fill="#fffdf8" stroke="#d8d0c2" />
+          <g class="hot" data-detail="ingress" tabindex="0" role="button" aria-label="入站入口细节">
+            <rect x="74" y="168" width="300" height="54" rx="13" fill="#e7edf1" stroke="#b9c7d1" />
+            <text x="94" y="191" class="spine-title">入站入口 · 3 entries</text>
+            <text x="94" y="210" class="spine-copy">ChannelIngress / ControlMessage / ACP</text>
           </g>
-          <text x="154" y="172" class="node-title">Business Goal</text>
-          <text x="154" y="196" class="node-copy">Mission / task / workspace</text>
-          <text x="154" y="218" class="node-copy">自然语言目标进入同一控制面</text>
-          <text x="154" y="240" class="micro-copy">Overlay GUI / API / CLI</text>
-
-          <g>
-            <rect x="454" y="142" width="180" height="54" rx="27" fill="#e2ebf2" stroke="#8aa3b4" />
-            <text x="492" y="174" class="tag-text">ChannelIngress</text>
-            <rect x="454" y="214" width="180" height="54" rx="27" fill="#e2ebf2" stroke="#8aa3b4" />
-            <text x="498" y="246" class="tag-text">EngineService</text>
-            <path d="M544 196 L544 214" stroke="#526b7d" stroke-width="2" marker-end="url(#arrow)" />
+          <g class="hot" data-detail="engine-service" tabindex="0" role="button" aria-label="EngineService 细节">
+            <rect x="460" y="168" width="276" height="54" rx="13" fill="#ffffff" stroke="#d9ded7" />
+            <text x="480" y="191" class="spine-title">EngineService</text>
+            <text x="480" y="210" class="spine-copy">唯一 task API · createTask(input)</text>
           </g>
-
-          <g filter="url(#soft-shadow)">
-            <path d="M1370 138 C1370 122 1382 110 1398 110 L1538 110 C1554 110 1566 122 1566 138 L1566 286 C1566 302 1554 314 1538 314 L1398 314 C1382 314 1370 302 1370 286 Z" fill="#fffdf8" stroke="#d8d0c2" />
+          <g class="hot" data-detail="engine-task" tabindex="0" role="button" aria-label="engine_task 细节">
+            <rect x="822" y="168" width="284" height="54" rx="13" fill="#ffffff" stroke="#d9ded7" />
+            <text x="842" y="191" class="spine-title">engine_task</text>
+            <text x="842" y="210" class="spine-copy">workflow / build · priority · executor</text>
           </g>
-          <text x="1400" y="154" class="node-title">Evidence-backed</text>
-          <text x="1400" y="176" class="node-title">Delivery</text>
-          <text x="1400" y="206" class="node-copy">代码、设计、研究、QA</text>
-          <text x="1400" y="228" class="node-copy">每次交付带证据链</text>
-          <text x="1400" y="252" class="micro-copy">Trace / artifacts / visible result</text>
-          <text x="1400" y="274" class="micro-copy">可审计、可复盘、可扩张</text>
-
-          <ellipse cx="820" cy="430" rx="420" ry="184" fill="none" stroke="#d8d0c2" stroke-width="2" />
-          <ellipse cx="820" cy="430" rx="340" ry="144" fill="none" stroke="#b8c4ca" stroke-width="2" stroke-dasharray="9 8" />
-          <ellipse cx="820" cy="430" rx="254" ry="104" fill="none" stroke="#cbb69e" stroke-width="2" stroke-dasharray="4 8" />
-
-          <text x="488" y="272" class="ring-label">Expert Squads / Prompt Profiles</text>
-          <text x="1090" y="302" class="ring-label">Agent Family / Role Contracts</text>
-          <text x="462" y="574" class="ring-label">Capability Fabric</text>
-          <text x="1058" y="574" class="ring-label">Durable Coordination</text>
-
-          <g filter="url(#soft-shadow)">
-            <circle cx="820" cy="430" r="108" fill="#18202d" />
-            <circle cx="820" cy="430" r="122" fill="none" stroke="#9a5a32" stroke-width="2" />
+          <g class="hot" data-detail="run-loop" tabindex="0" role="button" aria-label="runTaskLoop 细节">
+            <rect x="1192" y="168" width="260" height="54" rx="13" fill="#e7efe6" stroke="#aebfae" />
+            <text x="1212" y="191" class="spine-title">runTaskLoop()</text>
+            <text x="1212" y="210" class="spine-copy">唤醒 Orchestrator · 可见决策</text>
           </g>
-          <text x="744" y="410" class="white-title">Orchestrator</text>
-          <text x="734" y="437" class="white-copy">唯一任务级调度者</text>
-          <text x="720" y="460" class="white-copy">LLM = Large Language Model</text>
-          <text x="756" y="481" class="white-copy">大语言模型决策</text>
+          <path d="M374 195 L460 195" fill="none" stroke="#526576" stroke-width="2.1" marker-end="url(#arrow)" />
+          <path d="M736 195 L822 195" fill="none" stroke="#526576" stroke-width="2.1" marker-end="url(#arrow)" />
+          <path d="M1106 195 L1192 195" fill="none" stroke="#526576" stroke-width="2.1" marker-end="url(#arrow)" />
+          <path d="M1322 222 C1322 270 202 270 202 354" fill="none" stroke="#8a5a2b" stroke-width="2" stroke-dasharray="2 6" marker-end="url(#arrow-c)" />
+          <text x="626" y="238" class="flow-caption">one visible task spine · no hidden second route</text>
 
-          <g>
-            <circle cx="640" cy="342" r="54" fill="#e2ebf2" stroke="#6f8ca0" />
-            <text x="606" y="336" class="node-title">Build</text>
-            <text x="588" y="358" class="node-copy">实现与修复</text>
+          <!-- ===== Plane 02 · operating layer ===== -->
+          <text x="52" y="316" class="plane-label">02 · Agent Team 作业层</text>
+          <text x="52" y="336" class="plane-note">Orchestrator 读全量事实，调度同一组并行 Agent Team；专家团只换 prompt overlay，因此平台可承载不同业务。</text>
 
-            <circle cx="820" cy="318" r="54" fill="#dfe8dd" stroke="#7f9a83" />
-            <text x="779" y="312" class="node-title">Research</text>
-            <text x="776" y="334" class="node-copy">资料与事实</text>
-
-            <circle cx="1000" cy="342" r="54" fill="#e8e4f1" stroke="#978eaf" />
-            <text x="963" y="336" class="node-title">Design</text>
-            <text x="953" y="358" class="node-copy">前端与体验</text>
-
-            <circle cx="1094" cy="444" r="54" fill="#f1dfcf" stroke="#bf936f" />
-            <text x="1056" y="438" class="node-title">Visual QA</text>
-            <text x="1056" y="460" class="node-copy">截图验收</text>
-
-            <circle cx="1000" cy="534" r="54" fill="#e3ebef" stroke="#8aa1ad" />
-            <text x="961" y="528" class="node-title">Integrity</text>
-            <text x="962" y="550" class="node-copy">一致性审计</text>
-
-            <circle cx="820" cy="556" r="54" fill="#f3ead3" stroke="#bfa365" />
-            <text x="779" y="550" class="node-title">Workload</text>
-            <text x="787" y="572" class="node-copy">拆解评估</text>
-
-            <circle cx="640" cy="534" r="54" fill="#dfe8dd" stroke="#7f9a83" />
-            <text x="598" y="528" class="node-title">Fact Check</text>
-            <text x="607" y="550" class="node-copy">验证来源</text>
-
-            <circle cx="546" cy="444" r="54" fill="#e2ebf2" stroke="#6f8ca0" />
-            <text x="512" y="438" class="node-title">Custom</text>
-            <text x="506" y="460" class="node-copy">组织扩展</text>
+          <g class="hot" data-detail="orchestrator" tabindex="0" role="button" aria-label="Orchestrator 细节">
+            <rect x="72" y="360" width="274" height="176" rx="18" fill="#243447" stroke="#526576" stroke-width="1.5" />
+            <text x="96" y="400" class="dark-title">Orchestrator</text>
+            <text x="96" y="424" class="dark-copy">唯一任务级调度者</text>
+            <text x="96" y="446" class="dark-copy">读 engine_* + decision_log</text>
+            <text x="96" y="468" class="dark-copy">决定调谁 / 重试 / 加 goal</text>
+            <text x="96" y="490" class="dark-copy">交付或终止；自身不写代码</text>
+            <text x="96" y="516" class="dark-copy">loop.ts · tools.ts</text>
+          </g>
+          <g class="hot" data-detail="workflow-hint" tabindex="0" role="button" aria-label="工作流 hint 细节">
+            <rect x="72" y="564" width="274" height="66" rx="14" fill="#ffffff" stroke="#d9ded7" />
+            <text x="96" y="590" class="node-title">Workflow hint</text>
+            <text x="96" y="610" class="quiet-copy">direct / pipeline 是声明式建议，不是状态机。</text>
+          </g>
+          <g class="hot" data-detail="a2a" tabindex="0" role="button" aria-label="A2A 协议细节">
+            <rect x="72" y="650" width="274" height="76" rx="14" fill="#f2e8dc" stroke="#c89b68" />
+            <text x="96" y="678" class="node-title">A2A 持久协调协议</text>
+            <text x="96" y="700" class="quiet-copy">request / response / action，全部可观察。</text>
           </g>
 
-          <g>
-            <rect x="476" y="372" width="118" height="30" rx="15" fill="#f9f6ef" stroke="#d8d0c2" />
-            <text x="500" y="392" class="tag-text">frontend-replica</text>
-            <rect x="1028" y="372" width="132" height="30" rx="15" fill="#f9f6ef" stroke="#d8d0c2" />
-            <text x="1054" y="392" class="tag-text">frontend-innovate</text>
-            <rect x="492" y="486" width="92" height="30" rx="15" fill="#f9f6ef" stroke="#d8d0c2" />
-            <text x="516" y="506" class="tag-text">backend</text>
-            <rect x="1060" y="486" width="96" height="30" rx="15" fill="#f9f6ef" stroke="#d8d0c2" />
-            <text x="1080" y="506" class="tag-text">algorithm</text>
+          <rect x="410" y="360" width="844" height="366" rx="20" fill="#fbfbf8" stroke="#d9ded7" />
+          <text x="436" y="392" class="plane-label">通用 Agent Team 平台面</text>
+          <text x="436" y="414" class="plane-note">同一组角色并行取证、实现、复核；业务差异由上方专家团 overlay 注入到 prompt。</text>
+
+          <rect x="436" y="438" width="792" height="94" rx="16" fill="#f2e8dc" stroke="#c89b68" />
+          <text x="460" y="466" class="band-label">Expert Squads · PromptProfile overlay</text>
+          <text x="460" y="490" class="node-copy">换一层领域 prompt，覆盖下方整个 Agent Team；不改调度 / tools / model / MCP。</text>
+          <g class="hot" data-detail="squad-frontend-replica" tabindex="0" role="button" aria-label="Frontend Replica 专家团">
+            <rect x="460" y="504" width="138" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="470" y="519" class="chip-text">frontend-replica ★</text>
+          </g>
+          <g class="hot" data-detail="squad-frontend-innovate" tabindex="0" role="button" aria-label="Frontend Innovate 专家团">
+            <rect x="608" y="504" width="146" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="618" y="519" class="chip-text">frontend-innovate</text>
+          </g>
+          <g class="hot" data-detail="squad-backend" tabindex="0" role="button" aria-label="Backend 专家团">
+            <rect x="764" y="504" width="86" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="774" y="519" class="chip-text">backend</text>
+          </g>
+          <g class="hot" data-detail="squad-algorithm" tabindex="0" role="button" aria-label="Algorithm 专家团">
+            <rect x="860" y="504" width="96" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="870" y="519" class="chip-text">algorithm</text>
+          </g>
+          <g class="hot" data-detail="squad-automation-debug" tabindex="0" role="button" aria-label="Frontend Automation Debug 专家团">
+            <rect x="966" y="504" width="196" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="976" y="519" class="chip-text">frontend-automation-debug</text>
+          </g>
+          <g class="hot" data-detail="squad-general" tabindex="0" role="button" aria-label="General 专家团">
+            <rect x="1168" y="504" width="58" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
+            <text x="1178" y="519" class="chip-text">general</text>
+          </g>
+          <path d="M832 532 L832 552" fill="none" stroke="#8a5a2b" stroke-width="1.7" stroke-dasharray="2 5" marker-end="url(#arrow-c)" />
+
+          <rect x="436" y="562" width="236" height="138" rx="16" fill="#e7edf1" stroke="#b9c7d1" />
+          <text x="458" y="590" class="pillar-title">Scope / Evidence</text>
+          <text x="458" y="612" class="pillar-copy">先理解目标，再产出可验收事实。</text>
+          <g class="hot" data-detail="agent-intent" tabindex="0" role="button" aria-label="Intent Analysis"><rect x="456" y="624" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="462" cy="635" r="2.5" fill="#476a8f" /><text x="472" y="639" class="role-link">Intent Analysis</text></g>
+          <g class="hot" data-detail="agent-requirements" tabindex="0" role="button" aria-label="Requirements"><rect x="456" y="644" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="462" cy="655" r="2.5" fill="#476a8f" /><text x="472" y="659" class="role-link">Requirements</text></g>
+          <g class="hot" data-detail="agent-architect" tabindex="0" role="button" aria-label="Architect"><rect x="456" y="664" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="462" cy="675" r="2.5" fill="#476a8f" /><text x="472" y="679" class="role-link">Architect</text></g>
+          <g class="hot" data-detail="agent-frontend-design" tabindex="0" role="button" aria-label="Frontend Design"><rect x="456" y="684" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="462" cy="695" r="2.5" fill="#476a8f" /><text x="472" y="699" class="role-link">Frontend Design</text></g>
+          <g class="hot" data-detail="agent-frontend-research" tabindex="0" role="button" aria-label="Frontend Research"><rect x="558" y="624" width="100" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><text x="558" y="639" class="quiet-copy">Frontend Research</text></g>
+          <g class="hot" data-detail="agent-deep-research" tabindex="0" role="button" aria-label="Deep Research"><rect x="558" y="644" width="100" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><text x="558" y="659" class="quiet-copy">Deep Research</text></g>
+          <g class="hot" data-detail="agent-workload" tabindex="0" role="button" aria-label="Goal Workload Analyst"><rect x="558" y="664" width="100" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><text x="558" y="679" class="quiet-copy">Workload Analyst</text></g>
+
+          <rect x="704" y="562" width="236" height="138" rx="16" fill="#e7efe6" stroke="#aebfae" />
+          <text x="726" y="590" class="pillar-title">Build / Execute</text>
+          <text x="726" y="612" class="pillar-copy">并行 worktree 产 diff 与运行证据。</text>
+          <g class="hot" data-detail="agent-build" tabindex="0" role="button" aria-label="Build"><rect x="724" y="626" width="186" height="22" rx="6" fill="#ffffff" stroke="#c9d8c7" /><text x="738" y="642" class="role-link">Build agent</text></g>
+          <g class="hot" data-detail="axis-executor" tabindex="0" role="button" aria-label="ExecutorRegistry"><rect x="724" y="654" width="186" height="22" rx="6" fill="#ffffff" stroke="#c9d8c7" /><text x="738" y="670" class="role-link">ExecutorRegistry</text></g>
+          <text x="738" y="696" class="quiet-copy">worktree isolation · owned_paths</text>
+          <g class="hot" data-detail="agent-general" tabindex="0" role="button" aria-label="General subagent"><rect x="724" y="704" width="86" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><text x="738" y="718" class="quiet-copy">General</text></g>
+          <g class="hot" data-detail="agent-explore" tabindex="0" role="button" aria-label="Explore subagent"><rect x="820" y="704" width="86" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><text x="834" y="718" class="quiet-copy">Explore</text></g>
+
+          <rect x="972" y="562" width="236" height="138" rx="16" fill="#ece9f1" stroke="#c9c2d5" />
+          <text x="994" y="590" class="pillar-title">Verify / Accept</text>
+          <text x="994" y="612" class="pillar-copy">复核结果回到决策点继续推理。</text>
+          <g class="hot" data-detail="agent-visual-qa" tabindex="0" role="button" aria-label="Visual QA"><rect x="992" y="624" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="998" cy="635" r="2.5" fill="#5b5570" /><text x="1008" y="639" class="role-link">Visual QA</text></g>
+          <g class="hot" data-detail="agent-integrity" tabindex="0" role="button" aria-label="Integrity"><rect x="992" y="646" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="998" cy="657" r="2.5" fill="#5b5570" /><text x="1008" y="661" class="role-link">Integrity</text></g>
+          <g class="hot" data-detail="agent-fact-check" tabindex="0" role="button" aria-label="Fact Check"><rect x="992" y="668" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="998" cy="679" r="2.5" fill="#5b5570" /><text x="1008" y="683" class="role-link">Fact Check</text></g>
+          <g class="hot" data-detail="checks" tabindex="0" role="button" aria-label="Checks"><rect x="992" y="690" width="190" height="18" rx="5" fill="#ffffff" opacity="0" stroke="transparent" /><circle cx="998" cy="701" r="2.5" fill="#5b5570" /><text x="1008" y="705" class="role-link">Checks</text></g>
+
+          <g class="hot" data-detail="evidence" tabindex="0" role="button" aria-label="证据 handoff">
+            <rect x="1296" y="360" width="248" height="174" rx="18" fill="#fbfbf8" stroke="#d9ded7" />
+            <text x="1320" y="392" class="pillar-title">Evidence Handoff</text>
+            <text x="1320" y="420" class="node-copy">decision_log</text>
+            <text x="1320" y="446" class="node-copy">engine_artifact</text>
+            <text x="1320" y="472" class="node-copy">build report / brief / contract</text>
+            <text x="1320" y="506" class="quiet-copy">单写入：task-api + engine/*</text>
+          </g>
+          <g class="hot" data-detail="a2a" tabindex="0" role="button" aria-label="可观察投影">
+            <rect x="1296" y="564" width="248" height="96" rx="18" fill="#e7edf1" stroke="#b9c7d1" />
+            <text x="1320" y="596" class="pillar-title">Visible Projection</text>
+            <text x="1320" y="624" class="node-copy">conversation · events · SSE</text>
+            <text x="1320" y="646" class="quiet-copy">protocol_event / message part 可重建</text>
           </g>
 
-          <g>
-            <path d="M250 638 L1210 638" stroke="#9d9486" stroke-width="1.5" />
-            <rect x="250" y="658" width="174" height="38" rx="19" fill="#dfe8dd" stroke="#8aa37f" />
-            <text x="286" y="682" class="tag-text">Memory / DB</text>
-            <rect x="454" y="658" width="190" height="38" rx="19" fill="#e2ebf2" stroke="#8aa3b4" />
-            <text x="490" y="682" class="tag-text">WorkflowRegistry</text>
-            <rect x="674" y="658" width="174" height="38" rx="19" fill="#f1dfcf" stroke="#bf936f" />
-            <text x="718" y="682" class="tag-text">SkillTool</text>
-            <rect x="878" y="658" width="174" height="38" rx="19" fill="#e8e4f1" stroke="#978eaf" />
-            <text x="920" y="682" class="tag-text">MCP Client</text>
-            <rect x="1082" y="658" width="190" height="38" rx="19" fill="#f3ead3" stroke="#bfa365" />
-            <text x="1112" y="682" class="tag-text">Decision Evidence</text>
+          <path d="M346 448 L410 448" fill="none" stroke="#526576" stroke-width="2.1" marker-end="url(#arrow)" />
+          <text x="356" y="434" class="flow-caption">dispatch tools</text>
+          <path d="M672 632 L704 632" fill="none" stroke="#526576" stroke-width="1.8" marker-end="url(#arrow)" />
+          <path d="M940 632 L972 632" fill="none" stroke="#526576" stroke-width="1.8" marker-end="url(#arrow)" />
+          <path d="M1208 632 C1248 632 1258 448 1296 448" fill="none" stroke="#526576" stroke-width="2.1" marker-end="url(#arrow)" />
+          <path d="M1420 660 L1420 786 L206 786 L206 536" fill="none" stroke="#486b4b" stroke-width="2.1" stroke-linejoin="round" marker-end="url(#arrow)" />
+          <text x="650" y="778" class="flow-caption">evidence returns to Decision Point; next step is reasoned, not mechanical retry</text>
+
+          <!-- ===== Plane 03 · base + extension axes ===== -->
+          <text x="52" y="906" class="plane-label">03 · 证据与记忆底座 + 四条扩展轴</text>
+          <text x="52" y="926" class="plane-note">底座负责审计、记忆和投影；扩展轴扩能力但语义互不替代。</text>
+
+          <g class="hot" data-detail="base-decision-log" tabindex="0" role="button" aria-label="decision_log">
+            <rect x="70" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="88" y="974" class="chip-text">decision_log</text>
+          </g>
+          <g class="hot" data-detail="base-artifact" tabindex="0" role="button" aria-label="engine_artifact">
+            <rect x="284" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="302" y="974" class="chip-text">engine_artifact</text>
+          </g>
+          <g class="hot" data-detail="base-trace" tabindex="0" role="button" aria-label="Trace">
+            <rect x="498" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="516" y="974" class="chip-text">Trace</text>
+          </g>
+          <g class="hot" data-detail="base-bus" tabindex="0" role="button" aria-label="Bus">
+            <rect x="712" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="730" y="974" class="chip-text">Bus</text>
+          </g>
+          <g class="hot" data-detail="base-sse" tabindex="0" role="button" aria-label="SSE">
+            <rect x="926" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="944" y="974" class="chip-text">SSE</text>
+          </g>
+          <g class="hot" data-detail="base-memory" tabindex="0" role="button" aria-label="memory">
+            <rect x="1140" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="1158" y="974" class="chip-text">memory_*</text>
+          </g>
+          <g class="hot" data-detail="base-scheduler" tabindex="0" role="button" aria-label="scheduler">
+            <rect x="1354" y="948" width="198" height="42" rx="11" fill="#ffffff" stroke="#d9ded7" />
+            <text x="1372" y="974" class="chip-text">scheduler</text>
           </g>
 
-          <g>
-            <path d="M1266 385 C1306 366 1340 356 1382 356 L1510 356 C1538 356 1558 376 1558 404 L1558 518 C1558 546 1538 566 1510 566 L1382 566 C1340 566 1306 556 1266 537 Z" fill="#f9f6ef" stroke="#d8d0c2" />
-            <text x="1360" y="398" class="node-title">Scale Outlook</text>
-            <text x="1342" y="428" class="node-copy">行业 Skill packs</text>
-            <text x="1342" y="452" class="node-copy">企业 MCP tool catalog</text>
-            <text x="1342" y="476" class="node-copy">专家团模板化复制</text>
-            <text x="1342" y="500" class="node-copy">审计型交付运营</text>
-            <text x="1342" y="526" class="micro-copy">扩张的是能力面，不是隐形流程</text>
+          <g class="hot" data-detail="axis-executor" tabindex="0" role="button" aria-label="Executor 扩展轴">
+            <rect x="70" y="1014" width="350" height="48" rx="12" fill="#e7efe6" stroke="#aebfae" />
+            <text x="90" y="1043" class="node-title">Executor</text>
+            <text x="188" y="1043" class="quiet-copy">内置队列 + 外部 coding 进程</text>
+          </g>
+          <g class="hot" data-detail="axis-plugin" tabindex="0" role="button" aria-label="Plugin 扩展轴">
+            <rect x="442" y="1014" width="350" height="48" rx="12" fill="#ffffff" stroke="#d9ded7" />
+            <text x="462" y="1043" class="node-title">Plugin</text>
+            <text x="548" y="1043" class="quiet-copy">hook / auth · in-process</text>
+          </g>
+          <g class="hot" data-detail="axis-mcp" tabindex="0" role="button" aria-label="MCP 扩展轴">
+            <rect x="814" y="1014" width="350" height="48" rx="12" fill="#ffffff" stroke="#d9ded7" />
+            <text x="834" y="1043" class="node-title">MCP</text>
+            <text x="898" y="1043" class="quiet-copy">client 接工具 / server 暴露能力</text>
+          </g>
+          <g class="hot" data-detail="axis-acp" tabindex="0" role="button" aria-label="ACP 扩展轴">
+            <rect x="1186" y="1014" width="366" height="48" rx="12" fill="#ffffff" stroke="#d9ded7" />
+            <text x="1206" y="1043" class="node-title">ACP</text>
+            <text x="1270" y="1043" class="quiet-copy">编辑器 client · OpenCorvus agent</text>
           </g>
         </svg>
-      </section>
 
-      <section class="section" aria-labelledby="operating-model-title">
-        <div class="section-header">
-          <h2 id="operating-model-title">运营模型：从目标到可审计交付</h2>
-          <p>
-            下面把主图拆成 CEO 能快速判断的经营含义：谁做决策、能力如何扩张、风险如何被看见。
-          </p>
-        </div>
-        <div class="capability-field">
-          <div class="field-panel">
-            <div class="rail" aria-label="Operating sequence">
-              <div class="rail-item">
-                <div class="rail-key">目标进入</div>
-                <div class="rail-value">用户、Mission、工作区和任务请求进入同一 ChannelIngress；系统不把同一目标拆成不可见的双路消息。</div>
-              </div>
-              <div class="rail-item">
-                <div class="rail-key">统一调度</div>
-                <div class="rail-value">EngineService 唤起 Task Control Loop，Orchestrator 根据上下文、workflow hint 和证据做一次可见决策。</div>
-              </div>
-              <div class="rail-item">
-                <div class="rail-key">Agent 家族执行</div>
-                <div class="rail-value">Build、Research、Design、Visual QA、Integrity、Fact Check、Workload、Custom 等角色由 AgentRoleContract 描述职责和工具面。</div>
-              </div>
-              <div class="rail-item">
-                <div class="rail-key">能力增强</div>
-                <div class="rail-value">Skill 通过 mounted_agents 挂载到目标 Agent；MCP 接入外部工具和资源；专家团通过 PromptProfile 与 select_expert_squad 进入。</div>
-              </div>
-              <div class="rail-item">
-                <div class="rail-key">证据沉淀</div>
-                <div class="rail-value">Decision Log、engine_artifact、Trace、Bus、SSE 与 overlay projection 把过程变成可复盘的组织记忆。</div>
-              </div>
-            </div>
-          </div>
-          <div class="field-panel">
-            <div class="portfolio" aria-label="Capability portfolio">
-              <div class="portfolio-item">
-                <strong>Agent 家族</strong>
-                <span>不是单一机器人，而是按职责拆分的智能作业团队；每个角色都有明确的工具、上下文和协作边界。</span>
-              </div>
-              <div class="portfolio-item">
-                <strong>专家团</strong>
-                <span>Frontend Replica、Frontend Innovate、Backend、Algorithm、Automation Debug 等作为 prompt profile 扩展，不改变底层调度事实。</span>
-              </div>
-              <div class="portfolio-item">
-                <strong>Skill</strong>
-                <span>把行业流程、检查清单、工具使用方式沉淀成可挂载能力，适合做组织知识复用和部门级标准化。</span>
-              </div>
-              <div class="portfolio-item">
-                <strong>MCP</strong>
-                <span>把外部系统作为工具、资源、prompt 接入，形成企业工具目录和数据接入层。</span>
-              </div>
-              <div class="portfolio-item">
-                <strong>Workflow</strong>
-                <span>direct / pipeline 是声明式作业提示，不是固定状态机；Orchestrator 仍根据真实上下文做决策。</span>
-              </div>
-              <div class="portfolio-item">
-                <strong>Memory</strong>
-                <span>DB（Database，数据库）、decision log 和 artifact 将经验变成可追踪资产，支撑复盘、训练和治理。</span>
-              </div>
-            </div>
-          </div>
+        <div class="map-legend" aria-label="图例">
+          <span><i style="background: #243447"></i>Orchestrator（唯一决策）</span>
+          <span><i style="background: #e7edf1"></i>Scope / 证据 agent</span>
+          <span><i style="background: #e7efe6"></i>执行（build → executor）</span>
+          <span><i style="background: #ece9f1"></i>复核 / 验证</span>
+          <span><i style="background: #f2e8dc"></i>专家团 / A2A / handoff</span>
+          <span><i style="background: #ffffff"></i>工作流 / 扩展轴</span>
+          <span style="color: var(--copper); font-weight: 700">点击任意节点展开代码级细节 ›</span>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="horizon-title">
-        <div class="section-header">
-          <h2 id="horizon-title">使用前景：从项目助手到组织级智能作业平台</h2>
-          <p>
-            规模化路径不靠复制流程，而靠扩展角色、技能、MCP 接入和证据运营能力。
-          </p>
-        </div>
-        <div class="horizon">
-          <article class="horizon-stage">
-            <span class="stage-index">现</span>
-            <h3>当前可落地：任务级智能交付</h3>
-            <p>围绕一个 Mission 组织多个 Agent 完成实现、调研、设计、验证和复核。</p>
-            <ul>
-              <li>Orchestrator 可见调度</li>
-              <li>AgentRoleContract 统一角色事实</li>
-              <li>SkillTool 和 MCP 扩展能力</li>
-              <li>可截图、可测试、可审计的交付证据</li>
-            </ul>
-          </article>
-          <article class="horizon-stage">
-            <span class="stage-index">扩</span>
-            <h3>下一阶段：领域能力复用</h3>
-            <p>把高频行业场景沉淀成 skill packs、专家团模板和 MCP 工具目录。</p>
-            <ul>
-              <li>前端复刻、创新设计、自动化调试专家团</li>
-              <li>企业工具和数据系统通过 MCP 接入</li>
-              <li>组织级 Memory 支撑经验复用</li>
-              <li>Workflow hint 保持灵活，不固化为流程门</li>
-            </ul>
-          </article>
-          <article class="horizon-stage">
-            <span class="stage-index">治</span>
-            <h3>长期价值：智能作业治理层</h3>
-            <p>每次 Agent 协作都留下可观察证据，形成管理者能理解的交付运营视图。</p>
-            <ul>
-              <li>从单任务效率提升到团队能力资产</li>
-              <li>从“模型回答”升级为“证据化作业链”</li>
-              <li>从工具集成升级为可审计智能组织</li>
-              <li>从项目支持扩展到跨部门场景复制</li>
-            </ul>
-          </article>
+      <section class="executive-map" aria-labelledby="wiring-title" style="margin-top: 18px">
+        <h2 id="wiring-title" hidden>专家团装配管线 · Expert Squad Wiring</h2>
+        <span class="map-hint">点击任意环节展开细节</span>
+        <svg class="map-svg" viewBox="0 0 1640 560" role="img" aria-labelledby="wiring-svg-title wiring-svg-desc">
+          <title id="wiring-svg-title">Expert squad wiring pipeline</title>
+          <desc id="wiring-svg-desc">
+            Four stages: the PromptProfile catalog, the Orchestrator's visible squad decision, the single
+            root-session overlay write, and per-agent session composition where only the prompt arm reads the
+            squad while tools, agent, model, and MCP stay unchanged.
+          </desc>
+          <defs>
+            <marker id="warrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526576" />
+            </marker>
+            <marker id="warrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a5a2b" />
+            </marker>
+          </defs>
+
+          <text x="40" y="44" class="svg-h">专家团装配管线 · Expert Squad Wiring</text>
+          <text x="40" y="66" class="svg-sub">
+            专家团 = PromptProfile。Orchestrator 可见地选档 → 只写一处 root session overlay → 各 agent 在 session 组装时只热插 prompt 这一层；tool / agent / model / MCP 全部不变。
+          </text>
+
+          <rect x="24" y="92" width="1592" height="420" rx="22" fill="#ffffff" stroke="#d9ded7" />
+          <text x="58" y="126" class="group-label">① 专家团目录</text>
+          <text x="430" y="154" class="group-label">② Orchestrator 可见决策</text>
+          <text x="768" y="154" class="group-label">③ 注册 · 唯一写入</text>
+          <text x="1128" y="126" class="group-label">④ Agent session 组装</text>
+
+          <!-- Stage 1: catalog -->
+          <g class="hot" data-detail="wiring-catalog" tabindex="0" role="button" aria-label="专家团目录细节">
+            <rect x="56" y="148" width="300" height="236" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
+            <text x="80" y="182" class="pillar-title">PromptProfile.builtIns</text>
+            <text x="80" y="214" class="node-copy">frontend-replica ★</text>
+            <text x="80" y="240" class="node-copy">frontend-innovate</text>
+            <text x="80" y="266" class="node-copy">backend · algorithm</text>
+            <text x="80" y="292" class="node-copy">frontend-automation-debug</text>
+            <text x="80" y="318" class="node-copy">general（无 overlay）</text>
+            <line x1="80" y1="340" x2="332" y2="340" stroke="#d9ded7" />
+            <text x="80" y="364" class="quiet-copy">每档 = { agentID → prompt overlay }</text>
+          </g>
+          <g class="hot" data-detail="wiring-skill-discovery" tabindex="0" role="button" aria-label="mounted 专家团 skill 细节">
+            <rect x="56" y="402" width="300" height="64" rx="16" fill="#e7edf1" stroke="#b9c7d1" />
+            <text x="80" y="428" class="node-title">Mounted 专家团 skills</text>
+            <text x="80" y="450" class="quiet-copy">供 Orchestrator 检索后再 select_expert_squad</text>
+          </g>
+
+          <!-- Stage 2: decision -->
+          <g class="hot" data-detail="wiring-select" tabindex="0" role="button" aria-label="select_expert_squad 细节">
+            <rect x="426" y="184" width="276" height="206" rx="17" fill="#ffffff" stroke="#d9ded7" />
+            <text x="450" y="218" class="pillar-title">Orchestrator 选档</text>
+            <text x="450" y="254" class="node-copy">skill：读取 mounted 指引</text>
+            <text x="450" y="284" class="node-copy">读请求证据，推理用哪档</text>
+            <text x="450" y="314" class="node-copy">select_expert_squad(id, reason)</text>
+            <line x1="450" y1="340" x2="678" y2="340" stroke="#d9ded7" />
+            <text x="450" y="366" class="quiet-copy">非关键字路由 · 不自动 dispatch</text>
+          </g>
+
+          <!-- Stage 3: registration -->
+          <g class="hot" data-detail="wiring-overlay" tabindex="0" role="button" aria-label="root session overlay 细节">
+            <rect x="766" y="184" width="300" height="206" rx="17" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
+            <text x="790" y="218" class="pillar-title">root session overlay</text>
+            <text x="790" y="256" class="node-copy" fill="#8a5a2b">prompt_profile.active = &lt;id&gt;</text>
+            <text x="790" y="282" class="quiet-copy">Session.mergeConfigOverlay(root)</text>
+            <line x1="790" y1="310" x2="1040" y2="310" stroke="#dfcbb5" />
+            <text x="790" y="338" class="quiet-copy">不 dispatch · 不改 workflow</text>
+            <text x="790" y="362" class="quiet-copy">不改 model · 不改 tools</text>
+          </g>
+
+          <!-- Stage 4: composition, 3 arms -->
+          <g class="hot" data-detail="wiring-prompt-arm" tabindex="0" role="button" aria-label="PROMPT 组装臂细节">
+            <rect x="1120" y="148" width="454" height="122" rx="17" fill="#f2e8dc" stroke="#c89b68" />
+            <text x="1144" y="182" class="pillar-title" fill="#8a5a2b">PROMPT · 唯一受专家团驱动</text>
+            <text x="1144" y="216" class="node-copy">base core ⊕ profile.agents[agentID] ⊕ userAppend</text>
+            <text x="1144" y="244" class="quiet-copy">composeAgentPrompt → effective system prompt</text>
+          </g>
+          <g class="hot" data-detail="wiring-tool-arm" tabindex="0" role="button" aria-label="TOOLS 解析臂细节">
+            <rect x="1120" y="292" width="454" height="80" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
+            <text x="1144" y="324" class="pillar-title">TOOLS · 不受专家团影响</text>
+            <text x="1144" y="352" class="quiet-copy">AgentToolPool → ToolRegistry.tools(model, agent, config)</text>
+          </g>
+          <g class="hot" data-detail="wiring-model-arm" tabindex="0" role="button" aria-label="AGENT/MODEL/MCP 不变细节">
+            <rect x="1120" y="392" width="454" height="80" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
+            <text x="1144" y="424" class="pillar-title">AGENT / MODEL / MCP / WORKFLOW · 不变</text>
+            <text x="1144" y="452" class="quiet-copy">这些轴各有独立来源，不读取 expert squad。</text>
+          </g>
+
+          <!-- arrows -->
+          <path d="M356 268 L426 268" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
+          <path d="M356 432 C396 432 392 306 426 286" fill="none" stroke="#8a5a2b" stroke-width="1.6" stroke-dasharray="2 5" marker-end="url(#warrow-c)" />
+          <path d="M702 286 L766 286" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
+          <path d="M1066 286 C1092 270 1094 222 1120 206" fill="none" stroke="#8a5a2b" stroke-width="2.2" marker-end="url(#warrow-c)" />
+          <text x="1064" y="264" class="flow-caption">only prompt assembly changes</text>
+        </svg>
+
+        <div class="map-legend" aria-label="结论">
+          <span style="color: var(--copper); font-weight: 700">
+            换专家团 = 只热插 PROMPT 这一层；TOOLS / AGENT / MODEL / MCP / WORKFLOW 全部不变 → 同一通用基建承载众多业务。
+          </span>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="source-title">
-        <div class="section-header">
-          <h2 id="source-title">架构单一来源锚点</h2>
-          <p>
-            这些锚点说明主图不是概念包装，而是对当前 OpenCorvus 架构事实的高层抽象。
-          </p>
-        </div>
-        <div class="source-ledger">
-          <div class="ledger-item">
-            <strong>AgentRoleContract</strong>
-            <span>角色、工具面、skillMountable、workflow tool、A2A redispatch binding 的单一事实来源。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>AgentToolPool</strong>
-            <span>工具可见性、Orchestrator private tools、worker 请求 Orchestrator 决策能力的边界。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>Skill Mount Matrix</strong>
-            <span>Skill 的 mounted_agents、canonical SkillTool、overlay mount projection 和技能读取路径。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>MCP Boundary</strong>
-            <span>MCP 是协议扩展轴；它不同于 plugin，也不同于 executor，避免概念混用。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>PromptProfile</strong>
-            <span>专家团是 prompt profile 与可见 skill loading，不是 host 端关键词路由。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>WorkflowRegistry</strong>
-            <span>direct / pipeline 是声明式 hint；调度仍由 Orchestrator 基于上下文判断。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>A2A Protocol</strong>
-            <span>request / response / action 形成 durable coordination；子 Agent 提供证据，不替代任务级调度。</span>
-          </div>
-          <div class="ledger-item">
-            <strong>Evidence Plane</strong>
-            <span>Decision Log、engine_artifact、Trace、Bus、SSE 和 overlay projection 共同构成交付证据层。</span>
-          </div>
-        </div>
+      <section class="guardrail-strip" aria-label="架构红线">
+        <span class="gr-title">架构红线（单一来源）：</span>
+        <span class="gr" data-detail="rl-scheduler" tabindex="0" role="button">唯一调度者</span>
+        <span class="gr" data-detail="rl-no-pipeline" tabindex="0" role="button">无固定 pipeline</span>
+        <span class="gr" data-detail="rl-no-fallback" tabindex="0" role="button">无 fallback</span>
+        <span class="gr" data-detail="rl-no-hidden" tabindex="0" role="button">无隐藏消息</span>
+        <span class="gr" data-detail="rl-req-trace" tabindex="0" role="button">需求穷尽追溯</span>
+        <span class="gr" data-detail="rl-no-keyword" tabindex="0" role="button">无关键字路由</span>
+        <span class="gr" data-detail="rl-timeout" tabindex="0" role="button">无活动超时</span>
+        <span class="gr" data-detail="rl-retired" tabindex="0" role="button">退役不复活</span>
       </section>
 
       <footer class="footer">
         <div>
-          当前图定位为 executive architecture map：用于解释 OpenCorvus Agent Team 基建的规模、治理边界和使用前景。它不新增 runtime 行为，也不替代 `specs/current/architecture/**` 的详细章节。
+          本图定位为 architecture map：解释 OpenCorvus Agent Team 基建的角色、调度回路、协议与扩展边界。它不新增 runtime
+          行为，也不替代 <code>specs/current/architecture/**</code> 的详细章节；数字与名称以
+          <code>packages/opencorvus/src/**</code> 代码契约为单一真源。
         </div>
         <div class="boundary" aria-label="Architecture boundaries">
+          <span>single Orchestrator scheduler</span>
           <span>no fallback</span>
           <span>no hidden messages</span>
-          <span>no double source</span>
           <span>no host state machine</span>
-          <span>single Orchestrator scheduler</span>
+          <span>no double source</span>
+          <span>no keyword routing</span>
         </div>
       </footer>
     </main>
+
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+      <div class="drawer-head">
+        <div class="drawer-kicker" id="drawer-kicker">组件</div>
+        <h3 class="drawer-title" id="drawer-title">细节</h3>
+        <button class="drawer-close" id="drawer-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="drawer-body" id="drawer-body"></div>
+      <div class="drawer-src" id="drawer-src"></div>
+    </aside>
+
+    <script>
+      const DETAILS = {
+        "ingress": {
+          kicker: "平面 01 · 入站", title: "入站入口 · 3 entries",
+          src: "src/channel/ingress.ts · src/control/message.ts · src/acp/",
+          html: `<p>三类入站统一汇入 <code>EngineService.createTask</code>，绝不把同一目标拆成不可见的双路消息。</p>
+            <ul>
+              <li><b>ChannelIngress.message()</b> — 外部 bot / HTTP webhook，语义明确时确定性路由；命中 binding 且有 pending interaction 则直接回填。</li>
+              <li><b>ControlMessage.handle()</b> — 自然语言对话，过一次 LLM 推理产出受限的 panel capability JSON action。</li>
+              <li><b>ACP</b> — 外部编辑器（Zed 等）以 Agent Client Protocol 调用，编辑器为 client、OpenCorvus 为 agent。</li>
+            </ul>
+            <p>若消息尚未抵达 engine task，先调试 channel/control 边界，再查 agent 间路径。</p>`
+        },
+        "engine-service": {
+          kicker: "平面 01 · 任务 API", title: "EngineService",
+          src: "src/task-api/index.ts",
+          html: `<p>唯一的任务 API 入口（旧 <code>orchestrator/service.ts</code> 已迁移）。</p>
+            <h4>主要 export</h4>
+            <ul>
+              <li><code>init()</code> — 注册 scheduler poll、订阅 auto-permission、串行队列 recovery。</li>
+              <li><code>createTask(input)</code> — 创建任务 + 启动 Loop。</li>
+              <li><code>handleTaskMessage / operatorSteerAgentSession / replyInteraction / cancelTask / retryTask …</code> — task mutation。</li>
+              <li><code>getBoard / getBrief / getProjectBoard / getGlobalTaskBoard</code> — workbench 视图。</li>
+            </ul>`
+        },
+        "engine-task": {
+          kicker: "平面 01 · 数据", title: "engine_task",
+          src: "src/engine/engine.sql.ts",
+          html: `<p>engine 域顶层表，<code>session_id</code> 指向 root session。</p>
+            <div class="kv">
+              <div><b>status</b><span>queued · active · completed · failed · cancelled</span></div>
+              <div><b>priority</b><span>critical · high · normal · low</span></div>
+              <div><b>kind</b><span>workflow（完整 Loop）| build（快通道）</span></div>
+              <div><b>executor</b><span>opencorvus · codex · claude-code</span></div>
+            </div>
+            <p><code>kind="build"</code> 跳过分解 / 计划 / 评估直跑 build agent，但仍占一行，享受统一 cancel / list / audit。</p>`
+        },
+        "run-loop": {
+          kicker: "平面 02 · 控制回路", title: "runTaskLoop()",
+          src: "src/orchestrator/loop.ts",
+          html: `<p>唤醒 task orchestrator，暴露 orchestrator workflow tools。接受任意自由形式 task event，由 LLM 读 <code>engine_*</code> + decision-log 事实后自行判断，<b>不依赖</b> <code>trigger.kind</code> 枚举。</p>
+            <h4>Loop 消灭的旧机制（不要再引入）</h4>
+            <ul>
+              <li><code>recoverOrphanedTasks</code> — 孤儿 task 由 <code>EngineService.init</code> 串行队列统一重启。</li>
+              <li><code>notifyGoalResult</code> fire-and-forget 与 <code>agentNotifiedRuns</code> dedup。</li>
+              <li>host-side dispatch branch、无限 wake-up 循环。</li>
+            </ul>`
+        },
+        "orchestrator": {
+          kicker: "平面 02 · 调度核心", title: "Orchestrator",
+          src: "src/orchestrator/loop.ts · tools.ts · src/agent/tool-pool-contract.ts",
+          html: `<p>唯一任务级调度者。看完整上下文推理下一步动作；自身不写代码，executor 的 filesystem / search / write 工具被排除在其可见池外。</p>
+            <h4>显式 tool surface</h4>
+            <ul>
+              <li><b>Stage / evidence</b>：requirements · frontend_design · frontend_research · deep_research · architect · workload_analysis · build。</li>
+              <li><b>审查 / 复核</b>：visual_qa · integrity · fact_check · analyze_intent · explore。</li>
+              <li><b>Goal 维护</b>：add_goal · modify_goal · query_failed_goals · goal_report。</li>
+              <li><b>任务级控制</b>：complete_task · fail_task · cancel_task · retry_task · cancel_subagent · refine。</li>
+              <li><b>A2A 响应</b>：respond_agent_coordination（唯一调度响应入口）。</li>
+            </ul>
+            <p><code>deliver</code> / <code>publish_acceptance</code> / <code>steer_subagent</code> 已删除。</p>`
+        },
+        "workflow-hint": {
+          kicker: "平面 02 · 工作流", title: "Workflow hint：direct / pipeline",
+          src: "src/engine/workflow.ts",
+          html: `<p>两种声明式模板，<b>不是</b>硬状态机。通过 <code>WorkflowRegistry.resolve(id)</code> 解析，可在 <code>opencorvus.jsonc</code> 自定义。Orchestrator 基于推理仍可偏离推荐步骤。</p>
+            <div class="kv">
+              <div><b>direct</b><span>analyze_intent? → build（单文件 / bugfix / 配置 / 短调试）</span></div>
+              <div><b>pipeline</b><span>frontend_design? + frontend_research? → requirements → architect → workload_analysis? → build ×N → visual_qa? / integrity</span></div>
+            </div>
+            <h4>关键约束</h4>
+            <ul>
+              <li>依赖满足的 goal 在独立 worktree 并行执行，<code>owned_paths</code> 不重叠。</li>
+              <li>失败处理：Orchestrator 读 evidence 推理，不是查表 retry。</li>
+            </ul>`
+        },
+        "a2a": {
+          kicker: "平面 02 · 协议", title: "A2A 持久协调协议",
+          src: "engine/agent-coordination.ts · 13-agent-communication-matrix.md",
+          html: `<p>Agent 间调度用 <b>durable artifact</b> 与可见投影表达，<b>不用</b>隐藏消息或 direct child-session reply。每个方向只有一个入口。</p>
+            <h4>三个方向</h4>
+            <ul>
+              <li><b>Worker → Orchestrator</b>：<code>request_orchestrator_decision</code> → 写 <code>agent_coordination_request</code> + <code>agent.coordination.requested</code>，唤醒 task orchestrator。</li>
+              <li><b>Operator → Orchestrator</b>：<code>POST …/operator-steer</code> → <code>agent_coordination_request(origin="operator_steer")</code>。</li>
+              <li><b>Orchestrator → worker / action</b>：<code>respond_agent_coordination</code> 认领 pending request，写 response / action，再执行 continue / cancel_worker / ask_user / fail_task / redispatch。</li>
+            </ul>
+            <h4>可观察投影</h4>
+            <p>request / response / action / continuation / terminal 经一条可见投影（conversation · events · SSE）重建为 <code>protocol_event</code>、message part 与 session status。</p>`
+        },
+        "checks": {
+          kicker: "平面 02 · 验收", title: "Checks",
+          src: "src/acceptance/checks/",
+          html: `<p>deterministic runner + LLM judge 组合，验收维度按真实任务面选择。</p>
+            <ul>
+              <li>discovery · visual · content-fingerprint · runtime-evidence · types。</li>
+              <li>结果回到 Decision Point，由 Orchestrator 读 evidence 推理，不是查表 retry。</li>
+            </ul>
+            <p>旧独立 acceptance review agent 已删除：最终完成 / 失败归 Orchestrator 的 lifecycle decision，<code>integrity</code> 只输出 review report，运行时截图证据归 Build。</p>`
+        },
+        "evidence": {
+          kicker: "平面 02 · 证据", title: "证据 / handoff 产出",
+          src: "src/decision-log/ · src/engine/engine.sql.ts",
+          html: `<p>每步推理沉淀为持久 artifact 与共享上下文，构成可复盘的组织记忆。</p>
+            <ul>
+              <li><b>decision_log</b> — 全局 append-only，所有 agent 可读写，传 WHY 不只 WHAT。</li>
+              <li><b>engine_artifact</b> — 统一过程表，<code>kind</code> 决定语义；单一写入者 <code>task-api</code> + <code>engine/persist|state|store</code>。</li>
+              <li>handoff 持久面：build report / outcome / goal reports / contract graph / research brief / design specs。</li>
+            </ul>`
+        },
+        "base-decision-log": {
+          kicker: "底座", title: "decision_log",
+          src: "src/decision-log/schema.ts",
+          html: `<p>全局共享 append-only 表，通过 DI 注入给所有 agent。</p>
+            <ul>
+              <li>Requirements 种子 → Architect 写接口契约 / 目录蓝图 / 导出清单 / 命名规范 → Build / Executor 读上下文。</li>
+              <li>传递 <b>WHY</b>，不仅仅是 WHAT。</li>
+            </ul>`
+        },
+        "base-artifact": {
+          kicker: "底座", title: "engine_artifact",
+          src: "src/engine/engine.sql.ts",
+          html: `<p>engine 域共 13 张表，统一过程表 <code>engine_artifact</code> 按 <code>kind</code> 区分语义，替代旧的多表过程模型。</p>
+            <p>旧 goal 状态列、worktree 过程字段已退役，其单一来源迁到 <code>engine_artifact[kind="goal_run_attempt"].payload</code>。</p>
+            <p><b>唯一写入者</b>：<code>task-api/index.ts</code> 与 <code>engine/persist|state|store</code>，禁止其他模块直接写 <code>engine_*</code>。</p>`
+        },
+        "base-trace": {
+          kicker: "底座", title: "Trace — 统一 workflow 追踪",
+          src: "src/trace/index.ts",
+          html: `<p>每个 workflow 事件（task/agent 边界、llm.step deltas、tool.call/result、phase 变化）：</p>
+            <ul>
+              <li>追加 JSON 一行到 <code>&lt;dir&gt;/.opencorvus/trace/&lt;sessionID&gt;.jsonl</code>，并写 task rollup 与 manifest。</li>
+              <li>同时 <code>Bus.publish</code>，overlay SSE 消费者实时获取。</li>
+            </ul>
+            <p>自动埋点在 <code>session/llm.ts</code> + <code>agent/agent.ts</code> + <code>agent/runner.ts</code> + <code>orchestrator/agent.ts</code>，agent 代码不手工调 trace。</p>`
+        },
+        "base-bus": {
+          kicker: "底座", title: "Bus — 全局事件总线",
+          src: "src/bus/bus-event.ts · global.ts",
+          html: `<p>类型安全的事件定义（<code>BusEvent.define(name, zodSchema)</code>）+ <code>Bus.publish()</code> 全局发布。</p>
+            <ul>
+              <li>SSE 消费者订阅 → overlay 实时刷新。</li>
+              <li>Trace 双写的第二条路径。</li>
+              <li>事件清单定义在 <code>engine/model.ts</code> 的 <code>Event.*</code>。</li>
+            </ul>`
+        },
+        "base-sse": {
+          kicker: "底座", title: "SSE — Server-Sent Events",
+          src: "src/control/ · conversation/view.ts",
+          html: `<p>overlay 的实时刷新通道。A2A 的 request / response / action / continuation / terminal 全部经一条可见投影重建为 <code>protocol_event</code>、message part 与 session status。</p>
+            <p>不依赖隐藏消息——若可见状态缺失，先查 <code>conversation/view.ts</code> 与 protocol event 投影。</p>`
+        },
+        "base-memory": {
+          kicker: "底座", title: "memory — 长期语义记忆",
+          src: "src/memory/memory.sql.ts · scratchpad.sql.ts",
+          html: `<p>把经验变成可追踪资产，支撑复盘、训练与治理。</p>
+            <ul>
+              <li><code>memory_file · memory_chunk · memory_embedding</code> — 长期语义记忆。</li>
+              <li><code>task_plan</code> — 任务计划记忆；<code>scratchpad</code> — 短期暂存。</li>
+            </ul>`
+        },
+        "base-scheduler": {
+          kicker: "底座", title: "scheduler — 调度器",
+          src: "src/scheduler/*.sql.ts",
+          html: `<p>承载延时 / 周期任务与事件作业。</p>
+            <ul>
+              <li><code>task_queue</code> — 串行队列与 recovery。</li>
+              <li><code>cron_job</code> — 周期触发；<code>event_job</code> — 事件触发。</li>
+            </ul>`
+        },
+        "agent-intent": {
+          kicker: "Stage / 证据", title: "Intent Analysis",
+          src: "src/intent-analysis/agent.ts",
+          html: `<p>解读简短 / 模糊请求，输出 <code>IntentAnalysisResult</code>：intent class · complexity band · missing-info · clarifications。</p>
+            <div class="kv"><div><b>tool</b><span>analyze_intent（可选 stage）</span></div>
+            <div><b>产出</b><span>intent-analysis engine_artifact + decision-log</span></div>
+            <div><b>消费者</b><span>Orchestrator · Build · Integrity</span></div></div>`
+        },
+        "agent-requirements": {
+          kicker: "Stage / 证据", title: "Requirements",
+          src: "src/requirements/agent.ts",
+          html: `<p>逐行解析用户输入，提取全部 explicit + implicit 需求，编号 <code>REQ-N</code> 并写 foundational decisions；<b>不</b>产出 goals。</p>
+            <p>10000 行 template 与 1 行 bug report 要求同样严谨度。</p>
+            <div class="kv"><div><b>产出</b><span>requirements + goal contracts</span></div>
+            <div><b>消费者</b><span>Architect · Build</span></div></div>`
+        },
+        "agent-architect": {
+          kicker: "Stage / 证据", title: "Architect",
+          src: "src/architect/agent.ts",
+          html: `<p>权威 goal 分解者：先分析边界，再产出 <b>≥2</b> 个小型、可独立执行 / 验收的 goal；禁止单个大型 all-in-one goal。负责接口契约、追溯、contract IR / linker。</p>
+            <div class="kv"><div><b>产出</b><span>contract graph + decision-log</span></div>
+            <div><b>消费者</b><span>Build · Integrity</span></div></div>`
+        },
+        "agent-frontend-design": {
+          kicker: "Stage / 证据", title: "Frontend Design",
+          src: "src/frontend-design/agent.ts",
+          html: `<p>视觉参考（Figma / 图片 / URL）→ 前端模板 / 视觉一致性契约；按任务视觉作用域<b>一次性</b>产出 handoff，后续修复消费该 handoff，不重复执行。</p>
+            <div class="kv"><div><b>产出</b><span>task.design_specs + system artifacts</span></div>
+            <div><b>消费者</b><span>Build · Visual QA · Integrity</span></div></div>`
+        },
+        "agent-frontend-research": {
+          kicker: "Stage / 证据", title: "Frontend Research",
+          src: "src/frontend-research/agent.ts",
+          html: `<p>网页 URL → 直接调查源页面，汇总功能 / 视觉 / layout / interaction / content / fidelity evidence brief；按作用域一次性产出。</p>
+            <div class="kv"><div><b>产出</b><span>research brief artifact</span></div>
+            <div><b>消费者</b><span>Frontend Design · Architect · Build</span></div></div>`
+        },
+        "agent-deep-research": {
+          kicker: "Stage / 证据", title: "Deep Research",
+          src: "src/deep-research/",
+          html: `<p>深度资料调研，汇总 research brief artifact。</p>
+            <div class="kv"><div><b>tool</b><span>deep_research</span></div>
+            <div><b>消费者</b><span>Frontend Design · Architect · Build</span></div></div>`
+        },
+        "agent-workload": {
+          kicker: "Stage / 证据", title: "Goal Workload Analyst",
+          src: "src/goal-workload-analyst/agent.ts",
+          html: `<p><b>只读</b> goal 定型复核：深读 frontend template / contract graph / reference coverage，逐 goal 产反低估清单、验证清单与 <code>decomposition_concern</code>。</p>
+            <p>不创建 / 修改 goal、不写代码、<b>不作为 gate</b>。</p>
+            <div class="kv"><div><b>tool</b><span>workload_analysis</span></div>
+            <div><b>何时</b><span>Architect 产出 goal graph 后</span></div></div>`
+        },
+        "agent-build": {
+          kicker: "执行", title: "Build",
+          src: "src/build/agent.ts · src/executor/registry.ts",
+          html: `<p><code>BuildAgent.run</code> 创建 / 接管 worktree（<code>Worktree.create</code>），调 <code>ExecutorRegistry.requireCoding</code> 实际写代码，并通过 backend browser evidence 或 Browser MCP 取运行时截图证据。</p>
+            <p><code>goal/runner.ts</code> 仅 <code>cleanupGoalWorkspace</code> 清理，不创建 worktree、不调 executor。</p>
+            <div class="kv"><div><b>产出</b><span>build report / outcome / goal reports / changed-file artifacts</span></div>
+            <div><b>消费者</b><span>Integrity · Visual QA · Orchestrator</span></div></div>`
+        },
+        "agent-visual-qa": {
+          kicker: "复核 / 验证", title: "Visual QA",
+          src: "src/agent · VISUAL_QA_STATIC_TOOL_IDS",
+          html: `<p>基于截图对前端交付做视觉验收与修复定位。</p>
+            <div class="kv"><div><b>tool</b><span>visual_qa</span></div>
+            <div><b>产出</b><span>visual QA report + acceptance records</span></div>
+            <div><b>消费者</b><span>Integrity · Orchestrator</span></div></div>`
+        },
+        "agent-integrity": {
+          kicker: "复核 / 验证", title: "Integrity",
+          src: "src/integrity/team-agent.ts",
+          html: `<p>对抗性 integrity review team：根据真实任务面动态选 reviewer，复核 requirement scope、runtime evidence、实现质量与验收风险。<b>review report 边界，不是 lifecycle authority</b>。</p>
+            <p>旧固定维度 review、prosecutor、独立 acceptance、<code>fidelity</code> kind 已并入此 team。</p>
+            <div class="kv"><div><b>产出</b><span>integrity attempt artifact + review history</span></div>
+            <div><b>消费者</b><span>Orchestrator · 下一次 Build run</span></div></div>`
+        },
+        "agent-fact-check": {
+          kicker: "复核 / 验证", title: "Fact Check",
+          src: "src/agent · fact-check pool",
+          html: `<p>对 claim 逐条做来源验证，输出核验结论。</p>
+            <div class="kv"><div><b>tool</b><span>fact_check</span></div>
+            <div><b>何时</b><span>需要核验来源 / 主张时</span></div></div>`
+        },
+        "agent-general": {
+          kicker: "通用 subagent", title: "General",
+          src: "src/tool/task.ts · roleAssignments.general",
+          html: `<p>通用 coding / research subagent，含 web-clone private tools。<code>general → general</code> 自递归被权限策略拒绝。</p>
+            <div class="kv"><div><b>入口</b><span>Build 通过 task tool 派生</span></div></div>`
+        },
+        "agent-explore": {
+          kicker: "通用 subagent", title: "Explore",
+          src: "src/tool/task.ts · roleAssignments.explore",
+          html: `<p>只读探索 subagent：read / search / web / panel / memory，外加 <code>request_orchestrator_decision</code>。负责定位，不做写入。</p>
+            <div class="kv"><div><b>入口</b><span>Build / General 通过 task tool 派生</span></div></div>`
+        },
+        "squad-frontend-replica": {
+          kicker: "Expert Squad · DEFAULT", title: "Frontend Replica",
+          src: "src/agent/prompt-profile.ts · DEFAULT_PROMPT_PROFILE_ID",
+          html: `<p>参照复刻、网页复制、视觉证据与设计系统聚焦的专家团；<b>默认 active profile</b>。</p>
+            <ul>
+              <li>聚焦桌面源信息架构、模块顺序、密度、状态与可见 parity。</li>
+              <li>除非 operator 明确要求多端迁移，否则不引入 tablet / mobile 作用域。</li>
+              <li>build 用 <code>browser_preview_reference_regions</code> 取证、<code>browser_preview_compare_scroll_slices</code> 做 visual_diff。</li>
+            </ul>
+            <p><b>它只是 prompt overlay</b>：覆盖 14 个 agent 的领域 prompt，不改 workflow / routing / MCP / model / 工具池。</p>`
+        },
+        "squad-frontend-innovate": {
+          kicker: "Expert Squad", title: "Frontend Innovate",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>企业 / 产品级前端设计综合：构思、对比、收敛与 anti-slop 复核。</p>
+            <ul>
+              <li>frontend-design 产出多个命名方向，拒绝浅稿，再提交一份可实现的产品设计 handoff。</li>
+              <li>仅当 operator 明确要求多份 Build 头脑风暴稿时才并行多方向。</li>
+              <li>额外覆盖 deep-research / fact-check / goal-workload-analyst。</li>
+            </ul>`
+        },
+        "squad-backend": {
+          kicker: "Expert Squad", title: "Backend",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>API / 状态 / 数据 / 集成与运行正确性聚焦。</p>
+            <ul>
+              <li>优先请求与数据契约、状态归属、持久化边界、可观测性与确定性失败处理。</li>
+              <li>完成标准 = 契约与状态效果在真实 runtime 路径上被证明。</li>
+            </ul>`
+        },
+        "squad-algorithm": {
+          kicker: "Expert Squad", title: "Algorithm",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>正确性、复杂度、benchmark 与对抗用例聚焦。</p>
+            <ul>
+              <li>需求写成证明目标：不变量、界、边界用例、验收指标与可度量性能义务。</li>
+              <li>以不变量成立 + 性能证据收尾。</li>
+            </ul>`
+        },
+        "squad-automation-debug": {
+          kicker: "Expert Squad", title: "Frontend Automation Debug",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>前端自动化、浏览器运行时调试、视觉回归与可复现证据聚焦。</p>
+            <ul>
+              <li>把渲染面当可执行检查：交互、布局状态、可访问性信号与截图必须支撑每条验收主张。</li>
+              <li>若 browser / preview / lint / typecheck / build 在 checker 启动前中断，先查 manifest / .bin / package links / ports，再 rerun。</li>
+            </ul>`
+        },
+        "squad-general": {
+          kicker: "Expert Squad", title: "General",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>无领域 overlay 的基线档。保留通用行为，不向任何 agent 注入专家 prompt——用于不需要领域聚焦的任务。</p>
+            <p>专家团切换走可见路径：<code>config.prompt_profile.active</code> 或 Orchestrator 的 <code>select_expert_squad</code> 技能，不是 host 端关键词路由；project 自定义 profile 不能覆盖内置档。</p>`
+        },
+        "axis-executor": {
+          kicker: "扩展轴", title: "Executor — 执行器",
+          src: "src/executor/ · contract.ts (ExecutorName)",
+          html: `<p>内置执行队列与外部 coding 进程，<b>不属于</b> Agent Team——只执行不决策。当前名：<code>opencorvus · codex · claude-code</code>。</p>
+            <p>由 <code>engine_task.executor</code> 选择；调用点是 <code>BuildAgent.run</code> 内 <code>ExecutorRegistry.requireCoding</code>。旧 pipeline executor / goal-pool 模块已删除。</p>`
+        },
+        "axis-plugin": {
+          kicker: "扩展轴", title: "Plugin — 非执行器插件",
+          src: "src/plugin/index.ts · isolate.ts",
+          html: `<p>通过 <code>@opencorvus-ai/plugin</code> SDK 加载第三方 Hook / auth plugin，in-process、类型共享。</p>
+            <ul>
+              <li>注入 <code>Plugin.state</code>，暴露 Bus / Session / Config / Server。</li>
+              <li><code>isolate.ts</code> 用 isolated runtime 跑第三方 hook。</li>
+              <li><b>不</b>承担"在 worktree 里跑完整任务产 diff"。旧 plugin/codex、plugin/copilot 已收编为 executor。</li>
+            </ul>`
+        },
+        "axis-mcp": {
+          kicker: "扩展轴", title: "MCP — Model Context Protocol",
+          src: "src/mcp/",
+          html: `<p>协议扩展轴，与 plugin / executor 语义不同。</p>
+            <ul>
+              <li><b>作为 client / host</b>：接入外部 MCP server，把工具暴露给 agent。</li>
+              <li><b>作为 server</b>（<code>mcp/serve.ts</code>）：对外暴露 OpenCorvus 自身能力。</li>
+              <li>远程协议，有序列化开销 + 鉴权 / OAuth 流（<code>auth.ts</code> · <code>oauth-*</code>）。</li>
+            </ul>`
+        },
+        "axis-acp": {
+          kicker: "扩展轴", title: "ACP — Agent Client Protocol",
+          src: "src/acp/",
+          html: `<p>外部编辑器（Zed 等）通过 ACP 调用 OpenCorvus：编辑器为 client、OpenCorvus 为 agent。</p>
+            <p>与 ChannelIngress / ControlMessage 并列为入站入口之一。</p>`
+        },
+        "rl-scheduler": {
+          kicker: "架构红线", title: "唯一调度者",
+          src: "99-principles.md · §1",
+          html: `<p>Orchestrator 是唯一任务级调度者，sub-agent 提供作用域证据，不替代任务完成或跨目标调度。</p>
+            <p>Infrastructure 只执行，不决策，不自动 dispatch。</p>`
+        },
+        "rl-no-pipeline": {
+          kicker: "架构红线", title: "无固定 pipeline",
+          src: "99-principles.md · §4 / anti-patterns",
+          html: `<p>禁止硬编码状态机（<code>if status==evaluating → …</code>）与机械 RetryPolicy（<code>bug → re-execute</code>）。</p>
+            <p>失败由 agent 读 evidence 决定，不是查表；Orchestrator 随时 <code>add_goal</code> / <code>modify_goal</code>。</p>`
+        },
+        "rl-no-fallback": {
+          kicker: "架构红线", title: "无 fallback",
+          src: "99-principles.md · anti-patterns",
+          html: `<p>修源头不修消费端，不吞错误，不"兜底一下先让它跑起来"。</p>
+            <p>任何 <code>.catch(() =&gt; {})</code> 吞错误、脱离主循环的代码都是这个反模式。</p>`
+        },
+        "rl-no-hidden": {
+          kicker: "架构红线", title: "无隐藏消息",
+          src: "13-agent-communication-matrix.md",
+          html: `<p>A2A 调度由 durable artifact 与可见投影表达，<b>不</b>用隐藏消息或 direct child-session reply。</p>
+            <p>worker 请求调度只能走 <code>request_orchestrator_decision</code>，不走 task-root message / hidden note / 新 subtask chat。</p>`
+        },
+        "rl-req-trace": {
+          kicker: "架构红线", title: "需求穷尽追溯",
+          src: "99-principles.md · §5",
+          html: `<p>逐行解析用户输入，提取全部 explicit + implicit 需求编号 <code>REQ-N</code>。</p>
+            <p>每个 <code>REQ-N</code> 必须出现在至少一个 goal 的 <code>requirement_ids</code> 中，输出追溯矩阵，Integrity 验证完整覆盖。</p>`
+        },
+        "rl-no-keyword": {
+          kicker: "架构红线", title: "无关键字路由",
+          src: "99-principles.md · §13",
+          html: `<p>任何形式的关键词过滤 / 敏感词屏蔽 / 关键字匹配规则都是严重违规。</p>
+            <p>专家团是 <code>PromptProfile</code> + 可见 skill loading + <code>select_expert_squad</code>，不是 host 端关键词路由。</p>`
+        },
+        "rl-timeout": {
+          kicker: "架构红线", title: "无活动超时",
+          src: "99-principles.md · anti-patterns",
+          html: `<p>所有超时必须是 <b>inactivity-based</b>，从不从进程启动计时。</p>
+            <p>理由：LLM 调用时长不可预测，硬超时会在正常推理中途杀进程。</p>`
+        },
+        "rl-retired": {
+          kicker: "架构红线", title: "退役不复活",
+          src: "01-agents.md · 02-data.md",
+          html: `<p>以下均已删除，不作为当前 runtime 路径，不要在文档或代码里复活：</p>
+            <ul>
+              <li>planner（per-goal planning tool role）· gateway 单例 · <code>channel_key</code>。</li>
+              <li>独立 acceptance review agent · prosecutor · goal-pool executor · pipeline executor。</li>
+              <li><code>deliver</code> · <code>publish_acceptance</code> · <code>steer_subagent</code> tool。</li>
+            </ul>`
+        },
+        "wiring-catalog": {
+          kicker: "专家团装配 · ① 目录", title: "PromptProfile.builtIns",
+          src: "src/agent/prompt-profile.ts",
+          html: `<p>专家团目录是一组 <b>PromptProfile</b>。每档的核心就是一个映射：</p>
+            <div class="kv"><div><b>结构</b><span>{ label, description, agents: { agentID → prompt overlay } }</span></div></div>
+            <p>内置档：frontend-replica（默认）· frontend-innovate · backend · algorithm · frontend-automation-debug · general（空 overlay）。</p>
+            <h4>关键</h4>
+            <ul>
+              <li>不同档的 <code>agents</code> 键不同——即覆盖<b>不同的 agent 子集</b>；不在映射里的 agent 拿基线 prompt。</li>
+              <li>目录里<b>只有 prompt 文本</b>，没有 tool、没有 model、没有 MCP、没有 workflow。</li>
+              <li>project 自定义 profile 不能覆盖内置档（<code>validateConfig</code> 报错）。</li>
+            </ul>`
+        },
+        "wiring-skill-discovery": {
+          kicker: "专家团装配 · ① 决策输入", title: "Mounted 专家团 skills",
+          src: "src/skill/builtin/*-expert-squad.md · orchestrator/tools.ts (skill)",
+          html: `<p>少数专家团带一份 mounted Orchestrator <code>SKILL.md</code>（frontend-replica / frontend-innovate / frontend-automation-debug）。</p>
+            <p>Orchestrator 的 <code>skill</code> 工具是<b>scheduler-only 的检索/加载面</b>：用来在 <code>select_expert_squad</code> 之前查看请求匹配到的专家团指引；它不加载生产 / research / 实现类 skill。</p>
+            <p>这让选档是<b>证据驱动</b>的可见推理，而不是 host 端关键词匹配。</p>`
+        },
+        "wiring-select": {
+          kicker: "专家团装配 · ② 决策", title: "select_expert_squad",
+          src: "src/orchestrator/tools.ts",
+          html: `<p>Orchestrator 选档的<b>唯一入口</b>，是一次可见的 tool 调用。</p>
+            <h4>它做什么</h4>
+            <ul>
+              <li>校验 <code>profile_id</code> 已知（<code>assertKnownProfileID</code>）。</li>
+              <li>把 <code>{ prompt_profile: { active: profile_id } }</code> 写入 root session config overlay。</li>
+              <li>要求填写 <code>reason</code>：为何从下一轮起该任务用这档。</li>
+            </ul>
+            <h4>它明确不做（tool 描述原文）</h4>
+            <p>does not dispatch work, reroute the workflow, change models, change tools, mutate per-agent prompt fields, or infer the profile from keywords.</p>`
+        },
+        "wiring-overlay": {
+          kicker: "专家团装配 · ③ 注册", title: "root session overlay（唯一写入点）",
+          src: "Session.mergeConfigOverlay · src/config/effective.ts",
+          html: `<p>整个专家团切换<b>只改这一处状态</b>：root session 的 config overlay 里的 <code>prompt_profile.active</code>。</p>
+            <div class="kv">
+              <div><b>写入</b><span>prompt_profile.active = &lt;profile_id&gt;</span></div>
+              <div><b>作用域</b><span>该 task 的 root session（及其后续派生）</span></div>
+              <div><b>生效时机</b><span>未来的 Orchestrator wake 与被 dispatch 的 agent 组装 prompt 时</span></div>
+            </div>
+            <p>没有第二处注册：workflow / model / tools / MCP / 逐 agent prompt 字段都不被这次写入触碰。这正是「可换业务、不分叉调度」的实现根因。</p>`
+        },
+        "wiring-prompt-arm": {
+          kicker: "专家团装配 · ④ 组装", title: "PROMPT 臂（受专家团驱动）",
+          src: "src/agent/runner.ts · PromptProfile.composeAgentPrompt",
+          html: `<p>每个被 dispatch 的 agent 在 session 组装时，<b>有效 system prompt</b> 由三段拼接：</p>
+            <div class="kv">
+              <div><b>base</b><span>该 role 的 core prompt（不变）</span></div>
+              <div><b>overlay</b><span>overlayFor(agentID) = active profile.agents[agentID]（专家团驱动）</span></div>
+              <div><b>append</b><span>用户 / effective agent 的 prompt_append</span></div>
+            </div>
+            <p>拼接后再过 <code>appendNonExecutorSourceBoundary</code>。这是专家团唯一改变 runtime 行为的地方——<b>只有 prompt 这一层</b>。</p>
+            <p>若该 agent 不在 profile 的 <code>agents</code> 映射里，overlay 为空，它就跑基线 prompt。</p>`
+        },
+        "wiring-tool-arm": {
+          kicker: "专家团装配 · ④ 组装", title: "TOOLS 臂（不受专家团影响）",
+          src: "src/agent/tool-pool-contract.ts · src/tool/registry.ts",
+          html: `<p>工具可见性走<b>独立于专家团</b>的 canonical 管线：</p>
+            <ul>
+              <li><code>AgentToolPool</code> 赋值：<code>global</code> + <code>private</code> 两个显式列表。</li>
+              <li><code>ToolRegistry.tools(model, agent, config)</code> 加载全局 → 追加 private → 用 <code>visibleToolIDs</code> 收口。</li>
+            </ul>
+            <p>切换专家团不会增删任何 tool。built-in agent 工具池也不可经 <code>opencorvus.jsonc</code> 配置，prompt 与 permission 都无法制造第二来源。</p>`
+        },
+        "wiring-model-arm": {
+          kicker: "专家团装配 · ④ 组装", title: "AGENT / MODEL / MCP / WORKFLOW（不变）",
+          src: "role-contract.ts · mcp/ · engine/workflow.ts",
+          html: `<p>这些轴各有独立来源，<b>都不读专家团</b>：</p>
+            <ul>
+              <li><b>agent / role</b>：<code>AgentRoleContract</code> 决定职责、工具面、协作边界。</li>
+              <li><b>model</b>：由 provider / 配置决定，select_expert_squad 不改。</li>
+              <li><b>MCP servers</b>：<code>src/mcp/</code> 的 client/server 接入，与 profile 无关。</li>
+              <li><b>workflow</b>：<code>WorkflowRegistry</code> 的 direct / pipeline hint，与 profile 无关。</li>
+            </ul>
+            <p>结论：专家团只热插 prompt 一层，其余保持通用——同一基建因此能并行承载众多业务。</p>`
+        }
+      };
+
+      (function () {
+        const scrim = document.getElementById("scrim");
+        const drawer = document.getElementById("drawer");
+        const elKicker = document.getElementById("drawer-kicker");
+        const elTitle = document.getElementById("drawer-title");
+        const elBody = document.getElementById("drawer-body");
+        const elSrc = document.getElementById("drawer-src");
+        const btnClose = document.getElementById("drawer-close");
+        let lastFocus = null;
+
+        function open(id, trigger) {
+          const d = DETAILS[id];
+          if (!d) return;
+          lastFocus = trigger || null;
+          elKicker.textContent = d.kicker || "组件";
+          elTitle.textContent = d.title || "";
+          elBody.innerHTML = d.html || "";
+          elSrc.textContent = d.src ? "源 · " + d.src : "";
+          scrim.hidden = false;
+          drawer.hidden = false;
+          requestAnimationFrame(function () {
+            scrim.classList.add("open");
+            drawer.classList.add("open");
+          });
+          btnClose.focus();
+        }
+
+        function close() {
+          scrim.classList.remove("open");
+          drawer.classList.remove("open");
+          window.setTimeout(function () {
+            scrim.hidden = true;
+            drawer.hidden = true;
+          }, 260);
+          if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
+        }
+
+        document.addEventListener("click", function (e) {
+          const t = e.target.closest("[data-detail]");
+          if (t) open(t.getAttribute("data-detail"), t);
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && !drawer.hidden) {
+            close();
+            return;
+          }
+          if ((e.key === "Enter" || e.key === " ") && document.activeElement) {
+            const t = document.activeElement.closest && document.activeElement.closest("[data-detail]");
+            if (t) {
+              e.preventDefault();
+              open(t.getAttribute("data-detail"), t);
+            }
+          }
+        });
+
+        btnClose.addEventListener("click", close);
+        scrim.addEventListener("click", close);
+      })();
+    </script>
   </body>
 </html>

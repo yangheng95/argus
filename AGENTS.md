@@ -201,6 +201,13 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 - 如果停止失败、超时、缺少 live owner 证据或返回 `TaskCancellationIncompleteError` 等未完成信号，必须保留 Mission、Coding Assistant chat 和 task 记录，并把失败原因暴露给用户；禁止通过提前删除记录掩盖未停止的真实问题。
 - 本规则覆盖 UI 行为、server route、orchestrator tool、scheduler cleanup、project delete 级联和 agent 自行收尾。任何“停止前先删记录再补状态”的实现都属于双源 / fallback / gate 违规。
 
+**41（project 术语边界 — 2026-06-30）.** 讨论任务 404、目录归属或 `project_id` 时，必须区分用户可见的项目 / Mission / task 与 DB（Database，数据库）里的存储命名空间 `project_id`。
+
+- 一个目录可以承载多个用户可见项目、Mission、task 和会话；禁止把它误说成“一个目录只能做一个项目”。
+- `project_id` 是后端存储、权限和运行时证据的命名空间，不等同于用户语义里的项目数量。
+- 如果产品需要同一目录下多个用户可见项目，必须建模为显式用户层实体；禁止通过改写 `.git/opencorvus` marker 或制造同一 worktree 的多个 `project_id` 来冒充用户项目。
+- 调试 404 时必须说清楚是“用户项目/任务不存在”，还是“当前请求命中的 `project_id` 命名空间与记录所属命名空间不一致”。
+
 ---
 
 ## 七、元规则

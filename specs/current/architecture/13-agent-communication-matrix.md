@@ -24,7 +24,7 @@ If a message has not reached an engine task, debug the channel/control boundary 
 - **A2A 当前实现合同**见 [2026-06-26-enterprise-a2a-protocol-root-repair.md](../../records/2026-06/2026-06-26-enterprise-a2a-protocol-root-repair.md)。本文件的 direct/indirect 矩阵描述的是非 A2A 普通 agent 调用和历史预期对照，不是 worker scheduling mailbox 的替代真源。
 - **Planning tool role 已删除**：the removed planning package 整目录、旧目标池模块、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
-- **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），并吸收旧固定维度 review 与旧对抗性复核职责。`prosecute` / `prosecutor` 已删除。
+- **`integrity` 是 review report tool，不是 lifecycle authority**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），输出 pass / non-pass 报告供 Orchestrator 决策；最终完成 / 失败只能由 Orchestrator 的 `complete_task` / `fail_task` 写入。`prosecute` / `prosecutor` 已删除。
 - `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：默认按 `experimental.auto_confirm_proposed_tasks=true` 自动创建"完善上一个 request 的新任务"候选，只有该配置显式为 `false` 时才先询问用户；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
@@ -50,7 +50,7 @@ The implementation contract for the current A2A repair is recorded in [2026-06-2
 | `A`  | architect             | Contract graph and cross-goal architecture stage.                               |
 | `B`  | build                 | Implementation worker.                                                          |
 | `V`  | visual-qa             | Visual Quality Assurance stage.                                                 |
-| `IT` | integrity             | Final review boundary and acceptance authority.                                 |
+| `IT` | integrity             | Review report boundary; produces pass / non-pass evidence for Orchestrator.     |
 | `I`  | intent-analysis       | Intent artifact producer; tool ID is `analyze_intent`.                          |
 | `G`  | general               | General subagent spawned through the `task` tool.                               |
 | `E`  | explore               | Read-oriented exploration subagent.                                             |

@@ -62,7 +62,7 @@
 | ID         | 适合                                                | 步骤                                                                                                                                                                                                        |
 | ---------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `direct`   | 显式 `kind=build` 的单文件 / bugfix / 配置 / 短调试 | `analyze_intent?` → `build`                                                                                                                                                                                 |
-| `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构                   | `frontend_design?` + `frontend_research?`（按任务作用域一次性产出证据 / handoff，不作为重复修复工具） → `requirements` → `architect` → `workload_analysis?` → per-goal `build` → `visual_qa?` / `integrity` |
+| `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构                   | `frontend_design?` + `frontend_research?`（按任务作用域一次性产出证据 / handoff，不作为重复修复工具） → `requirements` → `architect` → `workload_analysis?` → per-goal `build` → `visual_qa?` / `integrity?` → Orchestrator lifecycle decision |
 
 用户可在 `opencorvus.jsonc` 自定义，通过 `WorkflowRegistry.resolve(id)` 解析。Orchestrator 基于推理仍可偏离推荐步骤。
 
@@ -128,7 +128,7 @@ orchestrator/loop.ts — runTaskLoop()
 | Frontend Design       | `frontend-design/agent.ts`                                                                                                                                                           | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约；按任务视觉作用域一次性产出 handoff，后续修复消费该 handoff，不重复执行 frontend-design                                               | 有视觉参考的前端任务                                                                                |
 | Frontend Research     | `frontend-research/agent.ts`                                                                                                                                                         | 网页 URL → 直接调查 prepared evidence 与源页面、汇总功能/视觉/layout/style/interaction/content/fidelity evidence brief；按网页调查作用域一次性产出 brief，后续修复消费该 brief，不重复执行 frontend-research | 有网页功能/视觉研究需求的前端或 PRD/SPEC/report 任务                                                |
 | Goal Workload Analyst | `goal-workload-analyst/agent.ts`                                                                                                                                                     | 只读 goal 定型复核：深读 frontend template / contract graph / reference coverage，逐 goal 产反低估清单、验证清单与 `decomposition_concern`；不创建/修改 goal、不写代码、不作为 gate                          | Architect 产出 goal graph 后，特别是网页复刻、复杂 UI 或大型重构任务                                |
-| Integrity Reviewer    | `integrity/team-agent.ts`                                                                                                                                                            | 对抗性 integrity review team：根据真实任务面动态选择 reviewer，复核 requirement scope、runtime evidence、实现质量与验收风险；旧固定维度 review 与 prosecutor 职责已并入此 team                               | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent）                          |
+| Integrity Reviewer    | `integrity/team-agent.ts`                                                                                                                                                            | 对抗性 integrity review team：根据真实任务面动态选择 reviewer，复核 requirement scope、runtime evidence、实现质量与验收风险，输出 pass / non-pass 报告；旧固定维度 review 与 prosecutor 职责已并入此 team                               | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent）                          |
 | Build                 | `build/agent.ts`（`BuildAgent.run`；同包 `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（`cleanupGoalWorkspace` 清理）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | `BuildAgent.run` 创建/接管 worktree、调用 `ExecutorRegistry.requireCoding` 并实际写代码；通过 task-scoped backend browser evidence 或 Browser MCP screenshot/observe 获取运行时截图证据；`goal/runner.ts` 不创建 worktree、不调用 executor | Orchestrator 通过 `build` tool 调起                                                                 |
 
 > Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory
@@ -136,7 +136,7 @@ orchestrator/loop.ts — runTaskLoop()
 > 任务树，**不是** 旧 per-goal planner 的替代。pipeline 流程里 "per-goal 实现步骤" 的职责
 > 已归并到 build agent 自身（结合 architect 写的 contract）。
 
-**Acceptance review 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 acceptance tool/service surface 不再存在。
+**Acceptance review 已删除**：任务完成 / 失败归属 Orchestrator 的 `complete_task` / `fail_task` lifecycle decision；`integrity` 只输出 review report，运行时截图证据归属 Build；旧 acceptance tool/service surface 不再存在。
 
 **Orchestrator 当前显式 tool surface**（2026-06-27，真源是 `src/agent/tool-pool-contract.ts` 的 orchestrator private/global 列表和 `src/orchestrator/tools.ts` 实现；`deliver` / `publish_acceptance` / `steer_subagent` 已删除）：
 

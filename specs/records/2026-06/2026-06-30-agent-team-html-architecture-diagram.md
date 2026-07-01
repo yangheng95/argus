@@ -198,11 +198,160 @@ future usage prospects.
   - viewport `1280x720`
   - page scroll size `1265x2440`
 
+### Second Corrective Recall (interactive, map-centric)
+
+User feedback across this revision:
+
+1. "改的成熟一些，不要故意炫技，要用充实内容征服读者" — drop the decorative
+   orbital SVG (concentric rings + radial floating agent circles) and replace
+   thin labels with dense, code-grounded facts.
+2. "专家团呢，我要的是每点击一个组件能展开更多的细节" — expert squads were
+   missing, and every component must be clickable to expand more detail.
+3. "专家团的作用是让 opencorvus 成为基建平台，用通用，可编排，agent team 并行，
+   承载众多的可能的业务，这也是重点" — the platform thesis must come through.
+4. "重点是 Agent Team Operating Map 这个图，内容要融入这个图，不是大段的文字" —
+   the SVG map is the artifact; content belongs inside the map, not in long
+   text sections beneath it.
+
+Revision applied:
+
+- Rebuilt the page around a single content-rich SVG `Agent Team Operating Map`.
+  Removed the orbital composition and all long text sections (roster table,
+  squad card grid, workflow lanes, A2A quad, axes grid, ledger).
+- Embedded the full substance INTO the map: three planes (ingress spine →
+  Orchestrator operating layer → evidence base + four extension axes), the
+  14-role agent family laid out by function group, the executor/worktree chain,
+  the verification loop, and the evidence/handoff handoff surfaces.
+- Added the expert squad as a horizontal `PromptProfile overlay` band drawn
+  ON TOP of the agent family, visually expressing the platform thesis: the same
+  general scheduling spine + parallel agent team carries many businesses by
+  swapping a domain prompt layer (not by forking scheduling). Built-ins read
+  from `src/agent/prompt-profile.ts::PromptProfile.builtIns`: frontend-replica
+  (default), frontend-innovate, backend, algorithm, frontend-automation-debug,
+  general.
+- Made every component clickable. A vanilla-JS detail drawer (no deps, works
+  from `file://`) opens code-level detail for each node, keyed by `data-detail`
+  into a `DETAILS` map. Substance lives in the drawer, keeping the page itself
+  free of large text blocks. Below the map only a compact metric strip, a
+  legend, a clickable guardrail (red-line) chip strip, and the footer remain.
+- Platform thesis woven into the masthead lead; metric strip surfaces `6 专家团`.
+
+Verification this revision (Windows, headless Chrome):
+
+- `node --check` on the extracted drawer script: pass.
+- Full-page screenshot + cropped plane-02 review: agent family groups, squad
+  overlay band, verification loop, and base/axes render without overlap.
+- Probe auto-click on the `agent-build` SVG chip confirmed the detail drawer
+  opens with title, body, kv table, and source footer.
+- Screenshots saved under the job scratch dir (`full.png`, `v2`/`v3`,
+  `map1.png`, `plane2.png`, `plane2b.png`, `drawer.png`, `drawer2.png`).
+
+### Expert-squad wiring pipeline (added)
+
+User request: "把不同专家团的 tool / agent / prompt 动态注册的过程画出来".
+
+Grounded in source before drawing:
+
+- `src/orchestrator/tools.ts` — `select_expert_squad` writes ONLY
+  `prompt_profile.active` to the root session config overlay via
+  `Session.mergeConfigOverlay`; its description states it "does not dispatch
+  work, reroute the workflow, change models, change tools, mutate per-agent
+  prompt fields, or infer the profile from keywords." The mounted `skill`
+  surface is scheduler-only search/load for expert-squad SKILL.md guidance.
+- `src/agent/runner.ts:1382` — effective prompt =
+  `appendNonExecutorSourceBoundary(PromptProfile.composeAgentPrompt({ agentID,
+  base: core, userAppend, config }))`.
+- `src/agent/prompt-profile.ts` — `composeAgentPrompt` joins base ⊕
+  `overlayFor(agentID)` (= active `profile.agents[agentID]`) ⊕ userAppend; each
+  built-in profile overlays a different subset of agent IDs.
+
+So the honest "dynamic registration" picture is: the expert squad is a
+PROMPT-only layer. Tools come from the canonical `AgentToolPool` +
+`ToolRegistry.tools()`; model, MCP servers, and workflow are independent and
+untouched.
+
+Added a second clickable SVG, `专家团装配管线 · Expert Squad Wiring`, as four
+stages: ① PromptProfile catalog (+ mounted SKILL.md), ② Orchestrator visible
+decision (`skill` → reason → `select_expert_squad`, not keyword routing),
+③ single write `prompt_profile.active` to root session overlay, ④ per-agent
+session composition split into three arms — PROMPT (squad-driven, highlighted)
+vs TOOLS and AGENT/MODEL/MCP/WORKFLOW (unchanged). The overlay arrow connects
+ONLY to the PROMPT arm; the other arms show independent sources, visually
+proving the squad hot-swaps just the prompt layer. New `DETAILS` drawer entries:
+`wiring-catalog`, `wiring-skill-discovery`, `wiring-select`, `wiring-overlay`,
+`wiring-prompt-arm`, `wiring-tool-arm`, `wiring-model-arm`. Verified by
+`node --check`, a cropped render of the pipeline (no overlap), and a probe
+auto-click on `wiring-overlay` opening the drawer.
+
+### Third Corrective Recall (visual breathing room)
+
+User feedback: "这里面的图太挤了，一点都不简约大气，怎么调整？"
+
+Revised acceptance criteria for this pass:
+
+- The first map must read as an executive operating canvas, not as a dense
+  inventory of every component.
+- Preserve the architecture facts and click-to-expand detail drawer, but move
+  secondary facts out of the first visual layer.
+- Increase visual hierarchy and whitespace: one main scheduling spine, one
+  platform band for expert squads, one grouped agent-team surface, and one
+  quiet evidence/extension base.
+- Keep the expert-squad platform thesis prominent: same Orchestrator + same
+  parallel Agent Team + prompt-profile overlay carries many business domains.
+- Keep the dedicated expert-squad wiring SVG because it explains the dynamic
+  prompt registration path, but make it more spacious and less label-heavy.
+- Re-run static consistency checks, script syntax checks, document tests, and a
+  real visual review path. Direct `file://` browser rendering is blocked by the
+  in-app browser URL policy, so any browser screenshot must use a user-approved
+  safer local preview path instead of direct file navigation.
+
+Hard constraints carried forward:
+
+- No fallback or compatibility story; this is a visual restructuring of the
+  same single HTML architecture source.
+- Do not add a second diagram source or split content into another current
+  architecture file.
+- Do not remove clickability for existing architectural components; if a visual
+  node is grouped, the underlying component details remain reachable through
+  group or representative hotspots.
+- Do not introduce new runtime concepts, routes, agents, prompt profiles, or
+  tool behavior.
+- Do not touch unrelated dirty source files.
+
+Sources re-read before this pass:
+
+| Source | Finding |
+| --- | --- |
+| `specs/records/2026-06/2026-06-30-agent-team-html-architecture-diagram.md` | Existing Recall, prior CEO-facing correction, interactive map correction, and expert-squad wiring record. |
+| `specs/current/architecture/17-agent-team-infrastructure.html` | Current SVG uses `viewBox="0 0 1640 1010"` and packs ingress, 14 role chips, expert squad chips, evidence, base tables, and extension axes into one dense map. |
+| `specs/current/architecture/README.md` | Confirms this HTML is the current architecture overview diagram. |
+| `specs/records/2026-06/README.md` and `specs/README.md` | Confirm the existing dated record remains the correct Recall location. |
+| Browser skill documentation | Confirms browser screenshot workflow, while direct `file://` navigation is blocked by policy in this environment. |
+
+Whole-repository grep evidence:
+
+| Command | Finding |
+| --- | --- |
+| `rg -n 'map-svg|viewBox|Agent Team Operating Map|Expert Squad Wiring|data-detail="agent-|data-detail="squad-|data-detail="wiring-|data-detail="base-|data-detail="axis-' specs/current/architecture/17-agent-team-infrastructure.html` | The crowded area is the first SVG plus the second wiring SVG; all clickable detail IDs are local to the same HTML. |
+| `rg -n '17-agent-team-infrastructure|Agent Team Operating Map|Expert Squad Wiring|PromptProfile overlay|executive visual|Second Corrective Recall|Verification' specs/records/2026-06/2026-06-30-agent-team-html-architecture-diagram.md specs/current/architecture/README.md specs/records/2026-06/README.md` | Only the current HTML and this record/index mention the diagram, so the visual pass should stay scoped to the HTML plus this record. |
+
+Independent agent feedback:
+
+- No new sub-agent was spawned because the user did not ask for parallel
+  delegation. This pass reuses prior landed review constraints already recorded
+  above and adds local grep plus browser-policy evidence.
+
 ## Verification
 
-Passed:
+Passed (latest run, interactive map-centric revision):
 
 ```powershell
-bun test packages/opencorvus/test/script/historical-docs-links.test.ts
-bun test packages/opencorvus/test/script/document-health.test.ts
+bun test packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/historical-docs-links.test.ts
+# 64 pass, 0 fail, 1060 expect() calls
 ```
+
+`document-health` does not scan `17-agent-team-infrastructure.html`: its
+architecture sweeps filter `.endsWith(".md")` and its targeted assertions use
+explicit file lists that exclude the HTML diagram, so the retired-name mentions
+in the diagram's guardrail/detail copy (shown only as "已删除 / 退役不复活") are
+not flagged.

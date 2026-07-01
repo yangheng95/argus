@@ -42,18 +42,28 @@ Current-day records:
 - [2026-06-29-task-active-sse-elapsed.md](2026-06-29-task-active-sse-elapsed.md) records task active SSE elapsed handling.
 - [2026-06-29-task-active-sse-runtime-elapsed.md](2026-06-29-task-active-sse-runtime-elapsed.md) records task active SSE runtime elapsed handling.
 - [2026-06-30-completed-worktree-immediate-reclaim.md](2026-06-30-completed-worktree-immediate-reclaim.md) records the completed goal worktree immediate reclaim repair.
+- [2026-06-30-completed-worktree-cleanup-status-boundary.md](2026-06-30-completed-worktree-cleanup-status-boundary.md) records the completed-worktree cleanup failure status boundary repair.
+- [2026-06-30-conversation-persisted-part-corruption-visibility.md](2026-06-30-conversation-persisted-part-corruption-visibility.md) records the conversation hydrate visible persisted-part corruption diagnostic repair.
+- [2026-06-30-worktree-cleanup-process-quiescence.md](2026-06-30-worktree-cleanup-process-quiescence.md) records the supervised-process quiescence repair for completed worktree cleanup.
 - [2026-06-30-frontend-research-citation-loop-root-repair.md](2026-06-30-frontend-research-citation-loop-root-repair.md) records the frontend research citation-map output-tool loop repair.
 - [2026-06-30-frontend-research-webpage-evidence-progress.md](2026-06-30-frontend-research-webpage-evidence-progress.md) records frontend research host webpage evidence progress observability.
 - [2026-06-30-goal-run-attempt-status-required.md](2026-06-30-goal-run-attempt-status-required.md) records the goal-run attempt status fail-fast parsing repair.
+- [2026-06-30-goal-mutation-running-session-activity-boundary.md](2026-06-30-goal-mutation-running-session-activity-boundary.md) records the DB-backed investigation and repair for manual goal mutation over running build-session transcript activity.
 - [2026-06-30-goal-run-state-simplification.md](2026-06-30-goal-run-state-simplification.md) records the goal-run state projection simplification plan.
 - [2026-06-30-goal-run-status-predicate-cleanup.md](2026-06-30-goal-run-status-predicate-cleanup.md) records the goal-run status catalog predicate cleanup.
+- [2026-06-30-mcp-goal-worktree-convergence.md](2026-06-30-mcp-goal-worktree-convergence.md) records MCP health, build retry, and task debug worktree convergence.
+- [2026-06-30-operator-message-wake-commitment.md](2026-06-30-operator-message-wake-commitment.md) records the operator message immediate wake repair.
+- [2026-06-30-overlay-goal-phase-board-sync-recovery.md](2026-06-30-overlay-goal-phase-board-sync-recovery.md) records the overlay goal-phase board projection recovery plan.
 - [2026-06-30-overlay-reasoning-streaming-markdown.md](2026-06-30-overlay-reasoning-streaming-markdown.md) records the overlay reasoning Markdown streaming repair.
 - [2026-06-30-provider-tool-schema-regex-lookaround.md](2026-06-30-provider-tool-schema-regex-lookaround.md) records the provider tool schema regex lookaround repair for `select_expert_squad.profile_id`.
+- [2026-06-30-remove-subagent-stale-recovery.md](2026-06-30-remove-subagent-stale-recovery.md) records the removal of orchestrator sub-agent stale recovery as a cancellation source.
 - [2026-06-30-run-artifact-status-required.md](2026-06-30-run-artifact-status-required.md) records the run artifact status fail-fast parsing repair.
 - [2026-06-30-run-status-catalog-classification.md](2026-06-30-run-status-catalog-classification.md) records the run status catalog classification cleanup.
 - [2026-06-30-retire-live-run-control-source.md](2026-06-30-retire-live-run-control-source.md) records the plan to retire live run/live goal_run lifecycle rows as orchestration control sources while preserving live ownership and active session protection.
 - [2026-06-30-sessionless-goal-completion-phase-projection.md](2026-06-30-sessionless-goal-completion-phase-projection.md) records the session-owned build phase projection repair for manual goal completion.
 - [2026-06-30-thick-expert-squad-prompts.md](2026-06-30-thick-expert-squad-prompts.md) records the thin-general, thick expert-squad prompt registry repair.
+- [2026-06-30-terminal-tool-time-order-contract.md](2026-06-30-terminal-tool-time-order-contract.md) records the terminal tool part end-after-start contract repair.
+- [2026-06-30-skill-matrix-hover-add-glyph.md](2026-06-30-skill-matrix-hover-add-glyph.md) records the Agent Skill Mount Matrix hover-only available add glyph plan.
 - [2026-06-30-visual-qa-problem-dom-report.md](2026-06-30-visual-qa-problem-dom-report.md) records the Visual QA problem DOM report strategy and report contract.
 
 ## Rules
