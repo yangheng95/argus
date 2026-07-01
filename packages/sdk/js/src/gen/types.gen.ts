@@ -11748,6 +11748,16 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
         implementation_covers_source: boolean
         implementation_matches_source_size: boolean
       }
+      content?: {
+        source: {
+          non_white_pixel_ratio: number
+          unique_color_count: number
+        }
+        implementation: {
+          non_white_pixel_ratio: number
+          unique_color_count: number
+        }
+      }
       artifacts?: {
         source_crop: string
         implementation_crop: string

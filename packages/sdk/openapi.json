@@ -21062,6 +21062,52 @@
                               "implementation_matches_source_size"
                             ]
                           },
+                          "content": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "object",
+                                "properties": {
+                                  "non_white_pixel_ratio": {
+                                    "type": "number"
+                                  },
+                                  "unique_color_count": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "non_white_pixel_ratio",
+                                  "unique_color_count"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "implementation": {
+                                "type": "object",
+                                "properties": {
+                                  "non_white_pixel_ratio": {
+                                    "type": "number"
+                                  },
+                                  "unique_color_count": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "non_white_pixel_ratio",
+                                  "unique_color_count"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "implementation"
+                            ],
+                            "additionalProperties": false
+                          },
                           "artifacts": {
                             "type": "object",
                             "properties": {
