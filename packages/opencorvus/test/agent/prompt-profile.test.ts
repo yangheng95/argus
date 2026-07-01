@@ -222,6 +222,36 @@ describe("prompt profiles", () => {
     }
   })
 
+  test("frontend replica expert squad uses source evidence instead of parity placeholders", async () => {
+    const profile = PromptProfile.builtIns["frontend-replica"]
+    const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
+    const skillText = (
+      await Bun.file("packages/opencorvus/src/skill/builtin/frontend-replica-expert-squad.md").text()
+    ).toLowerCase()
+    const forbidden = [
+      "visual rhythm",
+      "style rhythm",
+      "visible parity",
+      "broad page-wide impression",
+      "visual acceptance",
+      "vague page-wide",
+    ]
+
+    expect(profileText).toContain("source screenshot/dom/computed-style correspondence")
+    expect(profileText).toContain("source region layout")
+    expect(profileText).toContain("typography/spacing/color")
+    expect(profileText).toContain("rendered screenshot proof")
+    expect(profileText).toContain("rendered screenshots")
+    expect(skillText).toContain("source url/screenshot/dom evidence")
+    expect(skillText).toContain("layout/style/data/interaction constraints")
+    expect(skillText).toContain("rendered screenshot and interaction evidence review")
+
+    for (const fragment of forbidden) {
+      expect(profileText.includes(fragment), `frontend-replica profile contains ${fragment}`).toBe(false)
+      expect(skillText.includes(fragment), `frontend-replica skill contains ${fragment}`).toBe(false)
+    }
+  })
+
   test("frontend replica overlays carry source-to-target component-level discipline", () => {
     const agents = PromptProfile.builtIns["frontend-replica"].agents
     const allReplicaText = Object.values(agents).join("\n")

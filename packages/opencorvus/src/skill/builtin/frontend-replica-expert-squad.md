@@ -1,6 +1,6 @@
 ---
 name: frontend-replica-expert-squad
-description: Orchestrator skill for frontend replica tasks. Use when a task is a webpage clone, visual parity port, reference-page recreation, or frontend implementation where source information architecture, module order, layout density, desktop visual behavior, and interaction semantics must stay aligned with reference evidence.
+description: Orchestrator skill for frontend replica tasks. Use when a task is a webpage clone, reference-screenshot port, reference-page recreation, or frontend implementation where source information architecture, module order, layout density, desktop visual behavior, and interaction semantics must stay aligned with source URL/screenshot/DOM evidence.
 agents:
   - orchestrator
 mounted_agents:
@@ -12,7 +12,7 @@ priority: 90
 
 # Frontend Replica Expert Squad
 
-Use this skill when the task is a frontend replica or parity task: webpage clone, visual port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on visible reference evidence.
+Use this skill when the task is a frontend replica task: webpage clone, reference-screenshot port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on source URL/screenshot/DOM evidence.
 
 ## First action
 
@@ -23,25 +23,25 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 ## Dispatch discipline
 
 - Treat `frontend_research` as source-page investigation and page-skeleton evidence ownership.
-- Treat `frontend_design` as a single-shot task-scope handoff producer for the replica contract, material inventory, source handoff, and visual/data constraints.
+- Treat `frontend_design` as a single-shot task-scope handoff producer for the replica contract, material inventory, source handoff, and layout/style/data/interaction constraints.
 - Treat `architect` and `build` as consumers of that evidence, not as replacements for source investigation.
-- Treat `visual_qa` as rendered evidence review after implementation reaches a visible surface.
-- Do not use generic implementation work to invent a new page structure when source evidence exists.
+- Treat `visual_qa` as rendered screenshot and interaction evidence review after implementation reaches a visible surface.
+- Do not use implementation work without source URL, screenshot, DOM, or computed-style evidence to invent a new page structure when source evidence exists.
 
 ## Browser preview evidence ownership
 
 - Build owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
-- Visual QA owns independent final rendered parity review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
+- Visual QA owns independent final rendered source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
-- Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or generic review text.
+- Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or unowned review prose.
 
 ## Desktop-only replica scope
 
 - Frontend replica, clone, visual parity, and source-page recreation tasks are desktop-only generation tasks by default.
 - Do not ask Requirements, Architect, Build, Visual QA, or Integrity to create tablet/mobile/non-desktop requirements, goals, acceptance specs, build objectives, browser preview viewport requests, screenshots, source-debt rows, or final blockers unless the current operator explicitly asks for tablet/mobile/responsive/multi-end migration as a separate current task scope.
-- Generic tablet/mobile/responsive wording inside batch templates, old specs, upstream research/design summaries, handoff debt, historical goals, or general QA checklists is not authorization.
+- Tablet/mobile/responsive wording inside batch templates, old specs, upstream research/design summaries, handoff debt, historical goals, or general QA checklists is not authorization.
 - If the current operator explicitly asks for non-desktop migration, keep it as an independent multi-end migration scope instead of mixing it into the desktop replica generation task.
-- Browser preview may still support tablet/mobile viewports as a generic tool capability; this skill forbids converting that capability into default replica work.
+- Browser preview may still support tablet/mobile viewports as a general tool capability; this skill forbids converting that capability into default replica work.
 
 ## Completed goal rule
 

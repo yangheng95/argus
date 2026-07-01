@@ -123,22 +123,22 @@ export namespace PromptProfile {
     },
     "frontend-replica": {
       label: "Frontend Replica",
-      description: "Reference parity, webpage replication, visual evidence, and design-system focused expert squad.",
+      description: "Source URL/reference-screenshot replica, desktop region mapping, source evidence, and rendered proof expert squad.",
       agents: {
         coding: expertOverlay(
-          "Prioritize desktop source information architecture, module order, density, states, and visible parity from the source page. Do not introduce tablet/mobile scope unless the operator asks for a separate multi-end migration task.",
-          "Treat target project primitives, business components, and code as reuse options only when they preserve the source layout, visual rhythm, and interaction semantics.",
+          "Prioritize desktop source information architecture, module order, density, states, and source screenshot/DOM/computed-style correspondence. Do not introduce tablet/mobile scope unless the operator asks for a separate multi-end migration task.",
+          "Treat target project primitives, business components, and code as reuse options only when they preserve source region layout, typography/spacing/color tokens, content density, and interaction semantics.",
           "Verify the rendered component system against source screenshots, source structure evidence, computed style facts, and real states before claiming the replica is done.",
         ),
         "coding-assistant": expertOverlay(
-          "Answer replica questions in terms of source structure, component mapping, style rhythm, interaction semantics, and visible parity that can be checked in the rendered user interface.",
+          "Answer replica questions in terms of source structure, component mapping, typography/spacing/color evidence, interaction semantics, and rendered screenshot proof.",
           "Name the source component or region under discussion, the target project component or code path that may be reused, and the evidence needed before implementation.",
           "Keep guidance scoped to desktop source parity and call out when a request is really a separate multi-end migration or a new component goal.",
         ),
         general: expertOverlay(
-          "Anchor multi-step frontend replica work to source screens, module order, state changes, accessibility behavior, and user-visible acceptance evidence.",
-          "Keep non-code source assets, visual tokens, table density, chart behavior, hover states, and interaction semantics tied to source evidence rather than preference.",
-          "Treat target project reuse as an implementation constraint that must not rewrite the source information architecture or collapse multiple regions into one vague task.",
+          "Anchor multi-step frontend replica work to source screens, module order, state changes, accessibility behavior, and rendered screenshot/interaction evidence.",
+          "Keep non-code source assets, visual tokens, table density, chart behavior, hover states, and interaction semantics tied to source evidence rather than unverified design taste.",
+          "Treat target project reuse as an implementation constraint that must not rewrite the source information architecture or collapse multiple regions into one page-level task.",
         ),
         explore: expertOverlay(
           "Map source modules, component boundaries, style conventions, state changes, and prior visual evidence without mutating the workspace.",
@@ -147,7 +147,7 @@ export namespace PromptProfile {
         ),
         mission: expertOverlay(
           "Keep frontend replica work tied to the target surface, the source-backed structure, the interaction states that must work, and rendered evidence.",
-          "Track progress by meaningful source component or region so one goal proves one accountable slice instead of a broad page-wide impression.",
+          "Track progress by meaningful source component or region so one goal proves one accountable slice instead of a single page-level claim.",
           "Do not accept completion until source structure, target project reuse decisions, visual evidence, and unresolved scope defects are visible in the task record.",
         ),
         "intent-analysis": expertOverlay(
@@ -156,7 +156,7 @@ export namespace PromptProfile {
           "Produce intent that downstream Requirements and Architect can check against source screenshots, source structure evidence, and component interaction obligations.",
         ),
         requirements: expertOverlay(
-          "Write replica requirements as desktop observable truths: information architecture, module sequence, component states, source assets, visual acceptance, and interaction outcomes.",
+          "Write replica requirements as desktop observable truths: information architecture, module sequence, component states, source assets, rendered screenshot acceptance, and interaction outcomes.",
           "Register webpage-generation coverage beyond responsive behavior as explicit REQ or decision scope: source evidence binding, region completeness, visual style fidelity, interaction semantics, data/UI contracts, accessibility semantics, asset/media ownership, runtime integration, and browser verification evidence.",
           "Do not create tablet/mobile/non-desktop REQ rows from generic template, research, or handoff text; each requirement must bind to a source component, region, or state.",
           "When responsive or multi-viewport generation is explicitly authorized, register viewport-specific layout/alignment requirements separately; otherwise keep the replica requirements desktop-only.",
@@ -165,7 +165,7 @@ export namespace PromptProfile {
         ),
         architect: expertOverlay(
           "Turn replica requirements into desktop component boundaries, data flow, target project reuse decisions, and one accountable goal per meaningful component or region.",
-          "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; reject vague page-wide goals that hide component scope.",
+          "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; reject page-wide goals that omit source region/component ownership.",
           "Preserve the source module order, density, visual token source, state model, and interaction contracts while mapping target project code reuse to each goal.",
         ),
         "frontend-design": expertOverlay(
@@ -189,7 +189,7 @@ export namespace PromptProfile {
           "Do not require mobile/tablet evidence. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, or target project reuse proof is missing.",
         ),
         integrity: expertOverlay(
-          "Treat replica delivery as incomplete unless desktop source structure, requested surface, component-per-goal request, interactions, and visual acceptance are shown.",
+          "Treat replica delivery as incomplete unless desktop source structure, requested surface, component-per-goal request, interactions, rendered screenshots, and browser evidence are shown.",
           "Check that target project component or code reuse preserved the source page rather than replacing module order, density, state behavior, or interaction semantics.",
           "Treat unrequested tablet/mobile expectations as out of scope and report unresolved source evidence gaps, missing rendered proof, or scattered visual tokens as non-acceptance reasons.",
         ),
