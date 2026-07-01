@@ -284,7 +284,7 @@ export async function validateVisualEvidenceBundleReferenceComparisons(input: {
 
 function referenceHeightCoverageIssues(
   referenceHeight: number,
-  intervals: readonly Array<{ id?: string; y: number; height: number }>,
+  intervals: ReadonlyArray<{ id?: string; y: number; height: number }>,
   label = "pageCoverage",
 ): string[] {
   if (intervals.length === 0) return [`${label}: no covered source-reference intervals declared`]
