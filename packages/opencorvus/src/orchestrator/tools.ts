@@ -84,6 +84,11 @@ import {
 } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
+import {
+  collectVisualEvidenceMaterializationRefs,
+  materializeVisualEvidenceBundleFromEvidenceRefs,
+  renderVisualEvidenceBundleMaterializationSummary,
+} from "@/acceptance/visual-evidence-materializer"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import {
   renderVisualQaBuildEvidenceContext,
@@ -7161,6 +7166,19 @@ export function createOrchestratorTools(input: {
       })
       const report = normalizedVisualQa.report
       const visualQaSemantics = normalizedVisualQa.acceptance
+      const visualEvidenceMaterialization = referenceParity.required
+        ? await materializeVisualEvidenceBundleFromEvidenceRefs({
+            projectRoot,
+            taskID,
+            source: "integrity",
+            evidenceRefs: collectVisualEvidenceMaterializationRefs({
+              checkItems: report.check_items,
+              coverage: report.coverage,
+              evidence: report.evidence,
+              referenceParity: report.reference_parity,
+            }),
+          })
+        : undefined
 
       decisionLog.append({
         phase: "visual_qa",
@@ -7187,10 +7205,24 @@ export function createOrchestratorTools(input: {
           `reference_parity_required=${report.reference_parity.required}`,
           `reference_comparison_evidence=${report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
           `reference_missing_regions=${report.reference_parity.missing_regions.join(", ") || "(none)"}`,
+          visualEvidenceMaterialization
+            ? `visual_evidence_bundle_materialization=${visualEvidenceMaterialization.status}`
+            : "",
           `changed_files=${report.changed_files.join(", ") || "(none)"}`,
-        ].join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         reason: "Latest structured visual QA summary for read_context and integrity review.",
       })
+      if (visualEvidenceMaterialization) {
+        decisionLog.append({
+          phase: "visual_qa",
+          key: `visual_evidence_bundle_${Date.now()}`,
+          value: renderVisualEvidenceBundleMaterializationSummary(visualEvidenceMaterialization),
+          reason:
+            "Post-Visual-QA formal VisualEvidenceBundle materialization from task-scoped browser preview evidence.",
+        })
+      }
 
       await close()
       return {

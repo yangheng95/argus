@@ -845,6 +845,20 @@ function minimalVisualQaReport() {
   }
 }
 
+function minimalVisualQaReportWithRequiredReferenceParity() {
+  const report = minimalVisualQaReport()
+  return {
+    ...report,
+    reference_parity: {
+      required: true,
+      required_regions: ["main surface"],
+      reference_comparison_evidence_refs: [],
+      missing_regions: ["main surface"],
+      blocker_ids: ["authoritative-rendered-reference-visual"],
+    },
+  }
+}
+
 function minimalVisualQaAcceptance() {
   const issue = "accepted=true was submitted without screenshot comparison or screen-by-screen screenshot evidence."
   return {
@@ -1855,6 +1869,7 @@ function insertWorkflowTaskWithGoal(input: {
   workspaceBranch?: string
   specID?: string
   requirementIDs?: string[]
+  acceptanceSpecs?: unknown[]
   insertProject?: boolean
 }) {
   const specID = input.specID ?? `spec_${input.goalID}`
@@ -1907,7 +1922,7 @@ function insertWorkflowTaskWithGoal(input: {
         title: input.goalTitle,
         slug: input.goalSlug,
         objective: input.objective,
-        acceptance_specs: [],
+        acceptance_specs: input.acceptanceSpecs ?? [],
         owned_paths: ["src/index.ts"],
         depends_on: [],
         exports: [],
@@ -3298,6 +3313,22 @@ describe("orchestrator tools", () => {
           goalSlug: "review-visible-surface",
           objective: "Record visual QA evidence through the ordinary visual_qa tool path",
           now,
+          acceptanceSpecs: [
+            {
+              id: "acc-visual-evidence-dispatch",
+              source_requirement_id: "REQ-visual-dispatch",
+              goal_id: goalID,
+              title: "final rendered reference evidence",
+              scorers: [
+                {
+                  type: "prebuilt",
+                  name: "visual-evidence-bundle",
+                  spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+                },
+              ],
+              severity: "essential",
+            },
+          ],
           insertProject: false,
         })
         visualQaAnalyzeImpl = async (input: any) => {
@@ -3309,7 +3340,11 @@ describe("orchestrator tools", () => {
           })
           childSessionID = child.id
           input.onSessionCreated?.(child.id)
-          return { sessionID: child.id, report: minimalVisualQaReport(), acceptance: minimalVisualQaAcceptance() }
+          return {
+            sessionID: child.id,
+            report: minimalVisualQaReportWithRequiredReferenceParity(),
+            acceptance: minimalVisualQaAcceptance(),
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -3340,6 +3375,18 @@ describe("orchestrator tools", () => {
         expect(visualQaDecisions.some((entry) => entry.key === "latest_summary")).toBe(true)
         expect(visualQaDecisions.some((entry) => entry.value.includes("effective_accepted=false"))).toBe(true)
         expect(visualQaDecisions.some((entry) => entry.value.includes("Recovered visual QA report."))).toBe(true)
+        expect(
+          visualQaDecisions.some(
+            (entry) =>
+              entry.key === "latest_summary" &&
+              entry.value.includes("visual_evidence_bundle_materialization=not_ready"),
+          ),
+        ).toBe(true)
+        const materializationDecision = visualQaDecisions.find((entry) =>
+          entry.key.startsWith("visual_evidence_bundle_"),
+        )
+        expect(materializationDecision?.value).toContain("status=not_ready")
+        expect(materializationDecision?.value).toContain("issues=no browser_preview evidence refs")
       },
     })
   })
