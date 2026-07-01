@@ -550,7 +550,18 @@ async function withBrowserInactivity(page, label, inactivityTimeoutMs, action) {
             routeUrl
         );
       }
-      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), input.scrollY);
+      await page.evaluate(async (scrollY) => {
+        const html = document.documentElement;
+        const body = document.body;
+        const previousHtmlScrollBehavior = html.style.scrollBehavior;
+        const previousBodyScrollBehavior = body ? body.style.scrollBehavior : "";
+        html.style.scrollBehavior = "auto";
+        if (body) body.style.scrollBehavior = "auto";
+        window.scrollTo({ left: 0, top: scrollY, behavior: "instant" });
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        html.style.scrollBehavior = previousHtmlScrollBehavior;
+        if (body) body.style.scrollBehavior = previousBodyScrollBehavior;
+      }, input.scrollY);
       await page.waitForTimeout(${SCROLL_SLICE_SETTLE_AFTER_SCROLL_MS});
       browserFailures.assertNoFailures("scroll-slice capture");
       const capture = await page.evaluate(() => ({

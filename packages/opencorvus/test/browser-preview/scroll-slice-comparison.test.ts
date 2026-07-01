@@ -123,6 +123,53 @@ describe("browser preview scroll-slice comparison", () => {
   )
 
   test(
+    "uses exact instant scrolling when the implementation page enables smooth scrolling",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await makeReferencePng(path.join(paths.sourcePackageAbsolute, "reference.png"), {
+        width: 360,
+        height: 3600,
+        firstColor: "#dbeafe",
+        secondColor: "#dcfce7",
+      })
+      const server = await startScrollPreviewServer("smooth-scroll")
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const result = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            compareBrowserPreviewScrollSlice({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              viewportID: "desktop",
+              sourceReferenceArtifactID: "reference.png",
+              route: "/scroll",
+              scrollY: 1800,
+              sliceHeight: 180,
+            }),
+        })
+
+        expect(result.status).toBe("completed")
+        expect(result.implementation.actualScrollY).toBe(1800)
+        const implementationCrop = resolveRuntimeRelativePath(tmp.path, result.artifacts.implementation_crop)
+        const sideBySide = resolveRuntimeRelativePath(tmp.path, result.artifacts.side_by_side)
+        await expectPngDimensions(implementationCrop, { width: 360, height: 180 })
+        await expectPngDimensions(sideBySide, { width: 736, height: 256 })
+      } finally {
+        await server.close()
+      }
+    },
+    SCROLL_SLICE_TEST_TIMEOUT_MILLISECONDS,
+  )
+
+  test(
     "tool result attaches the composed side-by-side image and rejects raw URL-shaped parameters",
     async () => {
       expect(
@@ -380,7 +427,7 @@ async function makeMismatchedReferencePng(outputPath: string, width: number, hei
 }
 
 async function startScrollPreviewServer(
-  mode: "ok" | "late-pageerror" = "ok",
+  mode: "ok" | "late-pageerror" | "smooth-scroll" = "ok",
 ): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
@@ -389,16 +436,19 @@ async function startScrollPreviewServer(
       res.end("not found")
       return
     }
+    const sectionHeight = mode === "smooth-scroll" ? 1200 : 320
+    const pageMinHeight = sectionHeight * 3
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
     res.end(`<!doctype html>
       <html>
         <head>
           <title>Scroll slice implementation</title>
           <style>
-            html, body { margin: 0; width: 100%; min-height: 960px; font-family: Arial, sans-serif; }
-            .top { height: 320px; background: #dbeafe; color: #111827; box-sizing: border-box; padding: 48px 24px; }
-            .middle { height: 320px; background: #dcfce7; color: #111827; box-sizing: border-box; padding: 48px 24px; }
-            .bottom { height: 320px; background: #fee2e2; color: #111827; box-sizing: border-box; padding: 48px 24px; }
+            html, body { margin: 0; width: 100%; min-height: ${pageMinHeight}px; font-family: Arial, sans-serif; }
+            ${mode === "smooth-scroll" ? "html { scroll-behavior: smooth; }" : ""}
+            .top { height: ${sectionHeight}px; background: #dbeafe; color: #111827; box-sizing: border-box; padding: 48px 24px; }
+            .middle { height: ${sectionHeight}px; background: #dcfce7; color: #111827; box-sizing: border-box; padding: 48px 24px; }
+            .bottom { height: ${sectionHeight}px; background: #fee2e2; color: #111827; box-sizing: border-box; padding: 48px 24px; }
             h1 { margin: 0; font-size: 32px; line-height: 1.2; }
           </style>
           ${
