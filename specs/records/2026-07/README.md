@@ -7,3 +7,4 @@
 - [2026-07-01-visual-qa-multi-viewport-alignment.md](2026-07-01-visual-qa-multi-viewport-alignment.md) records the Visual QA multi-viewport alignment check item contract.
 - [2026-07-01-deleted-goal-conversation-phase-projection.md](2026-07-01-deleted-goal-conversation-phase-projection.md) records the deleted/replaced goal conversation phase projection repair.
 - [2026-07-01-frontend-replica-requirements-webpage-generation.md](2026-07-01-frontend-replica-requirements-webpage-generation.md) records the frontend-replica Requirements prompt coverage for webpage-generation requirements beyond responsive scope.
+- [2026-07-01-expert-squad-concrete-prompts.md](2026-07-01-expert-squad-concrete-prompts.md) records the removal of vague frontend-innovate expert-squad placeholder labels in favor of concrete task evidence and verification prompt contracts.

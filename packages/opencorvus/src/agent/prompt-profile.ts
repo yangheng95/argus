@@ -203,52 +203,52 @@ export namespace PromptProfile {
     "frontend-innovate": {
       label: "Frontend Innovate",
       description:
-        "Enterprise and product-grade frontend design synthesis, ideation, convergence, and anti-slop review expert squad.",
+        "Frontend design-resource synthesis, named direction comparison, selected-handoff implementation, and rendered-evidence review expert squad.",
       agents: {
         coding: expertOverlay(
-          "Treat frontend innovation work as product design synthesis: inspect resources, compare alternatives, preserve design-system fit, and verify the rendered experience before claiming completion.",
+          "Treat frontend innovation work as design-resource synthesis: inspect screenshots, HTML/CSS material, Figma material, existing user interface primitives, and package constraints before implementation.",
           "Keep product audience, information density, interaction semantics, accessibility behavior, and installed component primitives visible in every implementation choice.",
-          "Reject shallow visual novelty when it lacks resource evidence, selected-direction rationale, or rendered proof that the product experience improved.",
+          "Reject visual novelty when it lacks cited resource evidence, selected-direction rationale, or rendered screenshot and interaction evidence for the selected surface.",
         ),
         "coding-assistant": expertOverlay(
           "Answer frontend innovation questions through design-resource evidence, product intent, competing directions, convergence tradeoffs, and implementation-ready user interface details.",
-          "Name the resource, direction, component primitive, interaction state, and product-quality criterion behind each recommendation.",
+          "Name the resource, direction, component primitive, interaction state, accessibility constraint, and data or verification obligation behind each recommendation.",
           "Separate brainstorm options from the selected implementation direction so the user can inspect why a direction won and what remains unproven.",
         ),
         general: expertOverlay(
-          "Anchor exploratory frontend design work to screenshots, HTML material, Figma material, product goals, enterprise polish, accessibility, and evidence-backed alternatives.",
+          "Anchor exploratory frontend design work to screenshots, HTML/CSS material, Figma material, product goals, existing components, accessibility, and evidence-backed alternatives.",
           "Keep the design-resource manifest, existing component primitives, typography, spacing, density, and interaction states tied to concrete artifacts.",
           "Do not let generic modern-design language replace named directions, tradeoff comparison, selected rationale, or rendered verification.",
         ),
         explore: expertOverlay(
           "Map design resources, existing user interface primitives, product conventions, visual patterns, and implementation constraints without mutating the workspace.",
-          "Identify reusable components, library affordances, token sources, interaction patterns, and design gaps that block product-grade convergence.",
+          "Identify reusable components, library affordances, token sources, interaction patterns, accessibility constraints, and design-resource gaps that block selecting one implementation direction.",
           "Return evidence that Frontend Design can use to compare directions instead of producing a single shallow draft.",
         ),
         mission: expertOverlay(
-          "Keep frontend innovation missions tied to resource-backed design directions, anti-slop critique, selected direction rationale, and rendered proof expectations.",
-          "Track whether product audience, enterprise polish, accessibility, interaction semantics, and design-system fit are represented by explicit artifacts.",
+          "Keep frontend innovation missions tied to resource-backed design directions, rejected generic draft traits, selected direction rationale, and rendered proof expectations.",
+          "Track whether product audience, layout density, accessibility, interaction semantics, and design-system fit are represented by explicit artifacts.",
           "Do not accept implementation until selected-direction reasoning, build evidence, and visual review are all connected to the same design resource set.",
         ),
         "intent-analysis": expertOverlay(
-          "Resolve frontend innovation requests into design resources, product audience, enterprise quality bar, competing directions, interaction scope, and evidence gaps.",
+          "Resolve frontend innovation requests into design resources, product audience, candidate directions, interaction scope, accessibility/data constraints, and evidence gaps.",
           "Separate ideation, convergence, implementation, and review surfaces so a brainstorm draft cannot silently become the final source of truth.",
           "Preserve explicit operator constraints about whether Build should create brainstorming drafts or only implement the selected handoff.",
         ),
         requirements: expertOverlay(
-          "Write product-grade frontend requirements as observable design outcomes: information architecture, density, states, accessibility, component reuse, and anti-slop criteria.",
+          "Write frontend innovation requirements as observable design outcomes: information architecture, layout density, state coverage, accessibility, component reuse, data/UI contracts, and rendered verification.",
           "Require named design directions, selected-direction rationale, interaction-state coverage, and evidence-backed component decisions when the task asks for innovation.",
           "Reject requirements that ask for attractive appearance without product intent, resource traceability, accessibility behavior, or rendered verification.",
         ),
         architect: expertOverlay(
           "Turn the selected frontend innovation direction into component, data, styling, interaction, and verification contracts without losing design-system ownership.",
-          "Bind implementation goals to the chosen direction, installed primitives, resource manifest entries, state transitions, and product-quality risks.",
+          "Bind implementation goals to the chosen direction, installed primitives, resource manifest entries, state transitions, and resource traceability risks.",
           "Prevent parallel brainstorm artifacts from becoming a second implementation source unless the current operator explicitly requested bounded draft builds.",
         ),
         "frontend-design": expertOverlay(
-          "Inspect screenshots, HTML, Figma, and design resources; produce multiple named directions, reject shallow drafts, then submit one implementation-ready product design handoff.",
-          "For each direction, compare product audience fit, layout density, component reuse, interaction semantics, accessibility, and enterprise polish against resource evidence.",
-          "Select one direction with rationale, anti-slop review, implementation phases, and rendered-evidence expectations that Build and Visual QA can verify.",
+          "Inspect screenshots, HTML/CSS, Figma, and design resources; produce multiple named directions, identify rejected generic draft traits, then submit one implementation-ready product design handoff.",
+          "For each direction, compare target audience fit, information architecture, layout density, component reuse, data needs, interaction semantics, and accessibility against resource evidence.",
+          "Select one direction with rationale, rejected-traits review, implementation phases, and rendered-evidence expectations that Build and Visual QA can verify.",
         ),
         "frontend-research": expertOverlay(
           "Extract product intent, design patterns, information architecture, interaction states, and evidence gaps from source pages and design resources.",
@@ -261,7 +261,7 @@ export namespace PromptProfile {
           "Treat brainstorming drafts as selection evidence, not final truth; rerun the original checks and show rendered proof for the selected implementation.",
         ),
         "visual-qa": expertOverlay(
-          "Review the rendered product for enterprise polish, anti-slop defects, interaction truth, accessibility signals, and design-resource alignment.",
+          "Review the rendered product for selected-direction match, generic draft defects, interaction truth, accessibility signals, and design-resource alignment.",
           "Compare the implementation against the selected direction, not every discarded brainstorm, and inspect states that affect product trust or repeated use.",
           "Reject acceptance when visual evidence, interaction proof, accessibility behavior, or selected-direction rationale is missing.",
         ),
@@ -273,7 +273,7 @@ export namespace PromptProfile {
         "fact-check": expertOverlay(
           "Check design and implementation claims against cited resources, installed libraries, rendered evidence, and documented product constraints.",
           "Verify component availability, accessibility claims, library semantics, screenshot interpretation, and selected-direction tradeoffs one by one.",
-          "Flag unsupported polish, innovation, or anti-slop claims when they cannot be traced to artifacts or rendered behavior.",
+          "Flag unsupported visual, innovation, or selected-direction claims when they cannot be traced to artifacts or rendered behavior.",
         ),
         "goal-workload-analyst": expertOverlay(
           "Challenge frontend innovation goals for hidden design complexity, weak convergence, missing evidence, and oversized implementation surfaces.",
@@ -281,12 +281,12 @@ export namespace PromptProfile {
           "Recommend tighter goal boundaries that preserve selected-direction ownership and expose unresolved design-resource gaps before Build starts.",
         ),
         integrity: expertOverlay(
-          "Treat frontend innovation delivery as incomplete without selected-direction rationale, anti-slop review, implementation evidence, and rendered product proof.",
+          "Treat frontend innovation delivery as incomplete without selected-direction rationale, rejected-traits review, implementation evidence, and rendered product proof.",
           "Check that Build implemented the selected handoff rather than a discarded brainstorm or generic layout, and that Visual QA reviewed real rendered states.",
-          "Reject completion when design-resource traceability, interaction evidence, accessibility behavior, or enterprise polish claims are unsupported.",
+          "Reject completion when design-resource traceability, interaction evidence, accessibility behavior, or selected-direction claims are unsupported.",
         ),
         orchestrator: expertOverlay(
-          "Select frontend innovation for product-grade webpage design, resource-backed design synthesis, enterprise polish, and anti-slop review tasks.",
+          "Select frontend innovation for webpage or product UI tasks that require design resources, multiple named directions, selected implementation handoff, or rendered evidence review.",
           "Connect evidence gathering, Frontend Design directions, selected implementation, Visual QA, and Integrity through existing specialist surfaces.",
           "Use Build brainstorm drafts only when the current operator explicitly asks; otherwise Build implements the selected design handoff.",
         ),

@@ -144,8 +144,10 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
       "multiple named directions",
     )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain("reject shallow drafts")
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain("webpage design")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
+      "rejected generic draft traits",
+    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain("webpage or product UI tasks")
     expect(PromptProfile.builtIns["frontend-innovate"].agents.orchestrator).toContain(
       "Use Build brainstorm drafts only when the current operator explicitly asks",
     )
@@ -156,7 +158,7 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-innovate"].agents.build).toContain(
       "only when the current operator explicitly asks",
     )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents.integrity).toContain("anti-slop review")
+    expect(PromptProfile.builtIns["frontend-innovate"].agents.integrity).toContain("rejected-traits review")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("repair local deps")
     expect(PromptProfile.builtIns["frontend-automation-debug"].agents.build).toContain("rerun original command")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
@@ -183,10 +185,41 @@ describe("prompt profiles", () => {
 
   test("frontend innovate profile reaches direct session agents and specialists", () => {
     const config = Config.Info.parse({ prompt_profile: { active: "frontend-innovate" } })
-    expect(PromptProfile.overlayFor("coding", config)).toContain("product design synthesis")
+    expect(PromptProfile.overlayFor("coding", config)).toContain("design-resource synthesis")
     expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("competing directions")
     expect(PromptProfile.overlayFor("frontend-design", config)).toContain("implementation-ready product design handoff")
-    expect(PromptProfile.overlayFor("visual-qa", config)).toContain("enterprise polish")
+    expect(PromptProfile.overlayFor("visual-qa", config)).toContain("selected-direction match")
+  })
+
+  test("frontend innovate expert squad uses concrete task surfaces instead of quality placeholders", async () => {
+    const profile = PromptProfile.builtIns["frontend-innovate"]
+    const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
+    const skillText = (
+      await Bun.file("packages/opencorvus/src/skill/builtin/frontend-innovate-expert-squad.md").text()
+    ).toLowerCase()
+    const forbidden = [
+      "anti-slop",
+      "enterprise polish",
+      "enterprise-quality",
+      "product-grade",
+      "product-quality",
+      "quality bar",
+      "polished",
+    ]
+
+    expect(profileText).toContain("design-resource synthesis")
+    expect(profileText).toContain("multiple named directions")
+    expect(profileText).toContain("selected implementation handoff")
+    expect(profileText).toContain("rendered evidence review")
+    expect(profileText).toContain("accessibility/data constraints")
+    expect(skillText).toContain("direction selection review")
+    expect(skillText).toContain("design-resource synthesis")
+    expect(skillText).toContain("rendered verification")
+
+    for (const fragment of forbidden) {
+      expect(profileText.includes(fragment), `frontend-innovate profile contains ${fragment}`).toBe(false)
+      expect(skillText.includes(fragment), `frontend-innovate skill contains ${fragment}`).toBe(false)
+    }
   })
 
   test("frontend replica overlays carry source-to-target component-level discipline", () => {
@@ -275,15 +308,21 @@ describe("prompt profiles", () => {
   test("built-in registry pressure keeps overlays sharp, role-scoped, and free of workflow mechanics", () => {
     const forbiddenFragments = [
       "active prompt profile",
+      "anti-slop",
       "bias planning",
       "dispatch roster",
+      "enterprise polish",
+      "enterprise-quality",
       "fallback",
       "first action",
       "handoff graph",
       "host-side",
       "ownership lines",
       "profile_id",
+      "product-grade",
+      "product-quality",
       "prioritize these tools",
+      "quality bar",
       "retry strategy",
       "select_expert_squad",
       "state machine",
