@@ -7,7 +7,10 @@ import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
-import type { VisualQaReport } from "../../src/visual-qa/schema"
+import {
+  VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+  type VisualQaReport,
+} from "../../src/visual-qa/schema"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -725,6 +728,126 @@ describe("visual-qa output tools", () => {
     expect(result).toContain("BLOCKERS")
     expect(result).toContain("accepted=false was submitted without production_blockers")
     expect(kit.getCollector().final?.accepted).toBe(false)
+  })
+
+  test("rejects multi-viewport report without a multi-viewport alignment check item", async () => {
+    const kit = createVisualQaOutputTools()
+    const result = await submitReport(
+      kit,
+      validReport({
+        coverage: [
+          {
+            check_ids: [DEFAULT_CHECK_ID],
+            region: "home/table",
+            viewports: [
+              { width: 1440, height: 900 },
+              { width: 390, height: 844 },
+            ],
+            states: ["default"],
+            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+            notes: "Checked the table in two scoped viewports but did not register cross-viewport alignment.",
+          },
+        ],
+        evidence: [
+          {
+            check_ids: [DEFAULT_CHECK_ID],
+            type: "screenshot",
+            ref: "artifacts/desktop.png",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Fresh desktop screenshot.",
+          },
+          {
+            check_ids: [DEFAULT_CHECK_ID],
+            type: "screenshot",
+            ref: "artifacts/mobile.png",
+            viewport: { width: 390, height: 844 },
+            state: "default",
+            note: "Fresh narrow viewport screenshot.",
+          },
+        ],
+      }),
+    )
+
+    expect(result).toContain("check graph is incomplete")
+    expect(result).toContain(VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY)
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
+  test("records multi-viewport report with a registered alignment check item", async () => {
+    const alignmentCheckID = "check_multi_viewport_alignment"
+    const kit = createVisualQaOutputTools()
+    const result = await submitReport(
+      kit,
+      validReport({
+        check_items: [
+          checkItem(),
+          checkItem({
+            id: alignmentCheckID,
+            category: VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+            question: "Do shared layout anchors and critical controls remain aligned across scoped viewports?",
+            region: "home/table",
+            expected:
+              "The table heading, gutters, action controls, text wrapping, and overflow behavior stay coherent across desktop and narrow viewports.",
+            observed:
+              "Fresh desktop and narrow screenshots show coherent table anchors, gutters, controls, wrapping, and overflow behavior.",
+            viewports: [
+              { width: 1440, height: 900 },
+              { width: 390, height: 844 },
+            ],
+            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+          }),
+        ],
+        coverage: [
+          {
+            check_ids: [DEFAULT_CHECK_ID],
+            region: "home/table",
+            viewports: [{ width: 1440, height: 900 }],
+            states: ["default"],
+            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            evidence_refs: ["artifacts/desktop.png"],
+            notes: "Checked the default desktop table.",
+          },
+          {
+            check_ids: [alignmentCheckID],
+            region: "home/table multi-viewport alignment",
+            viewports: [
+              { width: 1440, height: 900 },
+              { width: 390, height: 844 },
+            ],
+            states: ["default"],
+            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
+            notes: "Checked shared layout anchors, gutters, wrapping, overflow, and control placement across both viewports.",
+          },
+        ],
+        evidence: [
+          {
+            check_ids: [DEFAULT_CHECK_ID, alignmentCheckID],
+            type: "screenshot",
+            ref: "artifacts/desktop.png",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Fresh desktop screenshot.",
+          },
+          {
+            check_ids: [alignmentCheckID],
+            type: "screenshot",
+            ref: "artifacts/mobile.png",
+            viewport: { width: 390, height: 844 },
+            state: "default",
+            note: "Fresh narrow viewport screenshot.",
+          },
+        ],
+      }),
+    )
+
+    expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=true")
+    expect(kit.getCollector().final?.check_items.map((item) => item.category)).toContain(
+      VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+    )
   })
 
   test("failed report renders production blockers and unresolved module problems in the terminal report", async () => {

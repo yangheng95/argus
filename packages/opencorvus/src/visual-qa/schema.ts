@@ -5,6 +5,7 @@ import { VISUAL_QA_PRODUCT_DESIGN_PRINCIPLE_IDS } from "./product-design-princip
 export const VisualQaSeveritySchema = z.enum(["critical", "major", "minor"])
 export const VisualQaFindingStatusSchema = z.enum(["open", "repaired", "deferred"])
 export const VisualQaCheckItemStatusSchema = z.enum(["passed", "failed", "inconclusive"])
+export const VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY = "multi-viewport-alignment"
 
 export const VisualQaViewportSchema = z.object({
   width: z.number().int().positive(),
@@ -46,7 +47,9 @@ export const VisualQaCheckItemSchema = z.object({
   category: z
     .string()
     .min(1)
-    .describe("Review category or product design principle ID, for example component-truth or reference-structure."),
+    .describe(
+      "Review category or product design principle ID, for example component-truth, reference-structure, or multi-viewport-alignment.",
+    ),
   question: z.string().min(1).describe("Concrete visual/product question that was checked."),
   region: z.string().min(1).describe("Visible region, route, component family, or interaction surface checked."),
   reference_region_key: z

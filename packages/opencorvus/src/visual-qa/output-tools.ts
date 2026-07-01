@@ -6,6 +6,7 @@ import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persis
 import { FactCheckItemSchema } from "@/fact-check/schema"
 import { visualQaOpenBlockingFindings, visualQaReportAcceptanceSemantics } from "./acceptance-semantics"
 import {
+  VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
   VisualQaCheckItemSchema,
   VisualQaCommandSchema,
   VisualQaCoverageSchema,
@@ -120,6 +121,61 @@ function collectorUnknownCheckIDIssues(
   return rows.flatMap((row) => unknownVisualCheckIDs(known, row.label, row.id, row.checkIDs))
 }
 
+type VisualQaViewport = VisualQaReport["coverage"][number]["viewports"][number]
+
+function visualQaViewportKey(viewport: VisualQaViewport): string {
+  const scale = viewport.device_scale_factor ?? 1
+  return `${viewport.width}x${viewport.height}@${scale}`
+}
+
+function visualQaViewportKeySet(viewports: readonly VisualQaViewport[]): Set<string> {
+  return new Set(viewports.map((viewport) => visualQaViewportKey(viewport)))
+}
+
+function collectVisualQaViewportKeys(report: VisualQaReport): Set<string> {
+  const keys = new Set<string>()
+  const add = (viewport?: VisualQaViewport): void => {
+    if (viewport) keys.add(visualQaViewportKey(viewport))
+  }
+  for (const item of report.check_items) for (const viewport of item.viewports) add(viewport)
+  for (const row of report.coverage) for (const viewport of row.viewports) add(viewport)
+  for (const row of report.evidence) add(row.viewport)
+  for (const row of report.problem_dom_regions) add(row.viewport)
+  return keys
+}
+
+function visualQaMultiViewportAlignmentIssues(report: VisualQaReport): string[] {
+  const viewportKeys = collectVisualQaViewportKeys(report)
+  if (viewportKeys.size <= 1) return []
+  const alignmentChecks = report.check_items.filter(
+    (item) => item.category === VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
+  )
+  if (alignmentChecks.length === 0) {
+    return [
+      `visual QA report covers ${viewportKeys.size} distinct viewports but has no registered check_item with category=${VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY}.`,
+    ]
+  }
+  const alignmentCheckIDs = new Set(alignmentChecks.map((item) => item.id))
+  const alignmentCheckViewportCount = visualQaViewportKeySet(
+    alignmentChecks.flatMap((item) => item.viewports),
+  ).size
+  const hasAlignmentCoverage = report.coverage.some(
+    (row) =>
+      row.check_ids.some((checkID) => alignmentCheckIDs.has(checkID)) &&
+      visualQaViewportKeySet(row.viewports).size >= 2,
+  )
+  const issues: string[] = []
+  if (alignmentCheckViewportCount < 2) {
+    issues.push(
+      `multi-viewport alignment check_item must list at least two distinct viewports when the report covers ${viewportKeys.size}.`,
+    )
+  }
+  if (!hasAlignmentCoverage) {
+    issues.push("multi-viewport alignment check_item has no coverage row spanning at least two distinct viewports.")
+  }
+  return issues
+}
+
 function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutputToolContext): string[] {
   const issues: string[] = []
   if (report.check_items.length === 0) {
@@ -169,6 +225,7 @@ function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutpu
       issues.push(`production_blocker "${blocker.id}" references only passed check_items; blockers require a failed or inconclusive check.`)
     }
   }
+  issues.push(...visualQaMultiViewportAlignmentIssues(report))
   const requiredRegions = new Set([
     ...(context.requiredReferenceRegions ?? []),
     ...report.reference_parity.required_regions,
