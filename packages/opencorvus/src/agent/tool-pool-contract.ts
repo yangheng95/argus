@@ -122,7 +122,6 @@ export namespace AgentToolPool {
     "schedule",
     "planner",
     "mission_state",
-    "wait",
     "goal_report",
     "lsp",
     "batch",
@@ -130,7 +129,7 @@ export namespace AgentToolPool {
 
   const taskCodingGlobal = [...codingGlobal, "request_orchestrator_decision"] as const
 
-  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => id !== "request_orchestrator_decision")
+  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => id !== "request_orchestrator_decision" && id !== "wait")
 
   export const roleAssignments: Record<AgentRoleID, ToolPoolAssignment> = {
     coding: pool({
@@ -169,7 +168,6 @@ export namespace AgentToolPool {
         "memory",
         "schedule",
         "mission_state",
-        "wait",
         "goal_report",
         "lsp",
         "batch",

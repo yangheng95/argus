@@ -270,8 +270,9 @@ test("role contract metadata is projected onto registered agents", async () => {
   })
 })
 
-test("custom default tool pool excludes task-scoped agent coordination", () => {
+test("custom default tool pool excludes scoped orchestration tools", () => {
   expect(AgentToolPool.customDefault().global).not.toContain("request_orchestrator_decision")
+  expect(AgentToolPool.customDefault().global).not.toContain("wait")
 })
 
 test("all live task-owned worker roles expose the A2A request tool", () => {
@@ -824,6 +825,17 @@ test("task lifecycle tools are exposed only to the orchestrator scheduler", () =
       expect(visible.has(tool), `${role} visibility for ${tool}`).toBe(role === "orchestrator")
     }
   }
+})
+
+test("wait tool is exposed only to Mission and the orchestrator scheduler", () => {
+  const waitOwners = new Set(["mission", "orchestrator"])
+
+  for (const [role, assignment] of Object.entries(AgentToolPool.roleAssignments)) {
+    const visible = AgentToolPool.visibleToolIDs(assignment)
+    expect(visible.has("wait"), `${role} visibility for wait`).toBe(waitOwners.has(role))
+  }
+
+  expect(AgentToolPool.customDefault().global).not.toContain("wait")
 })
 
 test("orchestrator tool pool covers every self-built orchestrator tool", async () => {

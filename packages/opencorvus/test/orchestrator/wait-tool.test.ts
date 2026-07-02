@@ -166,18 +166,33 @@ describe("createOrchestratorTools — wait wiring", () => {
     expect(wait.description).not.toMatch(/read_context/)
   })
 
-  test("mission and orchestrator agent tool surfaces expose wait", async () => {
+  test("only mission and orchestrator agent tool surfaces expose wait", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const mission = await Agent.get("mission")
         const orchestrator = await Agent.get("orchestrator")
+        const coding = await Agent.get("coding")
+        const build = await Agent.get("build")
+        const general = await Agent.get("general")
         expect(AgentToolPool.visibleToolIDs(mission?.tools).has("wait")).toBe(true)
         expect(AgentToolPool.visibleToolIDs(orchestrator?.tools).has("wait")).toBe(true)
+        expect(AgentToolPool.visibleToolIDs(coding?.tools).has("wait")).toBe(false)
+        expect(AgentToolPool.visibleToolIDs(build?.tools).has("wait")).toBe(false)
+        expect(AgentToolPool.visibleToolIDs(general?.tools).has("wait")).toBe(false)
+        expect(AgentToolPool.customDefault().global).not.toContain("wait")
 
         const missionTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, mission)
+        const orchestratorTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
+        const codingTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, coding)
+        const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
+        const generalTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, general)
         expect(missionTools.map((tool) => tool.id)).toContain("wait")
+        expect(orchestratorTools.map((tool) => tool.id)).toContain("wait")
+        expect(codingTools.map((tool) => tool.id)).not.toContain("wait")
+        expect(buildTools.map((tool) => tool.id)).not.toContain("wait")
+        expect(generalTools.map((tool) => tool.id)).not.toContain("wait")
       },
     })
   })
