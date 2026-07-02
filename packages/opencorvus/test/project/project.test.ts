@@ -8,6 +8,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
+import { Database } from "../../src/storage/db"
+import { ProjectTable } from "../../src/project/project.sql"
 
 Log.init({ print: false })
 
@@ -174,6 +176,88 @@ describe("Project.fromDirectory", () => {
       expect(resolved.sandbox).toBe(alias)
       expect(Project.get(original.project.id)?.worktree).toBe(alias)
       expect(resolved.project.sandboxes).not.toContain(tmp.path)
+    })
+  })
+
+  test("converges polluted same-directory marker to the selected root project", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const visibleID = Project.directoryProjectID(alias)
+      const physicalID = Project.directoryProjectID(tmp.path)
+      const now = Date.now()
+      Database.use((db) => {
+        db.insert(ProjectTable)
+          .values([
+            {
+              id: visibleID,
+              worktree: alias,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+            {
+              id: physicalID,
+              worktree: tmp.path,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+          ])
+          .run()
+      })
+      await Filesystem.write(path.join(alias, ".git", "opencorvus"), physicalID)
+
+      const resolved = await p.fromDirectory(alias)
+
+      expect(resolved.project.id).toBe(visibleID)
+      expect(resolved.project.worktree).toBe(alias)
+      expect(resolved.sandbox).toBe(alias)
+      expect(Project.get(visibleID)?.worktree).toBe(alias)
+      expect(Project.get(physicalID)?.worktree).toBe(tmp.path)
+      expect((await Filesystem.readText(path.join(alias, ".git", "opencorvus"))).trim()).toBe(visibleID)
+    })
+  })
+
+  test("converges polluted same-directory marker when git binary is unavailable", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const visibleID = Project.directoryProjectID(alias)
+      const physicalID = Project.directoryProjectID(tmp.path)
+      const now = Date.now()
+      Database.use((db) => {
+        db.insert(ProjectTable)
+          .values([
+            {
+              id: visibleID,
+              worktree: alias,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+            {
+              id: physicalID,
+              worktree: tmp.path,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+          ])
+          .run()
+      })
+      await Filesystem.write(path.join(alias, ".git", "opencorvus"), physicalID)
+
+      await withGitUnavailable(async () => {
+        const resolved = await p.fromDirectory(alias)
+
+        expect(resolved.project.id).toBe(visibleID)
+        expect(resolved.project.worktree).toBe(alias)
+        expect(resolved.sandbox).toBe(alias)
+        expect((await Filesystem.readText(path.join(alias, ".git", "opencorvus"))).trim()).toBe(visibleID)
+      })
     })
   })
 

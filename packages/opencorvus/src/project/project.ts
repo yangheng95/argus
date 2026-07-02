@@ -96,6 +96,17 @@ export namespace Project {
     return samePath(common, localCommon) || (await sameFilesystemLocation(common, localCommon))
   }
 
+  function findExactWorktreeRow(worktree: string) {
+    const rows = Database.use((db) => db.select().from(ProjectTable).all())
+    const matches = rows.filter((row) => samePath(row.worktree, worktree))
+    if (matches.length <= 1) return matches[0]
+    throw new WorktreeIdentityConflictError({
+      projectID: matches.map((row) => row.id).join(","),
+      existingWorktree: matches[0].worktree,
+      nextWorktree: worktree,
+    })
+  }
+
   async function displayGitTop(directory: string, gitTop: string) {
     return (await sameFilesystemLocation(directory, gitTop)) ? directory : gitTop
   }
@@ -106,9 +117,16 @@ export namespace Project {
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
+    const selectedRow = findExactWorktreeRow(worktree)
     if (!cached || cached === "global") {
-      await Filesystem.write(markerPath, localID).catch(() => undefined)
-      return localID
+      const id = selectedRow?.id ?? localID
+      await Filesystem.write(markerPath, id).catch(() => undefined)
+      return id
+    }
+
+    if (selectedRow && selectedRow.id !== cached) {
+      await Filesystem.write(markerPath, selectedRow.id).catch(() => undefined)
+      return selectedRow.id
     }
 
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, cached)).get())
@@ -244,8 +262,9 @@ export namespace Project {
         const cached = await Filesystem.readText(markerPath)
           .then((x) => x.trim())
           .catch(() => undefined)
-        const id = cached && cached !== "global" ? cached : localID
-        if (local && id === localID) await Filesystem.write(markerPath, localID).catch(() => undefined)
+        const selectedRow = findExactWorktreeRow(directory)
+        const id = selectedRow?.id ?? (cached && cached !== "global" ? cached : localID)
+        if (local && id !== cached) await Filesystem.write(markerPath, id).catch(() => undefined)
 
         return {
           id,

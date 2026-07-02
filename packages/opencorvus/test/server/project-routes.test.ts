@@ -61,6 +61,7 @@ async function withDirectoryAlias(target: string, run: (alias: string) => Promis
     await fs.symlink(target, alias, process.platform === "win32" ? "junction" : "dir")
     await run(alias)
   } finally {
+    await Instance.disposeAll().catch(() => undefined)
     await fs.rm(parent, { recursive: true, force: true })
   }
 }
@@ -121,6 +122,77 @@ describe("project routes", () => {
         expect(projectRow(body.id)?.worktree).toBe(alias)
       })
     }, 250)
+  }, 30_000)
+
+  test("GET /task/:taskID converges polluted linked-directory project identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+
+    await withDirectoryAlias(tmp.path, async (alias) => {
+      const visibleID = Project.directoryProjectID(alias)
+      const physicalID = Project.directoryProjectID(tmp.path)
+      const taskID = Identifier.ascending("task")
+      const sessionID = Identifier.ascending("session")
+      const now = Date.now()
+      Database.use((db) => {
+        db.insert(ProjectTable)
+          .values([
+            {
+              id: visibleID,
+              worktree: alias,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+            {
+              id: physicalID,
+              worktree: tmp.path,
+              time_created: now,
+              time_updated: now,
+              sandboxes: [],
+            },
+          ])
+          .run()
+        db.insert(SessionTable)
+          .values({
+            id: sessionID,
+            project_id: visibleID,
+            slug: "linked-directory-task-root",
+            directory: alias,
+            title: "Linked directory task root",
+            version: "0.0.1",
+            kind: "root",
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: visibleID,
+            session_id: sessionID,
+            source: "api",
+            title: "Linked directory task",
+            request: "read through linked directory",
+            priority: "normal",
+            kind: "workflow",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run()
+      })
+      await Filesystem.write(path.join(alias, ".git", "opencorvus"), physicalID)
+
+      const response = await app.request(`/task/${taskID}?directory=${encodeURIComponent(alias)}`)
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as { id: string; projectID: string; directory?: string }
+      expect(body.id).toBe(taskID)
+      expect(body.projectID).toBe(visibleID)
+      expect(body.directory).toBe(alias)
+      expect((await Filesystem.readText(path.join(alias, ".git", "opencorvus"))).trim()).toBe(visibleID)
+    })
   }, 30_000)
 
   test("POST /project/current/init-git is idempotent for git projects", async () => {
