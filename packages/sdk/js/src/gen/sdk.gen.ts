@@ -5412,7 +5412,7 @@ export class Control2 extends HeyApiClient {
                   }
                 | {
                     /**
-                     * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                     * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                      */
                     type: "contract_audit"
                     name: string
@@ -6885,7 +6885,7 @@ export class Task extends HeyApiClient {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -7050,7 +7050,7 @@ export class Task extends HeyApiClient {
                 }
               | {
                   /**
-                   * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                   * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                    */
                   type: "contract_audit"
                   name: string
@@ -8288,7 +8288,7 @@ export class Goal extends HeyApiClient {
             }
           | {
               /**
-               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+               * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
               name: string

@@ -10478,7 +10478,7 @@ export type GatewayControlActionData = {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -12092,7 +12092,7 @@ export type TaskCreateData = {
             }
           | {
               /**
-               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+               * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
               name: string
@@ -12257,7 +12257,7 @@ export type TaskCreateData = {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -14041,7 +14041,7 @@ export type TaskConversationResponses = {
               }
             | {
                 /**
-                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                  */
                 type: "contract_audit"
                 name: string
@@ -15174,7 +15174,7 @@ export type TaskBoardResponses = {
             }
           | {
               /**
-               * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+               * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
                */
               type: "contract_audit"
               name: string
@@ -17106,7 +17106,7 @@ export type GoalUpdateData = {
           }
         | {
             /**
-             * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+             * contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
              */
             type: "contract_audit"
             name: string

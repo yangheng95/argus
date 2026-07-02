@@ -13172,19 +13172,21 @@ export function createOrchestratorTools(input: {
             const priorGoalRunForRetry = findLatestTipGoalRun(attachedGoalID)
 
             const siblingGoals = listGoals(taskID)
-            const contractAuditUnknownContractFindings = validateArchitectContractGraph({
+            const architectContractGraphBlockers = validateArchitectContractGraph({
               goals: siblingGoals.map((g) => ({
                 id: g.id,
                 depends_on: g.depends_on as string[],
                 acceptance_specs: g.acceptance_specs as AcceptanceSpec[],
               })),
               graph: contractGraph,
-            }).filter((finding) => finding.code === "contract_audit_unknown_contract")
-            if (contractAuditUnknownContractFindings.length > 0) {
+            }).filter((finding) => finding.severity === "blocker")
+            if (architectContractGraphBlockers.length > 0) {
               throw new Error(
-                `Cannot build goal ${goal.id}: architect contract_audit references unknown graph contract ids. ` +
-                  `${contractAuditUnknownContractFindings.map((finding) => finding.message).join(" ")} ` +
-                  "Re-run architect so contract_audit.contract_ids are copied from registered graph contract ids.",
+                `Cannot build goal ${goal.id}: architect contract graph has blocker(s). ` +
+                  `${architectContractGraphBlockers
+                    .map((finding) => `${finding.code}: ${finding.message}`)
+                    .join(" ")} ` +
+                  "Re-run architect so dependency reasons, graph contracts, and contract_audit ids are internally consistent before Build consumes them.",
               )
             }
             if (selectedWorktreeUsage === "current_project") {

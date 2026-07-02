@@ -3107,6 +3107,102 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("goal build rejects persisted contract graph blockers before build starts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_graph_blocker_${stamp}`
+    const goalID = `gol_graph_blocker_${stamp}`
+
+    let buildStarted = false
+    buildAgentRunImpl = async () => {
+      buildStarted = true
+      return {
+        result: { status: "passed", summary: "should not run", files_changed: [], tests: [] },
+        sessionID: "ses_should_not_start",
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: null,
+          worktree: tmp.path,
+          projectName: "contract graph blocker predispatch",
+          taskTitle: "contract graph blocker predispatch",
+          request: "Reject persisted graph blockers before build",
+          goalTitle: "Build invalid graph goal",
+          goalSlug: "build-invalid-graph-goal",
+          objective: "Attempt to build a goal whose persisted graph contains a blocker finding.",
+          now,
+          acceptanceSpecs: [
+            {
+              id: "acc-contract-graph-blocker",
+              source_requirement_id: "REQ-1",
+              goal_id: goalID,
+              title: "Contract graph blocker",
+              severity: "essential",
+              scorers: [
+                {
+                  type: "contract_audit",
+                  name: "graph-contract",
+                  spec: { kind: "contract_graph", contract_ids: ["contract_scaffold_app_root"] },
+                  expect: { status: "passed" },
+                },
+              ],
+            },
+          ],
+          insertProject: false,
+        })
+        insertArchitectContractGraphArtifact({
+          taskID,
+          now: now + 1,
+          graph: {
+            version: 1,
+            contracts: [
+              {
+                id: "contract_scaffold_app_root",
+                kind: "render_surface",
+                name: "Production app root scaffold",
+                producer_goal_id: goalID,
+                consumer_goal_ids: [],
+                summary: "Production app root source files consumed by downstream UI goals.",
+                artifact_paths: ["package.json", "index.html", "src/**", "public/**", "docs/blank-template-blocker.md"],
+              },
+            ],
+            dependency_contracts: [],
+          },
+        })
+        const parent = await Session.create({ kind: "root", title: "contract graph blocker predispatch" })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        await expect(
+          tools.build.execute(
+            {
+              goalID,
+              reason: "Per-goal build should reject persisted contract graph blockers before starting build.",
+            },
+            buildToolOptions(),
+          ),
+        ).rejects.toThrow("render_surface_non_render_artifact_path")
+        expect(buildStarted).toBe(false)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("frontend_research returns a visible failure card when startup fails", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
