@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-wait-park-turn-boundary.md](2026-07-02-wait-park-turn-boundary.md) records the wait park turn-boundary repair so scheduled nonblocking waits stop the current session stream instead of letting the same model message chain more wait calls.
 - [2026-07-02-runtime-status-timing-root-repair.md](2026-07-02-runtime-status-timing-root-repair.md) records the root repair for task runtime/status timing so elapsed time uses the durable started/completed runtime window rather than created time or local UI state.
 - [2026-07-02-optional-build-worktree-schema.md](2026-07-02-optional-build-worktree-schema.md) records the optional `build.worktreeUsage` schema repair so the model can choose managed worktree versus current-project execution while preserving commit/report behavior.
 - [2026-07-02-direct-build-current-worktree.md](2026-07-02-direct-build-current-worktree.md) records the task-level direct build dispatch repair so `directBuildIntent="modify_files"` uses the current project worktree instead of creating a new managed worktree.

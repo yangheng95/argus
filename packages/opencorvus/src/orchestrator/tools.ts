@@ -56,6 +56,7 @@ import {
   WaitToolParameters,
   executeWait,
 } from "@/tool/wait"
+import { TOOL_RESULT_PARK_METADATA_KEY } from "@/session/tool-result-control"
 import { CronJobTable } from "@/scheduler/cron.sql"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
@@ -14146,6 +14147,7 @@ export function createOrchestratorTools(input: {
             nextRun: result.nextRun,
             mode: result.mode,
             nonblocking: true,
+            ...(result.aborted ? {} : { [TOOL_RESULT_PARK_METADATA_KEY]: true }),
           },
         }
       },

@@ -25,6 +25,7 @@ import {
   type LLMActivityPolicy,
 } from "@/llm/activity"
 import { toolFailureCauseFromUnknown, type ToolFailureCause } from "./tool-failure-cause"
+import { shouldParkAfterToolResult } from "./tool-result-control"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -151,6 +152,7 @@ export namespace SessionProcessor {
     let snapshot: string | undefined
     let blocked = false
     let needsCompaction = false
+    let parkAfterToolResult = false
     // Reasoning delta buffer: aggregate per-token deltas into batched SSE updates
     const reasoningDeltaBuf = new Map<string, string>()
     let reasoningFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -518,6 +520,10 @@ export namespace SessionProcessor {
                         input.assistantMessage.finish = "tool-calls"
                         preTerminalInterrupted = true
                       }
+                      if (shouldParkAfterToolResult(metadata)) {
+                        input.assistantMessage.finish = "tool-calls"
+                        parkAfterToolResult = true
+                      }
                       break
                     }
 
@@ -702,6 +708,7 @@ export namespace SessionProcessor {
                       continue
                   }
                   if (needsCompaction) break
+                  if (parkAfterToolResult) break
                   if (preTerminalInterrupted) break
                 }
               },
@@ -810,6 +817,7 @@ export namespace SessionProcessor {
           await Session.updateMessage(input.assistantMessage)
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
+          if (parkAfterToolResult) return "stop"
           if (input.assistantMessage.error) return "stop"
           return "continue"
         }

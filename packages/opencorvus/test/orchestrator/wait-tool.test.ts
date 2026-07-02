@@ -17,6 +17,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { resetDatabase } from "../fixture/db"
 import { CronJobTable } from "../../src/scheduler/cron.sql"
 import { Session } from "../../src/session"
+import { TOOL_RESULT_PARK_METADATA_KEY } from "../../src/session/tool-result-control"
 
 /**
  * Orchestrator `wait` is a one-shot deliberate pause for a NAMED external
@@ -202,6 +203,7 @@ describe("createOrchestratorTools — wait execute", () => {
       const metadata = toolMetadata(result)
       expect(metadata.mode).toBe("task")
       expect(metadata.nonblocking).toBe(true)
+      expect(metadata[TOOL_RESULT_PARK_METADATA_KEY]).toBe(true)
       expect(metadata.elapsedMs).toBeUndefined()
       const row = Database.use((db) =>
         db.select().from(CronJobTable).where(eq(CronJobTable.task_id, fixture.taskID)).get(),
@@ -229,6 +231,7 @@ describe("createOrchestratorTools — wait execute", () => {
       expect(elapsed).toBeLessThan(500)
       expect(output).toMatch(/^wait was not scheduled/)
       expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("none")
+      expect(toolMetadata(result)[TOOL_RESULT_PARK_METADATA_KEY]).toBeUndefined()
       const row = Database.use((db) =>
         db.select().from(CronJobTable).where(eq(CronJobTable.task_id, fixture.taskID)).get(),
       )

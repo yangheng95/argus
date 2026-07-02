@@ -4,6 +4,7 @@ import { Log } from "@/util/log"
 import { createDecisionLog } from "@/decision-log"
 import { CronService } from "@/scheduler/cron-service"
 import { Instance } from "@/project/instance"
+import { TOOL_RESULT_PARK_METADATA_KEY } from "@/session/tool-result-control"
 
 export const WAIT_MIN_MS = 1_000
 export const WAIT_RECOMMENDED_MS = 20 * 60 * 1000
@@ -123,6 +124,7 @@ export const WaitTool = Tool.define("wait", {
         nextRun: result.nextRun,
         mode: result.mode,
         nonblocking: true,
+        ...(result.aborted ? {} : { [TOOL_RESULT_PARK_METADATA_KEY]: true }),
       },
     }
   },

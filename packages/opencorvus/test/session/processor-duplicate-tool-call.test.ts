@@ -14,6 +14,7 @@ import { Message } from "../../src/session/message"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionSummary } from "../../src/session/summary"
 import { SessionStatus } from "../../src/session/status"
+import { TOOL_RESULT_PARK_METADATA_KEY } from "../../src/session/tool-result-control"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -191,6 +192,119 @@ test("session processor closes duplicate same-callID tool-call deltas with one r
   expect(toolParts[0]!.state.status).toBe("completed")
   const openParts = toolParts.filter((part) => part.state.status === "pending" || part.state.status === "running")
   expect(openParts).toHaveLength(0)
+})
+
+test("session processor parks after a scheduled wait tool result", async () => {
+  spyOn(Config, "get").mockResolvedValue({ experimental: {} } as Awaited<ReturnType<typeof Config.get>>)
+  spyOn(EngineConfig, "get").mockResolvedValue({
+    activity: { session_llm_idle_ms: 60 },
+  } as Awaited<ReturnType<typeof EngineConfig.get>>)
+  spyOn(SessionStatus, "set").mockImplementation(() => {})
+  spyOn(Bus, "publish").mockResolvedValue(undefined as never)
+  spyOn(Session, "updateMessage").mockResolvedValue(undefined as never)
+  spyOn(PermissionNext, "ask").mockResolvedValue(undefined as never)
+
+  const store = new Map<string, Message.Part>()
+  spyOn(Session, "updatePart").mockImplementation(async (part) => {
+    store.set(part.id, part as Message.Part)
+    return part as never
+  })
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
+
+  let secondWaitConsumed = false
+  let streamClosed = false
+  const waitParkStream: AsyncIterable<any> = {
+    [Symbol.asyncIterator]() {
+      let index = 0
+      return {
+        async next() {
+          index += 1
+          if (index === 1) return { done: false, value: { type: "start" } }
+          if (index === 2) {
+            return {
+              done: false,
+              value: {
+                type: "tool-call",
+                toolCallId: "call_wait_first",
+                toolName: "wait",
+                input: { duration_ms: 1200, reason: "external CI propagation" },
+              },
+            }
+          }
+          if (index === 3) {
+            return {
+              done: false,
+              value: {
+                type: "tool-result",
+                toolCallId: "call_wait_first",
+                toolName: "wait",
+                input: { duration_ms: 1200, reason: "external CI propagation" },
+                output: {
+                  output: "Scheduled nonblocking task wait cron_wait_1.",
+                  title: "Wait Scheduled",
+                  metadata: {
+                    nonblocking: true,
+                    aborted: false,
+                    [TOOL_RESULT_PARK_METADATA_KEY]: true,
+                  },
+                },
+              },
+            }
+          }
+          secondWaitConsumed = true
+          return {
+            done: false,
+            value: {
+              type: "tool-call",
+              toolCallId: "call_wait_second",
+              toolName: "wait",
+              input: { duration_ms: 1200, reason: "same-stream polling" },
+            },
+          }
+        },
+        async return() {
+          streamClosed = true
+          return { done: true, value: undefined }
+        },
+      }
+    },
+  }
+  spyOn(LLM, "stream").mockResolvedValue({
+    fullStream: waitParkStream,
+  } as Awaited<ReturnType<typeof LLM.stream>>)
+
+  const assistantMessage = {
+    id: "msg_wait_park",
+    sessionID: "ses_wait_park",
+    role: "assistant",
+    agent: "orchestrator",
+    parentID: "msg_parent",
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: Date.now() },
+  } as Message.Assistant
+  const processor = SessionProcessor.create({
+    assistantMessage,
+    sessionID: "ses_wait_park",
+    model: { providerID: "test-provider", id: "test-model" } as Provider.Model,
+    abort: new AbortController().signal,
+  })
+
+  await expect(processor.process({} as LLM.StreamInput)).resolves.toBe("stop")
+
+  expect(secondWaitConsumed).toBe(false)
+  expect(streamClosed).toBe(true)
+  expect(assistantMessage.finish).toBe("tool-calls")
+  const toolParts = [...store.values()].filter((p): p is Message.ToolPart => p.type === "tool")
+  expect(toolParts).toHaveLength(1)
+  expect(toolParts[0]!.tool).toBe("wait")
+  expect(toolParts[0]!.state.status).toBe("completed")
+  expect(
+    toolParts[0]!.state.status === "completed"
+      ? toolParts[0]!.state.metadata?.[TOOL_RESULT_PARK_METADATA_KEY]
+      : undefined,
+  ).toBe(true)
 })
 
 test("session processor preserves invalid tool-call input and paired tool-error cause", async () => {
