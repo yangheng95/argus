@@ -5,9 +5,22 @@ import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { installBrowserErrorCollector } from "./error-collector.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
+
+async function closeBrowserAndFixture(browser: { close(): Promise<void> }, server: { close(): Promise<void> }) {
+  let browserCloseError: unknown
+  try {
+    await browser.close()
+  } catch (error) {
+    browserCloseError = error
+  } finally {
+    await server.close()
+  }
+  if (browserCloseError) throw browserCloseError
+}
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -241,6 +254,8 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send([])
+      if (path === "/project/current/worktrees") return send([])
       if (path === "/global/tasks") return send(taskListPayload())
       if (path === "/mission") return send(missionListPayload(missionInterruptible))
       if (path === "/mission/mis_side_activity/abort") {
@@ -313,6 +328,9 @@ test(
       }
       if (path === "/task/tsk_side_activity/conversation") return send(taskConversationPayload())
       if (path === "/task/tsk_side_activity/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/task/events") {
         return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
       }
       if (path === "/session") return send([])
@@ -483,6 +501,11 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      installBrowserErrorCollector(page, {
+        allowResponse(response) {
+          return response.status === 503 && response.path === "/mission/mis_side_activity/project-archive"
+        },
+      })
       await page.setViewport({ width: 1440, height: 900 })
       await page.evaluateOnNewDocument((serverUrl) => {
         ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
@@ -972,7 +995,7 @@ test(
         workspaceDirection: "row",
         toolbarDirection: "column",
         itemsDirection: "column",
-        buttonCount: 7,
+        buttonCount: 9,
         toolbarWithinWorkspace: true,
       })
       assert.ok(
@@ -999,7 +1022,7 @@ test(
         workspaceDirection: "row",
         toolbarDirection: "column",
         itemsDirection: "column",
-        buttonCount: 7,
+        buttonCount: 9,
         toolbarWithinWorkspace: true,
       })
       assert.ok(
@@ -2052,8 +2075,7 @@ test(
         rightPreviewButton: "true",
       })
     } finally {
-      await browser.close()
-      await server.close()
+      await closeBrowserAndFixture(browser, server)
     }
   },
   { timeout: 180_000 },
@@ -2073,6 +2095,8 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send([])
+      if (path === "/project/current/worktrees") return send([])
       if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/mission") return send(missionListPayload(true))
       if (path === "/mission/mis_side_activity" && req.method === "DELETE") {
@@ -2140,6 +2164,11 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      installBrowserErrorCollector(page, {
+        allowResponse(response) {
+          return response.status === 500 && response.path === "/mission/mis_side_activity"
+        },
+      })
       await page.setViewport({ width: 1280, height: 760 })
       await page.evaluateOnNewDocument(
         (input: { serverUrl: string }) => {
@@ -2197,8 +2226,7 @@ test(
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await missionLedger.screenshot({}))
     } finally {
-      await browser.close()
-      await server.close()
+      await closeBrowserAndFixture(browser, server)
     }
   },
   { timeout: 60_000 },
@@ -2221,6 +2249,8 @@ test(
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return send([])
+      if (path === "/project/current/worktrees") return send([])
       if (path === "/global/tasks") return send({ tasks: [] })
       if (path === "/mission") {
         if (failMissionReload) return send({ error: "mission reload unavailable" }, { status: 500 })
@@ -2303,6 +2333,11 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
+      installBrowserErrorCollector(page, {
+        allowResponse(response) {
+          return response.status === 500 && response.path === "/mission"
+        },
+      })
       await page.setViewport({ width: 1280, height: 760 })
       await page.evaluateOnNewDocument(
         (input: { serverUrl: string }) => {
@@ -2368,8 +2403,7 @@ test(
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await missionPanel.screenshot({}))
     } finally {
-      await browser.close()
-      await server.close()
+      await closeBrowserAndFixture(browser, server)
     }
   },
   { timeout: 60_000 },
