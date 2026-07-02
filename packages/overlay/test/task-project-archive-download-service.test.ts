@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { ApiError, configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
+import { PROJECT_ARCHIVE_DOWNLOAD_TIMEOUT_MILLISECONDS } from "../src/services/project-archive"
 import { downloadTaskProjectArchive } from "../src/services/task"
 import { downloadMissionProjectArchive } from "../src/services/mission"
 
@@ -110,6 +111,7 @@ describe("downloadTaskProjectArchive", () => {
     expect(requests[0]!.path).toBe("task/task-123/project-archive")
     expect(requests[0]!.query?.directory).toBe("/repo/project")
     expect(requests[0]!.responseKind).toBe("binary")
+    expect(requests[0]!.timeoutMilliseconds).toBe(PROJECT_ARCHIVE_DOWNLOAD_TIMEOUT_MILLISECONDS)
     expect(anchors).toHaveLength(1)
     expect(anchors[0]!.href).toBe("blob:task-project-archive")
     expect(anchors[0]!.download).toBe("task-123-project.zip")
@@ -178,6 +180,7 @@ describe("downloadMissionProjectArchive", () => {
     expect(requests[0]!.path).toBe("mission/mission-123/project-archive")
     expect(requests[0]!.query?.directory).toBe("D:/repo")
     expect(requests[0]!.responseKind).toBe("binary")
+    expect(requests[0]!.timeoutMilliseconds).toBe(PROJECT_ARCHIVE_DOWNLOAD_TIMEOUT_MILLISECONDS)
     expect(anchors).toHaveLength(1)
     expect(anchors[0]!.download).toBe("mission-123-project.zip")
     expect(anchors[0]!.clicked).toBe(true)

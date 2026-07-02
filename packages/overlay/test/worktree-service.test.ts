@@ -7,6 +7,7 @@ import {
   deleteProjectWorktrees,
   loadProjectWorktrees,
   ProjectWorktreeBulkDeleteError,
+  PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS,
 } from "../src/services/worktree"
 
 const SAVED_DIRECTORY = "D:/workspace/app"
@@ -97,7 +98,7 @@ test("deleteProjectWorktree sends the target directory in the DELETE JSON body",
   expect(captured?.path).toBe("project/current/worktrees")
   expect(captured?.method).toBe("DELETE")
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
-  expect(captured?.timeoutMilliseconds).toBeNull()
+  expect(captured?.timeoutMilliseconds).toBe(PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS)
   expect(captured?.body).toEqual({
     kind: "json",
     value: {
@@ -121,7 +122,10 @@ test("deleteProjectWorktrees deletes each target through the same project route"
   expect(captured.map((req) => req.path)).toEqual(["project/current/worktrees", "project/current/worktrees"])
   expect(captured.map((req) => req.method)).toEqual(["DELETE", "DELETE"])
   expect(captured.map((req) => req.query?.directory)).toEqual([SAVED_DIRECTORY, SAVED_DIRECTORY])
-  expect(captured.map((req) => req.timeoutMilliseconds)).toEqual([null, null])
+  expect(captured.map((req) => req.timeoutMilliseconds)).toEqual([
+    PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS,
+    PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS,
+  ])
   expect(captured.map((req) => req.body)).toEqual([
     {
       kind: "json",

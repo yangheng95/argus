@@ -248,9 +248,14 @@ function relativePath(path: string): string {
  * back to direct `fetch`. Use this only when you need status or headers;
  * `apiJson` is still the preferred surface for plain JSON.
  */
+export interface ApiRequestInit extends RequestInit {
+  responseKind?: ResponseKind
+  timeoutMilliseconds?: number | null
+}
+
 export async function apiRequest<T = unknown>(
   path: string,
-  init?: RequestInit & { responseKind?: ResponseKind },
+  init?: ApiRequestInit,
 ): Promise<TransportResponse<T>> {
   const transport = getHostTransport()
   const method = methodFromInit(init)
@@ -262,6 +267,7 @@ export async function apiRequest<T = unknown>(
     body: bodyFromInit(init),
     headers: headersFromInit(init),
     signal: init?.signal ?? undefined,
+    timeoutMilliseconds: init?.timeoutMilliseconds,
     responseKind: init?.responseKind ?? "json",
   })
 }

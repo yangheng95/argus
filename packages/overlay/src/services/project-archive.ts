@@ -1,6 +1,8 @@
 import { bytesToArrayBuffer } from "../utils/binary"
 import { apiRequest, ApiError } from "./api"
 
+export const PROJECT_ARCHIVE_DOWNLOAD_TIMEOUT_MILLISECONDS = 15 * 60 * 1000
+
 function contentDispositionFilename(header: string | undefined): string | undefined {
   if (!header) return undefined
   const match = /filename="([^"]+)"/i.exec(header) || /filename=([^;]+)/i.exec(header)
@@ -35,6 +37,7 @@ function decodeBinaryErrorBody(body: Uint8Array): unknown {
 export async function downloadProjectArchive(input: { path: string }): Promise<boolean> {
   const response = await apiRequest<Uint8Array>(input.path, {
     responseKind: "binary",
+    timeoutMilliseconds: PROJECT_ARCHIVE_DOWNLOAD_TIMEOUT_MILLISECONDS,
   })
   if (!response.ok) {
     throw new ApiError(response.status, input.path, decodeBinaryErrorBody(response.body))

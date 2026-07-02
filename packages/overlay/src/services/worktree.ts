@@ -1,5 +1,7 @@
 import { apiJson } from "./api"
 
+export const PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS = 15 * 60 * 1000
+
 export interface ProjectWorktreeInfo {
   name: string
   branch?: string
@@ -62,7 +64,7 @@ export async function deleteProjectWorktree(projectDirectory: string, directory:
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ directory }),
-    timeoutMilliseconds: null,
+    timeoutMilliseconds: PROJECT_WORKTREE_DELETE_TIMEOUT_MILLISECONDS,
   })
   if (result?.ok !== true) throw new Error("project/current/worktrees did not confirm deletion")
   return true
