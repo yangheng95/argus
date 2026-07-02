@@ -138,7 +138,8 @@ export const PanelCapabilityRegistry = list(
     description:
       "Structured batch task status query for LLM reconciliation. Returns stable JSON for up to 50 taskIDs " +
       "at a time. Distinct from view_board (which produces human-oriented prose, single-task at a time) — " +
-      "use this when an agent needs to programmatically inspect outcomes of tasks it has dispatched.",
+      "use this when an agent needs to programmatically inspect outcomes of tasks it has dispatched. " +
+      "Each successful row includes agentInvocationDAG from the durable task session ledger; workflow steps are progress data, not executed-agent nodes.",
     kind: "query",
     surfaces: allProjectSurfaces,
     params: {

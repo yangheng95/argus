@@ -12,6 +12,8 @@ import { Memory } from "../../src/memory"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Identifier } from "../../src/id/id"
 import { timelineOrderKey } from "../../src/timeline/order"
+import { Session } from "../../src/session"
+import { taskToolSessionMetadata } from "../../src/tool/task"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -125,6 +127,124 @@ test("compileBoard does not retain a mutable process board between hydrations", 
       expect(after.task).not.toBe(before.task)
       expect(after.task.orderKey).toBe(expectedTaskOrderKey)
       expect(after.task.request).toBe("initial request")
+    },
+  })
+})
+
+test("compileBoard projects actual agent invocation DAG from the task session tree", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir({ git: true })
+  const now = Date.now()
+  const taskID = Identifier.ascending("task")
+  const goalID = Identifier.ascending("goal")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const root = await Session.create({
+        kind: "root",
+        title: "Task root",
+      })
+
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "test",
+            title: "Agent DAG projection",
+            request: "Project actual agent invocations as a DAG.",
+            kind: "workflow",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          } as any)
+          .run(),
+      )
+
+      const beforeTag = boardTag({ taskID })
+      const before = compileBoard({ taskID }) as any
+      expect(before.agentInvocationDAG).toMatchObject({
+        taskID,
+        rootSessionID: root.id,
+        nodes: [],
+        edges: [],
+        topLevelSessionIDs: [],
+      })
+
+      const orchestrator = await Session.create({
+        kind: "orchestrator",
+        parentID: root.id,
+        title: "Orchestrator",
+      })
+      const requirements = await Session.create({
+        kind: "requirements",
+        parentID: orchestrator.id,
+        title: "Requirements",
+      })
+      const executor = await Session.create({
+        kind: "executor",
+        parentID: orchestrator.id,
+        goalID,
+        title: "Executor container",
+      })
+      const build = await Session.create({
+        kind: "build",
+        parentID: executor.id,
+        goalID,
+        title: "Build worker",
+      })
+      const assistant = await Session.create({
+        kind: "assistant",
+        parentID: build.id,
+        title: "General subagent",
+        metadata: taskToolSessionMetadata("general"),
+      })
+
+      const afterTag = boardTag({ taskID })
+      expect(afterTag).not.toBe(beforeTag)
+
+      const after = compileBoard({ taskID }) as any
+      expect(() => TaskBoard.parse(after)).not.toThrow()
+      const dag = after.agentInvocationDAG
+      expect(dag.rootSessionID).toBe(root.id)
+      expect([...dag.nodes.map((node: any) => node.sessionID)].sort()).toEqual(
+        [orchestrator.id, requirements.id, build.id, assistant.id].sort(),
+      )
+      expect(dag.nodes.some((node: any) => node.sessionID === root.id || node.sessionID === executor.id)).toBe(false)
+
+      const buildNode = dag.nodes.find((node: any) => node.sessionID === build.id)
+      expect(buildNode).toMatchObject({
+        agent: "build",
+        kind: "build",
+        parentSessionID: executor.id,
+        parentAgentSessionID: orchestrator.id,
+        goalID,
+      })
+      const assistantNode = dag.nodes.find((node: any) => node.sessionID === assistant.id)
+      expect(assistantNode).toMatchObject({
+        agent: "general",
+        kind: "assistant",
+        parentSessionID: build.id,
+        parentAgentSessionID: build.id,
+      })
+      expect(dag.edges).toHaveLength(3)
+      expect(dag.edges).toContainEqual({
+        fromSessionID: orchestrator.id,
+        toSessionID: requirements.id,
+        relation: "agent_call",
+      })
+      expect(dag.edges).toContainEqual({
+        fromSessionID: orchestrator.id,
+        toSessionID: build.id,
+        relation: "agent_call",
+        viaSessionIDs: [executor.id],
+      })
+      expect(dag.edges).toContainEqual({ fromSessionID: build.id, toSessionID: assistant.id, relation: "agent_call" })
+      expect(dag.topLevelSessionIDs).toEqual([orchestrator.id])
     },
   })
 })

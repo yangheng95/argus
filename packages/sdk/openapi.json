@@ -18083,6 +18083,158 @@
                               "percent"
                             ]
                           },
+                          "agentInvocationDAG": {
+                            "type": "object",
+                            "properties": {
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "rootSessionID": {
+                                "type": "string"
+                              },
+                              "nodes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sessionID": {
+                                      "type": "string"
+                                    },
+                                    "orderKey": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "agent": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "root",
+                                        "orchestrator",
+                                        "assistant",
+                                        "mission",
+                                        "intent-analysis",
+                                        "requirements",
+                                        "frontend-design",
+                                        "goal",
+                                        "architect",
+                                        "goal-workload-analyst",
+                                        "integrity",
+                                        "fact-check",
+                                        "acceptance",
+                                        "executor",
+                                        "build",
+                                        "explore",
+                                        "deep-research",
+                                        "frontend-research",
+                                        "visual-qa",
+                                        "evaluator",
+                                        "system"
+                                      ]
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "parentSessionID": {
+                                      "type": "string"
+                                    },
+                                    "parentAgentSessionID": {
+                                      "type": "string"
+                                    },
+                                    "goalID": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "error": {
+                                          "type": "string"
+                                        },
+                                        "emittedAt": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "emittedAt"
+                                      ]
+                                    },
+                                    "time": {
+                                      "type": "object",
+                                      "properties": {
+                                        "created": {
+                                          "type": "number"
+                                        },
+                                        "updated": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "created",
+                                        "updated"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "sessionID",
+                                    "orderKey",
+                                    "agent",
+                                    "kind",
+                                    "time"
+                                  ]
+                                }
+                              },
+                              "edges": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "fromSessionID": {
+                                      "type": "string"
+                                    },
+                                    "toSessionID": {
+                                      "type": "string"
+                                    },
+                                    "relation": {
+                                      "type": "string",
+                                      "const": "agent_call"
+                                    },
+                                    "viaSessionIDs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "fromSessionID",
+                                    "toSessionID",
+                                    "relation"
+                                  ]
+                                }
+                              },
+                              "topLevelSessionIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "taskID",
+                              "nodes",
+                              "edges",
+                              "topLevelSessionIDs"
+                            ]
+                          },
                           "workflow": {
                             "type": "object",
                             "properties": {
@@ -18362,6 +18514,7 @@
                           "source",
                           "priority",
                           "progress",
+                          "agentInvocationDAG",
                           "goals",
                           "time"
                         ]
@@ -25929,6 +26082,158 @@
                         "percent"
                       ]
                     },
+                    "agentInvocationDAG": {
+                      "type": "object",
+                      "properties": {
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "rootSessionID": {
+                          "type": "string"
+                        },
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "orderKey": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "agent": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "root",
+                                  "orchestrator",
+                                  "assistant",
+                                  "mission",
+                                  "intent-analysis",
+                                  "requirements",
+                                  "frontend-design",
+                                  "goal",
+                                  "architect",
+                                  "goal-workload-analyst",
+                                  "integrity",
+                                  "fact-check",
+                                  "acceptance",
+                                  "executor",
+                                  "build",
+                                  "explore",
+                                  "deep-research",
+                                  "frontend-research",
+                                  "visual-qa",
+                                  "evaluator",
+                                  "system"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "parentAgentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "error": {
+                                    "type": "string"
+                                  },
+                                  "emittedAt": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "emittedAt"
+                                ]
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "orderKey",
+                              "agent",
+                              "kind",
+                              "time"
+                            ]
+                          }
+                        },
+                        "edges": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "fromSessionID": {
+                                "type": "string"
+                              },
+                              "toSessionID": {
+                                "type": "string"
+                              },
+                              "relation": {
+                                "type": "string",
+                                "const": "agent_call"
+                              },
+                              "viaSessionIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "fromSessionID",
+                              "toSessionID",
+                              "relation"
+                            ]
+                          }
+                        },
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "taskID",
+                        "nodes",
+                        "edges",
+                        "topLevelSessionIDs"
+                      ]
+                    },
                     "workflow": {
                       "type": "object",
                       "properties": {
@@ -26208,6 +26513,7 @@
                     "source",
                     "priority",
                     "progress",
+                    "agentInvocationDAG",
                     "goals",
                     "time"
                   ]
@@ -28856,6 +29162,158 @@
                             ]
                           }
                         },
+                        "agentInvocationDAG": {
+                          "type": "object",
+                          "properties": {
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "rootSessionID": {
+                              "type": "string"
+                            },
+                            "nodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sessionID": {
+                                    "type": "string"
+                                  },
+                                  "orderKey": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "agent": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "root",
+                                      "orchestrator",
+                                      "assistant",
+                                      "mission",
+                                      "intent-analysis",
+                                      "requirements",
+                                      "frontend-design",
+                                      "goal",
+                                      "architect",
+                                      "goal-workload-analyst",
+                                      "integrity",
+                                      "fact-check",
+                                      "acceptance",
+                                      "executor",
+                                      "build",
+                                      "explore",
+                                      "deep-research",
+                                      "frontend-research",
+                                      "visual-qa",
+                                      "evaluator",
+                                      "system"
+                                    ]
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "parentSessionID": {
+                                    "type": "string"
+                                  },
+                                  "parentAgentSessionID": {
+                                    "type": "string"
+                                  },
+                                  "goalID": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "error": {
+                                        "type": "string"
+                                      },
+                                      "emittedAt": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "emittedAt"
+                                    ]
+                                  },
+                                  "time": {
+                                    "type": "object",
+                                    "properties": {
+                                      "created": {
+                                        "type": "number"
+                                      },
+                                      "updated": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "created",
+                                      "updated"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "sessionID",
+                                  "orderKey",
+                                  "agent",
+                                  "kind",
+                                  "time"
+                                ]
+                              }
+                            },
+                            "edges": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "fromSessionID": {
+                                    "type": "string"
+                                  },
+                                  "toSessionID": {
+                                    "type": "string"
+                                  },
+                                  "relation": {
+                                    "type": "string",
+                                    "const": "agent_call"
+                                  },
+                                  "viaSessionIDs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "fromSessionID",
+                                  "toSessionID",
+                                  "relation"
+                                ]
+                              }
+                            },
+                            "topLevelSessionIDs": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "taskID",
+                            "nodes",
+                            "edges",
+                            "topLevelSessionIDs"
+                          ]
+                        },
                         "overview": {
                           "type": "object",
                           "properties": {
@@ -29983,6 +30441,7 @@
                         "interactions",
                         "channels",
                         "artifacts",
+                        "agentInvocationDAG",
                         "overview",
                         "brief"
                       ]
@@ -33390,6 +33849,158 @@
                         ]
                       }
                     },
+                    "agentInvocationDAG": {
+                      "type": "object",
+                      "properties": {
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "rootSessionID": {
+                          "type": "string"
+                        },
+                        "nodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "orderKey": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "agent": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "root",
+                                  "orchestrator",
+                                  "assistant",
+                                  "mission",
+                                  "intent-analysis",
+                                  "requirements",
+                                  "frontend-design",
+                                  "goal",
+                                  "architect",
+                                  "goal-workload-analyst",
+                                  "integrity",
+                                  "fact-check",
+                                  "acceptance",
+                                  "executor",
+                                  "build",
+                                  "explore",
+                                  "deep-research",
+                                  "frontend-research",
+                                  "visual-qa",
+                                  "evaluator",
+                                  "system"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "parentAgentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "error": {
+                                    "type": "string"
+                                  },
+                                  "emittedAt": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "emittedAt"
+                                ]
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "orderKey",
+                              "agent",
+                              "kind",
+                              "time"
+                            ]
+                          }
+                        },
+                        "edges": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "fromSessionID": {
+                                "type": "string"
+                              },
+                              "toSessionID": {
+                                "type": "string"
+                              },
+                              "relation": {
+                                "type": "string",
+                                "const": "agent_call"
+                              },
+                              "viaSessionIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "fromSessionID",
+                              "toSessionID",
+                              "relation"
+                            ]
+                          }
+                        },
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "taskID",
+                        "nodes",
+                        "edges",
+                        "topLevelSessionIDs"
+                      ]
+                    },
                     "overview": {
                       "type": "object",
                       "properties": {
@@ -34517,6 +35128,7 @@
                     "interactions",
                     "channels",
                     "artifacts",
+                    "agentInvocationDAG",
                     "overview",
                     "brief"
                   ]

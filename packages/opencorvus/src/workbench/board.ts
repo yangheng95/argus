@@ -49,6 +49,7 @@ import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
 import { Project } from "@/project/project"
+import { agentInvocationDAGForTask } from "@/orchestrator/task-event"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -274,6 +275,7 @@ function buildBoard(
         updated: item.time_updated,
       },
     })),
+    agentInvocationDAG: agentInvocationDAGForTask(task.id),
     artifacts: latestArtifacts
       .filter((item) => item.kind !== "diff" && item.kind !== "changed_file")
       .map((item) => ({
@@ -325,9 +327,37 @@ function latestTaskProtocolSequence(taskID: string) {
   )
 }
 
+function taskSessionTreeVersion(taskID: string) {
+  return (
+    Database.use((db) =>
+      db.get<{
+        count: number
+        updated: number
+        statusSeq: number
+        statusUpdated: number
+      }>(sql`
+        WITH RECURSIVE session_tree(id) AS (
+          SELECT session_id FROM engine_task WHERE id = ${taskID} AND session_id IS NOT NULL
+          UNION ALL
+          SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+        )
+        SELECT
+          count(distinct s.id) AS count,
+          coalesce(max(s.time_updated), 0) AS updated,
+          coalesce(max(pe.seq), 0) AS statusSeq,
+          coalesce(max(pe.emitted_at), 0) AS statusUpdated
+        FROM session_tree st
+        JOIN session s ON s.id = st.id
+        LEFT JOIN protocol_event pe ON pe.session_id = s.id AND pe.type = 'session.status'
+      `),
+    ) ?? { count: 0, updated: 0, statusSeq: 0, statusUpdated: 0 }
+  )
+}
+
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   const run = projectedRunForBoard(task)
   const plan = findActivePlanForTask(task.id)
+  const sessionTree = taskSessionTreeVersion(task.id)
   const goals = Database.use((db) =>
     db
       .select({
@@ -447,6 +477,10 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
     task.time_created,
     task.time_updated,
     task.budget?.max_executor_groups ?? "",
+    sessionTree.count,
+    sessionTree.updated,
+    sessionTree.statusSeq,
+    sessionTree.statusUpdated,
     run?.id ?? "",
     run?.time_updated ?? 0,
     plan?.id ?? "",

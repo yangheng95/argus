@@ -2,6 +2,15 @@ import { describe, expect, test } from "bun:test"
 import { taskStatusDetailFromBoard } from "../../src/status/task-status-snapshot"
 
 describe("taskStatusDetailFromBoard", () => {
+  function emptyAgentInvocationDAG(taskID: string) {
+    return {
+      taskID,
+      nodes: [],
+      edges: [],
+      topLevelSessionIDs: [],
+    }
+  }
+
   test("preserves aborted workflow raw status and counts it as failed", () => {
     const detail = taskStatusDetailFromBoard({
       task: {
@@ -18,6 +27,7 @@ describe("taskStatusDetailFromBoard", () => {
           updated: 2,
         },
       },
+      agentInvocationDAG: emptyAgentInvocationDAG("tsk_status_snapshot_aborted"),
       workflow: {
         id: "pipeline",
         name: "Pipeline",
@@ -63,10 +73,60 @@ describe("taskStatusDetailFromBoard", () => {
 
     expect(detail.status).toBe("failed")
     expect(detail.progress).toMatchObject({ total: 2, completed: 0, failed: 2, running: 0, pending: 0 })
+    expect(detail.agentInvocationDAG.nodes).toEqual([])
     expect(detail.workflow?.steps[0]).toMatchObject({ rawStatus: "aborted", status: "failed" })
     expect(detail.goals[0]?.status).toBe("failed")
     expect(detail.goals[0]?.progress).toMatchObject({ total: 1, failed: 1 })
     expect(detail.goals[0]?.steps[0]).toMatchObject({ rawStatus: "aborted", status: "failed" })
     expect(detail.goals[0]?.steps[0]?.phases?.[0]).toMatchObject({ rawStatus: "aborted", status: "failed" })
+  })
+
+  test("does not synthesize agent DAG nodes from pending workflow steps", () => {
+    const detail = taskStatusDetailFromBoard({
+      task: {
+        id: "tsk_status_snapshot_pending_dag",
+        orderKey: "v1:task:002",
+        projectID: "project-status-snapshot",
+        source: "test",
+        title: "Pending workflow without agents",
+        request: "Keep pending workflow separate from executed agent DAG.",
+        status: "queued",
+        priority: "normal",
+        time: {
+          created: 1,
+          updated: 2,
+        },
+      },
+      agentInvocationDAG: emptyAgentInvocationDAG("tsk_status_snapshot_pending_dag"),
+      workflow: {
+        id: "pipeline",
+        name: "Pipeline",
+        goalLoopStepIDs: ["build"],
+        steps: [
+          {
+            id: "requirements",
+            orderKey: "v1:step:001",
+            label: "Requirements",
+            tool: "requirements",
+            scope: "task",
+            skippable: false,
+            status: "pending",
+          },
+          {
+            id: "build",
+            orderKey: "v1:step:002",
+            label: "Build",
+            tool: "build",
+            scope: "goal",
+            skippable: false,
+            status: "pending",
+          },
+        ],
+      },
+    })
+
+    expect(detail.agentInvocationDAG.nodes).toEqual([])
+    expect(detail.workflow?.steps.map((step) => step.rawStatus)).toEqual(["pending", "pending"])
+    expect(detail.progress).toMatchObject({ total: 2, completed: 0, failed: 0, running: 0, pending: 2 })
   })
 })

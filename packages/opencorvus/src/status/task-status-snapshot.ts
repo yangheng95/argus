@@ -67,6 +67,7 @@ export const TaskStatusDetail = z.object({
   directory: z.string().optional(),
   error: z.string().optional(),
   progress: StatusProgress,
+  agentInvocationDAG: TaskBoard.shape.agentInvocationDAG,
   workflow: z
     .object({
       id: z.string(),
@@ -111,6 +112,7 @@ type ProgressInput = Array<{ rawStatus: StepStatus }>
 const TaskStatusBoardProjection = z
   .object({
     task: TaskBoard.shape.task,
+    agentInvocationDAG: TaskBoard.shape.agentInvocationDAG,
     workflow: TaskBoard.shape.workflow.optional(),
     goalWorkflows: TaskBoard.shape.goalWorkflows.optional(),
   })
@@ -265,6 +267,7 @@ export function taskStatusDetailFromBoard(input: unknown): TaskStatusDetail {
     directory: board.task.directory,
     error: board.task.error,
     progress,
+    agentInvocationDAG: board.agentInvocationDAG,
     workflow: board.workflow
       ? {
           id: board.workflow.id,

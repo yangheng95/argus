@@ -1,4 +1,5 @@
 import { EngineTaskTable } from "@/engine/engine.sql"
+import { taskToolSubagentNameFromMetadata } from "@/agent/subagent-session-metadata"
 import { SessionTable, type SessionKind } from "@/session/session.sql"
 import { Database, eq, sql } from "@/storage/db"
 import { timelineOrderKey } from "@/timeline/order"
@@ -53,8 +54,10 @@ export interface ConversationAgentSessionLedgerRow {
   sessionID: string
   orderKey: string
   stage: SessionKind
+  title?: string
   parentSessionID?: string
   goalID?: string
+  metadata?: Record<string, unknown>
   timeCreated: number
   timeUpdated: number
   latestStatus?: ConversationAgentSessionLedgerStatus
@@ -65,6 +68,37 @@ export interface ConversationAgentSessionLedgerStatus {
   type: string
   reason?: string
   error?: string
+}
+
+export interface AgentInvocationNode {
+  sessionID: string
+  orderKey: string
+  agent: string
+  kind: SessionKind
+  title?: string
+  parentSessionID?: string
+  parentAgentSessionID?: string
+  goalID?: string
+  status?: ConversationAgentSessionLedgerStatus & { emittedAt: number }
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export interface AgentInvocationEdge {
+  fromSessionID: string
+  toSessionID: string
+  relation: "agent_call"
+  viaSessionIDs?: string[]
+}
+
+export interface AgentInvocationDAG {
+  taskID: string
+  rootSessionID?: string
+  nodes: AgentInvocationNode[]
+  edges: AgentInvocationEdge[]
+  topLevelSessionIDs: string[]
 }
 
 function readSessionRow(sessionID: string) {
@@ -260,8 +294,10 @@ function toConversationAgentSessionLedgerRows(
   rows: Array<{
     sessionID: string
     stage: SessionKind
+    title: string
     parentSessionID: string | null
     goalID: string | null
+    metadata: unknown
     timeCreated: number
     timeUpdated: number
     statusType: string | null
@@ -287,8 +323,10 @@ function toConversationAgentSessionLedgerRows(
         id: row.sessionID,
       }),
       stage: row.stage,
+      title: row.title,
       parentSessionID: row.parentSessionID ?? undefined,
       goalID: row.goalID ?? undefined,
+      metadata: parseLedgerMetadata(row.metadata, row.sessionID),
       timeCreated: row.timeCreated,
       timeUpdated: row.timeUpdated,
       ...(statusType
@@ -305,6 +343,28 @@ function toConversationAgentSessionLedgerRows(
   })
 }
 
+function parseLedgerMetadata(input: unknown, sessionID: string): Record<string, unknown> | undefined {
+  if (input == null) return undefined
+  if (typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
+  if (typeof input !== "string") {
+    throw new Error(`conversation agent ledger metadata for session ${sessionID} is not an object`)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(input)
+  } catch (err) {
+    throw new Error(
+      `conversation agent ledger metadata for session ${sessionID} is not valid JSON: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`conversation agent ledger metadata for session ${sessionID} is not an object`)
+  }
+  return parsed as Record<string, unknown>
+}
+
 export function listConversationAgentSessionsForSessionTree(input: {
   sessionID: string
   projectID: string
@@ -313,8 +373,10 @@ export function listConversationAgentSessionsForSessionTree(input: {
     db.all<{
       sessionID: string
       stage: SessionKind
+      title: string
       parentSessionID: string | null
       goalID: string | null
+      metadata: unknown
       timeCreated: number
       timeUpdated: number
       statusType: string | null
@@ -333,8 +395,10 @@ export function listConversationAgentSessionsForSessionTree(input: {
       SELECT
         s.id AS sessionID,
         s.kind AS stage,
+        s.title AS title,
         s.parent_id AS parentSessionID,
         s.goal_id AS goalID,
+        s.metadata AS metadata,
         s.time_created AS timeCreated,
         s.time_updated AS timeUpdated,
         json_extract(pe.payload, '$.status.type') AS statusType,
@@ -380,6 +444,123 @@ export function listTaskConversationAgentSessions(taskID: string): ConversationA
   return listConversationAgentSessionsForSessionTree({
     sessionID: row.sessionID,
     projectID: row.projectID,
+  })
+}
+
+const NON_AGENT_SESSION_KINDS = new Set<SessionKind>(["root", "executor", "system"])
+
+function isAgentInvocationSession(row: ConversationAgentSessionLedgerRow) {
+  return !NON_AGENT_SESSION_KINDS.has(row.stage)
+}
+
+function agentNameForLedgerRow(row: ConversationAgentSessionLedgerRow) {
+  if (row.stage !== "assistant") return row.stage
+  const taskToolSubagent = taskToolSubagentNameFromMetadata(row.metadata)
+  if (taskToolSubagent) return taskToolSubagent
+  return "assistant"
+}
+
+export function agentInvocationDAGFromLedger(input: {
+  taskID: string
+  rootSessionID?: string
+  sessions: ConversationAgentSessionLedgerRow[]
+}): AgentInvocationDAG {
+  const ledgerByID = new Map(input.sessions.map((row) => [row.sessionID, row]))
+  const includedSessionIDs = new Set(
+    input.sessions.filter((row) => isAgentInvocationSession(row)).map((row) => row.sessionID),
+  )
+  const parentAgentBySessionID = new Map<string, string>()
+  const edges: AgentInvocationEdge[] = []
+
+  const nodes: AgentInvocationNode[] = input.sessions.flatMap((row) => {
+    if (!includedSessionIDs.has(row.sessionID)) return []
+    return [
+      {
+        sessionID: row.sessionID,
+        orderKey: row.orderKey,
+        agent: agentNameForLedgerRow(row),
+        kind: row.stage,
+        title: row.title,
+        parentSessionID: row.parentSessionID,
+        goalID: row.goalID,
+        ...(row.latestStatus && row.latestStatusEmittedAt
+          ? {
+              status: {
+                ...row.latestStatus,
+                emittedAt: row.latestStatusEmittedAt,
+              },
+            }
+          : {}),
+        time: {
+          created: row.timeCreated,
+          updated: row.timeUpdated,
+        },
+      },
+    ]
+  })
+
+  for (const node of nodes) {
+    const viaSessionIDs: string[] = []
+    const visited = new Set<string>([node.sessionID])
+    let parentID = node.parentSessionID
+    while (parentID) {
+      if (visited.has(parentID)) {
+        throw new Error(`agent invocation DAG detected a parent cycle at session ${parentID}`)
+      }
+      visited.add(parentID)
+      if (includedSessionIDs.has(parentID)) {
+        parentAgentBySessionID.set(node.sessionID, parentID)
+        edges.push({
+          fromSessionID: parentID,
+          toSessionID: node.sessionID,
+          relation: "agent_call",
+          ...(viaSessionIDs.length > 0 ? { viaSessionIDs } : {}),
+        })
+        break
+      }
+      viaSessionIDs.push(parentID)
+      parentID = ledgerByID.get(parentID)?.parentSessionID
+    }
+  }
+
+  const nodesWithParent = nodes.map((node) => {
+    const parentAgentSessionID = parentAgentBySessionID.get(node.sessionID)
+    return parentAgentSessionID ? { ...node, parentAgentSessionID } : node
+  })
+
+  return {
+    taskID: input.taskID,
+    rootSessionID: input.rootSessionID,
+    nodes: nodesWithParent,
+    edges,
+    topLevelSessionIDs: nodesWithParent
+      .filter((node) => !parentAgentBySessionID.has(node.sessionID))
+      .map((node) => node.sessionID),
+  }
+}
+
+export function agentInvocationDAGForTask(taskID: string): AgentInvocationDAG {
+  const row = Database.use((db) =>
+    db
+      .select({
+        sessionID: EngineTaskTable.session_id,
+        projectID: EngineTaskTable.project_id,
+      })
+      .from(EngineTaskTable)
+      .where(eq(EngineTaskTable.id, taskID))
+      .get(),
+  )
+  if (!row) throw new Error(`agent invocation DAG task ${taskID} does not exist`)
+  if (!row.sessionID) {
+    return agentInvocationDAGFromLedger({ taskID, sessions: [] })
+  }
+  return agentInvocationDAGFromLedger({
+    taskID,
+    rootSessionID: row.sessionID,
+    sessions: listConversationAgentSessionsForSessionTree({
+      sessionID: row.sessionID,
+      projectID: row.projectID,
+    }),
   })
 }
 

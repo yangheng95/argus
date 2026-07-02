@@ -15,6 +15,9 @@ import { resolveAgentModelRef } from "@/agent/model"
 import type { SessionKind } from "@/session/session.sql"
 import { ExploreAgent } from "@/explore/agent"
 import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { TASK_TOOL_SUBAGENT_METADATA_KEY, taskToolSessionMetadata } from "@/agent/subagent-session-metadata"
+
+export { taskToolSessionMetadata } from "@/agent/subagent-session-metadata"
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -31,14 +34,6 @@ const parameters = z.object({
 
 export function sessionKindForSubagent(agentName: string) {
   return agentName === "explore" ? "explore" : "assistant"
-}
-
-const taskToolSubagentMetadataKey = "taskToolSubagent"
-
-export function taskToolSessionMetadata(agentName: string): Record<string, unknown> {
-  return {
-    [taskToolSubagentMetadataKey]: agentName,
-  }
 }
 
 function taskToolPromptSwitches(input: {
@@ -59,7 +54,7 @@ export function assertTaskResumeSession(input: {
   expectedKind: SessionKind
   expectedSubagent: string
 }) {
-  const metadataSubagent = input.resumeSession.metadata?.[taskToolSubagentMetadataKey]
+  const metadataSubagent = input.resumeSession.metadata?.[TASK_TOOL_SUBAGENT_METADATA_KEY]
   if (input.resumeSession.parentID !== input.callerSession.id) {
     throw new Error(
       `Invalid task_id: ${input.resumeSession.id} is not a child session of caller session ${input.callerSession.id}`,

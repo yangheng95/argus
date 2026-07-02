@@ -8,6 +8,7 @@ import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
 import { isModelReference } from "@/provider/model-ref"
 import { decodeRawBase64Payload } from "@/session/text-mime"
+import { SESSION_KINDS } from "@/session/session.sql"
 
 export const Budget = z.object({
   maxExecutorGroups: z.number().int().positive().optional(),
@@ -911,6 +912,44 @@ export const TaskBoardGoalWorkflow = z.object({
   acceptanceSpecs: AcceptanceSpecSchema.array().optional(),
 })
 
+export const AgentInvocationStatus = z.object({
+  type: z.string(),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+  emittedAt: z.number(),
+})
+
+export const AgentInvocationNode = z.object({
+  sessionID: z.string(),
+  orderKey: z.string().min(1),
+  agent: z.string(),
+  kind: z.enum(SESSION_KINDS),
+  title: z.string().optional(),
+  parentSessionID: z.string().optional(),
+  parentAgentSessionID: z.string().optional(),
+  goalID: z.string().optional(),
+  status: AgentInvocationStatus.optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
+export const AgentInvocationEdge = z.object({
+  fromSessionID: z.string(),
+  toSessionID: z.string(),
+  relation: z.literal("agent_call"),
+  viaSessionIDs: z.array(z.string()).optional(),
+})
+
+export const AgentInvocationDAG = z.object({
+  taskID: Identifier.schema("task"),
+  rootSessionID: z.string().optional(),
+  nodes: AgentInvocationNode.array(),
+  edges: AgentInvocationEdge.array(),
+  topLevelSessionIDs: z.array(z.string()),
+})
+
 // ---------------------------------------------------------------------------
 // TaskBoard — full board projection
 // ---------------------------------------------------------------------------
@@ -936,6 +975,7 @@ export const TaskBoard = z.object({
   interactions: Interaction.array(),
   channels: TaskChannelBinding.array(),
   artifacts: Artifact.array(),
+  agentInvocationDAG: AgentInvocationDAG,
   overview: TaskBoardOverview,
   brief: z.object({
     content: z.string(),

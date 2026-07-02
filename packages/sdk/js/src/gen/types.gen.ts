@@ -10747,6 +10747,58 @@ export type MissionStatusResponses = {
         pending: number
         percent: number
       }
+      agentInvocationDAG: {
+        taskID: string
+        rootSessionID?: string
+        nodes: Array<{
+          sessionID: string
+          orderKey: string
+          agent: string
+          kind:
+            | "root"
+            | "orchestrator"
+            | "assistant"
+            | "mission"
+            | "intent-analysis"
+            | "requirements"
+            | "frontend-design"
+            | "goal"
+            | "architect"
+            | "goal-workload-analyst"
+            | "integrity"
+            | "fact-check"
+            | "acceptance"
+            | "executor"
+            | "build"
+            | "explore"
+            | "deep-research"
+            | "frontend-research"
+            | "visual-qa"
+            | "evaluator"
+            | "system"
+          title?: string
+          parentSessionID?: string
+          parentAgentSessionID?: string
+          goalID?: string
+          status?: {
+            type: string
+            reason?: string
+            error?: string
+            emittedAt: number
+          }
+          time: {
+            created: number
+            updated: number
+          }
+        }>
+        edges: Array<{
+          fromSessionID: string
+          toSessionID: string
+          relation: "agent_call"
+          viaSessionIDs?: Array<string>
+        }>
+        topLevelSessionIDs: Array<string>
+      }
       workflow?: {
         id: string
         name: string
@@ -13045,6 +13097,58 @@ export type TaskStatusResponses = {
       pending: number
       percent: number
     }
+    agentInvocationDAG: {
+      taskID: string
+      rootSessionID?: string
+      nodes: Array<{
+        sessionID: string
+        orderKey: string
+        agent: string
+        kind:
+          | "root"
+          | "orchestrator"
+          | "assistant"
+          | "mission"
+          | "intent-analysis"
+          | "requirements"
+          | "frontend-design"
+          | "goal"
+          | "architect"
+          | "goal-workload-analyst"
+          | "integrity"
+          | "fact-check"
+          | "acceptance"
+          | "executor"
+          | "build"
+          | "explore"
+          | "deep-research"
+          | "frontend-research"
+          | "visual-qa"
+          | "evaluator"
+          | "system"
+        title?: string
+        parentSessionID?: string
+        parentAgentSessionID?: string
+        goalID?: string
+        status?: {
+          type: string
+          reason?: string
+          error?: string
+          emittedAt: number
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      edges: Array<{
+        fromSessionID: string
+        toSessionID: string
+        relation: "agent_call"
+        viaSessionIDs?: Array<string>
+      }>
+      topLevelSessionIDs: Array<string>
+    }
     workflow?: {
       id: string
       name: string
@@ -13757,6 +13861,58 @@ export type TaskConversationResponses = {
           updated: number
         }
       }>
+      agentInvocationDAG: {
+        taskID: string
+        rootSessionID?: string
+        nodes: Array<{
+          sessionID: string
+          orderKey: string
+          agent: string
+          kind:
+            | "root"
+            | "orchestrator"
+            | "assistant"
+            | "mission"
+            | "intent-analysis"
+            | "requirements"
+            | "frontend-design"
+            | "goal"
+            | "architect"
+            | "goal-workload-analyst"
+            | "integrity"
+            | "fact-check"
+            | "acceptance"
+            | "executor"
+            | "build"
+            | "explore"
+            | "deep-research"
+            | "frontend-research"
+            | "visual-qa"
+            | "evaluator"
+            | "system"
+          title?: string
+          parentSessionID?: string
+          parentAgentSessionID?: string
+          goalID?: string
+          status?: {
+            type: string
+            reason?: string
+            error?: string
+            emittedAt: number
+          }
+          time: {
+            created: number
+            updated: number
+          }
+        }>
+        edges: Array<{
+          fromSessionID: string
+          toSessionID: string
+          relation: "agent_call"
+          viaSessionIDs?: Array<string>
+        }>
+        topLevelSessionIDs: Array<string>
+      }
       overview: {
         headline: string
         summary: string
@@ -14890,6 +15046,58 @@ export type TaskBoardResponses = {
         updated: number
       }
     }>
+    agentInvocationDAG: {
+      taskID: string
+      rootSessionID?: string
+      nodes: Array<{
+        sessionID: string
+        orderKey: string
+        agent: string
+        kind:
+          | "root"
+          | "orchestrator"
+          | "assistant"
+          | "mission"
+          | "intent-analysis"
+          | "requirements"
+          | "frontend-design"
+          | "goal"
+          | "architect"
+          | "goal-workload-analyst"
+          | "integrity"
+          | "fact-check"
+          | "acceptance"
+          | "executor"
+          | "build"
+          | "explore"
+          | "deep-research"
+          | "frontend-research"
+          | "visual-qa"
+          | "evaluator"
+          | "system"
+        title?: string
+        parentSessionID?: string
+        parentAgentSessionID?: string
+        goalID?: string
+        status?: {
+          type: string
+          reason?: string
+          error?: string
+          emittedAt: number
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      edges: Array<{
+        fromSessionID: string
+        toSessionID: string
+        relation: "agent_call"
+        viaSessionIDs?: Array<string>
+      }>
+      topLevelSessionIDs: Array<string>
+    }
     overview: {
       headline: string
       summary: string

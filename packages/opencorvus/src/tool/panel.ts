@@ -1,6 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { EngineService } from "@/task-api"
+import { AgentInvocationDAG } from "@/engine/model"
 import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
 import { Question } from "@/question"
@@ -84,6 +85,7 @@ const PanelQueryTaskSummaryRow = z.object({
   completed: z.number().optional(),
   error: z.string().optional(),
   result: PanelTaskResult,
+  agentInvocationDAG: AgentInvocationDAG,
   pendingInteractions: z.number().int().nonnegative().optional(),
 })
 const PanelQueryTaskChildRow = z.union([PanelQueryTaskSummaryRow, PanelQueryTaskErrorRow])
@@ -206,6 +208,7 @@ function panelTaskSummaryRow(board: PanelTaskBoard): z.infer<typeof PanelQueryTa
     completed: board.task.time?.completed,
     error: board.task.error,
     result: panelTaskResult(board),
+    agentInvocationDAG: board.agentInvocationDAG,
   })
 }
 
