@@ -464,6 +464,8 @@ describe("core prompt hygiene", () => {
     )
     expect(text).toContain("`contract_audit` is a scorer `type`, not a `script_ref` path")
     expect(text).toContain("Never write `.opencorvus/scripts/contract-audit`")
+    expect(text).toContain("materialized `artifact_paths` for the referenced graph contracts")
+    expect(text).toContain("do not satisfy a downstream render-surface contract by writing a blocker document")
   })
 
   test("architect prompt pins acceptance scorer discriminator values", async () => {

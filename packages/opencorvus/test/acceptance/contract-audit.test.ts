@@ -55,6 +55,51 @@ describe("contract_audit graph scorer", () => {
     expect(result.evidence).toContain("observed_assignments=1")
   })
 
+  test("materializes non-IR graph contract artifact paths and rejects blocker-only scaffold", async () => {
+    const workDir = await tempWorkDir({
+      "docs/blank-template-blocker.md": "Requested scaffold template was unavailable.\n",
+    })
+    const graph = scaffoldGraph(["package.json", "index.html", "src/**", "public/**", "docs/blank-template-blocker.md"])
+
+    const result = runContractAudit({
+      workDir,
+      index: contractGraphIRIndex(graph),
+      graph,
+      goal: { id: "goal_scaffold", owned_paths: ["package.json", "index.html", "src", "public", "docs"] },
+      spec: scaffoldAuditSpec(),
+      scorer: scaffoldAuditScorer(),
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.evidence).toContain("goal contract artifact materialization failed")
+    expect(result.evidence).toContain('artifact_path="package.json"')
+    expect(result.evidence).toContain('artifact_path="index.html"')
+    expect(result.evidence).toContain('artifact_path="src/**"')
+    expect(result.evidence).toContain('artifact_path="public/**"')
+  })
+
+  test("passes non-IR graph contract artifact path audit when scaffold exists", async () => {
+    const workDir = await tempWorkDir({
+      "package.json": '{"scripts":{"build":"vite"}}\n',
+      "index.html": '<div id="root"></div>\n',
+      "src/main.tsx": "export const mounted = true\n",
+      "public/.keep": "",
+    })
+    const graph = scaffoldGraph(["package.json", "index.html", "src/**", "public/**"])
+
+    const result = runContractAudit({
+      workDir,
+      index: contractGraphIRIndex(graph),
+      graph,
+      goal: { id: "goal_scaffold", owned_paths: ["package.json", "index.html", "src", "public"] },
+      spec: scaffoldAuditSpec(),
+      scorer: scaffoldAuditScorer(),
+    })
+
+    expect(result.status).toBe("passed")
+    expect(result.evidence).toContain("materialized_contract_artifact_paths=4")
+  })
+
   test("review evidence requires declared graph contract audit criteria", () => {
     const spec = auditSpec()
     const scorer = spec.scorers[0] as ContractAuditScorer
@@ -147,6 +192,51 @@ function auditScorer(): ContractAuditScorer {
     type: "contract_audit",
     name: "order-contract",
     spec: { kind: "contract_graph", contract_ids: ["contract_order"] },
+    expect: { status: "passed" },
+  }
+}
+
+function scaffoldGraph(artifactPaths: string[]): ArchitectContractGraph {
+  return {
+    version: 1,
+    contracts: [
+      {
+        id: "contract_scaffold_app_root",
+        kind: "render_surface",
+        name: "Production app root scaffold",
+        producer_goal_id: "goal_scaffold",
+        consumer_goal_ids: ["goal_ui"],
+        summary: "Production app root files consumed by downstream UI goals.",
+        artifact_paths: artifactPaths,
+      },
+    ],
+    dependency_contracts: [
+      {
+        from_goal_id: "goal_scaffold",
+        to_goal_id: "goal_ui",
+        reason: "contract",
+        contract_ids: ["contract_scaffold_app_root"],
+      },
+    ],
+  }
+}
+
+function scaffoldAuditSpec(): AcceptanceSpec {
+  return {
+    id: "acc-scaffold-contract",
+    source_requirement_id: "REQ-scaffold",
+    goal_id: "goal_scaffold",
+    title: "Production scaffold graph contract is materialized",
+    severity: "essential",
+    scorers: [scaffoldAuditScorer()],
+  }
+}
+
+function scaffoldAuditScorer(): ContractAuditScorer {
+  return {
+    type: "contract_audit",
+    name: "scaffold-contract",
+    spec: { kind: "contract_graph", contract_ids: ["contract_scaffold_app_root"] },
     expect: { status: "passed" },
   }
 }

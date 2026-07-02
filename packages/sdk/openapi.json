@@ -17257,7 +17257,7 @@
                                     "type": "object",
                                     "properties": {
                                       "type": {
-                                        "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                        "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                         "type": "string",
                                         "const": "contract_audit"
                                       },
@@ -22623,7 +22623,7 @@
                                       "type": "object",
                                       "properties": {
                                         "type": {
-                                          "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                          "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                           "type": "string",
                                           "const": "contract_audit"
                                         },
@@ -23075,7 +23075,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
-                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                                "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                                 "type": "string",
                                                 "const": "contract_audit"
                                               },
@@ -29850,7 +29850,7 @@
                                             "type": "object",
                                             "properties": {
                                               "type": {
-                                                "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                                "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                                 "type": "string",
                                                 "const": "contract_audit"
                                               },
@@ -34384,7 +34384,7 @@
                                         "type": "object",
                                         "properties": {
                                           "type": {
-                                            "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                            "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                             "type": "string",
                                             "const": "contract_audit"
                                           },
@@ -40003,7 +40003,7 @@
                                 "type": "object",
                                 "properties": {
                                   "type": {
-                                    "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                    "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                                     "type": "string",
                                     "const": "contract_audit"
                                   },

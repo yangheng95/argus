@@ -113,7 +113,7 @@ const ContractAuditScorerSchema = z.object({
   type: z
     .literal("contract_audit")
     .describe(
-      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+      "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
     ),
   name: z.string().min(1),
   spec: z.object({

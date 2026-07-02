@@ -2,6 +2,8 @@ import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 import { auditEligibleFieldsForSymbols, type AuditEligibleField, type ContractIR } from "@/architect/contract-ir"
+import type { ArchitectContractGraph } from "@/architect/contract-graph"
+import { Glob } from "@/util/glob"
 import { resolveTrigger, type AcceptanceSpec, type ContractAuditScorer } from "./types"
 
 export type ContractAuditStatus = "passed" | "failed" | "skipped" | "inconclusive"
@@ -60,16 +62,41 @@ export function contractAuditBlocksBuild(status: ContractAuditStatus): boolean {
 export function runContractAudit(input: {
   workDir: string
   index: Map<string, ContractIR>
+  graph?: ArchitectContractGraph
   goal: ContractAuditGoal
   spec: AcceptanceSpec
   scorer: ContractAuditScorer
 }): ContractAuditCriteriaResult {
   const requestedSymbols = input.scorer.spec.contract_ids
+  const artifactAudit = auditGraphContractArtifactPaths({
+    workDir: input.workDir,
+    graph: input.graph,
+    contractIDs: requestedSymbols,
+  })
+  if (artifactAudit?.status === "failed") {
+    return {
+      name: contractAuditCriteriaName(input.spec, input.scorer),
+      label: `${input.spec.title} / ${input.scorer.name}`,
+      family: "contract_audit",
+      status: "failed",
+      evidence: artifactAudit.evidence,
+    }
+  }
+
   const fields = auditEligibleFieldsForSymbols({
     index: input.index,
     symbols: requestedSymbols,
   })
   if (fields.length === 0) {
+    if (artifactAudit?.status === "passed") {
+      return {
+        name: contractAuditCriteriaName(input.spec, input.scorer),
+        label: `${input.spec.title} / ${input.scorer.name}`,
+        family: "contract_audit",
+        status: "passed",
+        evidence: artifactAudit.evidence,
+      }
+    }
     return {
       name: contractAuditCriteriaName(input.spec, input.scorer),
       label: `${input.spec.title} / ${input.scorer.name}`,
@@ -186,8 +213,137 @@ export function runContractAudit(input: {
       fields,
       observedAssignments,
       inconclusiveFindings: [...inconclusiveFindings.values()],
+      note: artifactAudit?.status === "passed" ? artifactAudit.evidence : undefined,
     }),
   }
+}
+
+interface ArtifactPathFinding {
+  contractID: string
+  artifactPath: string
+  reason: string
+}
+
+interface MaterializedArtifactPath {
+  contractID: string
+  artifactPath: string
+  matches: string[]
+}
+
+function auditGraphContractArtifactPaths(input: {
+  workDir: string
+  graph?: ArchitectContractGraph
+  contractIDs: readonly string[]
+}): { status: "passed" | "failed"; evidence: string } | undefined {
+  if (!input.graph) return undefined
+  const requested = new Set(input.contractIDs)
+  const contracts = input.graph.contracts.filter(
+    (contract) => requested.has(contract.id) && contract.artifact_paths.length > 0,
+  )
+  if (contracts.length === 0) return undefined
+
+  const missing: ArtifactPathFinding[] = []
+  const materialized: MaterializedArtifactPath[] = []
+  for (const contract of contracts) {
+    for (const artifactPath of contract.artifact_paths) {
+      const resolved = materializedArtifactPathMatches(input.workDir, artifactPath)
+      if (resolved.status === "matched") {
+        materialized.push({ contractID: contract.id, artifactPath: resolved.artifactPath, matches: resolved.matches })
+        continue
+      }
+      missing.push({ contractID: contract.id, artifactPath: resolved.artifactPath, reason: resolved.reason })
+    }
+  }
+
+  if (missing.length > 0) {
+    return {
+      status: "failed",
+      evidence: [
+        `goal contract artifact materialization failed; contract_ids=${contracts.map((contract) => contract.id).join(",")}`,
+        ...missing.map(
+          (finding) =>
+            `- contract=${finding.contractID} artifact_path=${JSON.stringify(finding.artifactPath)} reason=${finding.reason}`,
+        ),
+      ].join("\n"),
+    }
+  }
+
+  return {
+    status: "passed",
+    evidence: [
+      `materialized_contract_artifact_paths=${materialized.length}`,
+      ...materialized.map(
+        (entry) =>
+          `- contract=${entry.contractID} artifact_path=${JSON.stringify(entry.artifactPath)} matches=${entry.matches
+            .slice(0, 5)
+            .map((match) => JSON.stringify(match))
+            .join("|")}`,
+      ),
+    ].join("\n"),
+  }
+}
+
+function materializedArtifactPathMatches(
+  workDir: string,
+  rawArtifactPath: string,
+):
+  | { status: "matched"; artifactPath: string; matches: string[] }
+  | { status: "missing"; artifactPath: string; reason: string } {
+  const artifactPath = normalizeContractArtifactPath(rawArtifactPath)
+  if (!artifactPath) return { status: "missing", artifactPath: rawArtifactPath, reason: "empty artifact path" }
+  if (path.isAbsolute(artifactPath)) {
+    return { status: "missing", artifactPath, reason: "artifact path must be relative to the build workDir" }
+  }
+  if (artifactPath === ".." || artifactPath.startsWith("../")) {
+    return { status: "missing", artifactPath, reason: "artifact path escapes the build workDir" }
+  }
+
+  if (!isGlobArtifactPath(artifactPath)) {
+    const absolute = path.resolve(workDir, artifactPath)
+    if (!pathInside(workDir, absolute)) {
+      return { status: "missing", artifactPath, reason: "artifact path escapes the build workDir" }
+    }
+    return fs.existsSync(absolute)
+      ? { status: "matched", artifactPath, matches: [artifactPath] }
+      : { status: "missing", artifactPath, reason: "path does not exist" }
+  }
+
+  const matches = Glob.scanSync(artifactPath, { cwd: workDir, dot: true, include: "all" })
+    .map((match) => normalizeContractArtifactPath(String(match)))
+    .filter((match) => !!match && !match.startsWith("../"))
+    .sort()
+  if (matches.length > 0) return { status: "matched", artifactPath, matches }
+
+  const subtreeRoot = globSubtreeRoot(artifactPath)
+  if (subtreeRoot) {
+    const absolute = path.resolve(workDir, subtreeRoot)
+    if (pathInside(workDir, absolute) && fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()) {
+      return { status: "matched", artifactPath, matches: [subtreeRoot] }
+    }
+  }
+
+  return { status: "missing", artifactPath, reason: "glob matched no files or directories" }
+}
+
+function normalizeContractArtifactPath(artifactPath: string): string {
+  let normalized = artifactPath.trim().replaceAll("\\", "/")
+  while (normalized.startsWith("./")) normalized = normalized.slice(2)
+  return normalized.replace(/\/+$/, "")
+}
+
+function isGlobArtifactPath(artifactPath: string): boolean {
+  return /[*?[\]{}()!+@]/.test(artifactPath)
+}
+
+function globSubtreeRoot(artifactPath: string): string | undefined {
+  if (!artifactPath.endsWith("/**")) return undefined
+  const root = artifactPath.slice(0, -3)
+  return root.length > 0 && !isGlobArtifactPath(root) ? root : undefined
+}
+
+function pathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate))
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
 }
 
 function passEvidence(input: {

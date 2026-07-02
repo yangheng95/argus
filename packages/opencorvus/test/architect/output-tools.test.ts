@@ -501,6 +501,43 @@ test("contract graph validation blocks duplicate semantic surfaces", () => {
   )
 })
 
+test("rejects render_surface contracts that mix documentation artifacts", () => {
+  const findings = validateArchitectContractGraph({
+    goals: graphGoals([contractAuditSpec(["contract_scaffold_app_root"])]),
+    graph: {
+      version: 1,
+      contracts: [
+        {
+          id: "contract_scaffold_app_root",
+          kind: "render_surface",
+          name: "Production app root scaffold",
+          producer_goal_id: "goal_model",
+          consumer_goal_ids: ["goal_ui"],
+          summary: "Production app root source files consumed by downstream UI goals.",
+          artifact_paths: ["package.json", "index.html", "src/**", "public/**", "docs/blank-template-blocker.md"],
+        },
+      ],
+      dependency_contracts: [
+        {
+          from_goal_id: "goal_model",
+          to_goal_id: "goal_ui",
+          reason: "contract",
+          contract_ids: ["contract_scaffold_app_root"],
+        },
+      ],
+    },
+  })
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: "render_surface_non_render_artifact_path",
+      severity: "blocker",
+      scope: { contract_ids: ["contract_scaffold_app_root"], goal_ids: ["goal_model", "goal_ui"] },
+      message: expect.stringContaining("docs/blank-template-blocker.md"),
+    }),
+  )
+})
+
 test("contract without essential contract_audit coverage reports audit coverage concern", () => {
   const findings = contractWithoutAuditCoverageFindings({
     graph: baseGraph(),

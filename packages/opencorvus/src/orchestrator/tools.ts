@@ -91,10 +91,7 @@ import {
   readLatestTaskVisualEvidenceBundleSync,
   validateVisualEvidenceBundleReferenceComparisons,
 } from "@/acceptance/visual-evidence"
-import {
-  findReadableBrowserPreviewEvidenceByID,
-  resolveRuntimeRelativePath,
-} from "@/browser-preview/persist"
+import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "@/browser-preview/persist"
 import {
   collectVisualEvidenceMaterializationRefs,
   materializeVisualEvidenceBundleFromEvidenceRefs,
@@ -1123,6 +1120,7 @@ async function runGoalContractAuditCriteria(input: {
     ...runContractAudit({
       workDir: input.workDir,
       index: contractGraphIRIndex(graph),
+      graph,
       goal: goalContract,
       spec,
       scorer,

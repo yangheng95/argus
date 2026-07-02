@@ -72,6 +72,7 @@ Goal requirements:
 - Use `contract_audit` only with `{ "kind": "contract_graph", "contract_ids": [...] }` and `expect: { "status": "passed" }`.
 - `contract_audit` is a scorer `type`, not a `script_ref` path. Never write `.opencorvus/scripts/contract-audit`; for page DOM/button/keyboard/style checks use inline `shell`, and for graph-contract checks use `type:"contract_audit"` with registered contract ids.
 - contract_audit.contract_ids must be copied from already-registered contract ids returned by register_contract; unknown ids are rejected.
+- `contract_audit` verifies typed contract literals and materialized `artifact_paths` for the referenced graph contracts. If a bootstrap/source scaffold is unavailable, the bootstrap goal must fail or report the blocker; do not satisfy a downstream render-surface contract by writing a blocker document.
 - The verification goal's `acceptance_specs` are the quality contract for final integration and regression checks.
 - For reference-driven final visual parity, first register or modify a verification/integration goal, then call `register_visual_evidence_acceptance({ goal_id, source_requirement_id, title, criteria, reference_tokens })`. Do not hand-write this final visual scorer through `modify_goal` unless you have a nonstandard reason.
 - `acceptance_specs` must be meaningful feature acceptance, not routine toolchain hygiene. A valid acceptance spec proves user-visible behavior, data semantics, workflow behavior, integration contract behavior, rendered interface fidelity, or persisted artifact semantics. Syntax checks, typecheck, lint, build success, dev-server startup, and "project starts" are executor hygiene the Build model must perform anyway; they may be auxiliary evidence inside a broader functional acceptance spec, but they must never be the title, sole scorer, or whole success criterion.
@@ -99,6 +100,8 @@ Use `evidence_refs` for research evidence IDs that materially support this
 contract. Do not hide source IDs only in `summary`.
 
 Typed contracts (`type`, `function`, `enum`) require `ir_json`, a JSON string containing the ContractIR object. Route contracts may carry `route_json`, a JSON string containing `{method,path,request?,response?}`. Component contracts may carry `component_json`, a JSON string containing `{props?: string, events?: string[], slots?: string[]}`. For `component_json`, `props` is one comma-separated string such as `"title, items, onSelect"`; do not pass props as an array. Do not pass nested `ir`, `route`, or `component` objects directly to the tool; use the JSON string fields.
+
+`render_surface` contracts are downstream-consumable rendered/source surfaces only. Their `artifact_paths` must name production source, route, asset, or runtime surface paths; do not include docs, Markdown audits, blocker reports, or external-template failure notes. Those records can be ordinary goal-owned docs, but they are not graph contracts that downstream Build goals may consume.
 
 Inside `ir_json`, `kind` must equal contract `kind`: `"type"` has fields[], `"function"` has params[] and returns, `"enum"` has variants[].
 

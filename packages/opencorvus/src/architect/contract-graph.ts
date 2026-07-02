@@ -259,6 +259,20 @@ export function validateArchitectContractGraph(input: {
       )
     }
 
+    if (contract.kind === "render_surface") {
+      const nonRenderArtifactPaths = nonRenderSurfaceArtifactPaths(contract.artifact_paths)
+      if (nonRenderArtifactPaths.length > 0) {
+        findings.push(
+          blocker(
+            "render_surface_non_render_artifact_path",
+            `Contract ${contract.id} is a render_surface but includes non-render artifact path(s): ${nonRenderArtifactPaths.join(", ")}. Move documentation, audit notes, and blocker reports to goal-owned docs acceptance instead of making downstream goals consume them as a rendered surface.`,
+            { contract_ids: [contract.id], goal_ids: [contract.producer_goal_id, ...contract.consumer_goal_ids] },
+            ["register_contract", "modify_goal"],
+          ),
+        )
+      }
+    }
+
     if (contract.kind === "render_surface" && contract.consumer_goal_ids.length > 1) {
       findings.push(
         concern(
@@ -513,6 +527,20 @@ function essentialAcceptanceContractGraphIDsByGoal(
     }
   }
   return idsByGoal
+}
+
+const NON_RENDER_SURFACE_DOCUMENT_EXTENSIONS = [".md", ".markdown", ".txt", ".rst", ".adoc"]
+
+function nonRenderSurfaceArtifactPaths(artifactPaths: readonly string[]): string[] {
+  return artifactPaths.filter(isNonRenderSurfaceArtifactPath)
+}
+
+function isNonRenderSurfaceArtifactPath(artifactPath: string): boolean {
+  const normalized = artifactPath.trim().replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase()
+  if (!normalized) return false
+  const firstSegment = normalized.split("/")[0]
+  if (firstSegment === "docs" || firstSegment === "doc" || firstSegment === "documentation") return true
+  return NON_RENDER_SURFACE_DOCUMENT_EXTENSIONS.some((extension) => normalized.endsWith(extension))
 }
 
 function hasDependencyPath(goals: readonly GraphValidationGoal[], fromGoalID: string, ancestorGoalID: string): boolean {
