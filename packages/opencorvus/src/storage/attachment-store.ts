@@ -159,6 +159,10 @@ export namespace AttachmentStore {
     const existing = await fs.stat(abs).catch(() => null)
     if (!existing) {
       await fs.writeFile(abs, data)
+    } else {
+      if (!existing.isFile()) throw new Error(`AttachmentStore.write: existing path is not a file: ${abs}`)
+      const now = new Date()
+      await fs.utimes(abs, now, now)
     }
     const reference = {
       sha,

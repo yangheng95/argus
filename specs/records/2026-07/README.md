@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-build-staged-reference-first-run-race.md](2026-07-02-build-staged-reference-first-run-race.md) records the G1 failure diagnosis where a deduplicated staged-reference attachment kept an old mtime and could be swept before first provider replay.
 - [2026-07-02-task-agent-invocation-dag.md](2026-07-02-task-agent-invocation-dag.md) records the task query API repair that exposes a durable session-ledger agent invocation DAG instead of letting workflow template steps be mistaken for actually executed agents.
 - [2026-07-02-goal-scaffold-false-green-cascade.md](2026-07-02-goal-scaffold-false-green-cascade.md) records the database-backed repair for scaffold-goal false-green acceptance, non-IR contract materialization auditing, and render-surface contract blocker-document rejection.
 - [2026-07-02-layout-geometry-build-consumption.md](2026-07-02-layout-geometry-build-consumption.md) records the layout geometry repair so Visual QA cross-region alignment diagnostics become structured metrics and Build-consumed diagnostic evidence instead of loose text refs.

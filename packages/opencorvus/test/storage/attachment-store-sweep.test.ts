@@ -180,6 +180,31 @@ describe("AttachmentStore.sweep", () => {
     })
   })
 
+  test("refreshes an existing content-addressed blob before the caller persists its part row", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const bytes = differentBytes(50)
+        const first = await AttachmentStore.write(projectID, bytes, "image/png", "first.png")
+        const firstAbs = attachmentAbs(projectID, first.url)
+        await ageFile(firstAbs, 120_000)
+
+        const aged = await fs.stat(firstAbs)
+        expect(Date.now() - aged.mtimeMs).toBeGreaterThan(60_000)
+
+        const second = await AttachmentStore.write(projectID, bytes, "image/png", "second.png")
+        expect(second.url).toBe(first.url)
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.deleted).toBe(0)
+        expect(result.skippedYoung).toBe(1)
+        await expect(fs.readFile(firstAbs)).resolves.toEqual(bytes)
+      },
+    })
+  })
+
   test("idempotent — running twice deletes 0 the second time", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
