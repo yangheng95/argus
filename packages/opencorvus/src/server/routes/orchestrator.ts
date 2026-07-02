@@ -72,6 +72,7 @@ import {
   taskSession,
 } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
+import { Bus } from "@/bus"
 import { AgentSessionPendingCoordinationError, canReceiveDirectAgentSessionControl } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
@@ -701,7 +702,10 @@ export const EngineRoutes = lazy(() =>
           let ready = false
           let heartbeat: ReturnType<typeof setInterval> | undefined
           let messageChangePoll: ReturnType<typeof setInterval> | undefined
+          let messageChangeTimer: ReturnType<typeof setTimeout> | undefined
+          let forceScheduledMessageChange = false
           let stop = () => {}
+          let stopMessageMutations = () => {}
           let finishStream = () => {}
           let closed = false
           const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
@@ -709,7 +713,10 @@ export const EngineRoutes = lazy(() =>
             closed = true
             if (heartbeat) clearInterval(heartbeat)
             if (messageChangePoll) clearInterval(messageChangePoll)
+            if (messageChangeTimer) clearTimeout(messageChangeTimer)
+            forceScheduledMessageChange = false
             stop()
+            stopMessageMutations()
             if (input?.error) {
               log.warn("task event stream write failed", {
                 taskID,
@@ -760,6 +767,33 @@ export const EngineRoutes = lazy(() =>
               }),
             )
             await writeData(data)
+          }
+          const emitCurrentMessageChange = async (input: { force?: boolean } = {}) => {
+            if (closed) return
+            const nextCursor = taskMessageWatermarkCursor(taskID)
+            if (!input.force && !messageCursorChanged(nextCursor)) return
+            await emitMessageChange(nextCursor)
+          }
+          const scheduleMessageChange = (input: { force?: boolean } = {}) => {
+            if (closed) return
+            if (input.force) forceScheduledMessageChange = true
+            if (messageChangeTimer) return
+            messageChangeTimer = setTimeout(() => {
+              messageChangeTimer = undefined
+              const force = forceScheduledMessageChange
+              forceScheduledMessageChange = false
+              void emitCurrentMessageChange({ force }).catch((error) => cleanup({ closeStream: true, error }))
+            }, 0)
+          }
+          const cancelScheduledMessageChange = () => {
+            if (messageChangeTimer) clearTimeout(messageChangeTimer)
+            messageChangeTimer = undefined
+            forceScheduledMessageChange = false
+          }
+          const noteMessageMutation = (mutatedSessionID: string | undefined, input: { force?: boolean } = {}) => {
+            if (!mutatedSessionID) return
+            if (mutatedSessionID !== sessionID && taskIDForSession(mutatedSessionID) !== taskID) return
+            scheduleMessageChange(input)
           }
           const markLiveMessageSeen = (event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) => {
             if (!isMessageTaskEvent(event.type)) return
@@ -822,6 +856,18 @@ export const EngineRoutes = lazy(() =>
             }
             void writeData(item.data)
           })
+          const messageMutationUnsubscribers = [
+            Bus.subscribe(Message.Event.Created, (event) =>
+              noteMessageMutation(event.properties.info.sessionID, { force: true }),
+            ),
+            Bus.subscribe(Message.Event.Updated, (event) => noteMessageMutation(event.properties.info.sessionID)),
+            Bus.subscribe(Message.Event.PartUpdated, (event) => noteMessageMutation(event.properties.part.sessionID)),
+            Bus.subscribe(Message.Event.Removed, (event) => noteMessageMutation(event.properties.sessionID)),
+            Bus.subscribe(Message.Event.PartRemoved, (event) => noteMessageMutation(event.properties.sessionID)),
+          ]
+          stopMessageMutations = () => {
+            for (const unsubscribe of messageMutationUnsubscribers.splice(0)) unsubscribe()
+          }
 
           const connData = JSON.stringify(
             taskEvent(taskID, {
@@ -839,6 +885,7 @@ export const EngineRoutes = lazy(() =>
           }
           const initialMessageCursor = taskMessageWatermarkCursor(taskID)
           if (messageCursorChanged(initialMessageCursor)) {
+            cancelScheduledMessageChange()
             await emitMessageChange(initialMessageCursor)
           } else {
             rememberMessageCursor(initialMessageCursor)

@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-task-message-immediate-stream.md](2026-07-02-task-message-immediate-stream.md) records the selected-task message stream repair so persisted user messages emit the existing `task.messages.changed` signal before the `/message` response waits on scheduler acceptance.
 - [2026-07-02-project-alias-identity-convergence.md](2026-07-02-project-alias-identity-convergence.md) records the linked-directory project identity convergence repair for task 404s caused by duplicate project IDs for the same real worktree.
 - [2026-07-02-agent-model-select-popup-elevation.md](2026-07-02-agent-model-select-popup-elevation.md) records the Agent Models select popup elevation repair so shared `SelectControl` options render above the fullscreen settings dialog instead of being hidden behind it.
 - [2026-07-02-wait-message-created-activity.md](2026-07-02-wait-message-created-activity.md) records the wait early-interrupt repair that moves scheduler user activity from broad `message.updated` mutations to first-write `message.created` events.

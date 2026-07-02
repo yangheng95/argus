@@ -75,6 +75,64 @@ function mockDispatchTaskLoopAccepted(result: "started" | "queued" = "started") 
   )
 }
 
+function sseReader(response: Response): () => Promise<any> {
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error("SSE response body missing")
+  const decoder = new TextDecoder()
+  let buffer = ""
+  return async () => {
+    while (true) {
+      let boundary = buffer.indexOf("\n\n")
+      let delimiterLength = 2
+      const crlfBoundary = buffer.indexOf("\r\n\r\n")
+      if (boundary < 0 || (crlfBoundary >= 0 && crlfBoundary < boundary)) {
+        boundary = crlfBoundary
+        delimiterLength = 4
+      }
+      if (boundary >= 0) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + delimiterLength)
+        const data = frame
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice("data:".length).trimStart())
+          .join("\n")
+        if (data) return JSON.parse(data)
+        continue
+      }
+      const next = await reader.read()
+      if (next.done) throw new Error("SSE stream ended before the expected event")
+      buffer += decoder.decode(next.value, { stream: true })
+    }
+  }
+}
+
+async function readSseUntil(input: {
+  label: string
+  abort: AbortController
+  readEvent: () => Promise<any>
+  predicate: (event: any, events: any[]) => boolean
+  inactivityMs?: number
+}) {
+  const events: any[] = []
+  const inactivityMs = input.inactivityMs ?? 6_000
+  let timeout = setTimeout(() => input.abort.abort(`inactive waiting for ${input.label}`), inactivityMs)
+  const refresh = () => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => input.abort.abort(`inactive waiting for ${input.label}`), inactivityMs)
+  }
+  try {
+    while (true) {
+      const event = await input.readEvent()
+      events.push(event)
+      if (input.predicate(event, events)) return { event, events }
+      refresh()
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function seedActiveAndCompletedSameCwdTasks() {
   const activeTaskID = Identifier.ascending("task")
   const completedTaskID = Identifier.ascending("task")
@@ -502,6 +560,121 @@ describe("task message routes", () => {
           db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
         )
         expect(workbenchNotes).toEqual([])
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message emits task.messages.changed before scheduler response settles", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "message stream before response" })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "message stream before response",
+              request: "message stream before response",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        let releaseDispatch = () => {}
+        const dispatchGate = new Promise<void>((resolve) => {
+          releaseDispatch = resolve
+        })
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockImplementation(
+          async (input: Parameters<typeof Queue.dispatchTaskLoop>[0]) => {
+            await input.beforeAcceptedWake?.({ taskID: input.taskID, result: "started" })
+            await dispatchGate
+            return "started"
+          },
+        )
+
+        const abort = new AbortController()
+        let postSettled = false
+        let postResponse: Promise<Response> | undefined
+        try {
+          const streamResponse = await app.request(`/task/${taskID}/events`, {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+            signal: abort.signal,
+          })
+          expect(streamResponse.status).toBe(200)
+          const readEvent = sseReader(streamResponse)
+          await readSseUntil({
+            label: "task stream connection",
+            abort,
+            readEvent,
+            predicate: (event) => event.type === "task.connected",
+          })
+
+          postResponse = app
+            .request(`/task/${taskID}/message`, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-opencorvus-directory": tmp.path,
+              },
+              body: JSON.stringify({
+                text: "这条消息必须先进入消息流。",
+                source: "panel",
+              }),
+            })
+            .finally(() => {
+              postSettled = true
+            })
+
+          const { event: changed } = await readSseUntil({
+            label: "task.messages.changed before held message response",
+            abort,
+            readEvent,
+            predicate: (event) => event.type === "task.messages.changed" && event.payload?.taskID === taskID,
+            inactivityMs: 1_500,
+          })
+
+          expect(postSettled).toBe(false)
+          expect(changed.task_id).toBe(taskID)
+          expect(changed.payload?.watermark).toBeGreaterThan(0)
+
+          const messages = await Session.messages({ sessionID: root.id })
+          expect(
+            messages.some((message) =>
+              message.parts.some((part) => part.type === "text" && part.text === "这条消息必须先进入消息流。"),
+            ),
+          ).toBe(true)
+
+          releaseDispatch()
+          const response = await postResponse
+          expect(response.status).toBe(200)
+          const body = (await response.json()) as {
+            wake_status: string
+            user_message?: { info?: { sessionID?: string } }
+          }
+          expect(body.wake_status).toBe("started")
+          expect(body.user_message?.info?.sessionID).toBe(root.id)
+          expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        } finally {
+          releaseDispatch()
+          abort.abort("test complete")
+          if (postResponse) await postResponse.catch(() => undefined)
+        }
       },
     })
   })
