@@ -16702,6 +16702,50 @@ export type RunAcceptanceResponses = {
 
 export type RunAcceptanceResponse = RunAcceptanceResponses[keyof RunAcceptanceResponses]
 
+export type RunDiffData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/run/{runID}/diff"
+}
+
+export type RunDiffErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type RunDiffError = RunDiffErrors[keyof RunDiffErrors]
+
+export type RunDiffResponses = {
+  /**
+   * Run workspace diff preview bodies
+   */
+  200: Array<FileDiff>
+}
+
+export type RunDiffResponse = RunDiffResponses[keyof RunDiffResponses]
+
 export type GoalRunAcceptanceData = {
   body?: never
   path: {
@@ -16770,6 +16814,50 @@ export type GoalRunAcceptanceResponses = {
 }
 
 export type GoalRunAcceptanceResponse = GoalRunAcceptanceResponses[keyof GoalRunAcceptanceResponses]
+
+export type GoalRunDiffData = {
+  body?: never
+  path: {
+    goalRunID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/goal-run/{goalRunID}/diff"
+}
+
+export type GoalRunDiffErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type GoalRunDiffError = GoalRunDiffErrors[keyof GoalRunDiffErrors]
+
+export type GoalRunDiffResponses = {
+  /**
+   * Goal-run workspace diff preview bodies
+   */
+  200: Array<FileDiff>
+}
+
+export type GoalRunDiffResponse = GoalRunDiffResponses[keyof GoalRunDiffResponses]
 
 export type SessionTraceData = {
   body?: never

@@ -43,6 +43,7 @@ import {
   TraceEventList,
   UpdateGoalInput,
 } from "@/engine/model"
+import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { TaskStatusDetail, taskStatusDetailFromBoard } from "@/status/task-status-snapshot"
 import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { listPendingAgentCoordinationRequests } from "@/engine/agent-coordination"
@@ -1701,6 +1702,28 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .get(
+      "/run/:runID/diff",
+      describeRoute({
+        summary: "Get run workspace diff",
+        operationId: "run.diff",
+        responses: {
+          200: {
+            description: "Run workspace diff preview bodies",
+            content: {
+              "application/json": {
+                schema: resolver(SnapshotFileDiff.array()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ runID: Run.shape.id })),
+      async (c) => {
+        return c.json(await EngineService.getAcceptanceDiff(c.req.valid("param").runID))
+      },
+    )
+    .get(
       "/goal-run/:goalRunID/acceptance",
       describeRoute({
         summary: "Get goal-run acceptance",
@@ -1721,6 +1744,28 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ goalRunID: z.string().min(1) })),
       async (c) => {
         return c.json(await EngineService.getGoalRunAcceptance(c.req.valid("param").goalRunID))
+      },
+    )
+    .get(
+      "/goal-run/:goalRunID/diff",
+      describeRoute({
+        summary: "Get goal-run workspace diff",
+        operationId: "goalRun.diff",
+        responses: {
+          200: {
+            description: "Goal-run workspace diff preview bodies",
+            content: {
+              "application/json": {
+                schema: resolver(SnapshotFileDiff.array()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ goalRunID: z.string().min(1) })),
+      async (c) => {
+        return c.json(await EngineService.getGoalRunDiff(c.req.valid("param").goalRunID))
       },
     )
     .get(

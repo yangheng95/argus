@@ -67,19 +67,21 @@ function userMessage(sessionID: string): unknown {
     info: {
       id: `msg_${sessionID}`,
       role: "user",
+      resolvedRole: "user",
       channel: "main",
       sessionID,
       time: { created: 1 },
-      orderKey: `v1:0000000000000001:0000000000000030:0000000000000000:test:msg_${sessionID}`,
+      orderKey: `v1:0000000000000001:0000000000000030:0000000000000000:message:msg_${sessionID}`,
     },
     parts: [
       {
         id: `part_${sessionID}`,
         type: "text",
         text: "operator input",
+        resolvedRole: "user",
         messageID: `msg_${sessionID}`,
         sessionID,
-        orderKey: `v1:0000000000000001:0000000000000031:0000000000000000:test:part_${sessionID}`,
+        orderKey: `v1:0000000000000001:0000000000000031:0000000000000000:part:part_${sessionID}`,
       },
     ],
   }
@@ -471,7 +473,7 @@ test("stopChatRequest sends aborts with the request target directory", async () 
   expect(captured?.query?.directory).toBe(TASK_DIRECTORY)
 })
 
-test("acceptance diff fetch uses the selected task directory in request and cache key", async () => {
+test("workspace diff fetch uses the selected task directory in request and cache key", async () => {
   const captures: TransportRequest[] = []
   configure({ directory: SETTINGS_DIRECTORY })
   setBoardStore("board", {
@@ -481,7 +483,7 @@ test("acceptance diff fetch uses the selected task directory in request and cach
   __setHostTransportForTest(
     fakeTransport((req) => {
       captures.push(req)
-      return ok({ result: { diffs: [{ file: "src/app.ts", status: "modified", additions: 1, deletions: 0 }] } })
+      return ok([{ file: "src/app.ts", status: "modified", additions: 1, deletions: 0 }])
     }),
   )
 
@@ -489,6 +491,6 @@ test("acceptance diff fetch uses the selected task directory in request and cach
   await fetchFullDiffs("run_diff")
 
   expect(captures).toHaveLength(1)
-  expect(captures[0]?.path).toBe("run/run_diff/acceptance")
+  expect(captures[0]?.path).toBe("run/run_diff/diff")
   expect(captures[0]?.query?.directory).toBe(TASK_DIRECTORY)
 })

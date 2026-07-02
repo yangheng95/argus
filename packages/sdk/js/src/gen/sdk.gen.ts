@@ -145,6 +145,8 @@ import type {
   GoalDeleteResponses,
   GoalRunAcceptanceErrors,
   GoalRunAcceptanceResponses,
+  GoalRunDiffErrors,
+  GoalRunDiffResponses,
   GoalUpdateErrors,
   GoalUpdateResponses,
   InstanceDisposeErrors,
@@ -271,6 +273,8 @@ import type {
   RunArtifactsResponses,
   RunBriefErrors,
   RunBriefResponses,
+  RunDiffErrors,
+  RunDiffResponses,
   RunEvaluationsErrors,
   RunEvaluationsResponses,
   RunGetErrors,
@@ -7958,6 +7962,34 @@ export class Run extends HeyApiClient {
   }
 
   /**
+   * Get run workspace diff
+   */
+  public diff<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunDiffResponses, RunDiffErrors, ThrowOnError>({
+      url: "/run/{runID}/diff",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * List run artifacts
    */
   public artifacts<ThrowOnError extends boolean = false>(
@@ -8038,6 +8070,34 @@ export class GoalRun extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<GoalRunAcceptanceResponses, GoalRunAcceptanceErrors, ThrowOnError>({
       url: "/goal-run/{goalRunID}/acceptance",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get goal-run workspace diff
+   */
+  public diff<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalRunID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalRunID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GoalRunDiffResponses, GoalRunDiffErrors, ThrowOnError>({
+      url: "/goal-run/{goalRunID}/diff",
       ...options,
       ...params,
     })

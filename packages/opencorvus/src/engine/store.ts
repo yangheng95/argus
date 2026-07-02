@@ -63,6 +63,7 @@ import {
   validateResearchBriefTaskBoundary,
   type ResearchBrief,
 } from "@/research/schema"
+import { FileDiff as SnapshotFileDiff, type FileDiff as SnapshotFileDiffData } from "@/snapshot/types"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -589,6 +590,26 @@ export function findAcceptanceByGoalRun(goalRunID: string): AcceptanceRow | unde
   )
   const latest = latestPerAcceptance(rows)[0]
   return latest ? artifactRowToAcceptanceRow(latest) : undefined
+}
+
+export function findWorkspaceDiffsForAcceptance(acceptanceID: string): SnapshotFileDiffData[] {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.acceptance_id, acceptanceID),
+          eq(EngineArtifactTable.kind, "diff"),
+          eq(EngineArtifactTable.label, "workspace-diff"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .get(),
+  )
+  if (!row) return []
+  const payload = row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>) : {}
+  return SnapshotFileDiff.array().parse(payload.diffs)
 }
 
 export function findBuildOutcomeByGoalRun(goalRunID: string): BuildAttemptOutcomeRow | undefined {

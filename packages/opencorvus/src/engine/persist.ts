@@ -61,6 +61,7 @@ import { isTaskTerminal } from "./task-status"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { FileDiff as SnapshotFileDiff, type FileDiff as SnapshotFileDiffData } from "@/snapshot/types"
 import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
 import {
@@ -1608,6 +1609,17 @@ function summarizeAcceptanceDiffs(diffs: Array<{ file: string; [key: string]: un
   })
 }
 
+function acceptancePreviewDiffs(diffs: Array<{ file: string; [key: string]: unknown }>): SnapshotFileDiffData[] {
+  return diffs.flatMap((diff) => {
+    const parsed = SnapshotFileDiff.safeParse(diff)
+    if (parsed.success) return [parsed.data]
+    if (typeof diff.before === "string" || typeof diff.after === "string") {
+      throw new Error(`workspace-diff payload for ${diff.file} is not a valid Snapshot.FileDiff`)
+    }
+    return []
+  })
+}
+
 function acceptanceDiffStats(diffs: AcceptanceDiffSummary[]) {
   return diffs.reduce(
     (acc, diff) => {
@@ -1634,6 +1646,7 @@ function writeAcceptanceRow(
   },
 ) {
   const acceptanceDiffs = summarizeAcceptanceDiffs(input.acceptance.diffs)
+  const previewDiffs = acceptancePreviewDiffs(input.acceptance.diffs)
   const stats = acceptanceDiffStats(acceptanceDiffs)
   // Phase-6-c: the acceptance row itself is now an `engine_artifact` with
   // kind="acceptance" + label="acceptance-<scope>" (task vs goal_run). Payload
@@ -1679,7 +1692,7 @@ function writeAcceptanceRow(
       time_updated: input.now,
     })
     .run()
-  if (input.acceptance.diffs.length > 0) {
+  if (previewDiffs.length > 0) {
     db.insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
@@ -1689,7 +1702,7 @@ function writeAcceptanceRow(
         acceptance_id: input.acceptanceID,
         kind: "diff",
         label: "workspace-diff",
-        payload: { diffs: acceptanceDiffs },
+        payload: { diffs: previewDiffs },
         time_created: input.now,
         time_updated: input.now,
       })
@@ -2512,6 +2525,7 @@ export function finalizeBuildAttempt(input: {
     (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
   )
   const acceptanceDiffSummaries = summarizeAcceptanceDiffs(acceptanceDiffs)
+  const previewDiffs = acceptancePreviewDiffs(acceptanceDiffs)
   const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffSummaries.length > 0
   const outcomeKind = buildAttemptOutcomeKind({
     status: input.status,
@@ -2585,6 +2599,22 @@ export function finalizeBuildAttempt(input: {
           time_updated: now,
         })
         .run()
+      if (previewDiffs.length > 0) {
+        db.insert(EngineArtifactTable)
+          .values({
+            id: Identifier.ascending("artifact"),
+            task_id: input.taskID,
+            run_id: input.runID ?? goalRun.coordinator_run_id ?? null,
+            goal_run_id: input.goalRunID,
+            acceptance_id: acceptanceID,
+            kind: "diff",
+            label: "workspace-diff",
+            payload: { diffs: previewDiffs },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      }
     }
   })
   if (statusChanged) {

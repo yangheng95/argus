@@ -18,6 +18,7 @@ import {
   findGoalLatestWorkspace,
   findGoalRun,
   findRun,
+  findWorkspaceDiffsForAcceptance,
   requireTask,
   getGoalRetryCount,
 } from "../../src/engine/store"
@@ -621,13 +622,23 @@ describe("Goal.startNewAttempt — options", () => {
     ])
     expect(typeof acceptance?.result?.build_attempt_outcome_id).toBe("string")
     expect(JSON.stringify(acceptance?.result?.diffs)).not.toContain("export const value")
+    expect(findWorkspaceDiffsForAcceptance(acceptance!.id)).toEqual([
+      {
+        file: "src/index.ts",
+        before: "export const value = 1\n",
+        after: "export const value = 2\n",
+        additions: 1,
+        deletions: 1,
+        status: "modified",
+      },
+    ])
     const outcome = findBuildOutcomeByGoalRun(nextRunID)
     expect(outcome?.terminal_status).toBe("completed")
     expect(outcome?.outcome_kind).toBe("delivered")
     expect(outcome?.changed_files).toEqual(["src/index.ts"])
   })
 
-  test("persistTaskAcceptance stores bounded diff summaries in all acceptance artifacts", () => {
+  test("persistTaskAcceptance keeps acceptance summaries bounded and stores workspace preview bodies", () => {
     const acceptanceID = "acc_start_new_summary"
     const task = requireTask(taskID)
     const run = findRun(runID)
@@ -666,16 +677,24 @@ describe("Goal.startNewAttempt — options", () => {
       { file: "src/large.ts", status: "modified", additions: 20, deletions: 10 },
     ])
     expect(workspaceDiffArtifact?.payload.diffs).toEqual([
-      { file: "src/large.ts", status: "modified", additions: 20, deletions: 10 },
+      {
+        file: "src/large.ts",
+        before: "a".repeat(2048),
+        after: "b".repeat(2048),
+        additions: 20,
+        deletions: 10,
+        status: "modified",
+      },
     ])
+    expect(findWorkspaceDiffsForAcceptance(acceptanceID)).toEqual(workspaceDiffArtifact?.payload.diffs)
     expect(changedFileArtifact?.payload).toEqual({
       file: "src/large.ts",
       status: "modified",
       additions: 20,
       deletions: 10,
     })
-    expect(JSON.stringify(artifacts)).not.toContain("aaaa")
-    expect(JSON.stringify(artifacts)).not.toContain("bbbb")
+    expect(JSON.stringify([acceptanceArtifact, changedFileArtifact])).not.toContain("aaaa")
+    expect(JSON.stringify([acceptanceArtifact, changedFileArtifact])).not.toContain("bbbb")
     expect(JSON.stringify(artifacts)).not.toContain("cccc")
   })
 })

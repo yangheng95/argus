@@ -104,7 +104,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     title: "File changes filter fixture",
     directory: "D:/overlay/workspace/app",
     status: "active",
-    time: { created: now - 10_000, updated: now - 1_000 },
+    time: { created: now - 10_000, started: now - 9_000, updated: now - 1_000 },
   }
   const board = {
     snapshotVersion: "file-changes-filter-toolbar-board",
@@ -139,21 +139,17 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         behind: 0,
       })
     if (path === "/vcs/diff") return send(fileChangesFixture)
-    if (path === "/goal-run/gr_diff_preview/acceptance") {
-      return send({
-        result: {
-          diffs: [
-            {
-              file: "src/live-file.ts",
-              status: "modified",
-              additions: 1,
-              deletions: 0,
-              before: "export const value = 1;\nexport const end = true;\n",
-              after: "export const value = 1;\nexport const next = 2;\nexport const end = true;\n",
-            },
-          ],
+    if (path === "/goal-run/gr_diff_preview/diff") {
+      return send([
+        {
+          file: "src/live-file.ts",
+          status: "modified",
+          additions: 1,
+          deletions: 0,
+          before: "export const value = 1;\nexport const end = true;\n",
+          after: "export const value = 1;\nexport const next = 2;\nexport const end = true;\n",
         },
-      })
+      ])
     }
     if (path === `/task/${TASK_ID}/board`) return send(board, { headers: { etag: '"file-changes-filter-board"' } })
     if (path === `/task/${TASK_ID}/conversation`)
@@ -280,6 +276,16 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         throw new Error(`File changes diff view did not activate: ${JSON.stringify(state)}`, { cause: error })
       })
     await page.waitForSelector('.diff-preview-panel .diff-row[data-kind="add"]')
+    assert.equal(
+      requestLog.some((entry) => entry.startsWith("GET /goal-run/gr_diff_preview/diff")),
+      true,
+      JSON.stringify(requestLog.slice(-80), null, 2),
+    )
+    assert.equal(
+      requestLog.some((entry) => entry.startsWith("GET /goal-run/gr_diff_preview/acceptance")),
+      false,
+      JSON.stringify(requestLog.slice(-80), null, 2),
+    )
     const diffTabPanelState = await page.$eval('[data-ui="file-changes-view-tab"][data-value="diff"]', (node) => {
       const tab = node as HTMLElement
       const controls = tab.getAttribute("aria-controls") ?? ""

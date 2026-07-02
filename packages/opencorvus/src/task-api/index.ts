@@ -143,6 +143,7 @@ import {
   findArtifacts,
   findAcceptanceByGoalRun,
   findAcceptanceByRun,
+  findWorkspaceDiffsForAcceptance,
   findGoalRun,
   findLatestAcceptanceForRun,
   findActivePlanForTask,
@@ -2028,6 +2029,13 @@ export namespace EngineService {
     return viewAcceptance(acceptance)
   }
 
+  export async function getAcceptanceDiff(runID: string) {
+    requireRunInCurrentProject(runID)
+    const acceptance = findAcceptanceByRun(runID) ?? findLatestAcceptanceForRun(runID)
+    if (!acceptance) throw new NotFoundError({ message: `Acceptance not found for run ${runID}` })
+    return findWorkspaceDiffsForAcceptance(acceptance.id)
+  }
+
   export async function getGoalRunAcceptance(goalRunID: string) {
     // Read-only — goal-level diff previews must resolve against the
     // specific goal_run acceptance instead of the task-level aggregate.
@@ -2039,6 +2047,13 @@ export namespace EngineService {
     const acceptance = findAcceptanceByGoalRun(goalRunID)
     if (!acceptance) return null
     return viewAcceptance(acceptance)
+  }
+
+  export async function getGoalRunDiff(goalRunID: string) {
+    requireGoalRunInCurrentProject(goalRunID)
+    const acceptance = findAcceptanceByGoalRun(goalRunID)
+    if (!acceptance) return []
+    return findWorkspaceDiffsForAcceptance(acceptance.id)
   }
 
   /** Surface the per-session AgentTrace event stream so the overlay's debug

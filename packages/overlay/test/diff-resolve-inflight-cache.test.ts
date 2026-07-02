@@ -28,20 +28,16 @@ function deferred<T>(): Deferred<T> {
 }
 
 function acceptanceDiff(file: string) {
-  return {
-    result: {
-      diffs: [
-        {
-          file,
-          before: "",
-          after: "export const value = 1;\n",
-          additions: 1,
-          deletions: 0,
-          status: "added",
-        },
-      ],
+  return [
+    {
+      file,
+      before: "",
+      after: "export const value = 1;\n",
+      additions: 1,
+      deletions: 0,
+      status: "added",
     },
-  }
+  ]
 }
 
 mock.module("../src/services/api", () => ({
@@ -54,24 +50,25 @@ mock.module("../src/services/api", () => ({
   onAuthChange: () => () => {},
   queryWithDirectory: () => undefined,
   apiJson: async (path: string) => {
-    if (path === "vcs/diff") {
+    const requestPath = path.split("?")[0] || path
+    if (requestPath === "vcs/diff") {
       vcsCalls += 1
       throw new Error("resolveDiff must not use live VCS diff as a preview source")
     }
     acceptanceCalls += 1
-    if (path === "goal-run/gr_inflight_cache/acceptance") {
+    if (requestPath === "goal-run/gr_inflight_cache/diff") {
       if (acceptanceCalls === 1) return null
       return acceptanceDiff("src/new-file.ts")
     }
-    if (path === "goal-run/gr_concurrent/acceptance") {
+    if (requestPath === "goal-run/gr_concurrent/diff") {
       if (!concurrentAcceptance) throw new Error("missing concurrent acceptance test promise")
       return concurrentAcceptance.promise
     }
-    if (path === "goal-run/gr_empty_recheck/acceptance") {
-      return emptyAcceptance?.promise ?? { result: { diffs: [] } }
+    if (requestPath === "goal-run/gr_empty_recheck/diff") {
+      return emptyAcceptance?.promise ?? []
     }
-    if (path === "goal-run/gr_no_body/acceptance") {
-      return { result: { diffs: [] } }
+    if (requestPath === "goal-run/gr_no_body/diff") {
+      return []
     }
     throw new Error(`unexpected api path ${path}`)
   },
@@ -188,7 +185,7 @@ test("resolveDiff coalesces concurrent empty acceptance but re-fetches after it 
   await Promise.resolve()
 
   expect(acceptanceCalls).toBe(1)
-  emptyAcceptance.resolve({ result: { diffs: [] } })
+  emptyAcceptance.resolve([])
   expect(await Promise.all([first, second])).toEqual([null, null])
 
   expect(await resolveDiff(target)).toBeNull()

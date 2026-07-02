@@ -81,6 +81,7 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/goal-run/{goalRunID}/acceptance` | Get goal-run acceptance Errors: `LogFileNotFoundError`, `NotFoundError`. | `goalRun.acceptance` |
+| GET | `/goal-run/{goalRunID}/diff` | Get goal-run workspace diff Errors: `LogFileNotFoundError`, `NotFoundError`. | `goalRun.diff` |
 | DELETE | `/goal/{goalID}` | Delete goal Errors: `LogFileNotFoundError`, `NotFoundError`. | `goal.delete` |
 | PATCH | `/goal/{goalID}` | Update goal Body: `acceptance_specs`, `description`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `goal.update` |
 | POST | `/interaction/{interactionID}/reject` | Reject interaction Body: `autoReply`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `interaction.reject` |
@@ -97,6 +98,7 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/run/{runID}/acceptance` | Get run acceptance Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.acceptance` |
 | GET | `/run/{runID}/artifacts` | List run artifacts Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.artifacts` |
 | GET | `/run/{runID}/brief` | Get run brief Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.brief` |
+| GET | `/run/{runID}/diff` | Get run workspace diff Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.diff` |
 | GET | `/run/{runID}/evaluations` | List run evaluations Errors: `LogFileNotFoundError`, `NotFoundError`. | `run.evaluations` |
 | POST | `/task` | Create task Body: `request`; Errors: `BadRequestError`, `LogFileNotFoundError`, `NotFoundError`. | `task.create` |
 | PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory Body: `directory`. | `task.queue.reorder` |

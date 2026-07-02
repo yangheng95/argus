@@ -1,6 +1,6 @@
 // ── Diff service ──
 // Module-level cache + lazy-loader for full file diffs fetched from the
-// acceptance API. Shared by ChangesPanel and DiffPreviewPanel so the first
+// workspace-diff API. Shared by ChangesPanel and DiffPreviewPanel so the first
 // fetch for a given run is reused across all consumers.
 
 import { apiJson } from "./api"
@@ -265,12 +265,12 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   const pending = (async () => {
     const data = scope.goalRunID
       ? await apiJson(
-          directoryScopedPath(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`, directory, "goal-run diff"),
+          directoryScopedPath(`goal-run/${encodeURIComponent(scope.goalRunID)}/diff`, directory, "goal-run diff"),
         )
       : await apiJson(
-          directoryScopedPath(`run/${encodeURIComponent(String(scope.runID))}/acceptance`, directory, "run diff"),
+          directoryScopedPath(`run/${encodeURIComponent(String(scope.runID))}/diff`, directory, "run diff"),
         )
-    const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs)
+    const diffs = normalizeAcceptanceDiffs(data)
     if (diffs.length > 0) diffCache.set(key, diffs)
     return diffs
   })()

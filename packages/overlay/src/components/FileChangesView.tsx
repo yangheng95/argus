@@ -164,14 +164,16 @@ function InlineDiffPanel(props: { row: ChangeRowModel }) {
     () => `${props.row.group.goalRunID || props.row.group.runID || props.row.group.id}:${props.row.item.file}`,
     async () => resolveDiff(diffTargetFromRow(props.row)),
   )
-  const item = createMemo(() => change() || props.row.item)
+  const item = createMemo(() => change())
   const isText = createMemo(() => isKnownTextDiff(item()))
 
   return (
     <div class="change-inline-diff" data-text={isText() ? "true" : "false"}>
       <Show when={!change.loading} fallback={<p class="empty-hint change-inline-diff__hint">{t("diff.loading")}</p>}>
         <Show when={isText()} fallback={<p class="empty-hint change-inline-diff__hint">{t("diff.non_text")}</p>}>
-          <DiffView item={item()} />
+          <Show when={item()} fallback={<p class="empty-hint change-inline-diff__hint">{t("diff.no_preview")}</p>}>
+            {(resolved) => <DiffView item={resolved()} />}
+          </Show>
         </Show>
       </Show>
     </div>

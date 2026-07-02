@@ -31,6 +31,8 @@ describe("app routes", () => {
     expect(paths["/project/current"]?.patch).toBeDefined()
     expect(paths["/project/current"]?.delete).toBeDefined()
     expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
+    expect(paths["/goal-run/{goalRunID}/diff"]?.get).toBeDefined()
+    expect(paths["/run/{runID}/diff"]?.get).toBeDefined()
     expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
     expect(
       paths["/mission/{missionID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"],

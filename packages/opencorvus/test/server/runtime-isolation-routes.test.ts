@@ -168,9 +168,11 @@ describe("runtime isolation project-scoped routes", () => {
       const owningRequests = [
         { path: `/run/${runID}`, method: "GET" },
         { path: `/run/${runID}/acceptance`, method: "GET" },
+        { path: `/run/${runID}/diff`, method: "GET" },
         { path: `/run/${runID}/artifacts`, method: "GET" },
         { path: `/run/${runID}/evaluations`, method: "GET" },
         { path: `/goal-run/${goalRunID}/acceptance`, method: "GET" },
+        { path: `/goal-run/${goalRunID}/diff`, method: "GET" },
       ] as const
       for (const request of owningRequests) {
         const response = await app.request(request.path, {
@@ -190,9 +192,11 @@ describe("runtime isolation project-scoped routes", () => {
       const requests = [
         { path: `/run/${runID}`, method: "GET" },
         { path: `/run/${runID}/acceptance`, method: "GET" },
+        { path: `/run/${runID}/diff`, method: "GET" },
         { path: `/run/${runID}/artifacts`, method: "GET" },
         { path: `/run/${runID}/evaluations`, method: "GET" },
         { path: `/goal-run/${goalRunID}/acceptance`, method: "GET" },
+        { path: `/goal-run/${goalRunID}/diff`, method: "GET" },
         { path: `/run/${runID}/abort`, method: "POST" },
       ] as const
 

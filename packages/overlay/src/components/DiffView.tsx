@@ -127,8 +127,10 @@ export function DiffView(props: DiffViewProps) {
     const it = props.item
     if (it.isText === false) return t("diff.non_text")
     if (it.status === "deleted" && !it.after) return t("diff.empty_deleted")
-    if (it.status === "added" && !it.before && !it.after) return t("diff.empty_added")
-    if (it.before === it.after) return t("diff.empty_unchanged")
+    if (it.status === "added" && it.before === undefined && it.after === undefined) return t("diff.empty_added")
+    if (typeof it.before === "string" && typeof it.after === "string" && it.before === it.after) {
+      return t("diff.empty_unchanged")
+    }
     return t("diff.no_preview")
   })
 
