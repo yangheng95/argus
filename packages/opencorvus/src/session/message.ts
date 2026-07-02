@@ -586,6 +586,13 @@ export namespace Message {
   export type VisibleInfo = z.infer<typeof VisibleInfo>
 
   export const Event = {
+    Created: BusEvent.define(
+      "message.created",
+      z.object({
+        info: VisibleInfo,
+      }),
+      { tier: 3 },
+    ),
     Updated: BusEvent.define(
       "message.updated",
       z.object({

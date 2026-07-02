@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-wait-message-created-activity.md](2026-07-02-wait-message-created-activity.md) records the wait early-interrupt repair that moves scheduler user activity from broad `message.updated` mutations to first-write `message.created` events.
 - [2026-07-02-diff-preview-full-body-source.md](2026-07-02-diff-preview-full-body-source.md) records the root repair for overlay diff previews so acceptance summaries stay bounded while task and goal-run preview bodies come from a single `workspace-diff` artifact source.
 - [2026-07-02-build-staged-reference-first-run-race.md](2026-07-02-build-staged-reference-first-run-race.md) records the G1 failure diagnosis where a deduplicated staged-reference attachment kept an old mtime and could be swept before first provider replay.
 - [2026-07-02-task-agent-invocation-dag.md](2026-07-02-task-agent-invocation-dag.md) records the task query API repair that exposes a durable session-ledger agent invocation DAG instead of letting workflow template steps be mistaken for actually executed agents.

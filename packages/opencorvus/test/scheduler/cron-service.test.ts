@@ -72,7 +72,7 @@ async function appendTerminalToolResult(input: { sessionID: string; tool: string
       output: "done",
       title: "Done",
       metadata: {},
-      time: { start: now, end: now },
+      time: { start: now, end: now + 1 },
     },
   } satisfies Message.ToolPart
   await Session.persistMessage({ info: assistant, parts: [part], touchSessionID: input.sessionID })
@@ -357,6 +357,115 @@ describe("scheduler.cron-service", () => {
             Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()) ===
             undefined,
         )
+      },
+    })
+  })
+
+  test("new user updateMessage consumes pending session wait cron", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "assistant", title: "session wait updateMessage consume" })
+        const scheduled = CronService.createDelayedSessionWake({
+          name: "session wait",
+          prompt: "scheduled session wait",
+          projectId: Instance.project.id,
+          sessionId: session.id,
+          durationMs: 20 * 60 * 1000,
+        })
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "assistant",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+
+        await waitUntil(
+          () =>
+            Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()) ===
+            undefined,
+        )
+      },
+    })
+  })
+
+  test("existing user message update preserves pending session wait cron", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "assistant", title: "session wait update preserve" })
+        const message = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "assistant",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        } satisfies Message.User
+        await Session.updateMessage(message)
+        await Database.awaitEffectIdle(500)
+
+        const scheduled = CronService.createDelayedSessionWake({
+          name: "session wait",
+          prompt: "scheduled session wait",
+          projectId: Instance.project.id,
+          sessionId: session.id,
+          durationMs: 20 * 60 * 1000,
+        })
+        await Session.updateMessage(message)
+        await Database.awaitEffectIdle(500)
+
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()),
+        ).toBeDefined()
+      },
+    })
+  })
+
+  test("existing user message update preserves pending task wait cron", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        CronService.init()
+        const session = await Session.create({ kind: "orchestrator", title: "task wait update preserve" })
+        const taskID = "tsk_cron_message_update_" + Math.random().toString(36).slice(2)
+        seedTask({ taskID, sessionID: session.id })
+        const message = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "orchestrator",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        } satisfies Message.User
+        await Session.updateMessage(message)
+        await Database.awaitEffectIdle(500)
+
+        const scheduled = CronService.createTaskWake({
+          name: "task wait",
+          reason: "external user activity",
+          projectId: Instance.project.id,
+          taskId: taskID,
+          durationMs: 20 * 60 * 1000,
+        })
+        await Session.updateMessage(message)
+        await Database.awaitEffectIdle(500)
+
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(
+          Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, scheduled.id)).get()),
+        ).toBeDefined()
       },
     })
   })

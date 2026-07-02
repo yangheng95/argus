@@ -930,6 +930,13 @@ export namespace Session {
         })
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
+      if (!existing) {
+        Database.effect(() =>
+          Bus.publish(Message.Event.Created, {
+            info: persistedMessage,
+          }),
+        )
+      }
       Database.effect(() =>
         Bus.publish(Message.Event.Updated, {
           info: persistedMessage,
@@ -980,13 +987,15 @@ export namespace Session {
    * observable split-brain: listeners can see a header-only message and miss
    * the authored text if the process dies mid-write. We therefore:
    *   1. save the message row silently as the foreign-key target,
-   *   2. queue the visible `message.updated` event in the same transaction,
-   *   3. write every part in that same transaction,
-   *   4. optionally touch the owning session before commit.
+   *   2. queue the first-write `message.created` event when applicable,
+   *   3. queue the visible `message.updated` event in the same transaction,
+   *   4. write every part in that same transaction,
+   *   5. optionally touch the owning session before commit.
    *
    * Because the bus effects drain only after the transaction commits, any
-   * observer that sees `message.updated` or `message.part.updated` is guaranteed
-   * to read the fully durable message bundle from SQLite.
+   * observer that sees `message.created`, `message.updated`, or
+   * `message.part.updated` is guaranteed to read the fully durable message
+   * bundle from SQLite.
    */
   export const persistMessage = fn(
     z.object({
@@ -995,8 +1004,19 @@ export namespace Session {
       touchSessionID: Identifier.schema("session").optional(),
     }),
     async (input) => {
+      const existing = Database.use((db) =>
+        db.select({ id: MessageTable.id }).from(MessageTable).where(eq(MessageTable.id, input.info.id)).get(),
+      )
       Database.transaction(() => {
         saveMessage(input.info)
+        if (!existing) {
+          const createdInfo = messageWithPersistedCreated(input.info, input.info.time.created)
+          Database.effect(() =>
+            Bus.publish(Message.Event.Created, {
+              info: createdInfo,
+            }),
+          )
+        }
         updateMessage(input.info)
         for (const part of input.parts) {
           updatePart(part)

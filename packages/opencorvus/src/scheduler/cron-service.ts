@@ -353,18 +353,18 @@ export namespace CronService {
     const s = state()
     if (s.activityUnsubscribers.length > 0) return
     s.activityUnsubscribers.push(
-      Bus.subscribe(Message.Event.Updated, (event) => handleMessageUpdated(event.properties.info)),
+      Bus.subscribe(Message.Event.Created, (event) => handleMessageCreated(event.properties.info)),
       Bus.subscribe(Message.Event.PartUpdated, (event) => handlePartUpdated(event.properties.part)),
     )
   }
 
-  async function handleMessageUpdated(info: Message.Info): Promise<void> {
+  async function handleMessageCreated(info: Message.VisibleInfo): Promise<void> {
     if (info.role !== "user") return
     if (isSchedulerWakeMessage(info)) return
     consumePendingSessionWaits({
       sessionId: info.sessionID,
       projectId: Instance.project.id,
-      reason: "user message arrived before scheduled wait due time",
+      reason: "user message created before scheduled wait due time",
     })
     if (isTaskOperatorMessage(info)) return
     const taskID = taskIDForSession(info.sessionID)
@@ -372,8 +372,8 @@ export namespace CronService {
     await triggerTaskWaitFromActivity({
       taskId: taskID,
       projectId: Instance.project.id,
-      source: "message.updated",
-      detail: `user message ${info.id} arrived in session ${info.sessionID}`,
+      source: "message.created",
+      detail: `user message ${info.id} created in session ${info.sessionID}`,
     })
   }
 
