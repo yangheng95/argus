@@ -523,10 +523,9 @@ test(
             leftHeaderI18nKey: leftHeaderActions?.dataset.i18nAriaLabel ?? "",
             leftHeaderActionScope: leftHeaderActions?.dataset.activityActions ?? "",
             leftHeaderActionsActive: leftHeaderActions?.dataset.active ?? "",
-            rightInspector: active("#rightPanelInspector"),
             centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
             centerWorkflow: active("#centerWorkbenchWorkflow"),
-            centerInspector: active("#centerWorkbenchInspector"),
+            centerRequirements: active("#centerWorkbenchRequirements"),
             centerNotifications: active("#centerWorkbenchNotifications"),
             centerExplorer: active("#centerWorkbenchExplorer"),
             centerDiff: active("#centerWorkbenchDiff"),
@@ -639,16 +638,16 @@ test(
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]',
               )?.dataset.active ?? "",
-            rightInspectorButton:
+            rightRequirementsButton:
               document.querySelector<HTMLElement>(
-                '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+                '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
               )?.dataset.active ?? "",
-            rightInspectorCurrent: attr(
-              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            rightRequirementsCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
               "aria-current",
             ),
-            rightInspectorPressed: attr(
-              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            rightRequirementsPressed: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
               "aria-pressed",
             ),
             rightNotificationsButton:
@@ -671,7 +670,9 @@ test(
             renderedCardCount: Array.isArray((window as any).renderConversation?.())
               ? (window as any).renderConversation().length
               : -1,
-            rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
+            requirementsTitle:
+              document.querySelector<HTMLElement>("#centerWorkbenchRequirements .task-scope-panel__title")
+                ?.textContent ?? "",
             notificationTitle: document.querySelector<HTMLElement>("#notificationPanelTitle")?.textContent ?? "",
             workbenchStartsAtWorkspace: (() => {
               const workspace = document.querySelector<HTMLElement>("#conversationWorkspace")?.getBoundingClientRect()
@@ -760,10 +761,9 @@ test(
         leftHeaderI18nKey: "mission.title",
         leftHeaderActionScope: "mission",
         leftHeaderActionsActive: "true",
-        rightInspector: "false",
         centerOpen: "true",
         centerWorkflow: "true",
-        centerInspector: "false",
+        centerRequirements: "false",
         centerNotifications: "false",
         centerExplorer: "false",
         centerDiff: "false",
@@ -790,7 +790,7 @@ test(
         leftMemoryPressed: "",
         rightToolbarDisplay: "flex",
         centerResizerHidden: true,
-        rightActivityButtons: 7,
+        rightActivityButtons: 9,
         rightTuiButtonExists: false,
         rightWorkflowButton: "true",
         rightWorkflowCurrent: "",
@@ -799,16 +799,15 @@ test(
         rightDiffButton: "false",
         rightAssistantButtonExists: false,
         rightPreviewButton: "false",
-        rightInspectorButton: "false",
-        rightInspectorCurrent: "",
-        rightInspectorPressed: "false",
+        rightRequirementsButton: "false",
+        rightRequirementsCurrent: "",
+        rightRequirementsPressed: "false",
         rightNotificationsButton: "false",
         rightNotifications: "false",
         notificationPanelExists: true,
         taskStatusInWorkflowHeader: true,
         centerWorkbenchHeaderExists: false,
         chatTitle: "Mission",
-        rightTitle: "Inspector",
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
       })
@@ -1540,9 +1539,9 @@ test(
         rightWorkflowButton: "true",
         rightWorkflowCurrent: "",
         rightWorkflowPressed: "true",
-        rightInspectorButton: "false",
-        rightInspectorCurrent: "",
-        rightInspectorPressed: "false",
+        rightRequirementsButton: "false",
+        rightRequirementsCurrent: "",
+        rightRequirementsPressed: "false",
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
@@ -1555,30 +1554,30 @@ test(
         chatTitle: "Task",
       })
 
-      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       const twoPanelState = await waitForState(
-        "workflow separator semantics should render after inspector opens",
+        "workflow separator semantics should render after requirements opens",
         (state) => {
           const separator = state.workflowSeparator as { hidden: boolean; disabled: string; controls: string }
           return (
             state.centerWorkflow === "true" &&
-            state.centerInspector === "true" &&
+            state.centerRequirements === "true" &&
             separator.hidden === false &&
             separator.disabled === "false" &&
-            separator.controls === "centerWorkbenchWorkflow centerWorkbenchInspector"
+            separator.controls === "centerWorkbenchWorkflow centerWorkbenchRequirements"
           )
         },
       )
       assertMatchObject(twoPanelState, {
         centerWorkflow: "true",
-        centerInspector: "true",
+        centerRequirements: "true",
         rightWorkflowPressed: "true",
-        rightInspectorButton: "true",
-        rightInspectorCurrent: "",
-        rightInspectorPressed: "true",
+        rightRequirementsButton: "true",
+        rightRequirementsCurrent: "",
+        rightRequirementsPressed: "true",
         appDialogOpen: false,
       })
-      assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
+      assert.deepEqual(twoPanelState.openPanels, ["task", "requirements"])
       const twoPanelWidths = twoPanelState.openPanelWidths as number[]
       const initialWidthCapped = twoPanelState.openPanelInitialWidthCapped as string[]
       const rightToolbarPanelInitialMaxWidth = twoPanelState.rightToolbarPanelInitialMaxWidth as number
@@ -1591,11 +1590,11 @@ test(
         twoPanelWidths[0]! > twoPanelWidths[1]!,
         JSON.stringify({ twoPanelWidths, rightToolbarPanelInitialMaxWidth }),
       )
-      const inspectorPanel = await page.$("#centerWorkbenchInspector")
-      assert.ok(inspectorPanel, "inspector panel should exist before initial max-width screenshot")
-      const inspectorInitialMaxScreenshotPath = resolve(".scratch/right-toolbar-inspector-initial-max-width.png")
-      mkdirSync(dirname(inspectorInitialMaxScreenshotPath), { recursive: true })
-      writeFileSync(inspectorInitialMaxScreenshotPath, await inspectorPanel.screenshot({}))
+      const requirementsPanel = await page.$("#centerWorkbenchRequirements")
+      assert.ok(requirementsPanel, "requirements panel should exist before initial max-width screenshot")
+      const requirementsInitialMaxScreenshotPath = resolve(".scratch/right-toolbar-requirements-initial-max-width.png")
+      mkdirSync(dirname(requirementsInitialMaxScreenshotPath), { recursive: true })
+      writeFileSync(requirementsInitialMaxScreenshotPath, await requirementsPanel.screenshot({}))
       const separatorSemantics = twoPanelState.workflowSeparator as {
         hidden: boolean
         disabled: string
@@ -1611,7 +1610,7 @@ test(
       assert.equal(separatorSemantics.disabled, "false")
       assert.equal(separatorSemantics.role, "separator")
       assert.equal(separatorSemantics.orientation, "vertical")
-      assert.equal(separatorSemantics.controls, "centerWorkbenchWorkflow centerWorkbenchInspector")
+      assert.equal(separatorSemantics.controls, "centerWorkbenchWorkflow centerWorkbenchRequirements")
       assert.equal(separatorSemantics.tabIndex, 0)
       assert.ok(separatorSemantics.min < separatorSemantics.max)
       assert.ok(separatorSemantics.now >= separatorSemantics.min)
@@ -1637,7 +1636,7 @@ test(
           )
         },
       )
-      assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
+      assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "requirements"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
       assert.deepEqual(resizedTwoPanelState.openPanelInitialWidthCapped, ["false", "false"])
       const keyboardWidthBefore = resizedTwoPanelState.openPanelWidths[0]!
@@ -1650,10 +1649,10 @@ test(
       assert.equal((keyboardResizedState.workflowSeparator as { focused: boolean }).focused, true)
       assert.ok(keyboardResizedState.openPanelWidths[0]! < keyboardWidthBefore)
 
-      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       assertMatchObject(await activeState(), {
-        centerInspector: "false",
-        rightInspectorButton: "false",
+        centerRequirements: "false",
+        rightRequirementsButton: "false",
       })
 
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
@@ -1678,7 +1677,7 @@ test(
         centerPreview: "true",
         centerExplorer: "true",
         rightPreviewButton: "true",
-        rightInspector: "false",
+        centerRequirements: "false",
         chatTitle: "Task",
       })
       await page.setViewport({ width: 2000, height: 1200 })
@@ -1754,53 +1753,52 @@ test(
         centerPreview: "true",
         rightNotificationsButton: "true",
         rightPreviewButton: "true",
-        rightInspector: "false",
+        centerRequirements: "false",
         rightNotifications: "true",
         notificationTitle: "Notifications",
       })
 
-      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-      const inspectorOpenState = await activeState()
-      assertMatchObject(inspectorOpenState, {
-        centerInspector: "true",
+      await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
+      const requirementsOpenState = await activeState()
+      assertMatchObject(requirementsOpenState, {
+        centerRequirements: "true",
         centerNotifications: "true",
-        rightInspectorButton: "true",
+        rightRequirementsButton: "true",
         rightNotificationsButton: "true",
-        rightInspector: "true",
         rightNotifications: "true",
-        rightTitle: "Inspector",
+        requirementsTitle: "Requirements",
       })
-      assert.equal(inspectorOpenState.tabCount, 0)
-      assert.deepEqual(inspectorOpenState.openPanels, [
+      assert.equal(requirementsOpenState.tabCount, 0)
+      assert.deepEqual(requirementsOpenState.openPanels, [
         "task",
         "explorer",
         "diff",
         "browser",
-        "inspector",
+        "requirements",
         "notifications",
       ])
-      const inspectorPanelWidths = inspectorOpenState.openPanelWidths as number[]
-      const workbenchPanelMinWidth = inspectorOpenState.workbenchPanelMinWidth as number
-      assert.equal(inspectorPanelWidths.length, 6)
+      const requirementsPanelWidths = requirementsOpenState.openPanelWidths as number[]
+      const workbenchPanelMinWidth = requirementsOpenState.workbenchPanelMinWidth as number
+      assert.equal(requirementsPanelWidths.length, 6)
       assert.equal(
-        inspectorPanelWidths.every((width) => width >= workbenchPanelMinWidth - 1),
+        requirementsPanelWidths.every((width) => width >= workbenchPanelMinWidth - 1),
         true,
         JSON.stringify({
-          openPanels: inspectorOpenState.openPanels,
-          inspectorPanelWidths,
+          openPanels: requirementsOpenState.openPanels,
+          requirementsPanelWidths,
           workbenchPanelMinWidth,
-          centerWorkbenchBodyOverflow: inspectorOpenState.centerWorkbenchBodyOverflow,
+          centerWorkbenchBodyOverflow: requirementsOpenState.centerWorkbenchBodyOverflow,
         }),
       )
-      const centerWorkbenchBodyOverflow = inspectorOpenState.centerWorkbenchBodyOverflow as {
+      const centerWorkbenchBodyOverflow = requirementsOpenState.centerWorkbenchBodyOverflow as {
         clientWidth: number
         scrollWidth: number
       }
       assert.ok(
         centerWorkbenchBodyOverflow.scrollWidth > centerWorkbenchBodyOverflow.clientWidth,
-        JSON.stringify({ centerWorkbenchBodyOverflow, inspectorPanelWidths, workbenchPanelMinWidth }),
+        JSON.stringify({ centerWorkbenchBodyOverflow, requirementsPanelWidths, workbenchPanelMinWidth }),
       )
-      assert.equal((inspectorOpenState.workflowSeparator as { hidden: boolean }).hidden, false)
+      assert.equal((requirementsOpenState.workflowSeparator as { hidden: boolean }).hidden, false)
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForFunction(

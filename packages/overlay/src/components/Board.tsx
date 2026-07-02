@@ -1,7 +1,6 @@
-// ── Board Panel Components ──
-// Solid.js components that mirror the board rendering logic
-// renderBoard, renderSpec, renderPlan, renderGoals, renderBudget,
-// renderAcceptanceSection, renderTaskActions, statusIcon.
+// ── Task-scope panel components ──
+// Solid.js components that render requirements, architect contracts, goals,
+// acceptance evidence, task actions, and status badges.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
@@ -10,13 +9,12 @@ import { boardStore } from "../store/board"
 import { t, tc } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { statusIconName } from "../utils/status-mapping"
-import { taskLifecycleStatusOrIdleLabel, workflowStepStatusLabelFromString } from "../utils/status-labels"
+import { taskLifecycleStatusOrIdleLabel } from "../utils/status-labels"
 import { activeTone, verdictTone } from "../utils/verdict-tone"
 import { GoalWorkflowList } from "./GoalWorkflowGroup"
 import { RequirementsPanel } from "./RequirementsPanel"
-import { FrontendResearchPanel } from "./FrontendResearchPanel"
 import { ArchitectPanel } from "./ArchitectPanel"
-import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils/task-scope-sections"
+import { taskScopeWorkflowSectionID } from "../utils/task-scope-sections"
 import { Button } from "./ui/Button"
 import { Icon, type IconName } from "./Icon"
 import { Section } from "./primitives/Section"
@@ -377,19 +375,58 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
 // the per-id-mutex'd interaction-reply service — Board no longer needs to
 // pipe callbacks down for this surface.
 
-// ── Board (top-level) ──
-// Main board panel that orchestrates all sub-panels.
-// Reads from boardStore; action callbacks are passed via props so that
-// the parent (or ) can wire up the actual API calls.
-// Interaction reply/reject is self-contained inside <InteractionCard> and
-// no longer takes parent-supplied callbacks.
+// ── Right-toolbar task scope panels ──
+// Requirements, Architect, and Goals are mounted as separate right toolbar
+// panels. They share the boardStore projection; no panel owns its own copy of
+// task-scope data.
 
-interface BoardProps {
+interface BoardPanelProps {
   onRetry?: () => void
   onReplan?: () => void
   onCancel?: () => void
   onEditGoal?: (id: string, title: string, detail: string) => void
   onDeleteGoal?: (id: string) => void
+}
+
+type TaskScopePanelID = "requirements" | "architect" | "goals"
+
+interface TaskScopePanelShellProps {
+  panelID: TaskScopePanelID
+  title: string
+  icon: IconName
+  badgeText?: string
+  badgeTone?: string
+  badgeVariant?: "status" | "metric"
+  children: any
+}
+
+function TaskScopePanelShell(props: TaskScopePanelShellProps) {
+  return (
+    <div class="task-scope-panel" data-task-scope-panel={props.panelID}>
+      <header class="task-scope-panel__header oc-surface-header">
+        <div class="task-scope-panel__title-row oc-surface-header__main">
+          <span class="task-scope-panel__icon" aria-hidden="true">
+            <Icon name={props.icon} />
+          </span>
+          <span class="task-scope-panel__title oc-surface-header__title">{props.title}</span>
+        </div>
+        <Show when={props.badgeText}>
+          <span
+            class="task-scope-panel__badge"
+            data-tone={props.badgeTone || undefined}
+            data-variant={props.badgeVariant || "status"}
+          >
+            {props.badgeText}
+          </span>
+        </Show>
+      </header>
+      <div class="task-scope-panel__body right-activity-body" data-side-activity={props.panelID} data-active="true">
+        <div class="sections-stack workflow-section-stack task-scope-panel__stack" data-ui="workflow-section-stack">
+          {props.children}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface SectionFrameProps {
@@ -450,50 +487,39 @@ function SectionFrame(props: SectionFrameProps) {
   )
 }
 
-export function Board(props: BoardProps) {
+function workflowStatusTone(status: string): "" | "accent" | "good" | "bad" {
+  if (status === "failed") return "bad"
+  if (status === "completed") return "good"
+  if (status === "running") return "accent"
+  return ""
+}
+
+function createTaskScopeProjection() {
   const board = () => boardStore.board
 
   const spec = () => board()?.spec
   const acceptance = () => acceptancePanelAcceptance(board())
   const overview = () => board()?.overview
 
-  // ── Workflow-structured data (new) ──
   const workflow = () => board()?.workflow
   const requirements = () => board()?.requirements
   const architect = () => board()?.architect
   const goalWorkflows = () => board()?.goalWorkflows || []
 
-  // Derive streaming state from workflow step statuses
-  const isRequirementsGenerating = createMemo(() => {
+  const workflowStepStatus = (stepID: string): string => {
     const wf = workflow()
-    if (!wf) return false
-    const reqStep = wf.steps.find((s: any) => s.id === "requirements")
-    return reqStep?.status === "running"
-  })
-  const frontendResearchStatus = createMemo(() => {
-    const wf = workflow()
-    if (!wf) return ""
-    const step = wf.steps.find((s: any) => s.id === "frontend_research")
-    return String(step?.status || "")
-  })
-  const isArchitectGenerating = createMemo(() => {
-    const wf = workflow()
-    if (!wf) return false
-    const archStep = wf.steps.find((s: any) => s.id === "architect")
-    return archStep?.status === "running"
-  })
-  const taskScopeSections = createMemo(() =>
-    taskScopeSectionVisibility({
-      workflow: workflow(),
-      requirements: requirements(),
-      architect: architect(),
-    }),
-  )
+    if (!wf || !Array.isArray(wf.steps)) return ""
+    return String(wf.steps.find((s: any) => s.id === stepID)?.status || "")
+  }
 
-  // ── Active section tracking ──
-  // Map the workflow's current (running) step to a right-pane section id so
-  // the section gets `data-phase-state="active"` highlighting. Falls back to
-  // the most recently completed/failed step when nothing is running.
+  const isRequirementsGenerating = createMemo(() => {
+    return workflowStepStatus("requirements") === "running"
+  })
+
+  const isArchitectGenerating = createMemo(() => {
+    return workflowStepStatus("architect") === "running"
+  })
+
   const activeSection = createMemo<string>(() => {
     const wf = workflow()
     if (!wf || !Array.isArray(wf.steps)) return ""
@@ -508,127 +534,164 @@ export function Board(props: BoardProps) {
     return ""
   })
   const phaseFor = (id: string): "active" | "" => (activeSection() === id ? "active" : "")
-  const workflowStatusTone = (status: string): "" | "accent" | "good" | "bad" => {
-    if (status === "failed") return "bad"
-    if (status === "completed") return "good"
-    if (status === "running") return "accent"
-    return ""
+
+  return {
+    spec,
+    acceptance,
+    overview,
+    requirements,
+    architect,
+    goalWorkflows,
+    workflowStepStatus,
+    isRequirementsGenerating,
+    isArchitectGenerating,
+    phaseFor,
   }
+}
+
+export function RequirementsBoardPanel() {
+  const scope = createTaskScopeProjection()
+  const badgeText = createMemo(() => {
+    const rs = scope.requirements() ?? []
+    if (rs.length > 0) {
+      const passed = rs.filter((r: any) => r.status === "passed").length
+      return `${passed}/${rs.length}`
+    }
+    if (scope.isRequirementsGenerating()) return t("common.active")
+    return ""
+  })
+  const badgeTone = createMemo(() => {
+    const rs = scope.requirements() ?? []
+    if (rs.length === 0) return activeTone(scope.isRequirementsGenerating())
+    const passed = rs.filter((r: any) => r.status === "passed").length
+    const failed = rs.filter((r: any) => r.status === "failed").length
+    return verdictTone({ passed, failed, total: rs.length })
+  })
 
   return (
-    <>
-      <div id="taskActionsBar">
+    <TaskScopePanelShell
+      panelID="requirements"
+      title={t("workflow.requirements")}
+      icon="spec"
+      badgeText={badgeText()}
+      badgeTone={badgeTone()}
+    >
+      <SectionFrame
+        id="requirementsSection"
+        title={t("workflow.requirements")}
+        icon="spec"
+        bodyId="requirementsBody"
+        badgeId="requirementsBadge"
+        phaseState={scope.phaseFor("requirements")}
+        badgeText={badgeText()}
+        badgeTone={badgeTone()}
+      >
+        <RequirementsPanel
+          requirements={scope.requirements()}
+          specContent={scope.spec()?.content}
+          isGenerating={scope.isRequirementsGenerating()}
+        />
+      </SectionFrame>
+    </TaskScopePanelShell>
+  )
+}
+
+export function ArchitectBoardPanel() {
+  const scope = createTaskScopeProjection()
+  const architectStatus = createMemo(() => scope.workflowStepStatus("architect"))
+  const badgeText = createMemo(() => {
+    if (scope.architect()) return String(scope.architect()!.contractCount)
+    if (scope.isArchitectGenerating()) return t("common.active")
+    return ""
+  })
+  const badgeTone = createMemo(() => {
+    const status = architectStatus()
+    return workflowStatusTone(status) || activeTone(Boolean(scope.architect()))
+  })
+
+  return (
+    <TaskScopePanelShell
+      panelID="architect"
+      title={t("workflow.architect")}
+      icon="plan"
+      badgeText={badgeText()}
+      badgeTone={badgeTone()}
+    >
+      <SectionFrame
+        id="architectSection"
+        title={t("workflow.architect")}
+        icon="plan"
+        bodyId="architectBody"
+        badgeId="architectBadge"
+        phaseState={scope.phaseFor("architect")}
+        badgeText={badgeText()}
+        badgeTone={badgeTone()}
+      >
+        <ArchitectPanel architect={scope.architect()} isGenerating={scope.isArchitectGenerating()} />
+      </SectionFrame>
+    </TaskScopePanelShell>
+  )
+}
+
+export function GoalsBoardPanel(props: BoardPanelProps) {
+  const scope = createTaskScopeProjection()
+  const badgeText = createMemo(() => {
+    const gw = scope.goalWorkflows()
+    const passed = gw.filter((g) => g.goalStatus === "passed").length
+    return gw.length > 0 ? `${passed}/${gw.length}` : ""
+  })
+  const badgeTone = createMemo(() => {
+    const gw = scope.goalWorkflows()
+    if (gw.length === 0) return ""
+    const passed = gw.filter((g) => g.goalStatus === "passed").length
+    const failed = gw.filter((g) => g.goalStatus === "failed").length
+    return verdictTone({ passed, failed, total: gw.length })
+  })
+
+  return (
+    <TaskScopePanelShell
+      panelID="goals"
+      title={t("workflow.goals")}
+      icon="goals"
+      badgeText={badgeText()}
+      badgeTone={badgeTone()}
+      badgeVariant="metric"
+    >
+      <div id="taskActionsBar" class="task-scope-actions">
         <TaskActionsPanel
-          overview={overview()}
+          overview={scope.overview()}
           onRetry={props.onRetry}
           onReplan={props.onReplan}
           onCancel={props.onCancel}
         />
       </div>
 
-      {/* ── Data-driven unified layout ── */}
-      {/* Sections appear based on their data availability, not a mode flag. */}
-
-      {/* Trace surface 2026-04-26: only the per-card trace button (Card.tsx)
-          mounts <TracePanel sessionID={...} directory={...}>. Both the
-          right-panel and the conversation-level "Show all session trace"
-          toggle were removed because task-trace was a slow whole-task disk
-          read with frequent path-mismatch failure modes. Operators wanting
-          cross-session context now use the per-session Copy button on each
-          TracePanel to dump the JSON into a log viewer or LLM. */}
-
-      <div class="workflow-section-stack" data-ui="workflow-section-stack">
-        <Show when={taskScopeSections().frontendResearch}>
-          <SectionFrame
-            id="frontendResearchSection"
-            title={t("workflow.frontend_research")}
-            icon="spec"
-            bodyId="frontendResearchBody"
-            badgeId="frontendResearchBadge"
-            phaseState={phaseFor("frontendResearch")}
-            badgeText={frontendResearchStatus() ? workflowStepStatusLabelFromString(frontendResearchStatus()) : ""}
-            badgeTone={workflowStatusTone(frontendResearchStatus())}
-          >
-            <FrontendResearchPanel status={frontendResearchStatus()} />
-          </SectionFrame>
-        </Show>
-
-        <Show when={taskScopeSections().requirements}>
-          <SectionFrame
-            id="requirementsSection"
-            title={t("workflow.requirements")}
-            icon="spec"
-            bodyId="requirementsBody"
-            badgeId="requirementsBadge"
-            phaseState={phaseFor("requirements")}
-            badgeText={(() => {
-              const rs = requirements() ?? []
-              if (rs.length > 0) {
-                const passed = rs.filter((r: any) => r.status === "passed").length
-                return `${passed}/${rs.length}`
-              }
-              if (isRequirementsGenerating()) return t("common.active")
-              return goalWorkflows().length > 0 ? "—" : ""
-            })()}
-            badgeTone={(() => {
-              const rs = requirements() ?? []
-              if (rs.length === 0) return activeTone(isRequirementsGenerating())
-              const passed = rs.filter((r: any) => r.status === "passed").length
-              const failed = rs.filter((r: any) => r.status === "failed").length
-              return verdictTone({ passed, failed, total: rs.length })
-            })()}
-          >
-            <RequirementsPanel
-              requirements={requirements()}
-              specContent={spec()?.content}
-              isGenerating={isRequirementsGenerating()}
-            />
-          </SectionFrame>
-        </Show>
-
-        <Show when={taskScopeSections().architect}>
-          <SectionFrame
-            id="architectSection"
-            title={t("workflow.architect")}
-            icon="plan"
-            bodyId="architectBody"
-            badgeId="architectBadge"
-            phaseState={phaseFor("architect")}
-            badgeText={architect() ? String(architect()!.contractCount) : ""}
-            badgeTone={activeTone(Boolean(architect()))}
-          >
-            <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
-          </SectionFrame>
-        </Show>
-
-        <SectionFrame
-          id="goalWorkflowsSection"
-          title={t("workflow.goals")}
-          icon="goals"
-          bodyId="goalWorkflowsBody"
-          badgeId="goalWorkflowsBadge"
-          phaseState={phaseFor("goalWorkflows")}
-          badgeText={(() => {
-            const gw = goalWorkflows()
-            const passed = gw.filter((g) => g.goalStatus === "passed").length
-            return gw.length > 0 ? `${passed}/${gw.length}` : ""
-          })()}
-          badgeVariant="metric"
-          badgeTone={(() => {
-            const gw = goalWorkflows()
-            if (gw.length === 0) return ""
-            const passed = gw.filter((g) => g.goalStatus === "passed").length
-            const failed = gw.filter((g) => g.goalStatus === "failed").length
-            return verdictTone({ passed, failed, total: gw.length })
-          })()}
+      <SectionFrame
+        id="goalWorkflowsSection"
+        title={t("workflow.goals")}
+        icon="goals"
+        bodyId="goalWorkflowsBody"
+        badgeId="goalWorkflowsBadge"
+        phaseState={scope.phaseFor("goalWorkflows")}
+        badgeText={badgeText()}
+        badgeVariant="metric"
+        badgeTone={badgeTone()}
+      >
+        <Show
+          when={scope.goalWorkflows().length > 0}
+          fallback={<p class="empty-hint empty-hint--card">{t("workflow.goals_pending")}</p>}
         >
-          <GoalWorkflowList goals={goalWorkflows()} onEditGoal={props.onEditGoal} onDeleteGoal={props.onDeleteGoal} />
-        </SectionFrame>
-
-        <Show when={acceptance()}>
-          <AcceptancePanel acceptance={acceptance()} phaseState={phaseFor("acceptance")} />
+          <GoalWorkflowList
+            goals={scope.goalWorkflows()}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
+          />
         </Show>
-      </div>
-    </>
+      </SectionFrame>
+
+      <Show when={scope.acceptance()}>
+        <AcceptancePanel acceptance={scope.acceptance()} phaseState={scope.phaseFor("acceptance")} />
+      </Show>
+    </TaskScopePanelShell>
   )
 }

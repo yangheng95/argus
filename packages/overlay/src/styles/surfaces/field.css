@@ -295,8 +295,8 @@ textarea.field-input {
   box-shadow: none;
 }
 
-/* Inspector ("sections" context) tightens the field family for the
- * right-rail's denser layout. The right rail uses the global
+/* Sections context tightens the field family for the
+ * right-toolbar's denser layout. The toolbar views use the global
  * `--oc-radius-soft` corner + tighter padding tokens so a field
  * sitting inside <section.sections> matches the rail's density. */
 .sections .field {

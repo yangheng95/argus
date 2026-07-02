@@ -1,6 +1,7 @@
 # July 2026 Records
 
 - [2026-07-02-project-archive-worktree-timeouts.md](2026-07-02-project-archive-worktree-timeouts.md) records the project archive download and project worktree deletion transport timeout extension.
+- [2026-07-02-right-toolbar-task-scope-panels.md](2026-07-02-right-toolbar-task-scope-panels.md) records the overlay right toolbar split of the historical Inspector requirements, architect, and goals surfaces into dedicated task-scope panel controls.
 - [2026-07-02-task-message-immediate-stream.md](2026-07-02-task-message-immediate-stream.md) records the selected-task message stream repair so persisted user messages emit the existing `task.messages.changed` signal before the `/message` response waits on scheduler acceptance.
 - [2026-07-02-terminal-refill-stream-error-stall.md](2026-07-02-terminal-refill-stream-error-stall.md) records the terminal-goal refill repair for active tasks stuck behind an `orchestrator_stream_error` passive-wake suppression even after child goal evidence reached terminal state.
 - [2026-07-02-qa-integrity-evidence-backed-schema.md](2026-07-02-qa-integrity-evidence-backed-schema.md) records the QA and Integrity schema repair that rejects report fields not backed by actually registered evidence/check graph rows.

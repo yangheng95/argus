@@ -1,7 +1,5 @@
-/* Inspector surface — owns the right panel shell and activity bodies. The richer
-   `.section` / `.gwg` card chrome and the per-section variants
-   stay in styles.css until they are reworked through palette tokens
-   (their hover states + theme overrides need a deliberate sweep). */
+/* Task-scope and right-toolbar surface chrome. The filename is historical;
+   the retired Inspector aggregate panel no longer exists. */
 
 .sections {
   width: 100%;
@@ -37,7 +35,127 @@
   min-height: calc(16px * var(--ui-scale));
 }
 
-/* Section card stack: scrollable body that holds inspector cards.
+.task-scope-activity {
+  padding: 0;
+  background: var(--inspector-surface);
+  container: side-activity / inline-size;
+}
+
+.task-scope-panel {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-hover) 24%, transparent), transparent 34%),
+    var(--inspector-surface);
+}
+
+.task-scope-panel__header {
+  flex: 0 0 auto;
+  min-height: calc(38px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 66%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.task-scope-panel__title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(7px * var(--ui-scale));
+}
+
+.task-scope-panel__icon {
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.task-scope-panel__icon svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
+.task-scope-panel__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ui-font-body);
+}
+
+.task-scope-panel__badge {
+  flex: 0 0 auto;
+  min-width: calc(22px * var(--ui-scale));
+  min-height: calc(20px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(7px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-scope-panel__badge[data-tone="accent"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.task-scope-panel__badge[data-tone="good"] {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+}
+
+.task-scope-panel__badge[data-tone="bad"] {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.task-scope-panel__badge[data-variant="metric"] {
+  font-family: var(--mono);
+}
+
+.task-scope-panel__body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.task-scope-panel__stack {
+  border-radius: 0;
+  background: transparent;
+}
+
+.task-scope-panel__stack.workflow-section-stack {
+  gap: 0;
+}
+
+.task-scope-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.task-scope-actions .task-actions-buttons {
+  padding: 0 0 var(--ui-gap-sm);
+}
+
+/* Section card stack: scrollable body that holds task-scope cards.
    Stack gap + outer padding share `--ui-gap-sm` (6px) so the space
    above the first card matches the gap between siblings — the
    right-rail's single spacing rhythm. */
@@ -640,9 +758,10 @@
 }
 
 .file-explorer-upload-input {
+  --px-exact: 1px;
   position: fixed;
-  width: 1px;
-  height: 1px;
+  width: var(--px-exact);
+  height: var(--px-exact);
   opacity: 0;
   pointer-events: none;
 }
@@ -1706,7 +1825,7 @@
 }
 
 /* Requirements panel (RequirementsPanel.tsx): renders the spec
-   agent's parsed requirement list inside the inspector tab. The
+   agent's parsed requirement list inside the task-scope panel. The
    tab body uses a divided list with a leading mono-font index,
    description body, and trailing type / status / priority pill
    meta row. The streaming sub-block surfaces live spec-agent
@@ -1888,7 +2007,7 @@
 
 /* IntegrityCard panel (IntegrityCard.tsx): renders the architecture
    integrity LLM's verdict + per-dimension breakdown + correction
-   diffs + missing-coverage list inside the inspector tab. The
+   diffs + missing-coverage list inside task-scope panels. The
    shared `.verdict-pill` primitive (used here + Board) still lives
    in styles.css until its raw-rgba/hex chrome gets a token sweep. */
 .integrity {
@@ -2183,7 +2302,7 @@
 
 /* ArchitectPanel (ArchitectPanel.tsx): renders the architect
    agent's decisions and the inferred category overview inside
-   the inspector tab. The panel layers an overview row (count +
+   the task-scope panel. The panel layers an overview row (count +
    category pills + detail blurb) above a decisions list (per-
    decision card with key/value/reason) and a streaming row
    surfaced while the architect agent runs. */
@@ -2424,11 +2543,11 @@
 }
 
 /* The session viewer dialog (rendered by services/dialog.ts when an
- * operator opens an executor session from the inspector workspace)
+ * operator opens an executor session from a task-scope workspace)
  * shows a list of role-tagged messages. The .session-msg base + the
  * two role variants ([data-role="assistant"|"user"]) plus the role
  * label and message text canonicals live here next to the rest of
- * the inspector-side dialogs. */
+ * the task-scope-side dialogs. */
 .session-msg {
   display: flex;
   flex-direction: column;
@@ -2488,7 +2607,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Inspector misc (extracted 2026-05-04): embedded session list panel.
+   Task-scope misc (extracted 2026-05-04): embedded session list panel.
    ───────────────────────────────────────────────────────────── */
 
 .session-list-panel {
@@ -2505,7 +2624,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Inspector list-row variants (extracted 2026-05-04): goal/
+   Task-scope list-row variants (extracted 2026-05-04): goal/
    knowledge card chrome + their unified hover lift,
    gwg list + priority badge, goalsSection scroll override. Settings
    market-card chrome is owned by surfaces/settings.css.

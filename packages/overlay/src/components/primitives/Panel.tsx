@@ -9,7 +9,7 @@
 //   </Panel>
 //
 // CSS: src/styles/primitives/panel.css
-// Migration target: Step 9.E — 11 workspace and inspector panels.
+// Migration target: Step 9.E — workspace and task-scope panels.
 
 import { Show, type JSX, mergeProps, splitProps } from "solid-js"
 import { Dynamic } from "solid-js/web"

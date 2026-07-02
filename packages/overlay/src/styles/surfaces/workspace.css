@@ -500,6 +500,7 @@ body[data-resizing="true"] .pane-resizer::after {
 }
 
 .sections,
+.task-scope-panel,
 .config-dialog-layout {
   --section-stack-gap: calc(6px * var(--ui-scale));
   --section-field-gap: calc(4px * var(--ui-scale));

@@ -166,6 +166,8 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/skills/config",
@@ -183,6 +185,8 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
         timeline: [],
         events: [],
         view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })
@@ -276,12 +280,34 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
+    await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { visible: true, timeout: 15_000 })
+    await page.click(`.task-row-main[data-task-id="${taskID}"]`)
+    for (let i = 0; i < 50; i += 1) {
+      if (
+        requestLog.some(
+          (entry) =>
+            entry.startsWith(`GET /task/${taskID}/board`) ||
+            entry.startsWith(`GET /task/${taskID}/conversation`),
+        )
+      ) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    assert.ok(
+      requestLog.some(
+        (entry) =>
+          entry.startsWith(`GET /task/${taskID}/board`) || entry.startsWith(`GET /task/${taskID}/conversation`),
+      ),
+      `selecting ${taskID} must request its board or conversation: ${JSON.stringify(requestLog)}`,
+    )
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="goals"]', {
       visible: true,
       timeout: 15_000,
     })
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="goals"]')
     try {
       await page.waitForSelector(".acceptance-panel", { visible: true, timeout: 15_000 })
     } catch (error) {
@@ -412,17 +438,17 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     }
     const narrowScreenshot = await saveElementScreenshot(
       page,
-      "#rightPanelInspector .sections-stack",
+      '#centerWorkbenchGoals [data-ui="workflow-section-stack"]',
       "acceptance-panel-button-owner-narrow.png",
     )
     assert.ok(narrowScreenshot.endsWith("acceptance-panel-button-owner-narrow.png"))
-    await page.$eval("#rightPanelInspector .sections-stack", (node: HTMLElement) => {
+    await page.$eval('#centerWorkbenchGoals [data-ui="workflow-section-stack"]', (node: HTMLElement) => {
       node.scrollTop = node.scrollHeight
     })
     await new Promise((resolve) => setTimeout(resolve, 100))
     const narrowBottomScreenshot = await saveElementScreenshot(
       page,
-      "#rightPanelInspector .sections-stack",
+      '#centerWorkbenchGoals [data-ui="workflow-section-stack"]',
       "acceptance-panel-button-owner-narrow-bottom.png",
     )
     assert.ok(narrowBottomScreenshot.endsWith("acceptance-panel-button-owner-narrow-bottom.png"))

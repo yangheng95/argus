@@ -621,16 +621,29 @@ describe("overlay architecture guards", () => {
     expect(sidebarAt).toBeGreaterThan(-1)
   })
 
-  test("inspector right panel shell is owned by surfaces/inspector.css", () => {
+  test("right task-scope panel shell is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of ["sections", "sections-title", "sections-stack", "right-activity-body"]) {
+    for (const className of [
+      "sections",
+      "sections-title",
+      "sections-stack",
+      "task-scope-panel",
+      "task-scope-panel__header",
+      "task-scope-panel__body",
+      "task-scope-panel__stack",
+      "right-activity-body",
+    ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(html).not.toContain('id="centerWorkbenchInspector"')
+    expect(html).toContain('id="centerWorkbenchRequirements"')
+    expect(html).toContain('id="centerWorkbenchArchitect"')
+    expect(html).toContain('id="centerWorkbenchGoals"')
     expect(html).not.toContain("sections-tab-body")
     expect(inspectorSurface).toMatch(/\.right-activity-body\[data-active="false"\]/)
     expect(inspectorSurface).toMatch(/\.right-activity-body\[data-side-activity\]/)
@@ -693,7 +706,7 @@ describe("overlay architecture guards", () => {
     expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__badge\s*\{/)
     expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__body\s*\{/)
 
-    // Inspector surface owns the caret + badge tone variants
+    // Task-scope surface owns the caret + badge tone variants.
     expect(inspectorSurface).toMatch(/\.oc-section__head::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section\[open\] > \.oc-section__head::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__badge\[data-tone="(?:good|bad|warn|accent)"\](?:::before)?\s*\{/)
@@ -703,7 +716,7 @@ describe("overlay architecture guards", () => {
 
   test("section shell + head baseline are owned by surfaces/inspector.css", () => {
     // After Step 9.E migration, .section → .oc-section, .section-head → .oc-section__head.
-    // inspector.css owns the surface-level card chrome (background, border-radius,
+    // inspector.css owns the task-scope card chrome (background, border-radius,
     // overflow, hover wash) on top of the structural base in primitives/section.css.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
@@ -751,7 +764,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
-  test("task action buttons keep shared Button primitive dimensions inside inspector", () => {
+  test("task action buttons keep shared Button primitive dimensions inside the goals panel", () => {
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const boardSource = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
 
@@ -1044,7 +1057,7 @@ describe("overlay architecture guards", () => {
   test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {
     // Canonical moved from styles.css into surfaces/inspector.css. The
     // verdict-pill is rendered by Board.tsx + IntegrityCard inside the
-    // inspector workspace, so the inspector surface owns it.
+    // task-scope workspace, so the task-scope surface owns it.
     const inspector = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const styles = readLegacyStylesCss("src/styles.css")
 

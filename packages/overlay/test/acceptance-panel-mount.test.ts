@@ -42,7 +42,7 @@ function readAllSurfaceCss(): string {
 // acceptance card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares toolbar workbench activities without a separate Inspector column", async () => {
+test("index.html declares task-scope toolbar workbench activities without the historical Inspector panel", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).toContain('id="chatContentFrame"')
@@ -58,8 +58,17 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).toContain('id="centerWorkbenchSeparatorWorkflow"')
   expect(html).toContain('data-center-workbench-separator="workflow"')
   expect(html).toContain('role="separator" aria-orientation="vertical"')
-  expect(html).toContain('id="centerWorkbenchInspector"')
-  expect(html).toContain('id="centerWorkbenchSeparatorInspector"')
+  expect(html).not.toContain('id="centerWorkbenchInspector"')
+  expect(html).not.toContain('id="centerWorkbenchSeparatorInspector"')
+  expect(html).toContain('id="centerWorkbenchRequirements"')
+  expect(html).toContain('id="centerWorkbenchSeparatorRequirements"')
+  expect(html).toContain('id="solidRequirementsPanelMount"')
+  expect(html).toContain('id="centerWorkbenchArchitect"')
+  expect(html).toContain('id="centerWorkbenchSeparatorArchitect"')
+  expect(html).toContain('id="solidArchitectPanelMount"')
+  expect(html).toContain('id="centerWorkbenchGoals"')
+  expect(html).toContain('id="centerWorkbenchSeparatorGoals"')
+  expect(html).toContain('id="solidGoalsPanelMount"')
   expect(html).toContain('id="centerWorkbenchNotifications"')
   expect(html).toContain('id="centerWorkbenchSeparatorNotifications"')
   expect(html).toContain('id="centerWorkbenchExplorer"')
@@ -108,12 +117,12 @@ test("index.html declares toolbar workbench activities without a separate Inspec
   expect(html).not.toContain('id="rightPanelTui"')
   expect(html).not.toContain('id="rightPanelBrowser"')
   expect(html).not.toContain('id="rightPaneResizer"')
-  expect(html).toContain('id="rightPanelInspector"')
+  expect(html).not.toContain('id="rightPanelInspector"')
   expect(html).toContain('id="rightPanelNotifications"')
   expect(html).toContain('id="solidNotificationCenterMount"')
-  expect(html).toContain('data-side-activity="inspector" data-active="false"')
+  expect(html).not.toContain('data-side-activity="inspector"')
   expect(html).toContain('data-side-activity="notifications" data-active="false"')
-  expect(html).toContain('id="solidBoardMount"')
+  expect(html).not.toContain('id="solidBoardMount"')
   expect(html).not.toContain('id="solidRightPanelTabs"')
   expect(html).not.toContain('id="solidRightFilesMount"')
   expect(html).not.toContain('id="solidInteractionMount"')
@@ -127,16 +136,21 @@ test("index.html does not declare the rejected single InspectorPanel root", asyn
   expect(html).not.toContain('id="solidInspectorPanelMount"')
 })
 
-test("Board keeps acceptance inside the unified Inspector stack and file changes outside it", async () => {
+test("Goals panel keeps acceptance adjacent to goals and file changes outside it", async () => {
   const board = await readSrc("src/components/Board.tsx")
-  expect(board).toContain('class="workflow-section-stack"')
+  expect(board).toContain("export function GoalsBoardPanel")
+  expect(board).toContain('class="sections-stack workflow-section-stack task-scope-panel__stack"')
   const acceptanceAt = board.indexOf("<AcceptancePanel")
+  const goalsPanelAt = board.indexOf("export function GoalsBoardPanel")
   expect(acceptanceAt).toBeGreaterThan(-1)
+  expect(acceptanceAt).toBeGreaterThan(goalsPanelAt)
   expect(board).not.toContain("<FilesSection")
 })
 
-test("Inspector workflow sections render as one contiguous stack", async () => {
+test("task-scope workflow sections render through the shared contiguous stack", async () => {
   const css = await readSrc("src/styles/surfaces/inspector.css")
+  expect(css).toMatch(/\.task-scope-panel\s*\{/)
+  expect(css).toMatch(/\.task-scope-panel__stack\.workflow-section-stack\s*\{/)
   expect(css).toMatch(/\.workflow-section-stack\s*\{/)
   expect(css).toMatch(/\.workflow-section-stack \.oc-section \+ \.oc-section\s*\{/)
   expect(css).toContain('.workflow-section-stack .oc-section[data-phase-state="active"]')
@@ -171,7 +185,10 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).not.toContain('document.getElementById("solidRightPanelTabs")')
   expect(main).not.toContain('document.getElementById("solidFilesSectionMount")')
-  expect(main).toContain('document.getElementById("solidBoardMount")')
+  expect(main).not.toContain('document.getElementById("solidBoardMount")')
+  expect(main).toContain('document.getElementById("solidRequirementsPanelMount")')
+  expect(main).toContain('document.getElementById("solidArchitectPanelMount")')
+  expect(main).toContain('document.getElementById("solidGoalsPanelMount")')
   expect(main).not.toContain('document.getElementById("solidAcceptanceMount")')
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
@@ -185,9 +202,14 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow"',
   )
+  expect(main).not.toContain('id: "inspector"')
   expect(main).toContain(
-    'id: "inspector", icon: "inspect", labelKey: "sections.title", tooltipKey: "activity.tooltip.inspector"',
+    'id: "requirements",\n    icon: "spec",\n    labelKey: "workflow.requirements",\n    tooltipKey: "activity.tooltip.requirements"',
   )
+  expect(main).toContain(
+    'id: "architect",\n    icon: "plan",\n    labelKey: "workflow.architect",\n    tooltipKey: "activity.tooltip.architect"',
+  )
+  expect(main).toContain('id: "goals", icon: "goals", labelKey: "workflow.goals", tooltipKey: "activity.tooltip.goals"')
   expect(main).toContain(
     'id: "explorer", icon: "folder", labelKey: "explorer.title", tooltipKey: "activity.tooltip.explorer"',
   )
@@ -237,7 +259,10 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain("centerWorkbenchTabs")
   expect(main).not.toContain("activeCenterWorkbenchTab")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
-  expect(main).toContain('inspector: document.getElementById("centerWorkbenchInspector")')
+  expect(main).not.toContain('inspector: document.getElementById("centerWorkbenchInspector")')
+  expect(main).toContain('requirements: document.getElementById("centerWorkbenchRequirements")')
+  expect(main).toContain('architect: document.getElementById("centerWorkbenchArchitect")')
+  expect(main).toContain('goals: document.getElementById("centerWorkbenchGoals")')
   expect(main).toContain('notifications: document.getElementById("centerWorkbenchNotifications")')
   expect(main).toContain('screenshots: document.getElementById("centerWorkbenchScreenshots")')
   expect(main).toContain("primaryCenterPanel")
@@ -327,14 +352,14 @@ test("AcceptancePanel has an in-flight projection while the run is in deliver be
   expect(board).toContain("pending: true")
   expect(board).toContain('t("acceptance.inflight.hint")')
   expect(board).toMatch(/if \(hasActiveAcceptanceRun\(board\(\)\)\) return "acceptance"/)
-  expect(board).toContain("<AcceptancePanel acceptance={acceptance()}")
+  expect(board).toContain("<AcceptancePanel acceptance={scope.acceptance()}")
 })
 
 test("AcceptancePanel is not mounted for tasks without acceptance content", async () => {
   const board = await readSrc("src/components/Board.tsx")
   const acceptanceAt = board.indexOf("<AcceptancePanel")
   const beforeAcceptance = board.slice(Math.max(0, acceptanceAt - 220), acceptanceAt)
-  expect(beforeAcceptance).toContain("<Show when={acceptance()}>")
+  expect(beforeAcceptance).toContain("<Show when={scope.acceptance()}>")
   expect(board).not.toContain("acceptance.empty.hint")
   expect(board).not.toContain('data-verdict="empty"')
 })
@@ -455,6 +480,10 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
     "coding_assistant.title",
+    "activity.tooltip.requirements",
+    "activity.tooltip.architect",
+    "activity.tooltip.goals",
+    "workflow.goals_pending",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).
@@ -471,9 +500,11 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "acceptance.status.failed",
     "acceptance.status.publishing",
     "empty.acceptance",
+    "activity.tooltip.inspector",
     "right_panel.tabs",
     "right_panel.inspector",
     "right_panel.preview",
+    "sections.title",
     "frontend_preview.title",
     "coding_assistant.input_placeholder",
     "coding_assistant.send",

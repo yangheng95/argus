@@ -1354,20 +1354,21 @@ test(
       await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForSelector(".task-row-main[data-task-id='task-1']")
       await page.click(".task-row-main[data-task-id='task-1']")
-      await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       try {
         await page.waitForFunction(
-          () => document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active === "true",
+          () => document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active === "true",
         )
       } catch (error) {
         const snapshot = await page.evaluate(() => ({
           activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
-          inspectorButton:
+          requirementsButton:
             document.querySelector<HTMLElement>(
-              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
             )?.outerHTML || "",
           centerWorkbench: document.querySelector<HTMLElement>("#centerWorkbench")?.outerHTML.slice(0, 1200) || "",
-          inspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+          requirementsActive:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active || "",
           bodyText: document.body.textContent?.slice(0, 1200) || "",
         }))
         assert.fail(
@@ -1383,11 +1384,11 @@ test(
       } catch (error) {
         const snapshot = await page.evaluate(() => ({
           activeTask: document.querySelector<HTMLElement>(".task-row-main[data-active='true']")?.dataset.taskId || "",
-          inspector: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
-          rightPanel: document.querySelector<HTMLElement>("#rightPanelInspector")?.dataset.active || "",
-          sectionText: document.querySelector<HTMLElement>("#sections")?.textContent?.slice(0, 1200) || "",
-          inspectorText:
-            document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.textContent?.slice(0, 1200) || "",
+          requirements: document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active || "",
+          sectionText:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.textContent?.slice(0, 1200) || "",
+          requirementsText:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.textContent?.slice(0, 1200) || "",
           bodyText: document.body.textContent?.slice(0, 1200) || "",
         }))
         assert.fail(
@@ -1398,6 +1399,10 @@ test(
           )}`,
         )
       }
+      await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="goals"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#centerWorkbenchGoals")?.dataset.active === "true",
+      )
       await page.waitForSelector('[data-task-action="cancel"]')
       const taskActions = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-actions-buttons .oc-button"))
@@ -1470,6 +1475,8 @@ test(
       assert.equal(data.counters.retry, 1)
       assert.equal(data.counters.replan, 1)
       assert.equal(data.counters.cancel, 1)
+      await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="architect"]')
+      await page.waitForSelector(".arch-decision", { state: "attached" })
       const workflowPanels = await page.evaluate(() => {
         const req = document.querySelector<HTMLElement>(".req-item")
         const reqDesc = document.querySelector<HTMLElement>(".req-desc")
@@ -1548,19 +1555,19 @@ test(
         )
       }
       await page.waitForSelector(".change-row", { state: "attached" })
-      const inspectorPanelOpen = await page.evaluate(
+      const requirementsPanelOpen = await page.evaluate(
         () =>
           document.querySelector<HTMLElement>(
-            '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
           )?.dataset.active === "true",
       )
-      if (!inspectorPanelOpen) {
-        await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      if (!requirementsPanelOpen) {
+        await tap('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       }
       await page.waitForFunction(
         () =>
           document.querySelector<HTMLElement>(
-            '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
           )?.dataset.active === "true",
       )
       await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']", {

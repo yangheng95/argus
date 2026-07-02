@@ -65,9 +65,19 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     expect(cappedBody).toContain("max-width: var(--ui-right-toolbar-panel-initial-max-width);")
     expect(workspace).not.toContain("max-width: calc(420px")
     expect(main).toContain("const RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS")
-    for (const panel of ['"explorer"', '"diff"', '"browser"', '"screenshots"', '"inspector"', '"notifications"']) {
+    for (const panel of [
+      '"requirements"',
+      '"architect"',
+      '"goals"',
+      '"explorer"',
+      '"diff"',
+      '"browser"',
+      '"screenshots"',
+      '"notifications"',
+    ]) {
       expect(main).toContain(panel)
     }
+    expect(main).not.toContain('"inspector"')
     expect(main).toContain("body.dataset.initialWidthCapped")
     expect(main).toContain("clearCenterWorkbenchPanelInitialWidthCap(metrics.leftPanel, metrics.rightPanel)")
     expect(main).not.toContain("--ui-sections-width")

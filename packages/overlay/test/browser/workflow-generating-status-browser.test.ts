@@ -328,11 +328,16 @@ test("workflow generating panels expose live busy status regions", async () => {
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]', {
       visible: true,
       timeout: 15_000,
     })
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="architect"]', {
+      visible: true,
+      timeout: 15_000,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="architect"]')
     const waitVisible = async (selector: string) => {
       try {
         await page.waitForSelector(selector, { visible: true, timeout: 15_000 })
@@ -360,10 +365,9 @@ test("workflow generating panels expose live busy status regions", async () => {
       }
     }
     await waitVisible('[data-ui="workflow-section-stack"]')
-    await waitVisible("#frontendResearchSection .req-streaming-indicator")
     await waitVisible("#requirementsSection .req-streaming-indicator")
     await page.waitForSelector("#architectSection .arch-generating", { visible: true, timeout: 15_000 })
-    await page.waitForSelector("#frontendResearchBadge", { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#requirementsBadge", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#statusLabel", { visible: true, timeout: 15_000 })
 
     const statuses = await page.evaluate(() => {
@@ -379,12 +383,11 @@ test("workflow generating panels expose live busy status regions", async () => {
         }
       }
       return {
-        frontendResearch: read("#frontendResearchSection .req-streaming-indicator"),
         requirements: read("#requirementsSection .req-streaming-indicator"),
         architect: read("#architectSection .arch-generating"),
-        frontendResearchBadge: {
-          text: document.querySelector<HTMLElement>("#frontendResearchBadge")?.textContent?.trim() ?? "",
-          tone: document.querySelector<HTMLElement>("#frontendResearchBadge")?.dataset.tone ?? "",
+        requirementsBadge: {
+          text: document.querySelector<HTMLElement>("#requirementsBadge")?.textContent?.trim() ?? "",
+          tone: document.querySelector<HTMLElement>("#requirementsBadge")?.dataset.tone ?? "",
         },
         taskHeader: document.querySelector<HTMLElement>("#statusLabel")?.textContent?.trim() ?? "",
         taskRowBadge: (() => {
@@ -399,19 +402,10 @@ test("workflow generating panels expose live busy status regions", async () => {
           }
         })(),
         workflowText: document.querySelector<HTMLElement>('[data-ui="workflow-section-stack"]')?.textContent || "",
-        workflowStreamMessageCount: document.querySelectorAll(
-          "#frontendResearchSection .req-streaming-messages, #requirementsSection .req-streaming-messages",
-        ).length,
+        workflowStreamMessageCount: document.querySelectorAll("#requirementsSection .req-streaming-messages").length,
       }
     })
 
-    assert.deepEqual(statuses.frontendResearch, {
-      role: "status",
-      live: "polite",
-      busy: "true",
-      text: enUSMessages["workflow.frontend_research_generating"],
-      spinner: true,
-    })
     assert.deepEqual(statuses.requirements, {
       role: "status",
       live: "polite",
@@ -426,16 +420,16 @@ test("workflow generating panels expose live busy status regions", async () => {
       text: enUSMessages["workflow.architect_generating"],
       spinner: true,
     })
-    assert.equal(statuses.frontendResearchBadge.text, enUSMessages["workflow.status.running"])
-    assert.equal(statuses.frontendResearchBadge.tone, "accent")
+    assert.equal(statuses.requirementsBadge.text, enUSMessages["task.status.active"])
+    assert.equal(statuses.requirementsBadge.tone, "accent")
     assert.equal(statuses.taskHeader, enUSMessages["task.status.active"])
     assert.deepEqual(statuses.taskRowBadge, {
       text: enUSMessages["task.status.active"],
       ariaLabel: enUSMessages["task.status.active"],
       title: enUSMessages["task.status.active"],
     })
-    assert.notEqual(statuses.frontendResearchBadge.text, "running")
-    assert.notEqual(statuses.frontendResearchBadge.text, "workflow.status.running")
+    assert.notEqual(statuses.requirementsBadge.text, "active")
+    assert.notEqual(statuses.requirementsBadge.text, "task.status.active")
     assert.notEqual(statuses.taskHeader, "active")
     assert.notEqual(statuses.taskRowBadge.text, "active")
     assert.equal(statuses.workflowStreamMessageCount, 0)
@@ -452,7 +446,7 @@ test("workflow generating panels expose live busy status regions", async () => {
     assert.ok(screenshot.endsWith("workflow-generating-status-live.png"))
     const workflowBadgeScreenshot = await saveElementScreenshot(
       page,
-      "#frontendResearchSection .oc-section__head",
+      "#requirementsSection .oc-section__head",
       "workflow-running-badge-label.png",
     )
     assert.ok(workflowBadgeScreenshot.endsWith("workflow-running-badge-label.png"))

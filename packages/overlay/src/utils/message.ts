@@ -136,7 +136,7 @@ export function normalizeAgentRole(name: string): AgentRole {
 }
 
 /**
- * Map an AgentRole to the inspector panel section phase name.
+ * Map an AgentRole to the task-scope section phase name.
  * Returns "" for roles without a corresponding section.
  */
 export function agentRoleToSectionPhase(role: AgentRole): string {

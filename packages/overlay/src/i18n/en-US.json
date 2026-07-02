@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "94efe1fa26a344af"
+    "panel_revision": "9c4c641fcd0705f0"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -54,7 +54,9 @@
   "activity.tooltip.browser": "Open the task-scoped browser preview and page evidence target for visual checks.",
   "activity.tooltip.diff": "Review changed files and focused diffs for the selected task.",
   "activity.tooltip.explorer": "Browse files in the active workspace directory.",
-  "activity.tooltip.inspector": "Inspect requirements, plan, goals, acceptance evidence, and task diagnostics.",
+  "activity.tooltip.requirements": "Open the selected task requirements panel.",
+  "activity.tooltip.architect": "Open the selected task architecture contracts panel.",
+  "activity.tooltip.goals": "Open the selected task goals and acceptance evidence panel.",
   "activity.tooltip.mcp": "Manage MCP servers and tool connections available to agents.",
   "activity.tooltip.memory": "Inspect memory entries associated with the selected task and session.",
   "activity.tooltip.mission": "View Missions and the tasks they created.",
@@ -903,7 +905,6 @@
   "explorer.delete_many_success": "Deleted {{count}} items",
   "explorer.refresh": "Refresh",
   "explorer.refresh_success": "Explorer refreshed.",
-  "sections.title": "Inspector",
   "settings.language": "Language",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "Chinese (Simplified)",
@@ -1175,12 +1176,12 @@
   "workflow.architect_contracts": "contracts",
   "workflow.architect_generating": "Coordinating cross-goal contracts...",
   "workflow.goals": "Goals",
+  "workflow.goals_pending": "Goals have not been generated yet.",
   "workflow.status.completed": "Completed",
   "workflow.status.failed": "Failed",
   "workflow.status.pending": "Pending",
   "workflow.status.running": "Running",
   "workflow.status.skipped": "Skipped",
-  "workflow.frontend_research": "Frontend Research",
   "workflow.frontend_research_failed": "Frontend research failed before producing a research brief.",
   "workflow.frontend_research_generating": "Researching frontend evidence...",
   "workflow.frontend_research_pending": "Frontend research has not produced evidence yet.",

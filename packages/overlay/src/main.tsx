@@ -10,7 +10,7 @@ import { Icon, LUCIDE_ICON_NAMES, REGISTERED_ICONS, type IconName } from "./comp
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { CodingAssistantSessionList } from "./components/CodingAssistantSessionList"
-import { Board } from "./components/Board"
+import { ArchitectBoardPanel, GoalsBoardPanel, RequirementsBoardPanel } from "./components/Board"
 import { Mission } from "./components/Mission"
 import { ChatComposer } from "./components/ChatComposer"
 import { LogViewer } from "./components/LogViewer"
@@ -256,7 +256,9 @@ const [browserPreviewLinkRefresh, setBrowserPreviewLinkRefresh] = createSignal(0
 
 type CenterWorkbenchPanel =
   | "workflow"
-  | "inspector"
+  | "requirements"
+  | "architect"
+  | "goals"
   | "notifications"
   | "explorer"
   | "diff"
@@ -270,27 +272,43 @@ type PrimaryCenterPanel = "task" | "mission" | "chat"
 
 const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
   "workflow",
+  "requirements",
+  "architect",
+  "goals",
   "explorer",
   "diff",
   "browser",
   "screenshots",
-  "inspector",
   "notifications",
   "file",
 ]
 
 const RIGHT_TOOLBAR_INITIAL_WIDTH_PANELS: ReadonlySet<CenterWorkbenchPanel> = new Set<CenterWorkbenchPanel>([
+  "requirements",
+  "architect",
+  "goals",
   "explorer",
   "diff",
   "browser",
   "screenshots",
-  "inspector",
   "notifications",
 ])
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
   { id: "workflow", icon: "workflow", labelKey: "chat.title", tooltipKey: "activity.tooltip.workflow" },
-  { id: "inspector", icon: "inspect", labelKey: "sections.title", tooltipKey: "activity.tooltip.inspector" },
+  {
+    id: "requirements",
+    icon: "spec",
+    labelKey: "workflow.requirements",
+    tooltipKey: "activity.tooltip.requirements",
+  },
+  {
+    id: "architect",
+    icon: "plan",
+    labelKey: "workflow.architect",
+    tooltipKey: "activity.tooltip.architect",
+  },
+  { id: "goals", icon: "goals", labelKey: "workflow.goals", tooltipKey: "activity.tooltip.goals" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title", tooltipKey: "activity.tooltip.explorer" },
   { id: "diff", icon: "files", labelKey: "workspace.diff", tooltipKey: "activity.tooltip.diff" },
   { id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser" },
@@ -676,11 +694,13 @@ function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
 function getCenterWorkbenchViews(): Record<CenterWorkbenchPanel, HTMLElement | null> {
   return {
     workflow: document.getElementById("centerWorkbenchWorkflow"),
+    requirements: document.getElementById("centerWorkbenchRequirements"),
+    architect: document.getElementById("centerWorkbenchArchitect"),
+    goals: document.getElementById("centerWorkbenchGoals"),
     explorer: document.getElementById("centerWorkbenchExplorer"),
     diff: document.getElementById("centerWorkbenchDiff"),
     browser: document.getElementById("centerWorkbenchBrowser"),
     screenshots: document.getElementById("centerWorkbenchScreenshots"),
-    inspector: document.getElementById("centerWorkbenchInspector"),
     notifications: document.getElementById("centerWorkbenchNotifications"),
     file: document.getElementById("centerWorkbenchFile"),
   }
@@ -1692,13 +1712,23 @@ disposers.push(
   }),
 )
 
-// ── Mount: Board (right-panel task workflow sections) ──
+// ── Mount: right-toolbar task scope panels ──
 
-const boardMountEl = document.getElementById("solidBoardMount")
-if (boardMountEl) {
+const requirementsPanelMountEl = document.getElementById("solidRequirementsPanelMount")
+if (requirementsPanelMountEl) {
+  render(() => <RequirementsBoardPanel />, requirementsPanelMountEl)
+}
+
+const architectPanelMountEl = document.getElementById("solidArchitectPanelMount")
+if (architectPanelMountEl) {
+  render(() => <ArchitectBoardPanel />, architectPanelMountEl)
+}
+
+const goalsPanelMountEl = document.getElementById("solidGoalsPanelMount")
+if (goalsPanelMountEl) {
   render(
     () => (
-      <Board
+      <GoalsBoardPanel
         onRetry={retrySelectedTask}
         onReplan={replanSelectedTask}
         onCancel={cancelSelectedTask}
@@ -1706,7 +1736,7 @@ if (boardMountEl) {
         onDeleteGoal={deleteGoal}
       />
     ),
-    boardMountEl,
+    goalsPanelMountEl,
   )
 }
 
@@ -1890,15 +1920,9 @@ disposers.push(
 
     createEffect(() => {
       const panels = centerWorkbenchPanels()
-      const sections = document.getElementById("sections")
-      const inspectorBody = document.getElementById("rightPanelInspector")
       const notificationsBody = document.getElementById("rightPanelNotifications")
-      const inspectorTitle = document.getElementById("rightPanelTitle")
       const notificationsTitle = document.getElementById("notificationPanelTitle")
-      if (sections) sections.dataset.rightActivity = "inspector"
-      if (inspectorTitle) inspectorTitle.textContent = t("sections.title")
       if (notificationsTitle) notificationsTitle.textContent = t("notify.center_label")
-      if (inspectorBody) inspectorBody.dataset.active = String(panels.includes("inspector"))
       if (notificationsBody) notificationsBody.dataset.active = String(panels.includes("notifications"))
       document.body.dataset.notificationsPanelOpen = String(panels.includes("notifications"))
     })
@@ -1926,15 +1950,10 @@ disposers.push(
       const sidebarCollapsed = false
 
       const sidebar = document.getElementById("sidebar")
-      const sections = document.getElementById("sections")
 
       if (sidebar) {
         sidebar.dataset.collapsed = String(sidebarCollapsed)
         sidebar.hidden = false
-      }
-      if (sections) {
-        sections.dataset.collapsed = "false"
-        sections.hidden = false
       }
 
       schedulePaneLayout({

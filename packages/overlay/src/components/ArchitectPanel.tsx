@@ -49,6 +49,9 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
           <span class="arch-generating-label">{t("workflow.architect_generating")}</span>
         </div>
       </Show>
+      <Show when={!props.isGenerating && !props.architect}>
+        <p class="empty-hint empty-hint--card">{t("workflow.architect_empty")}</p>
+      </Show>
       <Show when={props.architect}>
         <div class="arch-overview">
           <div class="arch-summary">

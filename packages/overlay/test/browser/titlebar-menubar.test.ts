@@ -1082,7 +1082,9 @@ test(
       assert.equal(intro.brandLabel, "Workspace")
       assert.deepEqual(intro.rightActivities, [
         { activity: "workflow", active: "true" },
-        { activity: "inspector", active: "false" },
+        { activity: "requirements", active: "false" },
+        { activity: "architect", active: "false" },
+        { activity: "goals", active: "false" },
         { activity: "explorer", active: "false" },
         { activity: "diff", active: "false" },
         { activity: "browser", active: "false" },
@@ -1551,14 +1553,14 @@ test(
       })
       assert.deepEqual(nonPrimaryControlsWithBackgrounds, [])
 
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
 
-      const afterInspectorOpen = await page.evaluate(() => {
+      const afterRequirementsOpen = await page.evaluate(() => {
         const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
         const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
         const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
         const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
-        const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
+        const requirements = document.querySelector<HTMLElement>("#centerWorkbenchRequirements")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
         const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
         const initialMaxWidthProbe = document.createElement("span")
@@ -1571,39 +1573,43 @@ test(
         return {
           sidebar: sidebar.width,
           chat: chat.width,
-          sections: sections.width,
+          requirements: requirements.width,
           rightToolbarPanelInitialMaxWidth,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
           workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
-          centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
-          centerInspectorInitialWidthCapped:
-            document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.initialWidthCapped || "",
-          inspectorButtonActive:
+          centerRequirementsActive:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active || "",
+          centerRequirementsInitialWidthCapped:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.initialWidthCapped || "",
+          requirementsButtonActive:
             document.querySelector<HTMLElement>(
-              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
             )?.dataset.active || "",
           leftHandleWidth: left.width,
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
 
-      const afterInspectorOpenMessage = JSON.stringify(afterInspectorOpen)
-      assert.ok(afterInspectorOpen.sections > 300, afterInspectorOpenMessage)
+      const afterRequirementsOpenMessage = JSON.stringify(afterRequirementsOpen)
+      assert.ok(afterRequirementsOpen.requirements > 300, afterRequirementsOpenMessage)
       assert.ok(
-        afterInspectorOpen.sections <= afterInspectorOpen.rightToolbarPanelInitialMaxWidth + 2,
-        afterInspectorOpenMessage,
+        afterRequirementsOpen.requirements <= afterRequirementsOpen.rightToolbarPanelInitialMaxWidth + 2,
+        afterRequirementsOpenMessage,
       )
-      assert.ok(afterInspectorOpen.chat > afterInspectorOpen.sections, afterInspectorOpenMessage)
-      assert.ok(afterInspectorOpen.leftDivider <= 2, afterInspectorOpenMessage)
-      assert.ok(afterInspectorOpen.rightDivider <= 2, afterInspectorOpenMessage)
-      assert.ok(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider) <= 1, afterInspectorOpenMessage)
-      assert.equal(afterInspectorOpen.workbenchStartsAtWorkspace, true)
-      assert.equal(afterInspectorOpen.centerInspectorActive, "true")
-      assert.equal(afterInspectorOpen.centerInspectorInitialWidthCapped, "true")
-      assert.equal(afterInspectorOpen.inspectorButtonActive, "true")
-      assert.ok(afterInspectorOpen.leftHandleWidth <= 2)
-      assert.equal(afterInspectorOpen.rightPaneResizerExists, false)
+      assert.ok(afterRequirementsOpen.chat > afterRequirementsOpen.requirements, afterRequirementsOpenMessage)
+      assert.ok(afterRequirementsOpen.leftDivider <= 2, afterRequirementsOpenMessage)
+      assert.ok(afterRequirementsOpen.rightDivider <= 2, afterRequirementsOpenMessage)
+      assert.ok(
+        Math.abs(afterRequirementsOpen.leftDivider - afterRequirementsOpen.rightDivider) <= 1,
+        afterRequirementsOpenMessage,
+      )
+      assert.equal(afterRequirementsOpen.workbenchStartsAtWorkspace, true)
+      assert.equal(afterRequirementsOpen.centerRequirementsActive, "true")
+      assert.equal(afterRequirementsOpen.centerRequirementsInitialWidthCapped, "true")
+      assert.equal(afterRequirementsOpen.requirementsButtonActive, "true")
+      assert.ok(afterRequirementsOpen.leftHandleWidth <= 2)
+      assert.equal(afterRequirementsOpen.rightPaneResizerExists, false)
 
       await page.evaluate(() => {
         localStorage.removeItem("oc_sidebar_width")

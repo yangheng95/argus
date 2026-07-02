@@ -2534,14 +2534,16 @@ button.s-row:focus-visible {
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
 }
-.provider-section-count,
 .provider-catalog-hint {
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   line-height: 1.4;
-}
-.provider-catalog-hint {
   text-align: right;
+}
+.provider-section-count {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.4;
 }
 .provider-flat-list {
   display: flex;
@@ -2624,7 +2626,6 @@ button.s-row:focus-visible {
   gap: var(--ui-gap-xs);
   min-width: 0;
 }
-.provider-model-count,
 .provider-auth-status {
   max-width: 100%;
   white-space: nowrap;
@@ -2632,6 +2633,10 @@ button.s-row:focus-visible {
   text-overflow: ellipsis;
 }
 .provider-model-count {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
 .provider-row-actions {

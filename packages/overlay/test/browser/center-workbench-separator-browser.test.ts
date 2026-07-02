@@ -54,7 +54,7 @@ async function separatorState(page: OverlayPage) {
   return await page.$eval("#centerWorkbenchSeparatorWorkflow", (node) => {
     const separator = node as HTMLElement
     const workflow = document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!
-    const inspector = document.querySelector<HTMLElement>("#centerWorkbenchInspector")!
+    const requirements = document.querySelector<HTMLElement>("#centerWorkbenchRequirements")!
     const min = separator.getAttribute("aria-valuemin")
     const max = separator.getAttribute("aria-valuemax")
     const now = separator.getAttribute("aria-valuenow")
@@ -91,10 +91,10 @@ async function separatorState(page: OverlayPage) {
       outlineOffset: style.outlineOffset,
       backgroundColor: style.backgroundColor,
       accentColor,
-      inspectorInitialWidthCapped: inspector.dataset.initialWidthCapped ?? "",
+      requirementsInitialWidthCapped: requirements.dataset.initialWidthCapped ?? "",
       rightToolbarPanelInitialMaxWidth,
       workflowWidth: Math.round(workflow.getBoundingClientRect().width),
-      inspectorWidth: Math.round(inspector.getBoundingClientRect().width),
+      requirementsWidth: Math.round(requirements.getBoundingClientRect().width),
     }
   })
 }
@@ -250,7 +250,7 @@ async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
     const panels = [
       document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!,
       document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")!,
-      document.querySelector<HTMLElement>("#centerWorkbenchInspector")!,
+      document.querySelector<HTMLElement>("#centerWorkbenchRequirements")!,
     ].map((panel) => {
       const rect = panel.getBoundingClientRect()
       return {
@@ -299,9 +299,9 @@ function assertThreeCenterWorkbenchPanelMinWidths(
     [
       ["centerWorkbenchWorkflow", "true"],
       ["centerWorkbenchScreenshots", "true"],
-      ["centerWorkbenchInspector", "true"],
+      ["centerWorkbenchRequirements", "true"],
     ],
-    `${label}: expected workflow, screenshots, and inspector to be open`,
+    `${label}: expected workflow, screenshots, and requirements to be open`,
   )
   for (const panel of layout.panels) {
     assert.ok(
@@ -357,6 +357,8 @@ test(
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts")
+        return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
@@ -402,29 +404,29 @@ test(
         }
       })
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-      await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
+      await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]', {
         visible: true,
       })
       await installCenterWorkbenchResizeInstrumentation(page)
       await beginCenterWorkbenchResizeInstrumentation(page)
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
-      const inspectorOpenEvents = await collectCenterWorkbenchResizeEvents(page)
-      assertCenterWorkbenchResizeReadsAreDeferred(inspectorOpenEvents, "inspector toolbar open")
+      const requirementsOpenEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(requirementsOpenEvents, "requirements toolbar open")
 
       const initial = await separatorState(page)
       assert.equal(initial.hidden, false)
       assert.equal(initial.disabled, "false")
       assert.equal(initial.role, "separator")
       assert.equal(initial.orientation, "vertical")
-      assert.equal(initial.controls, "centerWorkbenchWorkflow centerWorkbenchInspector")
+      assert.equal(initial.controls, "centerWorkbenchWorkflow centerWorkbenchRequirements")
       assert.equal(initial.tabIndex, 0)
       assert.ok(initial.minValue! < initial.maxValue!)
       assert.ok(initial.nowValue! >= initial.minValue!)
       assert.ok(initial.nowValue! <= initial.maxValue!)
-      assert.equal(initial.inspectorInitialWidthCapped, "true")
-      assert.ok(initial.inspectorWidth <= initial.rightToolbarPanelInitialMaxWidth + 1)
-      assert.ok(initial.workflowWidth > initial.inspectorWidth)
+      assert.equal(initial.requirementsInitialWidthCapped, "true")
+      assert.ok(initial.requirementsWidth <= initial.rightToolbarPanelInitialMaxWidth + 1)
+      assert.ok(initial.workflowWidth > initial.requirementsWidth)
 
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
@@ -513,8 +515,8 @@ test(
         initial.workflowWidth,
       )
       const pointerResized = await separatorState(page)
-      assert.equal(pointerResized.inspectorInitialWidthCapped, "false")
-      assert.ok(pointerResized.workflowWidth - pointerResized.inspectorWidth > 80)
+      assert.equal(pointerResized.requirementsInitialWidthCapped, "false")
+      assert.ok(pointerResized.workflowWidth - pointerResized.requirementsWidth > 80)
 
       await page.mouse.move(20, 20)
       await page.focus("#centerWorkbenchSeparatorWorkflow")
@@ -554,7 +556,7 @@ test(
         return Number(separator.getAttribute("aria-valuenow")) === Number(separator.getAttribute("aria-valuemax"))
       })
 
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       await page.waitForFunction(() => document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")?.hidden)
       const hidden = await separatorState(page)
       assert.equal(hidden.hidden, true)
@@ -564,7 +566,7 @@ test(
       assert.equal(hidden.max, null)
       assert.equal(hidden.now, null)
 
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.setViewport({ width: 1180, height: 720 })

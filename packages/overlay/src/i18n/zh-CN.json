@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "94efe1fa26a344af"
+    "panel_revision": "9c4c641fcd0705f0"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -54,7 +54,9 @@
   "activity.tooltip.browser": "打开当前任务作用域的浏览器预览和页面证据目标，用于视觉检查。",
   "activity.tooltip.diff": "查看当前任务的文件变更和聚焦 diff。",
   "activity.tooltip.explorer": "浏览当前工作区目录中的文件。",
-  "activity.tooltip.inspector": "检查需求、方案、目标、验收证据和任务诊断。",
+  "activity.tooltip.requirements": "打开当前任务的需求分析面板。",
+  "activity.tooltip.architect": "打开当前任务的架构契约面板。",
+  "activity.tooltip.goals": "打开当前任务的目标和验收证据面板。",
   "activity.tooltip.mcp": "管理 Agent 可用的 MCP 服务和工具连接。",
   "activity.tooltip.memory": "查看当前任务和会话关联的记忆条目。",
   "activity.tooltip.mission": "查看 Mission 及其创建的任务。",
@@ -903,7 +905,6 @@
   "explorer.delete_many_success": "已删除 {{count}} 项",
   "explorer.refresh": "刷新",
   "explorer.refresh_success": "资源管理器已刷新。",
-  "sections.title": "Inspector",
   "settings.language": "语言",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "简体中文",
@@ -1175,12 +1176,12 @@
   "workflow.architect_contracts": "契约",
   "workflow.architect_generating": "正在整理跨目标契约…",
   "workflow.goals": "目标",
+  "workflow.goals_pending": "尚未生成目标。",
   "workflow.status.completed": "已完成",
   "workflow.status.failed": "失败",
   "workflow.status.pending": "待开始",
   "workflow.status.running": "进行中",
   "workflow.status.skipped": "已跳过",
-  "workflow.frontend_research": "前端研究",
   "workflow.frontend_research_failed": "前端研究在产出 research brief 前失败。",
   "workflow.frontend_research_generating": "正在研究前端证据…",
   "workflow.frontend_research_pending": "前端研究尚未产出证据。",

@@ -41,7 +41,7 @@ async function saveElementScreenshot(page: any, selector: string, filename: stri
   return screenshotPath
 }
 
-test("right inspector Section summary exposes tokenized keyboard focus", async () => {
+test("right task-scope Section summary exposes tokenized keyboard focus", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -142,6 +142,8 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts")
+      return send({ scope: "project", skills: [], agents: [], matrix: [], project_mounts: {}, unmounted_count: 0 })
     if (path === "/skill/directories")
       return send({
         global_config: "D:/skills/config",
@@ -159,6 +161,8 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
         timeline: [],
         events: [],
         view: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        agentView: { topLevelSessionIDs: [], sessions: [], messages: [] },
+        history: { oldestTimestamp: null, oldestOrderKey: null, oldestMessageID: null, hasMore: false, limit: 100 },
         eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
         lastSequence: 0,
       })
@@ -211,12 +215,15 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
+    await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { visible: true, timeout: 15_000 })
+    await page.click(`.task-row-main[data-task-id="${taskID}"]`)
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]', {
       visible: true,
       timeout: 15_000,
     })
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
     await page.waitForSelector('[data-ui="workflow-section-stack"] .oc-section__head', {
       visible: true,
       timeout: 15_000,

@@ -556,7 +556,7 @@ test(
 
       const toolbarPlacement = await page.evaluate(() => {
         const rightButton = document.querySelector<HTMLElement>(
-          '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+          '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
         )!
         const right = rightButton.getBoundingClientRect()
         return {
@@ -570,9 +570,9 @@ test(
       assert.ok(toolbarPlacement.rightHeight <= 40)
 
       assertAbsent(await page.$("#rightPaneResizer"))
-      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
 
-      const inspectorWorkbench = await page.evaluate(() => {
+      const requirementsWorkbench = await page.evaluate(() => {
         const measure = (selector: string) => {
           const node = document.querySelector<HTMLElement>(selector)
           if (!node) throw new Error(`Missing ${selector}`)
@@ -593,37 +593,38 @@ test(
           sidebar: measure("#sidebar"),
           leftResizer: measure("#leftPaneResizer"),
           chat: measure("#chatSection"),
-          sections: measure("#sections"),
-          centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
-          inspectorButtonActive:
+          requirements: measure("#centerWorkbenchRequirements"),
+          centerRequirementsActive:
+            document.querySelector<HTMLElement>("#centerWorkbenchRequirements")?.dataset.active || "",
+          requirementsButtonActive:
             document.querySelector<HTMLElement>(
-              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]',
             )?.dataset.active || "",
           workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
           sidebarContentVisible:
             getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
-          sectionsContentVisible:
-            getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
+          requirementsContentVisible:
+            getComputedStyle(document.querySelector<HTMLElement>("#centerWorkbenchRequirements .task-scope-panel")!)
+              .display !== "none",
           dockLeftControlExists: exists('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'),
           dockRightControlExists: exists('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]'),
         }
       })
 
-      assert.equal(inspectorWorkbench.sidebar.hidden, false)
-      assert.equal(inspectorWorkbench.sidebar.display, "flex")
-      assert.equal(inspectorWorkbench.leftResizer.hidden, false)
-      assert.equal(inspectorWorkbench.leftResizer.disabled, "false")
-      assert.equal(inspectorWorkbench.sections.hidden, false)
-      assert.equal(inspectorWorkbench.sections.display, "flex")
-      assert.ok(inspectorWorkbench.sections.width > 300)
-      assert.ok(Math.abs(inspectorWorkbench.sections.width - inspectorWorkbench.chat.width) <= 2)
-      assert.equal(inspectorWorkbench.centerInspectorActive, "true")
-      assert.equal(inspectorWorkbench.inspectorButtonActive, "true")
-      assert.equal(inspectorWorkbench.workbenchStartsAtWorkspace, true)
-      assert.equal(inspectorWorkbench.sidebarContentVisible, true)
-      assert.equal(inspectorWorkbench.sectionsContentVisible, true)
-      assert.equal(inspectorWorkbench.dockLeftControlExists, false)
-      assert.equal(inspectorWorkbench.dockRightControlExists, false)
+      assert.equal(requirementsWorkbench.sidebar.hidden, false)
+      assert.equal(requirementsWorkbench.sidebar.display, "flex")
+      assert.equal(requirementsWorkbench.leftResizer.hidden, false)
+      assert.equal(requirementsWorkbench.leftResizer.disabled, "false")
+      assert.equal(requirementsWorkbench.requirements.hidden, false)
+      assert.equal(requirementsWorkbench.requirements.display, "flex")
+      assert.ok(requirementsWorkbench.requirements.width > 300)
+      assert.equal(requirementsWorkbench.centerRequirementsActive, "true")
+      assert.equal(requirementsWorkbench.requirementsButtonActive, "true")
+      assert.equal(requirementsWorkbench.workbenchStartsAtWorkspace, true)
+      assert.equal(requirementsWorkbench.sidebarContentVisible, true)
+      assert.equal(requirementsWorkbench.requirementsContentVisible, true)
+      assert.equal(requirementsWorkbench.dockLeftControlExists, false)
+      assert.equal(requirementsWorkbench.dockRightControlExists, false)
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()
