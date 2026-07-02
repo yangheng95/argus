@@ -193,29 +193,38 @@ async function seedReferenceComparisonEvidence(input: {
 }
 
 describe("visual-qa output tools", () => {
-  test("records accepted report with missing evidence and coverage as effective failure", async () => {
+  test("rejects accepted report with evidence refs that were not registered", async () => {
     const kit = createVisualQaOutputTools()
     const result = await submitReport(kit, validReport({ evidence: [], coverage: [] }))
 
-    expect(result).toContain("RECORDED")
-    expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("BLOCKERS")
-    expect(result).toContain("without fresh visual or functional evidence")
-    expect(result).toContain("without screenshot comparison or screen-by-screen screenshot evidence")
-    expect(result).toContain("without coverage items")
-    expect(kit.getCollector().final?.accepted).toBe(true)
+    expect(result).toContain("check graph is incomplete")
+    expect(result).toContain("unregistered evidence_ref: artifacts/desktop.png")
+    expect(kit.getCollector().final).toBeUndefined()
   })
 
   test("records accepted report without screenshot-bearing evidence as effective failure", async () => {
     const kit = createVisualQaOutputTools()
+    const commandRef = "node node_modules/playwright/cli.js test visual.spec.ts"
     const result = await submitReport(
       kit,
       validReport({
+        check_items: [checkItem({ evidence_refs: [commandRef] })],
+        coverage: [
+          {
+            check_ids: [DEFAULT_CHECK_ID],
+            region: "home/table",
+            viewports: [{ width: 1440, height: 900 }],
+            states: ["default", "narrow"],
+            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            evidence_refs: [commandRef],
+            notes: "Checked table behavior with command output only.",
+          },
+        ],
         evidence: [
           {
             check_ids: [DEFAULT_CHECK_ID],
             type: "command",
-            ref: "node node_modules/playwright/cli.js test visual.spec.ts",
+            ref: commandRef,
             note: "Command output only; no screenshot artifact was inspected.",
           },
         ],
@@ -356,6 +365,17 @@ describe("visual-qa output tools", () => {
             evidence_refs: ["artifacts/map.png"],
           },
         ],
+        evidence: [
+          validReport().evidence[0]!,
+          {
+            check_ids: ["check_map_fidelity"],
+            type: "screenshot",
+            ref: "artifacts/map.png",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Fresh screenshot shows the low-fidelity map placeholder.",
+          },
+        ],
       }),
     )
 
@@ -374,6 +394,12 @@ describe("visual-qa output tools", () => {
       kit,
       validReport({
         check_items: [checkItem(), referenceCheckItem("region_header@desktop", "artifacts/desktop.png")],
+        evidence: [
+          {
+            ...validReport().evidence[0]!,
+            check_ids: [DEFAULT_CHECK_ID, "check_region_header_desktop"],
+          },
+        ],
         reference_parity: {
           required: true,
           required_regions: ["region_header@desktop"],
@@ -390,6 +416,37 @@ describe("visual-qa output tools", () => {
     expect(result).toContain("host materialization must produce a scoped VisualEvidenceBundle")
     expect(result).not.toContain("BLOCKERS")
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
+  })
+
+  test("rejects reference parity refs that were not registered as evidence rows", async () => {
+    const kit = createVisualQaOutputTools({
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop"],
+    })
+    const result = await submitReport(
+      kit,
+      validReport({
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", "artifacts/desktop.png")],
+        evidence: [
+          {
+            ...validReport().evidence[0]!,
+            check_ids: [DEFAULT_CHECK_ID, "check_region_header_desktop"],
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop"],
+          reference_comparison_evidence_refs: ["browser_preview_evidence:missing_reference"],
+          missing_regions: [],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(result).toContain("check graph is incomplete")
+    expect(result).toContain("reference_parity")
+    expect(result).toContain("browser_preview_evidence:missing_reference")
+    expect(kit.getCollector().final).toBeUndefined()
   })
 
   test("records accepted reference parity with non-formal comparison refs as process accepted advisories", async () => {
@@ -431,6 +488,7 @@ describe("visual-qa output tools", () => {
             validReport({
               check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
               evidence: [
+                validReport().evidence[0]!,
                 {
                   check_ids: ["check_region_header_desktop"],
                   type: "reference_comparison",
@@ -496,6 +554,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -557,6 +616,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -606,6 +666,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -658,6 +719,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -708,6 +770,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -757,6 +820,7 @@ describe("visual-qa output tools", () => {
           validReport({
             check_items: [checkItem(), referenceCheckItem("region_header@desktop", evidenceID)],
             evidence: [
+              validReport().evidence[0]!,
               {
                 check_ids: ["check_region_header_desktop"],
                 type: "reference_comparison",
@@ -1014,6 +1078,17 @@ describe("visual-qa output tools", () => {
             notes: "The heading node is too small and compressed compared with the required hero hierarchy.",
           },
         ],
+        evidence: [
+          validReport().evidence[0]!,
+          {
+            check_ids: ["check_hero_hierarchy"],
+            type: "screenshot",
+            ref: "artifacts/hero.png",
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Fresh screenshot shows the compressed hero heading hierarchy.",
+          },
+        ],
       }),
     )
 
@@ -1047,6 +1122,7 @@ describe("visual-qa output tools", () => {
           referenceCheckItem("region_header@desktop", "browser_preview_evidence:art_header"),
         ],
         evidence: [
+          validReport().evidence[0]!,
           {
             check_ids: ["check_region_header_desktop"],
             type: "reference_comparison",

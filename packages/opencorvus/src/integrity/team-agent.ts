@@ -118,6 +118,8 @@ const REVIEWER_EVIDENCE_ROW_CONTRACT_PROMPT = [
   "Reviewer evidence row contract:",
   "- Each reviewer `evidence[]` row uses exactly `checkIDs` and `note`.",
   "- Every evidence note must cite the registered check item IDs it supports; do not submit plain evidence strings.",
+  "- Only fill check item `evidence[]` after actual tool-backed inspection or command/runtime/visual evidence exists, and reuse those exact evidence strings in reviewer `evidence[]`, `coverage[]`, or `drilldowns[]` support rows.",
+  "- Finding and required-repair `evidence[]` must come from the cited check item evidence; do not invent downstream evidence text from plans, summaries, or intent.",
 ].join("\n")
 
 const ADVERSARIAL_INVESTIGATION_PROMPT = [
@@ -319,6 +321,74 @@ function integrityReviewerCheckIDRows(report: IntegrityReviewerReport): Array<{
   ]
 }
 
+function addIntegrityEvidenceSupport(
+  map: Map<string, Set<string>>,
+  checkIDs: readonly string[],
+  evidence: string,
+): void {
+  for (const checkID of checkIDs) {
+    const set = map.get(checkID) ?? new Set<string>()
+    set.add(evidence)
+    map.set(checkID, set)
+  }
+}
+
+function integrityReviewerEvidenceSupportByCheckID(report: IntegrityTeamReport): Map<string, Set<string>> {
+  const support = new Map<string, Set<string>>()
+  for (const reviewer of report.reviewers) {
+    for (const row of reviewer.evidence) addIntegrityEvidenceSupport(support, row.checkIDs, row.note)
+    for (const row of reviewer.coverage) addIntegrityEvidenceSupport(support, row.checkIDs, row.evidence)
+    for (const row of reviewer.drilldowns) addIntegrityEvidenceSupport(support, row.checkIDs, row.result)
+  }
+  return support
+}
+
+function integrityCheckEvidenceByID(report: IntegrityTeamReport): Map<string, Set<string>> {
+  return new Map(report.checkItems.map((item) => [item.id, new Set(item.evidence)]))
+}
+
+function unsupportedIntegrityEvidenceIssues(report: IntegrityTeamReport): string[] {
+  const issues: string[] = []
+  const reviewerSupport = integrityReviewerEvidenceSupportByCheckID(report)
+  for (const item of report.checkItems) {
+    const support = reviewerSupport.get(item.id) ?? new Set<string>()
+    if (support.size === 0) {
+      issues.push(`checkItem "${item.id}" has no reviewer evidence, drilldown, or coverage support row.`)
+      continue
+    }
+    const missing = item.evidence.filter((evidence) => !support.has(evidence))
+    if (missing.length > 0) {
+      issues.push(
+        `checkItem "${item.id}" evidence is not backed by reviewer support rows: ${missing.join(" | ")}.`,
+      )
+    }
+  }
+
+  const checkEvidence = integrityCheckEvidenceByID(report)
+  const linkedEvidenceIssues = (
+    label: string,
+    id: string,
+    checkIDs: readonly string[],
+    evidenceItems: readonly string[],
+  ): void => {
+    const supported = new Set<string>()
+    for (const checkID of checkIDs) for (const evidence of checkEvidence.get(checkID) ?? []) supported.add(evidence)
+    const missing = evidenceItems.filter((evidence) => !supported.has(evidence))
+    if (missing.length > 0) {
+      issues.push(
+        `${label} "${id}" evidence is not present on its cited checkItems (${checkIDs.join(", ")}): ${missing.join(" | ")}.`,
+      )
+    }
+  }
+  for (const finding of report.findings) {
+    linkedEvidenceIssues("finding", finding.id, finding.checkIDs, finding.evidence)
+  }
+  for (const repair of report.requiredRepairs) {
+    linkedEvidenceIssues("requiredRepair", repair.id, repair.checkIDs, repair.evidence)
+  }
+  return issues
+}
+
 function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: ParsedRequirement[]): string[] {
   const issues: string[] = []
   if (report.checkItems.length === 0) {
@@ -390,6 +460,7 @@ function integrityCheckGraphIssues(report: IntegrityTeamReport, requirements?: P
     })),
   ]
   for (const row of rows) issues.push(...integrityUnknownCheckIDIssues(report, row.label, row.id, row.checkIDs))
+  issues.push(...unsupportedIntegrityEvidenceIssues(report))
   for (const finding of report.findings) {
     if (finding.severity !== "blocking") continue
     const linked = finding.checkIDs.map((checkID) => checkByID.get(checkID)).filter((item) => item !== undefined)

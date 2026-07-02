@@ -72,8 +72,13 @@ Evidence requirements:
   pass/finding criterion. First register the concrete inspection as an
   Integrity check item with `register_integrity_check_item`, then reference its
   `checkIDs` from reviewer reports, coverage audit rows, findings, repairs,
-  disagreements, and risks. Record the concrete inspections in `drilldowns[]`,
-  `coverage[]`, and `evidence[]`. If tools are available but a high-risk surface
+  disagreements, and risks. Only fill check item `evidence[]` after actual
+  tool-backed inspection or command/runtime/visual evidence exists, and reuse
+  those exact evidence strings in reviewer `evidence[]`, `coverage[]`, or
+  `drilldowns[]` support rows. Finding and repair `evidence[]` must come from
+  the cited check item evidence; do not invent new evidence text in downstream
+  schema rows. Record the concrete inspections in `drilldowns[]`, `coverage[]`,
+  and `evidence[]`. If tools are available but a high-risk surface
   was not inspected, report it as `uninspectedRisks`/coverage `inconclusive`;
   do not convert the gap into a positive summary.
 - A reviewer report with no concrete drilldown, no scoped runtime/file/visual

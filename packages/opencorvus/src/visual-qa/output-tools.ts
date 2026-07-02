@@ -115,6 +115,78 @@ function unknownCheckIDs(report: VisualQaReport, label: string, id: string, chec
   return unknownVisualCheckIDs(new Set(report.check_items.map((item) => item.id)), label, id, checkIDs)
 }
 
+function visualQaEvidenceRefIssues(report: VisualQaReport): string[] {
+  const evidenceByRef = new Map<string, VisualQaReport["evidence"]>()
+  for (const row of report.evidence) {
+    const existing = evidenceByRef.get(row.ref) ?? []
+    existing.push(row)
+    evidenceByRef.set(row.ref, existing)
+  }
+  const rows: Array<{ label: string; id: string; refs: readonly string[]; checkIDs: readonly string[] }> = [
+    ...report.check_items.map((row) => ({
+      label: "check_item",
+      id: row.id,
+      refs: row.evidence_refs,
+      checkIDs: [row.id],
+    })),
+    ...report.coverage.map((row, index) => ({
+      label: "coverage",
+      id: `${row.region || "row"}#${index + 1}`,
+      refs: row.evidence_refs,
+      checkIDs: row.check_ids,
+    })),
+    ...report.findings.map((row) => ({
+      label: "finding",
+      id: row.id,
+      refs: row.evidence_refs,
+      checkIDs: row.check_ids,
+    })),
+    ...report.production_blockers.map((row) => ({
+      label: "production_blocker",
+      id: row.id,
+      refs: row.evidence_refs,
+      checkIDs: row.check_ids,
+    })),
+    ...report.unresolved_code_module_problems.map((row) => ({
+      label: "unresolved_code_module_problem",
+      id: row.id,
+      refs: row.evidence_refs,
+      checkIDs: row.check_ids,
+    })),
+    ...report.problem_dom_regions.map((row) => ({
+      label: "problem_dom_region",
+      id: row.id,
+      refs: row.evidence_refs,
+      checkIDs: row.check_ids,
+    })),
+    {
+      label: "reference_parity",
+      id: "reference_comparison_evidence_refs",
+      refs: report.reference_parity.reference_comparison_evidence_refs,
+      checkIDs: [],
+    },
+  ]
+  const issues: string[] = []
+  for (const row of rows) {
+    for (const ref of row.refs) {
+      const evidenceRows = evidenceByRef.get(ref) ?? []
+      if (evidenceRows.length === 0) {
+        issues.push(`${row.label} "${row.id}" references unregistered evidence_ref: ${ref}.`)
+        continue
+      }
+      if (
+        row.checkIDs.length > 0 &&
+        !evidenceRows.some((evidence) => evidence.check_ids.some((checkID) => row.checkIDs.includes(checkID)))
+      ) {
+        issues.push(
+          `${row.label} "${row.id}" evidence_ref "${ref}" is registered but not tied to its check_ids: ${row.checkIDs.join(", ")}.`,
+        )
+      }
+    }
+  }
+  return issues
+}
+
 function collectorUnknownCheckIDIssues(
   collector: Pick<VisualQaCollector, "check_items">,
   rows: Array<{ label: string; id: string; checkIDs: readonly string[] }>,
@@ -221,6 +293,7 @@ function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutpu
     })),
   ]
   for (const row of checkRows) issues.push(...unknownCheckIDs(report, row.label, row.id, row.checkIDs))
+  issues.push(...visualQaEvidenceRefIssues(report))
   for (const blocker of report.production_blockers) {
     const linked = blocker.check_ids.map((checkID) => checkByID.get(checkID)).filter((item) => item !== undefined)
     if (linked.length > 0 && linked.every((item) => item.status === "passed")) {

@@ -885,6 +885,86 @@ describe("integrity team-agent replay attempts", () => {
     expect(collector.reviewers).toHaveLength(0)
   })
 
+  test("submit_integrity_consensus rejects check evidence without reviewer support rows", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const collector = IntegrityTestHooks.emptyConsensusCollector()
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector,
+      goals: [],
+    } as any)
+    const report = passTeamReport()
+    report.checkItems[0]!.evidence = ["unbacked evidence string"]
+
+    const result = await submitRegisteredIntegrityReport(kit.tools, report)
+
+    expect(String(result)).toContain("check graph is incomplete")
+    expect(String(result)).toContain("checkItem \"check_surface_a\" evidence is not backed by reviewer support rows")
+    expect(collector.report).toBeUndefined()
+  })
+
+  test("submit_integrity_consensus rejects finding and repair evidence outside cited check evidence", async () => {
+    const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
+    const collector = IntegrityTestHooks.emptyConsensusCollector()
+    const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
+      collector,
+      goals: [],
+    } as any)
+    const report = passTeamReport()
+    report.verdict = "needs_correction"
+    report.summary = "Team found a backed defect."
+    report.teamReportMarkdown = "Team found a backed defect."
+    report.checkItems[0]!.status = "failed"
+    report.reviewers[0]!.verdict = "needs_correction"
+    report.findings = [
+      {
+        id: "finding_detached_evidence",
+        checkIDs: ["check_surface_a"],
+        severity: "blocking",
+        verdictImpact: "needs_correction",
+        title: "Detached evidence finding",
+        description: "The finding cites evidence that was not on the cited check item.",
+        evidence: ["invented finding evidence"],
+        targetIDs: [],
+        requirementIDs: [],
+        specIDs: [],
+        userRequestQuotes: ["Surface A satisfies its scoped promise."],
+        filePaths: ["src/surface-a.ts"],
+        affectedSymbols: [],
+        repair: "Repair Surface A.",
+        verify: ["Re-run the Surface A check."],
+        sourceFindingIDs: [],
+        priorAttemptRefs: [],
+        reviewers: ["rev_a"],
+        consensus: "agreed",
+      },
+    ]
+    report.requiredRepairs = [
+      {
+        id: "repair_detached_evidence",
+        checkIDs: ["check_surface_a"],
+        severity: "blocking",
+        description: "Repair the detached evidence finding.",
+        evidence: ["invented repair evidence"],
+        targetIDs: [],
+        requirementIDs: [],
+        specIDs: [],
+        filePaths: ["src/surface-a.ts"],
+        affectedSymbols: [],
+        repair: "Repair Surface A.",
+        verify: ["Re-run the Surface A check."],
+        sourceFindingIDs: ["finding_detached_evidence"],
+        priorAttemptRefs: [],
+      },
+    ]
+
+    const result = await submitRegisteredIntegrityReport(kit.tools, report)
+
+    expect(String(result)).toContain("check graph is incomplete")
+    expect(String(result)).toContain("finding \"finding_detached_evidence\" evidence is not present")
+    expect(String(result)).toContain("requiredRepair \"repair_detached_evidence\" evidence is not present")
+    expect(collector.report).toBeUndefined()
+  })
+
   test("submit_integrity_consensus rejects duplicate submits without overwriting the report", async () => {
     const { IntegrityTestHooks } = await import("../../src/integrity/team-agent")
     const collector = IntegrityTestHooks.emptyConsensusCollector()
@@ -1115,6 +1195,8 @@ describe("integrity team-agent replay attempts", () => {
         "A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]`",
       )
       expect(prompt).toContain("Do not write congratulatory or effort-focused summaries")
+      expect(prompt).toContain("Only fill check item `evidence[]` after actual tool-backed inspection")
+      expect(prompt).toContain("Finding and required-repair `evidence[]` must come from the cited check item evidence")
     }
 
     expect(reviewerPrompt).toContain("Actively try to falsify your scoped pass story")
