@@ -388,6 +388,8 @@ describe("BuildAgent managed worktree runtime", () => {
         expect(captured.run?.cwd).toBe(workDir)
         expect(captured.run?.logicalSessionID).toBe(output.sessionID)
         expect(captured.run?.taskID).toBe(taskID)
+        expect(output.worktreeDir).toBe(workDir)
+        expect(output.worktreeBranch).toBeUndefined()
       },
     })
   }, 30_000)

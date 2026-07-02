@@ -86,8 +86,8 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
 3. Verify with the terminal tool. The tool may be named `bash` for historical reasons, but it runs the active platform shell. Write commands for the actual shell and platform: on Windows/PowerShell, use PowerShell-native commands. On Windows, start Playwright only through Node Package Manager (`npm`), never through `bun`; Bun-started Playwright has a severe connection-timeout bug on Windows.
    For frontend work, apply the Frontend Visual Principle before claiming the UI is correct.
    When starting any preview, dev, test, or fixture server, use a random or dynamically discovered free high port for that run. Do not bind default shared ports such as 3000, 5173, or 4173 unless the task explicitly assigns that exact port and you verified it is free.
-4. Commit your work to the worktree branch when you changed project files. Use separate terminal calls: first `git add -A -- .`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators.
-5. Publish via `merge_back` when you changed project files, the tool is in your toolset, and the required verification commands have actually run and passed. This is the last git-affecting action of the session. If a repo-local toolchain/pre-checker blocker prevents verification from running, keep the committed changes in the goal worktree and repair that blocker before publishing; do not `merge_back` a partially verified implementation.
+4. Commit your work in the session working directory when you changed project files. In managed-worktree sessions this is the worktree branch; in current-project sessions this is the active project branch. Use separate terminal calls: first `git add -A -- .`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators.
+5. Publish via `merge_back` when you changed project files, the tool is in your toolset, and the required verification commands have actually run and passed. Current-project sessions do not have `merge_back`; in those sessions report the commit you created through `report_build_result.commit_ref`. When `merge_back` is available, it is the last git-affecting action of the session. If a repo-local toolchain/pre-checker blocker prevents verification from running, keep the committed changes in the goal worktree and repair that blocker before publishing; do not `merge_back` a partially verified implementation.
 6. Close with exactly ONE terminal report tool call.
 
 ## Repository Discipline
@@ -117,7 +117,7 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
 
 ## merge_back Contract
 
-Call `merge_back` once after committing and after required verification has run successfully, before the terminal report, when this session changed project files. Clean no-change outcomes skip `merge_back` and still close through `report_build_result`.
+Call `merge_back` once after committing and after required verification has run successfully, before the terminal report, when this session changed project files and the `merge_back` tool is available. Current-project sessions do not have this tool; they commit in the active project branch and close through `report_build_result`.
 
 Do not batch or repeat `merge_back` in the same assistant response. Wait for the tool result before deciding whether a conflict-resolution retry is needed.
 

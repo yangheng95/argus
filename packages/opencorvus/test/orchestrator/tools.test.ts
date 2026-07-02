@@ -91,6 +91,7 @@ import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 import { SessionControl } from "../../src/session/control"
+import { Worktree } from "../../src/worktree"
 import {
   claimStageContinuationRequest,
   createStageContinuationRequest,
@@ -12041,6 +12042,190 @@ describe("orchestrator tools", () => {
     expect(capturedContext?.visualQaFeedback).toContain('locator: main [data-testid="market-tabs"]')
     expect(capturedContext?.visualQaFeedback).toContain("code_search_terms: market-tabs, MarketTabs, loose")
     expect(capturedContext?.acceptanceFeedback).toBeUndefined()
+  })
+
+  test("goal build can run in current project without persisting a managed workspace", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_goal_current_project_${stamp}`
+    const goalID = `gol_goal_current_project_${stamp}`
+    let capturedRunInput: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal current project build test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal current project build test",
+          taskTitle: "Goal current project task",
+          request: "Implement a goal in the current project directory.",
+          goalTitle: "Current project goal",
+          goalSlug: "current-project-goal",
+          objective: "Verify current-project goal build does not register a managed workspace.",
+          now,
+          insertProject: false,
+        })
+
+        const createWorktreeSpy = spyOn(Worktree, "create")
+        buildAgentRunImpl = async (input: any) => {
+          capturedRunInput = input
+          await markBuildSlotAcquired(input, `ses_goal_current_project_${stamp}`)
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal build committed in the current project directory.",
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed the current project implementation.",
+                  reason: "The model selected current_project worktree usage.",
+                },
+              ],
+              tests: [],
+              commit_ref: "cur1234",
+            },
+            sessionID: `ses_goal_current_project_${stamp}`,
+            worktreeDir: input.workDir,
+            mergeBackStatus: "not_invoked",
+            worktreeHead: "cur1234",
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            reason: "Per-goal pipeline execution in the current project directory.",
+            worktreeUsage: "current_project",
+          },
+          buildToolOptions("goal_current_project"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(goalID, "passed")
+        expect(createWorktreeSpy).not.toHaveBeenCalled()
+      },
+    })
+
+    expect(capturedRunInput?.workDir).toBe(tmp.path)
+    expect(capturedRunInput?.managedWorktree).toBeUndefined()
+
+    const latestWorkspace = findGoalLatestWorkspace(goalID)
+    expect(latestWorkspace.directory).toBeNull()
+    expect(latestWorkspace.branch).toBeNull()
+
+    const goalRun = listGoalRunsByGoal(goalID)[0]
+    expect(goalRun?.workspace_dir).toBeNull()
+    expect(goalRun?.workspace_branch).toBeNull()
+    const outcome = Database.use((db) =>
+      db
+        .select()
+        .from(EngineArtifactTable)
+        .where(
+          and(
+            eq(EngineArtifactTable.goal_run_id, goalRun!.id),
+            eq(EngineArtifactTable.kind, "build_attempt_outcome"),
+          ),
+        )
+        .get(),
+    )
+    expect((outcome?.payload as any)?.host_facts?.contribution_commit_ref).toBe("cur1234")
+    expect((outcome?.payload as any)?.workspace?.dir).toBeNull()
+  })
+
+  test("task-level direct build can explicitly request a managed worktree", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_direct_managed_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const managedDir = path.join(tmp.path, ".opencorvus", "r", "w", "direct-managed")
+    let capturedRunInput: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Direct managed worktree task",
+              request: "Verify direct build can still request a managed worktree",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+        const parent = await Session.create({ kind: "root", title: "direct managed worktree test" })
+        buildAgentRunImpl = async (input: any) => {
+          capturedRunInput = input
+          await input.onSessionCreated?.(`ses_direct_managed_${stamp}`, {
+            worktreeDir: managedDir,
+            worktreeBranch: `opencorvus/direct-managed-${stamp}`,
+            worktreeBaseRef: "base1234",
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Direct build ran through a managed worktree.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "merged123",
+            },
+            sessionID: `ses_direct_managed_${stamp}`,
+            worktreeDir: managedDir,
+            worktreeBranch: `opencorvus/direct-managed-${stamp}`,
+            worktreeBaseRef: "base1234",
+            mergeBackStatus: "merged",
+            publishedCommitRef: "merged123",
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Implement through an isolated managed worktree.",
+            reason: "Scoped direct implementation with explicit isolation.",
+            directBuildIntent: "modify_files",
+            worktreeUsage: "managed_worktree",
+          },
+          buildToolOptions("direct_managed"),
+        )
+
+        expect(toolText(result)).toContain("Build agent finished (status=passed")
+        expect(toolText(result)).toContain(`worktreeDir: ${managedDir}`)
+      },
+    })
+
+    expect(capturedRunInput?.workDir).toBeUndefined()
+    expect(capturedRunInput?.managedWorktree).toBeUndefined()
   })
 
   test("workflow task-level investigation build is rejected before starting build agent", async () => {

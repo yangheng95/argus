@@ -147,6 +147,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       "reason",
       "goalID",
       "directBuildIntent",
+      "worktreeUsage",
       "userConfirmedStaleIntegrityData",
     ])
     expect(

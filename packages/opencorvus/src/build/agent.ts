@@ -466,9 +466,9 @@ export namespace BuildAgent {
       sessionID: string,
       context: { worktreeDir?: string; worktreeBranch?: string; worktreeBaseRef?: string },
     ) => string | void | Promise<string | void>
-    /** Optional pre-allocated worktree dir. When provided, the build agent
-     *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
-     *  When absent the agent creates a managed worktree under
+    /** Optional caller-owned working directory. When provided, the build agent
+     *  uses it as-is, does not expose merge_back, and does not manage its
+     *  lifecycle. When absent the agent creates a managed worktree under
      *  `<primary>/.opencorvus/r/`. */
     workDir?: string
     /** Goal-scoped managed worktree recorded on engine_goal. Unlike workDir,
@@ -487,8 +487,8 @@ export namespace BuildAgent {
     /** The child "build" session created for this invocation. Callers may
      *  inspect its message stream for audit / UI. */
     sessionID: string
-    /** The worktree directory used by this run. Absent when the caller
-     *  supplied `workDir` (caller already has it). */
+    /** The working directory used by this run: managed worktree directory or
+     *  caller-owned `workDir`. */
     worktreeDir?: string
     /** Branch checked out by worktreeDir. Present for build-managed worktrees. */
     worktreeBranch?: string
@@ -530,8 +530,8 @@ export namespace BuildAgent {
      *  Use this — not result.commit_ref — when persisting the goal's
      *  published commit reference. */
     publishedCommitRef?: string
-    /** Worktree HEAD commit (short SHA) at the end of the run. Always
-     *  present when a managed worktree exists. The orchestrator can
+    /** Working-directory HEAD commit (short SHA) at the end of the run. Always
+     *  present when the directory is a git repository. The orchestrator can
      *  compare against publishedCommitRef to see what was committed but
      *  not yet merged. */
     worktreeHead?: string
@@ -914,10 +914,10 @@ export namespace BuildAgent {
             "and does NOT audit your files_changed[] against the actual git diff. " +
             "Both facts are returned to the orchestrator alongside your report (merge_back_status, actual_changed_files), " +
             "so the orchestrator LLM cross-checks honesty itself. " +
-            "Be honest: if you changed project files but didn't merge, report status='failed' with a concrete error. " +
+            "Be honest: if the merge_back tool is available and you changed project files but did not merge, report status='failed' with a concrete error. " +
             "If integrity feedback gave you blocking fingerprints, include repair_report and list every fingerprint exactly once as repaired or unrepaired. " +
             "Include contract_restatement with the detailed req/goal you actually handled, and followup_workload_guidance warning later agents what work surface still needs deeper workload investigation. " +
-            "If you legitimately reused a prior attempt's worktree without further edits, or the scoped implementation was already satisfied with a clean worktree, status='passed' with files_changed=[] is fine.",
+            "If you legitimately reused a prior attempt's working directory without further edits, or the scoped implementation was already satisfied with a clean working directory, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
             const evaluated = evaluateBuildReportSubmission({
@@ -987,8 +987,8 @@ export namespace BuildAgent {
               buildReport: buildBuildReport,
             }
           : {
-              // Caller-owned worktrees (input.workDir set) skip merge_back — the
-              // caller manages publishing. The agent prompt is gated on the
+              // Caller-owned directories (input.workDir set) skip merge_back —
+              // the caller manages publishing. The agent prompt is gated on the
               // tool's presence so the LLM does not invent the call.
               tools: createBuildRuntimeTools(),
               getCollector: () => buildCollector,
@@ -1002,8 +1002,9 @@ export namespace BuildAgent {
       // Dispatch fork: executor === "opencorvus" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
-      // in the worktree on its own, then BuildAgent runs merge_back itself
-      // because the SDK has no way to call our merge_back tool.
+      // in the session working directory on its own, then BuildAgent runs
+      // merge_back itself when the session uses a managed worktree because
+      // the SDK has no way to call our merge_back tool.
       const executor = input.task.executor ?? "opencorvus"
       const runOpenCorvusBuildSession = async (continuation?: AgentSessionContinuation) =>
         await runAgentSession({
@@ -1204,7 +1205,7 @@ export namespace BuildAgent {
       // derived from the same in-closure variables the prior guards used —
       // mergedHead set ⇒ "merged"; otherwise the lastMergeBackOutcome text
       // pattern indicates which stage failed. "not_invoked" covers both
-      // caller-owned worktrees (no merge_back tool) and managed worktrees
+      // caller-owned directories (no merge_back tool) and managed worktrees
       // where the agent never called the tool.
       const mergeBackStatus: RunOutput["mergeBackStatus"] = mergedHead
         ? "merged"
@@ -1218,7 +1219,7 @@ export namespace BuildAgent {
                 : "not_invoked"
           : "not_invoked"
 
-      // Worktree HEAD captured for the orchestrator independent of merge.
+      // Working-directory HEAD captured for the orchestrator independent of merge.
       let worktreeHead: string | undefined
       if (worktreeDir) {
         const result = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, timeoutProfile: "fast" })
@@ -1243,7 +1244,7 @@ export namespace BuildAgent {
       return {
         result: parsed.data,
         sessionID: out.session.id,
-        worktreeDir: ownsWorktree ? worktreeDir : undefined,
+        worktreeDir,
         worktreeBranch: ownsWorktree ? worktreeBranch : undefined,
         worktreeBaseRef: ownsWorktree ? baseRef : undefined,
         diffs,
@@ -1271,7 +1272,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
   return [
     `You are the OpenCorvus external build executor running through ${executor}.`,
     "",
-    "Your job is to implement the scoped build request in the current worktree, verify it, and commit the result on the worktree branch.",
+    "Your job is to implement the scoped build request in the session working directory, verify it, and commit the result in that directory.",
     "",
     "Hard contract:",
     "- Treat the user prompt as a build contract, not as a chat request.",

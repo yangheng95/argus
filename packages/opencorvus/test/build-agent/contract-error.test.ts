@@ -353,6 +353,26 @@ describe("evaluateBuildReportSubmission", () => {
       expect(evaluated.output).toBe("RECORDED: build report status=passed.")
     }
   })
+
+  test("preserves caller-owned workDir commit_ref without merge_back", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Implemented directly in the current project",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        commit_ref: "cur1234",
+      },
+      ownsWorktree: false,
+    })
+
+    expect(evaluated.accepted).toBe(true)
+    if (evaluated.accepted) {
+      expect(evaluated.result.commit_ref).toBe("cur1234")
+      expect(evaluated.output).toBe("RECORDED: build report status=passed.")
+    }
+  })
 })
 
 describe("createMergeBackSingleFlight", () => {

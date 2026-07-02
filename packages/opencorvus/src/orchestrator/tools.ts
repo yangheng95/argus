@@ -12665,9 +12665,10 @@ export function createOrchestratorTools(input: {
         "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
         "shape after architect has registered goals. On retry/rework, omit `request` when persisted " +
         "failure facts already exist; the build retry message is composed from those facts only. " +
-        "Retry context recovery is selected from durable prior-session evidence: resumable sessions " +
-        "are resumed, while typed non-resumable context failures open a fresh child session on the same " +
-        "recorded goal worktree. Do not express this through `reason`, `request`, or a `freshContext` field. " +
+        "Retry context recovery is selected from durable prior-session evidence when worktreeUsage is " +
+        "managed_worktree: resumable sessions are resumed, while typed non-resumable context failures open " +
+        "a fresh child session on the same recorded goal worktree. Do not express this through `reason`, " +
+        "`request`, or a `freshContext` field. " +
         "Use `request` for a per-goal retry only when you have one exact new operator/error fact that " +
         "is not already in persisted build, acceptance, or integrity evidence. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct implementation build. It is supported for explicit `kind=build` tasks, whole-task rework after " +
@@ -12716,6 +12717,12 @@ export function createOrchestratorTools(input: {
             .describe(
               "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
             ),
+          worktreeUsage: z
+            .enum(["managed_worktree", "current_project"])
+            .optional()
+            .describe(
+              "Optional execution-directory choice. managed_worktree creates or reuses a build-managed git worktree and exposes merge_back. current_project runs in the active project directory as caller-owned workDir and does not expose merge_back. Omitted values use the schema defaults: goal-scoped builds use managed_worktree; task-level direct builds use current_project.",
+            ),
           userConfirmedStaleIntegrityData: z
             .boolean()
             .optional()
@@ -12725,7 +12732,7 @@ export function createOrchestratorTools(input: {
         })
         .strict(),
       execute: async (
-        { request = "", reason, goalID, directBuildIntent, userConfirmedStaleIntegrityData },
+        { request = "", reason, goalID, directBuildIntent, worktreeUsage, userConfirmedStaleIntegrityData },
         options,
       ) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
@@ -12738,6 +12745,7 @@ export function createOrchestratorTools(input: {
           requestLen: request.length,
           goalID: goalID || "",
           directBuildIntent: declaredDirectBuildIntent ?? "",
+          worktreeUsage: worktreeUsage ?? "",
         })
 
         const missingIntegrityArtifact = findLatestIntegrityArtifactMissingStatus(taskID)
@@ -12758,6 +12766,7 @@ export function createOrchestratorTools(input: {
         if (resolvedGoalReference && !resolvedGoalReference.ok) return resolvedGoalReference.message
         const attachedGoalID = resolvedGoalReference?.goalID
         const isTaskLevelBuild = !attachedGoalID
+        const selectedWorktreeUsage = worktreeUsage ?? (attachedGoalID ? "managed_worktree" : "current_project")
         if (attachedGoalID) {
           assertNoActiveGoalWorkForBuild({
             taskID,
@@ -12874,8 +12883,9 @@ export function createOrchestratorTools(input: {
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
-          let directBuildWorkDir: string | undefined
+          let callerOwnedBuildWorkDir: string | undefined
           let existingBuildSessionID: string | undefined
+          const taskProjectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
           if (attachedGoalID) {
             const { findGoal, findRequirements, listGoals, findGoalLatestWorkspace } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
@@ -12920,109 +12930,113 @@ export function createOrchestratorTools(input: {
                   "Re-run architect so contract_audit.contract_ids are copied from registered graph contract ids.",
               )
             }
-            // Phase B (2026-05-05): persistent worktree pointer comes from
-            // the latest goal_run_attempt artifact, not engine_goal columns.
-            // findGoalLatestWorkspace returns the triple from the newest
-            // payload — null when no attempt has run yet OR when terminal
-            // cleanup nulled the pointer.
-            const recorded = findGoalLatestWorkspace(attachedGoalID)
-            const recordedWorkspaceDir = recorded.directory?.trim() ?? ""
-            const recordedWorkspaceBranch = recorded.branch?.trim() ?? ""
-            const recordedWorkspaceBaseRef = recorded.baseRef ?? null
-            if (recordedWorkspaceDir || recordedWorkspaceBranch) {
-              if (!recordedWorkspaceDir || !recordedWorkspaceBranch) {
-                return (
-                  `build: goal ${attachedGoalID} has inconsistent workspace metadata ` +
-                  `(workspace_dir=${recordedWorkspaceDir || "null"}, ` +
-                  `workspace_branch=${recordedWorkspaceBranch || "null"}). ` +
-                  `This is a structural error; clean or reset the goal workspace explicitly.`
-                )
-              }
-              const valid = await Worktree.isValid(recordedWorkspaceDir)
-              if (!valid.valid) {
-                const recovered = await Worktree.recoverRecorded({
-                  directory: recordedWorkspaceDir,
-                  branch: recordedWorkspaceBranch,
-                })
-                if (recovered.status !== "recovered") {
-                  return (
-                    `build: recorded workspace for goal ${attachedGoalID} is invalid: ` +
-                    `${recordedWorkspaceDir} (${valid.reason ?? "unknown reason"}). ` +
-                    `Automatic reattach failed: ${recovered.reason}. Preserve that directory and fix or reset the goal workspace explicitly.`
-                  )
-                }
-                managedWorktree = {
-                  directory: recovered.directory,
-                  branch: recovered.branch,
-                  baseRef: recordedWorkspaceBaseRef,
-                }
-                // Phase G (2026-05-05): the recovered pointer rides the new
-                // attempt artifact via beginBuildAttempt below — no extra
-                // updateGoalWorkspace write needed. The previous explicit
-                // call routed through the synthetic-runID createGoalRun
-                // branch when a tip happened to be missing; both branches
-                // are now redundant since beginBuildAttempt always carries
-                // the workspace triple.
-                log.warn("reattached invalid goal workspace before build", {
-                  goalID: goal.id,
-                  reason: valid.reason ?? "unknown reason",
-                  workspaceDir: recovered.directory,
-                  workspaceBranch: recovered.branch,
-                })
-              }
-              if (!managedWorktree) {
-                managedWorktree = {
-                  directory: recordedWorkspaceDir,
-                  branch: recordedWorkspaceBranch,
-                  baseRef: recordedWorkspaceBaseRef,
-                }
-              }
+            if (selectedWorktreeUsage === "current_project") {
+              callerOwnedBuildWorkDir = taskProjectDir
             } else {
-              if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
-                throw new Error(
-                  `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} has no recorded worktree; fresh context retry cannot reuse worktree.`,
-                )
-              }
-              const info = await Worktree.create({
-                name: `goal-${goal.id.slice(-8)}`,
-                taskID,
-                goalID: goal.id,
-                runID: coordinatorRunID ?? taskID,
-              })
-              managedWorktree = {
-                directory: info.directory,
-                branch: info.branch,
-                baseRef: null,
-              }
-              // Phase G (2026-05-05): see comment above. The freshly created
-              // worktree's pointer flows into the first goal_run_attempt
-              // artifact via beginBuildAttempt — the prior pre-attempt
-              // updateGoalWorkspace call hit the no-tip synthetic-runID
-              // branch and was a no-op once the artifact landed.
-            }
-            if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
-              const selectedBuildSession = await selectGoalBuildRetrySession({
-                goalID: attachedGoalID,
-                priorGoalRun: priorGoalRunForRetry,
-                managedWorktree,
-                executor: task.executor,
-              })
-              existingBuildSessionID = selectedBuildSession.existingSessionID
-              if (!existingBuildSessionID) {
-                if (!managedWorktree?.directory) {
-                  throw new Error(
-                    `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} cannot resume session and has no reusable worktree: ${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}`,
+              // Phase B (2026-05-05): persistent worktree pointer comes from
+              // the latest goal_run_attempt artifact, not engine_goal columns.
+              // findGoalLatestWorkspace returns the triple from the newest
+              // payload — null when no attempt has run yet OR when terminal
+              // cleanup nulled the pointer.
+              const recorded = findGoalLatestWorkspace(attachedGoalID)
+              const recordedWorkspaceDir = recorded.directory?.trim() ?? ""
+              const recordedWorkspaceBranch = recorded.branch?.trim() ?? ""
+              const recordedWorkspaceBaseRef = recorded.baseRef ?? null
+              if (recordedWorkspaceDir || recordedWorkspaceBranch) {
+                if (!recordedWorkspaceDir || !recordedWorkspaceBranch) {
+                  return (
+                    `build: goal ${attachedGoalID} has inconsistent workspace metadata ` +
+                    `(workspace_dir=${recordedWorkspaceDir || "null"}, ` +
+                    `workspace_branch=${recordedWorkspaceBranch || "null"}). ` +
+                    `This is a structural error; clean or reset the goal workspace explicitly.`
                   )
                 }
-                createDecisionLog(taskID).append({
-                  phase: "orchestrator",
-                  goalID: attachedGoalID,
-                  key: `build_retry_fresh_session_${priorGoalRunForRetry.id}`,
-                  value:
-                    `Build retry selected a fresh build session because the previous build session context is unavailable ` +
-                    `(${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}); reusing worktree ${managedWorktree.directory}.`,
-                  reason: "build_retry_session_context_unavailable",
+                const valid = await Worktree.isValid(recordedWorkspaceDir)
+                if (!valid.valid) {
+                  const recovered = await Worktree.recoverRecorded({
+                    directory: recordedWorkspaceDir,
+                    branch: recordedWorkspaceBranch,
+                  })
+                  if (recovered.status !== "recovered") {
+                    return (
+                      `build: recorded workspace for goal ${attachedGoalID} is invalid: ` +
+                      `${recordedWorkspaceDir} (${valid.reason ?? "unknown reason"}). ` +
+                      `Automatic reattach failed: ${recovered.reason}. Preserve that directory and fix or reset the goal workspace explicitly.`
+                    )
+                  }
+                  managedWorktree = {
+                    directory: recovered.directory,
+                    branch: recovered.branch,
+                    baseRef: recordedWorkspaceBaseRef,
+                  }
+                  // Phase G (2026-05-05): the recovered pointer rides the new
+                  // attempt artifact via beginBuildAttempt below — no extra
+                  // updateGoalWorkspace write needed. The previous explicit
+                  // call routed through the synthetic-runID createGoalRun
+                  // branch when a tip happened to be missing; both branches
+                  // are now redundant since beginBuildAttempt always carries
+                  // the workspace triple.
+                  log.warn("reattached invalid goal workspace before build", {
+                    goalID: goal.id,
+                    reason: valid.reason ?? "unknown reason",
+                    workspaceDir: recovered.directory,
+                    workspaceBranch: recovered.branch,
+                  })
+                }
+                if (!managedWorktree) {
+                  managedWorktree = {
+                    directory: recordedWorkspaceDir,
+                    branch: recordedWorkspaceBranch,
+                    baseRef: recordedWorkspaceBaseRef,
+                  }
+                }
+              } else {
+                if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
+                  throw new Error(
+                    `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} has no recorded worktree; fresh context retry cannot reuse worktree.`,
+                  )
+                }
+                const info = await Worktree.create({
+                  name: `goal-${goal.id.slice(-8)}`,
+                  taskID,
+                  goalID: goal.id,
+                  runID: coordinatorRunID ?? taskID,
                 })
+                managedWorktree = {
+                  directory: info.directory,
+                  branch: info.branch,
+                  baseRef: null,
+                }
+                // Phase G (2026-05-05): see comment above. The freshly created
+                // worktree's pointer flows into the first goal_run_attempt
+                // artifact via beginBuildAttempt — the prior pre-attempt
+                // updateGoalWorkspace call hit the no-tip synthetic-runID
+                // branch and was a no-op once the artifact landed.
+              }
+              if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
+                const selectedBuildSession = await selectGoalBuildRetrySession({
+                  goalID: attachedGoalID,
+                  priorGoalRun: priorGoalRunForRetry,
+                  managedWorktree,
+                  executor: task.executor,
+                })
+                existingBuildSessionID = selectedBuildSession.existingSessionID
+                if (!existingBuildSessionID) {
+                  if (!managedWorktree?.directory) {
+                    throw new Error(
+                      `build: goal ${attachedGoalID} prior terminal goal_run ${priorGoalRunForRetry.id} cannot resume session and has no reusable worktree: ${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}`,
+                    )
+                  }
+                  createDecisionLog(taskID).append({
+                    phase: "orchestrator",
+                    goalID: attachedGoalID,
+                    key: `build_retry_fresh_session_${priorGoalRunForRetry.id}`,
+                    value:
+                      `Build retry selected a fresh build session because the previous build session context is unavailable ` +
+                      `(${selectedBuildSession.contextUnavailableReason ?? "unknown reason"}); reusing worktree ${managedWorktree.directory}.`,
+                    reason: "build_retry_session_context_unavailable",
+                  })
+                }
               }
             }
             const taskFidelity = readPersistedArchitectFidelity(task)
@@ -13070,10 +13084,9 @@ export function createOrchestratorTools(input: {
             })
 
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
-            const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
             const frontendDesign = renderFrontendDesignHandoffReference(taskID, {
               pathMode: "absolute",
-              projectDir,
+              projectDir: taskProjectDir,
             })
             const frontendResearch = renderFrontendResearchBuildPromptSection({
               taskID,
@@ -13139,7 +13152,7 @@ export function createOrchestratorTools(input: {
               designSpecs,
               frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
               frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
-              projectDir,
+              projectDir: taskProjectDir,
               fidelity: scopedFidelityForBuildGoal({ goalID: goal.id, fidelity: taskFidelity }),
               retryGuidance: requestText.length > 0 ? requestText : undefined,
               integrityFeedback,
@@ -13169,11 +13182,12 @@ export function createOrchestratorTools(input: {
               enabled: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
-            const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
-            directBuildWorkDir = projectDir
+            if (selectedWorktreeUsage === "current_project") {
+              callerOwnedBuildWorkDir = taskProjectDir
+            }
             const frontendDesign = renderFrontendDesignHandoffReference(taskID, {
               pathMode: "absolute",
-              projectDir,
+              projectDir: taskProjectDir,
             })
             const frontendResearch = renderFrontendResearchBuildPromptSection({
               taskID,
@@ -13193,7 +13207,7 @@ export function createOrchestratorTools(input: {
                     designSpecs,
                     frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
                     frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
-                    projectDir,
+                    projectDir: taskProjectDir,
                     integrityFeedback,
                     visualQaFeedback,
                     acceptanceFeedback,
@@ -13323,19 +13337,31 @@ export function createOrchestratorTools(input: {
             if (goalRunID) return
             try {
               const { beginBuildAttempt } = await import("@/engine/persist")
+              const persistentWorkspaceDir = managedWorktree
+                ? (buildSessionContext.worktreeDir ?? managedWorktree.directory)
+                : undefined
+              const persistentWorkspaceBranch = managedWorktree
+                ? (buildSessionContext.worktreeBranch ?? managedWorktree.branch ?? null)
+                : null
+              const persistentWorkspaceBaseRef = managedWorktree
+                ? (buildSessionContext.worktreeBaseRef ?? managedWorktree.baseRef ?? null)
+                : null
               goalRunID = beginBuildAttempt({
                 taskID,
                 goalID: attachedGoalID,
                 runID: coordinatorRunID,
                 sessionID,
-                workspaceDir: buildSessionContext.worktreeDir ?? managedWorktree?.directory,
+                workspaceDir: persistentWorkspaceDir,
                 // Phase G (2026-05-05): full workspace triple rides the
                 // attempt artifact. Pre-fix the orchestrator pre-wrote
                 // engine_goal columns then dropped to a synthetic-runID
                 // queued artifact when no tip existed; both paths are gone
-                // now — single source is the new attempt artifact.
-                workspaceBranch: buildSessionContext.worktreeBranch ?? managedWorktree?.branch ?? null,
-                workspaceBaseRef: buildSessionContext.worktreeBaseRef ?? managedWorktree?.baseRef ?? null,
+                // now — single source is the new attempt artifact. Only
+                // managed worktrees are persisted here; caller-owned current
+                // project sessions are session directories, not goal
+                // workspace lifecycle targets.
+                workspaceBranch: persistentWorkspaceBranch,
+                workspaceBaseRef: persistentWorkspaceBaseRef,
                 extraArtifacts: ({ goalRunID }) => {
                   const artifacts: Array<{
                     id: string
@@ -13414,7 +13440,7 @@ export function createOrchestratorTools(input: {
                 parentSessionID: input.agentSessionID,
                 existingSessionID: existingBuildSessionID,
                 signal: input.signal,
-                workDir: directBuildWorkDir,
+                workDir: callerOwnedBuildWorkDir,
                 managedWorktree,
                 onSessionCreated: openGoalRunForBuildSession,
               })
@@ -13444,10 +13470,11 @@ export function createOrchestratorTools(input: {
                 let collectedActualChangedFiles:
                   | NonNullable<Awaited<ReturnType<typeof BuildAgent.run>>["actualChangedFiles"]>
                   | undefined
-                if (managedWorktree?.directory) {
+                const diagnosticWorkDir = managedWorktree?.directory ?? callerOwnedBuildWorkDir
+                if (diagnosticWorkDir) {
                   try {
                     const headResult = await runGit(["rev-parse", "HEAD"], {
-                      cwd: managedWorktree.directory,
+                      cwd: diagnosticWorkDir,
                       timeoutProfile: "fast",
                     })
                     if (headResult.exitCode === 0) {
@@ -13461,7 +13488,7 @@ export function createOrchestratorTools(input: {
                       error: gitErr instanceof Error ? gitErr.message : String(gitErr),
                     })
                   }
-                  if (managedWorktree.baseRef) {
+                  if (managedWorktree?.baseRef) {
                     try {
                       const fetched = await collectGoalContributionDiffs(
                         managedWorktree.directory,
@@ -13501,7 +13528,7 @@ export function createOrchestratorTools(input: {
                   result: {
                     result: synthFailed,
                     sessionID: runErr.diagnostics.sessionID ?? "",
-                    worktreeDir: managedWorktree?.directory,
+                    worktreeDir: diagnosticWorkDir,
                     worktreeBranch: managedWorktree?.branch,
                     worktreeBaseRef: managedWorktree?.baseRef,
                     diffs: collectedDiffs,
@@ -13546,6 +13573,7 @@ export function createOrchestratorTools(input: {
               const currentGoalRun = goalRunID ? findGoalRun(goalRunID) : undefined
               if (
                 attachedGoalID &&
+                managedWorktree &&
                 worktreeDir &&
                 worktreeBranch &&
                 (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))
@@ -13636,23 +13664,28 @@ export function createOrchestratorTools(input: {
                     publishedCommitRef,
                   } = buildOutcome.result
                   const terminalStatus = result.status === "passed" ? "completed" : "failed"
+                  const contributionCommitForGoal =
+                    contributionCommitRef ?? (!managedWorktree ? result.commit_ref || undefined : undefined)
                   finalizeBuildAttempt({
                     goalRunID,
                     taskID,
                     goalID: attachedGoalID,
                     runID: coordinatorRunID,
                     status: terminalStatus,
-                    commitRef: contributionCommitRef,
+                    commitRef: contributionCommitForGoal,
                     publishedCommitRef,
                     diffBaseRef,
                     diffHeadRef,
-                    workspaceDir: worktreeDir,
+                    workspaceDir: managedWorktree ? worktreeDir : undefined,
                     // Phase B (2026-05-05): the build outcome carries branch +
                     // baseRef alongside the directory. Persist them on the
-                    // attempt artifact so the next dispatch / cleanup / board
-                    // view reads the full triple from one source.
-                    workspaceBranch: worktreeBranch,
-                    workspaceBaseRef: worktreeBaseRef ?? undefined,
+                    // attempt artifact only for managed worktrees so the next
+                    // dispatch / cleanup / board view reads the lifecycle
+                    // target from one source. Current-project sessions keep
+                    // their directory as session/report fact, not a managed
+                    // workspace pointer.
+                    workspaceBranch: managedWorktree ? worktreeBranch : undefined,
+                    workspaceBaseRef: managedWorktree ? (worktreeBaseRef ?? undefined) : undefined,
                     error: result.status === "failed" ? result.error : undefined,
                     diffs,
                     fileChanges: result.files_changed,
