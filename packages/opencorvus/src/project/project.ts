@@ -2,7 +2,7 @@ import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { createHash } from "crypto"
-import { Database, eq } from "../storage/db"
+import { Database, eq, sql } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
@@ -18,6 +18,7 @@ import { which } from "@/util/which"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
+  type Row = typeof ProjectTable.$inferSelect
 
   function gitpath(cwd: string, name: string) {
     if (!name) return cwd
@@ -35,6 +36,10 @@ export namespace Project {
 
   function generated(seed: string) {
     return createHash("sha1").update(Filesystem.windowsPath(seed)).digest("hex")
+  }
+
+  function sqliteIdentifier(name: string) {
+    return `"${name.replaceAll('"', '""')}"`
   }
 
   export function directoryProjectID(directory: string) {
@@ -96,10 +101,106 @@ export namespace Project {
     return samePath(common, localCommon) || (await sameFilesystemLocation(common, localCommon))
   }
 
-  function findExactWorktreeRow(worktree: string) {
+  function projectIDTables(db: Database.TxOrDb) {
+    const rows = db.all<{ name: string }>(sql`
+      SELECT name
+      FROM sqlite_schema
+      WHERE type = 'table'
+        AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+    `)
+    return rows
+      .filter((row) =>
+        db
+          .all<{ name: string }>(sql.raw(`PRAGMA table_info(${sqliteIdentifier(row.name)})`))
+          .some((column) => column.name === "project_id"),
+      )
+      .map((row) => row.name)
+  }
+
+  function projectReferenceCount(db: Database.TxOrDb, table: string, projectID: string) {
+    const row = db.get<{ count: number }>(
+      sql`SELECT count(*) as count FROM ${sql.raw(sqliteIdentifier(table))} WHERE project_id = ${projectID}`,
+    )
+    return row?.count ?? 0
+  }
+
+  function taskSessionReferenceCount(db: Database.TxOrDb, projectID: string) {
+    return projectReferenceCount(db, "engine_task", projectID) + projectReferenceCount(db, "session", projectID)
+  }
+
+  function chooseCanonicalExactWorktreeRow(input: {
+    rows: Row[]
+    preferredIDs: string[]
+    db: Database.TxOrDb
+  }) {
+    for (const id of input.preferredIDs) {
+      const row = input.rows.find((candidate) => candidate.id === id)
+      if (row) return row
+    }
+
+    const taskSessionOwners = input.rows.filter((row) => taskSessionReferenceCount(input.db, row.id) > 0)
+    return taskSessionOwners.length === 1 ? taskSessionOwners[0] : undefined
+  }
+
+  function mergeExactWorktreeRows(input: { worktree: string; rows: Row[]; canonical: Row }) {
+    const duplicateRows = input.rows.filter((row) => row.id !== input.canonical.id)
+    if (duplicateRows.length === 0) return input.canonical
+
+    return Database.transaction((db) => {
+      const projectScopedTables = projectIDTables(db)
+      for (const duplicate of duplicateRows) {
+        for (const table of projectScopedTables) {
+          db.run(
+            sql`UPDATE ${sql.raw(sqliteIdentifier(table))} SET project_id = ${input.canonical.id} WHERE project_id = ${duplicate.id}`,
+          )
+        }
+      }
+
+      const duplicateSandboxes = duplicateRows.flatMap((row) => row.sandboxes)
+      const sandboxes = [...new Set([...input.canonical.sandboxes, ...duplicateSandboxes])]
+      const firstWith = <K extends keyof Row>(key: K) =>
+        input.canonical[key] ?? duplicateRows.find((row) => row[key] !== null && row[key] !== undefined)?.[key]
+      const now = Date.now()
+      db.update(ProjectTable)
+        .set({
+          name: firstWith("name") as string | null,
+          icon_url: firstWith("icon_url") as string | null,
+          icon_color: firstWith("icon_color") as string | null,
+          time_updated: now,
+          time_initialized: firstWith("time_initialized") as number | null,
+          sandboxes,
+          commands: firstWith("commands") as { start?: string } | null,
+        })
+        .where(eq(ProjectTable.id, input.canonical.id))
+        .run()
+
+      for (const duplicate of duplicateRows) {
+        db.delete(ProjectTable).where(eq(ProjectTable.id, duplicate.id)).run()
+      }
+
+      log.warn("converged duplicate exact project worktree rows", {
+        worktree: input.worktree,
+        canonicalProjectID: input.canonical.id,
+        duplicateProjectIDs: duplicateRows.map((row) => row.id).join(","),
+      })
+
+      return db.select().from(ProjectTable).where(eq(ProjectTable.id, input.canonical.id)).get() ?? input.canonical
+    })
+  }
+
+  function findExactWorktreeRow(worktree: string, preferredIDs: string[] = []) {
     const rows = Database.use((db) => db.select().from(ProjectTable).all())
     const matches = rows.filter((row) => samePath(row.worktree, worktree))
     if (matches.length <= 1) return matches[0]
+    const canonical = Database.use((db) =>
+      chooseCanonicalExactWorktreeRow({
+        rows: matches,
+        preferredIDs: preferredIDs.filter(Boolean),
+        db,
+      }),
+    )
+    if (canonical) return mergeExactWorktreeRows({ worktree, rows: matches, canonical })
     throw new WorktreeIdentityConflictError({
       projectID: matches.map((row) => row.id).join(","),
       existingWorktree: matches[0].worktree,
@@ -117,7 +218,7 @@ export namespace Project {
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
-    const selectedRow = findExactWorktreeRow(worktree)
+    const selectedRow = findExactWorktreeRow(worktree, [cached ?? "", localID])
     if (!cached || cached === "global") {
       const id = selectedRow?.id ?? localID
       await Filesystem.write(markerPath, id).catch(() => undefined)
@@ -226,8 +327,6 @@ export namespace Project {
     Updated: BusEvent.define("project.updated", Info),
   }
 
-  type Row = typeof ProjectTable.$inferSelect
-
   export function fromRow(row: Row): Info {
     const icon =
       row.icon_url || row.icon_color
@@ -262,7 +361,7 @@ export namespace Project {
         const cached = await Filesystem.readText(markerPath)
           .then((x) => x.trim())
           .catch(() => undefined)
-        const selectedRow = findExactWorktreeRow(directory)
+        const selectedRow = findExactWorktreeRow(directory, [cached ?? "", localID])
         const id = selectedRow?.id ?? (cached && cached !== "global" ? cached : localID)
         if (local && id !== cached) await Filesystem.write(markerPath, id).catch(() => undefined)
 

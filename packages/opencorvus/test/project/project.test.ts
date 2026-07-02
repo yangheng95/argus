@@ -8,8 +8,9 @@ import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
-import { Database } from "../../src/storage/db"
+import { Database, sql } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
+import { Memory } from "../../src/memory"
 
 Log.init({ print: false })
 
@@ -259,6 +260,91 @@ describe("Project.fromDirectory", () => {
         expect((await Filesystem.readText(path.join(alias, ".git", "opencorvus"))).trim()).toBe(visibleID)
       })
     })
+  })
+
+  test("converges duplicate exact worktree rows by marker and preserves memory", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_marker_canonical"
+    const duplicateID = "project_exact_marker_duplicate"
+    const marker = path.join(tmp.path, ".git", "opencorvus")
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          {
+            id: canonicalID,
+            worktree: tmp.path,
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          },
+          {
+            id: duplicateID,
+            worktree: tmp.path,
+            time_created: now - 10,
+            time_updated: now - 10,
+            sandboxes: [path.join(tmp.path, ".opencorvus", "r", "w", "AA", "worktree")],
+          },
+        ])
+        .run()
+    })
+    await Filesystem.write(marker, canonicalID)
+    const memory = Memory.writeFile({
+      title: "Fact: Exact convergence sentinel",
+      content: "## Exact convergence\nThe exact duplicate worktree memory must move with its FTS entry.",
+      source: "agent",
+      projectId: duplicateID,
+      kind: "fact",
+    })
+
+    const resolved = await p.fromDirectory(tmp.path)
+
+    expect(resolved.project.id).toBe(canonicalID)
+    expect(resolved.project.worktree).toBe(tmp.path)
+    expect(Project.get(duplicateID)).toBeUndefined()
+    expect(Memory.getFileInProject({ fileId: memory.id, projectId: duplicateID })).toBeNull()
+    expect(Memory.getFileInProject({ fileId: memory.id, projectId: canonicalID })?.title).toBe(memory.title)
+    expect(Memory.search({ query: "duplicate worktree memory", projectId: canonicalID, limit: 3 }).length).toBe(1)
+    expect(
+      Database.use(
+        (db) =>
+          db.get<{ count: number }>(
+            sql`SELECT count(*) as count FROM memory_fts WHERE project_id = ${duplicateID}`,
+          )?.count,
+      ),
+    ).toBe(0)
+  })
+
+  test("keeps duplicate exact worktree conflict visible without a canonical signal", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    await fs.rm(path.join(tmp.path, ".git", "opencorvus"), { force: true })
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          {
+            id: "project_exact_ambiguous_a",
+            worktree: tmp.path,
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          },
+          {
+            id: "project_exact_ambiguous_b",
+            worktree: tmp.path,
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          },
+        ])
+        .run()
+    })
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("Project identity conflict")
+    expect(Project.get("project_exact_ambiguous_a")?.worktree).toBe(tmp.path)
+    expect(Project.get("project_exact_ambiguous_b")?.worktree).toBe(tmp.path)
   })
 
   test("recognizes same filesystem identity even when real paths differ", async () => {
