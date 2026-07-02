@@ -1,4 +1,9 @@
-export type BuildEvidenceRole = "target_reference" | "previous_output" | "comparison_artifact"
+export type BuildEvidenceRole =
+  | "target_reference"
+  | "previous_output"
+  | "comparison_artifact"
+  | "visual_qa_annotation"
+  | "visual_qa_diagnostic"
 
 export interface BuildEvidenceFile {
   url: string
@@ -21,6 +26,8 @@ export interface BuildEvidencePack {
   targetReferences?: BuildEvidenceFile[]
   previousOutputs?: BuildEvidenceFile[]
   comparisonArtifacts?: BuildEvidenceFile[]
+  visualQaAnnotations?: BuildEvidenceFile[]
+  visualQaDiagnostics?: BuildEvidenceFile[]
 }
 
 export type BuildEvidenceEntry = BuildEvidenceFile & { role: BuildEvidenceRole }
@@ -47,6 +54,8 @@ export function buildEvidenceEntries(pack: BuildEvidencePack | undefined): Build
     ...roleEntries("target_reference", pack.targetReferences),
     ...roleEntries("previous_output", pack.previousOutputs),
     ...roleEntries("comparison_artifact", pack.comparisonArtifacts),
+    ...roleEntries("visual_qa_annotation", pack.visualQaAnnotations),
+    ...roleEntries("visual_qa_diagnostic", pack.visualQaDiagnostics),
   ]
 }
 
@@ -113,6 +122,16 @@ export function renderBuildEvidenceRoleSections(pack: BuildEvidencePack | undefi
       "Comparison And Verification Artifacts",
       "Diagnostic artifacts for investigation and verification. They are not target references.",
       pack?.comparisonArtifacts,
+    ),
+    ...roleSection(
+      "Visual QA Annotated Problem Screenshots",
+      "Host-generated annotations from failed Visual Quality Assurance (QA) Document Object Model (DOM) regions. Consume these exact diagnostic images for repair and list their urls in consumed_visual_qa_annotation_refs before reporting status='passed'. They are not target references.",
+      pack?.visualQaAnnotations,
+    ),
+    ...roleSection(
+      "Visual QA Diagnostic Artifacts",
+      "Host-forwarded diagnostic artifacts from failed Visual Quality Assurance (QA), such as layout-geometry manifests. Consume these exact files for repair and list their urls in consumed_visual_qa_diagnostic_refs before reporting status='passed'. They are not target references and are not formal reference-comparison proof.",
+      pack?.visualQaDiagnostics,
     ),
   ]
   return lines.join("\n")

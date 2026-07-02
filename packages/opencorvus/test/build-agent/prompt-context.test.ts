@@ -39,6 +39,7 @@ describe("build agent prompt context", () => {
           "- dom-hero-tabs region=hero navigation boundary\n" +
           '  locator: main [data-testid="hero-tabs"]\n' +
           "  computed_style: display=flex; overflow=hidden; margin-top=-32px\n" +
+          "  annotated_evidence_refs: /attachment/proj/dom-hero-tabs.annotated.png\n" +
           "  code_search_terms: hero-tabs, market-hero, is-clipped",
       },
     )
@@ -47,9 +48,14 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Visual Quality Assurance (QA)")
     expect(prompt).toContain("problem_dom_regions")
     expect(prompt).toContain("Document Object Model (DOM)")
+    expect(prompt).toContain("annotated_evidence_refs")
+    expect(prompt).toContain("consumed_visual_qa_annotation_refs")
+    expect(prompt).toContain("consumed_visual_qa_diagnostic_refs")
+    expect(prompt).toContain("Layout-geometry manifests")
     expect(prompt).toContain("code-search terms")
     expect(prompt).toContain("fresh screenshot or comparison evidence")
     expect(prompt).toContain('locator: main [data-testid="hero-tabs"]')
+    expect(prompt).toContain("/attachment/proj/dom-hero-tabs.annotated.png")
     expect(prompt).toContain("code_search_terms: hero-tabs, market-hero, is-clipped")
     expect(prompt.indexOf("## Visual QA Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
     expect(prompt).not.toContain("## Acceptance Repair Overlay")

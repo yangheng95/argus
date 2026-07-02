@@ -355,14 +355,13 @@ describe("BuildAgent managed worktree runtime", () => {
       directory: tmp.path,
       fn: async () => {
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "managed-retry-worktree-"))
-        const buildSession = await Session.create({ kind: "build", title: "Managed retry build", directory: worktreeDir })
+        const buildSession = await Session.create({
+          kind: "build",
+          title: "Managed retry build",
+          directory: worktreeDir,
+        })
         const pngBytes = await pngImage(16, 16)
-        const original = await AttachmentStore.write(
-          Instance.project.id,
-          pngBytes,
-          "image/png",
-          "source-reference.png",
-        )
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "source-reference.png")
         await AttachmentStore.stageToWorktree(Instance.project.id, [original], worktreeDir)
 
         const msg = await SessionPrompt.prompt({
@@ -446,12 +445,7 @@ describe("BuildAgent managed worktree runtime", () => {
           directory: worktree.directory,
         })
         const pngBytes = await pngImage(16, 16)
-        const original = await AttachmentStore.write(
-          Instance.project.id,
-          pngBytes,
-          "image/png",
-          "source-reference.png",
-        )
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "source-reference.png")
         await AttachmentStore.stageToWorktree(Instance.project.id, [original], worktree.directory)
         const msg = await SessionPrompt.prompt({
           sessionID: buildSession.id,

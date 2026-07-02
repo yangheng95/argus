@@ -620,7 +620,7 @@ describe("pipeline workflow review topology", () => {
     expect(taskSteps.visual_qa?.status).toBe("failed")
   })
 
-  test("projects visual_qa as failed from accepted reference parity report without comparison refs", () => {
+  test("projects visual_qa as completed from process-accepted reference parity report without comparison refs", () => {
     const now = Date.now()
     const stamp = `${now.toString(16)}_reference_missing`
     const projectID = `proj_workflow_visual_qa_${stamp}`
@@ -676,7 +676,7 @@ describe("pipeline workflow review topology", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.visual_qa?.status).toBe("failed")
+    expect(taskSteps.visual_qa?.status).toBe("completed")
   })
 
   test("projects visual_qa as failed from accepted reference parity report with missing regions", () => {

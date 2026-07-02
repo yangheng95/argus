@@ -69,10 +69,12 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("repair input for Build, not visual proof")
     expect(normalized).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(normalized).toContain("register a `multi-viewport-alignment` check item")
+    expect(normalized).toContain("Broad heading or section enumeration is only a discovery aid")
+    expect(normalized).toContain("shared-rail groups must include every affected downstream section such as `News`")
     expect(normalized).toContain("shared layout anchors")
     expect(normalized).toContain("cross-viewport alignment")
     expect(normalized).toContain("A passed visual QA report for a bound module should cite fresh")
-    expect(normalized).toContain("cannot satisfy `reference_parity.reference_comparison_evidence_refs`")
+    expect(normalized).toContain("cannot replace the scoped `VisualEvidenceBundle`")
     expect(normalized).toContain("submit the visual QA report with the exact blocker or remaining evidence gap")
     expect(normalized).toContain(
       "A single full-page screenshot or single slice cannot prove the whole page is accepted",
@@ -102,6 +104,8 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(prompt).toContain("first-viewport")
     expect(prompt).toContain("Do not request, evaluate, or block on mobile/tablet reference evidence")
     expect(prompt).toContain("multi-viewport-alignment")
+    expect(prompt).toContain("Geometry alignment discipline")
+    expect(prompt).toContain("every affected downstream section such as `News`")
     expect(prompt).toContain("shared layout anchors")
     expect(prompt).toContain("instead of inventing proof or reference-comparison refs")
     expect(prompt).toContain("supporting visual_diff evidence")

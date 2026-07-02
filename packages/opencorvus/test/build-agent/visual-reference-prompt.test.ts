@@ -178,4 +178,38 @@ describe("BuildEvidencePack role rendering", () => {
       "previous_output:previous.png",
     ])
   })
+
+  test("keeps Visual QA annotated screenshots outside the visual target contract", () => {
+    const target = { url: "/attachment/project/target.png", mime: "image/png", filename: "target.png", sha: "target" }
+    const annotation = {
+      url: "/attachment/project/dom-annotated.png",
+      mime: "image/png",
+      filename: "dom-annotated.png",
+      sha: "annotation",
+    }
+    const diagnostic = {
+      url: "/attachment/project/layout-geometry.json",
+      mime: "application/json",
+      filename: "layout-geometry.json",
+      sha: "diagnostic",
+    }
+
+    const contract = renderVisualContractPreamble([target])
+    const sections = renderBuildEvidenceRoleSections({
+      targetReferences: [target],
+      visualQaAnnotations: [annotation],
+      visualQaDiagnostics: [diagnostic],
+    })
+
+    expect(contract).toContain("target.png")
+    expect(contract).not.toContain("dom-annotated.png")
+    expect(contract).not.toContain("layout-geometry.json")
+    expect(sections).toContain("### Visual QA Annotated Problem Screenshots")
+    expect(sections).toContain("dom-annotated.png")
+    expect(sections).toContain("consumed_visual_qa_annotation_refs")
+    expect(sections).toContain("### Visual QA Diagnostic Artifacts")
+    expect(sections).toContain("layout-geometry.json")
+    expect(sections).toContain("consumed_visual_qa_diagnostic_refs")
+    expect(sections).toContain("not target references")
+  })
 })

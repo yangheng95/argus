@@ -5,6 +5,7 @@ import {
   BrowserPreviewLayoutGeometryDiagnosticRequest,
   computeSourceDelta,
   diagnoseBrowserPreviewLayoutGeometry,
+  summarizeAlignmentGroups,
   summarizeWidthBehavior,
   type BrowserPreviewLayoutGeometrySample,
 } from "../../src/browser-preview/layout-geometry-diagnostic"
@@ -78,6 +79,83 @@ describe("browser preview layout geometry diagnostic", () => {
     ])
   })
 
+  test("summarizes explicit cross-region alignment groups", () => {
+    const pageSample = sample("desktop", true, 2048, 64, 200, 1784)
+    pageSample.regions.push({
+      regionID: "index-collections",
+      status: "captured",
+      locator: { kind: "data-oc-region", value: "index-collections" },
+      sourceRefs: [],
+      borderBox: { x: 540, y: 760, width: 1100, height: 80 },
+      edgeOffsets: {
+        viewportLeft: 540,
+        viewportRight: 408,
+        viewportTop: 760,
+        viewportBottom: 0,
+        pageLeft: 540,
+        pageRight: 408,
+        pageTop: 760,
+        pageBottom: 0,
+      },
+    })
+
+    expect(
+      summarizeAlignmentGroups([pageSample], [
+        {
+          id: "primary-content-rail",
+          regionIDs: ["hero", "index-collections"],
+          edges: ["left", "center-x", "width"],
+        },
+      ]),
+    ).toEqual([
+      {
+        sampleID: "desktop",
+        groupID: "primary-content-rail",
+        edge: "left",
+        status: "captured",
+        regionIDs: ["hero", "index-collections"],
+        missingRegionIDs: [],
+        values: [
+          { regionID: "hero", value: 64 },
+          { regionID: "index-collections", value: 540 },
+        ],
+        min: 64,
+        max: 540,
+        spread: 476,
+      },
+      {
+        sampleID: "desktop",
+        groupID: "primary-content-rail",
+        edge: "center-x",
+        status: "captured",
+        regionIDs: ["hero", "index-collections"],
+        missingRegionIDs: [],
+        values: [
+          { regionID: "hero", value: 164 },
+          { regionID: "index-collections", value: 1090 },
+        ],
+        min: 164,
+        max: 1090,
+        spread: 926,
+      },
+      {
+        sampleID: "desktop",
+        groupID: "primary-content-rail",
+        edge: "width",
+        status: "captured",
+        regionIDs: ["hero", "index-collections"],
+        missingRegionIDs: [],
+        values: [
+          { regionID: "hero", value: 200 },
+          { regionID: "index-collections", value: 1100 },
+        ],
+        min: 200,
+        max: 1100,
+        spread: 900,
+      },
+    ])
+  })
+
   test("persists layout-geometry evidence without becoming latest preview-capture evidence", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_layout_geometry"
@@ -113,10 +191,25 @@ describe("browser preview layout geometry diagnostic", () => {
           viewportID: "desktop",
           route: "/",
           regions: [{ regionID: "hero", locator: { kind: "data-oc-region", value: "hero" } }],
+          alignmentGroups: [
+            {
+              id: "primary-rail",
+              regionIDs: ["hero", "summary"],
+              edges: ["left"],
+            },
+          ],
           widthSamples: [],
           captureForTest: async () => ({
             diagnostics: [],
-            samples: [sample("desktop", true, 1440, 64, 200, 1176)],
+            samples: [
+              withSummaryRegion(sample("desktop", true, 1440, 64, 200, 1176), {
+                x: 320,
+                y: 240,
+                width: 400,
+                height: 120,
+                viewportRight: 720,
+              }),
+            ],
           }),
         })
 
@@ -132,6 +225,13 @@ describe("browser preview layout geometry diagnostic", () => {
             "/",
           ),
         )
+        expect(result.alignmentGroups[0]).toMatchObject({
+          sampleID: "desktop",
+          groupID: "primary-rail",
+          edge: "left",
+          status: "captured",
+          spread: 256,
+        })
 
         const latest = await latestBrowserPreviewEvidenceIDs({
           projectRoot: tmp.path,
@@ -213,6 +313,35 @@ function sample(
           pageRight: viewportRight,
           pageTop: 32,
           pageBottom: 668,
+        },
+      },
+    ],
+  }
+}
+
+function withSummaryRegion(
+  base: BrowserPreviewLayoutGeometrySample,
+  box: { x: number; y: number; width: number; height: number; viewportRight: number },
+): BrowserPreviewLayoutGeometrySample {
+  return {
+    ...base,
+    regions: [
+      ...base.regions,
+      {
+        regionID: "summary",
+        status: "captured",
+        locator: { kind: "data-oc-region", value: "summary" },
+        sourceRefs: [],
+        borderBox: { x: box.x, y: box.y, width: box.width, height: box.height },
+        edgeOffsets: {
+          viewportLeft: box.x,
+          viewportRight: box.viewportRight,
+          viewportTop: box.y,
+          viewportBottom: 800 - (box.y + box.height),
+          pageLeft: box.x,
+          pageRight: box.viewportRight,
+          pageTop: box.y,
+          pageBottom: 800 - (box.y + box.height),
         },
       },
     ],

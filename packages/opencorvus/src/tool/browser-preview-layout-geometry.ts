@@ -28,6 +28,7 @@ export const BrowserPreviewLayoutGeometryTool = Tool.define(BrowserPreviewLayout
       viewportID: params.viewportID,
       route: params.route,
       regions: params.regions,
+      alignmentGroups: params.alignmentGroups,
       widthSamples: params.widthSamples,
       signal: ctx.abort,
     })
@@ -79,6 +80,7 @@ function renderPublicResult(result: BrowserPreviewLayoutGeometryResult): Record<
       })),
     })),
     widthBehavior: result.widthBehavior,
+    alignmentGroups: result.alignmentGroups,
     diagnostics: result.diagnostics,
     evidenceSemantics:
       "Supporting layout geometry evidence only. This is not reference-comparison proof and does not replace screenshot inspection.",

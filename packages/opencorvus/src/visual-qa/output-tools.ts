@@ -5,6 +5,7 @@ import { browserPreviewEvidenceIDFromRef } from "@/acceptance/visual-evidence"
 import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import { FactCheckItemSchema } from "@/fact-check/schema"
 import { visualQaOpenBlockingFindings, visualQaReportAcceptanceSemantics } from "./acceptance-semantics"
+import { annotateVisualQaProblemDomRegion } from "./annotated-screenshot"
 import {
   VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
   VisualQaCheckItemSchema,
@@ -25,6 +26,7 @@ import {
 export interface VisualQaOutputToolContext {
   taskID?: string
   projectRoot?: string
+  projectID?: string
   referenceParityRequired?: boolean
   requiredReferenceRegions?: string[]
 }
@@ -271,13 +273,14 @@ async function summarizeVisualQaReportFeedback(
       )
     }
     if (report.accepted && context.referenceParityRequired && (context.requiredReferenceRegions?.length ?? 0) === 0) {
-      blockers.push(
+      advisories.push(
         "context expects reference parity but no authoritative requiredReferenceRegions were available from task evidence.",
       )
     }
     if (report.accepted && refs.size === 0) {
-      const issue = "accepted=true was submitted for reference parity without reference_comparison evidence refs."
-      if (!blockers.includes(issue)) blockers.push(issue)
+      advisories.push(
+        "reference parity report did not submit formal reference_comparison evidence refs; host materialization must produce a scoped VisualEvidenceBundle before final integrity acceptance.",
+      )
     }
     if (report.accepted && refs.size > 0) {
       if (!context.taskID || !context.projectRoot) {
@@ -302,15 +305,11 @@ async function summarizeVisualQaReportFeedback(
             }
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error)
-            const issue = `submitted reference comparison evidence ${evidenceID} is unreadable: ${detail}`
-            if (report.accepted) blockers.push(issue)
-            else advisories.push(issue)
+            advisories.push(`submitted reference comparison evidence ${evidenceID} is unreadable: ${detail}`)
           }
         }
         if (validEvidence.length === 0) {
-          const issue = "no submitted reference comparison refs resolved to readable passed browser_preview_evidence."
-          if (report.accepted) blockers.push(issue)
-          else advisories.push(issue)
+          advisories.push("no submitted reference comparison refs resolved to readable passed browser_preview_evidence.")
         }
         for (const key of requiredRegionKeys) {
           const parsed = parseReferenceRegionKey(key)
@@ -322,9 +321,9 @@ async function summarizeVisualQaReportFeedback(
             (evidence) => evidence.regionID === parsed.regionID && evidence.viewportID === parsed.viewportID,
           )
           if (!matched) {
-            const issue = `accepted=true lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`
-            if (report.accepted) blockers.push(issue)
-            else advisories.push(issue)
+            advisories.push(
+              `submitted report lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`,
+            )
           }
         }
       }
@@ -409,6 +408,9 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       region.ancestor_context.length ? `ancestors=${region.ancestor_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
       region.sibling_context.length ? `siblings=${region.sibling_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
       `evidence=${region.evidence_refs.join(", ") || "(none)"}`,
+      region.annotated_evidence_refs.length
+        ? `annotated_evidence=${region.annotated_evidence_refs.join(", ")}`
+        : undefined,
       `notes=${region.notes}`,
     ]
       .filter((part): part is string => Boolean(part))
@@ -518,15 +520,36 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
       inputSchema: VisualQaProblemDomRegionSchema,
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
-        const row = VisualQaProblemDomRegionSchema.parse(raw)
+        const parsed = VisualQaProblemDomRegionSchema.parse(raw)
         const checkIDIssues = collectorUnknownCheckIDIssues(collector, [
-          { label: "problem_dom_region", id: row.id, checkIDs: row.check_ids },
+          { label: "problem_dom_region", id: parsed.id, checkIDs: parsed.check_ids },
         ])
         if (checkIDIssues.length > 0) {
           return `Error: visual QA problem_dom_region references unregistered check items: ${checkIDIssues.join("; ")}`
         }
+        const annotation = await annotateVisualQaProblemDomRegion({
+          taskID: context.taskID,
+          projectRoot: context.projectRoot,
+          projectID: context.projectID,
+          region: { ...parsed, annotated_evidence_refs: [] },
+        })
+        if (annotation.error) {
+          return `Error: ${annotation.error}${
+            annotation.diagnostics.length > 0 ? ` Diagnostics: ${annotation.diagnostics.join("; ")}` : ""
+          }`
+        }
+        const row = {
+          ...parsed,
+          annotated_evidence_refs: annotation.annotatedEvidenceRefs,
+        }
         const status = upsertByID(collector.problem_dom_regions, row)
-        return `OK: visual QA problem_dom_region "${row.id}" ${status} (${collector.problem_dom_regions.length} total)`
+        const annotationText =
+          row.annotated_evidence_refs.length > 0
+            ? `; annotated_evidence_refs=${row.annotated_evidence_refs.join(", ")}`
+            : annotation.diagnostics.length > 0
+              ? `; annotation_diagnostics=${annotation.diagnostics.join("; ")}`
+              : ""
+        return `OK: visual QA problem_dom_region "${row.id}" ${status} (${collector.problem_dom_regions.length} total)${annotationText}`
       },
     }),
     register_visual_qa_unresolved_code_module_problem: tool({

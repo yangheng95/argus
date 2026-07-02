@@ -382,8 +382,8 @@ export namespace Agent {
         // Allowed:
         //   - dispatch tools (the orchestrator's actual job)
         //   - observation tools (read_context, query_failed_goals, goal_report)
-        //   - user-authorized command evidence (`bash`) when the latest
-        //     operator request explicitly needs a command result
+        //   - runtime/toolchain repair command surface (`bash`) for blockers
+        //     encountered while scheduling work
         //   - user interaction (question)
         //   - session-local bookkeeping (todoread, todowrite)
         // Excluded:

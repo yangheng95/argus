@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { $ } from "bun"
 import { createHash } from "node:crypto"
+import { createServer, type Server } from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
+import sharp from "sharp"
 import z from "zod"
+import { readLatestTaskVisualEvidenceBundleSync } from "../../src/acceptance/visual-evidence"
+import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
+import type { BrowserPreviewRegionBinding } from "../../src/browser-preview/region-comparison"
 import { Bus } from "../../src/bus"
 import { Database, and, eq, sql } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
@@ -42,6 +47,7 @@ import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import {
   findActiveRunForTask,
   findActivePlanForTask,
@@ -874,11 +880,128 @@ function minimalVisualQaAcceptance() {
   }
 }
 
+function minimalAcceptedVisualQaAcceptance() {
+  return {
+    submittedAccepted: true,
+    effectiveAccepted: true,
+    selfReportIssues: [],
+    blockingIssues: [],
+  }
+}
+
 function minimalVisualQaDecisionRecord() {
   return {
     report: minimalVisualQaReport(),
     acceptance: minimalVisualQaAcceptance(),
   }
+}
+
+async function writeVisualQaReferenceImage(projectRoot: string, taskID: string): Promise<void> {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(projectRoot, taskID)
+  await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+  await sharp({
+    create: {
+      width: 800,
+      height: 600,
+      channels: 4,
+      background: "#e7f5ee",
+    },
+  })
+    .png()
+    .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+}
+
+async function seedVisualQaSourceBindingEvidence(input: {
+  projectRoot: string
+  taskID: string
+  targetID: string
+  binding: BrowserPreviewRegionBinding
+}): Promise<string> {
+  const jobID = `art_visualqa_source_binding_${Date.now().toString(16)}`
+  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
+  const artifactDir = path.join(outDir, "source-binding")
+  await fs.mkdir(artifactDir, { recursive: true })
+  const sourceCrop = path.join(artifactDir, "source.png")
+  const implementationCrop = path.join(artifactDir, "implementation.png")
+  const sideBySide = path.join(artifactDir, "side-by-side.png")
+  for (const filePath of [sourceCrop, implementationCrop, sideBySide]) {
+    await sharp({
+      create: {
+        width: 10,
+        height: 10,
+        channels: 4,
+        background: "#e7f5ee",
+      },
+    })
+      .png()
+      .toFile(filePath)
+  }
+  const evidenceID = await persistBrowserPreviewEvidence({
+    projectRoot: input.projectRoot,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    viewportID: input.binding.viewport_id,
+    operationKind: "source-binding",
+    regionID: input.binding.region_id,
+    stateID: input.binding.state_id,
+    manifestPath: path.join(outDir, "source-binding.json"),
+    artifactPaths: {
+      source_crop: sourceCrop,
+      implementation_crop: implementationCrop,
+      side_by_side: sideBySide,
+    },
+    status: "passed",
+    summary: "seeded Visual QA source-binding evidence",
+    capture: {
+      status: "passed",
+      binding: input.binding,
+    },
+    diagnostics: ["seeded Visual QA source-binding evidence"],
+  })
+  return `browser_preview_evidence:${evidenceID}`
+}
+
+async function startVisualQaMatchingPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = createServer((req, res) => {
+    if (req.url !== "/economy") {
+      res.writeHead(404)
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html" })
+    res.end(`<!doctype html>
+      <html>
+        <head>
+          <style>
+            html, body { margin: 0; width: 800px; height: 600px; background: #e7f5ee; }
+            [data-oc-region="economy-page"] {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 800px;
+              height: 600px;
+              background: #e7f5ee;
+            }
+          </style>
+        </head>
+        <body>
+          <section data-oc-region="economy-page"></section>
+        </body>
+      </html>`)
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Visual QA preview server did not bind a port")
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () => closeServer(server),
+  }
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()))
+  })
 }
 
 function successfulAbortAdapter(): ExecutorAdapter {
@@ -1474,7 +1597,8 @@ function integrityFinding(input: {
   return {
     id: input.id ?? `finding-${Math.random().toString(16).slice(2)}`,
     checkIDs: ["check-requirements"],
-    severity: input.severity ?? ((input.verdictImpact ?? "needs_correction") === "needs_correction" ? "blocking" : "advisory"),
+    severity:
+      input.severity ?? ((input.verdictImpact ?? "needs_correction") === "needs_correction" ? "blocking" : "advisory"),
     verdictImpact: input.verdictImpact ?? "needs_correction",
     title: input.title ?? input.description,
     description: input.description,
@@ -2298,7 +2422,8 @@ describe("orchestrator tools", () => {
           project_id: projectID,
           source: "test",
           title: "Select expert squad",
-          request: "Use the frontend innovate expert squad for an existing URL redesign with aesthetic, professional, and convenient user-task goals.",
+          request:
+            "Use the frontend innovate expert squad for an existing URL redesign with aesthetic, professional, and convenient user-task goals.",
           kind: "workflow",
           priority: "normal",
           time_created: now,
@@ -3395,6 +3520,192 @@ describe("orchestrator tools", () => {
       },
     })
   })
+
+  test(
+    "visual_qa materializes a passing bundle from source-binding refs before recording stage acceptance",
+    async () => {
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const taskID = `tsk_visual_qa_materialized_${stamp}`
+      const goalID = `gol_visual_qa_materialized_${stamp}`
+      const preview = await startVisualQaMatchingPreviewServer()
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const parent = await Session.create({
+              kind: "root",
+              title: "visual qa materialized root",
+              metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+            })
+            insertWorkflowTaskWithGoal({
+              projectID: Instance.project.id,
+              taskID,
+              goalID,
+              sessionID: parent.id,
+              worktree: tmp.path,
+              projectName: "visual qa materialized",
+              taskTitle: "visual qa materialized",
+              request: "Review the browser-visible reference surface before final integrity.",
+              goalTitle: "Review materialized surface",
+              goalSlug: "review-materialized-surface",
+              objective: "Record materialized visual evidence through the ordinary visual_qa tool path",
+              now,
+              acceptanceSpecs: [
+                {
+                  id: "acc-visual-evidence-materialized",
+                  source_requirement_id: "REQ-visual-materialized",
+                  goal_id: goalID,
+                  title: "final rendered reference evidence",
+                  scorers: [
+                    {
+                      type: "prebuilt",
+                      name: "visual-evidence-bundle",
+                      spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+                    },
+                  ],
+                  severity: "essential",
+                },
+              ],
+              insertProject: false,
+            })
+            await writeVisualQaReferenceImage(tmp.path, taskID)
+            const target = await persistTestBrowserPreviewTarget({
+              taskID,
+              url: preview.url,
+              viewports: [
+                {
+                  id: "desktop",
+                  labelKey: "browser_preview.viewport.desktop",
+                  width: 800,
+                  height: 600,
+                },
+              ],
+            })
+            const binding: BrowserPreviewRegionBinding = {
+              region_id: "economy-page",
+              viewport_id: "desktop",
+              state_id: "default",
+              region_scope: "page-section",
+              crop_intent: "full-region",
+              source: {
+                reference_artifact_id: "web-clone-source/reference.png",
+                bbox: { x: 0, y: 0, width: 800, height: 600 },
+                semantic_role: "economy page",
+                text_anchors: ["economy"],
+                source_refs: ["web-clone-source/reference.png"],
+              },
+              implementation: {
+                route: "/economy",
+                locator: { kind: "data-oc-region", value: "economy-page" },
+                component_files: ["src/EconomyPanel.tsx"],
+              },
+              acceptance_refs: ["REQ-visual-materialized"],
+            }
+            const sourceBindingRef = await seedVisualQaSourceBindingEvidence({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              binding,
+            })
+            visualQaAnalyzeImpl = async (input: any) => {
+              const child = await Session.create({
+                kind: "visual-qa",
+                parentID: parent.id,
+                title: "visual qa materialized worker",
+              })
+              input.onSessionCreated?.(child.id)
+              const report = minimalVisualQaReport()
+              return {
+                sessionID: child.id,
+                report: {
+                  ...report,
+                  summary: "Source-binding visual QA process evidence accepted.",
+                  check_items: report.check_items.map((item) => ({
+                    ...item,
+                    region: "economy-page",
+                    reference_region_key: "economy-page@desktop",
+                    viewports: [{ width: 800, height: 600 }],
+                    source_refs: ["web-clone-source/reference.png"],
+                    evidence_refs: [sourceBindingRef],
+                  })),
+                  coverage: [
+                    {
+                      check_ids: ["check-main-surface"],
+                      region: "economy-page",
+                      viewports: [{ width: 800, height: 600 }],
+                      states: ["default"],
+                      source_refs: ["web-clone-source/reference.png"],
+                      evidence_refs: [sourceBindingRef],
+                      notes: "Checked the bound source region before host materialization.",
+                    },
+                  ],
+                  evidence: [
+                    {
+                      check_ids: ["check-main-surface"],
+                      type: "screenshot" as const,
+                      ref: sourceBindingRef,
+                      viewport: { width: 800, height: 600 },
+                      state: "default",
+                      note: "Task-scoped source-binding evidence for host VisualEvidenceBundle materialization.",
+                    },
+                  ],
+                  reference_parity: {
+                    required: true,
+                    required_regions: ["economy-page@desktop"],
+                    reference_comparison_evidence_refs: [],
+                    missing_regions: [],
+                    blocker_ids: [],
+                  },
+                },
+                acceptance: minimalAcceptedVisualQaAcceptance(),
+              }
+            }
+
+            const { tools } = createOrchestratorTools({
+              taskID,
+              agentSessionID: parent.id,
+              signal: new AbortController().signal,
+            })
+
+            const result = await tools.visual_qa.execute(
+              {
+                reason: "Need final frontend GUI review.",
+                focus: "Economy page",
+                app_url: preview.url,
+                preview_command: "node node_modules/playwright/cli.js test visual.spec.ts",
+              },
+              buildToolOptions("visual_qa_materialized"),
+            )
+
+            expect(toolText(result)).toContain("visual_qa complete: effective_accepted=true")
+            const visualQaDecisions = createDecisionLog(taskID).readByPhase("visual_qa")
+            const latestSummary = visualQaDecisions.find((entry) => entry.key === "latest_summary")
+            expect(latestSummary?.value).toContain("effective_accepted=true")
+            expect(latestSummary?.value).toContain("visual_qa_process_accepted=true")
+            expect(latestSummary?.value).toContain("visual_evidence_bundle_materialization=materialized")
+            expect(latestSummary?.value).toContain("visual_evidence_bundle_validation=true")
+            expect(visualQaDecisions.some((entry) => entry.value.includes("authoritative-rendered-reference-visual"))).toBe(
+              false,
+            )
+            expect(
+              visualQaDecisions.some((entry) => entry.value.includes("without reference_comparison evidence refs")),
+            ).toBe(false)
+            const materializationDecision = visualQaDecisions.find((entry) =>
+              entry.key.startsWith("visual_evidence_bundle_"),
+            )
+            expect(materializationDecision?.value).toContain("status=materialized")
+            const bundle = readLatestTaskVisualEvidenceBundleSync({ projectDir: tmp.path, taskID })
+            expect(bundle?.[0]?.inspection.status).toBe("passing")
+            expect(bundle?.[0]?.regions[0]?.id).toBe("economy-page")
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS },
+  )
 
   test("frontend_research unavailable continuation artifacts return visible recovery results", async () => {
     const now = Date.now()
@@ -6182,7 +6493,11 @@ describe("orchestrator tools", () => {
           })
           redispatchSessionID = redispatched.id
           input.onSessionCreated?.(redispatched.id)
-          return { sessionID: redispatched.id, report: minimalVisualQaReport(), acceptance: minimalVisualQaAcceptance() }
+          return {
+            sessionID: redispatched.id,
+            report: minimalVisualQaReport(),
+            acceptance: minimalVisualQaAcceptance(),
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -10582,7 +10897,11 @@ describe("orchestrator tools", () => {
           expect(deleteResult).toContain("active build session")
           expect(findGoal(goalID)?.objective).toBe("Stay unchanged while the build session is active.")
           expect(findGoalRun(goalRunID)?.status).toBe("running")
-          SessionStatus.set(child.id, { type: "terminal", reason: "aborted", error: "test cleanup" }, { publish: false })
+          SessionStatus.set(
+            child.id,
+            { type: "terminal", reason: "aborted", error: "test cleanup" },
+            { publish: false },
+          )
         },
       })
     })
@@ -11053,10 +11372,7 @@ describe("orchestrator tools", () => {
           time_updated: now,
         })
         .run()
-      db.update(EngineGoalTable)
-        .set({ plan_version_id: planID })
-        .where(eq(EngineGoalTable.id, removedGoalID))
-        .run()
+      db.update(EngineGoalTable).set({ plan_version_id: planID }).where(eq(EngineGoalTable.id, removedGoalID)).run()
       db.insert(EngineGoalTable)
         .values({
           id: dependentGoalID,
@@ -11865,6 +12181,7 @@ describe("orchestrator tools", () => {
     let capturedContext: any
     let capturedTarget: any
     let capturedRunInput: any
+    let capturedLayoutGeometryEvidenceID = ""
 
     await Instance.provide({
       directory: tmp.path,
@@ -11896,7 +12213,9 @@ describe("orchestrator tools", () => {
                 id: "REQ-visual-replica",
                 title: "Visual replica fidelity",
                 description: "The market page replica preserves the source page layout density and tab hierarchy.",
-                acceptance: ["Desktop screenshot comparison shows the tab hierarchy and spacing match the source page."],
+                acceptance: [
+                  "Desktop screenshot comparison shows the tab hierarchy and spacing match the source page.",
+                ],
                 evidence_refs: ["frontend_design:desktop-reference"],
                 non_goals: ["Do not redesign the page into a new marketing layout."],
                 priority: "blocking",
@@ -11904,6 +12223,71 @@ describe("orchestrator tools", () => {
             ],
           }),
         )
+        const annotatedVisualQaPng = await sharp({
+          create: {
+            width: 320,
+            height: 220,
+            channels: 4,
+            background: { r: 255, g: 255, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer()
+        const annotatedVisualQaRef = await AttachmentStore.write(
+          Instance.project.id,
+          annotatedVisualQaPng,
+          "image/png",
+          "dom-market-tabs.annotated.png",
+        )
+        const layoutGeometryJobID = `art_layout_geometry_${stamp}`
+        const layoutGeometryDir = ProjectRuntimePaths.browserPreviewJobRoot(tmp.path, taskID, layoutGeometryJobID)
+        await fs.mkdir(layoutGeometryDir, { recursive: true })
+        const layoutGeometryManifestPath = path.join(layoutGeometryDir, "layout-geometry.json")
+        const layoutGeometryManifest = {
+          operation: "layout-geometry",
+          status: "passed",
+          taskID,
+          targetID: "art_preview_target",
+          viewportID: "desktop",
+          route: "/markets/usa/",
+          jobID: layoutGeometryJobID,
+          samples: [],
+          widthBehavior: [],
+          alignmentGroups: [
+            {
+              sampleID: "desktop",
+              groupID: "primary-content-rail",
+              edge: "left",
+              status: "captured",
+              regionIDs: ["market-summary", "index-collections"],
+              missingRegionIDs: [],
+              values: [
+                { regionID: "market-summary", value: 36 },
+                { regionID: "index-collections", value: 540 },
+              ],
+              min: 36,
+              max: 540,
+              spread: 504,
+            },
+          ],
+          diagnostics: [],
+        }
+        await fs.writeFile(layoutGeometryManifestPath, `${JSON.stringify(layoutGeometryManifest, null, 2)}\n`, "utf8")
+        const layoutGeometryEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: "art_preview_target",
+          viewportID: "desktop",
+          operationKind: "layout-geometry",
+          manifestPath: layoutGeometryManifestPath,
+          artifactPaths: { manifest: layoutGeometryManifestPath },
+          status: "passed",
+          summary: "layout geometry captured primary-content-rail spread=504",
+          capture: layoutGeometryManifest,
+          diagnostics: [],
+        })
+        capturedLayoutGeometryEvidenceID = layoutGeometryEvidenceID
+        const layoutGeometryEvidenceRef = `browser_preview_evidence:${layoutGeometryEvidenceID}`
 
         const visualQaRecord: any = minimalVisualQaDecisionRecord()
         visualQaRecord.report.accepted = false
@@ -11917,14 +12301,14 @@ describe("orchestrator tools", () => {
           status: "failed",
           expected: "The market tab row matches the source hierarchy and first-viewport spacing.",
           observed: "The market tab row is clipped and spacing is too loose.",
-          evidence_refs: ["screenshot://local/market-tabs.png"],
+          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
           required_correction: "Restore tab row spacing and hierarchy from the source page.",
         }
         visualQaRecord.report.coverage[0] = {
           ...visualQaRecord.report.coverage[0],
           check_ids: ["check-market-tabs"],
           region: "market tabs",
-          evidence_refs: ["screenshot://local/market-tabs.png"],
+          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
         }
         visualQaRecord.report.evidence[0] = {
           ...visualQaRecord.report.evidence[0],
@@ -11934,6 +12318,13 @@ describe("orchestrator tools", () => {
           viewport: { width: 1440, height: 900 },
           note: "Market tab row screenshot shows clipping and loose spacing.",
         }
+        visualQaRecord.report.evidence.push({
+          check_ids: ["check-market-tabs"],
+          type: "other",
+          ref: layoutGeometryEvidenceRef,
+          viewport: { width: 1440, height: 900 },
+          note: "Layout geometry manifest shows primary-content-rail left spread=504px.",
+        })
         visualQaRecord.report.production_blockers = [
           {
             id: "blocker-market-tabs",
@@ -11944,7 +12335,7 @@ describe("orchestrator tools", () => {
             impact: "The first viewport reads as a redesigned page instead of a replica.",
             required_correction: "Restore tab row spacing and hierarchy from the source page.",
             source_refs: ["frontend_design:desktop-reference"],
-            evidence_refs: ["screenshot://local/market-tabs.png"],
+            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
           },
         ]
         visualQaRecord.report.problem_dom_regions = [
@@ -11955,7 +12346,7 @@ describe("orchestrator tools", () => {
             region: "market tabs",
             route: "/markets/usa/",
             viewport: { width: 1440, height: 900 },
-            locator: "main [data-testid=\"market-tabs\"]",
+            locator: 'main [data-testid="market-tabs"]',
             dom_path: "body > div#root > main > nav.market-tabs",
             outer_html_excerpt: '<nav data-testid="market-tabs" class="market-tabs loose">Stocks ETFs Bonds</nav>',
             ancestor_context: ["main class=market-page"],
@@ -11967,7 +12358,8 @@ describe("orchestrator tools", () => {
             computed_style: { display: "flex", gap: "32px", "margin-top": "40px" },
             attributes: { class: "market-tabs loose", "data-testid": "market-tabs" },
             code_search_terms: ["market-tabs", "MarketTabs", "loose"],
-            evidence_refs: ["screenshot://local/market-tabs.png"],
+            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
+            annotated_evidence_refs: [annotatedVisualQaRef.url],
             notes: "Repair the tab component before repainting adjacent overview cards.",
           },
         ]
@@ -12043,7 +12435,25 @@ describe("orchestrator tools", () => {
     expect(capturedContext?.visualQaFeedback).toContain("Latest failed Visual QA report for Build repair")
     expect(capturedContext?.visualQaFeedback).toContain("blocker-market-tabs")
     expect(capturedContext?.visualQaFeedback).toContain('locator: main [data-testid="market-tabs"]')
+    expect(capturedContext?.visualQaFeedback).toContain("annotated_evidence_refs")
     expect(capturedContext?.visualQaFeedback).toContain("code_search_terms: market-tabs, MarketTabs, loose")
+    expect(capturedContext?.evidencePack?.visualQaAnnotations).toHaveLength(1)
+    expect(capturedContext?.evidencePack?.visualQaAnnotations?.[0]).toMatchObject({
+      url: expect.stringContaining("/attachment/"),
+      filename: "dom-market-tabs.annotated.png",
+      intent: "visual_qa_annotation",
+      source: "visual_qa_problem_dom_region",
+      label: "dom-market-tabs",
+    })
+    expect(capturedContext?.evidencePack?.visualQaDiagnostics).toHaveLength(1)
+    expect(capturedContext?.evidencePack?.visualQaDiagnostics?.[0]).toMatchObject({
+      url: expect.stringContaining("/attachment/"),
+      filename: `${capturedLayoutGeometryEvidenceID}.layout-geometry.json`,
+      mime: "application/json",
+      intent: "visual_qa_diagnostic",
+      source: "browser_preview_layout_geometry",
+      label: capturedLayoutGeometryEvidenceID,
+    })
     expect(capturedContext?.acceptanceFeedback).toBeUndefined()
   })
 
@@ -12138,10 +12548,7 @@ describe("orchestrator tools", () => {
         .select()
         .from(EngineArtifactTable)
         .where(
-          and(
-            eq(EngineArtifactTable.goal_run_id, goalRun!.id),
-            eq(EngineArtifactTable.kind, "build_attempt_outcome"),
-          ),
+          and(eq(EngineArtifactTable.goal_run_id, goalRun!.id), eq(EngineArtifactTable.kind, "build_attempt_outcome")),
         )
         .get(),
     )
@@ -12950,7 +13357,9 @@ describe("orchestrator tools", () => {
           db
             .select()
             .from(EngineArtifactTable)
-            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
+            )
             .all(),
         )
         expect(manifests).toHaveLength(1)
@@ -13024,7 +13433,9 @@ describe("orchestrator tools", () => {
             db
               .select()
               .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .where(
+                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
+              )
               .all(),
           ),
         ).toHaveLength(0)
@@ -13098,7 +13509,9 @@ describe("orchestrator tools", () => {
             db
               .select()
               .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .where(
+                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
+              )
               .all(),
           ),
         ).toHaveLength(0)
@@ -13170,7 +13583,9 @@ describe("orchestrator tools", () => {
             db
               .select()
               .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .where(
+                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
+              )
               .all(),
           ),
         ).toHaveLength(0)
@@ -13229,8 +13644,7 @@ describe("orchestrator tools", () => {
               "Create a Frontend Innovate expert squad flow to redesign an existing enterprise market webpage from aesthetic, professional, and convenient perspectives using source-page investigation and HTML material. The operator explicitly asks for multiple Build brainstorm drafts.",
             goalTitle: "Build operator console draft",
             goalSlug: "build-operator-console-draft",
-            objective:
-              "Build the bounded operator-console design direction draft from the Frontend Design handoff.",
+            objective: "Build the bounded operator-console design direction draft from the Frontend Design handoff.",
             now,
             requirementIDs: ["REQ-frontend-innovate"],
             insertProject: false,
@@ -13261,15 +13675,15 @@ describe("orchestrator tools", () => {
                 {
                   id: editorialDraftGoalID,
                   title: "Build editorial dashboard draft",
-                slug: "build-editorial-dashboard-draft",
-                objective:
-                  "Build the bounded editorial-dashboard design direction draft from the Frontend Design handoff.",
-                owned: "src/editorial-dashboard-draft.tsx",
-              },
-              {
-                id: selectedImplementationGoalID,
-                title: "Implement selected operator console",
-                slug: "implement-selected-operator-console",
+                  slug: "build-editorial-dashboard-draft",
+                  objective:
+                    "Build the bounded editorial-dashboard design direction draft from the Frontend Design handoff.",
+                  owned: "src/editorial-dashboard-draft.tsx",
+                },
+                {
+                  id: selectedImplementationGoalID,
+                  title: "Implement selected operator console",
+                  slug: "implement-selected-operator-console",
                   objective:
                     "Implement the selected direction-operator-console product design as the final webpage surface.",
                   owned: "src/selected-operator-console.tsx",
@@ -13507,8 +13921,7 @@ describe("orchestrator tools", () => {
                     ref: "browser-preview:frontend-innovate-selected",
                     viewport: { width: 1280, height: 720 },
                     state: "default",
-                    note:
-                      "Selected direction rendered the monitor-risk-allocate path with clear hierarchy, keyboard focus, and non-generic component structure.",
+                    note: "Selected direction rendered the monitor-risk-allocate path with clear hierarchy, keyboard focus, and non-generic component structure.",
                   },
                   {
                     check_ids: ["check-main-surface"],
@@ -13516,8 +13929,7 @@ describe("orchestrator tools", () => {
                     ref: "browser-preview:frontend-innovate-keyboard-path",
                     viewport: { width: 1280, height: 720 },
                     state: "keyboard-focus",
-                    note:
-                      "Keyboard path reached the risk queue, allocation grid, and compliance trail without hidden controls.",
+                    note: "Keyboard path reached the risk queue, allocation grid, and compliance trail without hidden controls.",
                   },
                 ],
               },
@@ -13592,7 +14004,9 @@ describe("orchestrator tools", () => {
               db
                 .select()
                 .from(EngineArtifactTable)
-                .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "frontend_research_brief")))
+                .where(
+                  and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "frontend_research_brief")),
+                )
                 .all(),
             ),
           ).toHaveLength(1)
@@ -13608,14 +14022,14 @@ describe("orchestrator tools", () => {
           const task = Database.use((db) =>
             db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
           )!
-          expect((task.system_artifacts as any[]).some((item) => item.intent === "design_resource_manifest")).toBe(
-            true,
-          )
+          expect((task.system_artifacts as any[]).some((item) => item.intent === "design_resource_manifest")).toBe(true)
           const manifests = Database.use((db) =>
             db
               .select()
               .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+              .where(
+                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
+              )
               .all(),
           )
           expect(manifests).toHaveLength(1)
@@ -13642,7 +14056,9 @@ describe("orchestrator tools", () => {
             db
               .select()
               .from(EngineArtifactTable)
-              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_session_contract")))
+              .where(
+                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_session_contract")),
+              )
               .all(),
           )
           expect(buildContracts).toHaveLength(3)
@@ -13658,9 +14074,11 @@ describe("orchestrator tools", () => {
           )
           expect(toolText(visualResult)).toContain("visual_qa complete: effective_accepted=true")
           expect(visualQaInput.frontendDesign).toContain("direction-operator-console")
-          expect(createDecisionLog(taskID).readByPhase("visual_qa").some((entry) => entry.key === "latest_summary")).toBe(
-            true,
-          )
+          expect(
+            createDecisionLog(taskID)
+              .readByPhase("visual_qa")
+              .some((entry) => entry.key === "latest_summary"),
+          ).toBe(true)
 
           const integrityResult = await tools.integrity.execute(
             { reason: "Final Frontend Innovate chain review." },
@@ -15516,186 +15934,194 @@ describe("orchestrator tools", () => {
     { timeout: 15_000 },
   )
 
-  test("goal build rejects duplicate dispatch while live build ownership exists", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+  test(
+    "goal build rejects duplicate dispatch while live build ownership exists",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
 
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_duplicate_live_goal_${stamp}`
-    const taskID = `tsk_duplicate_live_goal_${stamp}`
-    const goalID = `gol_duplicate_live_${stamp}`
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const projectID = `project_duplicate_live_goal_${stamp}`
+      const taskID = `tsk_duplicate_live_goal_${stamp}`
+      const goalID = `gol_duplicate_live_${stamp}`
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "duplicate live goal test" })
-        insertWorkflowTaskWithGoal({
-          projectID,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Duplicate live goal test",
-          taskTitle: "Duplicate live goal task",
-          request: "Reject duplicate goal dispatch while live ownership exists",
-          goalTitle: "Duplicate live guard",
-          goalSlug: "duplicate-live-guard",
-          objective: "Ensure duplicate dispatch is keyed by live build ownership facts",
-          now,
-        })
-        const goalRunID = beginBuildAttempt({
-          taskID,
-          goalID,
-          sessionID: `ses_duplicate_live_${stamp}`,
-          now: now + 1,
-        })
-        const ownershipPayload = createOrchestratorToolOwnershipPayload({
-          taskID,
-          orchestratorSessionID: parent.id,
-          orchestratorMessageID: `msg_duplicate_live_${stamp}`,
-          toolCallID: `cal_duplicate_live_${stamp}`,
-          toolPartID: `prt_duplicate_live_${stamp}`,
-          childSessionID: `ses_duplicate_live_${stamp}`,
-          scope: "goal",
-          goalID,
-          goalRunID,
-          now: now + 1,
-        })
-        insertOrchestratorToolOwnershipArtifact({
-          taskID,
-          goalRunID,
-          label: "tool-ownership-start",
-          payload: ownershipPayload,
-          now: now + 1,
-        })
-        buildAgentRunImpl = async () => {
-          throw new Error("BuildAgent.run must not start for duplicate live ownership")
-        }
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "duplicate live goal test" })
+          insertWorkflowTaskWithGoal({
+            projectID,
+            taskID,
+            goalID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Duplicate live goal test",
+            taskTitle: "Duplicate live goal task",
+            request: "Reject duplicate goal dispatch while live ownership exists",
+            goalTitle: "Duplicate live guard",
+            goalSlug: "duplicate-live-guard",
+            objective: "Ensure duplicate dispatch is keyed by live build ownership facts",
+            now,
+          })
+          const goalRunID = beginBuildAttempt({
+            taskID,
+            goalID,
+            sessionID: `ses_duplicate_live_${stamp}`,
+            now: now + 1,
+          })
+          const ownershipPayload = createOrchestratorToolOwnershipPayload({
+            taskID,
+            orchestratorSessionID: parent.id,
+            orchestratorMessageID: `msg_duplicate_live_${stamp}`,
+            toolCallID: `cal_duplicate_live_${stamp}`,
+            toolPartID: `prt_duplicate_live_${stamp}`,
+            childSessionID: `ses_duplicate_live_${stamp}`,
+            scope: "goal",
+            goalID,
+            goalRunID,
+            now: now + 1,
+          })
+          insertOrchestratorToolOwnershipArtifact({
+            taskID,
+            goalRunID,
+            label: "tool-ownership-start",
+            payload: ownershipPayload,
+            now: now + 1,
+          })
+          buildAgentRunImpl = async () => {
+            throw new Error("BuildAgent.run must not start for duplicate live ownership")
+          }
 
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
 
-        let error: unknown
-        try {
-          await tools.build.execute(
+          let error: unknown
+          try {
+            await tools.build.execute(
+              {
+                goalID,
+                request: "Start duplicate build",
+                reason: "This should be rejected before BuildAgent starts.",
+              },
+              buildToolOptions(),
+            )
+          } catch (err) {
+            error = err
+          }
+          expect(error).toBeInstanceOf(Error)
+          const message = error instanceof Error ? error.message : String(error)
+          expect(message).toContain("live build tool")
+          expect(message).not.toContain("already has live goal_run")
+        },
+      })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "goal build is not blocked by correction-bearing review history",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
+
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const projectID = `project_goal_integrity_concern_block_${stamp}`
+      const taskID = `tsk_goal_integrity_concern_block_${stamp}`
+      const goalID = `gol_integrity_concern_block_${stamp}`
+      const specID = `spec_${goalID}`
+      let buildCalls = 0
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "persisted integrity concern block test" })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
+            goalID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Persisted integrity concern block test",
+            taskTitle: "Persisted integrity concern block task",
+            request: "Let build consume correction-bearing review history as context",
+            goalTitle: "Build after correction feedback",
+            goalSlug: "build-after-correction-feedback",
+            objective: "Verify correction counts inform the prompt rather than block dispatch",
+            now,
+            specID,
+            insertProject: false,
+          })
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: "ses_integrity_concern_block",
+            lineage: activeOnlyLineage(taskID, specID),
+            verdict: "concerns",
+            phase: "post_build",
+            perDimension: [
+              { id: "requirement_fidelity", verdict: "concerns" },
+              { id: "technical_feasibility", verdict: "pass" },
+              { id: "hallucination", verdict: "pass" },
+              { id: "solution_quality", verdict: "concerns" },
+            ],
+            issuesCount: 3,
+            correctionsCount: 1,
+            missingCount: 0,
+            reason: "A concern still carried a concrete correction action.",
+            now,
+          })
+          buildAgentRunImpl = async (input: any) => {
+            await markBuildSlotAcquired(input)
+            buildCalls += 1
+            return {
+              result: {
+                status: "passed",
+                summary: "Build handled correction-bearing review history.",
+                files_changed: [
+                  {
+                    path: "src/index.ts",
+                    summary: "Changed implementation after correction feedback.",
+                    reason: "Review history is context, not a dispatch decision.",
+                  },
+                ],
+                tests: [],
+                commit_ref: "abc1234",
+              },
+              sessionID: "ses_goal_after_correction_feedback",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
+          }
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const result = await tools.build.execute(
             {
               goalID,
-              request: "Start duplicate build",
-              reason: "This should be rejected before BuildAgent starts.",
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
             },
             buildToolOptions(),
           )
-        } catch (err) {
-          error = err
-        }
-        expect(error).toBeInstanceOf(Error)
-        const message = error instanceof Error ? error.message : String(error)
-        expect(message).toContain("live build tool")
-        expect(message).not.toContain("already has live goal_run")
-      },
-    })
-  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
-  test("goal build is not blocked by correction-bearing review history", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
-
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_goal_integrity_concern_block_${stamp}`
-    const taskID = `tsk_goal_integrity_concern_block_${stamp}`
-    const goalID = `gol_integrity_concern_block_${stamp}`
-    const specID = `spec_${goalID}`
-    let buildCalls = 0
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "persisted integrity concern block test" })
-        insertWorkflowTaskWithGoal({
-          projectID: Instance.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Persisted integrity concern block test",
-          taskTitle: "Persisted integrity concern block task",
-          request: "Let build consume correction-bearing review history as context",
-          goalTitle: "Build after correction feedback",
-          goalSlug: "build-after-correction-feedback",
-          objective: "Verify correction counts inform the prompt rather than block dispatch",
-          now,
-          specID,
-          insertProject: false,
-        })
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: "ses_integrity_concern_block",
-          lineage: activeOnlyLineage(taskID, specID),
-          verdict: "concerns",
-          phase: "post_build",
-          perDimension: [
-            { id: "requirement_fidelity", verdict: "concerns" },
-            { id: "technical_feasibility", verdict: "pass" },
-            { id: "hallucination", verdict: "pass" },
-            { id: "solution_quality", verdict: "concerns" },
-          ],
-          issuesCount: 3,
-          correctionsCount: 1,
-          missingCount: 0,
-          reason: "A concern still carried a concrete correction action.",
-          now,
-        })
-        buildAgentRunImpl = async (input: any) => {
-          await markBuildSlotAcquired(input)
-          buildCalls += 1
-          return {
-            result: {
-              status: "passed",
-              summary: "Build handled correction-bearing review history.",
-              files_changed: [
-                {
-                  path: "src/index.ts",
-                  summary: "Changed implementation after correction feedback.",
-                  reason: "Review history is context, not a dispatch decision.",
-                },
-              ],
-              tests: [],
-              commit_ref: "abc1234",
-            },
-            sessionID: "ses_goal_after_correction_feedback",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
-          }
-        }
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = await tools.build.execute(
-          {
-            goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
-
-        expectGoalBuildStarted(result)
-        await waitForGoalStatus(goalID, "passed")
-        expect(buildCalls).toBe(1)
-        expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
-      },
-    })
-  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
+          expectGoalBuildStarted(result)
+          await waitForGoalStatus(goalID, "passed")
+          expect(buildCalls).toBe(1)
+          expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+        },
+      })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
 
   test("orchestrator tool surface omits retired deliver verification", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -15760,261 +16186,273 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("goal build success reclaims the completed worktree immediately", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+  test(
+    "goal build success reclaims the completed worktree immediately",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
 
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_goal_cleanup_${stamp}`
-    const taskID = `tsk_goal_cleanup_${stamp}`
-    const goalID = `gol_cleanup_${stamp}`
-    let buildWorktreeDir = ""
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const projectID = `project_goal_cleanup_${stamp}`
+      const taskID = `tsk_goal_cleanup_${stamp}`
+      const goalID = `gol_cleanup_${stamp}`
+      let buildWorktreeDir = ""
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "goal cleanup build test" })
-        insertWorkflowTaskWithGoal({
-          projectID: Instance.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Goal cleanup build test",
-          taskTitle: "Goal cleanup build task",
-          request: "Build a scoped goal and reclaim its worktree after success",
-          goalTitle: "Reclaim successful worktree",
-          goalSlug: "reclaim-successful-worktree",
-          objective: "Verify completed goal worktrees are reclaimed after a passed build",
-          now,
-          insertProject: false,
-        })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "goal cleanup build test" })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
+            goalID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Goal cleanup build test",
+            taskTitle: "Goal cleanup build task",
+            request: "Build a scoped goal and reclaim its worktree after success",
+            goalTitle: "Reclaim successful worktree",
+            goalSlug: "reclaim-successful-worktree",
+            objective: "Verify completed goal worktrees are reclaimed after a passed build",
+            now,
+            insertProject: false,
+          })
 
-        buildAgentRunImpl = async (input: any) => {
-          await markBuildSlotAcquired(input)
-          buildWorktreeDir = input.managedWorktree.directory
-          expect(input.target.id).toBe(goalID)
+          buildAgentRunImpl = async (input: any) => {
+            await markBuildSlotAcquired(input)
+            buildWorktreeDir = input.managedWorktree.directory
+            expect(input.target.id).toBe(goalID)
+            expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
+            return {
+              result: {
+                status: "passed",
+                summary: "Goal built successfully",
+                files_changed: [
+                  {
+                    path: "src/index.ts",
+                    summary: "Changed scoped implementation file.",
+                    reason: "Required by the mocked goal build.",
+                  },
+                ],
+                tests: [],
+                commit_ref: "abc1234",
+              },
+              sessionID: "ses_goal_cleanup_build",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
+          }
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
+            },
+            buildToolOptions(),
+          )
+
+          expectGoalBuildStarted(result)
+          await waitForGoalStatus(goalID, "passed")
+          expect(buildWorktreeDir).not.toBe("")
+          await waitForCondition("completed goal worktree cleanup", async () => {
+            return !(await Filesystem.exists(buildWorktreeDir)) && findGoalLatestWorkspace(goalID).directory === null
+          })
+          expect(await Filesystem.exists(buildWorktreeDir)).toBe(false)
+          const ws = findGoalLatestWorkspace(goalID)
+          expect(ws.directory).toBeNull()
+          expect(ws.branch).toBeNull()
+          expect(ws.baseRef).toBeNull()
+          expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBeNull()
+          expect(listGoalRunsByGoal(goalID)[0]?.workspace_branch).toBeNull()
+        },
+      })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
+
+  test(
+    "goal build failure keeps the worktree for diagnosis",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
+
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const projectID = `project_goal_keep_${stamp}`
+      const taskID = `tsk_goal_keep_${stamp}`
+      const goalID = `gol_keep_${stamp}`
+      let buildWorktreeDir = ""
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "goal failed build test" })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
+            goalID,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Goal failed build test",
+            taskTitle: "Goal failed build task",
+            request: "Build a scoped goal and preserve its worktree on failure",
+            goalTitle: "Preserve failed worktree",
+            goalSlug: "preserve-failed-worktree",
+            objective: "Verify failed goal worktrees remain available for diagnosis",
+            now,
+            insertProject: false,
+          })
+
+          buildAgentRunImpl = async (input: any) => {
+            await markBuildSlotAcquired(input)
+            buildWorktreeDir = input.managedWorktree.directory
+            expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
+            return {
+              result: {
+                status: "failed",
+                summary: "Goal build failed",
+                files_changed: [],
+                tests: [],
+                error: "diagnostic failure",
+              },
+              sessionID: "ses_goal_failed_build",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
+          }
+
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
+
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
+            },
+            buildToolOptions(),
+          )
+
+          expectGoalBuildStarted(result)
+          await waitForGoalStatus(goalID, "failed")
           expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
-          return {
-            result: {
-              status: "passed",
-              summary: "Goal built successfully",
-              files_changed: [
-                {
-                  path: "src/index.ts",
-                  summary: "Changed scoped implementation file.",
-                  reason: "Required by the mocked goal build.",
-                },
-              ],
-              tests: [],
-              commit_ref: "abc1234",
-            },
-            sessionID: "ses_goal_cleanup_build",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
-          }
-        }
+          expect(findGoalLatestWorkspace(goalID).directory).toBe(buildWorktreeDir)
+          expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(buildWorktreeDir)
+        },
+      })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
 
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
+  test(
+    "goal build success records completed workspace cleanup refusal without failing the goal",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
 
-        const result = await tools.build.execute(
-          {
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const projectID = `project_goal_refuse_${stamp}`
+      const taskID = `tsk_goal_refuse_${stamp}`
+      const goalID = `gol_refuse_${stamp}`
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "goal cleanup refused test" })
+          insertWorkflowTaskWithGoal({
+            projectID: Instance.project.id,
+            taskID,
             goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Goal workspace pointer test",
+            taskTitle: "Goal workspace pointer task",
+            request: "Build a scoped goal and surface refused completed workspace cleanup",
+            goalTitle: "Refuse returned workspace cleanup",
+            goalSlug: "refuse-returned-workspace-cleanup",
+            objective: "Verify refused completed workspace cleanup is visible",
+            now,
+            insertProject: false,
+          })
 
-        expectGoalBuildStarted(result)
-        await waitForGoalStatus(goalID, "passed")
-        expect(buildWorktreeDir).not.toBe("")
-        await waitForCondition("completed goal worktree cleanup", async () => {
-          return !(await Filesystem.exists(buildWorktreeDir)) && findGoalLatestWorkspace(goalID).directory === null
-        })
-        expect(await Filesystem.exists(buildWorktreeDir)).toBe(false)
-        const ws = findGoalLatestWorkspace(goalID)
-        expect(ws.directory).toBeNull()
-        expect(ws.branch).toBeNull()
-        expect(ws.baseRef).toBeNull()
-        expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBeNull()
-        expect(listGoalRunsByGoal(goalID)[0]?.workspace_branch).toBeNull()
-      },
-    })
-  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
-
-  test("goal build failure keeps the worktree for diagnosis", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
-
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_goal_keep_${stamp}`
-    const taskID = `tsk_goal_keep_${stamp}`
-    const goalID = `gol_keep_${stamp}`
-    let buildWorktreeDir = ""
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "goal failed build test" })
-        insertWorkflowTaskWithGoal({
-          projectID: Instance.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Goal failed build test",
-          taskTitle: "Goal failed build task",
-          request: "Build a scoped goal and preserve its worktree on failure",
-          goalTitle: "Preserve failed worktree",
-          goalSlug: "preserve-failed-worktree",
-          objective: "Verify failed goal worktrees remain available for diagnosis",
-          now,
-          insertProject: false,
-        })
-
-        buildAgentRunImpl = async (input: any) => {
-          await markBuildSlotAcquired(input)
-          buildWorktreeDir = input.managedWorktree.directory
-          expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
-          return {
-            result: {
-              status: "failed",
-              summary: "Goal build failed",
-              files_changed: [],
-              tests: [],
-              error: "diagnostic failure",
-            },
-            sessionID: "ses_goal_failed_build",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
+          buildAgentRunImpl = async (input: any) => {
+            await markBuildSlotAcquired(input)
+            return {
+              result: {
+                status: "passed",
+                summary: "Goal built successfully",
+                files_changed: [
+                  {
+                    path: "src/index.ts",
+                    summary: "Changed scoped implementation file.",
+                    reason: "Required by the mocked goal build.",
+                  },
+                ],
+                tests: [],
+                commit_ref: "abc1234",
+              },
+              sessionID: "ses_goal_cleanup_refused",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
           }
-        }
+          spyOn(EngineWriter, "cleanupGoalWorkspaceForGoal").mockImplementationOnce(async () => {
+            throw new Error("WorktreeRemoveFailedError: EBUSY: resource busy or locked, rm 'managed-worktree'")
+          })
 
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
 
-        const result = await tools.build.execute(
-          {
-            goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
-
-        expectGoalBuildStarted(result)
-        await waitForGoalStatus(goalID, "failed")
-        expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
-        expect(findGoalLatestWorkspace(goalID).directory).toBe(buildWorktreeDir)
-        expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(buildWorktreeDir)
-      },
-    })
-  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
-
-  test("goal build success records completed workspace cleanup refusal without failing the goal", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
-
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const projectID = `project_goal_refuse_${stamp}`
-    const taskID = `tsk_goal_refuse_${stamp}`
-    const goalID = `gol_refuse_${stamp}`
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "goal cleanup refused test" })
-        insertWorkflowTaskWithGoal({
-          projectID: Instance.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Goal workspace pointer test",
-          taskTitle: "Goal workspace pointer task",
-          request: "Build a scoped goal and surface refused completed workspace cleanup",
-          goalTitle: "Refuse returned workspace cleanup",
-          goalSlug: "refuse-returned-workspace-cleanup",
-          objective: "Verify refused completed workspace cleanup is visible",
-          now,
-          insertProject: false,
-        })
-
-        buildAgentRunImpl = async (input: any) => {
-          await markBuildSlotAcquired(input)
-          return {
-            result: {
-              status: "passed",
-              summary: "Goal built successfully",
-              files_changed: [
-                {
-                  path: "src/index.ts",
-                  summary: "Changed scoped implementation file.",
-                  reason: "Required by the mocked goal build.",
-                },
-              ],
-              tests: [],
-              commit_ref: "abc1234",
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
             },
-            sessionID: "ses_goal_cleanup_refused",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
-          }
-        }
-        spyOn(EngineWriter, "cleanupGoalWorkspaceForGoal").mockImplementationOnce(async () => {
-          throw new Error("WorktreeRemoveFailedError: EBUSY: resource busy or locked, rm 'managed-worktree'")
-        })
+            buildToolOptions(),
+          )
 
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = await tools.build.execute(
-          {
-            goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
-
-        expectGoalBuildStarted(result)
-        const goalRunID = listGoalRunsByGoal(goalID)[0]?.id
-        expect(goalRunID).toBeString()
-        const diagnosticKey = `completed_worktree_cleanup_failed_${goalRunID}`
-        await waitForCondition("completed workspace cleanup refusal recorded", async () => {
-          return goalStatusByID(goalID) === "passed" && !!createDecisionLog(taskID).readByKey(diagnosticKey)
-        })
-        const goalRun = listGoalRunsByGoal(goalID)[0]
-        expect(goalRun?.status).toBe("completed")
-        expect(goalRun?.error).toBeNull()
-        expect(goalRun?.workspace_dir).toContain(".opencorvus")
-        expect(goalRun?.workspace_dir).toContain("worktree")
-        expect(findGoalLatestWorkspace(goalID).directory).toBe(goalRun?.workspace_dir)
-        expect(await Filesystem.exists(goalRun?.workspace_dir ?? "")).toBe(true)
-        const diagnostic = createDecisionLog(taskID).readByKey(diagnosticKey)
-        expect(diagnostic?.value).toContain("completed worktree cleanup failed")
-        expect(diagnostic?.value).toContain("EBUSY")
-        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
-      },
-    })
-  }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
+          expectGoalBuildStarted(result)
+          const goalRunID = listGoalRunsByGoal(goalID)[0]?.id
+          expect(goalRunID).toBeString()
+          const diagnosticKey = `completed_worktree_cleanup_failed_${goalRunID}`
+          await waitForCondition("completed workspace cleanup refusal recorded", async () => {
+            return goalStatusByID(goalID) === "passed" && !!createDecisionLog(taskID).readByKey(diagnosticKey)
+          })
+          const goalRun = listGoalRunsByGoal(goalID)[0]
+          expect(goalRun?.status).toBe("completed")
+          expect(goalRun?.error).toBeNull()
+          expect(goalRun?.workspace_dir).toContain(".opencorvus")
+          expect(goalRun?.workspace_dir).toContain("worktree")
+          expect(findGoalLatestWorkspace(goalID).directory).toBe(goalRun?.workspace_dir)
+          expect(await Filesystem.exists(goalRun?.workspace_dir ?? "")).toBe(true)
+          const diagnostic = createDecisionLog(taskID).readByKey(diagnosticKey)
+          expect(diagnostic?.value).toContain("completed worktree cleanup failed")
+          expect(diagnostic?.value).toContain("EBUSY")
+          expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+        },
+      })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
 
   test("goal build uses design resource manifest target once when task attachment has same screenshot", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -16137,6 +16575,7 @@ describe("orchestrator tools", () => {
       },
     })
   })
+
   test("goal build retry forwards previous rendered screenshot through attachment store URL", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })

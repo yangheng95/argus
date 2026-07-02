@@ -14,11 +14,11 @@ import { Session } from "@/session"
  * Why this tool instead of giving Mission generic write/edit: Mission may
  * READ and analyse the project (read/glob/search_code/list/lsp), but its
  * only WRITE surface to the workspace is these four files. It must NOT
- * acquire edit/write/apply_patch. Its bash surface is limited to
- * user-authorized command evidence and must not become an executor lane
- * (rule 11 — the orchestrator-core comment block has a literal history log of
- * how a coordination agent with executor tools bypassed worker dispatch and
- * tried to do work itself). mission_state pins
+ * acquire edit/write/apply_patch. Mission does not own bash; runtime command
+ * repair belongs to the Orchestrator scheduler and must not become an executor
+ * lane (rule 11 — the orchestrator-core contract records how a coordination
+ * agent with executor tools bypassed worker dispatch and tried to do work
+ * itself). mission_state pins
  * the agent to a fixed directory tree and file-name vocabulary so it cannot
  * overwrite arbitrary repo files even by mistake; all real changes go through
  * dispatched engine_tasks.

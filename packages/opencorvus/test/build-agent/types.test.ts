@@ -91,6 +91,23 @@ describe("BuildResultSchema", () => {
     if (parsed.success) expect(parsed.data.tests).toEqual([])
   })
 
+  test("rejects passed result with failed top-level test evidence", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "Claimed the visual repair passed despite a failed checker.",
+      files_changed: [{ path: "src/App.tsx", summary: "Changed page", reason: "Repair visual checker" }],
+      tests: [
+        { name: "browser_preview_reference_regions map-surfaces-world-trends", passed: false, detail: "passed=false" },
+      ],
+      ...FCI,
+    })
+
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(formatBuildResultSchemaError(parsed.error)).toContain("passed build result cannot contain failed tests")
+    }
+  })
+
   test("requires a concrete error for failed results", () => {
     const missing = BuildResultSchema.safeParse({
       status: "failed",

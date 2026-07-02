@@ -52,9 +52,12 @@ report the missing visual evidence against the original visual request,
 If a Visual QA report exists, treat it as focused visual acceptance evidence.
 Use `inspect_integrity_evidence({ section: "visual_qa_report" })` when
 visual or GUI fidelity matters. A report with `accepted=false` or non-empty
-`production_blockers` is failing visual acceptance evidence until repaired and
-revalidated. This is not a host-side delivery veto; it is task evidence that must be
-reconciled before an integrity pass.
+`production_blockers` is failing Visual QA process evidence until repaired and
+revalidated. For rendered-vs-reference parity, a scoped passing
+`VisualEvidenceBundle` inspected through `inspect_visual_evidence` is the
+authority; do not re-block the same formal parity contract solely from stale
+Visual QA missing-reference-comparison wording. This is not a host-side delivery
+veto; it is task evidence that must be reconciled before an integrity pass.
 
 Evidence requirements:
 

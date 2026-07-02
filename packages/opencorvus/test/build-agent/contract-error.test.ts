@@ -333,6 +333,76 @@ describe("evaluateBuildReportSubmission", () => {
     if (evaluated.accepted) expect(evaluated.result.fact_check_items).toEqual([])
   })
 
+  test("rejects passed report that does not consume dispatched Visual QA annotated screenshots", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the Visual QA blocker.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+      },
+      ownsWorktree: false,
+      requiredVisualQaAnnotationRefs: ["/attachment/proj/visual-qa-dom.png"],
+    })
+
+    expect(evaluated.accepted).toBe(false)
+    expect(evaluated.output).toContain("REJECTED: build report did not consume dispatched Visual QA")
+    expect(evaluated.output).toContain("consumed_visual_qa_annotation_refs")
+  })
+
+  test("accepts passed report that lists consumed Visual QA annotated screenshots", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the Visual QA blocker.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        consumed_visual_qa_annotation_refs: ["/attachment/proj/visual-qa-dom.png"],
+      },
+      ownsWorktree: false,
+      requiredVisualQaAnnotationRefs: ["/attachment/proj/visual-qa-dom.png"],
+    })
+
+    expect(evaluated.accepted).toBe(true)
+  })
+
+  test("rejects passed report that does not consume dispatched Visual QA diagnostic manifests", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the shared rail alignment blocker.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+      },
+      ownsWorktree: false,
+      requiredVisualQaDiagnosticRefs: ["/attachment/proj/art_layout.layout-geometry.json"],
+    })
+
+    expect(evaluated.accepted).toBe(false)
+    expect(evaluated.output).toContain("REJECTED: build report did not consume dispatched Visual QA diagnostic evidence")
+    expect(evaluated.output).toContain("consumed_visual_qa_diagnostic_refs")
+  })
+
+  test("accepts passed report that lists consumed Visual QA diagnostic manifests", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the shared rail alignment blocker.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        consumed_visual_qa_diagnostic_refs: ["/attachment/proj/art_layout.layout-geometry.json"],
+      },
+      ownsWorktree: false,
+      requiredVisualQaDiagnosticRefs: ["/attachment/proj/art_layout.layout-geometry.json"],
+    })
+
+    expect(evaluated.accepted).toBe(true)
+  })
+
   test("accepts valid build terminal payload and normalizes managed worktree commit_ref", () => {
     const evaluated = evaluateBuildReportSubmission({
       result: {

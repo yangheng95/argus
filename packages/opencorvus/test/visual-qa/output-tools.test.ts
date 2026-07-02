@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import sharp from "sharp"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
 import {
   VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
@@ -227,6 +229,87 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.accepted).toBe(true)
   })
 
+  test("materializes annotated screenshots for registered problem DOM regions in task context", async () => {
+    const tmp = await tmpdir()
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const taskID = `tsk_visual_qa_annotation_${Date.now().toString(16)}`
+          const screenshotDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "visual-qa-annotation")
+          await fs.mkdir(screenshotDir, { recursive: true })
+          const screenshotPath = path.join(screenshotDir, "desktop.png")
+          await sharp({
+            create: {
+              width: 320,
+              height: 240,
+              channels: 4,
+              background: { r: 255, g: 255, b: 255, alpha: 1 },
+            },
+          })
+            .png()
+            .toFile(screenshotPath)
+
+          const kit = createVisualQaOutputTools({
+            taskID,
+            projectRoot: tmp.path,
+            projectID: Instance.project.id,
+          })
+          await callTool(
+            kit.tools,
+            "register_visual_qa_check_item",
+            checkItem({
+              id: "check_dom_annotation",
+              status: "failed",
+              region: "hero tabs",
+              evidence_refs: [screenshotPath],
+              required_correction: "Repair the clipped tab row.",
+            }),
+          )
+          const result = await callTool(kit.tools, "register_visual_qa_problem_dom_region", {
+            id: "dom-hero-tabs",
+            check_ids: ["check_dom_annotation"],
+            blocker_ids: ["blocker-hero-tabs"],
+            region: "hero tabs",
+            route: "/markets/world-stocks/",
+            viewport: { width: 320, height: 240 },
+            locator: "main [data-testid=\"hero-tabs\"]",
+            dom_path: "body > div#root > main > nav.hero-tabs",
+            outer_html_excerpt: "<nav data-testid=\"hero-tabs\" class=\"hero-tabs is-clipped\">Stocks Futures</nav>",
+            bbox: { x: 24, y: 32, width: 180, height: 48 },
+            computed_style: { display: "flex", overflow: "hidden" },
+            attributes: { "data-testid": "hero-tabs", class: "hero-tabs is-clipped" },
+            code_search_terms: ["hero-tabs", "is-clipped"],
+            evidence_refs: [screenshotPath],
+            notes: "Build should inspect the hero tab container spacing.",
+          })
+
+          expect(result).toContain("annotated_evidence_refs=/attachment/")
+          const region = kit.getCollector().problem_dom_regions[0]
+          expect(region?.annotated_evidence_refs).toHaveLength(1)
+          const located = AttachmentStore.nameFromUrl(region!.annotated_evidence_refs[0]!)
+          expect(located).toBeDefined()
+          const absolute = AttachmentStore.resolveAbsolute(located!.projectID, located!.name)
+          expect(absolute).toBeDefined()
+          const metadata = await sharp(absolute!).metadata()
+          expect(metadata.width).toBe(320)
+          expect(metadata.height).toBe(240)
+          const raw = await sharp(absolute!).raw().toBuffer({ resolveWithObject: true })
+          let redPixels = 0
+          for (let offset = 0; offset < raw.data.length; offset += raw.info.channels) {
+            const r = raw.data[offset] ?? 0
+            const g = raw.data[offset + 1] ?? 0
+            const b = raw.data[offset + 2] ?? 0
+            if (r > 220 && g < 80 && b < 120) redPixels++
+          }
+          expect(redPixels).toBeGreaterThan(100)
+        },
+      })
+    } finally {
+      await tmp[Symbol.asyncDispose]?.()
+    }
+  })
+
   test("records failed report with blockers and unresolved module problems", async () => {
     const kit = createVisualQaOutputTools()
     const result = await submitReport(
@@ -282,7 +365,7 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.unresolved_code_module_problems[0]?.id).toBe("problem_map_module")
   })
 
-  test("records reference parity screenshot-only report as effective failure", async () => {
+  test("records reference parity screenshot-only report as process accepted with formal evidence advisory", async () => {
     const kit = createVisualQaOutputTools({
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop"],
@@ -302,13 +385,14 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
-    expect(result).toContain("effective_accepted=false")
-    expect(result).toContain("BLOCKERS")
-    expect(result).toContain("without reference_comparison evidence refs")
+    expect(result).toContain("effective_accepted=true")
+    expect(result).toContain("ADVISORIES")
+    expect(result).toContain("host materialization must produce a scoped VisualEvidenceBundle")
+    expect(result).not.toContain("BLOCKERS")
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
   })
 
-  test("records accepted reference parity with non-formal comparison refs as effective failure", async () => {
+  test("records accepted reference parity with non-formal comparison refs as process accepted advisories", async () => {
     await using tmp = await tmpdir({ git: true })
     const cases: Array<{
       label: string
@@ -378,12 +462,12 @@ describe("visual-qa output tools", () => {
           )
 
           expect(result, item.label).toContain("RECORDED")
-          expect(result, item.label).toContain("effective_accepted=false")
-          expect(result, item.label).toContain("BLOCKERS")
+          expect(result, item.label).toContain("effective_accepted=true")
+          expect(result, item.label).toContain("ADVISORIES")
           expect(result, item.label).toContain(
             "no submitted reference comparison refs resolved to readable passed browser_preview_evidence",
           )
-          expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(false)
+          expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(true)
         }
       },
     })
@@ -443,9 +527,9 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=false")
-        expect(result).toContain("without reference_comparison evidence refs")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+        expect(result).toContain("effective_accepted=true")
+        expect(result).toContain("host materialization must produce a scoped VisualEvidenceBundle")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
       },
     })
   }, 20_000)
@@ -500,7 +584,7 @@ describe("visual-qa output tools", () => {
     })
   }, 20_000)
 
-  test("records host-required parity without authoritative regions as effective failure", async () => {
+  test("records host-required parity without authoritative regions as advisory", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_no_authoritative_regions_${Date.now()}`
     await Instance.provide({
@@ -542,14 +626,14 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("effective_accepted=true")
         expect(result).toContain("no authoritative requiredReferenceRegions")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
       },
     })
   }, 20_000)
 
-  test("records unreadable reference-comparison evidence as effective failure", async () => {
+  test("records unreadable reference-comparison evidence as advisory", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_unreadable_ref_${Date.now()}`
     await Instance.provide({
@@ -594,9 +678,9 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("effective_accepted=true")
         expect(result).toContain("unreadable")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
       },
     })
   }, 20_000)

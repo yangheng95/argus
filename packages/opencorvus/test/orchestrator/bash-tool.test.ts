@@ -7,20 +7,19 @@ import {
 } from "../../src/orchestrator/tools"
 
 /**
- * Orchestrator bash is the user-authorized single-command evidence surface.
- * The prompt carries authorization scope; the host enforces command-shape
- * safety. These tests pin the schema-level invariants so they cannot regress
- * silently.
+ * Orchestrator bash is the full runtime repair command surface. The prompt
+ * carries the executor boundary; the host does not recreate the retired
+ * git-only / single-invocation command gate.
  *
- * Spec — 2026-06-15 user-authorized-mission-orchestrator-bash.
+ * Spec — 2026-07-02 orchestrator-runtime-command-permission.
  */
 
-describe("validateOrchestratorBashCommand — single invocation only", () => {
-  test("accepts a plain git status", () => {
+describe("validateOrchestratorBashCommand — runtime command text", () => {
+  test("accepts a plain git status command", () => {
     expect(validateOrchestratorBashCommand("git status")).toEqual({ ok: true })
   })
 
-  test("accepts non-git single commands", () => {
+  test("accepts non-git commands", () => {
     expect(validateOrchestratorBashCommand("npm test")).toEqual({ ok: true })
     expect(validateOrchestratorBashCommand("node --version")).toEqual({
       ok: true,
@@ -39,65 +38,15 @@ describe("validateOrchestratorBashCommand — single invocation only", () => {
     expect(b.ok).toBe(false)
   })
 
-  test("rejects pipelines", () => {
-    const result = validateOrchestratorBashCommand("git status | head -5")
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toMatch(/pipeline/)
-  })
-
-  test("rejects chained commands (&&, ||)", () => {
-    const a = validateOrchestratorBashCommand("git add . && git commit")
-    const b = validateOrchestratorBashCommand("git pull || git status")
-    expect(a.ok).toBe(false)
-    expect(b.ok).toBe(false)
-    if (!a.ok) expect(a.reason).toMatch(/chain/)
-    if (!b.ok) expect(b.reason).toMatch(/chain/)
-  })
-
-  test("rejects command separators (;)", () => {
-    const result = validateOrchestratorBashCommand("git status; git diff")
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toMatch(/separator/)
-  })
-
-  test("rejects backgrounding (&)", () => {
-    const result = validateOrchestratorBashCommand("git fetch &")
-    expect(result.ok).toBe(false)
-  })
-
-  test("rejects redirections (> / >> / <)", () => {
-    expect(validateOrchestratorBashCommand("git diff > out.patch").ok).toBe(false)
-    expect(validateOrchestratorBashCommand("git log >> log.txt").ok).toBe(false)
-    expect(validateOrchestratorBashCommand("git apply < patch.diff").ok).toBe(false)
-  })
-
-  test("rejects command substitution ($(...) and backticks)", () => {
-    const a = validateOrchestratorBashCommand("git reset --hard $(git merge-base HEAD main)")
-    const b = validateOrchestratorBashCommand("git checkout `git merge-base HEAD main`")
-    expect(a.ok).toBe(false)
-    expect(b.ok).toBe(false)
-    if (!a.ok) expect(a.reason).toMatch(/substitution/)
-    if (!b.ok) expect(b.reason).toMatch(/substitution/)
-  })
-
-  test("rejects process-killing patterns", () => {
-    // Defense in depth: even if someone uses an otherwise valid command, the
-    // host-killing detector catches `pkill` / `taskkill` / etc.
-    const result = validateOrchestratorBashCommand("pkill bun")
-    expect(result.ok).toBe(false)
-  })
-
-  test("rejects embedded newlines / carriage returns (shell command separators)", () => {
-    expect(validateOrchestratorBashCommand("git status\nrm -rf /tmp").ok).toBe(false)
-    expect(validateOrchestratorBashCommand("git diff\r\nrm foo").ok).toBe(false)
-  })
-
-  test("rejects an embedded `taskkill /IM` even inside a git argument", () => {
-    const result = validateOrchestratorBashCommand("git diff -- taskkill /IM bun.exe")
-    // host-killing pattern is a regex, fires on the substring.
-    expect(result.ok).toBe(false)
-    if (!result.ok)
-      expect(result.reason).toMatch(/host-process-killing|substitution|separator|pipeline|chain|redirection/)
+  test("accepts shell syntax needed for runtime repair", () => {
+    expect(validateOrchestratorBashCommand("git status | head -5")).toEqual({ ok: true })
+    expect(validateOrchestratorBashCommand("bun install && bun test packages/opencorvus/test/foo.test.ts")).toEqual({
+      ok: true,
+    })
+    expect(validateOrchestratorBashCommand("git diff > out.patch")).toEqual({ ok: true })
+    expect(validateOrchestratorBashCommand("node -e \"console.log(process.cwd())\"")).toEqual({ ok: true })
+    expect(validateOrchestratorBashCommand("git status\nbun --version")).toEqual({ ok: true })
+    expect(validateOrchestratorBashCommand("taskkill /IM bun.exe")).toEqual({ ok: true })
   })
 })
 
@@ -114,12 +63,13 @@ describe("createOrchestratorTools — bash wiring", () => {
     })
     expect(tools).toHaveProperty("bash")
     const bash = (tools as Record<string, { description?: string }>).bash
-    // Tool description must declare the user-authorized scope and forbid replacing
-    // sub-agent surfaces — these phrases are load-bearing for prompt-level
+    // Tool description must declare runtime repair scope and forbid replacing
+    // executor surfaces. These phrases are load-bearing for prompt-level
     // discipline.
-    expect(bash.description).toMatch(/User-authorized/i)
-    expect(bash.description).toMatch(/single-command/i)
-    expect(bash.description).toMatch(/NOT a code editor/)
-    expect(bash.description).toMatch(/NOT an autonomous test runner/)
+    expect(bash.description).toMatch(/Full runtime repair command shell/i)
+    expect(bash.description).toMatch(/toolchain blockers/i)
+    expect(bash.description).toMatch(/NOT a deliverable producer/)
+    expect(bash.description).toMatch(/NOT a code authoring lane/)
+    expect(bash.description).toMatch(/NOT a shortcut around requirements \/ architect \/ build/)
   })
 })

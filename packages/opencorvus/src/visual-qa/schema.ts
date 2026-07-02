@@ -187,6 +187,12 @@ export const VisualQaProblemDomRegionSchema = z.object({
     .default([])
     .describe("Strings Build should grep first when mapping the DOM region to source code."),
   evidence_refs: z.array(z.string().min(1)).default([]),
+  annotated_evidence_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Host-generated annotated screenshot refs with this Document Object Model (DOM) region's bbox, locator, blocker IDs, and repair hints drawn directly on the image.",
+    ),
   notes: z.string().min(1).describe("Concise repair guidance tied to these DOM facts."),
 })
 

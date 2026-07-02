@@ -47,15 +47,6 @@ export function visualQaReportSelfReportIssues(report: VisualQaReport): string[]
     if (report.reference_parity.required_regions.length === 0) {
       issues.push("accepted=true was submitted for reference parity without reference_parity.required_regions entries.")
     }
-    const directComparisonRefs = new Set([
-      ...report.reference_parity.reference_comparison_evidence_refs,
-      ...report.evidence.filter((item) => item.type === "reference_comparison").map((item) => item.ref),
-    ])
-    if (directComparisonRefs.size === 0) {
-      issues.push(
-        "accepted=true was submitted for reference parity without reference_comparison evidence refs.",
-      )
-    }
     if (report.reference_parity.missing_regions.length > 0) {
       issues.push(
         `accepted=true was submitted with reference_parity.missing_regions: ${report.reference_parity.missing_regions.join(", ")}.`,

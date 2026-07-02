@@ -33,6 +33,7 @@ import { Instance } from "@/project/instance"
 import { EffectiveConfig } from "@/config/effective"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog, type DecisionEntry } from "@/decision-log"
@@ -46,7 +47,6 @@ import { git as runGit } from "@/util/git"
 import { Shell } from "@/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
-import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/browser-preview"
 import {
   WAIT_MAX_MS,
@@ -86,11 +86,20 @@ import {
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
-import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
+import {
+  browserPreviewEvidenceIDFromRef,
+  readLatestTaskVisualEvidenceBundleSync,
+  validateVisualEvidenceBundleReferenceComparisons,
+} from "@/acceptance/visual-evidence"
+import {
+  findReadableBrowserPreviewEvidenceByID,
+  resolveRuntimeRelativePath,
+} from "@/browser-preview/persist"
 import {
   collectVisualEvidenceMaterializationRefs,
   materializeVisualEvidenceBundleFromEvidenceRefs,
   renderVisualEvidenceBundleMaterializationSummary,
+  type VisualEvidenceBundleMaterializationResult,
 } from "@/acceptance/visual-evidence-materializer"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import {
@@ -101,7 +110,7 @@ import {
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
 import { visualQaDecisionRecordEffectiveAcceptance } from "@/visual-qa/acceptance-semantics"
-import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
+import { VisualQaDecisionRecordSchema, type VisualQaAcceptance, type VisualQaReport } from "@/visual-qa/schema"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
@@ -1049,57 +1058,13 @@ async function requireTaskOrchestratorToolExecutionContext(
 }
 
 /**
- * Orchestrator-side bash is narrowly scoped to git merge-state repair only
- * (per the operator's binding directive). The schema rejects any non-git
- * invocation, any pipeline / redirect / command substitution, and any
- * process-killing pattern. This is data-integrity guarding for an
- * irreversible-by-LLM surface (shell execution); prompt-level rules carry only
- * the "what counts as a merge repair" scoping.
+ * Orchestrator-side bash accepts full shell command text for runtime repair.
+ * The role prompt owns when this power is valid; the schema only rejects an
+ * empty command so syntax gates do not recreate the retired git-only surface.
  */
 export function validateOrchestratorBashCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim()
   if (!trimmed) return { ok: false, reason: "empty command" }
-  if (trimmed !== "git" && !/^git[\s]/.test(trimmed)) {
-    const head = trimmed.split(/\s+/, 1)[0] ?? ""
-    return {
-      ok: false,
-      reason: `command must begin with 'git' (got '${head}'). Orchestrator bash is git-merge-only — dispatch a sub-agent for any other surface.`,
-    }
-  }
-  // Reject shell metacharacters that turn a single git invocation into a
-  // multi-step pipeline / redirect / subshell. Longer tokens first so the
-  // reason string reports the most specific match.
-  const dangerous: Array<[string, string]> = [
-    ["&&", "chain (&&)"],
-    ["||", "chain (||)"],
-    ["$(", "command substitution ($(...))"],
-    ["<(", "process substitution (<(...))"],
-    [">(", "process substitution (>(...))"],
-    [">>", "redirection (>>)"],
-    ["|", "pipeline (|)"],
-    [";", "command separator (;)"],
-    ["&", "background / chain (&)"],
-    [">", "redirection (>)"],
-    ["<", "redirection / heredoc (<)"],
-    ["`", "command substitution (backtick)"],
-    ["\n", "newline command separator"],
-    ["\r", "carriage-return command separator"],
-  ]
-  for (const [tok, why] of dangerous) {
-    if (trimmed.includes(tok)) {
-      return {
-        ok: false,
-        reason: `disallowed shell metacharacter ${why}. Orchestrator bash runs a single git invocation only; chain orchestrator tool calls instead of shell.`,
-      }
-    }
-  }
-  if (isHostKillingCommand(trimmed)) {
-    return {
-      ok: false,
-      reason:
-        "command matches host-process-killing pattern. Use a process-specific path (kill a PID you own); never name-killing.",
-    }
-  }
   return { ok: true }
 }
 
@@ -1355,12 +1320,7 @@ function goalMutationBlockedByLiveWork(input: { taskID: string; goalID: string; 
 function assertNoActiveGoalWorkForBuild(input: { taskID: string; goalID: string; action: string }): void {
   const blocker = goalMutationBlockedByLiveWork(input)
   if (!blocker) return
-  throw new Error(
-    blocker.replace(
-      /^Error: [^ ]+ refused because /,
-      `${input.action}: refused because `,
-    ),
-  )
+  throw new Error(blocker.replace(/^Error: [^ ]+ refused because /, `${input.action}: refused because `))
 }
 
 function renderEvidenceSourceManifest(input: {
@@ -4564,6 +4524,36 @@ export function validatePersistedArchitectFidelity(input: {
   })
 }
 
+function visualQaStageAcceptance(input: {
+  acceptance: VisualQaAcceptance
+  referenceParityRequired: boolean
+  materialization?: VisualEvidenceBundleMaterializationResult
+  validation?: { passing: boolean; issues: string[] }
+}): VisualQaAcceptance {
+  const blockingIssues = [...input.acceptance.blockingIssues]
+  if (input.referenceParityRequired) {
+    if (!input.materialization) {
+      blockingIssues.push("VisualEvidenceBundle materialization was not attempted for required reference parity.")
+    } else if (input.materialization.status !== "materialized") {
+      const detail = input.materialization.issues.join("; ") || "no formal VisualEvidenceBundle was materialized"
+      blockingIssues.push(`VisualEvidenceBundle materialization not_ready: ${detail}`)
+    } else if (!input.validation?.passing) {
+      const validationIssues =
+        input.validation && input.validation.issues.length > 0
+          ? input.validation.issues
+          : [`bundle inspection status is ${input.materialization.bundle.inspection.status}`]
+      blockingIssues.push(...validationIssues.map((issue) => `VisualEvidenceBundle validation failed: ${issue}`))
+    }
+  }
+  const uniqueBlockingIssues = [...new Set(blockingIssues)]
+  return {
+    submittedAccepted: input.acceptance.submittedAccepted,
+    effectiveAccepted: input.acceptance.effectiveAccepted && uniqueBlockingIssues.length === 0,
+    selfReportIssues: input.acceptance.selfReportIssues,
+    blockingIssues: uniqueBlockingIssues,
+  }
+}
+
 function latestFailedVisualQaDecisionRecord(taskID: string) {
   const reportEntries = createDecisionLog(taskID)
     .readByPhase("visual_qa")
@@ -4636,11 +4626,116 @@ function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
       attributePairs.length > 0 ? `  attributes: ${attributePairs.join("; ")}` : undefined,
       region.code_search_terms.length > 0 ? `  code_search_terms: ${region.code_search_terms.join(", ")}` : undefined,
       region.evidence_refs.length > 0 ? `  evidence_refs: ${region.evidence_refs.join(", ")}` : undefined,
+      region.annotated_evidence_refs.length > 0
+        ? `  annotated_evidence_refs: ${region.annotated_evidence_refs.join(", ")}`
+        : undefined,
       `  notes: ${region.notes}`,
     ]
     lines.push(...regionLines.filter((line): line is string => typeof line === "string"))
   }
   return lines.join("\n")
+}
+
+async function visualQaAnnotationEvidenceForBuild(taskID: string): Promise<BuildEvidenceFile[]> {
+  const record = latestFailedVisualQaDecisionRecord(taskID)
+  if (!record) return []
+  const files: BuildEvidenceFile[] = []
+  const seen = new Set<string>()
+  for (const region of record.report.problem_dom_regions) {
+    for (const url of region.annotated_evidence_refs) {
+      if (seen.has(url)) continue
+      seen.add(url)
+      const located = AttachmentStore.nameFromUrl(url)
+      if (!located) {
+        throw new Error(`Visual QA annotation ref is not an attachment url: ${url}`)
+      }
+      const ref = await AttachmentStore.readReference(located.projectID, located.name)
+      files.push({
+        url: ref.url,
+        mime: ref.mime,
+        sha: ref.sha,
+        size: ref.size,
+        filename: ref.filename ?? `${region.id}.annotated.png`,
+        intent: "visual_qa_annotation",
+        source: "visual_qa_problem_dom_region",
+        label: region.id,
+        scope: { kind: "task", taskID },
+      })
+    }
+  }
+  return files
+}
+
+function collectVisualQaReportEvidenceRefs(report: VisualQaReport): string[] {
+  return [
+    ...report.check_items.flatMap((row) => row.evidence_refs),
+    ...report.coverage.flatMap((row) => row.evidence_refs),
+    ...report.findings.flatMap((row) => [...row.evidence_refs, ...row.repair_refs]),
+    ...report.production_blockers.flatMap((row) => row.evidence_refs),
+    ...report.unresolved_code_module_problems.flatMap((row) => row.evidence_refs),
+    ...report.problem_dom_regions.flatMap((row) => row.evidence_refs),
+    ...report.repairs.flatMap((row) => row.verification),
+    ...report.evidence.map((row) => row.ref),
+    ...report.reference_parity.reference_comparison_evidence_refs,
+  ].filter((ref) => ref.trim().length > 0)
+}
+
+async function visualQaDiagnosticEvidenceForBuild(input: {
+  taskID: string
+  projectRoot: string
+}): Promise<BuildEvidenceFile[]> {
+  const record = latestFailedVisualQaDecisionRecord(input.taskID)
+  if (!record) return []
+  const files: BuildEvidenceFile[] = []
+  const seenEvidenceIDs = new Set<string>()
+  for (const rawRef of collectVisualQaReportEvidenceRefs(record.report)) {
+    const ref = rawRef.trim()
+    const explicitBrowserPreviewRef = ref.startsWith("browser_preview_evidence:")
+    const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+    if (!evidenceID || seenEvidenceIDs.has(evidenceID)) continue
+    let evidence
+    try {
+      evidence = await findReadableBrowserPreviewEvidenceByID({
+        projectRoot: input.projectRoot,
+        taskID: input.taskID,
+        evidenceID,
+      })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`Visual QA diagnostic evidence ref ${ref} is unreadable: ${detail}`)
+    }
+    if (!evidence) {
+      if (explicitBrowserPreviewRef) {
+        throw new Error(`Visual QA diagnostic evidence ref ${ref} does not resolve to browser_preview_evidence`)
+      }
+      continue
+    }
+    if (evidence.operationKind !== "layout-geometry") continue
+    if (!evidence.manifestPath) {
+      throw new Error(`layout-geometry evidence ${evidence.id} is missing manifestPath`)
+    }
+    seenEvidenceIDs.add(evidenceID)
+    const absManifestPath = resolveRuntimeRelativePath(input.projectRoot, evidence.manifestPath)
+    await fs.stat(absManifestPath)
+    const attachment = await AttachmentStore.writeFromPath(
+      Instance.project.id,
+      absManifestPath,
+      "application/json",
+      `${evidence.id}.layout-geometry.json`,
+    )
+    files.push({
+      url: attachment.url,
+      mime: attachment.mime,
+      sha: attachment.sha,
+      size: attachment.size,
+      filename: attachment.filename,
+      intent: "visual_qa_diagnostic",
+      source: "browser_preview_layout_geometry",
+      label: evidence.id,
+      scope: { kind: "task", taskID: input.taskID },
+    })
+  }
+  return files
 }
 
 export function composeLatestVisualQaFeedbackForBuild(input: { taskID: string }): string | undefined {
@@ -4883,9 +4978,16 @@ async function composeBuildEvidencePack(input: {
     taskID: input.task.id,
     enabled: input.includePreviousOutput,
   })
+  const visualQaAnnotations = await visualQaAnnotationEvidenceForBuild(input.task.id)
+  const visualQaDiagnostics = await visualQaDiagnosticEvidenceForBuild({
+    taskID: input.task.id,
+    projectRoot: taskPrimaryProjectRoot(input.task.id, { activeProjectID: Instance.project.id }),
+  })
   const pack: BuildEvidencePack = {
     ...(targetReferences.length > 0 ? { targetReferences } : {}),
     ...(previousOutput ? { previousOutputs: [previousOutput] } : {}),
+    ...(visualQaAnnotations.length > 0 ? { visualQaAnnotations } : {}),
+    ...(visualQaDiagnostics.length > 0 ? { visualQaDiagnostics } : {}),
   }
   return hasBuildEvidence(pack) ? pack : undefined
 }
@@ -7316,22 +7418,37 @@ export function createOrchestratorTools(input: {
             }),
           })
         : undefined
+      const visualEvidenceValidation =
+        visualEvidenceMaterialization?.status === "materialized"
+          ? await validateVisualEvidenceBundleReferenceComparisons({
+              projectRoot,
+              bundle: visualEvidenceMaterialization.bundle,
+              expectedTaskID: taskID,
+            })
+          : undefined
+      const visualQaStageSemantics = visualQaStageAcceptance({
+        acceptance: visualQaSemantics,
+        referenceParityRequired: referenceParity.required,
+        materialization: visualEvidenceMaterialization,
+        validation: visualEvidenceValidation,
+      })
 
       decisionLog.append({
         phase: "visual_qa",
         key: `report_${Date.now()}`,
-        value: JSON.stringify({ report, acceptance: visualQaSemantics }, null, 2),
+        value: JSON.stringify({ report, acceptance: visualQaStageSemantics }, null, 2),
         reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
       })
       decisionLog.append({
         phase: "visual_qa",
         key: "latest_summary",
         value: [
-          `accepted=${visualQaSemantics.effectiveAccepted}`,
-          `submitted_accepted=${visualQaSemantics.submittedAccepted}`,
-          `effective_accepted=${visualQaSemantics.effectiveAccepted}`,
-          `self_report_issues=${visualQaSemantics.selfReportIssues.length}`,
-          `effective_acceptance_issues=${visualQaSemantics.blockingIssues.length}`,
+          `accepted=${visualQaStageSemantics.effectiveAccepted}`,
+          `submitted_accepted=${visualQaStageSemantics.submittedAccepted}`,
+          `effective_accepted=${visualQaStageSemantics.effectiveAccepted}`,
+          `visual_qa_process_accepted=${visualQaSemantics.effectiveAccepted}`,
+          `self_report_issues=${visualQaStageSemantics.selfReportIssues.length}`,
+          `effective_acceptance_issues=${visualQaStageSemantics.blockingIssues.length}`,
           `summary=${report.summary}`,
           `coverage=${report.coverage.length}`,
           `findings=${report.findings.length}`,
@@ -7345,6 +7462,7 @@ export function createOrchestratorTools(input: {
           visualEvidenceMaterialization
             ? `visual_evidence_bundle_materialization=${visualEvidenceMaterialization.status}`
             : "",
+          visualEvidenceValidation ? `visual_evidence_bundle_validation=${visualEvidenceValidation.passing}` : "",
           `changed_files=${report.changed_files.join(", ") || "(none)"}`,
         ]
           .filter(Boolean)
@@ -7365,22 +7483,23 @@ export function createOrchestratorTools(input: {
       return {
         status: "reviewed",
         sessionID: result.sessionID,
-        accepted: visualQaSemantics.effectiveAccepted,
-        submittedAccepted: visualQaSemantics.submittedAccepted,
+        accepted: visualQaStageSemantics.effectiveAccepted,
+        submittedAccepted: visualQaStageSemantics.submittedAccepted,
         findingsCount: report.findings.length,
         productionBlockersCount: report.production_blockers.length,
         evidenceCount: report.evidence.length,
         repairsCount: report.repairs.length,
         changedFilesCount: report.changed_files.length,
         result: SubAgentProtocol.yieldResult({
-          headline: `visual_qa complete: effective_accepted=${visualQaSemantics.effectiveAccepted}`,
+          headline: `visual_qa complete: effective_accepted=${visualQaStageSemantics.effectiveAccepted}`,
           summary: report.summary,
           fields: [
             ["session", result.sessionID],
-            ["accepted", String(visualQaSemantics.effectiveAccepted)],
-            ["submitted_accepted", String(visualQaSemantics.submittedAccepted)],
-            ["self_report_issues", String(visualQaSemantics.selfReportIssues.length)],
-            ["effective_acceptance_issues", String(visualQaSemantics.blockingIssues.length)],
+            ["accepted", String(visualQaStageSemantics.effectiveAccepted)],
+            ["submitted_accepted", String(visualQaStageSemantics.submittedAccepted)],
+            ["visual_qa_process_accepted", String(visualQaSemantics.effectiveAccepted)],
+            ["self_report_issues", String(visualQaStageSemantics.selfReportIssues.length)],
+            ["effective_acceptance_issues", String(visualQaStageSemantics.blockingIssues.length)],
             ["coverage", String(report.coverage.length)],
             ["findings", String(report.findings.length)],
             ["production_blockers", String(report.production_blockers.length)],
@@ -7763,7 +7882,10 @@ export function createOrchestratorTools(input: {
         // it — refusing traversal matches the codebase-tools boundary rule.
         const projectRoot = Instance.project.worktree
         for (const rawPath of materialPaths) {
-          await trackStepProgress("frontend_design", `frontend_design dispatch: materializing local material ${rawPath}`)
+          await trackStepProgress(
+            "frontend_design",
+            `frontend_design dispatch: materializing local material ${rawPath}`,
+          )
           const abs = pathMod.isAbsolute(rawPath)
             ? pathMod.normalize(rawPath)
             : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
@@ -13653,6 +13775,8 @@ export function createOrchestratorTools(input: {
                   tests: [],
                   files_changed: [],
                   error: runErr.message,
+                  consumed_visual_qa_annotation_refs: [],
+                  consumed_visual_qa_diagnostic_refs: [],
                   // Host-synthesised BuildResult on contract violation: the LLM
                   // never reached its terminal tool, so it has no chance to
                   // populate fact_check_items. Empty array is the honest
@@ -13890,8 +14014,7 @@ export function createOrchestratorTools(input: {
               try {
                 const cleaned = await cleanupGoalWorkspaceForGoal(attachedGoalID)
                 if (cleaned) {
-                  completedGoalWorkspaceCleanupLine =
-                    `\n- completed_worktree_reclaimed: goal ${attachedGoalID} goal_run ${goalRunID}`
+                  completedGoalWorkspaceCleanupLine = `\n- completed_worktree_reclaimed: goal ${attachedGoalID} goal_run ${goalRunID}`
                 }
               } catch (cleanupErr) {
                 const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
@@ -14152,15 +14275,14 @@ export function createOrchestratorTools(input: {
 
     bash: tool({
       description:
-        "Git-only merge-state repair shell. Runs ONE `git ...` invocation " +
-        "against the project root for resolving an in-progress merge that no " +
-        "sub-agent can clear by itself. The schema rejects any non-git " +
-        "command, any pipeline / redirect / command substitution, and any " +
-        "process-killing pattern. This is NOT a code editor, NOT a test " +
-        "runner, NOT a repository inspector for general investigation, NOT a " +
-        "research tool, and NOT a shortcut around requirements / architect / " +
-        "build / integrity. The system prompt carries merge-repair scope; " +
-        "this schema carries command-shape restrictions.",
+        "Full runtime repair command shell against the project root. Use it " +
+        "to fix orchestration-time shell, git, package manager, test runner, " +
+        "browser preview, dependency materialization, or toolchain blockers " +
+        "encountered while scheduling work. This is NOT a deliverable " +
+        "producer, NOT a code authoring lane, NOT a research/content tool, " +
+        "and NOT a shortcut around requirements / architect / build / " +
+        "visual_qa / integrity. The system prompt carries the executor " +
+        "boundary; this schema intentionally does not gate command syntax.",
       inputSchema: z.object({
         command: z
           .string()
@@ -14172,17 +14294,16 @@ export function createOrchestratorTools(input: {
             }
           })
           .describe(
-            "Single git invocation. MUST start with `git ` and contain no " +
-              "pipeline (|), command separator (; / && / ||), background (&), " +
-              "redirection (> / <), command substitution ($() / backticks), or " +
-              "process-killing pattern. Examples: `git status`, " +
-              "`git merge --abort`, `git checkout --ours -- path/to/file`, " +
-              "`git diff --name-only --diff-filter=U`.",
+            "Full shell command text for runtime repair. Pipelines, chaining, " +
+              "redirection, command substitution, package-manager commands, " +
+              "test commands, git commands, and multi-line commands are valid " +
+              "when they repair an orchestration-time runtime blocker rather " +
+              "than produce the task deliverable.",
           ),
         description: z
           .string()
           .min(1)
-          .describe("Concise 5-15 word statement of the git merge-state symptom you are repairing."),
+          .describe("Concise 5-15 word statement of the runtime blocker you are repairing."),
         timeout: z
           .number()
           .int()
@@ -14194,9 +14315,8 @@ export function createOrchestratorTools(input: {
           ),
       }),
       execute: async ({ command, description, timeout }) => {
-        // Schema-level refine already rejected non-git / pipeline / kill
-        // shapes, but re-validate defensively so a future schema regression
-        // does not turn into silent shell exposure.
+        // Re-validate defensively so a future schema regression cannot execute
+        // an empty shell command.
         const validation = validateOrchestratorBashCommand(command)
         if (!validation.ok) {
           log.info("orchestrator bash refused", { taskID, command, reason: validation.reason })

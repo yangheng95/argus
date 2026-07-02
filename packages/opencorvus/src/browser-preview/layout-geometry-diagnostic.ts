@@ -30,12 +30,40 @@ export const BrowserPreviewLayoutGeometryRegion = z
   .strict()
 export type BrowserPreviewLayoutGeometryRegion = z.infer<typeof BrowserPreviewLayoutGeometryRegion>
 
+export const BrowserPreviewLayoutGeometryAlignmentEdge = z.enum([
+  "left",
+  "right",
+  "top",
+  "bottom",
+  "center-x",
+  "center-y",
+  "width",
+  "height",
+])
+export type BrowserPreviewLayoutGeometryAlignmentEdge = z.infer<typeof BrowserPreviewLayoutGeometryAlignmentEdge>
+
+export const BrowserPreviewLayoutGeometryAlignmentGroup = z
+  .object({
+    id: z.string().min(1),
+    regionIDs: z.array(z.string().min(1)).min(2),
+    edges: z.array(BrowserPreviewLayoutGeometryAlignmentEdge).min(1),
+  })
+  .strict()
+export type BrowserPreviewLayoutGeometryAlignmentGroup = z.infer<
+  typeof BrowserPreviewLayoutGeometryAlignmentGroup
+>
+
 export const BrowserPreviewLayoutGeometryDiagnosticRequest = z
   .object({
     targetID: z.string().min(1),
     viewportID: BrowserPreviewViewportID,
     route: z.string().min(1).default("/"),
     regions: BrowserPreviewLayoutGeometryRegion.array().min(1),
+    alignmentGroups: BrowserPreviewLayoutGeometryAlignmentGroup.array()
+      .default([])
+      .describe(
+        "Explicit groups of implementation regions that should share page rails, edges, centers, or dimensions. Produces numeric diagnostics only.",
+      ),
     widthSamples: BrowserPreviewLayoutGeometryWidthSample.array()
       .default([])
       .describe(
@@ -142,6 +170,19 @@ export type BrowserPreviewLayoutGeometryWidthBehavior = {
   rightEdgeDelta?: number
 }
 
+export type BrowserPreviewLayoutGeometryAlignmentSummary = {
+  sampleID: string
+  groupID: string
+  edge: BrowserPreviewLayoutGeometryAlignmentEdge
+  status: "captured" | "incomplete"
+  regionIDs: string[]
+  missingRegionIDs: string[]
+  values: Array<{ regionID: string; value: number }>
+  min?: number
+  max?: number
+  spread?: number
+}
+
 export type BrowserPreviewLayoutGeometrySample = {
   sampleID: string
   primary: boolean
@@ -162,6 +203,7 @@ export type BrowserPreviewLayoutGeometryResult = {
   evidenceID: string
   samples: BrowserPreviewLayoutGeometrySample[]
   widthBehavior: BrowserPreviewLayoutGeometryWidthBehavior[]
+  alignmentGroups: BrowserPreviewLayoutGeometryAlignmentSummary[]
   diagnostics: string[]
 }
 
@@ -180,6 +222,7 @@ type CaptureLayoutGeometryInput = {
   viewportID: BrowserPreviewViewportID
   route: string
   regions: BrowserPreviewLayoutGeometryRegion[]
+  alignmentGroups: BrowserPreviewLayoutGeometryAlignmentGroup[]
   widthSamples: BrowserPreviewLayoutGeometryWidthSample[]
   signal?: AbortSignal
 }
@@ -204,6 +247,7 @@ export async function diagnoseBrowserPreviewLayoutGeometry(
     regions: sample.regions.map((region) => attachSourceDelta(region)),
   }))
   const widthBehavior = summarizeWidthBehavior(samples)
+  const alignmentGroups = summarizeAlignmentGroups(samples, input.alignmentGroups)
   const manifestPath = path.join(outDir, "layout-geometry.json")
   const diagnostics = [
     ...captured.diagnostics,
@@ -228,6 +272,7 @@ export async function diagnoseBrowserPreviewLayoutGeometry(
     jobID,
     samples,
     widthBehavior,
+    alignmentGroups,
     diagnostics,
   }
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8")
@@ -319,6 +364,83 @@ export function summarizeWidthBehavior(
     }
   }
   return out
+}
+
+export function summarizeAlignmentGroups(
+  samples: BrowserPreviewLayoutGeometrySample[],
+  groups: readonly BrowserPreviewLayoutGeometryAlignmentGroup[],
+): BrowserPreviewLayoutGeometryAlignmentSummary[] {
+  const out: BrowserPreviewLayoutGeometryAlignmentSummary[] = []
+  for (const sample of samples) {
+    const regions = new Map(sample.regions.map((region) => [region.regionID, region]))
+    for (const group of groups) {
+      for (const edge of group.edges) {
+        const values = group.regionIDs
+          .map((regionID) => {
+            const value = regionValue(regions.get(regionID), edge)
+            return value === undefined ? undefined : { regionID, value }
+          })
+          .filter((item): item is { regionID: string; value: number } => Boolean(item))
+        const missingRegionIDs = group.regionIDs.filter(
+          (regionID) => !values.some((value) => value.regionID === regionID),
+        )
+        if (missingRegionIDs.length > 0) {
+          out.push({
+            sampleID: sample.sampleID,
+            groupID: group.id,
+            edge,
+            status: "incomplete",
+            regionIDs: group.regionIDs,
+            missingRegionIDs,
+            values,
+          })
+          continue
+        }
+        const numeric = values.map((value) => value.value)
+        const min = round(Math.min(...numeric))
+        const max = round(Math.max(...numeric))
+        out.push({
+          sampleID: sample.sampleID,
+          groupID: group.id,
+          edge,
+          status: "captured",
+          regionIDs: group.regionIDs,
+          missingRegionIDs: [],
+          values,
+          min,
+          max,
+          spread: round(max - min),
+        })
+      }
+    }
+  }
+  return out
+}
+
+function regionValue(
+  region: BrowserPreviewLayoutGeometryRegionSample | undefined,
+  edge: BrowserPreviewLayoutGeometryAlignmentEdge,
+): number | undefined {
+  if (!region || region.status !== "captured" || !region.borderBox) return undefined
+  const box = region.borderBox
+  switch (edge) {
+    case "left":
+      return round(box.x)
+    case "right":
+      return round(box.x + box.width)
+    case "top":
+      return round(box.y)
+    case "bottom":
+      return round(box.y + box.height)
+    case "center-x":
+      return round(box.x + box.width / 2)
+    case "center-y":
+      return round(box.y + box.height / 2)
+    case "width":
+      return round(box.width)
+    case "height":
+      return round(box.height)
+  }
 }
 
 async function captureBrowserPreviewLayoutGeometryWithSidecar(

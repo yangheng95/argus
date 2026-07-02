@@ -107,7 +107,9 @@ import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 
 const log = Log.create({ service: "build-agent" })
 
-function isFilePartData(value: unknown): value is Omit<Message.FilePart, "id" | "sessionID" | "messageID" | "orderKey"> {
+function isFilePartData(
+  value: unknown,
+): value is Omit<Message.FilePart, "id" | "sessionID" | "messageID" | "orderKey"> {
   if (!value || typeof value !== "object") return false
   const record = value as Record<string, unknown>
   return record.type === "file" && typeof record.url === "string" && typeof record.mime === "string"
@@ -253,11 +255,7 @@ export async function repairManagedBuildSessionStagedFileParts(input: {
       filename: row.data.filename ?? reference.filename,
     }
     Database.use((db) =>
-      db
-        .update(PartTable)
-        .set({ data: nextData, time_updated: Date.now() })
-        .where(eq(PartTable.id, row.id))
-        .run(),
+      db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
     )
     repaired++
   }
@@ -290,6 +288,8 @@ export function evaluateBuildReportSubmission(input: {
   mergedHead?: string
   ownsWorktree: boolean
   worktreeBranch?: string
+  requiredVisualQaAnnotationRefs?: readonly string[]
+  requiredVisualQaDiagnosticRefs?: readonly string[]
 }): BuildReportSubmission {
   const parsedResult = BuildResultSchema.safeParse(input.result)
   if (!parsedResult.success) {
@@ -299,6 +299,34 @@ export function evaluateBuildReportSubmission(input: {
         "REJECTED: build report did not match BuildResultSchema. " +
         `${formatBuildResultSchemaError(parsedResult.error)} ` +
         "Fix the payload and call report_build_result again.",
+    }
+  }
+  const visualQaAnnotationIssue = buildMissingConsumedRefsIssue(
+    parsedResult.data,
+    input.requiredVisualQaAnnotationRefs,
+    "consumed_visual_qa_annotation_refs",
+  )
+  if (visualQaAnnotationIssue) {
+    return {
+      accepted: false,
+      output:
+        "REJECTED: build report did not consume dispatched Visual QA annotated screenshot evidence. " +
+        `${visualQaAnnotationIssue} ` +
+        "Inspect the annotated images, list every consumed ref in consumed_visual_qa_annotation_refs, and call report_build_result again.",
+    }
+  }
+  const visualQaDiagnosticIssue = buildMissingConsumedRefsIssue(
+    parsedResult.data,
+    input.requiredVisualQaDiagnosticRefs,
+    "consumed_visual_qa_diagnostic_refs",
+  )
+  if (visualQaDiagnosticIssue) {
+    return {
+      accepted: false,
+      output:
+        "REJECTED: build report did not consume dispatched Visual QA diagnostic evidence. " +
+        `${visualQaDiagnosticIssue} ` +
+        "Inspect the diagnostic files, list every consumed ref in consumed_visual_qa_diagnostic_refs, and call report_build_result again.",
     }
   }
 
@@ -313,6 +341,26 @@ export function evaluateBuildReportSubmission(input: {
     result: { ...parsedResult.data, commit_ref },
     output: `RECORDED: build report status=${parsedResult.data.status}.`,
   }
+}
+
+function buildMissingConsumedRefsIssue(
+  result: BuildResult,
+  requiredRefs: readonly string[] | undefined,
+  consumedField: "consumed_visual_qa_annotation_refs" | "consumed_visual_qa_diagnostic_refs",
+): string | undefined {
+  const required = [...new Set(requiredRefs ?? [])].filter((ref) => ref.trim().length > 0).sort()
+  if (required.length === 0 || result.status !== "passed") return undefined
+  const consumed = new Set(result[consumedField])
+  const missing = required.filter((ref) => !consumed.has(ref))
+  return missing.length > 0 ? `missing ${consumedField}: ${missing.join(", ")}` : undefined
+}
+
+function buildEvidenceVisualQaAnnotationRefs(pack: BuildEvidencePack | undefined): string[] {
+  return [...new Set((pack?.visualQaAnnotations ?? []).map((file) => file.url).filter((url) => url.trim().length > 0))]
+}
+
+function buildEvidenceVisualQaDiagnosticRefs(pack: BuildEvidencePack | undefined): string[] {
+  return [...new Set((pack?.visualQaDiagnostics ?? []).map((file) => file.url).filter((url) => url.trim().length > 0))]
 }
 
 export namespace BuildAgent {
@@ -715,6 +763,8 @@ export namespace BuildAgent {
       const evidencePack = retryingExistingBuildSession ? undefined : promptContext?.evidencePack
       const evidenceEntries = buildEvidenceEntries(evidencePack)
       const targetReferences = buildEvidenceTargetReferences(evidencePack)
+      const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(evidencePack)
+      const requiredVisualQaDiagnosticRefs = buildEvidenceVisualQaDiagnosticRefs(evidencePack)
       const buildPromptText = () =>
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
@@ -914,6 +964,8 @@ export namespace BuildAgent {
               mergedHead,
               ownsWorktree,
               worktreeBranch,
+              requiredVisualQaAnnotationRefs,
+              requiredVisualQaDiagnosticRefs,
             })
             if (!evaluated.accepted) return evaluated.output
             // No host-side enforcement of merge_back-before-passed and no
@@ -1159,6 +1211,22 @@ export namespace BuildAgent {
       )
       if (integrityRepairContractError) {
         throw new Error(`build agent: integrity repair_report contract failed: ${integrityRepairContractError}`)
+      }
+      const visualQaAnnotationConsumptionError = buildMissingConsumedRefsIssue(
+        parsed.data,
+        requiredVisualQaAnnotationRefs,
+        "consumed_visual_qa_annotation_refs",
+      )
+      if (visualQaAnnotationConsumptionError) {
+        throw new Error(`build agent: Visual QA annotation consumption contract failed: ${visualQaAnnotationConsumptionError}`)
+      }
+      const visualQaDiagnosticConsumptionError = buildMissingConsumedRefsIssue(
+        parsed.data,
+        requiredVisualQaDiagnosticRefs,
+        "consumed_visual_qa_diagnostic_refs",
+      )
+      if (visualQaDiagnosticConsumptionError) {
+        throw new Error(`build agent: Visual QA diagnostic consumption contract failed: ${visualQaDiagnosticConsumptionError}`)
       }
 
       // commit_ref policy: in managed worktree mode, only the merged primary
@@ -1745,6 +1813,8 @@ function makeExternalPassedBuildResult(input: {
       "External executor completed against the persisted build prompt contract. Inspect the build user prompt, goal/request section, and changed files for the detailed req/goal scope.",
     followup_workload_guidance:
       "For follow-up agents: do not estimate remaining work from this synthesized summary alone. Read the build prompt, workload brief, diffs, verification evidence, and any unresolved executor events before planning more implementation.",
+    consumed_visual_qa_annotation_refs: [],
+    consumed_visual_qa_diagnostic_refs: [],
     fact_check_items: [],
   }
 }
@@ -1767,6 +1837,8 @@ function makeExternalFailedBuildResult(input: {
       "External executor failed while working against the persisted build prompt contract. Inspect the build user prompt, goal/request section, and failure evidence for the detailed req/goal scope.",
     followup_workload_guidance:
       "For follow-up agents: treat this failed external run as a workload-underestimation risk. Re-read the build prompt, workload brief, source evidence, failed merge or verification output, and consider workload_analysis / Architect re-sizing before another implementation pass.",
+    consumed_visual_qa_annotation_refs: [],
+    consumed_visual_qa_diagnostic_refs: [],
     fact_check_items: [],
   }
 }
@@ -2775,6 +2847,8 @@ function renderBuildTerminalReportContract(): string {
     "- `contract_restatement`: a detailed restatement of the effective req/goal contract you handled, including the user request or goal objective, relevant acceptance specs, requirement ids, important source evidence, and scoped non-goals.",
     "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, and whether workload_analysis or Architect re-sizing should be revisited before more implementation.",
     "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped region comparison artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
+    "- `consumed_visual_qa_annotation_refs`: every Visual QA annotated screenshot url from the Build Evidence Pack that you inspected and used for repair. When such evidence is present, passed reports without these refs are rejected.",
+    "- `consumed_visual_qa_diagnostic_refs`: every Visual QA diagnostic url from the Build Evidence Pack that you inspected and used for repair, such as layout-geometry manifests. When such evidence is present, passed reports without these refs are rejected.",
     "",
     "Do not shrink the report to the files you happened to touch. Weak follow-up models must be able to recover the real work surface from your terminal report without re-underestimating it.",
   ].join("\n")

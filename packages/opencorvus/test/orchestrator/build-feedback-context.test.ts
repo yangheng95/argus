@@ -271,6 +271,7 @@ describe("orchestrator build feedback context", () => {
                     },
                     code_search_terms: ["hero-tabs", "market-hero", "is-clipped"],
                     evidence_refs: ["screenshot://local/top-viewport.png"],
+                    annotated_evidence_refs: ["/attachment/project/dom-hero-tabs.annotated.png"],
                     notes: "Build should inspect the hero tab container spacing before repainting adjacent modules.",
                   },
                 ],
@@ -320,6 +321,7 @@ describe("orchestrator build feedback context", () => {
         expect(feedback ?? "").toContain('locator: main [data-testid="hero-tabs"]')
         expect(feedback ?? "").toContain('outer_html_excerpt: <nav data-testid="hero-tabs"')
         expect(feedback ?? "").toContain("computed_style: display=flex; overflow=hidden; margin-top=-32px")
+        expect(feedback ?? "").toContain("annotated_evidence_refs: /attachment/project/dom-hero-tabs.annotated.png")
         expect(feedback ?? "").toContain("code_search_terms: hero-tabs, market-hero, is-clipped")
       },
     })

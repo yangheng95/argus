@@ -172,6 +172,20 @@ const BuildResultBase = {
     .describe(
       "Optional task-scoped browser_preview_evidence refs when the build actually generated region comparison evidence.",
     ),
+  consumed_visual_qa_annotation_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Host-generated Visual QA annotated screenshot refs the build actually inspected and used for repair. " +
+        "Required for passed reports when the dispatch included Visual QA annotation evidence.",
+    ),
+  consumed_visual_qa_diagnostic_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Host-forwarded Visual QA diagnostic refs, such as layout-geometry manifests, the build actually inspected and used for repair. " +
+        "Required for passed reports when the dispatch included Visual QA diagnostic evidence.",
+    ),
   contract_restatement: z
     .string()
     .trim()
@@ -218,6 +232,14 @@ export const BuildPassedResultSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    for (const [testIndex, test] of value.tests.entries()) {
+      if (test.passed) continue
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tests", testIndex, "passed"],
+        message: "passed build result cannot contain failed tests",
+      })
+    }
     if (!value.repair_report) return
     if (value.repair_report.unrepaired_findings.length > 0) {
       ctx.addIssue({
