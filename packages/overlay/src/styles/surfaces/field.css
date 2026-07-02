@@ -61,7 +61,7 @@
 }
 
 .oc-select-content {
-  z-index: 1000;
+  z-index: calc(var(--ui-z-dialog) + 1);
   overflow: hidden;
   min-width: calc(120px * var(--ui-scale));
   max-width: min(calc(360px * var(--ui-scale)), calc(100cqw - 16px));

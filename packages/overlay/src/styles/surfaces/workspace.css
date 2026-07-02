@@ -179,7 +179,7 @@ body[data-center-workbench-panel-resizing="true"] * {
   cursor: col-resize;
   touch-action: none;
   background: transparent;
-  z-index: 4;
+  z-index: calc(var(--ui-z-raised) + 2);
 }
 
 .center-workbench-panel-separator[hidden] {

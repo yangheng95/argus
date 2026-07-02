@@ -192,7 +192,7 @@
 .changes-group-header {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--ui-z-decoration);
   display: flex;
   min-width: 0;
   align-items: center;

@@ -455,7 +455,7 @@
   width: 100%;
   padding: 0;
   position: relative;
-  z-index: 1;
+  z-index: var(--ui-z-decoration);
   pointer-events: none;
 }
 .task-row-right .task-row-stamp {
@@ -549,7 +549,7 @@
   top: 50%;
   right: 0;
   transform: translateY(-50%);
-  z-index: 2;
+  z-index: var(--ui-z-raised);
   pointer-events: none;
 }
 

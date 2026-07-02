@@ -1022,7 +1022,7 @@ button.s-row:focus-visible {
 .agent-skill-grid-agent {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: calc(var(--ui-z-raised) + 1);
   min-height: calc(32px * var(--ui-scale));
   background: color-mix(in srgb, var(--accent) 11%, var(--surface));
   color: var(--text-strong);
@@ -1034,7 +1034,7 @@ button.s-row:focus-visible {
 
 .agent-skill-grid-corner {
   left: 0;
-  z-index: 5;
+  z-index: calc(var(--ui-z-raised) + 3);
   display: flex;
   align-items: center;
   padding: 0 calc(12px * var(--ui-scale));
@@ -1099,7 +1099,7 @@ button.s-row:focus-visible {
   -webkit-appearance: none;
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: var(--ui-z-raised);
   display: flex;
   flex-direction: column;
   justify-content: center;

@@ -9,6 +9,24 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
+const PROMPT_PROFILE_CATALOG = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [],
+}
+
+const EMPTY_SKILL_MOUNT_MATRIX = {
+  scope: "project",
+  skills: [],
+  agents: [],
+  matrix: [],
+  project_mounts: {},
+  unmounted_count: 0,
+}
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
@@ -19,6 +37,15 @@ function send(value: unknown, init?: ResponseInit) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       ...(init?.headers || {}),
+    },
+  })
+}
+
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
     },
   })
 }
@@ -40,6 +67,31 @@ function mergePatch(target: unknown, patch: unknown): unknown {
   return base
 }
 
+function commonOverlayBootstrapResponse(path: string): Response | null {
+  if (path === "/global/projects/discover") {
+    return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
+  }
+  if (path === "/task/events") return eventStream()
+  if (path === "/project/current/worktrees") return send([])
+  if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+  if (path === "/mission") return send([])
+  if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
+  if (path === "/skill/mounts") return send(EMPTY_SKILL_MOUNT_MATRIX)
+  return null
+}
+
+async function closeBrowserAndServer(browser: { close(): Promise<void> }, server: { close(): Promise<void> }) {
+  let closeError: unknown
+  try {
+    await browser.close()
+  } catch (error) {
+    closeError = error
+  } finally {
+    await server.close()
+  }
+  if (closeError) throw closeError
+}
+
 async function chooseModelOption(page: any, triggerSelector: string, value: string) {
   await page.click(triggerSelector)
   const optionSelector = `.agent-model-select-option[data-model-value="${value}"]`
@@ -54,6 +106,24 @@ async function saveElementScreenshot(page: any, selector: string, filename: stri
   assert.ok(element, `${selector} should exist before screenshot`)
   writeFileSync(screenshotPath, await element.screenshot({}))
   return screenshotPath
+}
+
+async function assertPopupAboveConfigDialog(page: any, popupSelector: string) {
+  return await page.$eval(popupSelector, (popup: HTMLElement, selector: string) => {
+    const popupRect = popup.getBoundingClientRect()
+    const centerX = popupRect.left + popupRect.width / 2
+    const centerY = popupRect.top + Math.min(18, Math.max(1, popupRect.height / 2))
+    const topElement = document.elementFromPoint(centerX, centerY) as HTMLElement | null
+    const dialog = document.querySelector("#configDialog") as HTMLElement | null
+    if (!dialog) throw new Error("config dialog must exist while checking popup stacking")
+    return {
+      popupZIndex: getComputedStyle(popup).zIndex,
+      dialogZIndex: getComputedStyle(dialog).zIndex,
+      popupVisible: popupRect.width > 0 && popupRect.height > 0,
+      topElementClass: topElement?.className ?? "",
+      topElementInsidePopup: !!topElement?.closest(selector),
+    }
+  }, popupSelector)
 }
 
 test("agent model selects patch independent per-agent overrides", async () => {
@@ -75,6 +145,8 @@ test("agent model selects patch independent per-agent overrides", async () => {
     }
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
+    const commonResponse = commonOverlayBootstrapResponse(path)
+    if (commonResponse) return commonResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
     if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
@@ -212,6 +284,21 @@ test("agent model selects patch independent per-agent overrides", async () => {
 
     await page.click('[data-testid="agent-model-select-build"]')
     await page.waitForSelector('.agent-model-select-option[data-model-value=""]')
+    const buildPopupStacking = await assertPopupAboveConfigDialog(page, ".agent-model-select-content")
+    assert.equal(buildPopupStacking.popupZIndex, "10001")
+    assert.equal(buildPopupStacking.dialogZIndex, "10000")
+    assert.equal(buildPopupStacking.popupVisible, true)
+    assert.equal(
+      buildPopupStacking.topElementInsidePopup,
+      true,
+      `agent model popup should be above config dialog, top element was ${buildPopupStacking.topElementClass}`,
+    )
+    const popupScreenshot = await saveElementScreenshot(
+      page,
+      ".agent-model-select-content",
+      "agent-models-select-popup-visible.png",
+    )
+    assert.ok(popupScreenshot.endsWith("agent-models-select-popup-visible.png"))
     const inheritOption = await page.$eval('.agent-model-select-option[data-model-value=""]', (node: HTMLElement) =>
       node.textContent?.trim(),
     )
@@ -238,8 +325,7 @@ test("agent model selects patch independent per-agent overrides", async () => {
       integrity: { model: "openai/gpt-4.1" },
     })
   } finally {
-    await browser.close()
-    await server.close()
+    await closeBrowserAndServer(browser, server)
   }
 })
 
@@ -261,6 +347,8 @@ test("agent models loading spinner animates through shared motion tokens and sto
     }
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
+    const commonResponse = commonOverlayBootstrapResponse(path)
+    if (commonResponse) return commonResponse
     if (path === "/global/health") return send({ version: "agent-model-spinner" })
     if (path === "/global/tasks") return send({ tasks: [] })
     if (path === "/session") return send([])
@@ -282,7 +370,7 @@ test("agent models loading spinner animates through shared motion tokens and sto
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
-    if (path === "/config" && req.method === "GET") return send({ model: "openai/gpt-4o-mini", agent: {} })
+    if (path === "/config") return send({ model: "openai/gpt-4o-mini", agent: {} })
     if (path === "/agent") return agentsHold
     if (path === "/channel") return send([])
     if (path === "/executor") return send([])
@@ -374,7 +462,6 @@ test("agent models loading spinner animates through shared motion tokens and sto
     assert.equal(reduced.animationName, "none")
   } finally {
     releaseAgents?.(send([]))
-    await browser.close().catch(() => undefined)
-    await server.close()
+    await closeBrowserAndServer(browser, server)
   }
 })
