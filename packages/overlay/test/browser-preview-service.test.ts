@@ -4,10 +4,8 @@ import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   loadTaskBrowserPreviewEvidence,
-  loadTaskBrowserPreviewLiveSnapshotObjectUrl,
   loadTaskBrowserPreviewTarget,
   selectTaskBrowserPreviewTarget,
-  sendTaskBrowserPreviewLiveInputsObjectUrl,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
 } from "../src/services/browser-preview"
@@ -16,7 +14,13 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 const SAVED_DIRECTORY = "D:/workspace/app"
 const TASK_ID = "tsk_browserpreviewservice0001"
-const LIVE_FRAME_BYTES = new Uint8Array([1, 2, 3, 4, 5, 6, 7])
+const EVIDENCE_CAPTURE_BYTES = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+  0x42, 0x60, 0x82,
+])
 
 function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -279,7 +283,7 @@ test("browser preview service loads persisted evidence screenshot bytes through 
         status: 200,
         ok: true,
         headers: { "content-type": "image/png" },
-        body: LIVE_FRAME_BYTES as T,
+        body: EVIDENCE_CAPTURE_BYTES as T,
       }
     },
   })
@@ -296,103 +300,6 @@ test("browser preview service loads persisted evidence screenshot bytes through 
   expect(captured?.method).toBe("GET")
   expect(captured?.responseKind).toBe("binary")
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
-})
-
-test("browser preview service loads interactive live snapshot bytes through HostTransport", async () => {
-  let captured: TransportRequest | undefined
-  __setHostTransportForTest({
-    ...fakePreviewTransport((req) => {
-      captured = req
-    }),
-    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      captured = req
-      return {
-        status: 200,
-        ok: true,
-        headers: { "content-type": "image/png" },
-        body: LIVE_FRAME_BYTES as T,
-      }
-    },
-  })
-
-  const objectUrl = await loadTaskBrowserPreviewLiveSnapshotObjectUrl({
-    taskID: TASK_ID,
-    directory: SAVED_DIRECTORY,
-    targetID: "art_previewtarget000000000001",
-    viewportID: "desktop",
-  })
-
-  expect(objectUrl).toStartWith("blob:")
-  URL.revokeObjectURL(objectUrl)
-  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/live/snapshot`)
-  expect(captured?.method).toBe("POST")
-  expect(captured?.responseKind).toBe("binary")
-  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
-  expect(captured?.body).toEqual({
-    kind: "json",
-    value: {
-      targetID: "art_previewtarget000000000001",
-      viewportID: "desktop",
-    },
-  })
-})
-
-test("browser preview service leaves live frame decoding to the rendered image owner", async () => {
-  let captured: TransportRequest | undefined
-  __setHostTransportForTest({
-    ...fakePreviewTransport((req) => {
-      captured = req
-    }),
-    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      captured = req
-      return {
-        status: 200,
-        ok: true,
-        headers: { "content-type": "image/png" },
-        body: LIVE_FRAME_BYTES as T,
-      }
-    },
-  })
-
-  const objectUrl = await loadTaskBrowserPreviewLiveSnapshotObjectUrl({
-    taskID: TASK_ID,
-    directory: SAVED_DIRECTORY,
-    targetID: "art_previewtarget000000000001",
-    viewportID: "desktop",
-  })
-
-  expect(objectUrl).toStartWith("blob:")
-  URL.revokeObjectURL(objectUrl)
-  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/live/snapshot`)
-  expect(captured?.method).toBe("POST")
-  expect(captured?.responseKind).toBe("binary")
-})
-
-test("browser preview service decodes JSON error bodies from live snapshot binary responses", async () => {
-  __setHostTransportForTest({
-    ...fakePreviewTransport(() => {}),
-    async request<T>(): Promise<TransportResponse<T>> {
-      return {
-        status: 404,
-        ok: false,
-        headers: { "content-type": "application/json; charset=utf-8" },
-        body: new TextEncoder().encode(
-          JSON.stringify({ message: "Browser preview target not found: art_previewtarget_stale" }),
-        ) as T,
-      }
-    },
-  })
-
-  await expect(
-    loadTaskBrowserPreviewLiveSnapshotObjectUrl({
-      taskID: TASK_ID,
-      directory: SAVED_DIRECTORY,
-      targetID: "art_previewtarget_stale",
-      viewportID: "desktop",
-    }),
-  ).rejects.toThrow(
-    "API 404 task/tsk_browserpreviewservice0001/browser-preview/live/snapshot?directory=D%3A%2Fworkspace%2Fapp: Browser preview target not found: art_previewtarget_stale",
-  )
 })
 
 test("browser preview service decodes JSON error bodies from evidence capture binary responses", async () => {
@@ -419,45 +326,4 @@ test("browser preview service decodes JSON error bodies from evidence capture bi
   ).rejects.toThrow(
     "API 404 task/tsk_browserpreviewservice0001/browser-preview/evidence/art_previewevidence_missing/capture.png?directory=D%3A%2Fworkspace%2Fapp: Browser preview evidence capture not found: art_previewevidence_missing",
   )
-})
-
-test("browser preview service sends live inputs without URL bodies", async () => {
-  let captured: TransportRequest | undefined
-  __setHostTransportForTest({
-    ...fakePreviewTransport((req) => {
-      captured = req
-    }),
-    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      captured = req
-      return {
-        status: 200,
-        ok: true,
-        headers: { "content-type": "image/png" },
-        body: LIVE_FRAME_BYTES as T,
-      }
-    },
-  })
-
-  const objectUrl = await sendTaskBrowserPreviewLiveInputsObjectUrl({
-    taskID: TASK_ID,
-    directory: SAVED_DIRECTORY,
-    targetID: "art_previewtarget000000000001",
-    viewportID: "desktop",
-    inputs: [{ kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 }],
-  })
-
-  expect(objectUrl).toStartWith("blob:")
-  URL.revokeObjectURL(objectUrl)
-  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/live/input`)
-  expect(captured?.method).toBe("POST")
-  expect(captured?.responseKind).toBe("binary")
-  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
-  expect(captured?.body).toEqual({
-    kind: "json",
-    value: {
-      targetID: "art_previewtarget000000000001",
-      viewportID: "desktop",
-      inputs: [{ kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 }],
-    },
-  })
 })

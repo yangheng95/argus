@@ -151,6 +151,69 @@ describe("isWebviewMessage", () => {
       }),
     ).toBe(false)
   })
+
+  test("native browser preview commands require explicit finite bounds and navigation actions", () => {
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-sync",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: 10, y: 20, width: 640, height: 480 },
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-sync-zero",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: 10, y: 20, width: 0, height: 480 },
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-sync-infinite",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: Number.POSITIVE_INFINITY, y: 20, width: 640, height: 480 },
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-back",
+        command: { kind: "browserPreview.navigate", action: "back" },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-close",
+        command: { kind: "browserPreview.close" },
+      }),
+    ).toBe(true)
+    expect(
+      isWebviewMessage({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-invalid-action",
+        command: { kind: "browserPreview.navigate", action: "stop" },
+      }),
+    ).toBe(false)
+  })
 })
 
 describe("base64 codec (audit F4)", () => {
@@ -270,6 +333,16 @@ describe("schema snapshot (audit F8)", () => {
         type: "native.request",
         id: "native-1",
         command: { kind: "workspace.pickFiles", start: "D:/workspace", multiple: true },
+      },
+      {
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "native-2",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: 0, y: 42, width: 720, height: 540 },
+        },
       },
     ]
     for (const s of samples) {

@@ -15,6 +15,7 @@ import {
   Cable,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Circle,
@@ -69,6 +70,8 @@ export type IconName =
   | "chevron-up"
   | "chevron-down"
   | "caret-down"
+  | "nav-back"
+  | "nav-forward"
   | "plus"
   | "minimize"
   | "maximize"
@@ -204,6 +207,8 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "chevron-down": { component: ChevronDown },
   "caret-down": { component: ChevronDown },
   "caret-up": { component: ChevronUp },
+  "nav-back": { component: ChevronLeft },
+  "nav-forward": { component: ChevronRight },
   plus: { component: Plus },
   minimize: { component: Minus, strokeWidth: 2.1 },
   maximize: { component: Square, strokeWidth: 1.8 },

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const ROOT = resolve(import.meta.dir, "..", "..")
@@ -8,94 +8,31 @@ function source(path: string): string {
   return readFileSync(resolve(ROOT, path), "utf8")
 }
 
-test("interactive browser preview sessions have bounded resource lifetimes", () => {
-  const live = source("src/browser-preview/live.ts")
+test("PNG live browser preview sidecar is retired instead of kept as a fallback", () => {
+  expect(existsSync(resolve(ROOT, "src/browser-preview/live.ts"))).toBe(false)
 
-  expect(live).toContain("LIVE_IDLE_TIMEOUT_MILLISECONDS")
-  expect(live).toContain("private armIdleTimer(): void")
-  expect(live).toContain("this.idleTimer.unref?.()")
-  expect(live).toContain("private clearIdleTimer(): void")
-  expect(live).toContain("this.clearIdleTimer()")
-  expect(live).toContain('detached: process.platform !== "win32"')
-  expect(live).toContain('terminateChildTree(this.child, "SIGTERM")')
-  expect(live).toContain('terminateChildTree(this.child, "SIGKILL")')
-  expect(live).toContain("process.kill(-pid, signal)")
-})
-
-test("interactive browser preview command abort and timeout paths release listeners", () => {
-  const live = source("src/browser-preview/live.ts")
-
-  expect(live).toContain("const pending = this.pending.get(id)")
-  expect(live).toContain("LIVE_COMMAND_INACTIVITY_TIMEOUT_MILLISECONDS")
-  expect(live).toContain("private refreshCommandInactivityTimer(id: number, source: string): void")
-  expect(live).toContain("private refreshAllCommandInactivityTimers(source: string): void")
-  expect(live).toContain("Browser preview live command inactive for")
-  expect(live).toContain('new Error("Browser preview live command aborted.")')
-  expect(live).toContain('signal?.removeEventListener("abort", abort)')
-  expect(live).toContain('this.refreshAllCommandInactivityTimers("stdout")')
-  expect(live).toContain('this.refreshAllCommandInactivityTimers("stderr")')
-  expect(live).not.toContain("LIVE_COMMAND_TIMEOUT_MILLISECONDS")
-  expect(live).not.toContain("Browser preview live command timed out.")
-})
-
-test("interactive browser preview sidecar forwards browser activity to the host command timer", () => {
-  const live = source("src/browser-preview/live.ts")
-
-  expect(live).toContain("function writeActivityResponse(id, source)")
-  expect(live).toContain("activity: true")
-  expect(live).toContain("function commandActivityWriter(id)")
-  expect(live).toContain("if (typeof onActivity === \"function\") onActivity(source);")
-  expect(live).toContain("options.onActivity")
-  expect(live).toContain("this.refreshCommandInactivityTimer(id, message.source || \"sidecar-activity\")")
-})
-
-test("interactive browser preview live sidecar observes background failures", () => {
-  const live = source("src/browser-preview/live.ts")
-
-  expect(live).toContain('this.child.stdin.on("error", (error) => this.closeWithError(error, onClose))')
-  expect(live).toContain('this.child.stdout.on("error", (error) => this.closeWithError(error, onClose))')
-  expect(live).toContain('this.child.stderr.on("error", (error) => this.closeWithError(error, onClose))')
-  expect(live).toContain("void this.close().catch((error) =>")
-  expect(live).toContain('log.warn("browser preview live idle close failed"')
-  expect(live).toContain('log.warn("browser preview live child kill failed"')
-})
-
-test("interactive browser preview sidecars close on parent pipe teardown", () => {
-  const live = source("src/browser-preview/live.ts")
-
-  expect(live).toContain("let shuttingDown = false;")
-  expect(live).toContain('process.stdin.on("end", shutdown);')
-  expect(live).toContain('process.stdin.on("close", shutdown);')
-  expect(live).toContain("if (browser) await browser.close().catch")
-})
-
-test("interactive browser preview sidecar serializes commands inside one live session", () => {
-  const live = source("src/browser-preview/live.ts")
-
-  expect(live).toContain("let commandChain = Promise.resolve();")
-  expect(live).toContain("function enqueueCommand(message)")
-  expect(live).toContain("commandChain = commandChain.then(run, run);")
-  expect(live).toContain("enqueueCommand(message);")
-  expect(live).not.toContain("handle(message).catch((error) =>")
-  expect(live).not.toContain('reload: command.kind === "snapshot"')
-})
-
-test("server dispose and shutdown paths close interactive browser preview sessions", () => {
+  const routes = source("src/server/routes/browser-preview.ts")
   const serve = source("src/cli/cmd/serve.ts")
   const appRoutes = source("src/server/routes/app.ts")
   const globalRoutes = source("src/server/routes/global.ts")
 
-  expect(serve).toContain("closeBrowserPreviewLiveSessions")
-  expect(serve).toContain("abortCurrentProcessLiveExecution")
-  expect(serve.indexOf("await closeBrowserPreviewLiveSessions()")).toBeGreaterThan(
-    serve.indexOf("abortCurrentProcessLiveExecution"),
-  )
-  expect(appRoutes).toContain("await closeBrowserPreviewLiveSessions()")
-  expect(appRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(
-    appRoutes.indexOf("await Instance.dispose()"),
-  )
-  expect(globalRoutes).toContain("await closeBrowserPreviewLiveSessions()")
-  expect(globalRoutes.indexOf("await closeBrowserPreviewLiveSessions()")).toBeLessThan(
-    globalRoutes.indexOf("await Instance.disposeAll()"),
-  )
+  expect(routes).not.toContain("browserPreview.liveSnapshot")
+  expect(routes).not.toContain("browserPreview.liveInput")
+  expect(routes).not.toContain("/task/:taskID/browser-preview/live/snapshot")
+  expect(routes).not.toContain("/task/:taskID/browser-preview/live/input")
+  expect(routes).not.toContain("captureBrowserPreviewLiveSnapshot")
+  expect(routes).not.toContain("interactBrowserPreviewLive")
+  expect(serve).not.toContain("closeBrowserPreviewLiveSessions")
+  expect(appRoutes).not.toContain("closeBrowserPreviewLiveSessions")
+  expect(globalRoutes).not.toContain("closeBrowserPreviewLiveSessions")
+})
+
+test("browser preview backend keeps Playwright evidence APIs after live PNG retirement", () => {
+  const routes = source("src/server/routes/browser-preview.ts")
+
+  expect(routes).toContain("browserPreview.taskTarget")
+  expect(routes).toContain("browserPreview.captureTaskTarget")
+  expect(routes).toContain("browserPreview.readTaskEvidence")
+  expect(routes).toContain("browserPreview.readTaskEvidenceCapture")
+  expect(routes).toContain("browserPreview.compareTaskTargetRegions")
 })

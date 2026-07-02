@@ -20,7 +20,6 @@ import {
 } from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
-import { captureBrowserPreviewLiveSnapshot, interactBrowserPreviewLive } from "../../browser-preview/live"
 import {
   BrowserPreviewRegionComparisonRequest,
   BrowserPreviewRegionComparisonResult,
@@ -29,13 +28,6 @@ import {
 import { browserPreviewTaskEvidenceRoot } from "../../browser-preview/task-evidence-root"
 import { NotFoundError } from "../../storage/db"
 import { errors, namedErrorResponse } from "../error"
-
-const BrowserPreviewLiveRequest = z
-  .object({
-    targetID: z.string().min(1),
-    viewportID: BrowserPreviewViewportID,
-  })
-  .strict()
 
 const BrowserPreviewCaptureRequest = z
   .object({
@@ -49,36 +41,6 @@ const BrowserPreviewTargetSelectionRequest = z
     targetID: z.string().min(1),
   })
   .strict()
-
-const BrowserPreviewLiveInput = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("click"),
-      x: z.number().finite().nonnegative(),
-      y: z.number().finite().nonnegative(),
-      button: z.enum(["left", "middle", "right"]).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("wheel"),
-      x: z.number().finite().nonnegative(),
-      y: z.number().finite().nonnegative(),
-      deltaX: z.number().finite(),
-      deltaY: z.number().finite(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("key"),
-      key: z.string().min(1).max(80),
-    })
-    .strict(),
-])
-
-const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
-  inputs: BrowserPreviewLiveInput.array().min(1),
-}).strict()
 
 export const BrowserPreviewRoutes = lazy(() =>
   new Hono()
@@ -369,89 +331,6 @@ export const BrowserPreviewRoutes = lazy(() =>
           signal: c.req.raw.signal,
         })
         return c.json(result)
-      },
-    )
-    .post(
-      "/task/:taskID/browser-preview/live/snapshot",
-      describeRoute({
-        summary: "Capture interactive browser preview snapshot",
-        description:
-          "Return a PNG frame from the task-scoped Playwright live preview session for a persisted browser preview target.",
-        operationId: "browserPreview.liveSnapshot",
-        responses: {
-          200: {
-            description: "Interactive browser preview PNG frame",
-            content: {
-              "image/png": {
-                schema: resolver(z.string().meta({ format: "binary" })),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: z.string().min(1) })),
-      validator("json", BrowserPreviewLiveRequest),
-      async (c) => {
-        const { taskID } = c.req.valid("param")
-        const body = c.req.valid("json")
-        browserPreviewTaskEvidenceRoot(taskID)
-        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
-        const bytes = await captureBrowserPreviewLiveSnapshot({
-          taskID,
-          targetID: body.targetID,
-          viewportID: body.viewportID,
-          signal: c.req.raw.signal,
-        })
-        return new Response(bytes, {
-          headers: {
-            "content-type": "image/png",
-            "cache-control": "no-store",
-          },
-        })
-      },
-    )
-    .post(
-      "/task/:taskID/browser-preview/live/input",
-      describeRoute({
-        summary: "Send input to interactive browser preview",
-        description:
-          "Apply pointer, wheel, or keyboard input to the task-scoped Playwright live preview session and return the next PNG frame.",
-        operationId: "browserPreview.liveInput",
-        responses: {
-          200: {
-            description: "Interactive browser preview PNG frame after input",
-            content: {
-              "image/png": {
-                schema: resolver(z.string().meta({ format: "binary" })),
-              },
-            },
-          },
-          ...errors(404),
-        },
-      }),
-      validator("param", z.object({ taskID: z.string().min(1) })),
-      validator("json", BrowserPreviewLiveInputRequest),
-      async (c) => {
-        const { taskID } = c.req.valid("param")
-        const body = c.req.valid("json")
-        browserPreviewTaskEvidenceRoot(taskID)
-        const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
-        if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
-        const bytes = await interactBrowserPreviewLive({
-          taskID,
-          targetID: body.targetID,
-          viewportID: body.viewportID,
-          inputs: body.inputs,
-          signal: c.req.raw.signal,
-        })
-        return new Response(bytes, {
-          headers: {
-            "content-type": "image/png",
-            "cache-control": "no-store",
-          },
-        })
       },
     ),
 )

@@ -114,13 +114,13 @@ describe("app routes", () => {
       paths["/task/{taskID}/browser-preview/target"]?.put,
       paths["/task/{taskID}/browser-preview/capture"]?.post,
       paths["/task/{taskID}/browser-preview/compare"]?.post,
-      paths["/task/{taskID}/browser-preview/live/snapshot"]?.post,
-      paths["/task/{taskID}/browser-preview/live/input"]?.post,
       paths["/experimental/task-plan"]?.get,
       paths["/experimental/scratchpad"]?.get,
       paths["/panel/knowledge/memory/{id}"]?.get,
       paths["/panel/knowledge/memory/{id}"]?.delete,
     ]
+    expect(paths["/task/{taskID}/browser-preview/live/snapshot"]).toBeUndefined()
+    expect(paths["/task/{taskID}/browser-preview/live/input"]).toBeUndefined()
 
     for (const operation of operations) {
       expect(operation?.responses?.[404]?.content?.["application/json"]?.schema).toBeDefined()

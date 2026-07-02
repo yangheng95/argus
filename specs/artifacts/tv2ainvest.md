@@ -1,19 +1,17 @@
-US Country Page: <https://www.tradingview.com/markets/usa/>
 Forex 市场概览：<https://www.tradingview.com/markets/currencies/>
 Economy Heatmap：<https://www.tradingview.com/markets/world-economy/>
-US Country Page：<https://www.tradingview.com/markets/usa/>
 ETFs Market 页面：<https://www.tradingview.com/markets/etfs/>
 Futures 市场概览：<https://www.tradingview.com/markets/futures/>
 Government Bonds 概览： <https://www.tradingview.com/markets/bonds/>
 Corporate Bonds 概览：<https://www.tradingview.com/markets/corporate-bonds/>
 Crypto 市场概览：<https://www.tradingview.com/markets/cryptocurrencies/>
-Indices 市场概览：<https://www.tradingview.com/markets/indices/>
-World Stocks 概览：<https://www.tradingview.com/markets/world-stocks/>
-US Stocks 盘前盘后：<https://www.tradingview.com/markets/>
-Entire World 总览： <https://www.tradingview.com/markets/>
 Stock Screener：<https://www.tradingview.com/screener/>
 
-我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>，要求每个组件一个goal单独复刻
+US Country Page：<https://www.tradingview.com/markets/usa/>
+World Stocks 概览：<https://www.tradingview.com/markets/world-stocks/>
+Indices 市场概览：<https://www.tradingview.com/markets/indices/>
+
+我需要复刻网页：<https://www.tradingview.com/markets/cryptocurrencies/>，要求每个组件一个goal单独复刻，图片等非代码资源请复用TradingView
 
 这是一个多阶段前端复刻任务。目标是以 TradingView 目标页面为主导，尽可能高保真复刻其信息架构、模块结构、布局密度、视觉风格、颜色层级、字体节奏、完整组件交互体验和响应式行为，并实现为一个生产可合入页面。
 

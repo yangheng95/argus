@@ -8,9 +8,8 @@ function source(relativePath: string) {
   return readFileSync(path.join(repoRoot, relativePath), "utf8")
 }
 
-test("browser preview sidecars own navigation by browser inactivity", () => {
+test("Playwright evidence sidecars own navigation by browser inactivity", () => {
   const evidenceRunner = source("src/browser-preview/evidence-runner.ts")
-  const live = source("src/browser-preview/live.ts")
   const localModule = source("src/browser-preview/local-module-source-binding.ts")
   const scrollSlice = source("src/browser-preview/scroll-slice-comparison.ts")
 
@@ -26,13 +25,6 @@ test("browser preview sidecars own navigation by browser inactivity", () => {
   expect(evidenceRunner).not.toContain('on("pageerror", (payload) => reset(browserActivityLabel("pageerror", payload)))')
   expect(evidenceRunner).not.toContain('page.goto(input.url, { waitUntil: "load", timeout: input.navigationTimeoutMs })')
   expect(evidenceRunner).not.toContain('page.goto(routeUrl(input.url, route), { waitUntil: "load", timeout: 30000 })')
-
-  expect(live).toContain("withBrowserInactivity")
-  expect(live).toContain('() => page.goto(command.url, { waitUntil: "load", timeout: 0 })')
-  expect(live).toContain("browser failure before live capture")
-  expect(live).toContain('on("requestfailed", (payload) => fail(browserActivityLabel("requestfailed", payload)))')
-  expect(live).toContain('on("pageerror", (payload) => fail(browserActivityLabel("pageerror", payload)))')
-  expect(live).not.toContain('page.goto(command.url, { waitUntil: "load", timeout: command.navigationTimeoutMs })')
 
   expect(localModule).toContain("withBrowserInactivity")
   expect(localModule).toContain('() => page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 0 })')

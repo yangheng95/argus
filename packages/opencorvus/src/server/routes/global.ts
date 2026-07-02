@@ -15,7 +15,6 @@ import { Config } from "../../config/config"
 import { Database } from "../../storage/db"
 import { ActiveExecutorSessionsResponse, badRequestBody, errors } from "../error"
 import { canRestartServer, startServerRestart } from "../restart"
-import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import {
   MysqlTransferFullExport,
   MysqlTransferImportResult,
@@ -247,7 +246,6 @@ export const GlobalRoutes = lazy(() =>
         if (hasAnyActiveSessions()) {
           throw activeExecutorSessionsError("global.dispose")
         }
-        await closeBrowserPreviewLiveSessions()
         await Instance.disposeAll()
         GlobalBus.emit("event", {
           directory: "global",

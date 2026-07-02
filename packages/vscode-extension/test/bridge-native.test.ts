@@ -175,4 +175,32 @@ describe("TransportBridge VS Code native command bridge", () => {
       bridge.dispose()
     }
   })
+
+  test("rejects native browser preview webview commands in VS Code host", async () => {
+    const { bridge, webview } = await createBridge()
+    try {
+      await webview.receive({
+        protocol: PROTOCOL_VERSION,
+        type: "native.request",
+        id: "preview-sync",
+        command: {
+          kind: "browserPreview.sync",
+          url: "http://127.0.0.1:4173/preview",
+          bounds: { x: 0, y: 0, width: 640, height: 480 },
+        },
+      })
+      expect(nativeResponses(webview)).toContainEqual({
+        protocol: PROTOCOL_VERSION,
+        type: "native.response",
+        id: "preview-sync",
+        ok: false,
+        error: {
+          message: 'Native command "browserPreview.sync" is not available in the VS Code host.',
+          name: "Error",
+        },
+      })
+    } finally {
+      bridge.dispose()
+    }
+  })
 })

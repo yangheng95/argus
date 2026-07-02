@@ -156,10 +156,6 @@ describe("BrowserRuntime", () => {
       { path: "src/browser/webpage/render.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
       { path: "src/browser/webpage/runtime-state.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs({" },
       { path: "src/browser-preview/evidence-runner.ts", snippet: "launchArgs: BrowserRuntime.defaultLaunchArgs()," },
-      {
-        path: "src/browser-preview/live.ts",
-        snippet: "OPENCORVUS_BROWSER_LAUNCH_ARGS: JSON.stringify(BrowserRuntime.defaultLaunchArgs()),",
-      },
     ]
 
     for (const file of files) {

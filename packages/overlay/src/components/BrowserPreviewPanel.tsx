@@ -8,23 +8,25 @@ import {
   onCleanup,
   Show,
   Switch,
-  untrack,
 } from "solid-js"
-import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
 import {
   captureTaskBrowserPreviewEvidence,
-  loadTaskBrowserPreviewLiveSnapshotObjectUrl,
   loadTaskBrowserPreviewTarget,
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   selectTaskBrowserPreviewTarget,
-  sendTaskBrowserPreviewLiveInputsObjectUrl,
   type BrowserPreviewEvidence,
-  type BrowserPreviewLiveInput,
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
 } from "../services/browser-preview"
+import {
+  browserPreviewNativeSurfaceAvailable,
+  closeBrowserPreviewNativeSurface,
+  navigateBrowserPreviewNativeSurface,
+  syncBrowserPreviewNativeSurface,
+} from "../services/browser-preview-native"
+import type { BrowserPreviewNativeBounds, BrowserPreviewNativeNavigationAction } from "../services/host-transport"
 import { t } from "../utils/i18n"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Icon } from "./Icon"
@@ -33,17 +35,8 @@ import { Button } from "./ui/Button"
 import { SelectControl } from "./ui/SelectControl"
 import { SegmentedControl } from "./ui/SegmentedControl"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
-import { browserPreviewLivePoint, type BrowserPreviewLiveImageRect } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
-
-type BrowserPreviewLiveImage = {
-  directory: string
-  taskID: string
-  targetID: string
-  viewportID: BrowserPreviewViewportID
-  url: string
-}
 
 type BrowserPreviewEvidenceImage = {
   directory: string
@@ -53,10 +46,12 @@ type BrowserPreviewEvidenceImage = {
   url: string
 }
 
-type PendingBrowserPreviewLiveInput =
-  | { type: "ready"; input: BrowserPreviewLiveInput }
-  | { type: "point"; kind: "click"; clientX: number; clientY: number; button: "left" | "middle" | "right" }
-  | { type: "point"; kind: "wheel"; clientX: number; clientY: number; deltaX: number; deltaY: number }
+type BrowserPreviewNativeScope = {
+  directory: string
+  taskID: string
+  targetID: string
+  url: string
+}
 
 export interface BrowserPreviewPanelProps {
   active: () => boolean
@@ -74,9 +69,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [pendingSelectedTargetID, setPendingSelectedTargetID] = createSignal("")
   const [targetSelectionError, setTargetSelectionError] = createSignal("")
-  const [liveImage, setLiveImage] = createSignal<BrowserPreviewLiveImage>()
-  const [liveError, setLiveError] = createSignal("")
-  const [liveLoading, setLiveLoading] = createSignal(false)
+  const [nativePreviewError, setNativePreviewError] = createSignal("")
+  const [nativePreviewSyncing, setNativePreviewSyncing] = createSignal(false)
   const [targetLoadError, setTargetLoadError] = createSignal<{ taskID: string; message: string }>()
   const panelActive = createMemo(() => props.active())
   const [verificationRequest, setVerificationRequest] = createSignal<{
@@ -147,7 +141,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       null,
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
-  const selectedViewport = createMemo(() => viewports().find((viewport) => viewport.id === viewportID()))
   const viewportOptions = createMemo(() =>
     viewports().map((viewport) => ({
       value: viewport.id,
@@ -192,37 +185,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
     return evidence
   })
-  const liveScope = createMemo(() => {
+  const nativePreviewScope = createMemo<BrowserPreviewNativeScope | undefined>(() => {
     const taskID = props.taskID()
     const directory = props.directory()
     const resolved = currentTarget()
-    const viewport = selectedViewport()
-    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !viewport) {
+    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !resolved.url) {
       return undefined
     }
     if (latestEvidenceScope() || renderedEvidence()) {
       return undefined
     }
-    return { taskID, directory, targetID: resolved.id, viewportID: viewport.id, viewport }
+    return { taskID, directory, targetID: resolved.id, url: resolved.url }
   })
-  const liveImageUrl = createMemo(() => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
-    return image.url
-  })
-  const liveFrame = createMemo(() => {
-    const url = liveImageUrl()
-    if (!url) return undefined
-    const viewport = selectedViewport()
-    if (!viewport) throw new Error("Browser preview live frame style requires a selected backend viewport.")
-    return { url, viewport }
-  })
-  function liveFrameStyle(viewport: { width: number; height: number }): JSX.CSSProperties {
-    return {
-      "--browser-preview-live-aspect-ratio": `${viewport.width} / ${viewport.height}`,
-    } as JSX.CSSProperties
-  }
   const [captureImage] = createResource(
     () => {
       const evidence = renderedEvidence()
@@ -330,7 +304,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     setPendingSelectedTargetID(candidate.id)
     setTargetSelectionError("")
     setVerificationRequest(undefined)
-    clearLiveImageUrl()
+    requestNativePreviewClose(false)
     void selectTaskBrowserPreviewTarget({ taskID, directory, targetID: candidate.id })
       .then(() => setRefreshToken((value) => value + 1))
       .catch((error) => {
@@ -352,119 +326,115 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     setVerificationRequest({ taskID, directory, targetID: resolved.id, viewportIDs, token: Date.now() })
   }
 
-  let liveFrameRequestSequence = 0
-  let liveInputRequestInFlight = false
-  let pendingLiveInputScopeKey = ""
-  let pendingLiveInputs: PendingBrowserPreviewLiveInput[] = []
-  let liveImageElement: HTMLImageElement | null = null
-  let liveImageScrollElement: HTMLElement | null = null
-  let liveImageRect: BrowserPreviewLiveImageRect | undefined
-  let liveImageRectScopeKey = ""
-  let liveImageResizeObserver: ResizeObserver | null = null
+  let nativeSurfaceElement: HTMLElement | null = null
+  let nativeSurfaceScrollElement: HTMLElement | null = null
+  let nativeSurfaceResizeObserver: ResizeObserver | null = null
+  let lastNativePreviewSyncKey = ""
+  let nativePreviewSyncSequence = 0
 
-  const flushLiveInputOnFrame = createAnimationFrameScheduler(() => {
-    void flushLiveInputBatch()
+  const syncNativePreviewOnFrame = createAnimationFrameScheduler(() => {
+    void syncNativePreviewSurface()
   })
 
-  const clearLiveImageRect = () => {
-    liveImageRect = undefined
-    liveImageRectScopeKey = ""
+  const scheduleNativePreviewSync = () => {
+    syncNativePreviewOnFrame.schedule()
   }
 
-  const measureLiveImageRectOnFrame = createAnimationFrameScheduler(() => {
-    const scope = liveScope()
-    const image = liveImage()
-    const element = liveImageElement
-    if (!scope || !image || !element || !browserPreviewLiveImageMatchesScope(image, scope)) {
-      clearLiveImageRect()
+  const disconnectNativePreviewElement = () => {
+    nativeSurfaceResizeObserver?.disconnect()
+    nativeSurfaceResizeObserver = null
+    nativeSurfaceScrollElement?.removeEventListener("scroll", scheduleNativePreviewSync)
+    nativeSurfaceScrollElement = null
+    if (typeof window !== "undefined") window.removeEventListener("resize", scheduleNativePreviewSync)
+    nativeSurfaceElement = null
+    lastNativePreviewSyncKey = ""
+  }
+
+  const bindNativePreviewElement = (element: HTMLElement) => {
+    if (nativeSurfaceElement === element) {
+      scheduleNativePreviewSync()
       return
     }
-    const rect = element.getBoundingClientRect()
-    liveImageRect = {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-    }
-    const key = browserPreviewLiveScopeKey(scope)
-    liveImageRectScopeKey = key
-    if (pendingLiveInputs.length > 0 && pendingLiveInputScopeKey === key && !liveInputRequestInFlight) {
-      flushLiveInputOnFrame.schedule()
-    }
-  })
-
-  const scheduleLiveImageRectMeasure = () => {
-    measureLiveImageRectOnFrame.schedule()
-  }
-
-  const invalidateLiveImageRectAndScheduleMeasure = () => {
-    clearLiveImageRect()
-    scheduleLiveImageRectMeasure()
-  }
-
-  const disconnectLiveImageElement = () => {
-    liveImageResizeObserver?.disconnect()
-    liveImageResizeObserver = null
-    liveImageScrollElement?.removeEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure)
-    liveImageScrollElement = null
-    liveImageElement = null
-    clearLiveImageRect()
-  }
-
-  const bindLiveImageElement = (element: HTMLImageElement) => {
-    if (liveImageElement === element) {
-      scheduleLiveImageRectMeasure()
-      return
-    }
-    liveImageResizeObserver?.disconnect()
-    liveImageScrollElement?.removeEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure)
+    nativeSurfaceResizeObserver?.disconnect()
+    nativeSurfaceScrollElement?.removeEventListener("scroll", scheduleNativePreviewSync)
+    if (typeof window !== "undefined") window.removeEventListener("resize", scheduleNativePreviewSync)
     const scrollElement = props.scrollElement()
     if (!scrollElement) {
-      throw new Error("Browser preview live image must mount inside the center workbench scroll body.")
+      throw new Error("Browser preview native surface must mount inside the center workbench scroll body.")
     }
-    liveImageElement = element
-    liveImageScrollElement = scrollElement
-    clearLiveImageRect()
-    liveImageScrollElement.addEventListener("scroll", invalidateLiveImageRectAndScheduleMeasure, { passive: true })
+    nativeSurfaceElement = element
+    nativeSurfaceScrollElement = scrollElement
+    nativeSurfaceScrollElement.addEventListener("scroll", scheduleNativePreviewSync, { passive: true })
+    if (typeof window !== "undefined") window.addEventListener("resize", scheduleNativePreviewSync)
     if (typeof ResizeObserver !== "undefined") {
-      liveImageResizeObserver = new ResizeObserver(invalidateLiveImageRectAndScheduleMeasure)
-      liveImageResizeObserver.observe(element)
+      nativeSurfaceResizeObserver = new ResizeObserver(scheduleNativePreviewSync)
+      nativeSurfaceResizeObserver.observe(element)
     } else {
-      liveImageResizeObserver = null
+      nativeSurfaceResizeObserver = null
     }
-    scheduleLiveImageRectMeasure()
+    lastNativePreviewSyncKey = ""
+    scheduleNativePreviewSync()
+  }
+
+  function requestNativePreviewClose(reportError = true): void {
+    lastNativePreviewSyncKey = ""
+    nativePreviewSyncSequence += 1
+    setNativePreviewSyncing(false)
+    if (!browserPreviewNativeSurfaceAvailable()) return
+    void closeBrowserPreviewNativeSurface().catch((error) => {
+      if (!reportError) return
+      setNativePreviewError(browserPreviewErrorMessage(error))
+    })
+  }
+
+  async function syncNativePreviewSurface(): Promise<void> {
+    const scope = nativePreviewScope()
+    const element = nativeSurfaceElement
+    if (!scope || !element) return
+    if (!browserPreviewNativeSurfaceAvailable()) {
+      setNativePreviewSyncing(false)
+      setNativePreviewError(t("browser_preview.empty.native_unsupported"))
+      return
+    }
+    const bounds = browserPreviewNativeElementBounds(element)
+    if (!bounds) {
+      lastNativePreviewSyncKey = ""
+      return
+    }
+    const syncKey = `${browserPreviewNativeScopeKey(scope)}:${browserPreviewNativeBoundsKey(bounds)}`
+    if (lastNativePreviewSyncKey === syncKey) return
+    const sequence = ++nativePreviewSyncSequence
+    setNativePreviewSyncing(true)
+    setNativePreviewError("")
+    try {
+      await syncBrowserPreviewNativeSurface({ url: scope.url, bounds })
+      if (sequence === nativePreviewSyncSequence) lastNativePreviewSyncKey = syncKey
+    } catch (error) {
+      if (sequence === nativePreviewSyncSequence) {
+        lastNativePreviewSyncKey = ""
+        setNativePreviewError(browserPreviewErrorMessage(error))
+        requestNativePreviewClose(false)
+      }
+    } finally {
+      if (sequence === nativePreviewSyncSequence) setNativePreviewSyncing(false)
+    }
+  }
+
+  function navigateNativePreview(action: BrowserPreviewNativeNavigationAction): void {
+    if (!nativePreviewScope() || !browserPreviewNativeSurfaceAvailable()) return
+    setNativePreviewError("")
+    void navigateBrowserPreviewNativeSurface(action).catch((error) => {
+      setNativePreviewError(browserPreviewErrorMessage(error))
+    })
   }
 
   onCleanup(() => {
-    flushLiveInputOnFrame.cancel()
-    measureLiveImageRectOnFrame.cancel()
-    disconnectLiveImageElement()
+    syncNativePreviewOnFrame.cancel()
+    disconnectNativePreviewElement()
+    requestNativePreviewClose(false)
     const current = captureImage()
     if (current) URL.revokeObjectURL(current.url)
-    const live = liveImage()
-    if (live) URL.revokeObjectURL(live.url)
   })
-
-  const replaceLiveImageUrl = (scope: NonNullable<ReturnType<typeof liveScope>>, next: string) => {
-    const previous = liveImage()
-    setLiveImage({
-      directory: scope.directory,
-      taskID: scope.taskID,
-      targetID: scope.targetID,
-      viewportID: scope.viewportID,
-      url: next,
-    })
-    if (previous && previous.url !== next) URL.revokeObjectURL(previous.url)
-    scheduleLiveImageRectMeasure()
-  }
-
-  const clearLiveImageUrl = () => {
-    const previous = untrack(liveImage)
-    if (!previous) return
-    setLiveImage(undefined)
-    disconnectLiveImageElement()
-    URL.revokeObjectURL(previous.url)
-  }
 
   const taskScopeKey = createMemo(() => {
     const taskID = props.taskID()
@@ -478,202 +448,31 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       setPendingSelectedTargetID("")
       setTargetSelectionError("")
       setVerificationRequest(undefined)
-      setLiveError("")
-      clearLiveImageUrl()
+      setNativePreviewError("")
+      if (previous) requestNativePreviewClose(false)
     }
     return key
   })
 
-  const loadLiveFrame = async (
-    scope: NonNullable<ReturnType<typeof liveScope>>,
-    inputs?: BrowserPreviewLiveInput[],
-  ) => {
-    const sequence = ++liveFrameRequestSequence
-    setLiveLoading(true)
-    setLiveError("")
-    try {
-      const next = inputs
-        ? await sendTaskBrowserPreviewLiveInputsObjectUrl({ ...scope, inputs })
-        : await loadTaskBrowserPreviewLiveSnapshotObjectUrl(scope)
-      if (sequence !== liveFrameRequestSequence) {
-        URL.revokeObjectURL(next)
-        return
-      }
-      replaceLiveImageUrl(scope, next)
-    } catch (error) {
-      if (sequence === liveFrameRequestSequence) {
-        setLiveError(error instanceof Error ? error.message : String(error))
-        clearLiveImageUrl()
-        if (error instanceof ApiError && error.status === 404) {
-          refetchTargetFromPanel()
-        }
-      }
-    } finally {
-      if (sequence === liveFrameRequestSequence) {
-        setLiveLoading(false)
-      }
-    }
-  }
-
-  const clearPendingLiveInputs = () => {
-    pendingLiveInputs = []
-    pendingLiveInputScopeKey = ""
-    liveInputRequestInFlight = false
-    flushLiveInputOnFrame.cancel()
-  }
-
-  const queueLiveInput = (input: PendingBrowserPreviewLiveInput) => {
-    const previous = pendingLiveInputs[pendingLiveInputs.length - 1]
-    if (input.type === "point" && input.kind === "wheel" && previous?.type === "point" && previous.kind === "wheel") {
-      pendingLiveInputs[pendingLiveInputs.length - 1] = {
-        type: "point",
-        kind: "wheel",
-        clientX: input.clientX,
-        clientY: input.clientY,
-        deltaX: previous.deltaX + input.deltaX,
-        deltaY: previous.deltaY + input.deltaY,
-      }
-      return
-    }
-    pendingLiveInputs.push(input)
-  }
-
-  const pendingLiveInputsForScope = (
-    scope: NonNullable<ReturnType<typeof liveScope>>,
-    key: string,
-  ): BrowserPreviewLiveInput[] | undefined => {
-    const rect = liveImageRectScopeKey === key ? liveImageRect : undefined
-    const inputs: BrowserPreviewLiveInput[] = []
-    for (const input of pendingLiveInputs) {
-      if (input.type === "ready") {
-        inputs.push(input.input)
-        continue
-      }
-      if (!rect) {
-        scheduleLiveImageRectMeasure()
-        return undefined
-      }
-      const point = browserPreviewLivePoint(input, rect, scope.viewport)
-      if (!point) {
-        scheduleLiveImageRectMeasure()
-        return undefined
-      }
-      if (input.kind === "click") {
-        inputs.push({ kind: "click", ...point, button: input.button })
-      } else {
-        inputs.push({
-          kind: "wheel",
-          ...point,
-          deltaX: input.deltaX,
-          deltaY: input.deltaY,
-        })
-      }
-    }
-    return inputs
-  }
-
-  async function flushLiveInputBatch() {
-    if (liveInputRequestInFlight) return
-    const scope = liveScope()
-    if (!scope) {
-      clearPendingLiveInputs()
-      return
-    }
-    const key = browserPreviewLiveScopeKey(scope)
-    if (pendingLiveInputScopeKey && pendingLiveInputScopeKey !== key) {
-      clearPendingLiveInputs()
-      return
-    }
-    if (pendingLiveInputs.length === 0) return
-    const inputs = pendingLiveInputsForScope(scope, key)
-    if (!inputs) return
-    pendingLiveInputs = []
-    pendingLiveInputScopeKey = key
-    liveInputRequestInFlight = true
-    try {
-      await loadLiveFrame(scope, inputs)
-    } finally {
-      const current = liveScope()
-      liveInputRequestInFlight = false
-      if (!current || browserPreviewLiveScopeKey(current) !== key) {
-        clearPendingLiveInputs()
-        return
-      }
-      if (pendingLiveInputs.length > 0) flushLiveInputOnFrame.schedule()
-    }
-  }
-
-  const liveInputReadyScopeKey = () => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
-    return browserPreviewLiveScopeKey(scope)
-  }
-
-  const sendLiveInput = (input: PendingBrowserPreviewLiveInput) => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return
-    const key = browserPreviewLiveScopeKey(scope)
-    if (pendingLiveInputScopeKey && pendingLiveInputScopeKey !== key) clearPendingLiveInputs()
-    pendingLiveInputScopeKey = key
-    queueLiveInput(input)
-    flushLiveInputOnFrame.schedule()
-  }
-
-  const handleLiveImageDecodeError = (url: string) => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || image.url !== url || !browserPreviewLiveImageMatchesScope(image, scope)) return
-    setLiveError(t("browser_preview.empty.live_decode_failed"))
-    setLiveLoading(false)
-    clearLiveImageUrl()
-  }
-
-  const handleLivePointerDown: JSX.EventHandlerUnion<HTMLElement, PointerEvent> = (event) => {
-    if (event.button > 2) return
-    if (!liveInputReadyScopeKey()) return
-    event.currentTarget.focus()
-    event.preventDefault()
-    const button = event.button === 1 ? "middle" : event.button === 2 ? "right" : "left"
-    sendLiveInput({ type: "point", kind: "click", clientX: event.clientX, clientY: event.clientY, button })
-  }
-
-  const handleLiveWheel: JSX.EventHandlerUnion<HTMLElement, WheelEvent> = (event) => {
-    if (!liveInputReadyScopeKey()) return
-    event.preventDefault()
-    sendLiveInput({
-      type: "point",
-      kind: "wheel",
-      clientX: event.clientX,
-      clientY: event.clientY,
-      deltaX: event.deltaX,
-      deltaY: event.deltaY,
-    })
-  }
-
-  const handleLiveKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent> = (event) => {
-    if (event.key === "Shift" || event.key === "Control" || event.key === "Alt" || event.key === "Meta") return
-    if (event.key === "Tab" || event.key === "Escape") return
-    event.preventDefault()
-    sendLiveInput({ type: "ready", input: { kind: "key", key: event.key } })
-  }
-
   createEffect<string | undefined>((previous) => {
-    const scope = liveScope()
-    const key = scope ? browserPreviewLiveScopeKey(scope) : undefined
+    const scope = nativePreviewScope()
+    const key = scope ? browserPreviewNativeScopeKey(scope) : undefined
+    if (previous && previous !== key) requestNativePreviewClose(false)
     if (previous !== key) {
-      liveFrameRequestSequence += 1
-      clearPendingLiveInputs()
-      clearLiveImageUrl()
-      setLiveError("")
+      nativePreviewSyncSequence += 1
+      lastNativePreviewSyncKey = ""
+      setNativePreviewError("")
     }
     if (!scope) {
-      clearPendingLiveInputs()
-      setLiveLoading(false)
+      setNativePreviewSyncing(false)
       return key
     }
-    void loadLiveFrame(scope)
+    if (!browserPreviewNativeSurfaceAvailable()) {
+      setNativePreviewSyncing(false)
+      setNativePreviewError(t("browser_preview.empty.native_unsupported"))
+      return key
+    }
+    scheduleNativePreviewSync()
     return key
   })
 
@@ -684,191 +483,239 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           variant="panel"
           title={t("browser_preview.title")}
           actions={
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              tone="neutral"
-              title={t("browser_preview.refresh_title")}
-              aria-label={t("browser_preview.refresh_title")}
-              disabled={!props.taskID()}
-              onClick={() => {
-                setTargetSelectionError("")
-                setRefreshToken((value) => value + 1)
-              }}
-            >
-              <Icon name="refresh" size={13} />
-            </Button>
+            <>
+              <div
+                class="browser-preview-status"
+                data-status={
+                  targetSelectionError() || currentTargetError()
+                    ? "failed"
+                    : targetTransitionPending()
+                      ? "loading"
+                      : (currentTarget()?.status ?? "loading")
+                }
+                role={target.loading || targetTransitionPending() ? "status" : undefined}
+                aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}
+              >
+                <Switch
+                  fallback={
+                    <>
+                      <Icon name="info-circle" size={14} />
+                      <span>{t("browser_preview.status.missing")}</span>
+                    </>
+                  }
+                >
+                  <Match when={target.loading || targetTransitionPending()}>
+                    <span class="card__spinner" />
+                    <span>{t("browser_preview.loading")}</span>
+                  </Match>
+                  <Match when={targetSelectionError()}>
+                    <Icon name="status-failed" size={14} />
+                    <span>{t("browser_preview.status.failed")}</span>
+                  </Match>
+                  <Match when={currentTargetError()}>
+                    <Icon name="status-failed" size={14} />
+                    <span>{String(currentTargetError())}</span>
+                  </Match>
+                  <Match when={currentTarget()}>
+                    {(resolved) => (
+                      <>
+                        <Icon
+                          name={
+                            resolved().status === "ready"
+                              ? "status-completed"
+                              : resolved().status === "failed"
+                                ? "status-failed"
+                                : "info-circle"
+                          }
+                          size={14}
+                        />
+                        <span>{statusLabel(resolved().status)}</span>
+                      </>
+                    )}
+                  </Match>
+                </Switch>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                tone="neutral"
+                title={t("browser_preview.refresh_title")}
+                aria-label={t("browser_preview.refresh_title")}
+                disabled={!props.taskID()}
+                onClick={() => {
+                  setTargetSelectionError("")
+                  setRefreshToken((value) => value + 1)
+                }}
+              >
+                <Icon name="refresh" size={13} />
+              </Button>
+            </>
           }
         />
 
-        <div class="browser-preview-controls">
-          <div
-            class="browser-preview-status"
-            data-status={
-              targetSelectionError() || currentTargetError()
-                ? "failed"
-                : targetTransitionPending()
-                  ? "loading"
-                  : (currentTarget()?.status ?? "loading")
-            }
-            role={target.loading || targetTransitionPending() ? "status" : undefined}
-            aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}
-          >
-            <Switch
-              fallback={
-                <>
-                  <Icon name="info-circle" size={14} />
-                  <span>{t("browser_preview.status.missing")}</span>
-                </>
-              }
-            >
-              <Match when={target.loading || targetTransitionPending()}>
-                <span class="card__spinner" />
-                <span>{t("browser_preview.loading")}</span>
-              </Match>
-              <Match when={targetSelectionError()}>
-                <Icon name="status-failed" size={14} />
-                <span>{t("browser_preview.status.failed")}</span>
-              </Match>
-              <Match when={currentTargetError()}>
-                <Icon name="status-failed" size={14} />
-                <span>{String(currentTargetError())}</span>
-              </Match>
-              <Match when={currentTarget()}>
-                {(resolved) => (
-                  <>
-                    <Icon
-                      name={
-                        resolved().status === "ready"
-                          ? "status-completed"
-                          : resolved().status === "failed"
-                            ? "status-failed"
-                            : "info-circle"
-                      }
-                      size={14}
-                    />
-                    <span>{statusLabel(resolved().status)}</span>
-                  </>
-                )}
-              </Match>
-            </Switch>
+        <div class="browser-preview-controls" data-ui="browser-preview-toolbar">
+          <div class="browser-preview-toolbar-row" data-row="address">
+            <Show when={readyTarget()}>
+              <div class="browser-preview-browser-controls" data-ui="browser-preview-navigation-controls">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tone="neutral"
+                  title={t("browser_preview.navigation.back_title")}
+                  aria-label={t("browser_preview.navigation.back_title")}
+                  disabled={!nativePreviewScope() || !browserPreviewNativeSurfaceAvailable()}
+                  onClick={() => navigateNativePreview("back")}
+                >
+                  <Icon name="nav-back" size={13} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tone="neutral"
+                  title={t("browser_preview.navigation.forward_title")}
+                  aria-label={t("browser_preview.navigation.forward_title")}
+                  disabled={!nativePreviewScope() || !browserPreviewNativeSurfaceAvailable()}
+                  onClick={() => navigateNativePreview("forward")}
+                >
+                  <Icon name="nav-forward" size={13} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tone="neutral"
+                  title={t("browser_preview.navigation.reload_title")}
+                  aria-label={t("browser_preview.navigation.reload_title")}
+                  disabled={!nativePreviewScope() || !browserPreviewNativeSurfaceAvailable()}
+                  onClick={() => navigateNativePreview("reload")}
+                >
+                  <Icon name="refresh" size={13} />
+                </Button>
+              </div>
+            </Show>
+
+            <Show when={readyTarget() && candidates().length > 0}>
+              <SelectControl<BrowserPreviewCandidate>
+                class="browser-preview-candidate-select"
+                options={candidates()}
+                value={selectedCandidate()}
+                onChange={selectCandidate}
+                optionValue="id"
+                optionTextValue="url"
+                disabled={candidates().length <= 1}
+                disallowEmptySelection
+                gutter={4}
+                sameWidth
+                beforeTrigger={<Icon name="external-link" size={13} />}
+                triggerClass="browser-preview-candidate-trigger"
+                triggerDataUI="browser-preview-candidate-trigger"
+                ariaLabel={t("browser_preview.candidates.label")}
+                contentClass="browser-preview-candidate-content"
+                listboxClass="browser-preview-candidate-listbox"
+                optionClass="browser-preview-candidate-option"
+                indicatorClass="browser-preview-candidate-indicator"
+                optionData={(candidate) => ({
+                  "data-ui": "browser-preview-candidate-option",
+                  "data-target-id": candidate.id,
+                })}
+                renderValue={(candidate) => <span>{candidate?.url ?? targetUrl() ?? ""}</span>}
+                renderOptionLabel={(candidate) => candidate.url}
+              />
+            </Show>
+
           </div>
 
-          <Show when={readyTarget() && candidates().length > 0}>
-            <SelectControl<BrowserPreviewCandidate>
-              class="browser-preview-candidate-select"
-              options={candidates()}
-              value={selectedCandidate()}
-              onChange={selectCandidate}
-              optionValue="id"
-              optionTextValue="url"
-              disabled={candidates().length <= 1}
-              disallowEmptySelection
-              gutter={4}
-              sameWidth
-              beforeTrigger={<Icon name="external-link" size={13} />}
-              triggerClass="browser-preview-candidate-trigger"
-              triggerDataUI="browser-preview-candidate-trigger"
-              ariaLabel={t("browser_preview.candidates.label")}
-              contentClass="browser-preview-candidate-content"
-              listboxClass="browser-preview-candidate-listbox"
-              optionClass="browser-preview-candidate-option"
-              indicatorClass="browser-preview-candidate-indicator"
-              optionData={(candidate) => ({
-                "data-ui": "browser-preview-candidate-option",
-                "data-target-id": candidate.id,
-              })}
-              renderValue={(candidate) => <span>{candidate?.url ?? targetUrl() ?? ""}</span>}
-              renderOptionLabel={(candidate) => candidate.url}
-            />
-          </Show>
+          <div class="browser-preview-toolbar-row" data-row="tools">
+            <Show when={readyTarget() && viewports().length > 0}>
+              <div
+                class="browser-preview-viewport-controls"
+                data-ui="browser-preview-viewports"
+                data-orientation="horizontal"
+              >
+                <SegmentedControl<BrowserPreviewViewportID>
+                  options={viewportOptions()}
+                  value={viewportID()}
+                  onChange={setViewportID}
+                  ariaLabel={t("browser_preview.viewport.label")}
+                  class="oc-tabs"
+                  itemClass="oc-tab"
+                  itemAttributes={(option) => ({
+                    "data-ui": "browser-preview-viewport",
+                    "data-viewport-id": option.value,
+                    "data-size": "sm",
+                  })}
+                />
+              </div>
+            </Show>
 
-          <Show when={readyTarget() && viewports().length > 0}>
-            <div
-              class="browser-preview-viewport-controls"
-              data-ui="browser-preview-viewports"
-              data-orientation="horizontal"
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              tone="neutral"
+              class="browser-preview-capture-button"
+              title={t("browser_preview.capture_title")}
+              aria-label={t("browser_preview.capture_title")}
+              disabled={!props.taskID() || !readyTarget() || currentVerificationLoading()}
+              onClick={captureEvidence}
             >
-              <SegmentedControl<BrowserPreviewViewportID>
-                options={viewportOptions()}
-                value={viewportID()}
-                onChange={setViewportID}
-                ariaLabel={t("browser_preview.viewport.label")}
-                class="oc-tabs"
-                itemClass="oc-tab"
-                itemAttributes={(option) => ({
-                  "data-ui": "browser-preview-viewport",
-                  "data-viewport-id": option.value,
-                  "data-size": "sm",
-                })}
-              />
-            </div>
-          </Show>
+              <Icon name="inspect" size={13} />
+              <span>{t("browser_preview.capture")}</span>
+            </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            tone="neutral"
-            title={t("browser_preview.capture_title")}
-            aria-label={t("browser_preview.capture_title")}
-            disabled={!props.taskID() || !readyTarget() || currentVerificationLoading()}
-            onClick={captureEvidence}
-          >
-            <Icon name="inspect" size={13} />
-            <span>{t("browser_preview.capture")}</span>
-          </Button>
-
-          <Show
-            when={
-              currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()
-            }
-          >
-            <div
-              class="browser-preview-evidence-status"
-              data-status={
-                currentVerificationError()
-                  ? "failed"
-                  : (currentVerification()?.status ??
-                    renderedEvidence()?.status ??
-                    (currentVerificationLoading() ? "loading" : "idle"))
+            <Show
+              when={
+                currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()
               }
-              role={currentVerificationLoading() ? "status" : undefined}
-              aria-live={currentVerificationLoading() ? "polite" : undefined}
             >
-              <Switch>
-                <Match when={currentVerificationError()}>
-                  {(error) => (
-                    <>
-                      <Icon name="status-failed" size={14} />
-                      <span>{String(error())}</span>
-                    </>
-                  )}
-                </Match>
-                <Match when={currentVerificationLoading()}>
-                  <span class="card__spinner" />
-                  <span>{t("browser_preview.capture_loading")}</span>
-                </Match>
-                <Match when={currentVerification()}>
-                  {(resolved) => (
-                    <>
-                      <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                      <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
-                    </>
-                  )}
-                </Match>
-                <Match when={renderedEvidence()}>
-                  {(evidence) => (
-                    <>
-                      <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                      <span>{evidence().summary}</span>
-                    </>
-                  )}
-                </Match>
-              </Switch>
-            </div>
-          </Show>
+              <div
+                class="browser-preview-evidence-status"
+                data-status={
+                  currentVerificationError()
+                    ? "failed"
+                    : (currentVerification()?.status ??
+                      renderedEvidence()?.status ??
+                      (currentVerificationLoading() ? "loading" : "idle"))
+                }
+                role={currentVerificationLoading() ? "status" : undefined}
+                aria-live={currentVerificationLoading() ? "polite" : undefined}
+              >
+                <Switch>
+                  <Match when={currentVerificationError()}>
+                    {(error) => (
+                      <>
+                        <Icon name="status-failed" size={14} />
+                        <span>{String(error())}</span>
+                      </>
+                    )}
+                  </Match>
+                  <Match when={currentVerificationLoading()}>
+                    <span class="card__spinner" />
+                    <span>{t("browser_preview.capture_loading")}</span>
+                  </Match>
+                  <Match when={currentVerification()}>
+                    {(resolved) => (
+                      <>
+                        <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                        <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
+                      </>
+                    )}
+                  </Match>
+                  <Match when={renderedEvidence()}>
+                    {(evidence) => (
+                      <>
+                        <Icon name={evidence().status === "passed" ? "status-completed" : "status-failed"} size={14} />
+                        <span>{evidence().summary}</span>
+                      </>
+                    )}
+                  </Match>
+                </Switch>
+              </div>
+            </Show>
+          </div>
         </div>
       </div>
 
@@ -915,11 +762,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               </div>
             )}
           </Match>
-          <Match when={liveError()}>
+          <Match when={nativePreviewError()}>
             {(error) => (
-              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-live-error">
+              <div class="browser-preview-empty" data-status="failed" data-ui="browser-preview-native-error">
                 <Icon name="status-failed" size={18} />
-                <p>{t("browser_preview.empty.live_failed")}</p>
+                <p>{t("browser_preview.empty.native_failed")}</p>
                 <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
                 <code>{error()}</code>
               </div>
@@ -971,50 +818,29 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               </section>
             )}
           </Match>
-          <Match when={liveFrame()}>
-            {(frame) => (
+          <Match when={nativePreviewScope()}>
+            {(scope) => (
               <section
                 class="browser-preview-live"
                 data-ui="browser-preview-live"
-                data-status={liveError() ? "failed" : liveLoading() ? "loading" : "ready"}
+                data-status={nativePreviewSyncing() ? "loading" : "ready"}
+                data-target-id={scope().targetID}
               >
-                <figure
-                  class="browser-preview-live-frame"
-                  style={liveFrameStyle(frame().viewport)}
-                  role="application"
-                  tabIndex={0}
-                  onPointerDown={handleLivePointerDown}
-                  onWheel={handleLiveWheel}
-                  onKeyDown={handleLiveKeyDown}
-                  aria-label={t("browser_preview.title")}
-                >
-                  <img
-                    ref={bindLiveImageElement}
-                    src={frame().url}
-                    alt={targetUrl() ?? t("browser_preview.title")}
-                    data-ui="browser-preview-live-screenshot"
-                    decoding="async"
-                    draggable={false}
-                    onLoad={scheduleLiveImageRectMeasure}
-                    onError={() => handleLiveImageDecodeError(frame().url)}
-                  />
-                </figure>
-                <Show when={liveError()}>{(error) => <code>{error()}</code>}</Show>
+                <div class="browser-preview-native-frame">
+                  <div
+                    ref={bindNativePreviewElement}
+                    class="browser-preview-native-surface"
+                    data-ui="browser-preview-native-surface"
+                    role="application"
+                    aria-label={t("browser_preview.title")}
+                  >
+                    <Show when={nativePreviewSyncing()}>
+                      <span class="card__spinner" aria-hidden="true" />
+                    </Show>
+                  </div>
+                </div>
               </section>
             )}
-          </Match>
-          <Match when={liveLoading()}>
-            <div
-              class="browser-preview-empty"
-              data-status="loading"
-              data-ui="browser-preview-live-loading"
-              role="status"
-              aria-live="polite"
-            >
-              <span class="card__spinner" />
-              <p>{t("browser_preview.loading")}</p>
-              <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>
-            </div>
           </Match>
           <Match when={targetUrl()}>
             <div class="browser-preview-empty" data-status="ready" data-ui="browser-preview-evidence-missing">
@@ -1108,18 +934,33 @@ function evidenceFromVerification(
   }
 }
 
-function browserPreviewLiveScopeKey(input: {
-  directory: string
-  taskID: string
-  targetID: string
-  viewportID: BrowserPreviewViewportID
-}): string {
-  return `${input.directory}:${input.taskID}:${input.targetID}:${input.viewportID}`
+function browserPreviewNativeScopeKey(input: BrowserPreviewNativeScope): string {
+  return `${input.directory}:${input.taskID}:${input.targetID}:${input.url}`
 }
 
-function browserPreviewLiveImageMatchesScope(
-  image: BrowserPreviewLiveImage,
-  scope: { directory: string; taskID: string; targetID: string; viewportID: BrowserPreviewViewportID },
-): boolean {
-  return browserPreviewLiveScopeKey(image) === browserPreviewLiveScopeKey(scope)
+function browserPreviewNativeBoundsKey(bounds: BrowserPreviewNativeBounds): string {
+  return `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}`
+}
+
+function browserPreviewNativeElementBounds(element: HTMLElement): BrowserPreviewNativeBounds | undefined {
+  const rect = element.getBoundingClientRect()
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const x = Math.max(0, rect.left)
+  const y = Math.max(0, rect.top)
+  const right = Math.min(viewportWidth, rect.right)
+  const bottom = Math.min(viewportHeight, rect.bottom)
+  const width = right - x
+  const height = bottom - y
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return undefined
+  }
+  return { x, y, width, height }
 }

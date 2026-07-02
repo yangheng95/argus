@@ -76,11 +76,6 @@ export interface BrowserPreviewEvidence {
 
 export type BrowserPreviewViewportID = BrowserPreviewViewport["id"]
 
-export type BrowserPreviewLiveInput =
-  | { kind: "click"; x: number; y: number; button?: "left" | "middle" | "right" }
-  | { kind: "wheel"; x: number; y: number; deltaX: number; deltaY: number }
-  | { kind: "key"; key: string }
-
 function taskBrowserPreviewPath(taskID: string, directory: string, suffix = ""): string {
   const dir = directory.trim()
   if (!dir) throw new Error("browser preview service requires a task directory")
@@ -160,60 +155,6 @@ export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
   if (!response.ok) throw new ApiError(response.status, path, decodeBinaryBrowserPreviewErrorBody(response.body))
   const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
   return URL.createObjectURL(new Blob([bytesToArrayBuffer(response.body)], { type: contentType }))
-}
-
-export async function loadTaskBrowserPreviewLiveSnapshotObjectUrl(input: {
-  taskID: string
-  directory: string
-  targetID: string
-  viewportID: BrowserPreviewViewportID
-  signal?: AbortSignal
-}): Promise<string> {
-  return browserPreviewLiveFrameObjectUrl(
-    taskBrowserPreviewPath(input.taskID, input.directory, "/live/snapshot"),
-    {
-      targetID: input.targetID,
-      viewportID: input.viewportID,
-    },
-    input.signal,
-  )
-}
-
-export async function sendTaskBrowserPreviewLiveInputsObjectUrl(input: {
-  taskID: string
-  directory: string
-  targetID: string
-  viewportID: BrowserPreviewViewportID
-  inputs: BrowserPreviewLiveInput[]
-  signal?: AbortSignal
-}): Promise<string> {
-  return browserPreviewLiveFrameObjectUrl(
-    taskBrowserPreviewPath(input.taskID, input.directory, "/live/input"),
-    {
-      targetID: input.targetID,
-      viewportID: input.viewportID,
-      inputs: input.inputs,
-    },
-    input.signal,
-  )
-}
-
-async function browserPreviewLiveFrameObjectUrl(
-  path: string,
-  body: Record<string, unknown>,
-  signal?: AbortSignal,
-): Promise<string> {
-  const response = await apiRequest<Uint8Array>(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    responseKind: "binary",
-    signal,
-  })
-  if (!response.ok) throw new ApiError(response.status, path, decodeBinaryBrowserPreviewErrorBody(response.body))
-  const contentType = response.headers["content-type"] || response.headers["Content-Type"] || "image/png"
-  const blob = new Blob([bytesToArrayBuffer(response.body)], { type: contentType })
-  return URL.createObjectURL(blob)
 }
 
 function decodeBinaryBrowserPreviewErrorBody(body: Uint8Array): unknown {

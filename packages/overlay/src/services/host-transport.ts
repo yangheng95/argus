@@ -130,7 +130,13 @@ export interface ServerInfo {
   port?: number
 }
 
-export type { NativeCommand, NativeCommandKind, ProjectEditorID } from "@opencorvus-ai/transport-protocol"
+export type {
+  BrowserPreviewNativeBounds,
+  BrowserPreviewNativeNavigationAction,
+  NativeCommand,
+  NativeCommandKind,
+  ProjectEditorID,
+} from "@opencorvus-ai/transport-protocol"
 export { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"
 
 import { PROJECT_EDITOR_IDS } from "@opencorvus-ai/transport-protocol"
@@ -161,6 +167,9 @@ export interface HostCapabilities {
 const TAURI_NATIVE_COMMANDS: NativeCommandCapabilities = {
   "open-url": true,
   "open-path": true,
+  "browserPreview.sync": true,
+  "browserPreview.navigate": true,
+  "browserPreview.close": true,
   "settings.load": true,
   "settings.save": true,
   "config.write-file": true,
@@ -181,6 +190,9 @@ const TAURI_NATIVE_COMMANDS: NativeCommandCapabilities = {
 const BROWSER_NATIVE_COMMANDS: NativeCommandCapabilities = {
   "open-url": false,
   "open-path": false,
+  "browserPreview.sync": false,
+  "browserPreview.navigate": false,
+  "browserPreview.close": false,
   "settings.load": true,
   "settings.save": true,
   "config.write-file": false,
@@ -201,6 +213,9 @@ const BROWSER_NATIVE_COMMANDS: NativeCommandCapabilities = {
 const VSCODE_NATIVE_COMMANDS: NativeCommandCapabilities = {
   "open-url": true,
   "open-path": true,
+  "browserPreview.sync": false,
+  "browserPreview.navigate": false,
+  "browserPreview.close": false,
   "settings.load": true,
   "settings.save": true,
   "config.write-file": false,

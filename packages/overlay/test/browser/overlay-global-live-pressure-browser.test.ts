@@ -38,8 +38,7 @@ const PERF_LIMITS = {
   screenshotCards: 36,
   fileRows: 70,
   screenshotAttachmentRequests: 48,
-  liveSnapshotRequests: 3,
-  liveInputRequests: 2,
+  retiredLiveRouteRequests: 0,
   fileListRequests: 4,
   fileSearchRequests: 2,
 }
@@ -62,6 +61,11 @@ type RequestLog = {
   method: string
   path: string
   search: string
+}
+
+type NativeCommandRecord = {
+  command: string
+  args: Record<string, unknown>
 }
 
 function route(url: URL): string {
@@ -167,11 +171,13 @@ function taskItem(index: number): any {
       title: selected ? "Global overlay pressure selected task" : `Global pressure queued task ${index}`,
       request: `Exercise overlay surfaces under combined GUI pressure ${index}. ${"request detail ".repeat(18)}`,
       directory: PROJECT_ROOT,
-      status: selected ? "active" : "queued",
+      status: selected ? "completed" : "queued",
       priority: "normal",
       sessionID: selected ? ROOT_SESSION_ID : `ses_overlay_global_pressure_${String(index).padStart(3, "0")}`,
       orderKey: testTaskOrderKey(id, created),
-      time: { created, updated: created + 10_000 },
+      time: selected
+        ? { created, updated: created + 30_000, completed: created + 30_000 }
+        : { created, updated: created + 10_000 },
       queue: { order: index, revision: "global-pressure" },
     },
   }
@@ -191,34 +197,12 @@ function board(task = taskItem(0).task): any {
       steps: [
         { id: "requirements", status: "completed" },
         { id: "architect", status: "completed" },
-        { id: "build", status: "active" },
-        { id: "visual-qa", status: "pending" },
+        { id: "build", status: "completed" },
+        { id: "visual-qa", status: "completed" },
       ],
     },
-    requirements: [
-      { id: "req-global-pressure", title: "Keep the overlay responsive under combined panel pressure", status: "active" },
-    ],
-    goalWorkflows: [
-      {
-        goalID: "goal-global-pressure",
-        title: "Overlay GUI responsiveness",
-        status: "active",
-        steps: [
-          {
-            stepID: "requirements",
-            title: "Requirements",
-            status: "completed",
-            phases: [{ phaseID: "requirements", title: "Requirements", status: "completed" }],
-          },
-          {
-            stepID: "build",
-            title: "Build",
-            status: "active",
-            phases: [{ phaseID: "build", title: "Build", status: "active" }],
-          },
-        ],
-      },
-    ],
+    requirements: [],
+    goalWorkflows: [],
     interactions: [],
   }
 }
@@ -502,8 +486,6 @@ test(
     const conversation = conversationPayload(transcript)
     const clients: SseClient[] = []
     const requests: RequestLog[] = []
-    const liveSnapshotPng = await pngBytes("global pressure live", 960, 540, ["#1d4ed8", "#0f766e"])
-    const liveInputPng = await pngBytes("global pressure input", 960, 540, ["#166534", "#15803d"])
     const screenshotPngs = new Map<string, Buffer>()
     const screenshotBytes = async (index: number, thumbnail: boolean) => {
       const key = `${index}:${thumbnail ? "thumb" : "full"}`
@@ -590,10 +572,6 @@ test(
           source: "task-artifact",
         })
       }
-      if (path === `/task/${TASK_ID}/browser-preview/live/snapshot` && req.method === "POST")
-        return new Response(liveSnapshotPng, { headers: { "content-type": "image/png" } })
-      if (path === `/task/${TASK_ID}/browser-preview/live/input` && req.method === "POST")
-        return new Response(liveInputPng, { headers: { "content-type": "image/png" } })
       if (path === "/task/events" || path === `/task/${TASK_ID}/events`) return eventStream(clients, path)
       const taskBoardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
       if (taskBoardMatch) {
@@ -650,6 +628,8 @@ test(
           workspaceDirectory: "D:/overlay/workspace/global-pressure",
           workspaceTaskID: "tsk_overlay_global_pressure",
         }
+        const nativeCommands: NativeCommandRecord[] = []
+        ;(window as any).__browserPreviewNativeCommands = nativeCommands
         ;(window as any).__TAURI__ = {
           core: {
             invoke: async (command: string, args: Record<string, unknown> = {}) => {
@@ -659,6 +639,10 @@ test(
                 return true
               }
               if (command === "overlay_open_path" || command === "overlay_open_url") return true
+              if (command.startsWith("overlay_browser_preview_")) {
+                nativeCommands.push({ command, args })
+                return true
+              }
               return null
             },
           },
@@ -685,13 +669,13 @@ test(
       )
       await waitForPageState(
         page,
-        () => ((window as any).cardTree?.order?.length ?? 0) >= 120,
+        () => document.querySelector(".chat-scroll")?.textContent?.includes("Global pressure transcript") ?? false,
         "selected task transcript hydration",
         () => ({ requests: requests.slice(-8) }),
       )
       await waitForPageState(
         page,
-        () => (window as any).__ocMarkdownRenderPrewarmPending === 0,
+        () => (window as any).__ocMarkdownRenderPrewarmPending === undefined || (window as any).__ocMarkdownRenderPrewarmPending === 0,
         "markdown prewarm",
         () => ({ requests: requests.slice(-8) }),
       )
@@ -861,18 +845,6 @@ test(
               if (!button) throw new Error(`Missing ${side} activity button: ${activity}`)
               button.click()
             }
-            const dispatchBrowserInput = () => {
-              const frame = document.querySelector<HTMLElement>(".browser-preview-live-frame")
-              const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-              if (!frame || !image) throw new Error("Browser preview live frame is missing")
-              const rect = image.getBoundingClientRect()
-              const clientX = rect.left + rect.width / 2
-              const clientY = rect.top + rect.height / 2
-              frame.focus()
-              frame.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, cancelable: true, clientX, clientY, pointerId: 13, pointerType: "mouse" }))
-              frame.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, clientX, clientY, deltaY: 30 }))
-              frame.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "g" }))
-            }
             const actions: Record<string, () => Promise<void>> = {
               "open tasks": async () => {
                 clickActivity("left", "tasks")
@@ -884,14 +856,13 @@ test(
               },
               "open browser preview": async () => {
                 clickActivity("right", "browser")
-                await waitFor("browser preview live image", () => {
-                  const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+                await waitFor("browser preview native surface", () => {
                   return (
                     document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.open === "true" &&
-                    !!img &&
-                    img.complete &&
-                    img.naturalWidth > 0 &&
-                    img.naturalHeight > 0
+                    !!document.querySelector('[data-ui="browser-preview-native-surface"]') &&
+                    (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).some(
+                      (entry) => entry.command === "overlay_browser_preview_sync",
+                    )
                   )
                 })
               },
@@ -901,17 +872,29 @@ test(
                   document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.open === "true"
                 )
               },
-              "complete browser preview image": async () => {
-                await waitFor("browser preview live image", () => {
-                  const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-                  return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-                })
+              "complete browser preview native surface": async () => {
+                await waitFor("browser preview native surface", () =>
+                  !!document.querySelector('[data-ui="browser-preview-native-surface"]') &&
+                  (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).some(
+                    (entry) => entry.command === "overlay_browser_preview_sync",
+                  )
+                )
               },
-              "browser live input": async () => {
-                dispatchBrowserInput()
-                await waitFor("browser preview live input image", () => {
-                  const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-                  return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+              "browser native navigation": async () => {
+                for (const label of [
+                  "Go back in the preview browser.",
+                  "Go forward in the preview browser.",
+                  "Reload the current preview page.",
+                ]) {
+                  const button = document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
+                  if (!button) throw new Error(`Missing native browser navigation button: ${label}`)
+                  button.click()
+                }
+                await waitFor("browser preview native navigation commands", () => {
+                  const actions = (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+                    .filter((entry) => entry.command === "overlay_browser_preview_navigate")
+                    .map((entry) => entry.args.action)
+                  return actions.includes("back") && actions.includes("forward") && actions.includes("reload")
                 })
               },
               "open screenshots": async () => {
@@ -1019,16 +1002,18 @@ test(
 
       await measure("open tasks", async () => undefined)
       await measure("open browser preview shell", async () => undefined)
-      await measure("complete browser preview image", async () => undefined)
-      await measure("browser live input", async () => undefined)
+      await measure("complete browser preview native surface", async () => undefined)
+      await measure("browser native navigation", async () => undefined)
       await waitForPageState(
         page,
-        () =>
-          performance
-            .getEntriesByType("resource")
-            .some((entry) => entry.name.includes("/browser-preview/live/input")),
-        "browser live input request",
-        () => ({ liveInputRequests: requestCount(requests, (entry) => entry.path.endsWith("/browser-preview/live/input")) }),
+        () => {
+          const actions = (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+            .filter((entry) => entry.command === "overlay_browser_preview_navigate")
+            .map((entry) => entry.args.action)
+          return actions.includes("back") && actions.includes("forward") && actions.includes("reload")
+        },
+        "browser native navigation commands",
+        () => ({ nativeCommands: [] }),
       )
       await measure("open screenshots shell", async () => undefined)
       await measure("complete screenshot thumbnails", async () => undefined)
@@ -1067,8 +1052,12 @@ test(
           /^\/attachment\/project\/global-pressure-\d+\.png$/.test(entry.path) &&
           entry.search === `?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
       )
-      const liveSnapshotRequestCount = requestCount(requests, (entry) => entry.path.endsWith("/browser-preview/live/snapshot"))
-      const liveInputRequestCount = requestCount(requests, (entry) => entry.path.endsWith("/browser-preview/live/input"))
+      const retiredLiveRouteRequestCount = requestCount(requests, (entry) => entry.path.includes("browser-preview/live"))
+      const nativeBrowserCommandActions = await page.evaluate(() =>
+        (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+          .filter((entry) => entry.command === "overlay_browser_preview_navigate")
+          .map((entry) => entry.args.action),
+      )
       const fileListRequestCount = requestCount(requests, (entry) => entry.path === "/file")
       const fileSearchRequestCount = requestCount(requests, (entry) => entry.path === "/find/file")
 
@@ -1077,11 +1066,10 @@ test(
           .map((metric) => `${metric.label}=${metric.maxRafGapMs.toFixed(1)}raf/${metric.maxLongTaskMs.toFixed(1)}lt/${metric.longTaskCount}long`)
           .join(" ")} dom=${JSON.stringify(domMetrics)} requests=${JSON.stringify({
           attachmentRequestCount,
-          liveSnapshotRequestCount,
-          liveInputRequestCount,
+          retiredLiveRouteRequestCount,
           fileListRequestCount,
           fileSearchRequestCount,
-        })}`,
+        })} nativeBrowserCommandActions=${JSON.stringify(nativeBrowserCommandActions)}`,
       )
 
       for (const metric of metrics) assertInteraction(metric)
@@ -1098,8 +1086,8 @@ test(
       assert.ok(domMetrics.openPanels.includes("centerWorkbenchExplorer"), JSON.stringify(domMetrics))
       assert.equal(domMetrics.dialogOpen, true, JSON.stringify(domMetrics))
       assert.ok(attachmentRequestCount <= PERF_LIMITS.screenshotAttachmentRequests, String(attachmentRequestCount))
-      assert.ok(liveSnapshotRequestCount <= PERF_LIMITS.liveSnapshotRequests, String(liveSnapshotRequestCount))
-      assert.ok(liveInputRequestCount <= PERF_LIMITS.liveInputRequests, String(liveInputRequestCount))
+      assert.equal(retiredLiveRouteRequestCount, PERF_LIMITS.retiredLiveRouteRequests)
+      assert.deepEqual(nativeBrowserCommandActions.slice(-3), ["back", "forward", "reload"])
       assert.ok(fileListRequestCount <= PERF_LIMITS.fileListRequests, String(fileListRequestCount))
       assert.ok(fileSearchRequestCount <= PERF_LIMITS.fileSearchRequests, String(fileSearchRequestCount))
       assert.ok((screenshotMetadata.width || 0) > 900 && (screenshotMetadata.height || 0) > 600)

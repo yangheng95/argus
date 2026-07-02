@@ -165,9 +165,22 @@ export type ProjectEditorID = (typeof PROJECT_EDITOR_IDS)[number]
 
 export type HostPermission = "granted" | "denied" | "default" | "unsupported"
 
+export interface BrowserPreviewNativeBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export const BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS = ["back", "forward", "reload"] as const
+export type BrowserPreviewNativeNavigationAction = (typeof BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS)[number]
+
 export type NativeCommand =
   | { kind: "open-url"; url: string }
   | { kind: "open-path"; path: string }
+  | { kind: "browserPreview.sync"; url: string; bounds: BrowserPreviewNativeBounds }
+  | { kind: "browserPreview.navigate"; action: BrowserPreviewNativeNavigationAction }
+  | { kind: "browserPreview.close" }
   | { kind: "settings.load" }
   | { kind: "settings.save"; payload: unknown }
   | { kind: "config.write-file"; path: string; content: string }
@@ -403,6 +416,12 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
       return typeof obj["url"] === "string"
     case "open-path":
       return typeof obj["path"] === "string"
+    case "browserPreview.sync":
+      return typeof obj["url"] === "string" && isBrowserPreviewNativeBounds(obj["bounds"])
+    case "browserPreview.navigate":
+      return (BROWSER_PREVIEW_NATIVE_NAVIGATION_ACTIONS as readonly string[]).includes(obj["action"] as string)
+    case "browserPreview.close":
+      return true
     case "settings.load":
       return true
     case "settings.save":
@@ -440,6 +459,23 @@ export function isNativeCommand(value: unknown): value is NativeCommand {
     default:
       return false
   }
+}
+
+function isBrowserPreviewNativeBounds(value: unknown): value is BrowserPreviewNativeBounds {
+  if (!value || typeof value !== "object") return false
+  const obj = value as Record<string, unknown>
+  return (
+    finiteNumber(obj["x"]) &&
+    finiteNumber(obj["y"]) &&
+    finiteNumber(obj["width"]) &&
+    finiteNumber(obj["height"]) &&
+    (obj["width"] as number) > 0 &&
+    (obj["height"] as number) > 0
+  )
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value)
 }
 
 // ── Body encoding helpers (Buffer-free; works in both webview + node) ──

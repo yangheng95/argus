@@ -39,6 +39,7 @@ const LOCAL_SERVER_HOST: &str = DEFAULT_SERVER_HOST;
 const TRAY_ID: &str = "main-tray";
 const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
+const BROWSER_PREVIEW_WEBVIEW_LABEL: &str = "browser-preview-live-webview";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const OVERLAY_WINDOW_WIDTH_FRACTION: f64 = 0.80;
@@ -642,6 +643,118 @@ fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
     }
     fs::write(p, content).map_err(|err| err.to_string())?;
     Ok(true)
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserPreviewBounds {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+fn validate_browser_preview_bounds(
+    bounds: BrowserPreviewBounds,
+) -> Result<BrowserPreviewBounds, String> {
+    if !bounds.x.is_finite()
+        || !bounds.y.is_finite()
+        || !bounds.width.is_finite()
+        || !bounds.height.is_finite()
+        || bounds.width <= 0.0
+        || bounds.height <= 0.0
+    {
+        return Err(
+            "browser preview webview bounds must contain finite x/y and positive width/height"
+                .to_string(),
+        );
+    }
+    Ok(bounds)
+}
+
+fn browser_preview_position(bounds: BrowserPreviewBounds) -> tauri::LogicalPosition<f64> {
+    tauri::LogicalPosition::new(bounds.x, bounds.y)
+}
+
+fn browser_preview_size(bounds: BrowserPreviewBounds) -> tauri::LogicalSize<f64> {
+    tauri::LogicalSize::new(bounds.width, bounds.height)
+}
+
+#[tauri::command]
+async fn overlay_browser_preview_sync<R: Runtime>(
+    app: AppHandle<R>,
+    url: String,
+    bounds: BrowserPreviewBounds,
+) -> Result<bool, String> {
+    let bounds = validate_browser_preview_bounds(bounds)?;
+    let target_url = tauri::Url::parse(url.trim()).map_err(|err| err.to_string())?;
+    let position = browser_preview_position(bounds);
+    let size = browser_preview_size(bounds);
+
+    if let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) {
+        webview
+            .set_position(position)
+            .map_err(|err| err.to_string())?;
+        webview.set_size(size).map_err(|err| err.to_string())?;
+        if webview.url().map_err(|err| err.to_string())? != target_url {
+            webview
+                .navigate(target_url)
+                .map_err(|err| err.to_string())?;
+        }
+        webview.show().map_err(|err| err.to_string())?;
+        return Ok(true);
+    }
+
+    let window = app
+        .get_window("main")
+        .ok_or_else(|| "main overlay window is unavailable".to_string())?;
+    let builder = tauri::webview::WebviewBuilder::<R>::new(
+        BROWSER_PREVIEW_WEBVIEW_LABEL,
+        tauri::WebviewUrl::External(target_url),
+    )
+    .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny);
+    let webview = window
+        .add_child(builder, position, size)
+        .map_err(|err| err.to_string())?;
+    webview
+        .set_auto_resize(false)
+        .map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+fn browser_preview_navigation_script(action: &str) -> Result<Option<&'static str>, String> {
+    match action {
+        "back" => Ok(Some("history.back();")),
+        "forward" => Ok(Some("history.forward();")),
+        "reload" => Ok(None),
+        _ => Err(format!(
+            "unsupported browser preview navigation action: {action}"
+        )),
+    }
+}
+
+#[tauri::command]
+fn overlay_browser_preview_navigate<R: Runtime>(
+    app: AppHandle<R>,
+    action: String,
+) -> Result<bool, String> {
+    let webview = app
+        .get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL)
+        .ok_or_else(|| "browser preview webview is not mounted".to_string())?;
+    match browser_preview_navigation_script(action.trim())? {
+        Some(script) => webview.eval(script).map_err(|err| err.to_string())?,
+        None => webview.reload().map_err(|err| err.to_string())?,
+    }
+    Ok(true)
+}
+
+#[tauri::command]
+fn overlay_browser_preview_close<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    if let Some(webview) = app.get_webview(BROWSER_PREVIEW_WEBVIEW_LABEL) {
+        webview.close().map_err(|err| err.to_string())?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 #[tauri::command]
@@ -1614,6 +1727,9 @@ fn main() {
         overlay_open_url,
         overlay_open_project_editor,
         overlay_write_file,
+        overlay_browser_preview_sync,
+        overlay_browser_preview_navigate,
+        overlay_browser_preview_close,
         overlay_pick_dir,
         overlay_pick_files,
         overlay_attention_set,
@@ -1632,6 +1748,9 @@ fn main() {
         overlay_open_url,
         overlay_open_project_editor,
         overlay_write_file,
+        overlay_browser_preview_sync,
+        overlay_browser_preview_navigate,
+        overlay_browser_preview_close,
         overlay_pick_dir,
         overlay_pick_files,
         overlay_attention_set,
@@ -2119,6 +2238,45 @@ mod tests {
         assert_eq!(parsed.username, settings.username);
         assert_eq!(parsed.password, settings.password);
         assert_eq!(parsed.auto_server, settings.auto_server);
+    }
+
+    #[test]
+    fn browser_preview_bounds_require_finite_positive_size() {
+        assert!(validate_browser_preview_bounds(BrowserPreviewBounds {
+            x: 0.0,
+            y: 12.0,
+            width: 640.0,
+            height: 480.0,
+        })
+        .is_ok());
+        assert!(validate_browser_preview_bounds(BrowserPreviewBounds {
+            x: f64::INFINITY,
+            y: 12.0,
+            width: 640.0,
+            height: 480.0,
+        })
+        .is_err());
+        assert!(validate_browser_preview_bounds(BrowserPreviewBounds {
+            x: 0.0,
+            y: 12.0,
+            width: 0.0,
+            height: 480.0,
+        })
+        .is_err());
+    }
+
+    #[test]
+    fn browser_preview_navigation_actions_are_exact() {
+        assert_eq!(
+            browser_preview_navigation_script("back").unwrap(),
+            Some("history.back();")
+        );
+        assert_eq!(
+            browser_preview_navigation_script("forward").unwrap(),
+            Some("history.forward();")
+        );
+        assert_eq!(browser_preview_navigation_script("reload").unwrap(), None);
+        assert!(browser_preview_navigation_script("stop").is_err());
     }
 
     /// W2-V35 — `sidecar_cwd_dir()` MUST never resolve to `/` (macOS app

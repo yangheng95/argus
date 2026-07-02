@@ -31,6 +31,9 @@ function productionSourceFiles(root: string): string[] {
 const NATIVE_COMMAND_KINDS: NativeCommandKind[] = [
   "open-url",
   "open-path",
+  "browserPreview.sync",
+  "browserPreview.navigate",
+  "browserPreview.close",
   "settings.load",
   "settings.save",
   "config.write-file",

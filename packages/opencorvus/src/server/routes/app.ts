@@ -43,7 +43,6 @@ import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { startServerRestart } from "../restart"
 import { AppDocumentation } from "./documentation"
 import { serverErrorResponse } from "../error-handler"
-import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import { Event as ServerEvent, payload as serverEventPayload } from "../event"
 
 const log = Log.create({ service: "server" })
@@ -219,7 +218,6 @@ export function AppRoutes(root: Hono) {
         if (hasActiveSessions()) {
           throw activeExecutorSessionsError("instance.dispose")
         }
-        await closeBrowserPreviewLiveSessions()
         await Instance.dispose()
         return c.json(true)
       },

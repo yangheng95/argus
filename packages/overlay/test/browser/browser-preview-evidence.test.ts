@@ -136,8 +136,6 @@ test(
     const evidenceID = "art_previewevidence_desktop"
     const projectRoot = "D:/overlay/workspace/app"
     const captureBodies: unknown[] = []
-    const liveSnapshotBodies: unknown[] = []
-    const liveInputBodies: unknown[] = []
     const selectedTargets: unknown[] = []
     const errors: string[] = []
     const requestLog: string[] = []
@@ -415,18 +413,6 @@ test(
           ],
         })
       }
-      if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
-        liveSnapshotBodies.push(await req.json())
-        return new Response(pngBytes, {
-          headers: { "content-type": "image/png" },
-        })
-      }
-      if (path === `/task/${taskID}/browser-preview/live/input` && req.method === "POST") {
-        liveInputBodies.push(await req.json())
-        return new Response(pngBytes, {
-          headers: { "content-type": "image/png" },
-        })
-      }
       if (path === `/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`) {
         return new Response(pngBytes, {
           headers: { "content-type": "image/png" },
@@ -677,7 +663,6 @@ test(
     const requestLog: string[] = []
     const errors: string[] = []
     const captureBodies: unknown[] = []
-    const liveSnapshotBodies: unknown[] = []
     const pngBytes = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
       "base64",
@@ -839,10 +824,6 @@ test(
           evidenceIDs: {},
           diagnostics: [],
         })
-      }
-      if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
-        liveSnapshotBodies.push(await req.json())
-        return new Response(pngBytes, { headers: { "content-type": "image/png" } })
       }
       const evidenceMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)$`))
       if (evidenceMatch) {
@@ -1009,7 +990,11 @@ test(
       assert.match(text, /persisted mobile evidence passed/)
       assert.doesNotMatch(text, /persisted desktop evidence passed/)
       assert.deepEqual(captureBodies, [])
-      assert.deepEqual(liveSnapshotBodies, [])
+      assert.equal(
+        requestLog.some((entry) => entry.includes("/browser-preview/live/")),
+        false,
+        `persisted evidence restore must not call retired PNG live routes: ${JSON.stringify(requestLog, null, 2)}`,
+      )
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

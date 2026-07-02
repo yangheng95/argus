@@ -19,10 +19,6 @@ import type {
   BrowserPreviewCaptureTaskTargetResponses,
   BrowserPreviewCompareTaskTargetRegionsErrors,
   BrowserPreviewCompareTaskTargetRegionsResponses,
-  BrowserPreviewLiveInputErrors,
-  BrowserPreviewLiveInputResponses,
-  BrowserPreviewLiveSnapshotErrors,
-  BrowserPreviewLiveSnapshotResponses,
   BrowserPreviewReadTaskEvidenceArtifactErrors,
   BrowserPreviewReadTaskEvidenceArtifactResponses,
   BrowserPreviewReadTaskEvidenceCaptureErrors,
@@ -6220,112 +6216,6 @@ export class BrowserPreview extends HeyApiClient {
       ThrowOnError
     >({
       url: "/task/{taskID}/browser-preview/compare",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Capture interactive browser preview snapshot
-   *
-   * Return a PNG frame from the task-scoped Playwright live preview session for a persisted browser preview target.
-   */
-  public liveSnapshot<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      targetID: string
-      viewportID: "desktop" | "tablet" | "mobile"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "targetID" },
-            { in: "body", key: "viewportID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      BrowserPreviewLiveSnapshotResponses,
-      BrowserPreviewLiveSnapshotErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/live/snapshot",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Send input to interactive browser preview
-   *
-   * Apply pointer, wheel, or keyboard input to the task-scoped Playwright live preview session and return the next PNG frame.
-   */
-  public liveInput<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-      targetID: string
-      viewportID: "desktop" | "tablet" | "mobile"
-      inputs: Array<
-        | {
-            kind: "click"
-            x: number
-            y: number
-            button?: "left" | "middle" | "right"
-          }
-        | {
-            kind: "wheel"
-            x: number
-            y: number
-            deltaX: number
-            deltaY: number
-          }
-        | {
-            kind: "key"
-            key: string
-          }
-      >
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "targetID" },
-            { in: "body", key: "viewportID" },
-            { in: "body", key: "inputs" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      BrowserPreviewLiveInputResponses,
-      BrowserPreviewLiveInputErrors,
-      ThrowOnError
-    >({
-      url: "/task/{taskID}/browser-preview/live/input",
       ...options,
       ...params,
       headers: {

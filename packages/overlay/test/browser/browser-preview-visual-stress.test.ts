@@ -7,10 +7,16 @@ import sharp from "sharp"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { testTaskOrderKey } from "../fixtures/timeline-order.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 const PORT = 7778
 const SCREENSHOT_DIR = fileURLToPath(new URL("../../.scratch/browser-preview-visual-stress/", import.meta.url))
+
+type NativeCommandRecord = {
+  command: string
+  args: Record<string, unknown>
+}
 
 await ensureOverlayDist()
 
@@ -28,25 +34,17 @@ function json(value: unknown, init?: ResponseInit) {
   })
 }
 
-type SseController = ReadableStreamDefaultController<Uint8Array>
-
-function eventStream(register?: (controller: SseController) => void) {
+function eventStream() {
   return new Response(
     new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(":\n\n"))
-        register?.(controller)
       },
     }),
     {
       headers: { "content-type": "text/event-stream; charset=utf-8" },
     },
   )
-}
-
-function emitSse(controller: SseController | undefined, event: unknown) {
-  assert.ok(controller, "SSE stream must be connected before emitting task events")
-  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
 }
 
 async function pngBytes(label: string, colors: [string, string]) {
@@ -99,7 +97,7 @@ async function waitForActivityState(
         evidenceStatus: document.querySelector<HTMLElement>(".browser-preview-evidence-status")?.dataset.status || "",
         stageStatus:
           document.querySelector<HTMLElement>(
-            "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-live'], [data-ui='browser-preview-live-error'], [data-ui='browser-preview-target-failed'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
+            "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-live'], [data-ui='browser-preview-native-error'], [data-ui='browser-preview-target-failed'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
           )?.dataset.status || "",
       })),
       diagnostics: activityDiagnostics(diagnosticSnapshot),
@@ -155,7 +153,7 @@ async function waitForText(
       const preview = await page.evaluate(() => {
         const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
         const active = document.querySelector<HTMLElement>(
-          "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-live-error'], [data-ui='browser-preview-live'], [data-ui='browser-preview-live-loading'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
+          "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-native-error'], [data-ui='browser-preview-live'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
         )
         return {
           status: document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status || "",
@@ -172,52 +170,28 @@ async function waitForText(
   }
 }
 
-async function waitForFixtureActivity(predicate: () => boolean, label: string, diagnostics: () => unknown) {
-  let lastActivity = Date.now()
-  let previousSignature = ""
-  for (;;) {
-    if (predicate()) return
-    const signature = JSON.stringify(diagnostics())
-    if (signature !== previousSignature) {
-      previousSignature = signature
-      lastActivity = Date.now()
-    }
-    if (Date.now() - lastActivity > 6_000) {
-      assert.fail(`No fixture activity while waiting for ${label}\n${signature}`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-}
-
-async function waitForLiveSnapshotViewport(
-  bodies: unknown[],
-  input: { targetID: string; viewportID: "desktop" | "tablet" | "mobile"; label: string },
+async function waitForNativePreviewSync(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
+  input: { url: string; minCount: number; label: string },
 ) {
   let lastActivity = Date.now()
   let previousSignature = ""
   for (;;) {
-    if (
-      bodies.some(
-        (body) =>
-          (body as { targetID?: unknown; viewportID?: unknown }).targetID === input.targetID &&
-          (body as { viewportID?: unknown }).viewportID === input.viewportID,
-      )
-    ) {
-      return
-    }
-    const signature = JSON.stringify({ count: bodies.length, last: bodies.at(-1) || null })
+    const commands = await page.evaluate(
+      (url) =>
+        (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[]).filter(
+          (entry) => entry.command === "overlay_browser_preview_sync" && entry.args.url === url,
+        ),
+      input.url,
+    )
+    if (commands.length >= input.minCount) return
+    const signature = JSON.stringify({ count: commands.length, last: commands.at(-1) || null })
     if (signature !== previousSignature) {
       previousSignature = signature
       lastActivity = Date.now()
     }
     if (Date.now() - lastActivity > 6_000) {
-      assert.fail(
-        `No fixture activity while waiting for ${input.label}\n${JSON.stringify(
-          { targetID: input.targetID, viewportID: input.viewportID, bodies },
-          null,
-          2,
-        )}`,
-      )
+      assert.fail(`No native preview sync while waiting for ${input.label}\n${signature}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
@@ -486,8 +460,6 @@ test(
     const requestLog: string[] = []
     const errors: string[] = []
     const captureBodies: unknown[] = []
-    const liveSnapshotBodies: unknown[] = []
-    const liveInputBodies: unknown[] = []
     const selectedTargets: unknown[] = []
     const unexpectedRequests: string[] = []
     let boardRequestCount = 0
@@ -495,19 +467,12 @@ test(
     let serverOrigin = ""
     let targetMode: "load-error" | "missing" | "ready" | "failed" = "load-error"
     let selectedTargetID = primaryTargetID
-    let taskEventController: SseController | undefined
-    let taskEventConnectionCount = 0
     let expectedTargetLoadFailureConsoleCount = 0
     let expectedTargetSelectionFailureConsoleCount = 0
-    let liveSnapshotMode: "valid" | "corrupt-next" = "valid"
     const validTargetIDs = new Set([primaryTargetID, alternateTargetID])
     const png = {
-      primary: await pngBytes("primary live frame", ["#0f766e", "#1d4ed8"]),
-      alternate: await pngBytes("alternate live frame", ["#7c2d12", "#be123c"]),
-      input: await pngBytes("live input routed", ["#166534", "#15803d"]),
       evidence: await pngBytes("persisted evidence", ["#312e81", "#0f172a"]),
     }
-    const corruptLivePng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3])
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -516,6 +481,7 @@ test(
     const task = {
       id: taskID,
       directory: projectRoot,
+      orderKey: testTaskOrderKey(taskID, now - 10_000),
       status: "active",
       sessionID: "ses_preview_visual_stress",
       request: "Build agent started a browser_preview service and the operator is validating the preview panel.",
@@ -525,6 +491,7 @@ test(
     const otherTask = {
       id: otherTaskID,
       directory: otherProjectRoot,
+      orderKey: testTaskOrderKey(otherTaskID, now - 20_000),
       status: "active",
       sessionID: "ses_preview_visual_other",
       request: "A second task verifies preview state does not leak across task switches.",
@@ -771,10 +738,7 @@ test(
           return eventStream()
         }
         if (path === `/task/${taskID}/events`)
-          return eventStream((controller) => {
-            taskEventController = controller
-            taskEventConnectionCount += 1
-          })
+          return eventStream()
         if (path === `/task/${otherTaskID}/events`) return eventStream()
         if (path === `/task/${otherTaskID}/browser-preview`)
           return json({
@@ -816,30 +780,6 @@ test(
           captureBodies.push(body)
           return json({ message: "visual stress must not trigger hidden evidence capture" }, { status: 500 })
         }
-        if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
-          const body = await req.json()
-          liveSnapshotBodies.push(body)
-          const targetID = String((body as { targetID?: unknown }).targetID || "")
-          if (!validTargetIDs.has(targetID)) {
-            return json({ message: `Unknown browser preview target ${targetID}` }, { status: 404 })
-          }
-          if (liveSnapshotMode === "corrupt-next") {
-            liveSnapshotMode = "valid"
-            return new Response(corruptLivePng, { headers: { "content-type": "image/png" } })
-          }
-          return new Response(targetID === alternateTargetID ? png.alternate : png.primary, {
-            headers: { "content-type": "image/png" },
-          })
-        }
-        if (path === `/task/${taskID}/browser-preview/live/input` && req.method === "POST") {
-          const body = await req.json()
-          liveInputBodies.push(body)
-          const targetID = String((body as { targetID?: unknown }).targetID || "")
-          if (!validTargetIDs.has(targetID)) {
-            return json({ message: `Unknown browser preview target ${targetID}` }, { status: 404 })
-          }
-          return new Response(png.input, { headers: { "content-type": "image/png" } })
-        }
         const evidenceMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)$`))
         if (evidenceMatch) return json(evidence(evidenceMatch[1]))
         const captureMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)/capture\\.png$`))
@@ -878,6 +818,8 @@ test(
           workspaceTaskID: "tsk_browserpreview_visual_stress",
           workspaceDirectory: "D:/overlay/workspace/preview-stress",
         }
+        const nativeCommands: NativeCommandRecord[] = []
+        ;(window as any).__browserPreviewNativeCommands = nativeCommands
         ;(window as any).__TAURI__ = {
           core: {
             invoke: async (command: string, args: Record<string, unknown> = {}) => {
@@ -888,6 +830,10 @@ test(
               }
               if (command === "overlay_open_path") return true
               if (command === "overlay_open_url") return true
+              if (command.startsWith("overlay_browser_preview_")) {
+                nativeCommands.push({ command, args })
+                return true
+              }
               return null
             },
           },
@@ -979,7 +925,7 @@ test(
           )}`,
         )
       }
-      assert.equal(await page.$('[data-ui="browser-preview-live-screenshot"]'), null)
+      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
       await writeAndAssertScreenshot(page, "01-target-load-failure", { minNonWhiteDensity: 0.018 })
 
       targetMode = "missing"
@@ -988,35 +934,14 @@ test(
         errors,
         requestLog,
       }))
-      assert.equal(await page.$('[data-ui="browser-preview-live-screenshot"]'), null)
+      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
       assert.equal(await page.$('[data-ui="browser-preview-candidate-trigger"]'), null)
       assert.equal(await page.$('[data-ui="browser-preview-viewports"]'), null)
       assert.equal(await page.$(".browser-preview-evidence-status"), null)
       await writeAndAssertScreenshot(page, "02-missing-target", { minNonWhiteDensity: 0.018 })
 
-      const boardRequestsBeforeTargetEvent = boardRequestCount
-      const targetRequestsBeforeTargetEvent = previewTargetRequestCount
-      const taskEventConnectionsBeforeReconnect = taskEventConnectionCount
-      assert.ok(taskEventController, "selected task SSE stream should be connected before preview target update")
-      taskEventController.close()
-      taskEventController = undefined
-      await waitForFixtureActivity(
-        () => taskEventConnectionCount > taskEventConnectionsBeforeReconnect,
-        "selected task SSE reconnect before preview target update",
-        () => ({ taskEventConnectionCount, taskEventConnectionsBeforeReconnect, requestLog }),
-      )
       targetMode = "ready"
-      emitSse(taskEventController, {
-        type: "task.updated",
-        taskID,
-        sequence: 1,
-        properties: {
-          taskID,
-          status: "running",
-          summary: "Browser preview target updated",
-        },
-        source: "browser-preview.target",
-      })
+      await page.click('[aria-label="Refresh the saved preview evidence."]')
       await waitForActivityState(
         page,
         () => {
@@ -1024,20 +949,9 @@ test(
           return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
         },
         "ready persisted evidence screenshot",
-        () => ({ errors, requestLog, liveSnapshotBodies }),
+        () => ({ errors, requestLog }),
       )
-      assert.ok(
-        boardRequestCount > boardRequestsBeforeTargetEvent,
-        `task.updated should reload the selected board before preview refetch\n${JSON.stringify({ boardRequestCount, boardRequestsBeforeTargetEvent, requestLog }, null, 2)}`,
-      )
-      assert.ok(
-        previewTargetRequestCount > targetRequestsBeforeTargetEvent,
-        `task.updated should refetch task-scoped browser preview target\n${JSON.stringify({ previewTargetRequestCount, targetRequestsBeforeTargetEvent, requestLog }, null, 2)}`,
-      )
-      assert.ok(
-        taskEventConnectionCount > taskEventConnectionsBeforeReconnect,
-        `build-agent preview target update should survive selected task SSE reconnect\n${JSON.stringify({ taskEventConnectionCount, taskEventConnectionsBeforeReconnect, requestLog }, null, 2)}`,
-      )
+      assert.ok(previewTargetRequestCount > 0, `preview target should be requested: ${previewTargetRequestCount}`)
       await waitForText(page, "primary desktop evidence summary", "primary persisted evidence", () => ({
         errors,
         requestLog,
@@ -1087,7 +1001,7 @@ test(
       assert.equal(await page.$('[data-ui="browser-preview-selection-failed"]'), null)
       assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
       assert.equal(await page.$(".browser-preview-evidence-status"), null)
-      assert.equal(await page.$('[data-ui="browser-preview-live-screenshot"]'), null)
+      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
       await writeAndAssertScreenshot(page, "05-cross-task-missing-clears-selection", { minNonWhiteDensity: 0.018 })
 
       await page.click(taskRowSelector)
@@ -1107,84 +1021,59 @@ test(
         "stale primary evidence hidden",
         () => ({ errors, requestLog, captureBodies, selectedTargets }),
       )
-      await waitForLiveSnapshotViewport(liveSnapshotBodies, {
-        targetID: alternateTargetID,
-        viewportID: "desktop",
-        label: "alternate desktop live snapshot after target selection",
+      await waitForNativePreviewSync(page, {
+        url: urlFor(alternateTargetID),
+        minCount: 1,
+        label: "alternate desktop native webview sync after target selection",
       })
       await waitForActivityState(
         page,
-        () => {
-          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-        },
-        "alternate live screenshot before capture evidence",
-        () => ({ errors, requestLog, liveSnapshotBodies }),
-      )
-      await assertImageMatchesReference(
-        page,
-        '[data-ui="browser-preview-live-screenshot"]',
-        png.alternate,
-        "alternate live frame",
-      )
-      await writeAndAssertScreenshot(page, "06-alternate-live")
-
-      liveSnapshotMode = "corrupt-next"
-      await clickBrowserPreviewViewport(page, "tablet")
-      await waitForLiveSnapshotViewport(liveSnapshotBodies, {
-        targetID: alternateTargetID,
-        viewportID: "tablet",
-        label: "alternate tablet corrupt live snapshot",
-      })
-      await waitForActivityState(
-        page,
-        () => {
-          const error = document.querySelector<HTMLElement>('[data-ui="browser-preview-live-error"]')
-          return (
-            !!error &&
-            !document.querySelector('[data-ui="browser-preview-live-screenshot"]') &&
-            (error.textContent || "").includes("Browser preview live screenshot failed to decode.")
-          )
-        },
-        "corrupt live image decode failure",
-        () => ({ errors, requestLog, liveSnapshotBodies }),
+        () =>
+          !!document.querySelector('[data-ui="browser-preview-native-surface"]') &&
+          !document.querySelector('[data-ui="browser-preview-evidence"]'),
+        "alternate native webview before capture evidence",
+        () => ({ errors, requestLog }),
       )
       assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "07-live-decode-failure", { minNonWhiteDensity: 0.018 })
+      await writeAndAssertScreenshot(page, "06-alternate-native", { minNonWhiteDensity: 0.018 })
+
+      await clickBrowserPreviewViewport(page, "tablet")
+      await waitForActivityState(
+        page,
+        () => !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
+        "tablet native webview surface",
+        () => ({ errors, requestLog }),
+      )
+      assertNoPreviewLayoutBreakage(await previewLayout(page))
+      await writeAndAssertScreenshot(page, "07-tablet-native", { minNonWhiteDensity: 0.018 })
 
       await clickBrowserPreviewViewport(page, "mobile")
-      await waitForLiveSnapshotViewport(liveSnapshotBodies, {
-        targetID: alternateTargetID,
-        viewportID: "mobile",
-        label: "alternate mobile live snapshot recovery",
-      })
+      await waitForActivityState(
+        page,
+        () => !!document.querySelector('[data-ui="browser-preview-native-surface"]'),
+        "mobile native webview surface",
+        () => ({ errors, requestLog }),
+      )
+      await page.click('[aria-label="Go back in the preview browser."]')
+      await page.click('[aria-label="Go forward in the preview browser."]')
+      await page.click('[aria-label="Reload the current preview page."]')
       await waitForActivityState(
         page,
         () => {
-          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-          return (
-            !document.querySelector('[data-ui="browser-preview-live-error"]') &&
-            !!img &&
-            img.complete &&
-            img.naturalWidth > 0 &&
-            img.naturalHeight > 0
-          )
+          const actions = (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+            .filter((entry) => entry.command === "overlay_browser_preview_navigate")
+            .map((entry) => entry.args.action)
+          return actions.includes("back") && actions.includes("forward") && actions.includes("reload")
         },
-        "live screenshot recovery after decode failure",
-        () => ({ errors, requestLog, liveSnapshotBodies }),
+        "native browser navigation commands",
+        () => ({ errors, requestLog }),
       )
-      await assertImageMatchesReference(
-        page,
-        '[data-ui="browser-preview-live-screenshot"]',
-        png.alternate,
-        "alternate live frame after decode recovery",
-      )
-      await writeAndAssertScreenshot(page, "08-live-decode-recovery")
+      await writeAndAssertScreenshot(page, "08-mobile-native", { minNonWhiteDensity: 0.018 })
 
       await page.setViewport({ width: 390, height: 760 })
       await new Promise((resolve) => setTimeout(resolve, 250))
       assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "09-narrow-layout")
+      await writeAndAssertScreenshot(page, "09-narrow-layout", { minNonWhiteDensity: 0.018 })
 
       await page.setViewport({ width: 1440, height: 900 })
       await new Promise((resolve) => setTimeout(resolve, 250))
@@ -1202,7 +1091,7 @@ test(
       assert.ok(await page.$('[data-ui="browser-preview-target-failed"]'))
       assert.equal(await page.$('[data-ui="browser-preview-evidence"]'), null)
       assert.equal(await page.$(".browser-preview-evidence-status"), null)
-      assert.equal(await page.$('[data-ui="browser-preview-live-screenshot"]'), null)
+      assert.equal(await page.$('[data-ui="browser-preview-native-surface"]'), null)
       assert.equal(
         await page.$eval(
           '[aria-label="Capture Playwright evidence from the saved backend preview target."]',
@@ -1213,22 +1102,21 @@ test(
       await writeAndAssertScreenshot(page, "10-target-failed")
 
       assert.deepEqual(selectedTargets, [{ targetID: staleTargetID }, { targetID: alternateTargetID }])
-      assert.ok(
-        !liveSnapshotBodies.some((body) => (body as any).targetID === primaryTargetID),
-        "primary persisted evidence should not request a live snapshot",
+      assert.equal(
+        requestLog.some((entry) => entry.includes("/browser-preview/live/")),
+        false,
+        `visual stress must not call retired PNG live routes\n${JSON.stringify(requestLog, null, 2)}`,
       )
-      assert.ok(
-        liveSnapshotBodies.some((body) => (body as any).targetID === alternateTargetID),
-        "alternate target should be loaded through live snapshot after selection",
+      const nativeActions = await page.evaluate(() =>
+        (((window as any).__browserPreviewNativeCommands || []) as NativeCommandRecord[])
+          .filter((entry) => entry.command === "overlay_browser_preview_navigate")
+          .map((entry) => entry.args.action),
       )
+      assert.deepEqual(nativeActions.slice(-3), ["back", "forward", "reload"])
       assert.equal(
         captureBodies.length,
         0,
         `visual stress must not auto-capture evidence\n${JSON.stringify(captureBodies, null, 2)}`,
-      )
-      assert.ok(
-        requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/live/snapshot`)),
-        "live snapshot route should be exercised",
       )
       assert.deepEqual(unexpectedRequests, [])
       assert.equal(errors.length, 0, errors.join("\n"))

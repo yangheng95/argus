@@ -4,7 +4,6 @@ import { withNetworkOptions, resolveNetworkOptions, type NetworkOptions } from "
 import { Flag } from "../../flag/flag"
 import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../server/shutdown"
 import { stopServerWithTimeout } from "../../server/stop"
-import { closeBrowserPreviewLiveSessions } from "../../browser-preview/live"
 import type { ArgumentsCamelCase } from "yargs"
 
 /** Hide the console window on Windows using Win32 API. */
@@ -82,11 +81,6 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
         )
       } catch (error) {
         console.error("[serve] graceful shutdown abort failed:", error)
-      }
-      try {
-        await closeBrowserPreviewLiveSessions()
-      } catch (error) {
-        console.error("[serve] browser preview shutdown failed:", error)
       }
       await stopServerWithTimeout({
         stop: () => server.stop(true),

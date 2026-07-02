@@ -3,12 +3,10 @@ import { and, eq } from "drizzle-orm"
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { PNG } from "pngjs"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Server } from "../../src/server/server"
-import { closeBrowserPreviewLiveSessions } from "../../src/browser-preview/live"
 import {
   BROWSER_PREVIEW_EVIDENCE_KIND,
   latestBrowserPreviewEvidenceIDs,
@@ -28,7 +26,6 @@ const ROUTE_BROWSER_PREVIEW_JOB_ID = "artifact_route_test_job"
 
 describe("browser preview routes", () => {
   afterEach(async () => {
-    await closeBrowserPreviewLiveSessions()
     mock.restore()
     await resetDatabase()
   })
@@ -69,27 +66,6 @@ describe("browser preview routes", () => {
         )
       },
     })
-  }
-
-  function centerPixel(bytes: Buffer): [number, number, number, number] {
-    const png = PNG.sync.read(bytes)
-    const x = Math.floor(png.width / 2)
-    const y = Math.floor(png.height / 2)
-    const offset = (y * png.width + x) * 4
-    return [png.data[offset]!, png.data[offset + 1]!, png.data[offset + 2]!, png.data[offset + 3]!]
-  }
-
-  function expectCenterColor(bytes: Buffer, color: "red" | "blue") {
-    const [red, green, blue] = centerPixel(bytes)
-    if (color === "red") {
-      expect(red).toBeGreaterThan(200)
-      expect(green).toBeLessThan(80)
-      expect(blue).toBeLessThan(80)
-    } else {
-      expect(red).toBeLessThan(80)
-      expect(green).toBeLessThan(80)
-      expect(blue).toBeGreaterThan(200)
-    }
   }
 
   async function browserPreviewArtifactPath(directory: string, taskID: string, name: string): Promise<string> {
@@ -1009,39 +985,6 @@ describe("browser preview routes", () => {
           body: { targetID: target.id, viewportIDs: ["desktop"], url: "http://127.0.0.1:5173/" },
           field: "url",
         },
-        {
-          path: `/task/${taskID}/browser-preview/live/snapshot`,
-          body: { targetID: target.id, viewportID: "desktop", outDir: ".opencorvus/other" },
-          field: "outDir",
-        },
-        {
-          path: `/task/${taskID}/browser-preview/live/input`,
-          body: {
-            targetID: target.id,
-            viewportID: "desktop",
-            inputs: [{ kind: "click", x: 1, y: 1 }],
-            url: "http://127.0.0.1:5173/",
-          },
-          field: "url",
-        },
-        {
-          path: `/task/${taskID}/browser-preview/live/input`,
-          body: {
-            targetID: target.id,
-            viewportID: "desktop",
-            inputs: [{ kind: "click", x: 1, y: 1, outDir: ".opencorvus/other" }],
-          },
-          field: "outDir",
-        },
-        {
-          path: `/task/${taskID}/browser-preview/live/input`,
-          body: {
-            targetID: target.id,
-            viewportID: "desktop",
-            input: { kind: "click", x: 1, y: 1 },
-          },
-          field: "inputs",
-        },
       ] as const
 
       for (const item of cases) {
@@ -1164,378 +1107,33 @@ describe("browser preview routes", () => {
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
 
-  test(
-    "POST /task/:taskID/browser-preview/live/snapshot returns a PNG from the persisted target",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const target = await persistTestBrowserPreviewTarget({
-        taskID,
-        url: `data:text/html,${encodeURIComponent(`<!doctype html><html><body><button>Live</button><main>${"Preview ".repeat(80)}</main></body></html>`)}`,
-      })
-      const app = Server.App()
-      const response = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({ targetID: target.id, viewportID: "mobile" }),
-      })
+  test("retired browser preview PNG live routes are not mounted", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const app = Server.App()
+    const headers = {
+      "content-type": "application/json",
+      "x-opencorvus-directory": tmp.path,
+    }
 
-      expect(response.status).toBe(200)
-      expect(response.headers.get("content-type")).toBe("image/png")
-      const bytes = Buffer.from(await response.arrayBuffer())
-      expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
-    },
-    { timeout: 60_000 },
-  )
+    const snapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportID: "desktop" }),
+    })
+    const input = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        targetID: "art_previewtarget_missing",
+        viewportID: "desktop",
+        inputs: [{ kind: "click", x: 1, y: 1 }],
+      }),
+    })
 
-  test(
-    "POST /task/:taskID/browser-preview/live/snapshot preserves the active same-target page",
-    async () => {
-      await using tmp = await tmpdir()
-      let hitCount = 0
-      const preview = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        fetch(request) {
-          if (new URL(request.url).pathname !== "/live") return new Response("", { status: 404 })
-          hitCount += 1
-          const background = hitCount === 1 ? "#b91c1c" : "#047857"
-          return new Response(
-            `<!doctype html><html><head><title>Live ${hitCount}</title><style>body{margin:0;background:${background};color:white;font:32px Arial,sans-serif}</style></head><body><main>Live frame ${hitCount}</main></body></html>`,
-            {
-              headers: {
-                "content-type": "text/html",
-                "cache-control": "no-store",
-              },
-            },
-          )
-        },
-      })
-      try {
-        const taskID = await seedTask(tmp.path)
-        const target = await persistTestBrowserPreviewTarget({
-          taskID,
-          url: `http://127.0.0.1:${preview.port}/live`,
-        })
-        const app = Server.App()
-        const body = JSON.stringify({ targetID: target.id, viewportID: "desktop" })
-
-        const first = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-opencorvus-directory": tmp.path,
-          },
-          body,
-        })
-        const second = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-opencorvus-directory": tmp.path,
-          },
-          body,
-        })
-
-        expect(first.status).toBe(200)
-        expect(second.status).toBe(200)
-        expect(hitCount).toBe(1)
-        const firstHash = crypto
-          .createHash("sha256")
-          .update(Buffer.from(await first.arrayBuffer()))
-          .digest("hex")
-        const secondHash = crypto
-          .createHash("sha256")
-          .update(Buffer.from(await second.arrayBuffer()))
-          .digest("hex")
-        expect(secondHash).toBe(firstHash)
-      } finally {
-        preview.stop(true)
-      }
-    },
-    { timeout: 60_000 },
-  )
-
-  test(
-    "POST /task/:taskID/browser-preview/live/input preserves the active page between interactions",
-    async () => {
-      await using tmp = await tmpdir()
-      let pageHitCount = 0
-      const preview = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        fetch(request) {
-          if (new URL(request.url).pathname !== "/live-input") return new Response("", { status: 404 })
-          pageHitCount += 1
-          return new Response(
-            `<!doctype html><html><head><title>Interactive</title><style>body{margin:0;background:#111827;color:white;font:24px Arial,sans-serif}button{width:240px;height:88px;font:24px Arial,sans-serif}</style></head><body><button onclick="window.clicks=(window.clicks||0)+1;this.textContent='Clicks '+window.clicks">Clicks 0</button></body></html>`,
-            {
-              headers: {
-                "content-type": "text/html",
-                "cache-control": "no-store",
-              },
-            },
-          )
-        },
-      })
-      try {
-        const taskID = await seedTask(tmp.path)
-        const target = await persistTestBrowserPreviewTarget({
-          taskID,
-          url: `http://127.0.0.1:${preview.port}/live-input`,
-        })
-        const app = Server.App()
-        const headers = {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        }
-        const snapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ targetID: target.id, viewportID: "desktop" }),
-        })
-        expect(snapshot.status).toBe(200)
-
-        const firstInput = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            targetID: target.id,
-            viewportID: "desktop",
-            inputs: [{ kind: "click", x: 80, y: 40 }],
-          }),
-        })
-        const secondInput = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            targetID: target.id,
-            viewportID: "desktop",
-            inputs: [{ kind: "click", x: 80, y: 40 }],
-          }),
-        })
-
-        expect(firstInput.status).toBe(200)
-        expect(secondInput.status).toBe(200)
-        expect(pageHitCount).toBe(1)
-        const firstHash = crypto
-          .createHash("sha256")
-          .update(Buffer.from(await firstInput.arrayBuffer()))
-          .digest("hex")
-        const secondHash = crypto
-          .createHash("sha256")
-          .update(Buffer.from(await secondInput.arrayBuffer()))
-          .digest("hex")
-        expect(secondHash).not.toBe(firstHash)
-      } finally {
-        preview.stop(true)
-      }
-    },
-    { timeout: 60_000 },
-  )
-
-  test(
-    "POST /task/:taskID/browser-preview/live/input applies batched inputs in order",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const target = await persistTestBrowserPreviewTarget({
-        taskID,
-        url: `data:text/html,${encodeURIComponent(`<!doctype html>
-          <html>
-            <head>
-              <style>
-                html, body { margin: 0; width: 100%; height: 100%; background: rgb(32, 32, 32); }
-                button { position: absolute; top: 0; width: 120px; height: 120px; }
-                #first { left: 0; }
-                #second { left: 150px; }
-              </style>
-              <script>
-                window.firstCompleted = false
-                window.raceDetected = false
-                function paint(value) {
-                  document.body.style.background = value
-                }
-                function firstInput() {
-                  window.firstCompleted = true
-                  if (!window.raceDetected) paint('rgb(255, 0, 0)')
-                }
-                function secondInput() {
-                  if (window.firstCompleted) {
-                    paint('rgb(0, 0, 255)')
-                  } else {
-                    window.raceDetected = true
-                    paint('rgb(255, 0, 255)')
-                  }
-                }
-              </script>
-            </head>
-            <body>
-              <button id="first" onclick="firstInput()">First</button>
-              <button id="second" onclick="secondInput()">Second</button>
-            </body>
-          </html>`)}`,
-      })
-      const app = Server.App()
-      const headers = {
-        "content-type": "application/json",
-        "x-opencorvus-directory": tmp.path,
-      }
-
-      const response = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          targetID: target.id,
-          viewportID: "desktop",
-          inputs: [
-            { kind: "click", x: 60, y: 60 },
-            { kind: "click", x: 210, y: 60 },
-          ],
-        }),
-      })
-
-      expect(response.status).toBe(200)
-      expectCenterColor(Buffer.from(await response.arrayBuffer()), "blue")
-    },
-    { timeout: 60_000 },
-  )
-
-  test(
-    "POST /task/:taskID/browser-preview/live/input serializes concurrent same-session commands",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const target = await persistTestBrowserPreviewTarget({
-        taskID,
-        url: `data:text/html,${encodeURIComponent(`<!doctype html>
-          <html>
-            <head>
-              <style>
-                html, body { margin: 0; width: 100%; height: 100%; background: rgb(32, 32, 32); }
-                button { position: absolute; top: 0; width: 120px; height: 120px; }
-                #first { left: 0; }
-                #second { left: 150px; }
-              </style>
-              <script>
-                window.firstCompleted = false
-                window.raceDetected = false
-                function paint(value) {
-                  document.body.style.background = value
-                }
-                function firstInput() {
-                  setTimeout(() => {
-                    window.firstCompleted = true
-                    if (!window.raceDetected) paint('rgb(255, 0, 0)')
-                  }, 40)
-                }
-                function secondInput() {
-                  if (window.firstCompleted) {
-                    paint('rgb(0, 0, 255)')
-                  } else {
-                    window.raceDetected = true
-                    paint('rgb(255, 0, 255)')
-                  }
-                }
-              </script>
-            </head>
-            <body>
-              <button id="first" onclick="firstInput()">First</button>
-              <button id="second" onclick="secondInput()">Second</button>
-            </body>
-          </html>`)}`,
-      })
-      const app = Server.App()
-      const headers = {
-        "content-type": "application/json",
-        "x-opencorvus-directory": tmp.path,
-      }
-      const url = `/task/${taskID}/browser-preview/live/input`
-
-      const warm = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ targetID: target.id, viewportID: "desktop" }),
-      })
-      expect(warm.status).toBe(200)
-
-      const redRequest = app.request(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          targetID: target.id,
-          viewportID: "desktop",
-          inputs: [{ kind: "click", x: 60, y: 60 }],
-        }),
-      })
-      const blueRequest = app.request(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          targetID: target.id,
-          viewportID: "desktop",
-          inputs: [{ kind: "click", x: 210, y: 60 }],
-        }),
-      })
-
-      const [redResponse, blueResponse] = await Promise.all([redRequest, blueRequest])
-      expect(redResponse.status).toBe(200)
-      expect(blueResponse.status).toBe(200)
-      expectCenterColor(Buffer.from(await redResponse.arrayBuffer()), "red")
-      expectCenterColor(Buffer.from(await blueResponse.arrayBuffer()), "blue")
-
-      const finalSnapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ targetID: target.id, viewportID: "desktop" }),
-      })
-      expect(finalSnapshot.status).toBe(200)
-      expectCenterColor(Buffer.from(await finalSnapshot.arrayBuffer()), "blue")
-    },
-    { timeout: 60_000 },
-  )
-
-  test(
-    "POST /task/:taskID/browser-preview/live/input requires persisted target IDs",
-    async () => {
-      await using tmp = await tmpdir()
-      const taskID = await seedTask(tmp.path)
-      const app = Server.App()
-
-      const missingTargetID = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({
-          url: "http://127.0.0.1:5173/",
-          viewportID: "desktop",
-          inputs: [{ kind: "click", x: 1, y: 1 }],
-        }),
-      })
-      expect(missingTargetID.status).toBe(400)
-      expect(JSON.stringify(await missingTargetID.json())).toContain("targetID")
-
-      const unknownTarget = await app.request(`/task/${taskID}/browser-preview/live/input`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": tmp.path,
-        },
-        body: JSON.stringify({
-          targetID: "art_previewtarget_missing",
-          viewportID: "desktop",
-          inputs: [{ kind: "click", x: 1, y: 1 }],
-        }),
-      })
-      expect(unknownTarget.status).toBe(404)
-    },
-    { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
-  )
+    expect(snapshot.status).toBe(404)
+    expect(input.status).toBe(404)
+  })
 
   test(
     "POST /task/:taskID/browser-preview/capture rejects unknown target IDs before verification",

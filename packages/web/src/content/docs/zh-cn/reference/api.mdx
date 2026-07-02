@@ -112,8 +112,6 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceArtifact` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceCapture` |
-| POST | `/task/{taskID}/browser-preview/live/input` | Send input to interactive browser preview 请求体: `inputs`, `targetID`, `viewportID`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.liveInput` |
-| POST | `/task/{taskID}/browser-preview/live/snapshot` | Capture interactive browser preview snapshot 请求体: `targetID`, `viewportID`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.liveSnapshot` |
 | PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target 请求体: `targetID`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.selectTaskTarget` |
 | PATCH | `/task/{taskID}/budget` | Update task budget 请求体: `budget`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task 错误: `AgentSessionPendingCoordinationError`, `LogFileNotFoundError`, `NotFoundError`, `ReplyTargetEnvelopeMissingError`, `TaskCancellationIncompleteError`. | `task.cancel` |
