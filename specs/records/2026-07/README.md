@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-frontend-replica-workflow-goal-discipline.md](2026-07-02-frontend-replica-workflow-goal-discipline.md) records the frontend-replica expert-squad skill update that makes webpage replicas workflow tasks, prevents unnecessary reruns of already executed agents outside retry / Build / Integrity / Visual QA, and defaults unspecified clone decomposition to one component per goal with at least 10 goals.
 - [2026-07-02-project-archive-worktree-timeouts.md](2026-07-02-project-archive-worktree-timeouts.md) records the project archive download and project worktree deletion transport timeout extension.
 - [2026-07-02-right-toolbar-task-scope-panels.md](2026-07-02-right-toolbar-task-scope-panels.md) records the overlay right toolbar split of the historical Inspector requirements, architect, and goals surfaces into dedicated task-scope panel controls.
 - [2026-07-02-task-message-immediate-stream.md](2026-07-02-task-message-immediate-stream.md) records the selected-task message stream repair so persisted user messages emit the existing `task.messages.changed` signal before the `/message` response waits on scheduler acceptance.

@@ -166,6 +166,7 @@ export namespace PromptProfile {
         ),
         architect: expertOverlay(
           "Turn replica requirements into desktop component boundaries, data flow, target project reuse decisions, and one accountable goal per meaningful component or region.",
+          "When the operator does not specify granularity, generally produce 10 or more source-component goals; do not merge several source components, unrelated regions, or whole-page work into one Build goal.",
           "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; desktop adaptive viewport acceptance stays on desktop goals when the current contract names it.",
           "Do not create goals or acceptance specs that allow footer/page y alignment, source document height, or scroll-slice alignment to pass through empty CSS spacing, fake spacer components, or unrendered media slots.",
           "Preserve the source module order, density, visual token source, state model, and interaction contracts while mapping target project code reuse to each goal.",
@@ -201,6 +202,7 @@ export namespace PromptProfile {
         ),
         orchestrator: expertOverlay(
           "Keep replica decisions grounded in exact reference surface, source evidence, goals, acceptance, and the operator's component-per-goal request.",
+          "When the operator did not name goal granularity, ask Architect for one source component or meaningful region per goal, generally 10 or more goals, and reject bundled multi-component goals.",
           "Assign downstream work so Build and Visual QA produce reference-region proof and scroll-slice supporting evidence, plus scoped desktop adaptive viewport checks when the current desktop contract requires them.",
           "When evidence mentions footer y coordinates, source page height, or full-page geometry, keep downstream instructions tied to restoring the visible source regions that occupy those coordinates, not to padding blank page space.",
           "Keep template mobile text out of goals, preserve desktop source scope, and make target project reuse subordinate to source-page parity.",

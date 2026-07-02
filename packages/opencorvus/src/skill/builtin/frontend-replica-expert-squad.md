@@ -22,11 +22,21 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 
 ## Dispatch discipline
 
+- Treat frontend replica as a workflow / pipeline task, not a direct single Build task. The normal path is source evidence, Requirements, Architect goals, per-goal Build, Visual QA, Integrity, then Orchestrator lifecycle decision.
 - Treat `frontend_research` as source-page investigation and page-skeleton evidence ownership.
 - Treat `frontend_design` as a single-shot task-scope handoff producer for the replica contract, material inventory, source handoff, and layout/style/data/interaction constraints.
 - Treat `architect` and `build` as consumers of that evidence, not as replacements for source investigation.
 - Treat `visual_qa` as rendered screenshot and interaction evidence review after implementation reaches a visible surface.
 - Do not use implementation work without source URL, screenshot, DOM, or computed-style evidence to invent a new page structure when source evidence exists.
+- After an agent has already produced its task-scope artifact, consume the persisted artifact instead of calling that same agent again for another angle. Exceptions are explicit retry of a failed/incomplete call, Build implementation or repair, Visual QA review or re-review, and Integrity review or re-review after repair.
+- Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
+
+## Goal decomposition discipline
+
+- If the operator does not specify goal granularity, default to one source component or meaningful source region per goal.
+- Do not mix several source components, unrelated regions, or a whole page into one Build goal.
+- Normal webpage replica decomposition generally needs 10 or more goals. Fewer goals require source evidence that the page has fewer than 10 meaningful components or regions, plus an explicit Architect note explaining why each remaining goal is still one component or region.
+- Keep each goal tied to its source evidence, target implementation files, Component Interaction Matrix entries, and rendered verification evidence.
 
 ## Browser preview evidence ownership
 
