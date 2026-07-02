@@ -2783,6 +2783,13 @@ export type EventTodoUpdated = {
   }
 }
 
+export type EventMessageCreated = {
+  type: "message.created"
+  properties: {
+    info: VisibleMessage
+  }
+}
+
 export type EventMessageUpdated = {
   type: "message.updated"
   properties: {
@@ -3822,6 +3829,7 @@ export type Event =
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventTodoUpdated
+  | EventMessageCreated
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated

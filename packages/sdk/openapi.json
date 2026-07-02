@@ -53594,6 +53594,30 @@
           "properties"
         ]
       },
+      "Event.message.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/VisibleMessage"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.message.updated": {
         "type": "object",
         "properties": {
@@ -57580,6 +57604,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.todo.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.created"
           },
           {
             "$ref": "#/components/schemas/Event.message.updated"
