@@ -54801,7 +54801,8 @@
               "fact": {
                 "type": "string",
                 "enum": [
-                  "server_restart_active_task_recovered"
+                  "server_restart_active_task_recovered",
+                  "terminal_goal_refill_dispatched"
                 ]
               },
               "status": {

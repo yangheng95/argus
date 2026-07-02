@@ -1467,7 +1467,7 @@ export const Event = {
     "task.lifecycle",
     z.object({
       taskID: Identifier.schema("task"),
-      fact: z.enum(["server_restart_active_task_recovered"]),
+      fact: z.enum(["server_restart_active_task_recovered", "terminal_goal_refill_dispatched"]),
       status: Task.shape.status.optional(),
       orphaned: z.boolean().optional(),
       summary: z.string(),

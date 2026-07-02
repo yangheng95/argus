@@ -94,7 +94,6 @@ export namespace EngineRuntime {
   async function syncTerminalGoalRefills(runID: string, _hooks: RuntimeHooks): Promise<boolean> {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
-    if (run.status === "blocked" && run.blocking_reason === "orchestrator_stream_error") return false
     const goalRuns = listGoalRunsForRun(runID)
 
     const pending = findPendingInteractions(run.id)
@@ -130,9 +129,15 @@ export namespace EngineRuntime {
       factsRecorded = true
     }
 
+    const event =
+      run.status === "blocked" && run.blocking_reason === "orchestrator_stream_error"
+        ? await terminalGoalRefillLifecycleEvent(run, refillFacts.length)
+        : undefined
+
     const { dispatchTaskLoop } = await import("@/engine/queue")
     const dispatchResult = await dispatchTaskLoop({
       taskID: run.task_id,
+      event,
       beforeAcceptedWake: ({ result }) => recordRefillFacts(result),
     })
     if (dispatchResult !== "started" && dispatchResult !== "queued") return false
@@ -167,6 +172,26 @@ export namespace EngineRuntime {
       return syncTerminalGoalRefills(runID, hooks)
     }
     return false
+  }
+}
+
+async function terminalGoalRefillLifecycleEvent(run: RunRow, refillCount: number) {
+  const lifecycleEvent = await EngineProtocol.emit(
+    Event.TaskLifecycleFact,
+    {
+      taskID: run.task_id,
+      fact: "terminal_goal_refill_dispatched",
+      summary:
+        `Terminal goal-run evidence reached terminal state for run ${run.id}; ` +
+        `waking orchestrator for ${refillCount} refill decision${refillCount === 1 ? "" : "s"}.`,
+    },
+    { source: "engine.runtime", target: "orchestrator", runID: run.id },
+  )
+  return {
+    lifecycleFact: {
+      kind: "terminal_goal_refill_dispatched" as const,
+      eventID: lifecycleEvent.id,
+    },
   }
 }
 

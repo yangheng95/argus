@@ -1,6 +1,7 @@
 # July 2026 Records
 
 - [2026-07-02-task-message-immediate-stream.md](2026-07-02-task-message-immediate-stream.md) records the selected-task message stream repair so persisted user messages emit the existing `task.messages.changed` signal before the `/message` response waits on scheduler acceptance.
+- [2026-07-02-terminal-refill-stream-error-stall.md](2026-07-02-terminal-refill-stream-error-stall.md) records the terminal-goal refill repair for active tasks stuck behind an `orchestrator_stream_error` passive-wake suppression even after child goal evidence reached terminal state.
 - [2026-07-02-qa-integrity-evidence-backed-schema.md](2026-07-02-qa-integrity-evidence-backed-schema.md) records the QA and Integrity schema repair that rejects report fields not backed by actually registered evidence/check graph rows.
 - [2026-07-02-project-alias-identity-convergence.md](2026-07-02-project-alias-identity-convergence.md) records the linked-directory project identity convergence repair for task 404s caused by duplicate project IDs for the same real worktree.
 - [2026-07-02-agent-model-select-popup-elevation.md](2026-07-02-agent-model-select-popup-elevation.md) records the Agent Models select popup elevation repair so shared `SelectControl` options render above the fullscreen settings dialog instead of being hidden behind it.

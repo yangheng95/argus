@@ -409,6 +409,30 @@ describe("engine queue", () => {
         expect(runTaskLoop).not.toHaveBeenCalled()
         expect(findRun(runID)?.status).toBe("blocked")
 
+        const lifecycleResult = await dispatchTaskLoop({
+          taskID,
+          event: {
+            lifecycleFact: {
+              kind: "terminal_goal_refill_dispatched",
+              eventID: "pev_terminal_refill_queue",
+            },
+          },
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(lifecycleResult).toBe("started")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            lifecycleFact: {
+              kind: "terminal_goal_refill_dispatched",
+              eventID: "pev_terminal_refill_queue",
+            },
+          },
+        })
+        runTaskLoop.mockClear()
+
         const operatorResult = await dispatchTaskLoop({
           taskID,
           event: {

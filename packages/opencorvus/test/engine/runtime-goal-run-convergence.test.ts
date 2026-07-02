@@ -295,7 +295,7 @@ describe("EngineRuntime goal-run convergence", () => {
       directory: tmp.path,
       fn: async () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_stream_error_${Date.now()}`
+        const taskID = `tsk_goal_stream_error_${Date.now()}`
         const runID = `run_goal_stream_error_${Date.now()}`
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
@@ -312,6 +312,13 @@ describe("EngineRuntime goal-run convergence", () => {
           [{ id: "grun_aborted_two", goal_id: "goal_grun_aborted_two", status: "aborted" }],
           now + 3,
         )
+        seedGoalRefillNotification(
+          taskID,
+          runID,
+          { id: "grun_aborted_two", goal_id: "goal_grun_aborted_two", status: "aborted" },
+          [],
+          now + 4,
+        )
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -325,19 +332,19 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
-  test("blocked orchestrator stream-error run does not liveness-dispatch without a notification fact", async () => {
+  test("blocked orchestrator stream-error run dispatches terminal-refill lifecycle wake without clearing blocker", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_stream_error_blocked_${Date.now()}`
+        const taskID = `tsk_goal_stream_error_blocked_${Date.now()}`
         const runID = `run_goal_stream_error_blocked_${Date.now()}`
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
           status: "blocked",
           blocking_reason: "orchestrator_stream_error",
-          error: "OrchestratorAborted: explicit task cancellation",
+          error: "Error: session prompt loop finished",
         })
         seedGoalRun(taskID, runID, "grun_aborted_blocked_one", "aborted", now + 1)
 
@@ -347,9 +354,19 @@ describe("EngineRuntime goal-run convergence", () => {
         const run = findRun(runID)
         expect(run?.status).toBe("blocked")
         expect(run?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(run?.error).toBe("OrchestratorAborted: explicit task cancellation")
-        expect(runTaskLoop).not.toHaveBeenCalled()
-        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
+        expect(run?.error).toBe("Error: session prompt loop finished")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            lifecycleFact: {
+              kind: "terminal_goal_refill_dispatched",
+            },
+          },
+        })
+        const lifecycleEventID = runTaskLoop.mock.calls[0]?.[0].event?.lifecycleFact?.eventID
+        expect(lifecycleEventID).toBeString()
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
       },
     })
   })

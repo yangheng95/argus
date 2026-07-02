@@ -3084,7 +3084,7 @@ export type EventTaskLifecycle = {
   type: "task.lifecycle"
   properties: {
     taskID: string
-    fact: "server_restart_active_task_recovered"
+    fact: "server_restart_active_task_recovered" | "terminal_goal_refill_dispatched"
     status?: "queued" | "active" | "completed" | "failed" | "cancelled"
     orphaned?: boolean
     summary: string

@@ -507,7 +507,7 @@ export interface OrchestratorEvent {
   /** Durable task lifecycle causality for internal engine wakes. This is not a
    *  user/operator note and must not synthesize a visible user message. */
   lifecycleFact?: {
-    kind: "server_restart_active_task_recovered"
+    kind: "server_restart_active_task_recovered" | "terminal_goal_refill_dispatched"
     eventID: string
   }
 }
