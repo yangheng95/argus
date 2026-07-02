@@ -168,16 +168,176 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
-  test("managed build prompt file parts are sourced from staged references", async () => {
-    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/agent.ts"), "utf8")
+  test("external build ignores task attachments when no evidence pack is supplied", async () => {
+    await using tmp = await tmpdir({ git: true })
 
-    expect(source).toContain("stagedFilePartsForPrompt = AttachmentStore.filePartsFromStagedReferences")
-    expect(source).toContain("stagedFilePartsForPrompt !== undefined")
-    expect(source).not.toContain(
-      "const inline = await AttachmentStore.inlineFileParts(allMultimodal)\n" +
-        "              // Three layers of context for attachments",
-    )
-  })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_build_no_pack_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "No evidence pack root",
+          directory: tmp.path,
+        })
+        const baitRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(12, 12),
+          "image/png",
+          "bait-task-attachment.png",
+        )
+        seedTask({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: rootSession.id,
+          executor: "codex",
+          attachments: [{ ...baitRef, intent: "visual_reference", source: "user-upload" }],
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+        const workDir = path.join(tmp.path, "external-no-pack")
+        await fs.mkdir(workDir, { recursive: true })
+
+        await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          target: {
+            kind: "request",
+            text: "verify task attachments are not auto-promoted",
+          },
+          workDir,
+        })
+
+        expect(captured.run?.prompt).not.toContain("## Visual Reference Contract")
+        expect(captured.run?.prompt).not.toContain("## Build Evidence Pack")
+        expect(captured.run?.prompt).not.toContain("bait-task-attachment.png")
+      },
+    })
+  }, 30_000)
+
+  test("managed external build prompt stages evidence pack roles", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_build_evidence_pack_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Evidence pack root",
+          directory: tmp.path,
+        })
+        const targetRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(16, 16),
+          "image/png",
+          "target-reference.png",
+        )
+        const previousRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(10, 10),
+          "image/png",
+          "previous-output.png",
+        )
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+
+        await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          target: {
+            kind: "request",
+            text: "verify evidence pack prompt",
+          },
+          context: {
+            evidencePack: {
+              targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
+              previousOutputs: [
+                {
+                  ...previousRef,
+                  filename: "previous-output.png",
+                  intent: "rendered_output",
+                  source: "rendered_output",
+                },
+              ],
+            },
+          },
+        })
+
+        const prompt = captured.run?.prompt ?? ""
+        expect(prompt).toContain("## Visual Reference Contract")
+        expect(prompt).toContain("target-reference.png")
+        const contractOnly = prompt.slice(0, prompt.indexOf("## Build Evidence Pack"))
+        expect(contractOnly).not.toContain("previous-output.png")
+        expect(prompt).toContain("### Previous Build Output Evidence")
+        expect(prompt).toContain("previous-output.png")
+        expect(prompt).toContain("## Staged Reference Files")
+        expect(prompt).toContain("references/target-reference.png")
+        expect(prompt).toContain("references/previous-output.png")
+      },
+    })
+  }, 30_000)
+
+  test("caller-owned external build rejects evidence without staged references", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_external_evidence_no_stage_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "External evidence no stage root",
+          directory: tmp.path,
+        })
+        const targetRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(16, 16),
+          "image/png",
+          "target-reference.png",
+        )
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+        const workDir = path.join(tmp.path, "external-evidence-no-stage")
+        await fs.mkdir(workDir, { recursive: true })
+
+        await expect(
+          BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            target: {
+              kind: "request",
+              text: "verify evidence staging is strict",
+            },
+            context: {
+              evidencePack: {
+                targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
+              },
+            },
+            workDir,
+          }),
+        ).rejects.toThrow("external executor received build evidence but no staged references were created")
+        expect(captured.run).toBeUndefined()
+      },
+    })
+  }, 30_000)
 
   test("managed build retries repair persisted file parts from staged references", async () => {
     await using tmp = await tmpdir({

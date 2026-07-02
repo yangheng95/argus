@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { renderVisualContractPreamble } from "../../src/build/agent"
+import { buildEvidenceEntries, renderBuildEvidenceRoleSections } from "../../src/build/evidence-pack"
 
 /**
  * Overlay image ingestion fidelity contract.
@@ -134,5 +135,47 @@ describe("renderVisualContractPreamble", () => {
         expect(out).toContain('src="references/foo.png"')
       })
     }
+  })
+})
+
+describe("BuildEvidencePack role rendering", () => {
+  test("keeps previous output outside the visual target contract", () => {
+    const target = { url: "/attachment/project/target.png", mime: "image/png", filename: "target.png", sha: "same" }
+    const previous = {
+      url: "/attachment/project/previous.png",
+      mime: "image/png",
+      filename: "previous.png",
+      sha: "same",
+    }
+
+    const contract = renderVisualContractPreamble([target])
+    const sections = renderBuildEvidenceRoleSections({
+      targetReferences: [target],
+      previousOutputs: [previous],
+    })
+
+    expect(contract).toContain("target.png")
+    expect(contract).not.toContain("previous.png")
+    expect(sections).toContain("### Target Visual References")
+    expect(sections).toContain("target.png")
+    expect(sections).toContain("### Previous Build Output Evidence")
+    expect(sections).toContain("previous.png")
+    expect(sections).toContain("do not clone it as the target reference")
+  })
+
+  test("preserves same sha when different evidence roles carry different meanings", () => {
+    const entries = buildEvidenceEntries({
+      targetReferences: [
+        { url: "/attachment/project/target.png", mime: "image/png", filename: "target.png", sha: "abc" },
+      ],
+      previousOutputs: [
+        { url: "/attachment/project/previous.png", mime: "image/png", filename: "previous.png", sha: "abc" },
+      ],
+    })
+
+    expect(entries.map((entry) => `${entry.role}:${entry.filename}`)).toEqual([
+      "target_reference:target.png",
+      "previous_output:previous.png",
+    ])
   })
 })

@@ -95,6 +95,12 @@ import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 import { InstructionPrompt } from "@/session/instruction"
 import { renderBuildPromptOverlays } from "./prompt-context"
+import {
+  buildEvidenceEntries,
+  buildEvidenceTargetReferences,
+  renderBuildEvidenceRoleSections,
+  type BuildEvidencePack,
+} from "./evidence-pack"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -409,14 +415,10 @@ export namespace BuildAgent {
       owned_paths: string[]
       depends_on: string[]
     }>
-    /** Pre-formatted multimodal file parts produced by upstream evidence —
-     *  typically the previous attempt's rendered.png from acceptance visual
-     *  evidence so the build LLM can see what it actually produced versus
-     *  the user reference. Each entry's `url` MUST be the canonical
-     *  `/attachment/<projectID>/<name>` URL; AttachmentStore is the single
-     *  source that reads bytes and splices them into the user message after
-     *  `task.attachments`. */
-    retryAttachments?: Array<{ url: string; mime: string; filename?: string }>
+    /** Binary evidence projected by the orchestrator for this build dispatch.
+     *  Target references, prior outputs, and comparison artifacts keep
+     *  separate roles all the way to prompt construction. */
+    evidencePack?: BuildEvidencePack
     /** This goal's Goal Workload Analyst brief, injected only when it matches
      *  the active architect snapshot. Scopes the goal BEFORE implementation
      *  (anti premature-minimization): countable work surface, underestimation
@@ -706,36 +708,20 @@ export namespace BuildAgent {
       })
       const runtimeGoalRunID = typeof openedGoalRunID === "string" ? openedGoalRunID : undefined
 
-      const buildReferenceAttachments = collectBuildReferenceAttachments(input.task)
       const retryingExistingBuildSession = Boolean(input.existingSessionID)
       const promptContext = input.context
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
+      const evidencePack = retryingExistingBuildSession ? undefined : promptContext?.evidencePack
+      const evidenceEntries = buildEvidenceEntries(evidencePack)
+      const targetReferences = buildEvidenceTargetReferences(evidencePack)
       const buildPromptText = () =>
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
           : buildUserPrompt(input.target, promptContext, input.task.id)
       const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
-      // Forward the same authoritative references named in the
-      // frontend-design evidence manifest as multimodal user-message parts so
-      // the build LLM physically sees what to clone. This includes user
-      // attachments and frontend-design materialized visual artifacts
-      // (system_artifacts intent=visual_reference), not acceptance retry renders.
-      //
-      // Same-session retry is different: the first build turn already carried
-      // the visual contract, staged reference list, attachment inventory, and
-      // inline file parts. Re-emitting that full envelope turns an incremental
-      // retry into a synthetic redispatch and can re-send oversized images.
-      // Retry therefore appends only buildRetryFeedbackPrompt(...) text.
-      const taskAttachments = retryingExistingBuildSession ? [] : buildReferenceAttachments
-      const retryAttachments = retryingExistingBuildSession
-        ? []
-        : ((input.context?.retryAttachments ?? []).filter(
-            (a) => typeof a?.url === "string" && typeof a?.mime === "string",
-          ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
-      const allMultimodal = [...taskAttachments, ...retryAttachments]
 
-      // Stage authoritative visual/reference attachments into `<worktree>/references/`
+      // Stage build evidence into `<worktree>/references/`
       // so the build agent can pass worktree-local relative paths to tools
       // whose sandbox checks reject paths outside the worktree. For managed
       // worktrees, the staged file is also the provider-bound byte source:
@@ -744,12 +730,12 @@ export namespace BuildAgent {
       // content-addressed blob a second time after staging.
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
       let stagedFilePartsForPrompt: AttachmentStore.InlineFilePart[] | undefined
-      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && allMultimodal.length > 0) {
+      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && evidenceEntries.length > 0) {
         try {
-          stagedAttachments = await AttachmentStore.stageToWorktree(Instance.project.id, allMultimodal, worktreeDir)
+          stagedAttachments = await AttachmentStore.stageToWorktree(Instance.project.id, evidenceEntries, worktreeDir)
           stagedFilePartsForPrompt = AttachmentStore.filePartsFromStagedReferences(stagedAttachments)
           if (stagedAttachments.length > 0) {
-            log.info("build agent: staged reference attachments into worktree references/", {
+            log.info("build agent: staged evidence into worktree references/", {
               taskID: input.task.id,
               count: stagedAttachments.length,
               worktreeDir,
@@ -761,7 +747,7 @@ export namespace BuildAgent {
           // sandbox checks. Surface so the orchestrator marks the build as
           // failed instead of silently degrading.
           throw new Error(
-            `build agent: failed to stage task attachments into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
+            `build agent: failed to stage build evidence into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
             { cause: err instanceof Error ? err : undefined },
           )
         }
@@ -782,40 +768,35 @@ export namespace BuildAgent {
           })
         }
       }
+      const evidenceRoleSections = renderBuildEvidenceRoleSections(evidencePack)
       const buildUserPartsFn =
-        allMultimodal.length > 0
+        evidenceEntries.length > 0
           ? async () => {
               const text = buildPromptText()
               const inline =
                 stagedFilePartsForPrompt !== undefined
                   ? stagedFilePartsForPrompt
-                  : await AttachmentStore.inlineFileParts(allMultimodal)
-              // Three layers of context for attachments, each with a different
+                  : await AttachmentStore.inlineFileParts(evidenceEntries)
+              // Three layers of context for evidence, each with a different
               // role and required to coexist:
               //   1. file parts → the LLM physically sees the pixels; managed
               //      builds source these parts from staged references/
               //   2. renderStagedList → tells the LLM the worktree-local path
               //      so it can pass them to sandbox-checked tools
-              //   3. renderAttachmentInventory → textual ledger of EVERY
-              //      attachment (multimodal + reference-only) so the LLM
-              //      anchors its reasoning to "I have these files"
+              //   3. renderBuildEvidenceRoleSections → textual ledger that
+              //      keeps target references separate from prior outputs
               //
-              // Plus an UNCONDITIONAL contract preamble (only when this dispatch
-              // actually carries multimodal references): the static system
-              // prompt's reference-fidelity language is conditional ("If the
-              // prompt depends on screenshots…"), and models routinely judge
-              // their way out of the condition. The preamble eliminates that
-              // judgement: when this branch runs, attachments demonstrably
-              // exist; restoration is therefore not optional. Filenames are
-              // listed so the model cannot pretend "no specific image was named".
-              const visualContractPreamble = renderVisualContractPreamble(allMultimodal, {
+              // Plus an UNCONDITIONAL target-reference contract preamble when
+              // this dispatch carries target references. Previous outputs and
+              // comparison artifacts are diagnostic context only.
+              const visualContractPreamble = renderVisualContractPreamble(targetReferences, {
                 mode: "inlined",
               })
               const enrichedText =
                 visualContractPreamble +
                 text +
-                AttachmentStore.renderStagedList(stagedAttachments) +
-                AttachmentStore.renderAttachmentInventory(allMultimodal)
+                evidenceRoleSections +
+                AttachmentStore.renderStagedList(stagedAttachments)
               return [{ type: "text" as const, text: enrichedText }, ...inline]
             }
           : undefined
@@ -827,12 +808,20 @@ export namespace BuildAgent {
       // pixels in the message). Mirrors the opencorvus path so external
       // executors stop free-styling away from screenshots they were given.
       const buildExternalPromptText =
-        allMultimodal.length > 0
-          ? () =>
-              renderVisualContractPreamble(allMultimodal, { mode: "staged-only" }) +
-              buildPromptText() +
-              AttachmentStore.renderStagedList(stagedAttachments) +
-              AttachmentStore.renderAttachmentInventory(allMultimodal)
+        evidenceEntries.length > 0
+          ? () => {
+              if (stagedAttachments.length === 0) {
+                throw new Error(
+                  "build agent: external executor received build evidence but no staged references were created",
+                )
+              }
+              return (
+                renderVisualContractPreamble(targetReferences, { mode: "staged-only" }) +
+                buildPromptText() +
+                evidenceRoleSections +
+                AttachmentStore.renderStagedList(stagedAttachments)
+              )
+            }
           : buildPromptText
 
       // Tracks whether `merge_back` ever returned `merged` for this build
@@ -2705,36 +2694,6 @@ function renderBuildRequirementsSection(
   return lines.join("\n")
 }
 
-type BuildReferenceAttachment = {
-  sha?: string
-  url: string
-  mime: string
-  size?: number
-  filename?: string
-  intent?: string
-  source?: string
-}
-
-function collectBuildReferenceAttachments(task: TaskRow): BuildReferenceAttachment[] {
-  const taskAttachments = Array.isArray(task.attachments)
-    ? (task.attachments as Array<Partial<BuildReferenceAttachment>>)
-    : []
-  const designArtifacts = (
-    Array.isArray(task.system_artifacts) ? (task.system_artifacts as Array<Partial<BuildReferenceAttachment>>) : []
-  ).filter((item) => item.intent === "visual_reference")
-
-  const seen = new Set<string>()
-  const merged: BuildReferenceAttachment[] = []
-  for (const item of [...taskAttachments, ...designArtifacts]) {
-    if (typeof item?.url !== "string" || typeof item?.mime !== "string") continue
-    const key = item.sha ?? item.url
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push({ ...item, url: item.url, mime: item.mime })
-  }
-  return merged
-}
-
 /**
  * Render an UNCONDITIONAL visual-contract preamble, prepended to the build
  * agent's user prompt whenever this dispatch carries multimodal references
@@ -2771,7 +2730,7 @@ export function renderVisualContractPreamble(
   const mode = options.mode ?? "inlined"
   const sourceLine =
     mode === "inlined"
-      ? "The file(s) below are inlined above as multimodal parts AND staged on disk under `references/`."
+      ? "The file(s) below are inlined above as multimodal parts."
       : "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
   const lines: string[] = [
     "## Visual Reference Contract (binding for this dispatch)",

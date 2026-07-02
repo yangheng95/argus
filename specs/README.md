@@ -15,11 +15,11 @@ This directory is the single source for OpenCorvus specs and spec-adjacent task 
 
 ## Storage Model
 
-| Location                        | Contents                                                            | Authority                                                                  |
-| ------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `specs/current/architecture/**` | Living architecture chapters and diagrams.                          | Current architecture source of truth.                                      |
-| `specs/records/YYYY-MM/**`      | Dated monthly plans, investigations, benchmarks, and audit records. | Historical evidence unless the file explicitly declares current authority. |
-| `specs/artifacts/**`            | Input artifacts such as prompts and product-reference notes.        | Task input only, not architecture authority.                               |
+| Location                        | Contents                                                            | Authority                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `specs/current/architecture/**` | Living architecture chapters and diagrams.                          | Current architecture source of truth.                                                                                             |
+| `specs/records/YYYY-MM/**`      | Dated monthly plans, investigations, benchmarks, and audit records. | Historical evidence unless the file explicitly declares current authority; individual records are indexed in each monthly README. |
+| `specs/artifacts/**`            | Input artifacts such as prompts and product-reference notes.        | Task input only, not architecture authority.                                                                                      |
 
 ## Hard Rules
 

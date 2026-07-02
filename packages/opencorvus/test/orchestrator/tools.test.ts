@@ -113,6 +113,10 @@ import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
 import { SkillTool } from "../../src/tool/skill"
+import {
+  createDesignResourceManifest,
+  recordDesignResourceManifest,
+} from "../../src/frontend-design/design-resource-manifest"
 
 const ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
@@ -2896,49 +2900,8 @@ describe("orchestrator tools", () => {
   test("goal build rejects persisted contract_audit graph id mismatch before build starts", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_audit_drift_${stamp}`
     const taskID = `tsk_audit_drift_${stamp}`
     const goalID = `gol_audit_drift_${stamp}`
-
-    insertWorkflowTaskWithGoal({
-      projectID,
-      taskID,
-      goalID,
-      sessionID: null,
-      worktree: tmp.path,
-      projectName: "contract audit drift predispatch",
-      taskTitle: "contract audit drift predispatch",
-      request: "Reject drifted contract audit ids before build",
-      goalTitle: "Build drifted audit goal",
-      goalSlug: "build-drifted-audit-goal",
-      objective: "Attempt to build a goal whose persisted audit contract id is absent from the graph.",
-      now,
-    })
-    Database.use((db) =>
-      db
-        .update(EngineGoalTable)
-        .set({
-          acceptance_specs: [
-            {
-              id: "acc-contract-audit-drift",
-              source_requirement_id: "REQ-1",
-              goal_id: goalID,
-              title: "Contract audit drift",
-              severity: "essential",
-              scorers: [
-                {
-                  type: "contract_audit",
-                  name: "graph-contract",
-                  spec: { kind: "contract_graph", contract_ids: ["missing_contract"] },
-                  expect: { status: "passed" },
-                },
-              ],
-            },
-          ],
-        })
-        .where(eq(EngineGoalTable.id, goalID))
-        .run(),
-    )
 
     let buildStarted = false
     buildAgentRunImpl = async () => {
@@ -2954,6 +2917,46 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: null,
+          worktree: tmp.path,
+          projectName: "contract audit drift predispatch",
+          taskTitle: "contract audit drift predispatch",
+          request: "Reject drifted contract audit ids before build",
+          goalTitle: "Build drifted audit goal",
+          goalSlug: "build-drifted-audit-goal",
+          objective: "Attempt to build a goal whose persisted audit contract id is absent from the graph.",
+          now,
+          insertProject: false,
+        })
+        Database.use((db) =>
+          db
+            .update(EngineGoalTable)
+            .set({
+              acceptance_specs: [
+                {
+                  id: "acc-contract-audit-drift",
+                  source_requirement_id: "REQ-1",
+                  goal_id: goalID,
+                  title: "Contract audit drift",
+                  severity: "essential",
+                  scorers: [
+                    {
+                      type: "contract_audit",
+                      name: "graph-contract",
+                      spec: { kind: "contract_graph", contract_ids: ["missing_contract"] },
+                      expect: { status: "passed" },
+                    },
+                  ],
+                },
+              ],
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run(),
+        )
         const parent = await Session.create({ kind: "root", title: "contract audit drift predispatch" })
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
@@ -16013,6 +16016,127 @@ describe("orchestrator tools", () => {
     })
   }, ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS)
 
+  test("goal build uses design resource manifest target once when task attachment has same screenshot", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_manifest_build_evidence_${stamp}`
+    const goalID = `gol_manifest_build_evidence_${stamp}`
+    let capturedContext: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "manifest build evidence test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Manifest build evidence test",
+          taskTitle: "Manifest build evidence task",
+          request: "Build from a captured URL screenshot.",
+          goalTitle: "Implement captured page",
+          goalSlug: "implement-captured-page",
+          objective: "Use the captured screenshot exactly once as target evidence.",
+          now,
+          insertProject: false,
+        })
+        const screenshot = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          "image/png",
+          "url-screenshot.png",
+        )
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              attachments: [{ ...screenshot, intent: "visual_reference", source: "url-screenshot" }],
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+        const manifest = createDesignResourceManifest({
+          taskID,
+          resources: [{ ...screenshot, intent: "visual_reference", source: "url-screenshot" }],
+          now,
+        })
+        recordDesignResourceManifest({ taskID, manifest, now })
+        for (const key of [
+          "public_report",
+          "frontend_template",
+          "fillable_modules",
+          "material_inventory",
+          "visual_consistency_contract",
+          "ui_data_contract",
+          "template_iteration_notes",
+          "completeness_review",
+          "evidence_source_manifest",
+        ]) {
+          createDecisionLog(taskID).append({
+            phase: "frontend_design",
+            key,
+            value: `${key} complete for manifest evidence regression.`,
+            reason: "Build prerequisite requires complete frontend-design template first.",
+          })
+        }
+
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          capturedContext = input.context
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built with manifest evidence",
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Updated visual implementation.",
+                  reason: "Required by the mocked manifest build.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_manifest_evidence",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement from the captured URL screenshot",
+            reason: "Verify manifest evidence projection.",
+          },
+          buildToolOptions(),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(goalID, "passed")
+        expect(capturedContext?.evidencePack?.targetReferences).toHaveLength(1)
+        expect(capturedContext.evidencePack.targetReferences[0]).toMatchObject({
+          url: screenshot.url,
+          filename: "url-screenshot.png",
+          intent: "visual_reference",
+          source: "url-screenshot",
+        })
+        expect(capturedContext.evidencePack.previousOutputs ?? []).toEqual([])
+      },
+    })
+  })
   test("goal build retry forwards previous rendered screenshot through attachment store URL", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
@@ -16133,11 +16257,13 @@ describe("orchestrator tools", () => {
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
-        expect(capturedContext?.retryAttachments).toHaveLength(1)
-        const retryAttachment = capturedContext.retryAttachments[0]
-        expect(retryAttachment.url).toBe(rendered.url)
-        expect(retryAttachment.url).toStartWith(`/attachment/${Instance.project.id}/`)
-        await expect(AttachmentStore.inlineFileParts([retryAttachment])).resolves.toHaveLength(1)
+        expect(capturedContext?.evidencePack?.previousOutputs).toHaveLength(1)
+        expect(capturedContext?.evidencePack?.targetReferences ?? []).toEqual([])
+        const previousOutput = capturedContext!.evidencePack!.previousOutputs![0]
+        expect(previousOutput.url).toBe(rendered.url)
+        expect(previousOutput.url).toStartWith(`/attachment/${Instance.project.id}/`)
+        expect(previousOutput.intent).toBe("rendered_output")
+        await expect(AttachmentStore.inlineFileParts([previousOutput])).resolves.toHaveLength(1)
       },
     })
   })

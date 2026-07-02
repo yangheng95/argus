@@ -71,10 +71,12 @@ import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import {
   createDesignResourceManifest,
+  DesignResourceManifestSchema,
   designResourceManifestFileRefs,
   frontendDesignMaterialMime,
   recordDesignResourceManifest,
 } from "@/frontend-design/design-resource-manifest"
+import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from "@/build/evidence-pack"
 import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
@@ -4709,49 +4711,183 @@ async function composeIntegrityFeedbackMarkdownForBuild(input: {
   })?.promptMarkdown
 }
 
-async function loadLatestRenderedRetryAttachment(input: {
+function isBuildEvidenceVisualMime(mime: string): boolean {
+  return mime.startsWith("image/") || mime === "application/pdf"
+}
+
+function buildEvidenceFileFromRecord(input: {
+  record: Record<string, unknown>
+  role: string
+  defaultFilename?: string
+  defaultIntent?: string
+  defaultSource?: string
+  scope: NonNullable<BuildEvidenceFile["scope"]>
+}): BuildEvidenceFile {
+  const url = input.record.url
+  const mime = input.record.mime
+  if (typeof url !== "string" || url.length === 0) {
+    throw new Error(`build evidence ${input.role} entry requires a non-empty url`)
+  }
+  if (typeof mime !== "string" || mime.length === 0) {
+    throw new Error(`build evidence ${input.role} entry ${input.defaultFilename ?? url} requires a non-empty mime`)
+  }
+  return {
+    url,
+    mime,
+    ...(typeof input.record.sha === "string" ? { sha: input.record.sha } : {}),
+    ...(typeof input.record.size === "number" ? { size: input.record.size } : {}),
+    ...(typeof input.record.filename === "string"
+      ? { filename: input.record.filename }
+      : input.defaultFilename
+        ? { filename: input.defaultFilename }
+        : {}),
+    ...(typeof input.record.intent === "string"
+      ? { intent: input.record.intent }
+      : input.defaultIntent
+        ? { intent: input.defaultIntent }
+        : {}),
+    ...(typeof input.record.source === "string"
+      ? { source: input.record.source }
+      : input.defaultSource
+        ? { source: input.defaultSource }
+        : {}),
+    scope: input.scope,
+  }
+}
+
+function uniqueBuildEvidenceFiles(files: readonly BuildEvidenceFile[]): BuildEvidenceFile[] {
+  const seen = new Set<string>()
+  const result: BuildEvidenceFile[] = []
+  for (const file of files) {
+    const key = file.sha ?? file.url
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(file)
+  }
+  return result
+}
+
+function taskAttachmentTargetEvidence(task: TaskRow): BuildEvidenceFile[] {
+  const attachments = Array.isArray(task.attachments) ? (task.attachments as unknown[]) : []
+  const files: BuildEvidenceFile[] = []
+  for (const item of attachments) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`task ${task.id} has malformed attachment entry for build evidence`)
+    }
+    const record = item as Record<string, unknown>
+    const intent = typeof record.intent === "string" ? record.intent : undefined
+    const mime = typeof record.mime === "string" ? record.mime : ""
+    const candidateTarget = intent === "visual_reference" || !intent
+    if (!candidateTarget || !isBuildEvidenceVisualMime(mime)) continue
+    files.push(
+      buildEvidenceFileFromRecord({
+        record,
+        role: "target_reference",
+        defaultIntent: "visual_reference",
+        defaultSource: "task-attachment",
+        scope: { kind: "task", taskID: task.id },
+      }),
+    )
+  }
+  return uniqueBuildEvidenceFiles(files)
+}
+
+function latestDesignResourceManifest(taskID: string) {
+  const row = Database.use((db) =>
+    db
+      .select({
+        id: EngineArtifactTable.id,
+        payload: EngineArtifactTable.payload,
+      })
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+  if (!row) return undefined
+  const parsed = DesignResourceManifestSchema.safeParse(row.payload)
+  if (!parsed.success) {
+    throw new Error(`design_resource_manifest artifact ${row.id} is malformed: ${parsed.error.message}`)
+  }
+  if (parsed.data.task_id !== taskID) {
+    throw new Error(
+      `design_resource_manifest artifact ${row.id} belongs to task ${parsed.data.task_id}, expected ${taskID}`,
+    )
+  }
+  return parsed.data
+}
+
+function targetEvidenceForBuild(task: TaskRow): BuildEvidenceFile[] {
+  const manifest = latestDesignResourceManifest(task.id)
+  if (manifest) {
+    return uniqueBuildEvidenceFiles(
+      designResourceManifestFileRefs(manifest)
+        .filter((ref) => ref.intent === "visual_reference" && isBuildEvidenceVisualMime(ref.mime))
+        .map((ref) => ({
+          url: ref.url,
+          mime: ref.mime,
+          sha: ref.sha,
+          size: ref.size,
+          ...(ref.filename ? { filename: ref.filename } : {}),
+          intent: "visual_reference",
+          source: ref.source ?? "design_resource_manifest",
+          scope: { kind: "task", taskID: task.id },
+        })),
+    )
+  }
+  return taskAttachmentTargetEvidence(task)
+}
+
+async function loadPreviousRenderedOutputEvidence(input: {
   taskID: string
   enabled: boolean
-}): Promise<import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]> {
+}): Promise<BuildEvidenceFile | undefined> {
   if (!input.enabled) return undefined
-  try {
-    const task = requireTask(input.taskID)
-    const artifacts = Array.isArray(task.system_artifacts) ? task.system_artifacts : []
-    const rendered = [...artifacts]
-      .reverse()
-      .find(
-        (artifact) =>
-          artifact?.intent === "rendered_output" &&
-          typeof artifact.url === "string" &&
-          typeof artifact.mime === "string" &&
-          artifact.mime.startsWith("image/"),
-      )
-    if (!rendered) return undefined
-    const { AttachmentStore } = await import("@/storage/attachment-store")
-    const located = AttachmentStore.nameFromUrl(rendered.url)
-    if (!located) {
-      throw new Error(
-        `rendered_output artifact has no resolvable attachment url: ${rendered.filename ?? rendered.sha ?? rendered.url}`,
-      )
-    }
-    const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
-    if (!abs) {
-      throw new Error(`rendered_output artifact ${located.projectID}/${located.name} is not resolvable on disk`)
-    }
-    return [
-      {
-        url: rendered.url,
-        mime: rendered.mime,
-        filename: "previous-attempt-rendered.png",
-      },
-    ]
-  } catch (err) {
-    log.warn("build retry: failed to load previous rendered screenshot attachment", {
-      taskID: input.taskID,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return undefined
+  const task = requireTask(input.taskID)
+  const artifacts = Array.isArray(task.system_artifacts) ? (task.system_artifacts as unknown[]) : []
+  const rendered = [...artifacts].reverse().find((artifact): artifact is Record<string, unknown> => {
+    if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) return false
+    const record = artifact as Record<string, unknown>
+    return record.intent === "rendered_output" && typeof record.mime === "string" && record.mime.startsWith("image/")
+  })
+  if (!rendered) return undefined
+  const { AttachmentStore } = await import("@/storage/attachment-store")
+  const file = buildEvidenceFileFromRecord({
+    record: { ...rendered, intent: "rendered_output", source: "rendered_output" },
+    role: "previous_output",
+    defaultFilename: "previous-attempt-rendered.png",
+    defaultIntent: "rendered_output",
+    defaultSource: "rendered_output",
+    scope: { kind: "task", taskID: input.taskID },
+  })
+  const located = AttachmentStore.nameFromUrl(file.url)
+  if (!located) {
+    throw new Error(
+      `rendered_output artifact has no resolvable attachment url: ${file.filename ?? file.sha ?? file.url}`,
+    )
   }
+  const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+  if (!abs) {
+    throw new Error(`rendered_output artifact ${located.projectID}/${located.name} is not resolvable on disk`)
+  }
+  await fs.stat(abs)
+  return file
+}
+
+async function composeBuildEvidencePack(input: {
+  task: TaskRow
+  includePreviousOutput: boolean
+}): Promise<BuildEvidencePack | undefined> {
+  const targetReferences = targetEvidenceForBuild(input.task)
+  const previousOutput = await loadPreviousRenderedOutputEvidence({
+    taskID: input.task.id,
+    enabled: input.includePreviousOutput,
+  })
+  const pack: BuildEvidencePack = {
+    ...(targetReferences.length > 0 ? { targetReferences } : {}),
+    ...(previousOutput ? { previousOutputs: [previousOutput] } : {}),
+  }
+  return hasBuildEvidence(pack) ? pack : undefined
 }
 
 const FIGMA_URL_PATTERN = /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\/[^\s)]+/i
@@ -13121,13 +13257,13 @@ export function createOrchestratorTools(input: {
               activeSpecSnapshotID: activeSpecForContext?.id,
             })
 
-            // Visual feedback closure-loop: when acceptance rejected on visual
-            // grounds, attach the previous rendered.png so the build LLM
-            // physically compares its output to the user reference instead of
-            // re-painting from text alone.
-            const retryAttachments = await loadLatestRenderedRetryAttachment({
-              taskID,
-              enabled: retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
+            // Visual feedback closure-loop: target references and previous
+            // outputs stay separated by role so rendered retry evidence never
+            // becomes a binding clone target.
+            const evidencePack = await composeBuildEvidencePack({
+              task,
+              includePreviousOutput:
+                retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
@@ -13160,7 +13296,7 @@ export function createOrchestratorTools(input: {
               visualQaFeedback,
               retryFeedback,
               acceptanceFeedback,
-              retryAttachments,
+              evidencePack,
               workloadBrief,
             }
           } else {
@@ -13178,9 +13314,9 @@ export function createOrchestratorTools(input: {
               taskID,
               activeSpecSnapshotID: activeSpecForContext?.id,
             })
-            const retryAttachments = await loadLatestRenderedRetryAttachment({
-              taskID,
-              enabled: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
+            const evidencePack = await composeBuildEvidencePack({
+              task,
+              includePreviousOutput: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             if (selectedWorktreeUsage === "current_project") {
@@ -13199,7 +13335,7 @@ export function createOrchestratorTools(input: {
               integrityFeedback ||
               visualQaFeedback ||
               acceptanceFeedback ||
-              retryAttachments ||
+              evidencePack ||
               designSpecs ||
               frontendResearch.trim().length > 0 ||
               frontendDesign.trim().length > 0
@@ -13212,7 +13348,7 @@ export function createOrchestratorTools(input: {
                     integrityFeedback,
                     visualQaFeedback,
                     acceptanceFeedback,
-                    retryAttachments,
+                    evidencePack,
                   }
                 : undefined
           }
