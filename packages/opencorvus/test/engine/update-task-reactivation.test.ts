@@ -68,13 +68,14 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
     await resetDatabase()
   })
 
-  test("reactivating a failed task clears time_completed (derived status flips back to active)", async () => {
+  test("reactivating a failed task starts a new runtime window", async () => {
     const failNow = Date.now() - 60_000
+    const oldStarted = failNow - 120_000
     Database.use((db) =>
       db
         .update(EngineTaskTable)
         .set({
-          time_started: failNow - 120_000,
+          time_started: oldStarted,
           time_completed: failNow,
           error: "fail_task: architect fidelity blocked",
           time_updated: failNow,
@@ -91,17 +92,20 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
     const reactivated = findTask(taskID)
     expect(reactivated).toBeDefined()
     expect(reactivated!.time_completed).toBe(null)
+    expect(reactivated!.time_started).toBeGreaterThan(failNow)
+    expect(reactivated!.time_started).not.toBe(oldStarted)
     expect(reactivated!.error).toBe(null)
     expect(deriveTaskStatus(reactivated!)).toBe("active")
   })
 
-  test("reactivating a completed task (no error) also clears time_completed", async () => {
+  test("reactivating a completed task also starts a new runtime window", async () => {
     const completeNow = Date.now() - 30_000
+    const oldStarted = completeNow - 120_000
     Database.use((db) =>
       db
         .update(EngineTaskTable)
         .set({
-          time_started: completeNow - 120_000,
+          time_started: oldStarted,
           time_completed: completeNow,
           error: null,
           time_updated: completeNow,
@@ -116,6 +120,8 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
 
     const reactivated = findTask(taskID)
     expect(reactivated!.time_completed).toBe(null)
+    expect(reactivated!.time_started).toBeGreaterThan(completeNow)
+    expect(reactivated!.time_started).not.toBe(oldStarted)
     expect(deriveTaskStatus(reactivated!)).toBe("active")
   })
 

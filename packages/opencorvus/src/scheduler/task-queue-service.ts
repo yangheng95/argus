@@ -775,7 +775,6 @@ export namespace TaskQueueService {
           .update(TaskQueueTable)
           .set({
             status: "failed",
-            time_started: null,
             time_completed: now,
             error_message: "task timed out while running",
             time_updated: now,
@@ -813,7 +812,6 @@ export namespace TaskQueueService {
         .update(TaskQueueTable)
         .set({
           status: "failed",
-          time_started: null,
           time_completed: now,
           error_message: message(error),
           time_updated: now,

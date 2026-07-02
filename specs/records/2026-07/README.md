@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-02-runtime-status-timing-root-repair.md](2026-07-02-runtime-status-timing-root-repair.md) records the root repair for task runtime/status timing so elapsed time uses the durable started/completed runtime window rather than created time or local UI state.
 - [2026-07-02-optional-build-worktree-schema.md](2026-07-02-optional-build-worktree-schema.md) records the optional `build.worktreeUsage` schema repair so the model can choose managed worktree versus current-project execution while preserving commit/report behavior.
 - [2026-07-02-direct-build-current-worktree.md](2026-07-02-direct-build-current-worktree.md) records the task-level direct build dispatch repair so `directBuildIntent="modify_files"` uses the current project worktree instead of creating a new managed worktree.
 - [2026-07-02-single-agent-vs-opencorvus-clear-drawio.md](2026-07-02-single-agent-vs-opencorvus-clear-drawio.md) records the replacement clear Draw.io architecture comparison for traditional single-agent coding assistants versus OpenCorvus multi-agent orchestration.

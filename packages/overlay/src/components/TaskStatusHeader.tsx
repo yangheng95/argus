@@ -16,46 +16,51 @@ import { selectedTaskSseActiveElapsedMs, taskRuntimeActivityKey } from "../servi
 
 const ACTIVE_STATUS = "active"
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
-const loggedTerminalTimeErrors = new Set<string>()
+const loggedRuntimeTimeErrors = new Set<string>()
 
 export function TaskStatusHeader() {
   const task = createMemo(() => (boardStore.board as any)?.task)
   const status = createMemo<string>(() => task()?.status || "")
   const iconStatus = createMemo<string>(() => status() || "idle")
-  const startTime = createMemo<number>(() => task()?.time?.created || 0)
+  const startedTime = createMemo<number>(() => task()?.time?.started || 0)
   const completedTime = createMemo<number>(() => task()?.time?.completed || 0)
   const isActive = createMemo(() => status() === ACTIVE_STATUS)
   const visible = createMemo(() => Boolean(activeTaskID()))
   const elapsedKey = createMemo(() => {
     const taskID = String(task()?.id || activeTaskID() || "")
-    if (!taskID || !startTime()) return ""
-    return taskRuntimeActivityKey({ taskID, createdAt: startTime() })
+    if (!taskID || !startedTime()) return ""
+    return taskRuntimeActivityKey({ taskID, startedAt: startedTime() })
+  })
+  const missingStartedTime = createMemo(() => {
+    const taskID = String(task()?.id || activeTaskID() || "")
+    return Boolean(visible() && taskID && (isActive() || TERMINAL_STATUSES.has(status())) && !(startedTime() > 0))
   })
   const missingCompletionTime = createMemo(() => {
     const taskID = String(task()?.id || activeTaskID() || "")
-    return Boolean(visible() && taskID && startTime() > 0 && TERMINAL_STATUSES.has(status()) && !(completedTime() > 0))
+    return Boolean(visible() && taskID && startedTime() > 0 && TERMINAL_STATUSES.has(status()) && !(completedTime() > 0))
   })
   const invalidCompletionTime = createMemo(() => {
     const taskID = String(task()?.id || activeTaskID() || "")
     return Boolean(
-      visible() &&
+        visible() &&
         taskID &&
-        startTime() > 0 &&
+        startedTime() > 0 &&
         TERMINAL_STATUSES.has(status()) &&
         completedTime() > 0 &&
-        completedTime() <= startTime(),
+        completedTime() <= startedTime(),
     )
   })
-  const terminalTimeError = createMemo(() => {
+  const runtimeTimeError = createMemo(() => {
+    if (missingStartedTime()) return "missing start time"
     if (missingCompletionTime()) return "missing completion time"
     if (invalidCompletionTime()) return "invalid completion time"
     return ""
   })
 
   const elapsedText = createMemo(() => {
-    const start = startTime()
-    if (!visible() || !start) return ""
-    const timeError = terminalTimeError()
+    const start = startedTime()
+    if (!visible()) return ""
+    const timeError = runtimeTimeError()
     if (timeError) return timeError
     if (isActive()) return formatDuration(selectedTaskSseActiveElapsedMs(elapsedKey()))
     if (TERMINAL_STATUSES.has(status())) return formatDuration(completedTime() - start)
@@ -63,24 +68,26 @@ export function TaskStatusHeader() {
   })
 
   createEffect(() => {
-    const timeError = terminalTimeError()
+    const timeError = runtimeTimeError()
     if (!timeError) return
     const taskID = String(task()?.id || activeTaskID() || "")
-    const key = `${taskID}:${status()}:${startTime()}:${completedTime()}:${timeError}`
-    if (loggedTerminalTimeErrors.has(key)) return
-    loggedTerminalTimeErrors.add(key)
+    const key = `${taskID}:${status()}:${startedTime()}:${completedTime()}:${timeError}`
+    if (loggedRuntimeTimeErrors.has(key)) return
+    loggedRuntimeTimeErrors.add(key)
     AppLog.error("ui", `Task status ${timeError}`, {
       taskID,
       status: status(),
-      startedAt: startTime(),
+      startedAt: startedTime() || undefined,
       completedAt: completedTime() || undefined,
       notificationID: `task-status:${timeError.replace(/\s+/g, "-")}:${taskID}`,
       notificationTitle: "Task status timestamp invalid",
-      notificationMessage: `Task ${taskID} has an invalid terminal timestamp.`,
+      notificationMessage: `Task ${taskID} has an invalid runtime timestamp.`,
       notificationDetails:
-        timeError === "missing completion time"
+        timeError === "missing start time"
+          ? `task.time.started is required for task status ${status()}.`
+          : timeError === "missing completion time"
           ? `task.time.completed is required for terminal task status ${status()}.`
-          : `task.time.completed must be greater than task.time.created for terminal task status ${status()}.`,
+          : `task.time.completed must be greater than task.time.started for terminal task status ${status()}.`,
     })
   })
 

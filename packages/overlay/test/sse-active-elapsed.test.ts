@@ -57,7 +57,7 @@ test("SSE active elapsed resets on a new task run key", () => {
 test("selected task SSE activity service is reactive and keyed by task run", () => {
   createRoot((dispose) => {
     __resetSelectedTaskSseActivityForTest()
-    const key = taskRuntimeActivityKey({ taskID: "tsk_service", createdAt: 1_776_000_000_000 })
+    const key = taskRuntimeActivityKey({ taskID: "tsk_service", startedAt: 1_776_000_000_000 })
 
     recordSelectedTaskSseActivity({ key, active: true, startedAt: 10, activityAt: 1010 })
     expect(selectedTaskSseActiveElapsedMs(key)).toBe(1000)
@@ -72,7 +72,7 @@ test("selected task SSE activity service is reactive and keyed by task run", () 
 })
 
 test("selected task SSE activity extracts persisted task message watermarks", () => {
-  const key = taskRuntimeActivityKey({ taskID: "tsk_watermark", createdAt: 1_776_000_000_000 })
+  const key = taskRuntimeActivityKey({ taskID: "tsk_watermark", startedAt: 1_776_000_000_000 })
   __resetSelectedTaskSseActivityForTest()
 
   recordSelectedTaskSseEventActivity({
@@ -96,7 +96,7 @@ test("selected task SSE activity extracts persisted task message watermarks", ()
 test("selected task SSE activity ignores old replayed events after a restored watermark", () => {
   createRoot((dispose) => {
     __resetSelectedTaskSseActivityForTest()
-    const key = taskRuntimeActivityKey({ taskID: "tsk_replay", createdAt: 1_776_000_000_000 })
+    const key = taskRuntimeActivityKey({ taskID: "tsk_replay", startedAt: 1_776_000_000_000 })
 
     recordSelectedTaskSseActivity({
       key,
@@ -119,7 +119,7 @@ test("selected task SSE activity ignores old replayed events after a restored wa
 test("selected task SSE snapshot restores existing elapsed when entering an active task", () => {
   createRoot((dispose) => {
     __resetSelectedTaskSseActivityForTest()
-    const key = taskRuntimeActivityKey({ taskID: "tsk_snapshot", createdAt: 1_776_000_000_000 })
+    const key = taskRuntimeActivityKey({ taskID: "tsk_snapshot", startedAt: 1_776_000_001_000 })
 
     recordSelectedTaskSseSnapshot({
       taskID: "tsk_snapshot",
@@ -139,7 +139,7 @@ test("selected task SSE snapshot restores existing elapsed when entering an acti
 test("selected task SSE snapshot does not start queued tasks", () => {
   createRoot((dispose) => {
     __resetSelectedTaskSseActivityForTest()
-    const key = taskRuntimeActivityKey({ taskID: "tsk_queued", createdAt: 1_776_000_000_000 })
+    const key = taskRuntimeActivityKey({ taskID: "tsk_queued", startedAt: 1_776_000_000_000 })
 
     recordSelectedTaskSseSnapshot({
       taskID: "tsk_queued",
@@ -177,8 +177,8 @@ test("SSE active elapsed rejects invalid timestamps instead of using wall-clock 
       { key: "tsk_invalid:1", active: true, startedAt: 0, activityAt: 1 },
     ),
   ).toThrow("SSE active elapsed start timestamp must be positive")
-  expect(() => taskRuntimeActivityKey({ taskID: "tsk_invalid", createdAt: 0 })).toThrow(
-    "runtime activity requires a positive task.time.created timestamp",
+  expect(() => taskRuntimeActivityKey({ taskID: "tsk_invalid", startedAt: 0 })).toThrow(
+    "runtime activity requires a positive task.time.started timestamp",
   )
   expect(() =>
     recordSelectedTaskSseEventActivity({

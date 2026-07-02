@@ -1,4 +1,4 @@
-import { Database, eq } from "@/storage/db"
+import { and, Database, eq, isNull } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
@@ -47,6 +47,10 @@ const TERMINAL_TASK_RUN_STATUS = {
   failed: "failed",
   cancelled: "aborted",
 } as const satisfies Record<TerminalTaskStatus, RunRow["status"]>
+
+function isTerminalTaskIntent(status: InternalTaskUpdateValues["status"]): status is TerminalTaskStatus {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
 
 export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary: string, options?: TaskUpdateOptions) {
   if (
@@ -98,7 +102,7 @@ async function applyTaskUpdate(
   let metaMutated = rest.metadata !== undefined
   switch (intent) {
     case "active":
-      if (resolved.time_started === undefined && row.time_started == null) {
+      if (resolved.time_started === undefined && (row.time_started == null || row.time_completed != null)) {
         resolved.time_started = now
       }
       // Re-activating a previously terminal task (retry after a fail_task or
@@ -165,7 +169,9 @@ async function applyTaskUpdate(
     return row
   }
 
+  const terminalIntent = isTerminalTaskIntent(intent)
   let updated: TaskRow | undefined
+  let existingTerminal: TaskRow | undefined
   Database.transaction((db) => {
     updated = db
       .update(EngineTaskTable)
@@ -173,10 +179,19 @@ async function applyTaskUpdate(
         ...resolved,
         time_updated: now,
       })
-      .where(eq(EngineTaskTable.id, row.id))
+      .where(
+        terminalIntent
+          ? and(eq(EngineTaskTable.id, row.id), isNull(EngineTaskTable.time_completed))
+          : eq(EngineTaskTable.id, row.id),
+      )
       .returning()
       .get()
     if (!updated) {
+      const current = db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, row.id)).get()
+      if (terminalIntent && current?.time_completed != null) {
+        existingTerminal = current
+        return
+      }
       throw new Error(`task ${row.id} not found during updateTask`)
     }
     const nextStatus = deriveTaskStatus(updated)
@@ -233,6 +248,13 @@ async function applyTaskUpdate(
       }
     })
   })
+  if (existingTerminal) {
+    const terminalStatus = deriveTaskStatus(existingTerminal)
+    if (isTerminalTaskIntent(terminalStatus)) {
+      await finalizeLiveRunForTerminalTask(existingTerminal, terminalStatus, {}, summary, options)
+    }
+    return existingTerminal
+  }
   const result = updated ?? requireTask(row.id)
   await finalizeLiveRunForTerminalTask(result, intent, resolved, summary, options)
   return result

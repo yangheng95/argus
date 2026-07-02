@@ -8,13 +8,13 @@ import {
 const [activityRevision, setActivityRevision] = createSignal(0)
 const elapsedByKey = new Map<string, SseActiveElapsedState>()
 
-export function taskRuntimeActivityKey(input: { taskID: string; createdAt: number }): string {
+export function taskRuntimeActivityKey(input: { taskID: string; startedAt: number }): string {
   const taskID = input.taskID.trim()
   if (!taskID) return ""
-  if (!Number.isFinite(input.createdAt) || input.createdAt <= 0) {
-    throw new Error(`task ${taskID} runtime activity requires a positive task.time.created timestamp`)
+  if (!Number.isFinite(input.startedAt) || input.startedAt <= 0) {
+    throw new Error(`task ${taskID} runtime activity requires a positive task.time.started timestamp`)
   }
-  return `${taskID}:${input.createdAt}`
+  return `${taskID}:${input.startedAt}`
 }
 
 function eventProperties(event: any): Record<string, any> {
@@ -78,10 +78,12 @@ export function recordSelectedTaskSseEventActivity(input: {
   const taskID = String(input.taskID || "")
   if (!taskID || String(input.task?.id || "") !== taskID) return
   if (eventTaskID(input.event) && eventTaskID(input.event) !== taskID) return
+  const startedAt = Number(input.task?.time?.started)
+  if ((!Number.isFinite(startedAt) || startedAt <= 0) && !input.active) return
   recordSelectedTaskSseActivity({
-    key: taskRuntimeActivityKey({ taskID, createdAt: Number(input.task?.time?.created) }),
+    key: taskRuntimeActivityKey({ taskID, startedAt }),
     active: input.active,
-    startedAt: Number(input.task?.time?.started),
+    startedAt,
     activityAt: selectedTaskSseActivityAt(input.event),
   })
 }
@@ -96,10 +98,11 @@ export function recordSelectedTaskSseSnapshot(input: {
   if (!taskID || String(input.task?.id || "") !== taskID) return
   if (!input.active) return
   if (!Number.isFinite(input.activityAt) || input.activityAt <= 0) return
+  const startedAt = Number(input.task?.time?.started)
   recordSelectedTaskSseActivity({
-    key: taskRuntimeActivityKey({ taskID, createdAt: Number(input.task?.time?.created) }),
+    key: taskRuntimeActivityKey({ taskID, startedAt }),
     active: true,
-    startedAt: Number(input.task?.time?.started),
+    startedAt,
     activityAt: input.activityAt,
   })
 }

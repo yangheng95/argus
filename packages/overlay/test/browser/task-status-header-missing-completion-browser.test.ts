@@ -12,6 +12,7 @@ await ensureOverlayDist()
 
 const MISSING_TASK_ID = "tsk_missing_completed_time"
 const INVALID_TASK_ID = "tsk_invalid_completed_time"
+const COMPLETED_TASK_ID = "tsk_completed_runtime_window"
 const ACTIVE_TASK_ID = "tsk_active_sse_time"
 const QUEUED_TASK_ID = "tsk_queued_no_elapsed"
 const DIRECTORY = "D:/overlay/workspace/status-header"
@@ -99,7 +100,7 @@ const tasks = {
     taskID: MISSING_TASK_ID,
     title: "Missing completed time",
     status: "completed",
-    time: { created: 1_780_000_000_000, updated: 1_780_000_010_000 },
+    time: { created: 1_780_000_000_000, started: 1_780_000_002_000, updated: 1_780_000_010_000 },
   }),
   [INVALID_TASK_ID]: taskRecord({
     taskID: INVALID_TASK_ID,
@@ -107,8 +108,20 @@ const tasks = {
     status: "completed",
     time: {
       created: 1_780_000_010_000,
-      completed: 1_780_000_000_000,
+      started: 1_780_000_012_000,
+      completed: 1_780_000_011_000,
       updated: 1_780_000_010_000,
+    },
+  }),
+  [COMPLETED_TASK_ID]: taskRecord({
+    taskID: COMPLETED_TASK_ID,
+    title: "Completed runtime window",
+    status: "completed",
+    time: {
+      created: 1_780_000_040_000,
+      started: 1_780_000_047_000,
+      completed: 1_780_000_050_000,
+      updated: 1_780_000_050_000,
     },
   }),
   [ACTIVE_TASK_ID]: taskRecord({
@@ -372,6 +385,14 @@ test(
   "TaskStatusHeader does not show queued elapsed time",
   async () => {
     await verifyTaskStatusElapsed(QUEUED_TASK_ID, "", "task-status-header-queued-no-elapsed.png")
+  },
+  { timeout: 60_000 },
+)
+
+test(
+  "TaskStatusHeader renders terminal duration from started to completed, not created",
+  async () => {
+    await verifyTaskStatusElapsed(COMPLETED_TASK_ID, "3s", "task-status-header-completed-runtime-window.png")
   },
   { timeout: 60_000 },
 )

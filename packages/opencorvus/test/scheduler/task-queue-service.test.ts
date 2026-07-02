@@ -1268,6 +1268,7 @@ describe("scheduler.task-queue-service", () => {
         const stale = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, staleID)).get())
         expect(fresh?.status).toBe("running")
         expect(stale?.status).toBe("failed")
+        expect(stale?.time_started).toBe(now - 5000)
       },
     })
 
@@ -1491,11 +1492,12 @@ describe("scheduler.task-queue-service", () => {
         try {
           const session = await Session.create({ kind: "assistant" })
           const now = Date.now()
+          const queueTaskID = "task_stale_visible_" + Math.random().toString(36).slice(2)
           Database.use((db) =>
             db
               .insert(TaskQueueTable)
               .values({
-                id: "task_stale_visible_" + Math.random().toString(36).slice(2),
+                id: queueTaskID,
                 session_id: session.id,
                 prompt: "stale-visible",
                 status: "running",
@@ -1514,6 +1516,8 @@ describe("scheduler.task-queue-service", () => {
           )
 
           await TaskQueueService.runNow()
+          const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get())
+          expect(row?.time_started).toBe(now - 5000)
           expect(errors).toEqual([{ sessionID: session.id, message: "task timed out while running" }])
         } finally {
           stop()

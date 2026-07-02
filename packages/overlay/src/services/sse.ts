@@ -113,7 +113,7 @@ function eventProperties(event: any): Record<string, any> {
 function selectedTaskRuntimeKey(taskID: string): string {
   const boardTask = boardStore.board?.task
   if (!taskID || boardTask?.id !== taskID) return ""
-  return taskRuntimeActivityKey({ taskID, createdAt: Number(boardTask?.time?.created) })
+  return taskRuntimeActivityKey({ taskID, startedAt: Number(boardTask?.time?.started) })
 }
 
 function recordSelectedTaskSseUpdate(event: any, taskID: string): void {

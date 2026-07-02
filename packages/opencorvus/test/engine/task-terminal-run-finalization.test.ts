@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findRun, findTask } from "../../src/engine/store"
 import { terminalTask, updateRun, updateTask } from "../../src/engine/state"
+import { deriveTaskStatus } from "../../src/engine/task-status"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -12,7 +13,7 @@ afterEach(async () => {
 
 function seedRunningTaskRun(input?: { taskCompleted?: number; runStatus?: "queued" | "running"; runStarted?: number | null }) {
   const now = Date.now()
-  const taskID = `task_terminal_run_${now}_${Math.random().toString(36).slice(2)}`
+  const taskID = `tsk_terminal_run_${now}_${Math.random().toString(36).slice(2)}`
   const runID = `run_terminal_${now}_${Math.random().toString(36).slice(2)}`
   const projectID = `project_terminal_${now}_${Math.random().toString(36).slice(2)}`
   const runStatus = input?.runStatus ?? "running"
@@ -138,6 +139,28 @@ describe("terminal task writes finalize live runs", () => {
     const run = findRun(runID)
     expect(run?.status).toBe("completed")
     expect(run?.time_completed).toBe(completed)
+  })
+
+  test("stale terminal task write cannot rewrite existing terminal facts", async () => {
+    const { taskID, now } = seedRunningTaskRun()
+    const staleRunningRow = findTask(taskID)!
+    const failedAt = now + 100
+
+    await terminalTask(
+      staleRunningRow,
+      { status: "failed", error: "first terminal failure", time_completed: failedAt },
+      "first terminal failure",
+    )
+    await terminalTask(
+      staleRunningRow,
+      { status: "completed", time_completed: now + 200 },
+      "late stale completion",
+    )
+
+    const afterLateWrite = findTask(taskID)!
+    expect(deriveTaskStatus(afterLateWrite)).toBe("failed")
+    expect(afterLateWrite.time_completed).toBe(failedAt)
+    expect(afterLateWrite.error).toBe("first terminal failure")
   })
 
   test("failed and aborted run statuses complete without implying start", async () => {
