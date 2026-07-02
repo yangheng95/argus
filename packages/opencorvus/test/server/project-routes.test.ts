@@ -124,6 +124,46 @@ describe("project routes", () => {
     }, 250)
   }, 30_000)
 
+  test("GET /config converges duplicate exact project identity through middleware", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const canonicalID = Project.directoryProjectID(tmp.path)
+    const duplicateID = "project_config_exact_duplicate"
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          {
+            id: canonicalID,
+            worktree: tmp.path,
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          },
+          {
+            id: duplicateID,
+            worktree: tmp.path,
+            time_created: now,
+            time_updated: now,
+            sandboxes: [],
+          },
+        ])
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    const response = await app.request("/config", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    await response.json()
+    expect(projectRow(canonicalID)?.worktree).toBe(tmp.path)
+    expect(projectRow(duplicateID)).toBeUndefined()
+  }, 30_000)
+
   test("GET /task/:taskID converges polluted linked-directory project identity", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()

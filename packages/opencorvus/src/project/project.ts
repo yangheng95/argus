@@ -125,22 +125,80 @@ export namespace Project {
     return row?.count ?? 0
   }
 
-  function taskSessionReferenceCount(db: Database.TxOrDb, projectID: string) {
-    return projectReferenceCount(db, "engine_task", projectID) + projectReferenceCount(db, "session", projectID)
-  }
-
   function chooseCanonicalExactWorktreeRow(input: {
     rows: Row[]
     preferredIDs: string[]
-    db: Database.TxOrDb
   }) {
     for (const id of input.preferredIDs) {
       const row = input.rows.find((candidate) => candidate.id === id)
       if (row) return row
     }
+  }
 
-    const taskSessionOwners = input.rows.filter((row) => taskSessionReferenceCount(input.db, row.id) > 0)
-    return taskSessionOwners.length === 1 ? taskSessionOwners[0] : undefined
+  function assertNoEmbeddedProjectIDReferences(db: Database.TxOrDb, worktree: string, canonicalID: string, duplicateIDs: string[]) {
+    const rows = db.all<{ tableName: string }>(sql`
+      SELECT name as tableName
+      FROM sqlite_schema
+      WHERE type = 'table'
+        AND name NOT LIKE 'sqlite_%'
+        AND sql LIKE 'CREATE TABLE%'
+      ORDER BY name
+    `)
+    for (const duplicateID of duplicateIDs) {
+      const needle = `/attachment/${duplicateID}/`
+      for (const row of rows) {
+        const columns = db.all<{ name: string; type: string }>(sql.raw(`PRAGMA table_info(${sqliteIdentifier(row.tableName)})`))
+        const textColumns = columns.filter((column) => column.type.toUpperCase().includes("TEXT"))
+        for (const column of textColumns) {
+          const match = db.get<{ count: number }>(
+            sql`SELECT count(*) as count FROM ${sql.raw(sqliteIdentifier(row.tableName))} WHERE instr(${sql.raw(sqliteIdentifier(column.name))}, ${needle}) > 0`,
+          )
+          if ((match?.count ?? 0) > 0) {
+            throw new WorktreeIdentityConflictError({
+              projectID: [canonicalID, ...duplicateIDs].join(","),
+              existingWorktree: worktree,
+              nextWorktree: `${worktree} blocked by embedded attachment reference ${needle} in ${row.tableName}.${column.name}`,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  function assertNoUniqueProjectConstraintConflict(db: Database.TxOrDb, worktree: string, canonicalID: string, duplicateIDs: string[]) {
+    const convergenceIDs = [canonicalID, ...duplicateIDs]
+    const permissionOwners = convergenceIDs.filter((id) => projectReferenceCount(db, "permission", id) > 0)
+    if (permissionOwners.length > 1) {
+      throw new WorktreeIdentityConflictError({
+        projectID: permissionOwners.join(","),
+        existingWorktree: worktree,
+        nextWorktree: `${worktree} blocked by duplicate permission rows that cannot be converged`,
+      })
+    }
+
+    const rows = db.all<{ requestID: string; projectID: string; count: number }>(sql`
+      SELECT request_id as requestID, project_id as projectID, count(*) as count
+      FROM engine_task
+      WHERE request_id IS NOT NULL
+        AND project_id IN (${sql.join([canonicalID, ...duplicateIDs], sql`, `)})
+      GROUP BY request_id, project_id
+    `)
+    const byRequest = new Map<string, Set<string>>()
+    for (const row of rows) {
+      if (row.count <= 0) continue
+      const owners = byRequest.get(row.requestID) ?? new Set<string>()
+      owners.add(row.projectID)
+      byRequest.set(row.requestID, owners)
+    }
+    for (const [requestID, owners] of byRequest) {
+      if (owners.size > 1) {
+        throw new WorktreeIdentityConflictError({
+          projectID: [...owners].join(","),
+          existingWorktree: worktree,
+          nextWorktree: `${worktree} blocked by duplicate request_id ${requestID} that cannot be converged`,
+        })
+      }
+    }
   }
 
   function mergeExactWorktreeRows(input: { worktree: string; rows: Row[]; canonical: Row }) {
@@ -148,6 +206,9 @@ export namespace Project {
     if (duplicateRows.length === 0) return input.canonical
 
     return Database.transaction((db) => {
+      const duplicateIDs = duplicateRows.map((row) => row.id)
+      assertNoEmbeddedProjectIDReferences(db, input.worktree, input.canonical.id, duplicateIDs)
+      assertNoUniqueProjectConstraintConflict(db, input.worktree, input.canonical.id, duplicateIDs)
       const projectScopedTables = projectIDTables(db)
       for (const duplicate of duplicateRows) {
         for (const table of projectScopedTables) {
@@ -197,7 +258,6 @@ export namespace Project {
       chooseCanonicalExactWorktreeRow({
         rows: matches,
         preferredIDs: preferredIDs.filter(Boolean),
-        db,
       }),
     )
     if (canonical) return mergeExactWorktreeRows({ worktree, rows: matches, canonical })

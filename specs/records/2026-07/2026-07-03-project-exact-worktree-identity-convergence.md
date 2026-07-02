@@ -48,12 +48,12 @@ exact worktree rows into one canonical project row and move every direct
    - marker-named canonical row plus memory-bearing duplicate row converges to
      the marker id, moves memory file/chunk/FTS rows, deletes the duplicate
      project row, and keeps memory searchable;
-   - no marker/local-id/ownership signal remains a visible
+   - no marker/local identity signal remains a visible
      `ProjectWorktreeIdentityConflictError` instead of silently choosing a row.
 2. Implement exact-worktree convergence inside `project.ts`:
    - read `.git/opencorvus` before exact-row lookup;
-   - when exact duplicates exist, choose canonical only from durable signals:
-     marker id, local generated id, or a unique task/session owner;
+   - when exact duplicates exist, choose canonical only from durable identity
+     signals: marker id or local generated id;
    - update every table that has a `project_id` column by schema introspection,
      including `memory_fts`;
    - merge duplicate project sandboxes and safe display metadata into the
@@ -89,7 +89,10 @@ exact worktree rows into one canonical project row and move every direct
   - `findExactWorktreeRow()` now accepts durable preferred ids from the active
     marker and generated local id.
   - Exact duplicate worktree rows converge only when a canonical row is proven
-    by marker/local id or a unique task/session owner.
+    by marker/local id.
+  - Convergence preflights embedded `/attachment/<duplicateID>/...` references
+    and project-scoped uniqueness conflicts before updating rows; unsafe rows
+    keep the identity conflict visible instead of partial-migrating.
   - Convergence updates every SQLite table with a `project_id` column by schema
     introspection, including `memory_fts`, then deletes duplicate `project`
     rows after child rows have moved.
@@ -101,6 +104,13 @@ exact worktree rows into one canonical project row and move every direct
     memory file/chunk/FTS rows and searchability.
   - Added an ambiguous duplicate exact worktree regression that proves the
     error remains visible without a canonical signal.
+  - Added unsafe convergence regressions for embedded attachment refs,
+    `permission.project_id` conflicts, and
+    `engine_task(project_id, request_id)` conflicts, including duplicate-row to
+    duplicate-row collisions where the canonical row is otherwise empty.
+- `packages/opencorvus/test/server/project-routes.test.ts`
+  - Added a real `GET /config` route regression proving the project middleware
+    converges duplicate exact worktree rows before config load.
 - Live DB repair
   - Created a SQLite `VACUUM INTO` backup at
     `.scratch/project-identity-20260703-012047/opencorvus-before-project-identity-convergence.db`.
@@ -130,10 +140,10 @@ bun test packages/opencorvus/test/script/product-docs-single-source.test.ts
 
 Results:
 
-- Duplicate exact worktree focused tests: 2 pass.
-- Project identity suite: 31 pass.
+- Duplicate exact worktree focused tests: 7 pass.
+- Project identity suite: 36 pass.
 - `packages/opencorvus` typecheck: pass.
-- Project route suite: 19 pass.
+- Project route suite: 20 pass.
 - Historical docs links: 19 pass.
 - Document health: 46 pass.
 - Product docs single source: 4 pass.
@@ -141,6 +151,8 @@ Results:
 Live DB read-only verification:
 
 ```text
+PRAGMA integrity_check => ok
+
 select worktree, count(*), group_concat(id)
 from project
 group by worktree
@@ -167,3 +179,26 @@ Isolated config-path verification:
 Instance.provide(directory=world-economy) + Config.get()
 => projectID cab62748535e7e3abf1fe78a96a8018c2bbe799d, no identity conflict
 ```
+
+## Independent Audit Addendum
+
+After the first implementation, independent agents Zeno, Helmholtz, and Dewey
+audited the code, live DB, and verification envelope. The live DB repair was
+confirmed consistent: duplicate worktrees are gone, direct `project_id` orphan
+rows are absent, memory file/chunk/FTS rows remain aligned, and SQLite integrity
+checks pass.
+
+The audit found that the first code path was still too broad as a general
+automatic repair:
+
+| Risk | Severity | Required follow-up |
+| --- | --- | --- |
+| Embedded attachment URLs store `/attachment/<projectID>/<name>` inside JSON columns and message parts. Updating only direct `project_id` columns could leave stale URLs after deleting a duplicate project row. | High | Before convergence, detect persisted `/attachment/<duplicateID>/...` references in ordinary table text and abort with an explicit project identity convergence error. Do not rewrite these refs in this repair; rewriting embedded JSON requires a separate source-aware design. |
+| Unique constraints such as `permission.project_id` and `engine_task(project_id, request_id)` can conflict when duplicate rows are collapsed. | Medium | Preflight known project-scoped uniqueness conflicts and abort with an explicit convergence error before any update. |
+| The unique task/session owner canonical rule is too heuristic; task/session ownership is data ownership, not a durable project identity source. | Medium | Remove task/session-owner canonical selection. Automatic convergence should use only marker/local identity signals; otherwise keep the conflict visible. |
+| No real `/config` HTTP regression covered the middleware path that originally failed. | Medium | Add a route-level `GET /config` duplicate exact worktree regression. |
+
+Second-pass repair boundary: exact duplicate rows auto-converge only for
+marker/local canonical identities and only when the migration is direct-reference
+safe. Unsafe embedded refs or uniqueness conflicts keep the duplicate rows and
+surface a deterministic identity convergence error.

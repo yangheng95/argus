@@ -11,6 +11,8 @@ import { resetDatabase } from "../fixture/db"
 import { Database, sql } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Memory } from "../../src/memory"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { PermissionTable } from "../../src/session/session.sql"
 
 Log.init({ print: false })
 
@@ -345,6 +347,201 @@ describe("Project.fromDirectory", () => {
     await expect(p.fromDirectory(tmp.path)).rejects.toThrow("Project identity conflict")
     expect(Project.get("project_exact_ambiguous_a")?.worktree).toBe(tmp.path)
     expect(Project.get("project_exact_ambiguous_b")?.worktree).toBe(tmp.path)
+  })
+
+  test("rejects duplicate exact worktree convergence with embedded attachment refs", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_attachment_canonical"
+    const duplicateID = "project_exact_attachment_duplicate"
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: canonicalID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+        ])
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: "task_exact_attachment_duplicate",
+          project_id: duplicateID,
+          source: "test",
+          title: "Attachment duplicate",
+          request: "Attachment duplicate",
+          priority: "normal",
+          attachments: [
+            {
+              sha: "sha",
+              url: `/attachment/${duplicateID}/sha.png`,
+              mime: "image/png",
+              size: 1,
+            },
+          ],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("embedded attachment reference")
+    expect(Project.get(duplicateID)?.worktree).toBe(tmp.path)
+    expect(Database.use((db) => db.select().from(EngineTaskTable).where(sql`id = ${"task_exact_attachment_duplicate"}`).get())?.project_id).toBe(
+      duplicateID,
+    )
+  })
+
+  test("rejects duplicate exact worktree convergence with project unique constraint conflicts", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_constraint_canonical"
+    const duplicateID = "project_exact_constraint_duplicate"
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: canonicalID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+        ])
+        .run()
+      db.insert(PermissionTable)
+        .values([
+          { project_id: canonicalID, data: [], time_created: now, time_updated: now },
+          { project_id: duplicateID, data: [], time_created: now, time_updated: now },
+        ])
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("duplicate permission rows")
+    expect(Project.get(duplicateID)?.worktree).toBe(tmp.path)
+  })
+
+  test("rejects duplicate exact worktree convergence when duplicate rows conflict on permission", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_constraint_canonical_empty"
+    const duplicateA = "project_exact_constraint_duplicate_a"
+    const duplicateB = "project_exact_constraint_duplicate_b"
+    const now = Date.now()
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: canonicalID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateA, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateB, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+        ])
+        .run()
+      db.insert(PermissionTable)
+        .values([
+          { project_id: duplicateA, data: [], time_created: now, time_updated: now },
+          { project_id: duplicateB, data: [], time_created: now, time_updated: now },
+        ])
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("duplicate permission rows")
+    expect(Project.get(duplicateA)?.worktree).toBe(tmp.path)
+    expect(Project.get(duplicateB)?.worktree).toBe(tmp.path)
+  })
+
+  test("rejects duplicate exact worktree convergence with duplicate request ids", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_request_canonical"
+    const duplicateID = "project_exact_request_duplicate"
+    const now = Date.now()
+    const requestID = "request_exact_duplicate"
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: canonicalID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+        ])
+        .run()
+      db.insert(EngineTaskTable)
+        .values([
+          {
+            id: "task_exact_request_canonical",
+            project_id: canonicalID,
+            request_id: requestID,
+            source: "test",
+            title: "Canonical request",
+            request: "Canonical request",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          },
+          {
+            id: "task_exact_request_duplicate",
+            project_id: duplicateID,
+            request_id: requestID,
+            source: "test",
+            title: "Duplicate request",
+            request: "Duplicate request",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          },
+        ])
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("duplicate request_id")
+    expect(Project.get(duplicateID)?.worktree).toBe(tmp.path)
+  })
+
+  test("rejects duplicate exact worktree convergence when duplicate rows share request ids", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const canonicalID = "project_exact_request_canonical_empty"
+    const duplicateA = "project_exact_request_duplicate_a"
+    const duplicateB = "project_exact_request_duplicate_b"
+    const now = Date.now()
+    const requestID = "request_exact_duplicate_rows"
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values([
+          { id: canonicalID, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateA, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+          { id: duplicateB, worktree: tmp.path, time_created: now, time_updated: now, sandboxes: [] },
+        ])
+        .run()
+      db.insert(EngineTaskTable)
+        .values([
+          {
+            id: "task_exact_request_duplicate_a",
+            project_id: duplicateA,
+            request_id: requestID,
+            source: "test",
+            title: "Duplicate request A",
+            request: "Duplicate request A",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          },
+          {
+            id: "task_exact_request_duplicate_b",
+            project_id: duplicateB,
+            request_id: requestID,
+            source: "test",
+            title: "Duplicate request B",
+            request: "Duplicate request B",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          },
+        ])
+        .run()
+    })
+    await Filesystem.write(path.join(tmp.path, ".git", "opencorvus"), canonicalID)
+
+    await expect(p.fromDirectory(tmp.path)).rejects.toThrow("duplicate request_id")
+    expect(Project.get(duplicateA)?.worktree).toBe(tmp.path)
+    expect(Project.get(duplicateB)?.worktree).toBe(tmp.path)
   })
 
   test("recognizes same filesystem identity even when real paths differ", async () => {
