@@ -25,7 +25,14 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Session } from "../../src/session"
 import { Identifier } from "../../src/id/id"
 import { Database } from "../../src/storage/db"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineChannelBindingTable,
+  EngineInteractionRequestTable,
+  EngineProgressSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
+import { DecisionLogTable } from "../../src/decision-log/schema"
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -66,6 +73,78 @@ function seedTaskWithFileRefs(input: {
         kind: "workflow",
         attachments: input.attachments ?? [],
         system_artifacts: input.systemArtifacts ?? [],
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+}
+
+function seedDurableOwnerRefs(input: {
+  taskID: string
+  decisionUrl: string
+  artifactUrl: string
+  interactionUrl: string
+  progressUrl: string
+  channelUrl: string
+}) {
+  const now = Date.now()
+  Database.use((db) => {
+    db.insert(DecisionLogTable)
+      .values({
+        id: Identifier.ascending("decision"),
+        task_id: input.taskID,
+        phase: "eval",
+        key: "visual_qa_annotation",
+        value: `annotated_evidence_refs=${input.decisionUrl}`,
+        reason: "sweep retain regression",
+        time_created: now,
+      })
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        kind: "design_resource_manifest",
+        label: "manifest",
+        payload: { references: [input.artifactUrl] },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineInteractionRequestTable)
+      .values({
+        id: Identifier.ascending("interaction"),
+        task_id: input.taskID,
+        external_id: Identifier.ascending("external"),
+        request_type: "question",
+        status: "pending",
+        title: "Interaction attachment retain",
+        body: input.interactionUrl,
+        payload: { attachmentUrl: input.interactionUrl },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: input.taskID,
+        status: "active",
+        summary: input.progressUrl,
+        payload: { attachmentUrl: input.progressUrl },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineChannelBindingTable)
+      .values({
+        id: Identifier.ascending("channel"),
+        task_id: input.taskID,
+        platform: `test-${now}`,
+        channel: Identifier.ascending("channel"),
+        thread: Identifier.ascending("thread"),
+        payload: { attachmentUrl: input.channelUrl },
         time_created: now,
         time_updated: now,
       })
@@ -226,12 +305,15 @@ describe("AttachmentStore.sweep", () => {
 
   // ── Retain-surface coverage ─────────────────────────────────────────
   //
-  // The live set is the union of three sources, not just `part.data`:
+  // The live set is the union of all durable attachment-owner sources, not
+  // just `part.data`:
   //   • session part.data           (conversation parts)
   //   • engine_task.attachments     (USER-CONTRACT files — figma-mcp frames,
   //                                   user uploads)
   //   • engine_task.system_artifacts (SYSTEM-GENERATED evidence — URL
   //                                   screenshots, rendered.png)
+  //   • decision_log value/reason   (Visual QA annotated evidence refs)
+  //   • engine artifact/progress/interaction/channel payloads
   //
   // Before the fix, collectReferencedShas only walked part.data. Any sha
   // registered via appendTaskAttachment / appendTaskSystemArtifact looked
@@ -289,26 +371,33 @@ describe("AttachmentStore.sweep", () => {
     })
   })
 
-  test("retain set = union of part.data ∪ task.attachments ∪ task.system_artifacts", async () => {
+  test("retain set includes session, task, decision-log, and engine durable owner refs", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const projectID = Instance.project.id
+        const taskID = Identifier.ascending("task")
         // A: referenced from a session part.data
         const partRef = await AttachmentStore.write(projectID, differentBytes(20), "image/png", "a.png")
         // B: referenced from engine_task.attachments
         const userAttachment = await AttachmentStore.write(projectID, differentBytes(21), "image/png", "b.png")
         // C: referenced from engine_task.system_artifacts
         const systemArtifact = await AttachmentStore.write(projectID, differentBytes(22), "image/png", "c.png")
-        // D: orphan — not referenced anywhere
-        const orphan = await AttachmentStore.write(projectID, differentBytes(23), "image/png", "d.png")
+        // D-H: referenced from additional durable task-scoped owner rows
+        const decisionRef = await AttachmentStore.write(projectID, differentBytes(23), "image/png", "decision.png")
+        const artifactRef = await AttachmentStore.write(projectID, differentBytes(24), "image/png", "artifact.png")
+        const interactionRef = await AttachmentStore.write(projectID, differentBytes(25), "image/png", "interaction.png")
+        const progressRef = await AttachmentStore.write(projectID, differentBytes(26), "image/png", "progress.png")
+        const channelRef = await AttachmentStore.write(projectID, differentBytes(27), "image/png", "channel.png")
+        // I: orphan — not referenced anywhere
+        const orphan = await AttachmentStore.write(projectID, differentBytes(28), "image/png", "orphan.png")
 
         await seedPartFileRef({ filename: "a.png", url: partRef.url })
 
         seedTaskWithFileRefs({
           projectID,
-          taskID: Identifier.ascending("task"),
+          taskID,
           attachments: [
             { sha: userAttachment.sha, url: userAttachment.url, mime: "image/png", size: userAttachment.size },
           ],
@@ -316,24 +405,42 @@ describe("AttachmentStore.sweep", () => {
             { sha: systemArtifact.sha, url: systemArtifact.url, mime: "image/png", size: systemArtifact.size },
           ],
         })
+        seedDurableOwnerRefs({
+          taskID,
+          decisionUrl: decisionRef.url,
+          artifactUrl: artifactRef.url,
+          interactionUrl: interactionRef.url,
+          progressUrl: progressRef.url,
+          channelUrl: channelRef.url,
+        })
 
         // Sanity: the helper actually returns the union we expect, not just
         // a permissive superset. Pinning this directly so a refactor that
         // drops one source still fails fast even if sweep() somehow still
         // passes.
         const retain = AttachmentStore.collectReferencedShas().get(projectID) ?? new Set<string>()
-        expect([...retain].sort()).toEqual([partRef.sha, userAttachment.sha, systemArtifact.sha].sort())
+        const keptRefs = [
+          partRef,
+          userAttachment,
+          systemArtifact,
+          decisionRef,
+          artifactRef,
+          interactionRef,
+          progressRef,
+          channelRef,
+        ]
+        expect([...retain].sort()).toEqual(keptRefs.map((ref) => ref.sha).sort())
 
-        for (const ref of [partRef, userAttachment, systemArtifact, orphan]) {
+        for (const ref of [...keptRefs, orphan]) {
           await ageFile(attachmentAbs(projectID, ref.url), 120_000)
         }
 
         const result = await AttachmentStore.sweep(projectID)
         expect(result.deleted).toBe(1)
-        expect(result.kept).toBe(3)
+        expect(result.kept).toBe(keptRefs.length)
 
         const remaining = (await AttachmentStore.listOnDisk(projectID)).map((f) => f.sha).sort()
-        expect(remaining).toEqual([partRef.sha, userAttachment.sha, systemArtifact.sha].sort())
+        expect(remaining).toEqual(keptRefs.map((ref) => ref.sha).sort())
       },
     })
   })
@@ -396,7 +503,7 @@ describe("AttachmentStore.sweep", () => {
     expect([...(unscoped.get(projectB) ?? [])].sort()).toEqual([partB, taskB].sort())
   })
 
-  test("still deletes a sha that is absent from all three retain surfaces", async () => {
+  test("still deletes a sha that is absent from all durable retain surfaces", async () => {
     // Negative control — confirms the wider retain set did not accidentally
     // disable the GC: a task that has its OWN attachments registered, but
     // doesn't reference some unrelated orphan, must still let that orphan be

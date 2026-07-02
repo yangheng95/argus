@@ -7,7 +7,14 @@ import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database, eq } from "@/storage/db"
 import { PartTable, SessionTable } from "@/session/session.sql"
-import { EngineTaskTable } from "@/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineChannelBindingTable,
+  EngineInteractionRequestTable,
+  EngineProgressSnapshotTable,
+  EngineTaskTable,
+} from "@/engine/engine.sql"
+import { DecisionLogTable } from "@/decision-log/schema"
 import { Log } from "@/util/log"
 import { requireRuntimePackage } from "@/runtime/package-require"
 
@@ -156,7 +163,10 @@ export namespace AttachmentStore {
     const dir = storageDir(project.worktree)
     await fs.mkdir(dir, { recursive: true })
     const abs = path.join(dir, name)
-    const existing = await fs.stat(abs).catch(() => null)
+    const existing = await fs.stat(abs).catch((error) => {
+      if (hasNodeErrorCode(error, "ENOENT") || hasNodeErrorCode(error, "ENOTDIR")) return null
+      throw error
+    })
     if (!existing) {
       await fs.writeFile(abs, data)
     } else {
@@ -829,12 +839,14 @@ export namespace AttachmentStore {
    * surfaces still references it:
    *
    *   • `part.data`                         (session conversation parts)
-   *   • `engine_task.attachments`           (USER-CONTRACT files: user uploads,
-   *                                          figma-mcp frames the user pointed
-   *                                          us at)
-   *   • `engine_task.system_artifacts`      (SYSTEM-GENERATED evidence: URL
-   *                                          screenshots, rendered.png, local
-   *                                          material reads)
+   *   • `engine_task.attachments`           (USER-CONTRACT files)
+   *   • `engine_task.system_artifacts`      (SYSTEM-GENERATED evidence)
+   *   • `decision_log.value/reason`         (Visual QA annotated evidence refs)
+   *   • `engine_artifact.payload`           (design manifests, browser-preview
+   *                                          evidence, acceptance evidence)
+   *   • `engine_interaction_request`,
+   *     `engine_progress_snapshot`, and
+   *     `engine_channel_binding` payloads    (durable task-scoped runtime facts)
    *
    * Walking only `part.data` (the pre-fix behaviour) violated rule 8: shas
    * registered through `appendTaskAttachment` / `appendTaskSystemArtifact`
@@ -871,6 +883,89 @@ export namespace AttachmentStore {
         harvestReferences(row.attachments, byProject)
         harvestReferences(row.system_artifacts, byProject)
       }
+
+      const decisionRows = projectID
+        ? db
+            .select({ value: DecisionLogTable.value, reason: DecisionLogTable.reason })
+            .from(DecisionLogTable)
+            .innerJoin(EngineTaskTable, eq(DecisionLogTable.task_id, EngineTaskTable.id))
+            .where(eq(EngineTaskTable.project_id, projectID))
+            .all()
+        : db.select({ value: DecisionLogTable.value, reason: DecisionLogTable.reason }).from(DecisionLogTable).all()
+      for (const row of decisionRows) {
+        harvestReferences(row.value, byProject)
+        harvestReferences(row.reason, byProject)
+      }
+
+      const artifactRows = projectID
+        ? db
+            .select({ payload: EngineArtifactTable.payload })
+            .from(EngineArtifactTable)
+            .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
+            .where(eq(EngineTaskTable.project_id, projectID))
+            .all()
+        : db.select({ payload: EngineArtifactTable.payload }).from(EngineArtifactTable).all()
+      for (const row of artifactRows) harvestReferences(row.payload, byProject)
+
+      const interactionRows = projectID
+        ? db
+            .select({
+              title: EngineInteractionRequestTable.title,
+              body: EngineInteractionRequestTable.body,
+              payload: EngineInteractionRequestTable.payload,
+              response: EngineInteractionRequestTable.response,
+            })
+            .from(EngineInteractionRequestTable)
+            .innerJoin(EngineTaskTable, eq(EngineInteractionRequestTable.task_id, EngineTaskTable.id))
+            .where(eq(EngineTaskTable.project_id, projectID))
+            .all()
+        : db
+            .select({
+              title: EngineInteractionRequestTable.title,
+              body: EngineInteractionRequestTable.body,
+              payload: EngineInteractionRequestTable.payload,
+              response: EngineInteractionRequestTable.response,
+            })
+            .from(EngineInteractionRequestTable)
+            .all()
+      for (const row of interactionRows) {
+        harvestReferences(row.title, byProject)
+        harvestReferences(row.body, byProject)
+        harvestReferences(row.payload, byProject)
+        harvestReferences(row.response, byProject)
+      }
+
+      const progressRows = projectID
+        ? db
+            .select({
+              summary: EngineProgressSnapshotTable.summary,
+              payload: EngineProgressSnapshotTable.payload,
+            })
+            .from(EngineProgressSnapshotTable)
+            .innerJoin(EngineTaskTable, eq(EngineProgressSnapshotTable.task_id, EngineTaskTable.id))
+            .where(eq(EngineTaskTable.project_id, projectID))
+            .all()
+        : db
+            .select({
+              summary: EngineProgressSnapshotTable.summary,
+              payload: EngineProgressSnapshotTable.payload,
+            })
+            .from(EngineProgressSnapshotTable)
+            .all()
+      for (const row of progressRows) {
+        harvestReferences(row.summary, byProject)
+        harvestReferences(row.payload, byProject)
+      }
+
+      const channelRows = projectID
+        ? db
+            .select({ payload: EngineChannelBindingTable.payload })
+            .from(EngineChannelBindingTable)
+            .innerJoin(EngineTaskTable, eq(EngineChannelBindingTable.task_id, EngineTaskTable.id))
+            .where(eq(EngineTaskTable.project_id, projectID))
+            .all()
+        : db.select({ payload: EngineChannelBindingTable.payload }).from(EngineChannelBindingTable).all()
+      for (const row of channelRows) harvestReferences(row.payload, byProject)
     })
     return byProject
   }

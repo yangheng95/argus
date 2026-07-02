@@ -10,7 +10,7 @@
  * dedupe, hard error on unknown extension (rule 1 — no silent
  * application/octet-stream fallback).
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
@@ -92,6 +92,38 @@ describe("AttachmentStore.writeFromPath", () => {
         const ref = await AttachmentStore.writeFromPath(projectID, src, "application/pdf")
         expect(ref.mime).toBe("application/pdf")
         expect(ref.url.endsWith(".dat")).toBe(true) // ext follows source filename
+      },
+    })
+  })
+
+  test("surfaces non-missing storage stat errors instead of treating the blob as absent", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const src = path.join(tmp.path, "blocked.png")
+        await fs.writeFile(src, PNG_MAGIC)
+        const first = await AttachmentStore.writeFromPath(projectID, src)
+        const located = AttachmentStore.nameFromUrl(first.url)
+        if (!located) throw new Error("expected attachment location")
+        const storedPath = AttachmentStore.resolveAbsolute(projectID, located.name)
+        if (!storedPath) throw new Error("expected stored path")
+
+        const originalStat = fs.stat
+        const statSpy = spyOn(fs, "stat").mockImplementation(async (target: fs.PathLike) => {
+          if (String(target) === storedPath) {
+            const error = new Error("permission denied") as NodeJS.ErrnoException
+            error.code = "EACCES"
+            throw error
+          }
+          return await originalStat(target)
+        })
+        try {
+          await expect(AttachmentStore.writeFromPath(projectID, src)).rejects.toThrow("permission denied")
+        } finally {
+          statSpy.mockRestore()
+        }
       },
     })
   })

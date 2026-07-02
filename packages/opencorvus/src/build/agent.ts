@@ -28,6 +28,7 @@ import z from "zod"
 import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { $ } from "bun"
 import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
@@ -36,6 +37,7 @@ import { PromptProfile, type PromptProfileConfig } from "@/agent/prompt-profile"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { EffectiveConfig } from "@/config/effective"
+import { collectRuntimePathRefs } from "@/browser-preview/persist"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
@@ -115,6 +117,19 @@ function isFilePartData(
   return record.type === "file" && typeof record.url === "string" && typeof record.mime === "string"
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function isCompletedToolPartData(value: unknown): value is Record<string, unknown> & {
+  state: Record<string, unknown> & { status: "completed" }
+} {
+  if (!isRecord(value)) return false
+  if (value.type !== "tool") return false
+  const state = value.state
+  return isRecord(state) && state.status === "completed"
+}
+
 function hasNodeErrorCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === code
 }
@@ -171,6 +186,86 @@ function repairCandidateFilenames(input: {
   return candidates
 }
 
+function cloneJsonObject<T extends Record<string, unknown>>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function parseStructuredToolOutputForPathRefs(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  const trimmed = value.trim()
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined
+  return JSON.parse(trimmed)
+}
+
+function collectToolArtifactPathCandidates(state: Record<string, unknown>): string[] {
+  const candidates: string[] = []
+  const pushAll = (refs: readonly string[]) => {
+    for (const ref of refs) {
+      if (!candidates.includes(ref)) candidates.push(ref)
+    }
+  }
+  pushAll(collectRuntimePathRefs(state.metadata))
+  pushAll(collectRuntimePathRefs(parseStructuredToolOutputForPathRefs(state.output)))
+  return candidates
+}
+
+function resolveReplayArtifactCandidate(input: {
+  projectRoot: string
+  worktreeDir: string
+  candidate: string
+}): string | undefined {
+  const raw = input.candidate.trim()
+  if (!raw) return undefined
+  const candidate = raw.startsWith("file://") ? fileURLToPath(raw) : raw
+  const projectRoot = path.resolve(input.projectRoot)
+  const worktreeDir = path.resolve(input.worktreeDir)
+  const withinRoot = (root: string, abs: string) => abs === root || abs.startsWith(root + path.sep)
+  if (path.isAbsolute(candidate)) {
+    const abs = path.resolve(candidate)
+    if (withinRoot(projectRoot, abs) || withinRoot(worktreeDir, abs)) return abs
+    throw new Error(`managed build retry artifact path is outside project/worktree roots: ${input.candidate}`)
+  }
+  const normalized = candidate.replaceAll("\\", "/")
+  if (normalized === ".opencorvus" || normalized.startsWith(".opencorvus/")) {
+    const abs = path.resolve(projectRoot, ...normalized.split("/"))
+    if (!withinRoot(projectRoot, abs)) {
+      throw new Error(`managed build retry artifact path escapes project root: ${input.candidate}`)
+    }
+    return abs
+  }
+  const abs = path.resolve(worktreeDir, ...normalized.split("/"))
+  if (!withinRoot(worktreeDir, abs)) {
+    throw new Error(`managed build retry artifact path escapes build worktree: ${input.candidate}`)
+  }
+  return abs
+}
+
+async function resolveManagedRetryArtifactReference(input: {
+  projectRoot: string
+  worktreeDir: string
+  storedName: string
+  sha: string
+  artifactCandidates: readonly string[]
+}): Promise<string> {
+  const tried: string[] = []
+  for (const candidate of input.artifactCandidates) {
+    const abs = resolveReplayArtifactCandidate({
+      projectRoot: input.projectRoot,
+      worktreeDir: input.worktreeDir,
+      candidate,
+    })
+    if (!abs) continue
+    tried.push(abs)
+    if (!(await pathExists(abs))) continue
+    if ((await fileSha256(abs)) !== input.sha) continue
+    return abs
+  }
+  throw new Error(
+    "managed build retry cannot repair persisted tool-result attachment: no persisted artifact path matched " +
+      `${input.storedName}; tried ${tried.join(", ") || "<none>"}`,
+  )
+}
+
 async function resolveManagedRetryStagedReference(input: {
   worktreeDir: string
   storedName: string
@@ -202,6 +297,8 @@ export async function repairManagedBuildSessionStagedFileParts(input: {
   projectID: string
   worktreeDir: string
 }): Promise<{ checked: number; repaired: number }> {
+  const project = Project.get(input.projectID)
+  if (!project) throw new Error(`managed build retry cannot repair attachments: project ${input.projectID} not found`)
   const rows = Database.use((db) =>
     db
       .select({
@@ -214,50 +311,161 @@ export async function repairManagedBuildSessionStagedFileParts(input: {
   )
   let checked = 0
   let repaired = 0
-  for (const row of rows) {
-    if (!isFilePartData(row.data)) continue
-    const located = AttachmentStore.nameFromUrl(row.data.url)
-    if (!located) continue
+  const repairAttachment = async (args: {
+    rowID: string
+    label: string
+    attachment: { url: string; mime: string; filename?: string }
+    artifactCandidates?: () => readonly string[]
+    stagedReference: boolean
+  }): Promise<{ attachment: { url: string; mime: string; filename?: string }; repaired: boolean }> => {
+    const located = AttachmentStore.nameFromUrl(args.attachment.url)
+    if (!located) return { attachment: args.attachment, repaired: false }
     checked++
     if (located.projectID !== input.projectID) {
       throw new Error(
-        `managed build retry cannot repair persisted file part ${row.id}: attachment belongs to project ` +
+        `managed build retry cannot repair ${args.label} ${args.rowID}: attachment belongs to project ` +
           `${located.projectID}, expected ${input.projectID}`,
       )
     }
     const canonicalAbs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
     if (!canonicalAbs) {
       throw new Error(
-        `managed build retry cannot repair persisted file part ${row.id}: attachment ` +
+        `managed build retry cannot repair ${args.label} ${args.rowID}: attachment ` +
           `${located.projectID}/${located.name} is not resolvable`,
       )
     }
-    if (await pathExists(canonicalAbs)) continue
+    if (await pathExists(canonicalAbs)) return { attachment: args.attachment, repaired: false }
 
     const expectedSha = shaFromStoredAttachmentName(located.name)
-    const stagedAbs = await resolveManagedRetryStagedReference({
-      worktreeDir: input.worktreeDir,
-      storedName: located.name,
-      filename: row.data.filename,
-      mime: row.data.mime,
-      sha: expectedSha,
-    })
+    if (!expectedSha) {
+      throw new Error(
+        `managed build retry cannot repair ${args.label} ${args.rowID}: attachment name ${located.name} has no sha`,
+      )
+    }
+    const sourceAbs = args.stagedReference
+      ? await resolveManagedRetryStagedReference({
+          worktreeDir: input.worktreeDir,
+          storedName: located.name,
+          filename: args.attachment.filename,
+          mime: args.attachment.mime,
+          sha: expectedSha,
+        })
+      : await resolveManagedRetryArtifactReference({
+          projectRoot: project.worktree,
+          worktreeDir: input.worktreeDir,
+          storedName: located.name,
+          sha: expectedSha,
+          artifactCandidates: args.artifactCandidates?.() ?? [],
+        })
     const reference = await AttachmentStore.writeFromPath(
       input.projectID,
-      stagedAbs,
-      row.data.mime,
-      row.data.filename ?? path.basename(stagedAbs),
+      sourceAbs,
+      args.attachment.mime,
+      args.attachment.filename ?? path.basename(sourceAbs),
     )
-    const nextData = {
-      ...row.data,
-      url: reference.url,
-      mime: reference.mime,
-      filename: row.data.filename ?? reference.filename,
+    if (reference.sha !== expectedSha) {
+      throw new Error(
+        `managed build retry repaired ${args.label} ${args.rowID} from ${sourceAbs} but sha changed: ` +
+          `${reference.sha}, expected ${expectedSha}`,
+      )
     }
-    Database.use((db) =>
-      db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
-    )
-    repaired++
+    return {
+      attachment: {
+        ...args.attachment,
+        url: reference.url,
+        mime: reference.mime,
+        filename: args.attachment.filename ?? reference.filename,
+      },
+      repaired: true,
+    }
+  }
+
+  for (const row of rows) {
+    if (isFilePartData(row.data)) {
+      const result = await repairAttachment({
+        rowID: row.id,
+        label: "persisted file part",
+        attachment: row.data,
+        stagedReference: true,
+      })
+      if (!result.repaired) continue
+      const nextData = {
+        ...row.data,
+        url: result.attachment.url,
+        mime: result.attachment.mime,
+        filename: result.attachment.filename,
+      }
+      Database.use((db) =>
+        db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
+      )
+      repaired++
+      continue
+    }
+
+    if (!isCompletedToolPartData(row.data)) continue
+    const nextData = cloneJsonObject(row.data)
+    const state = nextData.state
+    const artifactCandidates = () => collectToolArtifactPathCandidates(state)
+    let rowRepaired = false
+    if (Array.isArray(state.attachments)) {
+      const attachments: unknown[] = []
+      for (const item of state.attachments) {
+        if (!isRecord(item) || typeof item.url !== "string" || typeof item.mime !== "string") {
+          attachments.push(item)
+          continue
+        }
+        const result = await repairAttachment({
+          rowID: row.id,
+          label: "tool-result attachment",
+          attachment: {
+            url: item.url,
+            mime: item.mime,
+            filename: typeof item.filename === "string" ? item.filename : undefined,
+          },
+          artifactCandidates,
+          stagedReference: false,
+        })
+        attachments.push({ ...item, ...result.attachment })
+        if (result.repaired) {
+          rowRepaired = true
+          repaired++
+        }
+      }
+      state.attachments = attachments
+    }
+
+    const metadata = state.metadata
+    const browser = isRecord(metadata) && isRecord(metadata.browser) ? metadata.browser : undefined
+    const screenshot = isRecord(browser?.screenshot) ? browser.screenshot : undefined
+    if (screenshot && typeof screenshot.attachmentUrl === "string") {
+      const located = AttachmentStore.nameFromUrl(screenshot.attachmentUrl)
+      const metadataAttachment = {
+        url: screenshot.attachmentUrl,
+        mime: typeof screenshot.mimeType === "string" ? screenshot.mimeType : "image/png",
+        filename: located?.name,
+      }
+      const result = await repairAttachment({
+        rowID: row.id,
+        label: "browser screenshot metadata",
+        attachment: metadataAttachment,
+        artifactCandidates,
+        stagedReference: false,
+      })
+      if (result.repaired) {
+        screenshot.attachmentUrl = result.attachment.url
+        const repairedLocated = AttachmentStore.nameFromUrl(result.attachment.url)
+        const repairedSha = repairedLocated ? shaFromStoredAttachmentName(repairedLocated.name) : undefined
+        if (repairedSha) screenshot.sha = repairedSha
+        rowRepaired = true
+        repaired++
+      }
+    }
+
+    if (rowRepaired) {
+      Database.use((db) =>
+        db.update(PartTable).set({ data: nextData, time_updated: Date.now() }).where(eq(PartTable.id, row.id)).run(),
+      )
+    }
   }
   return { checked, repaired }
 }
@@ -739,6 +947,12 @@ export namespace BuildAgent {
           `BuildAgent.run: existing session ${buildSession.id} has kind=${buildSession.kind}, expected build`,
         )
       }
+      if (buildSession.projectID !== input.task.project_id) {
+        throw new Error(
+          `BuildAgent.run: existing session ${buildSession.id} belongs to project ${buildSession.projectID}, ` +
+            `expected task project ${input.task.project_id}`,
+        )
+      }
       if ((buildSession.goalID ?? undefined) !== (input.target.kind === "goal" ? input.target.id : undefined)) {
         throw new Error(
           `BuildAgent.run: existing session ${buildSession.id} has goalID=${buildSession.goalID ?? "<unset>"}, expected ${input.target.kind === "goal" ? input.target.id : "<unset>"}`,
@@ -779,11 +993,9 @@ export namespace BuildAgent {
       // AttachmentStore.writeFromPath, so Build no longer reads the original
       // content-addressed blob a second time after staging.
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
-      let stagedFilePartsForPrompt: AttachmentStore.InlineFilePart[] | undefined
       if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && evidenceEntries.length > 0) {
         try {
           stagedAttachments = await AttachmentStore.stageToWorktree(Instance.project.id, evidenceEntries, worktreeDir)
-          stagedFilePartsForPrompt = AttachmentStore.filePartsFromStagedReferences(stagedAttachments)
           if (stagedAttachments.length > 0) {
             log.info("build agent: staged evidence into worktree references/", {
               taskID: input.task.id,
@@ -823,31 +1035,27 @@ export namespace BuildAgent {
         evidenceEntries.length > 0
           ? async () => {
               const text = buildPromptText()
-              const inline =
-                stagedFilePartsForPrompt !== undefined
-                  ? stagedFilePartsForPrompt
-                  : await AttachmentStore.inlineFileParts(evidenceEntries)
-              // Three layers of context for evidence, each with a different
+              // Two layers of context for evidence, each with a different
               // role and required to coexist:
-              //   1. file parts → the LLM physically sees the pixels; managed
-              //      builds source these parts from staged references/
-              //   2. renderStagedList → tells the LLM the worktree-local path
-              //      so it can pass them to sandbox-checked tools
-              //   3. renderBuildEvidenceRoleSections → textual ledger that
-              //      keeps target references separate from prior outputs
+              //   1. renderStagedList → tells the LLM the worktree-local path
+              //      so it can inspect evidence with ordinary read/browser
+              //      tooling when needed, instead of forcing provider-bound
+              //      image bytes during session birth.
+              //   2. renderBuildEvidenceRoleSections → textual ledger that
+              //      keeps target references separate from prior outputs.
               //
               // Plus an UNCONDITIONAL target-reference contract preamble when
               // this dispatch carries target references. Previous outputs and
               // comparison artifacts are diagnostic context only.
               const visualContractPreamble = renderVisualContractPreamble(targetReferences, {
-                mode: "inlined",
+                mode: "staged-only",
               })
               const enrichedText =
                 visualContractPreamble +
                 text +
                 evidenceRoleSections +
                 AttachmentStore.renderStagedList(stagedAttachments)
-              return [{ type: "text" as const, text: enrichedText }, ...inline]
+              return [{ type: "text" as const, text: enrichedText }]
             }
           : undefined
       // External coding providers (codex / claude-code) get only a single

@@ -19,6 +19,7 @@ import { Database } from "../../src/storage/db"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
+import { Identifier } from "../../src/id/id"
 
 const providerModel: Provider.Model = {
   id: "test-model",
@@ -133,6 +134,25 @@ function captureCodingProvider(captured: { run?: CodingRunInfo; resume?: CodingR
   }
 }
 
+async function createAssistantMessage(input: { sessionID: string; cwd: string; parentID?: string }) {
+  return await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID: input.sessionID,
+    role: "assistant",
+    time: { created: Date.now(), completed: Date.now() + 1 },
+    parentID: input.parentID ?? Identifier.ascending("message"),
+    providerID: "test",
+    modelID: "test",
+    agent: "build",
+    path: {
+      cwd: input.cwd,
+      root: input.cwd,
+    },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, total: 0, cache: { read: 0, write: 0 } },
+  } as any)
+}
+
 afterEach(() => {
   ExecutorRegistry.reset()
 })
@@ -143,6 +163,15 @@ describe("BuildAgent managed worktree runtime", () => {
 
     expect(source).toContain("includeMcpTools: input.includeMcpTools,")
     expect(source).not.toContain("includeMcpTools: input.includeMcpTools === true")
+  })
+
+  test("in-process build prompts staged evidence paths instead of provider-bound image parts", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/agent.ts"), "utf8")
+
+    expect(source).toContain('mode: "staged-only"')
+    expect(source).toContain('return [{ type: "text" as const, text: enrichedText }]')
+    expect(source).not.toContain("filePartsFromStagedReferences(stagedAttachments)")
+    expect(source).not.toContain("return [{ type: \"text\" as const, text: enrichedText }, ...inline]")
   })
 
   test("managed worktrees do not receive copied runtime evidence views", async () => {
@@ -409,6 +438,270 @@ describe("BuildAgent managed worktree runtime", () => {
       },
     })
   }, 20_000)
+
+  test("managed build retries repair tool-result attachments from persisted artifact paths", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = `tsk_tool_attachment_repair_${Date.now().toString(36)}`
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "managed-retry-tool-worktree-"))
+        const buildSession = await Session.create({
+          kind: "build",
+          title: "Managed retry tool attachment",
+          directory: worktreeDir,
+        })
+        const pngBytes = await pngImage(18, 18)
+        const artifactRel = `.opencorvus/r/t/${taskID}/bp/job/side-by-side.png`
+        const artifactAbs = path.join(tmp.path, ...artifactRel.split("/"))
+        await fs.mkdir(path.dirname(artifactAbs), { recursive: true })
+        await fs.writeFile(artifactAbs, pngBytes)
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "side-by-side.png")
+        const message = await createAssistantMessage({
+          sessionID: buildSession.id,
+          cwd: worktreeDir,
+        })
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: message.id,
+          sessionID: buildSession.id,
+          type: "tool",
+          tool: "browser_preview_compare_scroll_slices",
+          callID: "call_tool_attachment_repair",
+          state: {
+            status: "completed",
+            input: {},
+            output: JSON.stringify({ artifacts: { side_by_side: artifactRel } }),
+            title: "Browser preview comparison",
+            metadata: { artifacts: { side_by_side: artifactRel } },
+            time: { start: 1, end: 2 },
+            attachments: [
+              {
+                id: Identifier.ascending("part"),
+                messageID: message.id,
+                sessionID: buildSession.id,
+                type: "file",
+                mime: "image/png",
+                url: original.url,
+                filename: "side-by-side.png",
+              },
+            ],
+          },
+        } as any)
+
+        const originalLocation = AttachmentStore.nameFromUrl(original.url)
+        if (!originalLocation) throw new Error("expected original attachment location")
+        const originalAbs = AttachmentStore.resolveAbsolute(originalLocation.projectID, originalLocation.name)
+        if (!originalAbs) throw new Error("expected original attachment path")
+        await fs.rm(originalAbs, { force: true })
+        await fs.rm(`${originalAbs}.metadata.json`, { force: true })
+
+        const storedBefore = await Message.get({ sessionID: buildSession.id, messageID: message.id })
+        await expect(Message.toModelMessages([storedBefore], providerModel)).rejects.toThrow(
+          "Failed to read tool-result attachment",
+        )
+
+        const repaired = await repairManagedBuildSessionStagedFileParts({
+          sessionID: buildSession.id,
+          projectID: Instance.project.id,
+          worktreeDir,
+        })
+
+        expect(repaired).toEqual({ checked: 1, repaired: 1 })
+        expect(await fs.readFile(originalAbs)).toEqual(pngBytes)
+        const storedAfter = await Message.get({ sessionID: buildSession.id, messageID: message.id })
+        const modelMessages = await Message.toModelMessages([storedAfter], providerModel)
+        const serializedModelMessages = JSON.stringify(modelMessages)
+        expect(serializedModelMessages).toContain('"type":"image-data"')
+        expect(serializedModelMessages).toContain('"mediaType":"image/png"')
+        expect(serializedModelMessages).toContain(`"data":"${pngBytes.toString("base64")}"`)
+      },
+    })
+  }, 20_000)
+
+  test("managed build retry rejects artifact repair paths outside replay roots", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "managed-retry-escape-worktree-"))
+        const buildSession = await Session.create({
+          kind: "build",
+          title: "Managed retry escaped artifact path",
+          directory: worktreeDir,
+        })
+        const pngBytes = await pngImage(16, 16)
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "escaped.png")
+        const message = await createAssistantMessage({
+          sessionID: buildSession.id,
+          cwd: worktreeDir,
+        })
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: message.id,
+          sessionID: buildSession.id,
+          type: "tool",
+          tool: "browser_preview_compare_scroll_slices",
+          callID: "call_tool_attachment_escape",
+          state: {
+            status: "completed",
+            input: {},
+            output: "artifact path escaped",
+            title: "Browser preview comparison",
+            metadata: { artifacts: { side_by_side: "../outside.png" } },
+            time: { start: 1, end: 2 },
+            attachments: [
+              {
+                id: Identifier.ascending("part"),
+                messageID: message.id,
+                sessionID: buildSession.id,
+                type: "file",
+                mime: "image/png",
+                url: original.url,
+                filename: "escaped.png",
+              },
+            ],
+          },
+        } as any)
+
+        const originalLocation = AttachmentStore.nameFromUrl(original.url)
+        if (!originalLocation) throw new Error("expected original attachment location")
+        const originalAbs = AttachmentStore.resolveAbsolute(originalLocation.projectID, originalLocation.name)
+        if (!originalAbs) throw new Error("expected original attachment path")
+        await fs.rm(originalAbs, { force: true })
+        await fs.rm(`${originalAbs}.metadata.json`, { force: true })
+
+        await expect(
+          repairManagedBuildSessionStagedFileParts({
+            sessionID: buildSession.id,
+            projectID: Instance.project.id,
+            worktreeDir,
+          }),
+        ).rejects.toThrow("escapes build worktree")
+      },
+    })
+  }, 20_000)
+
+  test("managed build retry fails unrecoverable browser screenshot metadata without artifact source", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "managed-retry-mcp-worktree-"))
+        const buildSession = await Session.create({
+          kind: "build",
+          title: "Managed retry MCP screenshot",
+          directory: worktreeDir,
+        })
+        const pngBytes = await pngImage(20, 20)
+        const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "browser-shot.png")
+        const message = await createAssistantMessage({
+          sessionID: buildSession.id,
+          cwd: worktreeDir,
+        })
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: message.id,
+          sessionID: buildSession.id,
+          type: "tool",
+          tool: "browser_observe",
+          callID: "call_unrecoverable_browser_screenshot",
+          state: {
+            status: "completed",
+            input: {},
+            output: "observed browser screenshot",
+            title: "Browser observe",
+            metadata: {
+              browser: {
+                screenshot: {
+                  mimeType: "image/png",
+                  attachmentUrl: original.url,
+                  sha: original.sha,
+                },
+              },
+            },
+            time: { start: 1, end: 2 },
+          },
+        } as any)
+
+        const originalLocation = AttachmentStore.nameFromUrl(original.url)
+        if (!originalLocation) throw new Error("expected original attachment location")
+        const originalAbs = AttachmentStore.resolveAbsolute(originalLocation.projectID, originalLocation.name)
+        if (!originalAbs) throw new Error("expected original attachment path")
+        await fs.rm(originalAbs, { force: true })
+        await fs.rm(`${originalAbs}.metadata.json`, { force: true })
+
+        await expect(
+          repairManagedBuildSessionStagedFileParts({
+            sessionID: buildSession.id,
+            projectID: Instance.project.id,
+            worktreeDir,
+          }),
+        ).rejects.toThrow("no persisted artifact path matched")
+      },
+    })
+  }, 20_000)
+
+  test("managed build retry rejects existing build sessions from a foreign project", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+
+    let foreignBuildSessionID = ""
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        const foreignBuildSession = await Session.create({
+          kind: "build",
+          title: "Foreign build session",
+          directory: projectB.path,
+        })
+        foreignBuildSessionID = foreignBuildSession.id
+      },
+    })
+
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        const taskID = `tsk_foreign_build_session_${Date.now().toString(36)}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Foreign session root",
+          directory: projectA.path,
+        })
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+
+        await expect(
+          BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            existingSessionID: foreignBuildSessionID,
+            target: {
+              kind: "request",
+              text: "retry with foreign build session",
+            },
+            managedWorktree: {
+              directory: projectA.path,
+              branch: undefined,
+            },
+          }),
+        ).rejects.toThrow("expected task project")
+      },
+    })
+  }, 30_000)
 
   test("managed build retry invokes persisted file part repair before provider resume", async () => {
     await using tmp = await tmpdir({

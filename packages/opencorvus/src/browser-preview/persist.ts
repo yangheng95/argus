@@ -696,6 +696,36 @@ export function stripRuntimePathRefs(input: unknown): unknown {
   return out
 }
 
+export function collectRuntimePathRefs(input: unknown): string[] {
+  const refs: string[] = []
+  const seen = new Set<object>()
+  const push = (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed && !refs.includes(trimmed)) refs.push(trimmed)
+  }
+  const visit = (value: unknown, depth: number) => {
+    if (!value || depth > 8) return
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1)
+      return
+    }
+    if (typeof value !== "object") return
+    if (seen.has(value)) return
+    seen.add(value)
+    for (const [key, child] of Object.entries(value)) {
+      if (typeof child === "string" && isPathRefKey(key)) push(child)
+      if ((key === "artifactPaths" || key === "artifact_paths") && Array.isArray(child)) {
+        for (const item of child) {
+          if (typeof item === "string") push(item)
+        }
+      }
+      visit(child, depth + 1)
+    }
+  }
+  visit(input, 0)
+  return refs
+}
+
 function isPathRefKey(key: string): boolean {
   return (
     key === "path" ||
