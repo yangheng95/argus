@@ -87,6 +87,19 @@
 | `control_message` | `control/control.sql.ts`     | 外部控制消息 timeline            |
 | `project`         | `project/project.sql.ts`     | 项目根                           |
 
+## Project Storage Namespace
+
+`project.id` / `project_id` 是后端 storage namespace，不是用户可见项目数。
+同一 canonical project worktree / common Git identity 必须收敛到一个后端
+namespace；一个目录下的多个用户可见 Mission / task 通过现有 Mission/task 记录
+表达，不能通过制造多个 `project_id` 行表达。
+
+`Project.fromDirectory()` 与 exact-worktree convergence 是当前 namespace 入口。
+重复 worktree 行只能收敛或显式报错；当历史 JSON/text 中存在
+`/attachment/<projectID>/...` 这类嵌入式 namespace identity 时，不能盲改或复制
+foreign attachment 来“修复”。Attachment bytes 的物理池在
+`.opencorvus/r/b/a`，但语义 owner 来自记录里的 `project_id` / durable contract。
+
 ## 辅助域
 
 | 表                                                            | 文件                         | 作用                                            |
@@ -144,6 +157,37 @@ wake）。Agent 代码不手工调 trace；命名空间是 `AgentTrace`，不是
   > 现为 Orchestrator + 专职 sub-agent 模型（Requirements → Architect → Build/Executor）。
   > Planner 不再是合法 SessionKind（见本文件 §session 域）。
 - **传 WHY 不只 WHAT**
+
+## Build Input Evidence
+
+Build 输入证据的 durable authority 是
+`engine_artifact[kind="build_session_contract"].payload.input_evidence`。不要新增
+平行的 `build_input_evidence` artifact，也不要从当前 task attachments、ambient
+`Instance.project.id` 或 board/compaction 投影重新计算 Build 输入 owner。
+
+当前 contract 记录：
+
+- manifest `version`、`project_id`、`task_id`、`goal_id?`、`goal_run_id?`、
+  `session_id?`
+- 每个 input entry 的 `role`、`project_id`、`sha`、`mime`、`size`、`filename?`
+- provenance 字段如 `source_artifact_id?`、`source_decision_id?`、
+  `source_task_id?`
+- legacy byte address `legacy_attachment_url?`、future file ref
+  `artifact_file_ref_id?`
+- staged path `staged_rel_path?` 与 `sha_verified_at`
+
+Orchestrator 在 BuildAgent/provider replay 前组成并验证 manifest：task project
+ownership、canonical metadata、bytes 可读性、sha 一致性、role/source/intent 都必须先
+成立。`beginBuildAttempt.extraArtifacts` 将同一 manifest 写入
+`build_session_contract`，与 running `goal_run_attempt` 在同一事务中落库。
+
+同一 Build session retry 读取原 session 的
+`build_session_contract.input_evidence`，不重新附带 fresh model file parts。fresh
+Build session / redispatch 会写新的 contract input section。
+
+后续长期文件 owner 是通用 `artifact_file_ref`，不是 attachment-only
+`attachment_ref`。在该表实施前，GC 仍可对 legacy `/attachment/...` 嵌入引用做
+harvest，但 Build contract-held evidence 已是显式 live-set 来源。
 
 ## 相关文档
 

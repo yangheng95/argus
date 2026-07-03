@@ -1,7 +1,7 @@
 # Multi-Task Storage Namespace Consensus
 
 Date: 2026-07-03
-Status: Revised after independent review
+Status: Phase 1 implemented through documentation update; end-to-end reproduction pending
 
 ## Recall
 
@@ -15,6 +15,20 @@ Status: Revised after independent review
 | First independent analysis | Carson confirmed the documented product boundary: one directory may hold many user-visible projects/Missions/tasks, but not multiple backend `project_id` namespaces for the same worktree. Arendt confirmed `stageToWorktree` is correctly strict and the missing boundary is an attempt-scoped durable Build input owner. Helmholtz confirmed runtime roots and attachment blobs are physically directory-level while task/session paths are mostly scoped, so same-directory multi-`project_id` cannot be fully isolated. |
 | Second independent review | Wegener rejected implementing a new `user_project` table for this failure chain and required using existing Mission/task grouping unless product requirements exceed it. Heisenberg and Wegener both rejected parallel `build_input_evidence` and `build_session_contract` authorities. Heisenberg required `artifact_file_ref` rather than attachment-only ownership and required missing blobs to fail during dispatch evidence composition. Socrates required a fuller `project_id` surface table, linked-worktree wording, cache handling, current duplicate-project preflights, and explicit Build callsite replacements. |
 | External prior art check | Read official docs for [OpenHands Docker Sandbox](https://docs.openhands.dev/sdk/guides/agent-server/docker-sandbox), [OpenHands GUI workspace mounting](https://docs.openhands.dev/openhands/usage/cli/gui-server), [GitHub Codespaces isolation](https://docs.github.com/en/codespaces/reference/security-in-github-codespaces), [Claude Code parallel sessions with worktrees](https://code.claude.com/docs/en/common-workflows), [Git worktree](https://git-scm.com/docs/git-worktree), [SWE-agent output trajectories](https://swe-agent.com/latest/usage/trajectories/), [SWE-agent command-line environment examples](https://swe-agent.com/latest/usage/cl_tutorial/), [GitLab job artifacts](https://docs.gitlab.com/ci/jobs/job_artifacts/), [GitLab CI/CD architecture notes](https://docs.gitlab.com/development/cicd/), [MLflow artifact stores](https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/), [Bazel remote caching](https://bazel.build/remote/caching), [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence), and [Temporal Workflow Id / Run Id](https://docs.temporal.io/workflow-execution/workflowid-runid). |
+
+## Implementation Status
+
+Phase 1 is implemented in code and current architecture docs:
+
+- `build_session_contract.payload.input_evidence` is the single durable Build input manifest.
+- Build dispatch composes and validates evidence before provider replay; foreign refs, missing blobs, and sha mismatch fail before contract/provider use.
+- Build staging, same-session retry repair, and Build-bound `SessionPrompt` byte materialization use the task/session manifest owner instead of ambient `Instance.project.id`.
+- Same-session retry reuses the original manifest and does not resend fresh file parts; fresh Build sessions write a new manifest.
+- GC retains blobs referenced only through a live `build_session_contract.input_evidence`.
+- Board and compaction projections keep Build inputs single-source by carrying only contract locators.
+- Fresh Build dispatch rejects active-project/task-project mismatch before creating a Build child session, staging evidence, or calling a provider.
+
+Goal 10 still remains: run the end-to-end failure reproduction bundle listed below before calling the entire repair complete.
 
 ## Problem Statement
 
@@ -628,16 +642,17 @@ Do not:
 
 ### Phase 1: Seal The Current Failure Chain
 
-- Extend `build_session_contract` with `input_evidence` and treat it as the single Build dispatch manifest.
-- Compose and validate Build input evidence before BuildAgent/provider replay:
+- Status: implemented.
+- Extended `build_session_contract` with `input_evidence` and treats it as the single Build dispatch manifest.
+- Composes and validates Build input evidence before BuildAgent/provider replay:
   - foreign-project target references fail before staging;
   - missing blobs fail as corrupt Build input before provider replay;
   - sha mismatch fails before contract write.
-- Replace task-owned ambient `Instance.project.id` usage in Build evidence materialization/staging/repair with `task.project_id`.
-- Replace or explicitly bind SessionPrompt byte materialization for Build-bound MCP blobs, `data:` file parts, and `file://` parts so it cannot use the wrong ambient project.
-- Ensure the extended `build_session_contract` is written through `beginBuildAttempt.extraArtifacts` in the same transaction as the running attempt.
-- Keep `AttachmentStore.stageToWorktree` strict.
-- Add focused tests:
+- Replaced task-owned ambient `Instance.project.id` usage in Build evidence materialization/staging/repair with `task.project_id`.
+- Bound SessionPrompt byte materialization for Build-bound MCP blobs, `data:` file parts, and `file://` parts so it cannot use the wrong ambient project.
+- Ensures the extended `build_session_contract` is written through `beginBuildAttempt.extraArtifacts` in the same transaction as the running attempt.
+- Keeps `AttachmentStore.stageToWorktree` strict.
+- Added focused tests:
   - foreign-project target reference rejected before staging;
   - missing blob rejected before provider replay;
   - sha mismatch rejected before contract write;
@@ -663,7 +678,7 @@ Do not:
 
 ### Phase 4: Current Architecture Update
 
-After implementation and verification, update `specs/current/architecture/02-data.md` and `10-worktree-lifecycle.md` to make the storage namespace, Build contract input evidence, and file-ref authority current architecture.
+Status: implemented for `specs/current/architecture/02-data.md` and `10-worktree-lifecycle.md`. They now describe the storage namespace, Build contract input evidence, retry owner, and Phase 2 `artifact_file_ref` direction as current architecture.
 
 ## Non-Goals
 
@@ -693,4 +708,20 @@ Draft validation after integrating independent review:
 
 ```powershell
 bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts --timeout 120000
+```
+
+Phase 1 implementation verification run during execution:
+
+```powershell
+bun test packages/opencorvus/test/build-agent/evidence-manifest.test.ts --timeout 120000
+bun test packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts --timeout 120000
+bun test packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "goal build retry reuses the prior build session by default|goal build session contract records validated input evidence manifest|direct build rejects foreign input evidence" --timeout 120000
+bun test packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/session/prompt-parts-model-resolution.test.ts --timeout 120000
+bun test packages/opencorvus/test/storage/attachment-store-sweep.test.ts --timeout 120000
+bun test packages/opencorvus/test/workbench/board.test.ts --timeout 120000
+bun test packages/opencorvus/test/session/compaction.test.ts --timeout 120000
+bun test packages/transport-protocol/test/contract.test.ts --timeout 120000
+bun test packages/overlay/test/api-directory-injection.test.ts --timeout 120000
+bun test packages/opencorvus/test/server/task-conversation-routes.test.ts --test-name-pattern "hydrates transcript from the task project|current-project transcript" --timeout 120000
+bun run --cwd packages/opencorvus typecheck
 ```
