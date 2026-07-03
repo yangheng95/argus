@@ -25,6 +25,7 @@ import { ProviderRoutes } from "./provider"
 import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
 import { SkillRoutes } from "./skill"
+import { ExpertSquadRoutes } from "./expert-squad"
 import { PtyRoutes } from "./pty"
 import { ExportRoutes } from "./export"
 import { EngineRoutes } from "./orchestrator"
@@ -123,6 +124,7 @@ export function AppRoutes(root: Hono) {
     .route("/question", QuestionRoutes())
     .route("/provider", ProviderRoutes())
     .route("/skill", SkillRoutes())
+    .route("/expert-squad", ExpertSquadRoutes())
     .route("/panel", PanelRoutes())
     .route("/control", ControlRoutes())
     .route("/coding", CodingRoutes())

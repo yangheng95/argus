@@ -1,4 +1,4 @@
-import { BlobWriter, Uint8ArrayReader, Uint8ArrayWriter, ZipReader, ZipWriter } from "@zip.js/zip.js"
+import { BlobWriter, Uint8ArrayReader, Writer, ZipReader, ZipWriter } from "@zip.js/zip.js"
 import { randomUUID } from "crypto"
 import { cp, lstat, mkdir, readdir, rename, rm } from "fs/promises"
 import path from "path"
@@ -42,6 +42,14 @@ export namespace ExpertSquadPackageManager {
     path: string
     bytes: Uint8Array
   }
+
+  export const archiveImportLimits = {
+    base64Characters: 24 * 1024 * 1024,
+    archiveBytes: 18 * 1024 * 1024,
+    entries: 512,
+    fileBytes: 4 * 1024 * 1024,
+    totalUnpackedBytes: 16 * 1024 * 1024,
+  } as const
 
   const packageInstallLocks = new Map<string, Promise<void>>()
 
@@ -128,21 +136,90 @@ export namespace ExpertSquadPackageManager {
     return stripped
   }
 
+  function assertArchiveByteLimit(label: string, value: number, limit: number) {
+    if (value > limit) throw new Error(`${label} exceeds expert squad archive limit: ${value} bytes > ${limit} bytes`)
+  }
+
+  class LimitedUint8ArrayWriter extends Writer<Uint8Array> {
+    private chunks: Uint8Array[] = []
+    private byteCount = 0
+
+    constructor(private limits: { label: string; limit: number }[]) {
+      super()
+    }
+
+    override async init(size?: number) {
+      await super.init?.(size)
+      if (typeof size !== "number") return
+      for (const limit of this.limits) assertArchiveByteLimit(limit.label, size, limit.limit)
+    }
+
+    override async writeUint8Array(array: Uint8Array) {
+      const nextByteCount = this.byteCount + array.byteLength
+      for (const limit of this.limits) assertArchiveByteLimit(limit.label, nextByteCount, limit.limit)
+      this.chunks.push(Uint8Array.from(array))
+      this.byteCount = nextByteCount
+    }
+
+    override async getData() {
+      const result = new Uint8Array(this.byteCount)
+      let offset = 0
+      for (const chunk of this.chunks) {
+        result.set(chunk, offset)
+        offset += chunk.byteLength
+      }
+      return result
+    }
+  }
+
   async function readArchiveFiles(input: ImportArchiveInput): Promise<NormalizedArchiveFile[]> {
+    if (input.archiveBase64.length > archiveImportLimits.base64Characters) {
+      throw new Error(
+        `Expert squad archive base64 payload exceeds limit: ${input.archiveBase64.length} characters > ${archiveImportLimits.base64Characters} characters`,
+      )
+    }
     const archive = Uint8Array.from(Buffer.from(input.archiveBase64, "base64"))
+    assertArchiveByteLimit("Expert squad archive", archive.byteLength, archiveImportLimits.archiveBytes)
     const reader = new ZipReader(new Uint8ArrayReader(archive))
     try {
       const entries = await reader.getEntries()
+      if (entries.length > archiveImportLimits.entries) {
+        throw new Error(`Expert squad archive entry count exceeds limit: ${entries.length} > ${archiveImportLimits.entries}`)
+      }
       const files: NormalizedArchiveFile[] = []
       const seen = new Set<string>()
+      let declaredUnpackedBytes = 0
+      let actualUnpackedBytes = 0
       for (const entry of entries) {
         if (entry.directory) continue
         const relativePath = normalizeArchivePath(entry.filename)
         const collisionKey = relativePath.toLowerCase()
         if (seen.has(collisionKey)) throw new Error(`Duplicate expert squad archive path after normalization: ${relativePath}`)
         seen.add(collisionKey)
-        const data = await entry.getData?.(new Uint8ArrayWriter())
+        assertArchiveByteLimit(`Expert squad archive file ${relativePath}`, entry.uncompressedSize, archiveImportLimits.fileBytes)
+        declaredUnpackedBytes += entry.uncompressedSize
+        assertArchiveByteLimit(
+          "Expert squad archive declared unpacked content",
+          declaredUnpackedBytes,
+          archiveImportLimits.totalUnpackedBytes,
+        )
+        const data = await entry.getData?.(
+          new LimitedUint8ArrayWriter([
+            { label: `Expert squad archive file ${relativePath}`, limit: archiveImportLimits.fileBytes },
+            {
+              label: "Expert squad archive unpacked content",
+              limit: archiveImportLimits.totalUnpackedBytes - actualUnpackedBytes,
+            },
+          ]),
+        )
         if (!data) continue
+        assertArchiveByteLimit(`Expert squad archive file ${relativePath}`, data.byteLength, archiveImportLimits.fileBytes)
+        actualUnpackedBytes += data.byteLength
+        assertArchiveByteLimit(
+          "Expert squad archive unpacked content",
+          actualUnpackedBytes,
+          archiveImportLimits.totalUnpackedBytes,
+        )
         files.push({
           path: relativePath,
           bytes: data,
@@ -217,6 +294,7 @@ export namespace ExpertSquadPackageManager {
       await rm(backup, { recursive: true, force: true })
 
       let targetMoved = false
+      let targetInstalled = false
       try {
         await cp(source, staging, {
           recursive: true,
@@ -224,13 +302,17 @@ export namespace ExpertSquadPackageManager {
           errorOnExist: true,
           verbatimSymlinks: true,
         })
-        await ExpertSquadRegistry.loadSourcePackage(staging)
+        const staged = await ExpertSquadRegistry.loadSourcePackage(staging)
+        if (staged.id !== loaded.id) {
+          throw new Error(`Expert squad package id changed during import: expected ${loaded.id}, got ${staged.id}`)
+        }
 
         if (existing) {
           await rename(target, backup)
           targetMoved = true
         }
         await rename(staging, target)
+        targetInstalled = true
         await ExpertSquadRegistry.loadPackage(target)
         await rm(backup, { recursive: true, force: true })
         return {
@@ -251,6 +333,7 @@ export namespace ExpertSquadPackageManager {
             )
           }
         }
+        if (!targetMoved && targetInstalled) await rm(target, { recursive: true, force: true }).catch(() => undefined)
         throw error
       }
     })

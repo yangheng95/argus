@@ -8796,6 +8796,133 @@ export type SkillPolicyResponses = {
 
 export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
 
+export type ExpertSquadImportFolderData = {
+  body: {
+    sourceDirectory: string
+    replace?: boolean
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/import-folder"
+}
+
+export type ExpertSquadImportFolderErrors = {
+  /**
+   * Expert squad package import rejected
+   */
+  400: {
+    name: "ExpertSquadPackageError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type ExpertSquadImportFolderError = ExpertSquadImportFolderErrors[keyof ExpertSquadImportFolderErrors]
+
+export type ExpertSquadImportFolderResponses = {
+  /**
+   * Imported expert squad package
+   */
+  200: {
+    id: string
+    targetRoot: string
+    replaced: boolean
+  }
+}
+
+export type ExpertSquadImportFolderResponse = ExpertSquadImportFolderResponses[keyof ExpertSquadImportFolderResponses]
+
+export type ExpertSquadImportFileData = {
+  body: {
+    archiveBase64: string
+    filename?: string
+    replace?: boolean
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/import-file"
+}
+
+export type ExpertSquadImportFileErrors = {
+  /**
+   * Expert squad package import rejected
+   */
+  400: {
+    name: "ExpertSquadPackageError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type ExpertSquadImportFileError = ExpertSquadImportFileErrors[keyof ExpertSquadImportFileErrors]
+
+export type ExpertSquadImportFileResponses = {
+  /**
+   * Imported expert squad package
+   */
+  200: {
+    id: string
+    targetRoot: string
+    replaced: boolean
+  }
+}
+
+export type ExpertSquadImportFileResponse = ExpertSquadImportFileResponses[keyof ExpertSquadImportFileResponses]
+
+export type ExpertSquadExportData = {
+  body: {
+    id: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/expert-squad/export"
+}
+
+export type ExpertSquadExportErrors = {
+  /**
+   * Expert squad package export rejected
+   */
+  400: {
+    name: "ExpertSquadPackageError"
+    data: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type ExpertSquadExportError = ExpertSquadExportErrors[keyof ExpertSquadExportErrors]
+
+export type ExpertSquadExportResponses = {
+  /**
+   * Exported expert squad archive
+   */
+  200: {
+    id: string
+    filename: string
+    archiveBase64: string
+    fileCount: number
+  }
+}
+
+export type ExpertSquadExportResponse = ExpertSquadExportResponses[keyof ExpertSquadExportResponses]
+
 export type PanelCapabilitiesData = {
   body?: never
   path?: never

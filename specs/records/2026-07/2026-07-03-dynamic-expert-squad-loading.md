@@ -929,12 +929,23 @@ Phase 2 package manager foundation, 2026-07-03:
 - Import/export tests live in `packages/opencorvus/test/expert-squad/package-manager.test.ts`.
 - Independent package-manager review found and drove fixes for staging/backup catalog pollution, export path traversal, restore failure swallowing, runtime filter duplication, active-selection mutation risk, concurrent replace serialization, ZIP colon path rejection, and export wrapper contract alignment.
 
+Phase 3 import/export routes, 2026-07-03:
+
+- Added project-scoped `/expert-squad/import-folder`, `/expert-squad/import-file`, and `/expert-squad/export` routes on top of `ExpertSquadPackageManager`.
+- Routes use `Instance.directory` as the only project directory source and reject body-level `projectDirectory` overrides through strict request schemas.
+- Package validation failures are surfaced as `ExpertSquadPackageError` with HTTP 400 instead of generic 500 responses.
+- Route tests cover real `?directory=` project injection, ZIP import/export round trip, invalid archive error mapping, and project-directory override rejection across all three routes in `packages/opencorvus/test/server/expert-squad-routes.test.ts`.
+- `routeRequiresProjectDirectory` and OpenAPI directory-query tests now explicitly cover `/expert-squad/*`.
+- Independent route review found no route-scope blocker and drove the real `?directory=` plus all-route body override coverage fixes.
+- Independent package-security review found first-install cleanup and ZIP resource-limit blockers. The package manager now rejects staging manifest ID changes before moving, removes a newly moved first-install target if final validation fails, and applies explicit archive base64, decoded archive, entry count, per-file, and total unpacked byte limits.
+- A second package-security review found and drove fixes for replace rollback after post-move validation failure and for enforcing actual decompressed bytes through a bounded ZIP writer instead of only after full materialization.
+- Package-manager tests now cover first-install cleanup after post-move validation failure, replace rollback after post-move validation failure, staging manifest ID changes, and ZIP archive resource-limit rejection.
+
 Still pending:
 
 - Migrating built-in expert squads into package-shaped definitions.
 - Replacing `PromptProfile` TypeScript built-ins with registry-backed catalog/projection.
 - Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
-- Implementing folder/ZIP import and export routes on top of `ExpertSquadPackageManager`; route code must map package validation errors to precise HTTP responses instead of returning generic 500s.
 - Implementing delete/reference-audit service support before adding `DELETE /expert-squad/:id`; delete route must not perform its own separate config/session lookup logic.
 
 ## Open Risks For Review
@@ -1030,3 +1041,17 @@ Review loop 6:
   - MCP runtime keys use project ID plus complete canonical MCP server ref across connection, status, auth/cache, provider-facing, proxy, prompt/resource, and `callTool` lookup;
   - strict manifest schema covers nested stale fields;
   - active projection remains the only runtime capability source.
+
+Implementation review loop 7:
+
+- Parfit reviewed route scope and found no blocker, then identified two coverage gaps: route tests needed a real `?directory=` middleware path and body-level `projectDirectory` rejection on all three expert-squad routes.
+- Wegener reviewed package security and found two blockers: first-time folder import could leave a bad target after a post-move validation failure, and ZIP import lacked archive-size, entry-count, per-file, and total unpacked byte limits.
+- Archimedes reviewed generated API artifacts and found the route/OpenAPI/docs/SDK additions consistent, but flagged that staged boundaries must exclude unrelated dirty Visual QA, model snapshot, and generated `retry_replay_token_limit` output.
+- Revisions applied:
+  - Route tests now use real `?directory=` injection for folder import and assert body-level `projectDirectory` rejection for import-folder, import-file, and export.
+  - `ExpertSquadPackageManager` now checks archive resource limits before and during extraction.
+  - Folder import now rejects staging manifest ID changes before moving the staging directory.
+  - First-time import cleanup removes a newly moved target if final canonical validation fails.
+  - Replace rollback after post-move validation failure restores the previous package and does not delete the restored target during cleanup.
+  - ZIP extraction now uses a bounded writer so actual decompressed bytes are checked while chunks are written, not only after full materialization.
+  - Staging will include only expert-squad route/package/docs/SDK route artifacts; unrelated dirty files remain outside this phase.

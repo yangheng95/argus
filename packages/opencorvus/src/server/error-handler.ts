@@ -61,6 +61,7 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "PluginServiceRegistrationError") return 500
   if (err.name === "PluginServiceDuplicateIDError") return 500
   if (err.name === "MCPOAuthStateError") return 400
+  if (err.name === "ExpertSquadPackageError") return 400
   return 500
 }
 

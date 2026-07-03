@@ -95,6 +95,12 @@ import type {
   ExperimentalWorkspaceListResponses,
   ExperimentalWorkspaceRemoveErrors,
   ExperimentalWorkspaceRemoveResponses,
+  ExpertSquadExportErrors,
+  ExpertSquadExportResponses,
+  ExpertSquadImportFileErrors,
+  ExpertSquadImportFileResponses,
+  ExpertSquadImportFolderErrors,
+  ExpertSquadImportFolderResponses,
   ExportSessionErrors,
   ExportSessionResponses,
   FileCopyErrors,
@@ -4019,6 +4025,127 @@ export class Skill extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SkillPolicyResponses, unknown, ThrowOnError>({
       url: "/skill/policy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class ExpertSquad extends HeyApiClient {
+  /**
+   * Import an expert squad folder
+   *
+   * Validate and install a local expert-squad package folder into the current project's .opencorvus expert-squads catalog.
+   */
+  public importFolder<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      sourceDirectory: string
+      replace?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "sourceDirectory" },
+            { in: "body", key: "replace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExpertSquadImportFolderResponses,
+      ExpertSquadImportFolderErrors,
+      ThrowOnError
+    >({
+      url: "/expert-squad/import-folder",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Import an expert squad ZIP archive
+   *
+   * Validate and install a dropped expert-squad ZIP archive into the current project's .opencorvus expert-squads catalog.
+   */
+  public importFile<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      archiveBase64: string
+      filename?: string
+      replace?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "archiveBase64" },
+            { in: "body", key: "filename" },
+            { in: "body", key: "replace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExpertSquadImportFileResponses,
+      ExpertSquadImportFileErrors,
+      ThrowOnError
+    >({
+      url: "/expert-squad/import-file",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Export an expert squad ZIP archive
+   *
+   * Validate and pack a canonical expert-squad package from the current project's .opencorvus expert-squads catalog.
+   */
+  public export<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExpertSquadExportResponses, ExpertSquadExportErrors, ThrowOnError>({
+      url: "/expert-squad/export",
       ...options,
       ...params,
       headers: {
@@ -9888,6 +10015,11 @@ export class OpenCorvusClient extends HeyApiClient {
   private _skill?: Skill
   get skill(): Skill {
     return (this._skill ??= new Skill({ client: this.client }))
+  }
+
+  private _expertSquad?: ExpertSquad
+  get expertSquad(): ExpertSquad {
+    return (this._expertSquad ??= new ExpertSquad({ client: this.client }))
   }
 
   private _panel?: Panel

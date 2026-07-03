@@ -239,6 +239,14 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | POST | `/panel/message` | Handle desktop panel message Body: `surface`, `text`. | `panel.message` |
 | POST | `/panel/message/stream` | Handle desktop panel message with streaming Body: `surface`, `text`. | `panel.message.stream` |
 
+### Expert Squad
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| POST | `/expert-squad/export` | Export an expert squad ZIP archive Body: `id`; Errors: `ExpertSquadPackageError`. | `expertSquad.export` |
+| POST | `/expert-squad/import-file` | Import an expert squad ZIP archive Body: `archiveBase64`; Errors: `ExpertSquadPackageError`. | `expertSquad.importFile` |
+| POST | `/expert-squad/import-folder` | Import an expert squad folder Body: `sourceDirectory`; Errors: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
+
 ### Skill
 
 | Method | Path | Summary | operationId |

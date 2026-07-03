@@ -39,6 +39,7 @@
     "gateway": { "title_en": "Gateway", "title_zh": "Gateway", "order": 46 },
     "attachment": { "title_en": "Attachment", "title_zh": "Attachment", "order": 47 },
     "panel": { "title_en": "Panel", "title_zh": "Panel", "order": 50 },
+    "expert-squad": { "title_en": "Expert Squad", "title_zh": "Expert Squad", "order": 54 },
     "skill": { "title_en": "Skill", "title_zh": "Skill", "order": 55 },
     "control": { "title_en": "Control", "title_zh": "Control", "order": 56 },
     "export": { "title_en": "Export", "title_zh": "Export", "order": 57 },

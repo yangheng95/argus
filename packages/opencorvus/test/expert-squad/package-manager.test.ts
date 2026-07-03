@@ -1,5 +1,5 @@
 import { BlobReader, TextReader, TextWriter, Uint8ArrayWriter, ZipReader, ZipWriter } from "@zip.js/zip.js"
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { ExpertSquadPackageManager } from "../../src/expert-squad/manager"
@@ -128,6 +128,7 @@ async function zipEntries(bytes: Uint8Array): Promise<Map<string, string>> {
 
 describe("ExpertSquadPackageManager", () => {
   afterEach(async () => {
+    mock.restore()
     await resetDatabase()
   })
 
@@ -272,6 +273,101 @@ describe("ExpertSquadPackageManager", () => {
 
     expect(await fs.readFile(path.join(imported.targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
     await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+  })
+
+  test("failed replacement after moving the new target restores the previous package", async () => {
+    await using project = await tmpdir()
+    await using source = await tmpdir()
+    const sourceRoot = await writeSourcePackage(source.path)
+    const imported = await ExpertSquadPackageManager.importDirectory({
+      projectDirectory: project.path,
+      sourceDirectory: sourceRoot,
+      replace: false,
+    })
+    await writeFile(sourceRoot, "README.md", "# Broken Replacement After Move\n")
+    const originalLoadPackage = ExpertSquadRegistry.loadPackage
+    const loadPackage = spyOn(ExpertSquadRegistry, "loadPackage").mockImplementation(async (root) => {
+      if (path.resolve(root) === path.resolve(imported.targetRoot)) throw new Error("post-move replacement validation failed")
+      return originalLoadPackage(root)
+    })
+
+    await expect(
+      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: true }),
+    ).rejects.toThrow(/post-move replacement validation failed/)
+
+    loadPackage.mockRestore()
+    expect(await fs.readFile(path.join(imported.targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
+    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+  })
+
+  test("failed first install removes the newly moved target", async () => {
+    await using project = await tmpdir()
+    await using source = await tmpdir()
+    const sourceRoot = await writeSourcePackage(source.path)
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica")
+    const originalLoadPackage = ExpertSquadRegistry.loadPackage
+    spyOn(ExpertSquadRegistry, "loadPackage").mockImplementation(async (root) => {
+      if (path.resolve(root) === path.resolve(targetRoot)) throw new Error("post-move validation failed")
+      return originalLoadPackage(root)
+    })
+
+    await expect(
+      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+    ).rejects.toThrow(/post-move validation failed/)
+
+    await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  test("rejects source packages whose manifest id changes during staging", async () => {
+    await using project = await tmpdir()
+    await using source = await tmpdir()
+    const sourceRoot = await writeSourcePackage(source.path)
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica")
+    const originalLoadSourcePackage = ExpertSquadRegistry.loadSourcePackage
+    let loadCount = 0
+    spyOn(ExpertSquadRegistry, "loadSourcePackage").mockImplementation(async (root) => {
+      const loaded = await originalLoadSourcePackage(root)
+      loadCount += 1
+      return loadCount === 2 ? { ...loaded, id: "frontend-innovate" } : loaded
+    })
+
+    await expect(
+      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+    ).rejects.toThrow(/id changed during import/)
+
+    expect(loadCount).toBe(2)
+    await expect(fs.lstat(targetRoot)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  test("rejects ZIP archives that exceed import resource limits", async () => {
+    await using project = await tmpdir()
+    const extraEntryCount = ExpertSquadPackageManager.archiveImportLimits.entries + 1
+    const manyEntries = await zipBase64([
+      ...Object.entries(packageFileMap("pkg")),
+      ...Array.from({ length: extraEntryCount }, (_, index) => [`pkg/agents/build/skills/extra-${index}/SKILL.md`, "x"] as const),
+    ])
+    await expect(
+      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: manyEntries, replace: false }),
+    ).rejects.toThrow(/entry count exceeds limit/)
+
+    const oversizedFile = "x".repeat(ExpertSquadPackageManager.archiveImportLimits.fileBytes + 1)
+    const oversizedArchive = await zipBase64([
+      ...Object.entries(packageFileMap("pkg")),
+      ["pkg/agents/build/skills/implementation/large.md", oversizedFile],
+    ])
+    await expect(
+      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: oversizedArchive, replace: false }),
+    ).rejects.toThrow(/archive file .* exceeds expert squad archive limit/)
+
+    const chunk = "x".repeat(Math.floor(ExpertSquadPackageManager.archiveImportLimits.fileBytes / 2))
+    const chunkCount = Math.floor(ExpertSquadPackageManager.archiveImportLimits.totalUnpackedBytes / chunk.length) + 1
+    const totalOversizedArchive = await zipBase64([
+      ...Object.entries(packageFileMap("pkg")),
+      ...Array.from({ length: chunkCount }, (_, index) => [`pkg/agents/build/skills/bulk-${index}/SKILL.md`, chunk] as const),
+    ])
+    await expect(
+      ExpertSquadPackageManager.importArchive({ projectDirectory: project.path, archiveBase64: totalOversizedArchive, replace: false }),
+    ).rejects.toThrow(/unpacked content exceeds expert squad archive limit/)
   })
 
   test("rejects ZIP path traversal, absolute paths, and duplicate normalized entries", async () => {

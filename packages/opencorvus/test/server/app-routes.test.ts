@@ -165,6 +165,9 @@ describe("app routes", () => {
     expect(directoryParameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual([
       "directory",
     ])
+    expect(directoryParameterNames(paths["/expert-squad/import-folder"]?.post)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/expert-squad/import-file"]?.post)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/expert-squad/export"]?.post)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/session"]?.get)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/global/health"]?.get)).toEqual([])
     expect(directoryParameterNames(paths["/log"]?.get)).toEqual([])

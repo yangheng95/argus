@@ -239,6 +239,14 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | POST | `/panel/message` | Handle desktop panel message 请求体: `surface`, `text`. | `panel.message` |
 | POST | `/panel/message/stream` | Handle desktop panel message with streaming 请求体: `surface`, `text`. | `panel.message.stream` |
 
+### Expert Squad
+
+| Method | 路径 | 说明 | operationId |
+|---|---|---|---|
+| POST | `/expert-squad/export` | Export an expert squad ZIP archive 请求体: `id`; 错误: `ExpertSquadPackageError`. | `expertSquad.export` |
+| POST | `/expert-squad/import-file` | Import an expert squad ZIP archive 请求体: `archiveBase64`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFile` |
+| POST | `/expert-squad/import-folder` | Import an expert squad folder 请求体: `sourceDirectory`; 错误: `ExpertSquadPackageError`. | `expertSquad.importFolder` |
+
 ### Skill
 
 | Method | 路径 | 说明 | operationId |

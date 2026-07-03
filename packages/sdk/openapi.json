@@ -12715,6 +12715,321 @@
         ]
       }
     },
+    "/expert-squad/import-folder": {
+      "post": {
+        "operationId": "expertSquad.importFolder",
+        "summary": "Import an expert squad folder",
+        "description": "Validate and install a local expert-squad package folder into the current project's .opencorvus expert-squads catalog.",
+        "responses": {
+          "200": {
+            "description": "Imported expert squad package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "targetRoot": {
+                      "type": "string"
+                    },
+                    "replaced": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "targetRoot",
+                    "replaced"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Expert squad package import rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ExpertSquadPackageError"
+                    },
+                    "data": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourceDirectory": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "replace": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "sourceDirectory"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.expertSquad.importFolder({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/expert-squad/import-file": {
+      "post": {
+        "operationId": "expertSquad.importFile",
+        "summary": "Import an expert squad ZIP archive",
+        "description": "Validate and install a dropped expert-squad ZIP archive into the current project's .opencorvus expert-squads catalog.",
+        "responses": {
+          "200": {
+            "description": "Imported expert squad package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "targetRoot": {
+                      "type": "string"
+                    },
+                    "replaced": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "targetRoot",
+                    "replaced"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Expert squad package import rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ExpertSquadPackageError"
+                    },
+                    "data": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "archiveBase64": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "replace": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "archiveBase64"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.expertSquad.importFile({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/expert-squad/export": {
+      "post": {
+        "operationId": "expertSquad.export",
+        "summary": "Export an expert squad ZIP archive",
+        "description": "Validate and pack a canonical expert-squad package from the current project's .opencorvus expert-squads catalog.",
+        "responses": {
+          "200": {
+            "description": "Exported expert squad archive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "archiveBase64": {
+                      "type": "string"
+                    },
+                    "fileCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "filename",
+                    "archiveBase64",
+                    "fileCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Expert squad package export rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "const": "ExpertSquadPackageError"
+                    },
+                    "data": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.expertSquad.export({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/panel/capabilities": {
       "get": {
         "operationId": "panel.capabilities",
