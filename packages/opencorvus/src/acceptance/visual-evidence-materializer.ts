@@ -8,6 +8,7 @@ import {
   resolveSourceReferencePath,
 } from "@/browser-preview/region-comparison"
 import {
+  browserPreviewEvidenceIDFromRef,
   findBrowserPreviewTargetByID,
   findReadableBrowserPreviewEvidenceByID,
   resolveRuntimeRelativePath,
@@ -18,7 +19,6 @@ import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import {
-  browserPreviewEvidenceIDFromRef,
   VisualEvidenceBundleSchema,
   type VisualEvidenceBundle,
   type VisualRegionEvidence,

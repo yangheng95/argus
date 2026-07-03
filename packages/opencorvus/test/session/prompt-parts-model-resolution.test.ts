@@ -112,12 +112,15 @@ describe("session prompt model resolution", () => {
     } as any)
 
     await using tmp = await tmpdir({ git: true })
+    let ownerProjectID = ""
     const message = await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant", title: "prompt parts MCP blob resource" })
+        ownerProjectID = Instance.project.id
         return await createUserMessage({
           sessionID: session.id,
+          byteMaterializationProjectID: ownerProjectID,
           agent: "test-agent",
           model: { providerID: "openai", modelID: "gpt-5.2" },
           parts: [
@@ -144,6 +147,7 @@ describe("session prompt model resolution", () => {
     expect(filePart?.url).not.toBe("mcp://remote/reference.png")
     const located = AttachmentStore.nameFromUrl(filePart!.url)
     expect(located).toBeTruthy()
+    expect(located!.projectID).toBe(ownerProjectID)
     const bytes = await AttachmentStore.read(located!.projectID, located!.name)
     expect(bytes.toString()).toBe("png-bytes")
   })
@@ -168,6 +172,7 @@ describe("session prompt model resolution", () => {
         await expect(
           createUserMessage({
             sessionID: session.id,
+            byteMaterializationProjectID: Instance.project.id,
             agent: "test-agent",
             model: { providerID: "openai", modelID: "gpt-5.2" },
             parts: [

@@ -1102,7 +1102,7 @@ export namespace BuildAgent {
       // pixels in the message). Mirrors the opencorvus path so external
       // executors stop free-styling away from screenshots they were given.
       const buildExternalPromptText =
-        evidenceEntries.length > 0
+        !retryingExistingBuildSession && evidenceEntries.length > 0
           ? () => {
               if (stagedAttachments.length === 0) {
                 throw new Error(

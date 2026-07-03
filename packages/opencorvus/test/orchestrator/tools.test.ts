@@ -7214,6 +7214,7 @@ describe("orchestrator tools", () => {
     const goalID = `gol_agent_coordination_build_redispatch_${stamp}`
     const specID = `spec_agent_coordination_build_redispatch_${stamp}`
     const redispatchSessionID = `ses_build_stage_redispatch_${stamp}`
+    const sourceContractID = `art_build_source_contract_${stamp}`
     const sourceWorkspaceBranch = (await $`git branch --show-current`.cwd(tmp.path).quiet().text()).trim() || "master"
     let buildInput: any
 
@@ -7247,6 +7248,12 @@ describe("orchestrator tools", () => {
           goalID,
           title: "agent coordination build source worker",
         })
+        const targetRef = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "redispatch-source-reference.png",
+        )
         const sourceRunID = await createAbortableCoordinatorRun({ taskID, sessionID: source.id, now })
         const sourceGoalRunID = beginBuildAttempt({
           taskID,
@@ -7258,6 +7265,38 @@ describe("orchestrator tools", () => {
         })
         expect(findGoalRun(sourceGoalRunID)?.workspace_dir).toBe(tmp.path)
         expect(findGoalRun(sourceGoalRunID)?.workspace_branch).toBe(sourceWorkspaceBranch)
+        const sourceManifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: source.id,
+          evidencePack: {
+            targetReferences: [{ ...targetRef, intent: "visual_reference", source: "redispatch-source-contract" }],
+          },
+        })
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: sourceContractID,
+              task_id: taskID,
+              run_id: sourceRunID,
+              goal_run_id: sourceGoalRunID,
+              kind: "build_session_contract",
+              label: "build-session-contract",
+              payload: {
+                session_id: source.id,
+                task_id: taskID,
+                goal_id: goalID,
+                goal_run_id: sourceGoalRunID,
+                input_evidence: sourceManifest,
+                digest: "source-contract",
+              },
+              time_created: now + 5,
+              time_updated: now + 5,
+            })
+            .run(),
+        )
         installBuildRuntimeContract({ sessionID: source.id, taskID, goalID, goalRunID: sourceGoalRunID })
         const ownershipPayload = createOrchestratorToolOwnershipPayload({
           taskID,
@@ -7377,7 +7416,7 @@ describe("orchestrator tools", () => {
             started: true,
             redispatch_started: true,
             preexisting_build_goal_run_ids: [sourceGoalRunID],
-            preexisting_build_session_contract_ids: [],
+            preexisting_build_session_contract_ids: [sourceContractID],
             recovered_redispatch: false,
           },
         })
