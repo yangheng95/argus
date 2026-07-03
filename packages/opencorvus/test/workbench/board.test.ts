@@ -131,6 +131,141 @@ test("compileBoard does not retain a mutable process board between hydrations", 
   })
 })
 
+test("compileBoard keeps build input evidence behind the contract artifact", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_contract_${stamp}`
+  const taskID = `tsk_board_contract_${stamp}`
+  const runID = `run_board_contract_${stamp}`
+  const goalID = `gol_board_contract_${stamp}`
+  const goalRunID = `glr_board_contract_${stamp}`
+  const contractID = `artifact_board_contract_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board contract projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Board contract projection",
+        request: "project build contract facts",
+        kind: "workflow",
+        priority: "normal",
+        attachments: [
+          {
+            sha: "current-task-sha",
+            url: "/attachment/project_current/current-task-sha.png",
+            mime: "image/png",
+            size: 10,
+            filename: "current.png",
+          },
+        ],
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values([
+        {
+          id: runID,
+          task_id: taskID,
+          run_id: runID,
+          kind: "run",
+          label: "run-running",
+          payload: {
+            status: "running",
+            phase: "execute",
+            executor: "opencorvus",
+            retry_count: 0,
+            metadata: {},
+            time_started: now - 9_000,
+            time_completed: null,
+          },
+          time_created: now - 9_000,
+          time_updated: now - 9_000,
+        },
+        {
+          id: contractID,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "build_session_contract",
+          label: "build-session-contract",
+          payload: {
+            session_id: "ses_board_contract",
+            task_id: taskID,
+            goal_id: goalID,
+            goal_run_id: goalRunID,
+            spec_snapshot_id: "spec-board-contract",
+            plan_version_id: "plan-board-contract",
+            source_artifact_ids: ["artifact-source-contract"],
+            digest: "digest-board-contract",
+            input_evidence: {
+              version: 1,
+              project_id: projectID,
+              task_id: taskID,
+              goal_id: goalID,
+              goal_run_id: goalRunID,
+              session_id: "ses_board_contract",
+              entries: [
+                {
+                  role: "source",
+                  project_id: projectID,
+                  sha: "contract-input-sha",
+                  mime: "image/png",
+                  size: 10,
+                  filename: "contract.png",
+                  legacy_attachment_url: `/attachment/${projectID}/contract-input-sha.png`,
+                  staged_rel_path: ".opencorvus/input/contract.png",
+                  sha_verified_at: now,
+                },
+              ],
+            },
+          },
+          time_created: now,
+          time_updated: now,
+        },
+      ] as any)
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const contract = board.artifacts.find((item: any) => item.kind === "build_session_contract")
+      expect(contract?.payload).toEqual({
+        session_id: "ses_board_contract",
+        task_id: taskID,
+        goal_id: goalID,
+        goal_run_id: goalRunID,
+        spec_snapshot_id: "spec-board-contract",
+        plan_version_id: "plan-board-contract",
+        digest: "digest-board-contract",
+        goal_contract_snapshot: undefined,
+        collaboration_goals_count: undefined,
+        requirements_count: undefined,
+        source_artifact_ids: ["artifact-source-contract"],
+      })
+      expect(JSON.stringify(contract.payload)).not.toContain("contract-input-sha")
+      expect(JSON.stringify(contract.payload)).not.toContain("current-task-sha")
+    },
+  })
+})
+
 test("compileBoard projects actual agent invocation DAG from the task session tree", async () => {
   await resetDatabase()
   await using tmp = await tmpdir({ git: true })

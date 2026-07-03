@@ -509,6 +509,9 @@ export namespace SessionCompaction {
     )
     return rows.map((row) => {
       const payload = row.payload as Record<string, any>
+      // Handoff carries the active contract locator, not an input-evidence
+      // summary. A resumed build must read payload.input_evidence from this
+      // build_session_contract artifact instead of reconstructing task inputs.
       return {
         sessionID: String(payload.session_id ?? sessionID),
         goalID: String(payload.goal_id),

@@ -563,6 +563,9 @@ function compactArtifactPayload(kind: string, input: unknown) {
     )
   }
   if (kind === "build_session_contract") {
+    // Board exposes contract identity only. Build input ownership remains in
+    // payload.input_evidence on the build_session_contract artifact; projection
+    // layers must not recompute it from mutable task attachments.
     return {
       session_id: item.session_id,
       task_id: item.task_id,

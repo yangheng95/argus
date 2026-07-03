@@ -17,6 +17,9 @@ import type { Provider } from "../../src/provider/provider"
 import type { Config } from "../../src/config/config"
 import { Todo } from "../../src/session/todo"
 import { AgentRoleContract, type AgentRoleID } from "../../src/agent/role-contract"
+import { Database } from "../../src/storage/db"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { resetDatabase } from "../fixture/db"
 
 Log.init({ print: false })
 
@@ -1357,6 +1360,118 @@ describe("CompactionHandoff", () => {
         expect(runtime.text).toContain("Current todos. Copy this JSON array exactly")
         expect(runtime.text).toContain('"content": "Keep exact todo text"')
         expect(runtime.evidenceRequirements.todos).toEqual(todos)
+      },
+    })
+  })
+
+  test("runtime context keeps build input evidence behind active build contract ids", async () => {
+    await resetDatabase()
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const session = await Session.create({ kind: "assistant", title: "build contract compaction" })
+        const taskID = `tsk_compaction_contract_${now.toString(16)}`
+        const runID = `run_compaction_contract_${now.toString(16)}`
+        const goalID = `gol_compaction_contract_${now.toString(16)}`
+        const goalRunID = `glr_compaction_contract_${now.toString(16)}`
+        const contractID = `artifact_compaction_contract_${now.toString(16)}`
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "Compaction contract projection",
+              request: "preserve active build contract ids",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "current-task-sha",
+                  url: `/attachment/${Instance.project.id}/current-task-sha.png`,
+                  mime: "image/png",
+                  size: 10,
+                  filename: "current.png",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: contractID,
+              task_id: taskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              kind: "build_session_contract",
+              label: "build-session-contract",
+              payload: {
+                session_id: session.id,
+                task_id: taskID,
+                goal_id: goalID,
+                goal_run_id: goalRunID,
+                source_artifact_ids: ["artifact-source-contract"],
+                digest: "digest-compaction-contract",
+                input_evidence: {
+                  version: 1,
+                  project_id: Instance.project.id,
+                  task_id: taskID,
+                  goal_id: goalID,
+                  goal_run_id: goalRunID,
+                  session_id: session.id,
+                  entries: [
+                    {
+                      role: "source",
+                      project_id: Instance.project.id,
+                      sha: "contract-input-sha",
+                      mime: "image/png",
+                      size: 10,
+                      filename: "contract.png",
+                      legacy_attachment_url: `/attachment/${Instance.project.id}/contract-input-sha.png`,
+                      staged_rel_path: ".opencorvus/input/contract.png",
+                      sha_verified_at: now,
+                    },
+                  ],
+                },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+        const user = {
+          id: "m-user",
+          sessionID: session.id,
+          role: "user",
+          time: { created: 0 },
+          agent: "build",
+          model: { providerID: "test", modelID: "test-model" },
+        } as Message.User
+
+        const runtime = await SessionCompaction.TestHooks.runtimeContext({
+          sessionID: session.id,
+          userMessage: user,
+          selectedHead: [],
+        })
+
+        expect(runtime.evidenceRequirements.activeBuildContracts).toEqual([
+          {
+            sessionID: session.id,
+            goalID,
+            goalRunID,
+            artifactID: contractID,
+            sourceArtifactIDs: ["artifact-source-contract"],
+            digest: "digest-compaction-contract",
+          },
+        ])
+        expect(runtime.text).toContain(contractID)
+        expect(runtime.text).toContain("artifact-source-contract")
+        expect(runtime.text).not.toContain("contract-input-sha")
+        expect(runtime.text).not.toContain("current-task-sha")
       },
     })
   })

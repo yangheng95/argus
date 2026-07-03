@@ -501,6 +501,7 @@ export namespace CompactionHandoff {
     'Generic placeholders such as "continue implementation" are invalid.',
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
     "When active build-session contract facts are supplied, copy their ids into activeBuildContracts instead of paraphrasing them.",
+    "Do not summarize Build input evidence in handoff fields; read payload.input_evidence from the referenced build_session_contract artifact when needed.",
     "When current todos are supplied, copy the todo array exactly into todos with the same item order, content, status, and priority.",
     "Fill workingContext with the compact active working set: concrete requirements, constraints, file relationships, ids, paths, and partial conclusions the next agent must keep in mind.",
     "Fill chronology with ordered progress events from the compacted history, including what changed, what was verified, and what remains unresolved.",
