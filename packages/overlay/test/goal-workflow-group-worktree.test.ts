@@ -74,6 +74,17 @@ describe("GoalWorkflowGroup — worktree row contract", () => {
     // The <For> loop must remain the only parallelization site.
     expect(source).toMatch(/<For each=\{props\.goals\}>/)
   })
+
+  test("worktree row constrains long path and branch text inside narrow task-scope panels", () => {
+    const css = readText("src/styles/surfaces/inspector.css")
+    expect(css).toMatch(/\.gwg-worktree,[\s\S]*?\.gwg \.oc-button\[data-ui="goal-worktree-open"\]\s*\{[\s\S]*?min-width:\s*0;/)
+    expect(css).toMatch(/\.gwg-worktree,[\s\S]*?\.gwg \.oc-button\[data-ui="goal-worktree-open"\]\s*\{[\s\S]*?overflow:\s*hidden;/)
+    expect(css).toMatch(/\.gwg-worktree-path\s*\{[\s\S]*?flex:\s*1 1 0;/)
+    expect(css).toMatch(/\.gwg-worktree-branch\s*\{[\s\S]*?max-width:\s*46%;/)
+    expect(css).toMatch(/\.gwg-worktree-branch\s*\{[\s\S]*?text-overflow:\s*ellipsis;/)
+    expect(css).toContain('@container side-activity (max-width: 340px)')
+    expect(css).toMatch(/\.task-scope-panel \.gwg-worktree-branch\s*\{[\s\S]*?grid-column:\s*2;/)
+  })
 })
 
 describe("§6.4 source guards — TaskWorkspaceLine surfaces stay deleted", () => {

@@ -142,3 +142,51 @@
   - no task timestamp toast;
   - goals titles render as readable text in a 291px side-by-side panel;
   - Acceptance remains adjacent to Goals and visually separate as evidence.
+
+## 2026-07-03 Second-Pass GUI Review
+
+### Recall
+
+- User challenged whether the quick GUI correction was sufficiently careful.
+- Re-read this record, current git state, the last commit summary, the browser
+  skill documentation, and the task-scope CSS / tests before making another
+  code change.
+- Second-pass real browser fixture used a deliberately long goal title and a
+  long branch name in the Goals panel while Requirements, Architect, Goals, and
+  Workflow were open together at 1440x900.
+
+### Findings
+
+- The duplicate Requirements / Architect / Goals body headers remained fixed.
+- Goal titles stayed readable in the narrow Goals panel.
+- A new issue was visible in the expanded Goals card: the worktree row's branch
+  text had `flex-shrink: 0` and no bounded ellipsis, which widened the GWG
+  (Goal Workflow Group) body beyond the panel.
+- Acceptance evidence names were still forced into one-line ellipsis, which was
+  too brittle for narrow task-scope panels.
+
+### Correction
+
+- Constrained `.gwg-worktree` and the `goal-worktree-open` button to
+  `min-width: 0`, `max-width: 100%`, and hidden overflow.
+- Changed the expanded worktree row in narrow side-activity containers to a
+  two-column grid so path and branch can occupy separate lines without
+  widening the card.
+- Added max-width + ellipsis to `.gwg-worktree-branch` as the intentional clip
+  point.
+- Changed `.acceptance-evidence-name` to wrap with `overflow-wrap: anywhere`
+  instead of forcing single-line ellipsis.
+
+### Verification
+
+- Real browser screenshot after rebuild:
+  `packages/overlay/.scratch/task-scope-second-pass-desktop-after.png`.
+- DOM metrics after the second pass:
+  - worktree row `clientWidth` equals `scrollWidth`;
+  - duplicate task-scope headers remain absent;
+  - no alert/toast is visible;
+  - the only remaining overflow is the branch text itself, with
+    `text-overflow: ellipsis`, inside its bounded span.
+- `bun test packages/overlay/test/goal-workflow-group-worktree.test.ts packages/overlay/test/acceptance-panel-mount.test.ts packages/overlay/test/overlay-architecture-guards.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+- `bun run --cwd packages/overlay build:vite`

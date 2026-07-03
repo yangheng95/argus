@@ -410,6 +410,15 @@ test("surface CSS maps verdict tone to the panel's pseudo-element left-edge acce
   expect(css).not.toMatch(/\.acceptance-title\b/)
 })
 
+test("acceptance evidence names wrap instead of forcing narrow panel overflow", async () => {
+  const css = readAllSurfaceCss()
+  const nameRule = css.match(/\.acceptance-evidence-name\s*\{[\s\S]*?\n\}/)?.[0] ?? ""
+  expect(nameRule).toContain("min-width: 0;")
+  expect(nameRule).toContain("overflow-wrap: anywhere;")
+  expect(nameRule).not.toContain("white-space: nowrap;")
+  expect(nameRule).not.toContain("text-overflow: ellipsis;")
+})
+
 test("evidence rows reuse the shared .verdict-pill primitive — no per-row color rules", async () => {
   // verdict-pill primitive moved from styles.css to surfaces/inspector.css
   // (styles.css was dissolved 2026-05-04).

@@ -1594,6 +1594,8 @@
   align-items: center;
   gap: calc(8px * var(--ui-scale));
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
   background: transparent;
@@ -1604,6 +1606,7 @@
   font-family: var(--font);
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-body);
+  overflow: hidden;
 }
 
 .gwg .oc-button[data-ui="goal-worktree-open"] {
@@ -1635,8 +1638,9 @@
 }
 
 .gwg-worktree-path {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1645,11 +1649,32 @@
 }
 
 .gwg-worktree-branch {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-soft);
+}
+
+@container side-activity (max-width: 340px) {
+  .task-scope-panel .gwg-worktree,
+  .task-scope-panel .gwg .oc-button[data-ui="goal-worktree-open"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: calc(8px * var(--ui-scale));
+    row-gap: calc(3px * var(--ui-scale));
+    align-items: baseline;
+  }
+
+  .task-scope-panel .gwg-worktree-branch {
+    grid-column: 2;
+    max-width: 100%;
+  }
 }
 
 /* Markdown reset for goal-card prose blocks: nuke the default
@@ -2541,9 +2566,8 @@
 
 .acceptance-evidence-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .task-actions-buttons {
