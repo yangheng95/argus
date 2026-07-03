@@ -483,7 +483,7 @@ export const GithubRunCommand = cmd({
       let octoRest: Octokit
       let octoGraph: typeof graphql
       let gitConfig: string
-      let session: { id: string; title: string; version: string }
+      let session: Session.Info
       let exitCode = 0
       type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
       const triggerCommentId = isCommentEvent
@@ -513,8 +513,9 @@ export const GithubRunCommand = cmd({
 
         // Setup opencorvus session
         const repoData = await fetchRepo()
-        session = await Session.create({
+        session = await Session.createNext({
           kind: "assistant",
+          directory: Instance.directory,
           permission: [
             {
               permission: "question",
@@ -871,6 +872,7 @@ export const GithubRunCommand = cmd({
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           messageID: Identifier.ascending("message"),
           variant,
           model: {
@@ -925,6 +927,7 @@ export const GithubRunCommand = cmd({
         console.log("Requesting summary from agent...")
         const summary = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           messageID: Identifier.ascending("message"),
           variant,
           model: {

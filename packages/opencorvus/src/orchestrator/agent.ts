@@ -894,6 +894,7 @@ export namespace Orchestrator {
                   system: Array.isArray(system) ? system.join("\n\n") : system,
                   systemMode: "complete",
                   tools: enableMap,
+                  byteMaterializationProjectID: agentSession.projectID,
                   parts: partsWithIds,
                 })) as Message.WithParts)
               : ((await SessionPrompt.loop({

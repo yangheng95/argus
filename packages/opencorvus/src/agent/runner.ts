@@ -196,6 +196,10 @@ export interface RunAgentSessionInput<C> {
     /** Uses only runtime contract tools, skipping registry and Model Context Protocol tools. */
     exactTools?: boolean
   }
+  /** Attachment byte writes performed while creating the user message must
+   *  target this storage namespace. Build passes task.project_id explicitly;
+   *  ordinary agent sessions use the created session's projectID. */
+  byteMaterializationProjectID?: string
   /** Additional per-run registry/runtime tool switches merged after defaults. */
   toolSwitches?: Record<string, boolean>
   /** Stage-specific extra tool surface + collector. */
@@ -831,6 +835,15 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     includeMcpTools: input.runtimeContract?.includeMcpTools,
     exactTools: input.runtimeContract?.exactTools,
   })
+  let byteMaterializationProjectID = session.projectID
+  if (input.byteMaterializationProjectID) {
+    if (input.byteMaterializationProjectID !== session.projectID) {
+      throw new Error(
+        `runAgentSession byteMaterializationProjectID ${input.byteMaterializationProjectID} does not match session project ${session.projectID}`,
+      )
+    }
+    byteMaterializationProjectID = input.byteMaterializationProjectID
+  }
   try {
     try {
       const promptOnce = async (promptParts: typeof parts = parts) => {
@@ -841,6 +854,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
           system: systemPrompt,
           systemMode: "complete",
           tools: enableMap,
+          byteMaterializationProjectID,
           extra: {
             taskID: input.taskID,
             ...(continuationClaim

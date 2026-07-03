@@ -1282,6 +1282,7 @@ export namespace BuildAgent {
           taskID: input.task.id,
           model: input.model,
           signal: input.signal,
+          byteMaterializationProjectID: input.task.project_id,
           toolKit: buildToolKit,
           buildUserPrompt: buildPromptText,
           buildUserParts: buildUserPartsFn,

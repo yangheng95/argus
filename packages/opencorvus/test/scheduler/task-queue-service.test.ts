@@ -23,6 +23,16 @@ function result() {
   } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
 }
 
+function sessionPromptMetadata(projectID: string, text: string) {
+  return {
+    kind: "session_prompt" as const,
+    input: {
+      byteMaterializationProjectID: projectID,
+      parts: [{ type: "text" as const, text }],
+    },
+  }
+}
+
 function deferred() {
   let resolve!: () => void
   const promise = new Promise<void>((done) => {
@@ -125,12 +135,7 @@ describe("scheduler.task-queue-service", () => {
               prompt: "running without activity",
               status: "running",
               source: "test",
-              metadata: {
-                kind: "session_prompt",
-                input: {
-                  parts: [{ type: "text", text: "running without activity" }],
-                },
-              },
+              metadata: sessionPromptMetadata(session.projectID, "running without activity"),
               time_created: staleAt,
               time_updated: staleAt,
               time_started: staleAt,
@@ -171,12 +176,7 @@ describe("scheduler.task-queue-service", () => {
               prompt: "fresh running row",
               status: "running",
               source: "test",
-              metadata: {
-                kind: "session_prompt",
-                input: {
-                  parts: [{ type: "text", text: "fresh running row" }],
-                },
-              },
+              metadata: sessionPromptMetadata(session.projectID, "fresh running row"),
               time_created: now,
               time_updated: now,
               time_started: now,
@@ -227,12 +227,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "timer rearm uncancellable",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "timer rearm uncancellable" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "timer rearm uncancellable"),
                 time_created: now - 1000,
                 time_updated: now - 1000,
                 time_started: now - 1000,
@@ -335,6 +330,7 @@ describe("scheduler.task-queue-service", () => {
         await TaskQueueService.runNow()
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
         expect(row?.status).toBe("completed")
+        expect(prompt.mock.calls[0]?.[0]?.byteMaterializationProjectID).toBe(session.projectID)
         expect(prompt.mock.calls[0]?.[0]?.extra?.wake_reason).toEqual({
           source: "scheduler.task_queue",
           queueTaskID: id,
@@ -374,6 +370,7 @@ describe("scheduler.task-queue-service", () => {
       source: "scheduler.task_queue",
       queueSource: "test",
     })
+    expect(prompt.mock.calls[0]?.[0]?.byteMaterializationProjectID).toBeDefined()
   })
 
   test("executes automatic compaction through session control and default loop mode", async () => {
@@ -485,6 +482,7 @@ describe("scheduler.task-queue-service", () => {
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
         expect(row?.metadata.input).toMatchObject({
           agent: "mission",
+          byteMaterializationProjectID: session.projectID,
           parts: [{ type: "text", text: "mission queue" }],
         })
         await TaskQueueService.runNow()
@@ -492,6 +490,49 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(1)
+    expect(prompt.mock.calls[0]?.[0]?.byteMaterializationProjectID).toBeDefined()
+  })
+
+  test("stored queued prompt must carry byte materialization owner", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const id = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: session.id,
+              prompt: "legacy missing owner",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "legacy missing owner" }],
+                },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("failed")
+        expect(row?.error_message).toContain("missing byteMaterializationProjectID")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(0)
   })
 
   test("direct execute prompt preserves agent-owned session identity", async () => {
@@ -647,12 +688,7 @@ describe("scheduler.task-queue-service", () => {
               prompt: "other project",
               status: "queued",
               source: "test",
-              metadata: {
-                kind: "session_prompt",
-                input: {
-                  parts: [{ type: "text", text: "other project" }],
-                },
-              },
+              metadata: sessionPromptMetadata(session.projectID, "other project"),
               time_created: now,
               time_updated: now,
             })
@@ -705,12 +741,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "low",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "low" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "low"),
                 time_created: now,
                 time_updated: now,
               },
@@ -721,12 +752,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "high" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "high"),
                 time_created: now + 1,
                 time_updated: now + 1,
               },
@@ -933,12 +959,7 @@ describe("scheduler.task-queue-service", () => {
           priority: "high" as const,
           status: "queued" as const,
           source: "test",
-          metadata: {
-            kind: "session_prompt" as const,
-            input: {
-              parts: [{ type: "text", text: `a-${i}` }],
-            },
-          },
+          metadata: sessionPromptMetadata(a.projectID, `a-${i}`),
           time_created: now + i,
           time_updated: now + i,
         }))
@@ -955,12 +976,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "b" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(b.projectID, "b"),
                 time_created: now + bulk.length + 1,
                 time_updated: now + bulk.length + 1,
               },
@@ -998,12 +1014,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "running",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "running" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "running"),
                 time_created: now - 1000,
                 time_updated: now,
                 time_started: now,
@@ -1014,12 +1025,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "queued",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "queued" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "queued"),
                 time_created: now,
                 time_updated: now,
               },
@@ -1139,12 +1145,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "running" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(blocked.projectID, "running"),
                 time_created: now - 2000,
                 time_updated: now,
                 time_started: now - 2000,
@@ -1156,12 +1157,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "blocked-queued" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(blocked.projectID, "blocked-queued"),
                 time_created: now - 1000,
                 time_updated: now - 1000,
               },
@@ -1172,12 +1168,7 @@ describe("scheduler.task-queue-service", () => {
                 priority: "normal",
                 status: "queued",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "ready-queued" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(ready.projectID, "ready-queued"),
                 time_created: now,
                 time_updated: now,
               },
@@ -1233,12 +1224,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "fresh",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "fresh" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "fresh"),
                 time_created: now - 5000,
                 time_updated: now,
                 time_started: now - 5000,
@@ -1249,12 +1235,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "stale",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "stale" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "stale"),
                 time_created: now - 5000,
                 time_updated: now - 5000,
                 time_started: now - 5000,
@@ -1298,12 +1279,7 @@ describe("scheduler.task-queue-service", () => {
               prompt: "stale uncancellable",
               status: "running",
               source: "test",
-              metadata: {
-                kind: "session_prompt",
-                input: {
-                  parts: [{ type: "text", text: "stale uncancellable" }],
-                },
-              },
+              metadata: sessionPromptMetadata(session.projectID, "stale uncancellable"),
               time_created: now - 5000,
               time_updated: now - 5000,
               time_started: now - 5000,
@@ -1349,12 +1325,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "stale unfinished prompt",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "stale unfinished prompt" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "stale unfinished prompt"),
                 time_created: now - 5000,
                 time_updated: now - 5000,
                 time_started: now - 5000,
@@ -1502,12 +1473,7 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "stale-visible",
                 status: "running",
                 source: "test",
-                metadata: {
-                  kind: "session_prompt",
-                  input: {
-                    parts: [{ type: "text", text: "stale-visible" }],
-                  },
-                },
+                metadata: sessionPromptMetadata(session.projectID, "stale-visible"),
                 time_created: now - 5000,
                 time_updated: now - 5000,
                 time_started: now - 5000,

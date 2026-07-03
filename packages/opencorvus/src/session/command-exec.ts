@@ -48,6 +48,7 @@ export namespace SessionCommand {
   export async function command(input: CommandInput) {
     log.info("command", input)
     const cmd = await Command.get(input.command)
+    const session = await Session.get(input.sessionID)
     const config = await EffectiveConfig.effective({ sessionID: input.sessionID })
     const agentName = cmd.agent ?? input.agent ?? (await Agent.defaultAgent({ config }))
 
@@ -179,6 +180,7 @@ export namespace SessionCommand {
       messageID: input.messageID,
       model: userModel,
       agent: userAgent,
+      byteMaterializationProjectID: session.projectID,
       parts,
       variant: input.variant,
     })) as Message.WithParts

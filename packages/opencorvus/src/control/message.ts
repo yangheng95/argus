@@ -115,6 +115,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       model,
       system,
       systemMode: "complete",
+      byteMaterializationProjectID: control.info.projectID,
       parts: parts as any,
       tools,
       format: {

@@ -167,7 +167,7 @@ export namespace TaskQueueService {
       })
       .parse(raw)
     const prompt = stampTaskQueueWakeReason(
-      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      applySessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt), "new"),
       { queueSource: input.source },
     )
     const promptInput = {
@@ -212,7 +212,7 @@ export namespace TaskQueueService {
     const input = EnqueuePromptInput.parse(raw)
     const id = Identifier.ascending("task")
     const prompt = stampTaskQueueWakeReason(
-      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      applySessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt), "new"),
       { queueTaskID: id, queueSource: input.source ?? "api" },
     )
     const now = Date.now()
@@ -279,7 +279,7 @@ export namespace TaskQueueService {
     const input = EnqueuePromptInput.parse(raw)
     const id = Identifier.ascending("task")
     const prompt = stampTaskQueueWakeReason(
-      applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
+      applySessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt), "new"),
       { queueTaskID: id, queueSource: input.source ?? "api" },
     )
     const userMessage = await SessionPrompt.prompt({
@@ -665,7 +665,7 @@ export namespace TaskQueueService {
     assertInFlightNotCancelled(task, inFlight)
     try {
       if (metadata.data.kind === "session_prompt") {
-        await executePrompt(
+        await executeStoredPrompt(
           {
             sessionID: task.session_id,
             prompt: metadata.data.input,
@@ -985,15 +985,47 @@ function promptSchema() {
   })
 }
 
-function applyStoredSessionPromptIdentity<T extends z.infer<ReturnType<typeof promptSchema>>>(
+function applySessionPromptIdentity<T extends z.infer<ReturnType<typeof promptSchema>>>(
   sessionID: string,
   prompt: T,
+  mode: "new" | "stored",
 ): T {
   const row = Database.use((db) =>
-    db.select({ kind: SessionTable.kind }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
+    db
+      .select({ kind: SessionTable.kind, projectID: SessionTable.project_id })
+      .from(SessionTable)
+      .where(eq(SessionTable.id, sessionID))
+      .get(),
   )
-  if (!row) return prompt
-  return SessionAgentIdentity.applyToPrompt(row.kind, prompt)
+  if (!row) throw new Error(`Session not found: ${sessionID}`)
+  if (mode === "stored" && !prompt.byteMaterializationProjectID) {
+    throw new Error(`Stored queued prompt for session ${sessionID} is missing byteMaterializationProjectID`)
+  }
+  if (prompt.byteMaterializationProjectID && prompt.byteMaterializationProjectID !== row.projectID) {
+    throw new Error(
+      `SessionPrompt byteMaterializationProjectID ${prompt.byteMaterializationProjectID} does not match session project ${row.projectID}`,
+    )
+  }
+  return SessionAgentIdentity.applyToPrompt(row.kind, {
+    ...prompt,
+    byteMaterializationProjectID: row.projectID,
+  })
+}
+
+async function executeStoredPrompt(
+  input: { sessionID: string; prompt: unknown; source?: string },
+  hooks?: { beforeLoop?: () => void | Promise<void> },
+) {
+  const prompt = stampTaskQueueWakeReason(
+    applySessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt), "stored"),
+    { queueSource: input.source },
+  )
+  const promptInput = {
+    sessionID: input.sessionID,
+    ...prompt,
+  }
+  if (hooks) return SessionPrompt.prompt(promptInput, hooks)
+  return SessionPrompt.prompt(promptInput)
 }
 
 function stampTaskQueueWakeReason<T extends z.infer<ReturnType<typeof promptSchema>>>(

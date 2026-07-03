@@ -470,6 +470,7 @@ describe("BuildAgent managed worktree runtime", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: buildSession.id,
+          byteMaterializationProjectID: buildSession.projectID,
           agent: "coding",
           noReply: true,
           parts: [
@@ -817,6 +818,7 @@ describe("BuildAgent managed worktree runtime", () => {
         await AttachmentStore.stageToWorktree(Instance.project.id, [original], worktree.directory)
         const msg = await SessionPrompt.prompt({
           sessionID: buildSession.id,
+          byteMaterializationProjectID: buildSession.projectID,
           agent: "coding",
           noReply: true,
           parts: [

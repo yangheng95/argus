@@ -11,6 +11,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Log } from "../../src/util/log"
 import { LSP } from "../../src/lsp"
+import { MCP } from "../../src/mcp"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -102,6 +103,7 @@ describe("session.prompt missing file", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           agent: "coding",
           noReply: true,
           parts: [
@@ -127,6 +129,157 @@ describe("session.prompt missing file", () => {
         expect(located).toBeTruthy()
         const roundTrip = await AttachmentStore.read(located!.projectID, located!.name)
         expect(roundTrip.equals(pngBytes)).toBe(true)
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("rejects byte materialization when the prompt omits the owner project", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "coding",
+            noReply: true,
+            parts: [
+              {
+                type: "file",
+                mime: "image/png",
+                filename: "reference.png",
+                url: "data:image/png;base64,iVBORw0KGgo=",
+              },
+            ],
+          }),
+        ).rejects.toThrow("requires byteMaterializationProjectID")
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("materializes data URL file parts into the supplied owner project", async () => {
+    await using ownerTmp = await tmpdir({ git: true })
+    await using activeTmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    let ownerProjectID = ""
+    await Instance.provide({
+      directory: ownerTmp.path,
+      fn: async () => {
+        ownerProjectID = Instance.project.id
+      },
+    })
+
+    await Instance.provide({
+      directory: activeTmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+        const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          byteMaterializationProjectID: ownerProjectID,
+          agent: "coding",
+          noReply: true,
+          parts: [
+            {
+              type: "file",
+              mime: "image/png",
+              filename: "reference.png",
+              url: `data:image/png;base64,${pngBytes.toString("base64")}`,
+            },
+          ],
+        })
+
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        const filePart = stored.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+        const located = AttachmentStore.nameFromUrl(filePart.url)
+        expect(located?.projectID).toBe(ownerProjectID)
+        expect(await AttachmentStore.read(ownerProjectID, located!.name)).toEqual(pngBytes)
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("materializes MCP resource blobs into the supplied owner project", async () => {
+    const readResource = spyOn(MCP, "readResource").mockResolvedValue({
+      contents: [
+        {
+          blob: Buffer.from("resource-bytes").toString("base64"),
+          mimeType: "image/png",
+        },
+      ],
+    } as any)
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "build" })
+
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
+          agent: "coding",
+          noReply: true,
+          parts: [
+            {
+              type: "file",
+              mime: "image/png",
+              filename: "resource.png",
+              url: "mcp://test/resource.png",
+              source: {
+                type: "resource",
+                clientName: "test-client",
+                uri: "resource://image",
+                text: { value: "resource://image", start: 0, end: "resource://image".length },
+              },
+            },
+          ],
+        })
+
+        expect(readResource).toHaveBeenCalledWith("test-client", "resource://image")
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        const filePart = stored.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+        const located = AttachmentStore.nameFromUrl(filePart.url)
+        expect(located?.projectID).toBe(session.projectID)
+        expect(await AttachmentStore.read(session.projectID, located!.name)).toEqual(Buffer.from("resource-bytes"))
 
         await Session.remove(session.id)
       },
@@ -163,6 +316,7 @@ describe("session.prompt missing file", () => {
         const [stagedPart] = AttachmentStore.filePartsFromStagedReferences(staged)
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           agent: "coding",
           noReply: true,
           parts: [{ type: "text", text: "use the staged reference" }, stagedPart],
@@ -207,6 +361,7 @@ describe("session.prompt missing file", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           agent: "coding",
           noReply: true,
           parts: [
@@ -252,6 +407,7 @@ describe("session.prompt missing file", () => {
         await expect(
           SessionPrompt.prompt({
             sessionID: session.id,
+            byteMaterializationProjectID: session.projectID,
             agent: "coding",
             noReply: true,
             parts: [
@@ -354,6 +510,7 @@ describe("session.prompt missing file", () => {
           await expect(
             SessionPrompt.prompt({
               sessionID: session.id,
+              byteMaterializationProjectID: session.projectID,
               agent: "coding",
               noReply: true,
               parts: [
@@ -399,6 +556,7 @@ describe("session.prompt missing file", () => {
         await expect(
           SessionPrompt.prompt({
             sessionID: session.id,
+            byteMaterializationProjectID: session.projectID,
             agent: "coding",
             noReply: true,
             parts: [
@@ -443,6 +601,7 @@ describe("session.prompt missing file", () => {
         const file = path.join(tmp.path, "still-present.ts")
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           agent: "coding",
           noReply: true,
           parts: [
@@ -504,6 +663,7 @@ describe("session.prompt special characters", () => {
 
           const message = await SessionPrompt.prompt({
             sessionID: session.id,
+            byteMaterializationProjectID: session.projectID,
             model: { providerID: "openai", modelID: "gpt-5.2" },
             parts,
             noReply: true,

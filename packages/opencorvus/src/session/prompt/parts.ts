@@ -46,6 +46,11 @@ function parseFileRangeLine(value: string, name: string): number {
   return parsed
 }
 
+function requireByteMaterializationProjectID(input: PromptInput, context: string): string {
+  if (input.byteMaterializationProjectID) return input.byteMaterializationProjectID
+  throw new Error(`SessionPrompt.createUserMessage ${context} requires byteMaterializationProjectID`)
+}
+
 export async function resolvePromptParts(
   template: string,
   opts?: { config?: Config.Info },
@@ -216,7 +221,7 @@ export async function createUserMessage(input: PromptInput) {
                       ? content.mimeType
                       : part.mime
                   const fileRef = await AttachmentStore.write(
-                    Instance.project.id,
+                    requireByteMaterializationProjectID(input, `MCP resource blob for ${clientName}/${uri}`),
                     decodeRawBase64Payload(content.blob, `MCP resource blob for ${clientName}/${uri}`),
                     mimeType,
                     part.filename,
@@ -253,7 +258,12 @@ export async function createUserMessage(input: PromptInput) {
                   part.url,
                   `SessionPrompt.createUserMessage data URL file part ${part.filename ?? part.mime}`,
                 )
-                const fileRef = await AttachmentStore.write(Instance.project.id, bytes, part.mime, part.filename)
+                const fileRef = await AttachmentStore.write(
+                  requireByteMaterializationProjectID(input, `data URL file part ${part.filename ?? part.mime}`),
+                  bytes,
+                  part.mime,
+                  part.filename,
+                )
                 const persistedPart: Draft<Message.Part> = {
                   ...part,
                   messageID: info.id,
@@ -421,7 +431,7 @@ export async function createUserMessage(input: PromptInput) {
                 // canonical ref and the bytes round-trip via toModelOutput's
                 // ref → base64 reader at LLM call time.
                 const fileRef = await AttachmentStore.writeFromPath(
-                  Instance.project.id,
+                  requireByteMaterializationProjectID(input, `binary file part ${part.filename ?? filepath}`),
                   filepath,
                   part.mime,
                   part.filename!,

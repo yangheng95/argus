@@ -243,6 +243,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         result = await SessionPrompt.prompt({
           messageID,
           sessionID: session.id,
+          byteMaterializationProjectID: session.projectID,
           model: {
             modelID: model.modelID,
             providerID: model.providerID,

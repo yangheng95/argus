@@ -10089,6 +10089,7 @@ export function createOrchestratorTools(input: {
               } else {
                 workerMessage = await SessionPrompt.prompt({
                   sessionID: request.payload.session_id,
+                  byteMaterializationProjectID: target.session.projectID,
                   messageID: workerMessageID,
                   model: {
                     providerID: target.model.providerID,
@@ -12670,6 +12671,7 @@ export function createOrchestratorTools(input: {
         try {
           finalMessage = await SessionPrompt.prompt({
             sessionID: refineSession.id,
+            byteMaterializationProjectID: refineSession.projectID,
             model: { providerID: model.providerID, modelID: model.api.id },
             agent: "general",
             system: systemPrompt,

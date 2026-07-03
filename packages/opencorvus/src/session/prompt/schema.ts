@@ -19,6 +19,7 @@ export const PromptInput = z.object({
   systemMode: z.enum(["append_to_agent", "complete"]).optional(),
   variant: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional(),
+  byteMaterializationProjectID: z.string().min(1).optional(),
   parts: z.array(
     z.discriminatedUnion("type", [
       Message.TextPart.omit({
