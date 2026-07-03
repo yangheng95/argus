@@ -103,7 +103,11 @@ import {
   renderBuildEvidenceRoleSections,
   type BuildEvidencePack,
 } from "./evidence-pack"
-import { buildEvidencePackFromInputManifest, type BuildInputEvidenceManifest } from "./evidence-manifest"
+import {
+  buildEvidencePackFromInputManifest,
+  readOriginalBuildSessionInputEvidenceManifest,
+  type BuildInputEvidenceManifest,
+} from "./evidence-manifest"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -968,6 +972,16 @@ export namespace BuildAgent {
           `BuildAgent.run: existing session ${buildSession.id} has directory=${buildSession.directory}, expected ${worktreeDir}`,
         )
       }
+      const retryingExistingBuildSession = Boolean(input.existingSessionID)
+      const originalInputEvidenceManifest = retryingExistingBuildSession
+        ? readOriginalBuildSessionInputEvidenceManifest({
+            sessionID: buildSession.id,
+            taskID: input.task.id,
+            projectID: input.task.project_id,
+            goalID: input.target.kind === "goal" ? input.target.id : undefined,
+          })
+        : undefined
+
       const openedGoalRunID = await input.onSessionCreated?.(buildSession.id, {
         worktreeDir,
         worktreeBranch,
@@ -975,16 +989,19 @@ export namespace BuildAgent {
       })
       const runtimeGoalRunID = typeof openedGoalRunID === "string" ? openedGoalRunID : undefined
 
-      const retryingExistingBuildSession = Boolean(input.existingSessionID)
       const promptContext = input.context
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
       const evidencePack = retryingExistingBuildSession ? undefined : promptContext?.evidencePack
-      const inputEvidenceManifest = retryingExistingBuildSession ? undefined : promptContext?.inputEvidenceManifest
+      const inputEvidenceManifest = retryingExistingBuildSession
+        ? originalInputEvidenceManifest
+        : promptContext?.inputEvidenceManifest
       if (evidencePack && !inputEvidenceManifest) {
         throw new Error("BuildAgent.run: evidencePack requires validated inputEvidenceManifest before staging")
       }
-      const validatedEvidencePack = buildEvidencePackFromInputManifest(inputEvidenceManifest)
+      const validatedEvidencePack = retryingExistingBuildSession
+        ? undefined
+        : buildEvidencePackFromInputManifest(inputEvidenceManifest)
       const evidenceEntries = buildEvidenceEntries(validatedEvidencePack)
       const targetReferences = buildEvidenceTargetReferences(validatedEvidencePack)
       const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(validatedEvidencePack)
@@ -1025,9 +1042,12 @@ export namespace BuildAgent {
         }
       }
       if (retryingExistingBuildSession && ownsWorktree && worktreeDir) {
+        if (!originalInputEvidenceManifest) {
+          throw new Error("BuildAgent.run: retrying existing build session without original input evidence manifest")
+        }
         const repaired = await repairManagedBuildSessionStagedFileParts({
           sessionID: buildSession.id,
-          projectID: Instance.project.id,
+          projectID: originalInputEvidenceManifest.project_id,
           worktreeDir,
         })
         if (repaired.repaired > 0) {

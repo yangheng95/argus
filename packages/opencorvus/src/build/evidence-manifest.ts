@@ -1,4 +1,7 @@
 import { AttachmentStore } from "@/storage/attachment-store"
+import { EngineArtifactTable } from "@/engine/engine.sql"
+import { Database, and, eq } from "@/storage/db"
+import z from "zod"
 import {
   buildEvidenceEntries,
   type BuildEvidenceEntry,
@@ -33,11 +36,161 @@ export interface BuildInputEvidenceManifest {
   entries: BuildInputEvidenceManifestEntry[]
 }
 
+const BuildEvidenceRoleSchema = z.enum([
+  "target_reference",
+  "previous_output",
+  "comparison_artifact",
+  "visual_qa_annotation",
+  "visual_qa_diagnostic",
+])
+
+export const BuildInputEvidenceManifestEntrySchema = z
+  .object({
+    role: BuildEvidenceRoleSchema,
+    project_id: z.string().min(1),
+    sha: z.string().min(1),
+    mime: z.string().min(1),
+    size: z.number().int().nonnegative(),
+    filename: z.string().min(1).optional(),
+    source: z.string().min(1).optional(),
+    intent: z.string().min(1).optional(),
+    source_task_id: z.string().min(1).optional(),
+    source_goal_id: z.string().min(1).optional(),
+    source_goal_run_id: z.string().min(1).optional(),
+    legacy_attachment_url: z.string().min(1),
+    sha_verified_at: z.number(),
+  })
+  .strict()
+
+export const BuildInputEvidenceManifestSchema = z
+  .object({
+    version: z.literal(1),
+    project_id: z.string().min(1),
+    task_id: z.string().min(1),
+    goal_id: z.string().min(1).optional(),
+    goal_run_id: z.string().min(1).optional(),
+    session_id: z.string().min(1).optional(),
+    entries: z.array(BuildInputEvidenceManifestEntrySchema),
+  })
+  .strict()
+
 export class BuildInputEvidenceValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "BuildInputEvidenceValidationError"
   }
+}
+
+function issueSummary(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+    .join("; ")
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+}
+
+export function parseBuildInputEvidenceManifest(input: unknown, context: string): BuildInputEvidenceManifest {
+  const parsed = BuildInputEvidenceManifestSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new BuildInputEvidenceValidationError(
+      `${context} has invalid build_session_contract.input_evidence: ${issueSummary(parsed.error)}`,
+    )
+  }
+  const manifest = parsed.data
+  for (const entry of manifest.entries) {
+    if (entry.project_id !== manifest.project_id) {
+      throw new BuildInputEvidenceValidationError(
+        `${context} input_evidence entry ${entry.role} ${entry.filename ?? entry.sha} belongs to project ${entry.project_id}, expected manifest project ${manifest.project_id}`,
+      )
+    }
+  }
+  return manifest
+}
+
+function assertManifestMatchesBuildSession(
+  manifest: BuildInputEvidenceManifest,
+  input: { context: string; sessionID: string; taskID: string; projectID: string; goalID?: string },
+) {
+  if (manifest.session_id !== input.sessionID) {
+    throw new BuildInputEvidenceValidationError(
+      `${input.context} input_evidence session_id=${manifest.session_id ?? "<unset>"} does not match build session ${input.sessionID}`,
+    )
+  }
+  if (manifest.task_id !== input.taskID) {
+    throw new BuildInputEvidenceValidationError(
+      `${input.context} input_evidence task_id=${manifest.task_id} does not match task ${input.taskID}`,
+    )
+  }
+  if (manifest.project_id !== input.projectID) {
+    throw new BuildInputEvidenceValidationError(
+      `${input.context} input_evidence project_id=${manifest.project_id} does not match task project ${input.projectID}`,
+    )
+  }
+  const expectedGoalID = input.goalID
+  if ((manifest.goal_id ?? undefined) !== expectedGoalID) {
+    throw new BuildInputEvidenceValidationError(
+      `${input.context} input_evidence goal_id=${manifest.goal_id ?? "<unset>"} does not match ${expectedGoalID ?? "<unset>"}`,
+    )
+  }
+}
+
+export function readOriginalBuildSessionInputEvidenceManifest(input: {
+  sessionID: string
+  taskID: string
+  projectID: string
+  goalID?: string
+}): BuildInputEvidenceManifest {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        id: EngineArtifactTable.id,
+        payload: EngineArtifactTable.payload,
+      })
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, "build_session_contract")))
+      .orderBy(EngineArtifactTable.time_created, EngineArtifactTable.id)
+      .all(),
+  )
+  const context = `Build session ${input.sessionID}`
+  const row = rows.find((candidate) => {
+    const payload = recordValue(candidate.payload)
+    return payload?.session_id === input.sessionID
+  })
+  if (!row) {
+    throw new BuildInputEvidenceValidationError(
+      `${context} has no build_session_contract for task ${input.taskID}`,
+    )
+  }
+  const payload = recordValue(row.payload)
+  if (!payload) {
+    throw new BuildInputEvidenceValidationError(`${context} contract ${row.id} payload is not an object`)
+  }
+  if (payload.task_id !== input.taskID) {
+    throw new BuildInputEvidenceValidationError(
+      `${context} contract ${row.id} task_id=${String(payload.task_id)} does not match task ${input.taskID}`,
+    )
+  }
+  const expectedGoalID = input.goalID ?? null
+  const actualGoalID = typeof payload.goal_id === "string" ? payload.goal_id : null
+  if (actualGoalID !== expectedGoalID) {
+    throw new BuildInputEvidenceValidationError(
+      `${context} contract ${row.id} goal_id=${actualGoalID ?? "<unset>"} does not match ${expectedGoalID ?? "<unset>"}`,
+    )
+  }
+  if (payload.input_evidence === null || payload.input_evidence === undefined) {
+    throw new BuildInputEvidenceValidationError(`${context} contract ${row.id} is missing input_evidence`)
+  }
+  const manifest = parseBuildInputEvidenceManifest(payload.input_evidence, `${context} contract ${row.id}`)
+  assertManifestMatchesBuildSession(manifest, {
+    context: `${context} contract ${row.id}`,
+    sessionID: input.sessionID,
+    taskID: input.taskID,
+    projectID: input.projectID,
+    goalID: input.goalID,
+  })
+  return manifest
 }
 
 function entryLabel(entry: BuildEvidenceEntry) {

@@ -5,19 +5,21 @@ import sharp from "sharp"
 
 import { BuildAgent, repairManagedBuildSessionStagedFileParts } from "../../src/build/agent"
 import type { BuildEvidencePack } from "../../src/build/evidence-pack"
-import { composeBuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { composeBuildInputEvidenceManifest, type BuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import type { CodingProvider, CodingRunInfo, CodingResumeInfo } from "../../src/executor/contract"
 import { persistExecutorSessionRef } from "../../src/executor/session-ref"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { findTask } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
+import { ProjectTable } from "../../src/project/project.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
 import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 import type { Provider } from "../../src/provider/provider"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
@@ -118,6 +120,54 @@ async function composeTestInputEvidenceManifest(taskID: string, evidencePack: Bu
     taskID,
     evidencePack,
   })
+}
+
+function seedProjectRow(input: { projectID: string; worktree: string }) {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(ProjectTable)
+      .values({
+        id: input.projectID,
+        worktree: input.worktree,
+        time_created: now,
+        time_updated: now,
+        sandboxes: [],
+      })
+      .run(),
+  )
+}
+
+function insertBuildSessionContract(input: {
+  taskID: string
+  sessionID: string
+  manifest: BuildInputEvidenceManifest
+  goalID?: string
+}) {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: input.manifest.goal_run_id ?? null,
+        kind: "build_session_contract",
+        label: "build-session-contract",
+        payload: {
+          session_id: input.sessionID,
+          task_id: input.taskID,
+          goal_id: input.goalID ?? null,
+          goal_run_id: input.manifest.goal_run_id ?? null,
+          input_evidence: input.manifest,
+          digest: `test-${input.sessionID}`,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
 }
 
 function captureCodingProvider(captured: { run?: CodingRunInfo; resume?: CodingResumeInfo }): CodingProvider {
@@ -816,6 +866,15 @@ describe("BuildAgent managed worktree runtime", () => {
         const pngBytes = await pngImage(16, 16)
         const original = await AttachmentStore.write(Instance.project.id, pngBytes, "image/png", "source-reference.png")
         await AttachmentStore.stageToWorktree(Instance.project.id, [original], worktree.directory)
+        const manifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: buildSession.id,
+          evidencePack: {
+            targetReferences: [{ ...original, intent: "visual_reference", source: "test" }],
+          },
+        })
+        insertBuildSessionContract({ taskID, sessionID: buildSession.id, manifest })
         const msg = await SessionPrompt.prompt({
           sessionID: buildSession.id,
           byteMaterializationProjectID: buildSession.projectID,
@@ -867,6 +926,187 @@ describe("BuildAgent managed worktree runtime", () => {
         expect(captured.resume?.sessionID).toBe("provider-native-managed-retry-session")
         expect(await fs.readFile(originalAbs)).toEqual(pngBytes)
         const storedAfter = await Message.get({ sessionID: buildSession.id, messageID: msg.info.id })
+        const modelMessages = await Message.toModelMessages([storedAfter], providerModel)
+        expect(JSON.stringify(modelMessages)).toContain(`data:image/png;base64,${pngBytes.toString("base64")}`)
+      },
+    })
+  }, 30_000)
+
+  test("managed build retry rejects an existing session without the original input evidence contract", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_missing_retry_contract_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Missing retry contract root",
+          directory: tmp.path,
+        })
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const worktree = await Worktree.create({
+          name: `missing-retry-contract-${suffix}`,
+          taskID,
+          sessionID: rootSession.id,
+        })
+        const buildSession = await Session.createNext({
+          kind: "build",
+          parentID: rootSession.id,
+          title: "Missing retry contract build",
+          directory: worktree.directory,
+        })
+        await persistExecutorSessionRef({
+          sessionID: buildSession.id,
+          provider: "codex",
+          ref: { nativeSessionID: "provider-native-missing-contract-session" },
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+
+        await expect(
+          BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            existingSessionID: buildSession.id,
+            target: {
+              kind: "request",
+              text: "retry managed build without contract",
+            },
+            managedWorktree: {
+              directory: worktree.directory,
+              branch: worktree.branch,
+            },
+          }),
+        ).rejects.toThrow("has no build_session_contract")
+        expect(captured.run).toBeUndefined()
+        expect(captured.resume).toBeUndefined()
+      },
+    })
+  }, 30_000)
+
+  test("managed build retry repairs persisted file parts through the original manifest project", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskProjectID = `project_retry_manifest_owner_${suffix}`
+        seedProjectRow({ projectID: taskProjectID, worktree: tmp.path })
+
+        const taskID = `tsk_retry_manifest_owner_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Retry manifest owner root",
+          directory: tmp.path,
+        })
+        seedTask({ projectID: taskProjectID, taskID, sessionID: rootSession.id, executor: "codex" })
+        const worktree = await Worktree.create({
+          name: `retry-manifest-owner-${suffix}`,
+          taskID,
+          sessionID: rootSession.id,
+        })
+        const buildSession = await Session.createNext({
+          kind: "build",
+          parentID: rootSession.id,
+          title: "Retry manifest owner build",
+          directory: worktree.directory,
+        })
+        Database.use((db) =>
+          db.update(SessionTable).set({ project_id: taskProjectID }).where(eq(SessionTable.id, buildSession.id)).run(),
+        )
+
+        const pngBytes = await pngImage(16, 16)
+        const original = await AttachmentStore.write(taskProjectID, pngBytes, "image/png", "source-reference.png")
+        await AttachmentStore.stageToWorktree(taskProjectID, [original], worktree.directory)
+        const manifest = await composeBuildInputEvidenceManifest({
+          projectID: taskProjectID,
+          taskID,
+          sessionID: buildSession.id,
+          evidencePack: {
+            targetReferences: [{ ...original, intent: "visual_reference", source: "test" }],
+          },
+        })
+        insertBuildSessionContract({ taskID, sessionID: buildSession.id, manifest })
+
+        const msg = await SessionPrompt.prompt({
+          sessionID: buildSession.id,
+          byteMaterializationProjectID: taskProjectID,
+          agent: "coding",
+          noReply: true,
+          parts: [
+            { type: "text", text: "use the manifest-owned visual reference" },
+            {
+              type: "file",
+              mime: "image/png",
+              filename: "source-reference.png",
+              url: `data:image/png;base64,${pngBytes.toString("base64")}`,
+            },
+          ],
+        })
+        const originalLocation = AttachmentStore.nameFromUrl(original.url)
+        if (!originalLocation) throw new Error("expected original attachment location")
+        const originalAbs = AttachmentStore.resolveAbsolute(originalLocation.projectID, originalLocation.name)
+        if (!originalAbs) throw new Error("expected original attachment path")
+        await fs.rm(originalAbs, { force: true })
+        await fs.rm(`${originalAbs}.metadata.json`, { force: true })
+        await persistExecutorSessionRef({
+          sessionID: buildSession.id,
+          provider: "codex",
+          ref: { nativeSessionID: "provider-native-manifest-owner-session" },
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+
+        const output = await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          existingSessionID: buildSession.id,
+          target: {
+            kind: "request",
+            text: "retry managed build with manifest owner",
+          },
+          managedWorktree: {
+            directory: worktree.directory,
+            branch: worktree.branch,
+          },
+        })
+
+        expect(output.sessionID).toBe(buildSession.id)
+        expect(captured.resume?.sessionID).toBe("provider-native-manifest-owner-session")
+        expect(await fs.readFile(originalAbs)).toEqual(pngBytes)
+        const storedAfter = await Message.get({ sessionID: buildSession.id, messageID: msg.info.id })
+        const filePart = storedAfter.parts.find((part) => part.type === "file")
+        if (!filePart || filePart.type !== "file") throw new Error("expected stored file part")
+        expect(filePart.url).toStartWith(`/attachment/${taskProjectID}/`)
         const modelMessages = await Message.toModelMessages([storedAfter], providerModel)
         expect(JSON.stringify(modelMessages)).toContain(`data:image/png;base64,${pngBytes.toString("base64")}`)
       },
@@ -952,6 +1192,15 @@ describe("BuildAgent managed worktree runtime", () => {
           executor: "codex",
           attachments: [{ ...visualRef, intent: "visual_reference", source: "user-upload" }],
         })
+        const manifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: buildSession.id,
+          evidencePack: {
+            targetReferences: [{ ...visualRef, intent: "visual_reference", source: "user-upload" }],
+          },
+        })
+        insertBuildSessionContract({ taskID, sessionID: buildSession.id, manifest })
         await persistExecutorSessionRef({
           sessionID: buildSession.id,
           provider: "codex",

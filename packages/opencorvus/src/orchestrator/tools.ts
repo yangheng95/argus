@@ -80,6 +80,7 @@ import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from
 import {
   bindBuildInputEvidenceManifest,
   composeBuildInputEvidenceManifest,
+  readOriginalBuildSessionInputEvidenceManifest,
   type BuildInputEvidenceManifest,
 } from "@/build/evidence-manifest"
 import {
@@ -13390,17 +13391,27 @@ export function createOrchestratorTools(input: {
             // Visual feedback closure-loop: target references and previous
             // outputs stay separated by role so rendered retry evidence never
             // becomes a binding clone target.
-            const evidencePack = await composeBuildEvidencePack({
-              task,
-              includePreviousOutput:
-                retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
-            })
-            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
-              projectID: task.project_id,
-              taskID: task.id,
-              goalID: goal.id,
-              evidencePack,
-            })
+            let evidencePack: BuildEvidencePack | undefined
+            if (existingBuildSessionID) {
+              inputEvidenceManifest = readOriginalBuildSessionInputEvidenceManifest({
+                sessionID: existingBuildSessionID,
+                taskID: task.id,
+                projectID: task.project_id,
+                goalID: goal.id,
+              })
+            } else {
+              evidencePack = await composeBuildEvidencePack({
+                task,
+                includePreviousOutput:
+                  retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
+              })
+              inputEvidenceManifest = await composeBuildInputEvidenceManifest({
+                projectID: task.project_id,
+                taskID: task.id,
+                goalID: goal.id,
+                evidencePack,
+              })
+            }
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
             // only when the latest workload artifact targets the active

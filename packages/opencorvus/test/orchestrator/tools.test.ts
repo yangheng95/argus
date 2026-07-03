@@ -8,6 +8,7 @@ import sharp from "sharp"
 import z from "zod"
 import { readLatestTaskVisualEvidenceBundleSync } from "../../src/acceptance/visual-evidence"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
+import { composeBuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
 import type { BrowserPreviewRegionBinding } from "../../src/browser-preview/region-comparison"
 import { Bus } from "../../src/bus"
 import { Database, and, eq, sql } from "../../src/storage/db"
@@ -15412,6 +15413,8 @@ describe("orchestrator tools", () => {
     const priorSessionID = `ses_prior_retry_default_${stamp}`
     let observedExistingSessionID: unknown
     let observedRetryFeedback: unknown
+    let originalRefUrl = ""
+    let currentRefUrl = ""
 
     await Instance.provide({
       directory: tmp.path,
@@ -15432,6 +15435,29 @@ describe("orchestrator tools", () => {
           now,
           insertProject: false,
         })
+        const originalRef = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "original-retry-reference.png",
+        )
+        const currentRef = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.concat([Buffer.from(minimalPngBytes()), Buffer.from("current")]),
+          "image/png",
+          "current-retry-reference.png",
+        )
+        originalRefUrl = originalRef.url
+        currentRefUrl = currentRef.url
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...currentRef, intent: "visual_reference", source: "current-task-attachment" }],
+            } as any)
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
         await Session.createNext({
           id: priorSessionID,
           kind: "build",
@@ -15440,6 +15466,38 @@ describe("orchestrator tools", () => {
           title: "Prior retry build session",
           directory: tmp.path,
         })
+        const originalManifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          evidencePack: {
+            targetReferences: [{ ...originalRef, intent: "visual_reference", source: "original-contract" }],
+          },
+        })
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              kind: "build_session_contract",
+              label: "build-session-contract",
+              payload: {
+                session_id: priorSessionID,
+                task_id: taskID,
+                goal_id: goalID,
+                goal_run_id: null,
+                input_evidence: originalManifest,
+                digest: "original-contract",
+              },
+              time_created: now + 5,
+              time_updated: now + 5,
+            })
+            .run(),
+        )
         const priorGoalRunID = seedTerminalFailedBuildRun({
           taskID,
           goalID,
@@ -15466,6 +15524,8 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedRetryFeedback = input.context?.retryFeedback
+          expect(input.context?.inputEvidenceManifest?.entries?.[0]?.legacy_attachment_url).toBe(originalRefUrl)
+          expect(JSON.stringify(input.context?.inputEvidenceManifest)).not.toContain(currentRefUrl)
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -15506,6 +15566,17 @@ describe("orchestrator tools", () => {
         expect(String(observedRetryFeedback)).not.toContain("AUDIT_REASON_SHOULD_NOT_ENTER_BUILD_PROMPT")
         expect(String(observedRetryFeedback)).not.toContain("Terminal error:")
         expect(createNextSpy).not.toHaveBeenCalled()
+        const contracts = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_session_contract")))
+            .all(),
+        )
+        const retryContract = contracts.at(-1)?.payload as any
+        expect(retryContract?.session_id).toBe(priorSessionID)
+        expect(retryContract?.input_evidence?.entries?.[0]?.legacy_attachment_url).toBe(originalRefUrl)
+        expect(JSON.stringify(retryContract?.input_evidence)).not.toContain(currentRefUrl)
       },
     })
   }, 30_000)
