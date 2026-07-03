@@ -146,7 +146,7 @@ describe("PromptProfileResolver", () => {
       taskID: "tsk_general_projection",
       agentSessionID: "ses_general_projection",
     })
-    const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
     expect(Object.keys(projectedTools)).toEqual([...expectedSchedulerRoleBaseToolIDs])
     for (const hidden of [
       "build",
@@ -184,7 +184,7 @@ describe("PromptProfileResolver", () => {
       const capability = await PromptProfileResolver.resolveSchedulerCapability({
         config: Config.Info.parse({ prompt_profile: { active: expectation.profileID } }),
       })
-      const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+      const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
 
       expect(capability.promptProfileID).toBe(expectation.profileID)
       expect(capability.builtIn).toBe(true)
@@ -205,9 +205,11 @@ describe("PromptProfileResolver", () => {
     }
   })
 
-  test("resolves project package scheduler projection without activating package tool or MCP refs", async () => {
+  test("resolves active project package scheduler package tools without activating MCP refs", async () => {
     await using project = await tmpdir({ git: true })
     await writeProjectExpertSquadPackage(project.path)
+    const packageToolRef = `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(packageToolRef)
     const capability = await PromptProfileResolver.resolveSchedulerCapability({
       projectDirectory: project.path,
       config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
@@ -217,7 +219,9 @@ describe("PromptProfileResolver", () => {
     expect(capability.promptProfileID).toBe(PROJECT_EXPERT_SQUAD_ID)
     expect(capability.builtInToolIDs).toContain("build")
     expect(capability.builtInToolIDs).toContain("select_expert_squad")
-    expect(capability.scheduler.package_tool_refs).toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
+    expect(capability.packageToolRefs).toEqual([packageToolRef])
+    expect(capability.packageToolProviderNames).toEqual([packageToolProviderName])
+    expect(capability.scheduler.package_tool_refs).toContain(packageToolRef)
     expect(capability.scheduler.package_mcp_server_refs).toContain(
       `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`,
     )
@@ -227,10 +231,117 @@ describe("PromptProfileResolver", () => {
       taskID: "tsk_project_projection",
       agentSessionID: "ses_project_projection",
     })
-    const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
+      projectDirectory: project.path,
+    })
     expect(Object.hasOwn(projectedTools, "build")).toBe(true)
+    expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(true)
     expect(Object.hasOwn(projectedTools, `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)).toBe(false)
+    expect(Object.hasOwn(projectedTools, "source-evidence")).toBe(false)
+    expect(Object.hasOwn(projectedTools, "build-evidence")).toBe(false)
     expect(Object.hasOwn(projectedTools, "package-browser")).toBe(false)
+    const packageToolResult = await (projectedTools[packageToolProviderName] as any).execute(
+      { label: "unit" },
+      {
+        toolCallId: "call_project_package_tool",
+        opencorvus: {
+          sessionID: "ses_project_projection",
+          messageID: "msg_project_projection",
+          toolCallID: "call_project_package_tool",
+        },
+      },
+    )
+    expect(packageToolResult.output).toContain(`source-evidence:orchestrator:unit:${project.path}`)
+    expect(packageToolResult.metadata.package_tool_ref).toBe(packageToolRef)
+    expect(packageToolResult.metadata.provider_tool_name).toBe(packageToolProviderName)
+  })
+
+  test("keeps project package tools absent from general scheduler projection", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+    )
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+    })
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_general_with_project_package",
+      agentSessionID: "ses_general_with_project_package",
+    })
+
+    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
+      projectDirectory: project.path,
+    })
+
+    expect(capability.packageToolRefs).toEqual([])
+    expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(false)
+    expect(Object.hasOwn(projectedTools, "source-evidence")).toBe(false)
+  })
+
+  test("does not expose declared package tools until scheduler projection references them", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path, PROJECT_EXPERT_SQUAD_ID, {
+      schedulerPackageToolRefs: [],
+    })
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+    )
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+    })
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_declared_not_projected",
+      agentSessionID: "ses_declared_not_projected",
+    })
+
+    const projectedTools = await PromptProfileResolver.projectOrchestratorTools(rawTools, capability, {
+      projectDirectory: project.path,
+    })
+
+    expect(capability.packageToolRefs).toEqual([])
+    expect(Object.hasOwn(projectedTools, packageToolProviderName)).toBe(false)
+  })
+
+  test("does not import inactive package tool modules while another profile is active", async () => {
+    await using project = await tmpdir({ git: true })
+    const inactiveRoot = await writeProjectExpertSquadPackage(project.path)
+    await Bun.write(
+      path.join(inactiveRoot, "agents", "orchestrator", "tools", "source-evidence.ts"),
+      'throw new Error("inactive package tool imported")',
+    )
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+    })
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_inactive_package_tool",
+      agentSessionID: "ses_inactive_package_tool",
+    })
+
+    await expect(
+      PromptProfileResolver.projectOrchestratorTools(rawTools, capability, { projectDirectory: project.path }),
+    ).resolves.toBeDefined()
+  })
+
+  test("fails visibly when active package tool export is not a ToolDefinition", async () => {
+    await using project = await tmpdir({ git: true })
+    const packageRoot = await writeProjectExpertSquadPackage(project.path)
+    await Bun.write(path.join(packageRoot, "agents", "orchestrator", "tools", "source-evidence.ts"), "export default {}")
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+    })
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_invalid_package_tool",
+      agentSessionID: "ses_invalid_package_tool",
+    })
+
+    await expect(
+      PromptProfileResolver.projectOrchestratorTools(rawTools, capability, { projectDirectory: project.path }),
+    ).rejects.toThrow("must export default ToolDefinition")
   })
 
   test("resolves general skill projection to selector skills without unreferenced default ordinary skills", async () => {
@@ -406,7 +517,7 @@ describe("PromptProfileResolver", () => {
     const rawTools: Record<string, (typeof tools)[keyof typeof tools]> = { ...tools }
     delete rawTools.skill
 
-    expect(() => PromptProfileResolver.projectOrchestratorTools(rawTools, capability)).toThrow(
+    await expect(PromptProfileResolver.projectOrchestratorTools(rawTools, capability)).rejects.toThrow(
       /projects Orchestrator tool "skill"/,
     )
   })

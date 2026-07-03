@@ -11,6 +11,7 @@ import { MCP } from "../../src/mcp"
 import { SkillTool } from "../../src/tool/skill"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Config } from "../../src/config/config"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
@@ -447,7 +448,7 @@ Use this skill.
     }
   })
 
-  test("active project package prompt profile projects package skills but not package tools or MCP surfaces", async () => {
+  test("active project package prompt profile keeps package tools outside skill and registry surfaces", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -508,10 +509,15 @@ Use this skill.
           expect(buildSearch.output).toContain("<name>implementation</name>")
 
           const toolIDs = await ToolRegistry.ids()
+          const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+            `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+          )
           expect(toolIDs).not.toContain("source-evidence")
           expect(toolIDs).not.toContain("build-evidence")
+          expect(toolIDs).not.toContain(packageToolProviderName)
           const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build!)
           expect(buildTools.map((entry) => entry.id)).not.toContain("build-evidence")
+          expect(buildTools.map((entry) => entry.id)).not.toContain(packageToolProviderName)
 
           const mcpStatus = await MCP.status()
           expect(Object.keys(mcpStatus)).not.toContain(PROJECT_EXPERT_SQUAD_ID)

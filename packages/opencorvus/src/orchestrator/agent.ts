@@ -713,7 +713,10 @@ export namespace Orchestrator {
         workflowState,
         operatorMessage: event?.operatorMessage,
       })
-      const tools = PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability)
+      const tools = await PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability, {
+        projectDirectory: schedulerProjectDirectory,
+        signal: ctrl.signal,
+      })
       const guard = toolGuard(tools)
       const enableMap: Record<string, boolean> = Object.fromEntries(
         Object.keys(guard.tools).map((name) => [name, true]),

@@ -1680,3 +1680,114 @@ Phase 8C Corrective Recall, 2026-07-04:
 - `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts` passed: 65 pass.
 - `bun run api:routes-check` passed.
 - Scoped `git diff --check` over Phase 8C touched files passed.
+
+Phase 9 Recall, 2026-07-04:
+
+### User Request
+
+- Continue implementing and testing the dynamic `.opencorvus` expert-squad architecture through independent-agent adversarial implementation and review.
+- Preserve the original architecture goal: selected expert-squad packages can define tool definitions under their clear-text package directory, but runtime exposure must be derived from the active manifest ID and capability projection, not from folder names, global scans, fallback routes, or UI filtering.
+
+### Acceptance Criteria For This Slice
+
+- Active project expert-squad scheduler `package_tool_refs` enter the Orchestrator exact runtime contract.
+- Package tool files are loaded only from the active project package and only when `capability_projection.scheduler.package_tool_refs` names the canonical package ref.
+- Provider-facing package tool names are deterministic, safe, and distinct from canonical refs, bare file names, built-in tool IDs, global custom tool IDs, and plugin tool IDs.
+- Package tools do not enter `ToolRegistry.ids()`, `ToolRegistry.tools()`, `SkillMount`, `SkillTool`, `/skill/mounts`, or worker agent tool surfaces in this slice.
+- Inactive packages are not imported for package tool execution during general/built-in profile runtime projection.
+- Active package tool import or shape errors fail visibly; they must not be skipped like the flat custom-tool scanner.
+- MCP projection, worker runtime package-tool projection/hash binding, package custom agents, and package-tool pack/unpack cache invalidation remain out of this slice and must not be claimed as implemented.
+
+### Hard Constraints
+
+- No fallback, compatibility alias, hidden route, host-side gate, `ToolRegistry` global scan, UI-only filtering, or same-turn synthetic tool table mutation.
+- Do not create a new worktree, do not run `git reset`, and do not stage unrelated dirty direct-build, Visual QA, Integrity, SDK/OpenAPI, or import/session files.
+- Package tool module code executes at import time; therefore inactive packages must not be imported while resolving another active profile.
+- Existing running OpenCorvus/overlay processes must not be restarted or refreshed.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/src/expert-squad/registry.ts`
+- `packages/opencorvus/src/tool/registry.ts`
+- `packages/opencorvus/src/tool/tool.ts`
+- `packages/plugin/src/tool.ts`
+- `packages/opencorvus/src/orchestrator/agent.ts`
+- `packages/opencorvus/src/session/loop.ts`
+- `packages/opencorvus/src/agent/tool-pool-contract.ts`
+- `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
+- `packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`
+- `packages/opencorvus/test/expert-squad/registry.test.ts`
+- `packages/opencorvus/test/fixture/expert-squad.ts`
+
+### Repository Search Evidence
+
+- `rg -n "package_tool_refs|default_tool_refs|resolveSchedulerCapability|builtInToolIDs|projectTool|ToolRegistry|privateRegistryTools|createOrchestratorTools|setSessionRuntimeContract|SessionRuntimeContract|Tool\\.Info|AgentToolPool|GLOBAL_TOOL_IDS" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`: package tool refs are validated in the registry and fixture but scheduler runtime currently projects only built-in tool IDs.
+- `rg -n "projectOrchestratorTools\\(" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`: call sites are limited to Orchestrator runtime setup and focused resolver tests, so converting projection to async is scoped.
+- `rg -n "export.*ToolDefinition|interface ToolDefinition|type ToolDefinition|ToolContext" packages/plugin packages/opencorvus/src -g "*.ts"`: `@opencorvus-ai/plugin` already owns a mature `ToolDefinition` ABI with Zod args and execute context.
+- `rg -n "package_tool_refs|tools/source-evidence|build-evidence|unsupported tool extension|declared in agents" packages/opencorvus/test/expert-squad packages/opencorvus/test/fixture -g "*.ts"`: package tool files are validated as refs today, but current fixtures export `{}` and do not prove executable tool definitions.
+
+### Independent Agent Feedback
+
+- Godel found the correct runtime path is the existing Orchestrator exact-runtime contract: resolve active scheduler capability, build raw Orchestrator tools, materialize active package scheduler tools, merge before `toolGuard()`, and install the merged table into `SessionRuntimeContract`. Godel warned not to touch `ToolRegistry.state()` because it is flat and forgiving.
+- Godel recommended splitting identity into canonical authorization refs (`<expert_squad_id>/<owner>/<tool_id>`) and provider-facing names such as `pkg_tool__<sanitized-ref-hint>__<hash>`, plus hard collision checks.
+- Godel recommended tests proving active package tools appear only under the active project profile, general profile remains clean, ownership declarations alone do not grant visibility, inactive broken packages are not imported, and global `ToolRegistry` stays clean.
+- Mencius confirmed package tool runtime projection is missing and flagged blockers: flat `ToolRegistry` loading silently skips failures; TypeScript import executes top-level code; provider-name collisions can overwrite exact runtime tool maps; and current runtime contract identity does not yet carry profile/projection identity for worker stale-continuation enforcement.
+- Mencius accepted `@opencorvus-ai/plugin` `ToolDefinition` as the package-tool module ABI only, not as the loader/registry contract. Active package imports must fail hard on import or shape errors.
+- Mencius recommended additional future tests for worker projection/hash binding and package replacement stale module cache; those remain outside Phase 9 scheduler-only scope.
+
+### Phase 9 Planned Boundary
+
+- Add package-tool projection helpers under the expert-squad resolver domain.
+- Expose a deterministic helper for package tool provider names derived from canonical package refs.
+- Implement active scheduler package-tool materialization from `capability_projection.scheduler.package_tool_refs` only.
+- Convert `PromptProfileResolver.projectOrchestratorTools()` to async so it can merge raw built-in tools with active package tools.
+- Reuse the `@opencorvus-ai/plugin` `ToolDefinition` ABI for package tool files, but implement a package-scoped loader that:
+  - resolves refs to contained package paths;
+  - imports only active projected refs;
+  - validates the exported definition shape;
+  - wraps execution with the OpenCorvus `Tool.Info` contract and plugin-like context;
+  - records canonical ref/package/source metadata in tool result metadata.
+- Update focused tests:
+  - active project package scheduler runtime includes the deterministic package provider tool name;
+  - general profile with a project package does not expose package tools;
+  - package tool declaration in `agents.orchestrator.tool_refs` without scheduler projection does not expose the tool;
+  - inactive broken package tools are not imported while another profile is active;
+  - active invalid package tool shape fails visibly;
+  - `ToolRegistry.ids()` / `ToolRegistry.tools()` do not expose canonical, bare, or provider package tool names.
+
+### Phase 9 Remaining Boundary
+
+- MCP projection remains unimplemented.
+- Worker package-tool runtime projection and projection-hash continuation validation remain unimplemented.
+- Package custom agents remain unimplemented.
+- Package replacement stale ESM import cache validation remains unimplemented.
+
+### Phase 9 Implementation Result
+
+- `ResolvedSchedulerCapability` now carries active scheduler `packageToolRefs`, deterministic `packageToolProviderNames`, and the active package root for project packages. Built-in/general profiles keep package tool refs empty.
+- `PromptProfileResolver.packageToolProviderName()` derives provider-facing names as `pkg_tool__<sanitized-ref-hint>__<hash>`, while the manifest canonical ref remains the authorization identity.
+- `PromptProfileResolver.projectOrchestratorTools()` is async and merges two surfaces only: existing explicit built-in Orchestrator tools and active scheduler package tools. Provider-name collisions with built-ins or raw Orchestrator tools fail visibly.
+- Package tool loading stays under the expert-squad resolver instead of `ToolRegistry`. The loader validates the canonical package ref, resolves only contained `.ts`/`.js` files under the active package, rejects symbolic links, and fails when a projected file is missing.
+- Active package tool files use the existing `@opencorvus-ai/plugin` `ToolDefinition` application binary interface. The loader compiles the active tool file through `Bun.build()` into a content-addressed temporary ECMAScript module bundle, resolves the runtime `@opencorvus-ai/plugin` package as the single ABI source, imports only that compiled active module, and rejects non-`ToolDefinition` exports.
+- Package tool execution requires real session/message identity in the AI SDK execution options, supplies a scheduler-scoped plugin context, refuses permission prompts, truncates output through `Truncate.output()`, and returns metadata for canonical ref, expert-squad ID, provider tool name, source path, and truncation state.
+- Orchestrator runtime setup now awaits the projected tool table before `toolGuard()` and installs the merged result into the exact `SessionRuntimeContract`.
+- The project expert-squad fixture now writes executable package tool definitions for `source-evidence` and `build-evidence`, with optional scheduler package-tool refs so tests can distinguish declaration from projection.
+
+### Phase 9 Independent Review Result
+
+- Helmholtz performed a final read-only review of the Phase 9 diff. The package-tool projection logic had no blocking findings: active scheduler package tools stay out of `ToolRegistry`, `SkillTool`, and MCP surfaces; inactive package modules are not imported; deterministic provider names are exposed instead of canonical refs; and active invalid exports fail visibly.
+- Helmholtz found two commit-boundary blockers in mixed dirty files: unrelated WorkflowRegistry migration hunks in `prompt-profile-resolver.ts`, and unrelated attachment/context-packet hunks in `orchestrator/agent.ts`. The staged Phase 9 snapshot excludes both unrelated hunks; only the package-tool resolver changes and the awaited Orchestrator projection call are staged from those files.
+
+### Phase 9 Validation
+
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts -t "resolves active project package scheduler package tools|fails visibly when active package tool export"` passed: 2 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts -t "resolves active project package scheduler package tools|fails visibly when active package tool export|inactive package tool|declared package tools|general scheduler projection"` passed: 5 pass.
+- `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/tool/registry.test.ts` passed: 38 pass, 400 expect calls.
+- `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 19 pass.
+- `git diff --check` passed. It emitted CRLF warnings for unrelated pre-existing dirty files outside the Phase 9 staged set; no whitespace errors were reported.

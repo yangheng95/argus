@@ -4,6 +4,8 @@ import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 
 describe("tool.registry", () => {
   test("includes core coding tools", async () => {
@@ -141,6 +143,26 @@ describe("tool.registry", () => {
         // gracefully skips tools whose imports fail.
         const ids = await ToolRegistry.ids()
         expect(Array.isArray(ids)).toBe(true)
+      },
+    })
+  }, 20000)
+
+  test("does not scan expert-squad package tools into the flat registry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const providerName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids = await ToolRegistry.ids()
+        expect(ids).not.toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
+        expect(ids).not.toContain("source-evidence")
+        expect(ids).not.toContain(providerName)
+        const tools = await ToolRegistry.tools({ providerID: "", modelID: "" })
+        expect(tools.map((entry) => entry.id)).not.toContain(providerName)
       },
     })
   }, 20000)

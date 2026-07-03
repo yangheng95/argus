@@ -7,11 +7,13 @@ const EXPERT_SQUAD_MANIFEST = "expert-squad.jsonc"
 
 export interface ProjectExpertSquadManifestOptions {
   schedulerDefaultSkillRefs?: string[]
+  schedulerPackageToolRefs?: string[]
   buildDefaultSkillRefs?: string[]
   agentDefaultSkillRefs?: Record<string, string[]>
 }
 
 export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options: ProjectExpertSquadManifestOptions = {}) {
+  const schedulerPackageToolRefs = options.schedulerPackageToolRefs ?? [`${id}/orchestrator/source-evidence`]
   const buildProjection = {
     role_base: true,
     ...(options.buildDefaultSkillRefs?.length ? { default_skill_refs: options.buildDefaultSkillRefs } : {}),
@@ -48,7 +50,7 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options
           ? { default_skill_refs: options.schedulerDefaultSkillRefs }
           : {}),
         package_skill_refs: [`${id}/orchestrator/scheduler`],
-        package_tool_refs: [`${id}/orchestrator/source-evidence`],
+        ...(schedulerPackageToolRefs.length ? { package_tool_refs: schedulerPackageToolRefs } : {}),
         package_mcp_server_refs: [`${id}/orchestrator/package-browser`],
         package_mcp_tool_refs: [`${id}/orchestrator/package-browser/tool/snapshot`],
         package_mcp_prompt_refs: [`${id}/orchestrator/package-browser/prompt/inspect`],
@@ -89,8 +91,32 @@ export function projectExpertSquadFiles(
       "---\nname: scheduler\ndescription: Project scheduler skill.\n---\n",
     [`${root}agents/build/skills/implementation/SKILL.md`]:
       "---\nname: implementation\ndescription: Project implementation skill.\n---\n",
-    [`${root}agents/orchestrator/tools/source-evidence.ts`]: "export default {}",
-    [`${root}agents/build/tools/build-evidence.ts`]: "export default {}",
+    [`${root}agents/orchestrator/tools/source-evidence.ts`]: [
+      'import { tool } from "@opencorvus-ai/plugin"',
+      "",
+      "export default tool({",
+      '  description: "Project source evidence tool.",',
+      "  args: {",
+      "    label: tool.schema.string().optional(),",
+      "  },",
+      "  async execute(args, context) {",
+      '    return `source-evidence:${context.agent}:${args.label ?? ""}:${context.directory}`',
+      "  },",
+      "})",
+      "",
+    ].join("\n"),
+    [`${root}agents/build/tools/build-evidence.ts`]: [
+      'import { tool } from "@opencorvus-ai/plugin"',
+      "",
+      "export default tool({",
+      '  description: "Project build evidence tool.",',
+      "  args: {},",
+      "  async execute(_args, context) {",
+      "    return `build-evidence:${context.agent}:${context.directory}`",
+      "  },",
+      "})",
+      "",
+    ].join("\n"),
     [`${root}agents/orchestrator/mcp/package-browser.jsonc`]: JSON.stringify(
       { command: "node", args: ["browser.js"], capabilities: { tools: ["snapshot"], prompts: ["inspect"], resources: ["dom"] } },
       null,

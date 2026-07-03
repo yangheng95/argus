@@ -4,6 +4,7 @@ import { Identifier } from "../../src/id/id"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
+import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
@@ -180,6 +181,21 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("bash")
   })
 
+  test("general wake does not expose project package scheduler tools", async () => {
+    const captured = await captureOrchestratorRuntimeContract({
+      profileID: "general",
+      writeProjectPackage: true,
+    })
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+    )
+
+    expect(captured.includeMcpTools).toBe(false)
+    expect(captured.toolIDs).toEqual([...expectedSchedulerRoleBaseToolIDs])
+    expect(captured.toolIDs).not.toContain(packageToolProviderName)
+    expect(captured.toolIDs).not.toContain("source-evidence")
+  })
+
   test("frontend automation debug wake installs its active built-in projected workflow tools", async () => {
     const captured = await captureOrchestratorRuntimeContract({ profileID: "frontend-automation-debug" })
 
@@ -194,17 +210,23 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).not.toContain("deep_research")
   })
 
-  test("project package wake installs built-in scheduler refs without package tool or MCP activation", async () => {
+  test("project package wake installs scheduler package tools without MCP activation", async () => {
     const captured = await captureOrchestratorRuntimeContract({
       profileID: PROJECT_EXPERT_SQUAD_ID,
       writeProjectPackage: true,
     })
+    const packageToolProviderName = PromptProfileResolver.packageToolProviderName(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`,
+    )
 
     expect(captured.includeMcpTools).toBe(false)
     expect(captured.toolIDs).toContain("select_expert_squad")
     expect(captured.toolIDs).toContain("skill")
     expect(captured.toolIDs).toContain("build")
+    expect(captured.toolIDs).toContain(packageToolProviderName)
     expect(captured.toolIDs).not.toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
+    expect(captured.toolIDs).not.toContain("source-evidence")
+    expect(captured.toolIDs).not.toContain("build-evidence")
     expect(captured.toolIDs).not.toContain("package-browser")
   })
 
