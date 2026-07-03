@@ -11,6 +11,7 @@ import { SessionTable } from "../../src/session/session.sql"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -136,6 +137,7 @@ describe("session routes", () => {
 
   test("PATCH /session/:id/config applies prompt profile overlay and rejects unknown profiles", async () => {
     await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -149,11 +151,11 @@ describe("session routes", () => {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
-          body: JSON.stringify({ prompt_profile: { active: "frontend-automation-debug" } }),
+          body: JSON.stringify({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
         })
         expect(saved.status).toBe(200)
         const body = (await saved.json()) as { config: Config.Info; origin: any }
-        expect(body.config.prompt_profile.active).toBe("frontend-automation-debug")
+        expect(body.config.prompt_profile.active).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(body.origin.prompt_profile.active).toBe("session")
 
         const rejected = await app.request(`/session/${session.id}/config`, {
@@ -171,7 +173,7 @@ describe("session routes", () => {
           error: [{ message: expect.stringContaining("Unknown prompt profile") }],
         })
         expect((await Session.get(session.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "frontend-automation-debug" },
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
       },
     })

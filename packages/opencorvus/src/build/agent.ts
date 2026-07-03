@@ -33,7 +33,8 @@ import { $ } from "bun"
 import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
-import { PromptProfile, type PromptProfileConfig } from "@/agent/prompt-profile"
+import type { PromptProfileConfig } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { resolveAgentModel } from "@/agent/model"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
@@ -850,9 +851,10 @@ export namespace BuildAgent {
     }>
   }
 
-  export function composeExternalCodingSystem(input: {
+  export async function composeExternalCodingSystem(input: {
     executor: Exclude<TaskRow["executor"], "opencorvus">
     config: { prompt_profile?: PromptProfileConfig }
+    projectDirectory: string
     baseSystem?: string
     userAppend?: string
   }) {
@@ -861,7 +863,8 @@ export namespace BuildAgent {
       .map((s) => s.trim())
       .filter(Boolean)
       .join("\n\n")
-    const profiledSystem = PromptProfile.composeAgentPrompt({
+    const profiledSystem = await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory: input.projectDirectory,
       agentID: "build",
       base,
       userAppend: input.userAppend,
@@ -2390,7 +2393,13 @@ async function runWithExternalProviderImpl(args: {
   }
 
   const engineConfig = await EngineConfig.get()
-  const config = await EffectiveConfig.effective({ taskID: args.taskID, sessionID: args.existingSessionID })
+  const profileScope: { taskID?: string; sessionID?: string } = args.existingSessionID
+    ? { taskID: args.taskID, sessionID: args.existingSessionID }
+    : { taskID: args.taskID }
+  const [config, projectDirectory] = await Promise.all([
+    EffectiveConfig.effective(profileScope),
+    EffectiveConfig.directory(profileScope),
+  ])
   const buildAgent = await Agent.get("build", { config })
   const userAppend = buildAgent?.promptAppend
   const baseSystem = resolveOption<string>(options.system)
@@ -2398,9 +2407,10 @@ async function runWithExternalProviderImpl(args: {
   const systemWithRepairDiscipline = [baseSystem, renderBuildRepairDiscipline(), ...projectInstructions]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join("\n\n")
-  const composedSystem = BuildAgent.composeExternalCodingSystem({
+  const composedSystem = await BuildAgent.composeExternalCodingSystem({
     executor: args.executor,
     config,
+    projectDirectory,
     baseSystem: systemWithRepairDiscipline,
     userAppend,
   })

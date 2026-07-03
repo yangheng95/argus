@@ -8,6 +8,9 @@ import type { Provider } from "../../src/provider/provider"
 import { applyRightSidebarCodingAssistantPromptOverlay } from "../../src/coding-assistant/session"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
+import { Instance } from "../../src/project/instance"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import { tmpdir } from "../fixture/fixture"
 
 const model = {
   providerID: "test",
@@ -93,6 +96,44 @@ test("direct coding uses the coding prompt while build stage uses complete core"
   })
 
   expect(buildSystem).toEqual([`RUNNER RUNTIME CONTEXT\n${BUILD_CORE}`])
+})
+
+test("direct LLM composition applies project package prompt overlays when an Instance context exists", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
+  })
+  await writeProjectExpertSquadPackage(tmp.path)
+
+  const build = {
+    name: "build",
+    mode: "primary",
+    prompt: BUILD_CORE,
+  } as Agent.Info
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const system = await LLM.composeSystem({
+          agent: build,
+          model,
+          system: [],
+          user: {
+            ...user(),
+            agent: "build",
+            system: undefined,
+          } as Message.User,
+        })
+
+        expect(system[0]).toContain(BUILD_CORE)
+        expect(system[0]).toContain("project build overlay")
+        expect(system[0].indexOf(BUILD_CORE)).toBeLessThan(system[0].indexOf("project build overlay"))
+      },
+    })
+  } finally {
+    await Instance.disposeAll()
+  }
 })
 
 test("right sidebar coding assistant overlay prevents complete-system prompt replacement", async () => {

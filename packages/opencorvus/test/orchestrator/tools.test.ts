@@ -45,6 +45,7 @@ import {
 import * as EnginePersist from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase, TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import {
@@ -2442,6 +2443,7 @@ describe("orchestrator tools", () => {
   test("select_expert_squad writes a validated prompt profile to the task root session overlay", async () => {
     const now = Date.now()
     const projectID = "prj_select_expert_squad"
+    await writeProjectExpertSquadPackage(tmp.path)
     const taskID = "tsk_select_expert_squad"
     Database.use((db) => {
       db.insert(ProjectTable)
@@ -2487,6 +2489,9 @@ describe("orchestrator tools", () => {
           agentSessionID: root.id,
           signal: new AbortController().signal,
         })
+        expect(Object.keys(tools)).not.toContain("source-evidence")
+        expect(Object.keys(tools)).not.toContain("build-evidence")
+        expect(Object.keys(tools)).not.toContain("package-browser")
 
         const result = await tools.select_expert_squad.execute(
           {
@@ -2502,17 +2507,17 @@ describe("orchestrator tools", () => {
           prompt_profile: { active: "frontend-innovate" },
         })
 
-        const automationResult = await tools.select_expert_squad.execute(
+        const projectPackageResult = await tools.select_expert_squad.execute(
           {
-            profile_id: "frontend-automation-debug",
-            reason: "The current failure now requires browser automation and screenshot evidence.",
+            profile_id: PROJECT_EXPERT_SQUAD_ID,
+            reason: "The current task requires the project-local expert squad package.",
           },
-          buildToolOptions("select_expert_squad_automation"),
+          buildToolOptions("select_expert_squad_project_package"),
         )
-        expect(toolText(automationResult)).toContain("- previous: frontend-innovate")
-        expect(toolText(automationResult)).toContain("- active: frontend-automation-debug")
+        expect(toolText(projectPackageResult)).toContain("- previous: frontend-innovate")
+        expect(toolText(projectPackageResult)).toContain(`- active: ${PROJECT_EXPERT_SQUAD_ID}`)
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "frontend-automation-debug" },
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
 
         await expect(
@@ -2522,7 +2527,7 @@ describe("orchestrator tools", () => {
           ),
         ).rejects.toThrow("Unknown prompt profile")
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "frontend-automation-debug" },
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
       },
     })

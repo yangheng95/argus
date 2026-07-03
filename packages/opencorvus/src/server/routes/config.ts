@@ -4,12 +4,14 @@ import z from "zod"
 import { Config } from "../../config/config"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { EffectiveConfig } from "@/config/effective"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { PromptProfile, PromptProfileCatalogSchema } from "@/agent/prompt-profile"
 import { PromptCatalog } from "../../config/prompt-catalog"
+import { Instance } from "@/project/instance"
 import { mapValues } from "remeda"
 import { badRequestBody, errors } from "../error"
 import { Log } from "../../util/log"
@@ -122,6 +124,14 @@ export const ConfigRoutes = lazy(() =>
             .join("; ")
           return c.json(badRequestBody(`config: ${issues}`), 400)
         }
+        try {
+          await PromptProfileResolver.assertKnownProfileID({
+            projectDirectory: Instance.directory,
+            profileID: PromptProfile.activeID(parsedPreview.data),
+          })
+        } catch (error) {
+          return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
+        }
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()
@@ -218,15 +228,23 @@ export const ConfigRoutes = lazy(() =>
         if (!query.sessionID) {
           const config = await Config.get()
           return c.json(
-            PromptProfile.list(config, { projectActive: PromptProfile.activeID(config), sessionActive: null }),
+            await PromptProfileResolver.list({
+              projectDirectory: Instance.directory,
+              config,
+              projectActive: PromptProfile.activeID(config),
+              sessionActive: null,
+            }),
           )
         }
-        const [projectConfig, effectiveConfig] = await Promise.all([
+        const [projectConfig, effectiveConfig, projectDirectory] = await Promise.all([
           EffectiveConfig.base({ sessionID: query.sessionID }),
           EffectiveConfig.effective({ sessionID: query.sessionID }),
+          EffectiveConfig.directory({ sessionID: query.sessionID }),
         ])
         return c.json(
-          PromptProfile.list(effectiveConfig, {
+          await PromptProfileResolver.list({
+            projectDirectory,
+            config: effectiveConfig,
             projectActive: PromptProfile.activeID(projectConfig),
             sessionActive: PromptProfile.activeID(effectiveConfig),
           }),

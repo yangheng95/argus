@@ -69,7 +69,7 @@ import { resolveAgentModel, resolveSessionOverlay } from "@/agent/model"
 import { Agent } from "@/agent/agent"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
 import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
@@ -1354,15 +1354,18 @@ async function composeSystemPrompt(
   core: string,
   scope: { taskID?: string; sessionID?: string } | undefined,
 ): Promise<{ prompt: string }> {
-  const config = await EffectiveConfig.effective(scope)
-  const overlay = await resolveSessionOverlay(scope)
+  const [config, projectDirectory, overlay] = await Promise.all([
+    EffectiveConfig.effective(scope),
+    EffectiveConfig.directory(scope),
+    resolveSessionOverlay(scope),
+  ])
   const baseAgent = await Agent.get(agentName, { config })
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend =
     effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
   const prompt = appendNonExecutorSourceBoundary({
     agentID: agentName,
-    prompt: PromptProfile.composeAgentPrompt({ agentID: agentName, base: core, userAppend, config }),
+    prompt: await PromptProfileResolver.composeAgentPrompt({ projectDirectory, agentID: agentName, base: core, userAppend, config }),
   })
   return { prompt }
 }

@@ -2,6 +2,8 @@ import { Config } from "./config"
 import { Agent } from "@/agent/agent"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
 import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
+import { Instance } from "@/project/instance"
 
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
@@ -91,6 +93,7 @@ export namespace PromptCatalog {
     const cfg = await Config.get()
     const configPrompts = cfg.prompt ?? {}
     const activeProfile = PromptProfile.activeID(cfg)
+    const projectDirectory = Instance.directory
     const agents = await Agent.list()
 
     const entries: Entry[] = []
@@ -142,8 +145,9 @@ export namespace PromptCatalog {
       const basePrompt = promptMode === "append" ? defaultPrompt : (configuredPrompt ?? defaultPrompt)
       const userAppend = promptMode === "append" ? configuredPrompt : null
       const editablePrompt = promptMode === "append" ? (userAppend ?? "") : basePrompt
-      const profilePrompt = PromptProfile.overlayFor(agent.name, cfg) ?? null
-      const effectivePrompt = PromptProfile.composeAgentPrompt({
+      const profilePrompt = (await PromptProfileResolver.overlayFor({ projectDirectory, agentID: agent.name, config: cfg })) ?? null
+      const effectivePrompt = await PromptProfileResolver.composeAgentPrompt({
+        projectDirectory,
         agentID: agent.name,
         base: basePrompt,
         userAppend,

@@ -33,6 +33,14 @@ export namespace EffectiveConfig {
     return Config.mergeOverlay(baseConfig, overlay ?? {})
   }
 
+  export async function directory(opts?: { taskID?: string; sessionID?: string }): Promise<string> {
+    const sessionID = await rootSessionID(opts)
+    if (!sessionID) return Instance.directory
+
+    const { Session } = await import("@/session")
+    return (await Session.get(sessionID)).directory
+  }
+
   async function resolveOverlay(opts?: { taskID?: string; sessionID?: string }): Promise<Config.Overlay | undefined> {
     const { resolveSessionOverlay } = await import("@/agent/model")
     return resolveSessionOverlay(opts)

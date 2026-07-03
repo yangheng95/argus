@@ -498,10 +498,10 @@ describe("prompt profiles", () => {
     expect(catalog.profiles.some((profile) => profile.id === "custom-squad")).toBe(false)
   })
 
-  test("rejects unknown active profiles and removed custom profile definitions", () => {
+  test("keeps profile existence out of Config.Info and rejects removed custom profile definitions", () => {
     const unknown = Config.Info.safeParse({ prompt_profile: { active: "missing" } })
-    expect(unknown.success).toBe(false)
-    if (!unknown.success) expect(JSON.stringify(unknown.error.issues)).toContain("Unknown prompt profile")
+    expect(unknown.success).toBe(true)
+    if (unknown.success) expect(unknown.data.prompt_profile.active).toBe("missing")
 
     const customProfiles = Config.Info.safeParse({
       prompt_profile: {

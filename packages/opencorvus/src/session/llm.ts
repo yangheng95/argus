@@ -15,9 +15,10 @@ import type { TextHooks } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { EffectiveConfig } from "@/config/effective"
+import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import { Agent } from "@/agent/agent"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { Message } from "./message"
 import { SessionEvents } from "./events"
 import { sessionLifecycleOrderKey } from "./status"
@@ -78,9 +79,15 @@ export namespace LLM {
     sessionID?: string
     runtimeSystemMode?: "complete"
   }) {
-    const config = input.sessionID
-      ? await EffectiveConfig.effective({ sessionID: input.sessionID })
-      : await EffectiveConfig.effective()
+    const currentInstance = Instance.current()
+    const [config, projectDirectory] = input.sessionID
+      ? await Promise.all([
+          EffectiveConfig.effective({ sessionID: input.sessionID }),
+          EffectiveConfig.directory({ sessionID: input.sessionID }),
+        ])
+      : currentInstance
+        ? await Promise.all([EffectiveConfig.effective(), Promise.resolve(currentInstance.directory)])
+        : [Config.Info.parse({}), undefined]
     const agent = Agent.resolveSessionAgent(
       input.agent,
       await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined),
@@ -90,7 +97,8 @@ export namespace LLM {
       ? []
       : agent.prompt
         ? [
-            PromptProfile.composeAgentPrompt({
+            await PromptProfileResolver.composeAgentPrompt({
+              projectDirectory,
               agentID: agent.name,
               base: agent.prompt,
               userAppend: agent.promptAppend,

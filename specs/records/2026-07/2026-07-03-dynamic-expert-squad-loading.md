@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; phase 5 custom prompt-profile source removed; runtime projection pending.
+Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; phase 5 custom prompt-profile source removed; phase 6 project package prompt-profile resolution landed; runtime capability projection pending.
 
 Glossary:
 
@@ -987,9 +987,59 @@ Phase 5 implementation, 2026-07-03:
 
 Still pending:
 
-- Wiring project package-backed catalog/projection after `prompt_profile.profiles` removal.
+- Wiring project package-backed prompt-profile catalog and prompt-overlay resolution after `prompt_profile.profiles` removal.
 - Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
 - Implementing delete/reference-audit service support before adding `DELETE /expert-squad/:id`; delete route must not perform its own separate config/session lookup logic.
+
+Phase 6 planned boundary, 2026-07-04:
+
+- Implement project package-backed prompt-profile resolution, not capability projection.
+- Make canonical `.opencorvus/expert-squads/<expert_squad_id>` packages appear in `/config/prompt-profile` as read-only package-backed profiles with role prompt overlays loaded from each package's agent prompt files.
+- Allow `prompt_profile.active` to reference a validated project package ID in the owning project/session directory.
+- Compose project package role prompt overlays in Orchestrator, worker agents, direct session LLM calls, external Build executor prompts, and prompt preview surfaces.
+- Keep `prompt_profile.active` as the only active expert-squad state field.
+- Keep `Config.Info` responsible only for static shape and ID syntax; known-ID validation must move to async boundaries with project/session context.
+- Reject project package IDs that collide with built-in package IDs. Do not choose precedence between built-in and project sources.
+- Do not materialize project package selector metadata as mounted skills in this phase.
+- Do not scan, register, or expose project package tool refs, skill refs, MCP server/tool/prompt/resource refs, workflow tools, projected agents, projection hashes, source paths, or capability summaries.
+- Tests must prove package prompt-profile catalog/active selection works while package tool/skill/MCP capability refs remain inert.
+
+Phase 6 implementation inventory, 2026-07-04:
+
+| Surface | Implemented action |
+| --- | --- |
+| `packages/opencorvus/src/expert-squad/registry.ts` | Exposes filesystem package prompt-profile loading through the existing manifest/path parser; prompt files are read through manifest-declared safe paths instead of a duplicate parser. |
+| `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts` | Adds an async project-aware resolver for catalog, active validation, overlay resolution, and prompt composition. |
+| `packages/opencorvus/src/agent/prompt-profile.ts` | Keeps sync built-in-only APIs for static built-in tests; project packages are not loaded through this sync path. |
+| `packages/opencorvus/src/config/config.ts` | Removes built-ins-only known-ID validation from `Config.Info`; `prompt_profile.active` keeps syntax-only validation. |
+| `/config` and `/config/prompt-profile` routes | Validate active IDs with the project-aware resolver and return built-in plus project package-backed catalog entries. |
+| Session, Mission, Task API, and `select_expert_squad` write paths | Replace sync `PromptProfile.assertKnownProfileID` with project/session-aware resolver validation. |
+| Orchestrator, Agent runner, Session LLM, Build external executor, PromptCatalog preview | Use project-aware prompt composition for active package overlays. |
+| SkillMount, SkillTool, SystemPrompt skills, ToolRegistry, MCP | Preserve current behavior; negative tests prove project package capability refs do not leak before runtime projection lands. |
+
+Phase 6 validation, 2026-07-04:
+
+- `bun test packages/opencorvus/test/server/config-routes.test.ts -t "project package prompt profile|unknown prompt profile"`
+- `bun test packages/opencorvus/test/server/session-routes.test.ts -t "prompt profile"`
+- `bun test packages/opencorvus/test/mission/wake-route.test.ts -t "prompt profile"`
+- `bun test packages/opencorvus/test/server/task-create-route.test.ts -t "prompt profile"`
+- `bun test packages/opencorvus/test/server/task-message-routes.test.ts -t "prompt profile"`
+- `bun test packages/opencorvus/test/orchestrator/tools.test.ts -t "select_expert_squad"`
+- `bun test packages/opencorvus/test/tool/skill.test.ts -t "active project package"`
+- `bun test packages/opencorvus/test/session/prompt-final-input.test.ts`
+- `bun test packages/opencorvus/test/agent/runner-prompt.test.ts -t "runAgentSession appends"`
+- `bun test packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts packages/opencorvus/test/server/expert-squad-routes.test.ts packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/build-agent/external-system.test.ts packages/opencorvus/test/session/prompt-final-input.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`
+- `git diff --check`
+
+The route write-path tests were run as individual files to avoid shared fixture reset races masking project/session directory behavior.
+
+Phase 6 independent investigation feedback, 2026-07-04:
+
+- Socrates found that a catalog-only change is unsafe because active writes already flow into prompt composition; accepting a project package ID without prompt overlay resolution would create a broken active state. Socrates recommended a new async project-aware resolver and warned that project packages currently can collide with built-in IDs, which must be rejected instead of resolved by precedence.
+- Ptolemy found no current production call site that treats a prompt-profile catalog entry as proof that tool/MCP/skill projection is wired, but identified adjacent leakage risks. Ptolemy required negative tests proving project packages do not appear in mounted skills, `SkillTool`, `SystemPrompt.skills`, `ToolRegistry`, Orchestrator exact runtime tools, MCP status/tools/prompts/resources/proxy/auth/connect/disconnect/call paths, or catalog capability fields.
+- Both reviewers agreed that this phase is prompt-profile and prompt-overlay resolution only. Runtime capability projection remains pending and must not be partially implemented through UI filtering, selector skill materialization, or registry scans.
 
 ## Open Risks For Review
 
@@ -1131,3 +1181,45 @@ Implementation review loop 10:
   - Regenerated SDK and API documentation from the corrected schema description.
   - Removed the stale overlay prompt-catalog mutation exports and updated overlay tests so they assert the removed writer API is absent instead of pinning it as required.
   - Kept runtime projection explicitly pending; this loop did not add partial Orchestrator, worker, skill, tool, or MCP projection wiring.
+
+Implementation review loop 11:
+
+- Leibniz reviewed the initial phase 6 implementation and found one blocker plus two coverage gaps.
+- Blocker: `expert-squad-routes.test.ts` still reused the built-in `frontend-replica` ID as a project package fixture, which correctly failed after built-in/project collision rejection landed.
+- Coverage gap: active write-path validation was only proven through `/config`, not through session config, Mission wake, task creation, task message, and `select_expert_squad`.
+- Coverage gap: package capability refs were not yet proven inert across mounted skills, the `skill` tool, system prompt skill rendering, `ToolRegistry`, and MCP.
+- Revisions applied:
+  - Added a shared project package fixture with manifest ID `project-replica`, prompt overlays, skill refs, tool refs, and MCP refs for package-scope tests.
+  - Updated expert-squad route tests to use the non-built-in project package ID so built-in collision rejection remains meaningful.
+  - Added project package active-write coverage for `/config`, session config, Mission wake, task creation, task message, and `select_expert_squad`.
+  - Added negative capability tests proving active project package skill refs, tool refs, and MCP declarations remain inert until the runtime capability projection phase.
+  - Kept project package selector metadata out of mounted skills and did not add partial projection to Orchestrator exact tools, worker contracts, SkillMount, SkillTool, SystemPrompt skills, ToolRegistry, or MCP.
+
+Implementation review loop 12:
+
+- Aristotle reviewed phase 6 route/API and test coverage after loop 11 and found new blockers.
+- Blocker: `LLM.composeSystem()` called `EffectiveConfig.directory()` and `EffectiveConfig.effective()` without a session or active `Instance`, breaking contextless direct prompt composition tests with `No context found for instance`.
+- Blocker: project package prompt overlays were not proven through real Agent runner or external Build executor prompt composition.
+- Blocker: the inert capability test used `Object.keys()` on `ToolRegistry.tools()` array output, so it did not actually inspect tool IDs; it also covered only `MCP.status()` and not MCP tools, prompts, resources, server proxy, connect, disconnect, auth, remove-auth, or call-tool paths.
+- Coverage gap: `/config/prompt-profile?sessionID=...` was covered only with built-in profiles, not a project package active profile.
+- Docs gap: `specs/current/architecture/17-agent-team-infrastructure.html` still referenced deleted `src/skill/builtin/*-expert-squad.md` selector files and `PromptProfile.composeAgentPrompt` as a current runtime prompt source.
+- Harvey independently found no phase 6 production blocker, but confirmed the sync `PromptProfile` helpers remain a maintenance risk and identified the same `ToolRegistry.tools()` array assertion bug.
+- Revisions applied:
+  - `PromptProfileResolver` now supports an explicit contextless built-in-only scope; `LLM.composeSystem()` uses session scope, current `Instance` scope, or schema-materialized empty config without reading project config state when no project context exists.
+  - Added direct LLM, Agent runner, and external Build executor tests proving `project-replica` prompt overlays reach actual runtime prompt composition.
+  - Extended the shared project package fixture with MCP tool, prompt, and resource declarations.
+  - Fixed the `ToolRegistry.tools()` assertion to inspect tool IDs, and extended negative capability tests across MCP tools, prompts, resources, server proxy lists, `callTool`, `connect`, `disconnect`, `supportsOAuth`, and `removeAuth` while disabling the built-in browser MCP in that test project to avoid sidecar-dependent validation.
+  - Added Orchestrator exact runtime tool-table assertions proving package tool refs are not installed in phase 6.
+  - Updated the session-specific prompt-profile catalog test to use a project package active profile.
+  - Updated the current architecture page to describe built-in selector skills as package-derived and runtime prompt composition as `PromptProfileResolver`-backed.
+
+Implementation review loop 13:
+
+- Laplace reviewed the loop 12 fixes and found no blockers.
+- Laplace confirmed:
+  - contextless `LLM.composeSystem()` is built-in-only and no longer touches project config state without an `Instance`;
+  - project package overlays flow through direct LLM, Agent runner, and external Build prompt composition;
+  - `/config/prompt-profile?sessionID=...` resolves project package profiles from the session directory;
+  - package capability refs remain inert across SkillMount, SystemPrompt skills, SkillTool, ToolRegistry, MCP, and Orchestrator exact tools;
+  - the omitted `projectDirectory` resolver path is not a fallback for failed project loading because project-present calls still surface discovery and collision errors.
+- Non-blocking cleanup candidate carried forward: old sync `PromptProfile` helper APIs remain for built-in-only static tests, but production `src` call sites now use `PromptProfileResolver`. Removing or narrowing those helpers should be a later built-in test cleanup, not mixed into phase 6 runtime resolver delivery.

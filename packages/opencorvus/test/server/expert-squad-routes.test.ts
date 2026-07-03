@@ -1,81 +1,19 @@
 import { BlobReader, TextReader, TextWriter, Uint8ArrayWriter, ZipReader, ZipWriter } from "@zip.js/zip.js"
 import { afterEach, describe, expect, test } from "bun:test"
-import fs from "fs/promises"
 import path from "path"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
+import {
+  PROJECT_EXPERT_SQUAD_ID,
+  projectExpertSquadFiles,
+  writeSourceExpertSquadPackage,
+} from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
-async function writeFile(root: string, relativePath: string, content: string) {
-  const target = path.join(root, relativePath)
-  await fs.mkdir(path.dirname(target), { recursive: true })
-  await fs.writeFile(target, content)
-}
-
-function manifest() {
-  return {
-    schema_version: 1,
-    id: "frontend-replica",
-    label: "Frontend Replica",
-    description: "Replica squad",
-    version: "2026.07.03",
-    readme: "README.md",
-    selector: {
-      summary: "Use for replica tasks.",
-      selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
-    },
-    capability_projection: {
-      scheduler: {
-        role_base: true,
-        built_in_tool_ids: ["select_expert_squad", "skill", "build"],
-        package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
-        package_skill_refs: ["frontend-replica/orchestrator/scheduler"],
-      },
-      agents: {
-        build: {
-          role_base: true,
-          package_skill_refs: ["frontend-replica/build/implementation"],
-          package_tool_refs: ["frontend-replica/build/build-evidence"],
-        },
-      },
-    },
-    agents: {
-      orchestrator: {
-        prompt: "agents/orchestrator/system.md",
-        skill_refs: ["frontend-replica/orchestrator/scheduler"],
-        tool_refs: ["frontend-replica/orchestrator/source-evidence"],
-      },
-      build: {
-        prompt: "agents/build/system.md",
-        skill_refs: ["frontend-replica/build/implementation"],
-        tool_refs: ["frontend-replica/build/build-evidence"],
-      },
-    },
-  }
-}
-
-function packageFileMap(prefix = "") {
-  const root = prefix ? `${prefix.replace(/\/+$/, "")}/` : ""
-  return {
-    [`${root}README.md`]: "# Frontend Replica\n",
-    [`${root}agents/orchestrator/system.md`]: "orchestrator overlay",
-    [`${root}agents/build/system.md`]: "build overlay",
-    [`${root}agents/orchestrator/skills/scheduler/SKILL.md`]: "---\nname: scheduler\n---\n",
-    [`${root}agents/build/skills/implementation/SKILL.md`]: "---\nname: implementation\n---\n",
-    [`${root}agents/orchestrator/tools/source-evidence.ts`]: "export default {}",
-    [`${root}agents/build/tools/build-evidence.ts`]: "export default {}",
-    [`${root}${ExpertSquadRegistry.MANIFEST}`]: JSON.stringify(manifest(), null, 2),
-  }
-}
-
 async function writeSourcePackage(root: string, folder = "uploaded-folder") {
-  const packageRoot = path.join(root, folder)
-  for (const [relativePath, content] of Object.entries(packageFileMap())) {
-    await writeFile(packageRoot, relativePath, content)
-  }
-  return packageRoot
+  return writeSourceExpertSquadPackage(root, folder)
 }
 
 async function zipBase64(entries: Record<string, string>) {
@@ -120,16 +58,16 @@ describe("expert-squad routes", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { id: string; targetRoot: string; replaced: boolean }
     expect(body).toEqual({
-      id: "frontend-replica",
-      targetRoot: path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"),
+      id: PROJECT_EXPERT_SQUAD_ID,
+      targetRoot: path.join(project.path, ".opencorvus", "expert-squads", PROJECT_EXPERT_SQUAD_ID),
       replaced: false,
     })
-    await expect(ExpertSquadRegistry.loadPackage(body.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    await expect(ExpertSquadRegistry.loadPackage(body.targetRoot)).resolves.toMatchObject({ id: PROJECT_EXPERT_SQUAD_ID })
   })
 
   test("POST /expert-squad/import-file and /export round-trip a wrapped ZIP package", async () => {
     await using project = await tmpdir({ git: true })
-    const archiveBase64 = await zipBase64(packageFileMap("downloaded-name"))
+    const archiveBase64 = await zipBase64(projectExpertSquadFiles(PROJECT_EXPERT_SQUAD_ID, "downloaded-name"))
 
     await Instance.provide({
       directory: project.path,
@@ -143,7 +81,7 @@ describe("expert-squad routes", () => {
           body: JSON.stringify({ archiveBase64, filename: "similar-display-name.zip", replace: false }),
         })
         expect(imported.status).toBe(200)
-        expect(await imported.json()).toMatchObject({ id: "frontend-replica", replaced: false })
+        expect(await imported.json()).toMatchObject({ id: PROJECT_EXPERT_SQUAD_ID, replaced: false })
 
         const exported = await Server.App().request("/expert-squad/export", {
           method: "POST",
@@ -151,7 +89,7 @@ describe("expert-squad routes", () => {
             "content-type": "application/json",
             "x-opencorvus-directory": project.path,
           },
-          body: JSON.stringify({ id: "frontend-replica" }),
+          body: JSON.stringify({ id: PROJECT_EXPERT_SQUAD_ID }),
         })
         expect(exported.status).toBe(200)
         const body = (await exported.json()) as {
@@ -160,12 +98,14 @@ describe("expert-squad routes", () => {
           archiveBase64: string
           fileCount: number
         }
-        expect(body.id).toBe("frontend-replica")
-        expect(body.filename).toBe("frontend-replica-expert-squad.zip")
+        expect(body.id).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.filename).toBe(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad.zip`)
         const entries = await zipEntries(body.archiveBase64)
         expect(body.fileCount).toBe(entries.size)
         expect(entries.has(ExpertSquadRegistry.MANIFEST)).toBe(false)
-        expect(entries.get(`frontend-replica/${ExpertSquadRegistry.MANIFEST}`)).toContain('"id": "frontend-replica"')
+        expect(entries.get(`${PROJECT_EXPERT_SQUAD_ID}/${ExpertSquadRegistry.MANIFEST}`)).toContain(
+          `"id": "${PROJECT_EXPERT_SQUAD_ID}"`,
+        )
       },
     })
   })
@@ -173,7 +113,7 @@ describe("expert-squad routes", () => {
   test("POST /expert-squad/import-file maps invalid package archives to ExpertSquadPackageError", async () => {
     await using project = await tmpdir({ git: true })
     const archiveBase64 = await zipBase64({
-      ...packageFileMap("pkg"),
+      ...projectExpertSquadFiles(PROJECT_EXPERT_SQUAD_ID, "pkg"),
       "pkg/README.md:ads": "# alternate data stream\n",
     })
 
@@ -201,7 +141,7 @@ describe("expert-squad routes", () => {
     await using project = await tmpdir({ git: true })
     await using source = await tmpdir()
     const sourceDirectory = await writeSourcePackage(source.path)
-    const archiveBase64 = await zipBase64(packageFileMap("pkg"))
+    const archiveBase64 = await zipBase64(projectExpertSquadFiles(PROJECT_EXPERT_SQUAD_ID, "pkg"))
     const requests = [
       {
         path: "/expert-squad/import-folder",
@@ -213,7 +153,7 @@ describe("expert-squad routes", () => {
       },
       {
         path: "/expert-squad/export",
-        body: { projectDirectory: source.path, id: "frontend-replica" },
+        body: { projectDirectory: source.path, id: PROJECT_EXPERT_SQUAD_ID },
       },
     ]
 

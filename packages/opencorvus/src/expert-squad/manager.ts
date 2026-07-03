@@ -4,6 +4,7 @@ import { cp, lstat, mkdir, readdir, rename, rm } from "fs/promises"
 import path from "path"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Filesystem } from "@/util/filesystem"
+import { builtInPromptProfiles } from "./builtin"
 import { ExpertSquadRegistry } from "./registry"
 
 export namespace ExpertSquadPackageManager {
@@ -92,6 +93,12 @@ export namespace ExpertSquadPackageManager {
 
   function assertInside(parent: string, child: string, context: string) {
     if (!Filesystem.contains(parent, child)) throw new Error(`${context}: path escapes expert squad package directory`)
+  }
+
+  function assertNoBuiltInCollision(id: string) {
+    if (Object.hasOwn(builtInPromptProfiles, id)) {
+      throw new Error(`Expert squad package id ${JSON.stringify(id)} collides with a built-in expert squad id`)
+    }
   }
 
   function assertSourceNotRuntimeInternal(projectDirectory: string, sourceDirectory: string) {
@@ -267,6 +274,7 @@ export namespace ExpertSquadPackageManager {
     assertSourceNotRuntimeInternal(input.projectDirectory, input.sourceDirectory)
     const source = Filesystem.resolve(input.sourceDirectory)
     const loaded = await ExpertSquadRegistry.loadSourcePackage(source)
+    assertNoBuiltInCollision(loaded.id)
     const target = targetRoot(input.projectDirectory, loaded.id)
     return withPackageInstallLock(Filesystem.normalizePath(target), async () => {
       const base = canonicalBase(input.projectDirectory)

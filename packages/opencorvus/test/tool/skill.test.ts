@@ -7,7 +7,10 @@ import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { SkillMount } from "../../src/skill/mounts"
 import { SystemPrompt } from "../../src/session/system"
+import { MCP } from "../../src/mcp"
 import { SkillTool } from "../../src/tool/skill"
+import { ToolRegistry } from "../../src/tool/registry"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
@@ -374,6 +377,73 @@ Use this skill.
           expect(innovate.output).toContain("Design Philosophy Contract")
           expect(innovate.output).toContain("Existing URL Redesign Flow")
           expect(innovate.output).toContain("rejected shallow or generic draft traits")
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
+  test("active project package prompt profile does not leak package capability refs into skill, tool, or MCP surfaces", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+        mcp: { browser: { enabled: false } },
+      },
+    })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const [orchestrator, build] = await Promise.all([Agent.get("orchestrator"), Agent.get("build")])
+          expect(orchestrator).toBeDefined()
+          expect(build).toBeDefined()
+
+          const allSkills = await SkillMount.resolve({ agent: orchestrator! })
+          expect(allSkills.skills.map((skill) => skill.name)).not.toContain("scheduler")
+          expect(allSkills.skills.map((skill) => skill.name)).not.toContain("implementation")
+
+          const skillPrompt = await SystemPrompt.skills(orchestrator!)
+          expect(skillPrompt).not.toContain("project-replica")
+          expect(skillPrompt).not.toContain("source-evidence")
+          expect(skillPrompt).not.toContain("build-evidence")
+          expect(skillPrompt).not.toContain("package-browser")
+
+          const tool = await SkillTool.init({ agent: orchestrator! })
+          const ctx: Tool.Context = { ...baseCtx, agent: "orchestrator", ask: async () => {} }
+          const search = await tool.execute({ query: "project scheduler source evidence implementation" }, ctx)
+          expect(search.output).not.toContain("<name>scheduler</name>")
+          expect(search.output).not.toContain("<name>implementation</name>")
+          await expect(tool.execute({ name: "scheduler" }, ctx)).rejects.toThrow("not found or not allowed")
+
+          const toolIDs = await ToolRegistry.ids()
+          expect(toolIDs).not.toContain("source-evidence")
+          expect(toolIDs).not.toContain("build-evidence")
+          const buildTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build!)
+          expect(buildTools.map((entry) => entry.id)).not.toContain("build-evidence")
+
+          const mcpStatus = await MCP.status()
+          expect(Object.keys(mcpStatus)).not.toContain(PROJECT_EXPERT_SQUAD_ID)
+          expect(Object.keys(mcpStatus)).not.toContain("package-browser")
+          expect(Object.keys(await MCP.tools())).not.toContain("package-browser_snapshot")
+          expect(Object.keys(await MCP.prompts())).not.toContain("package-browser_inspect")
+          expect(Object.keys(await MCP.resources())).not.toContain("package-browser_dom")
+          expect((await MCP.serverTools()).map((tool) => tool.key)).not.toContain("package-browser_snapshot")
+          expect((await MCP.serverPrompts()).map((prompt) => prompt.key)).not.toContain("package-browser_inspect")
+          expect((await MCP.serverResources()).map((resource) => resource.key)).not.toContain("package-browser_dom")
+          await expect(MCP.callTool({ key: "package-browser_snapshot", args: {} })).rejects.toThrow(
+            "MCP tool not found",
+          )
+          await expect(MCP.connect("package-browser")).rejects.toThrow("MCP server not found")
+          await expect(MCP.disconnect("package-browser")).rejects.toThrow("MCP server not found")
+          await expect(MCP.supportsOAuth("package-browser")).rejects.toThrow("MCP server not found")
+          await expect(MCP.removeAuth("package-browser")).rejects.toThrow("MCP server not found")
         },
       })
     } finally {

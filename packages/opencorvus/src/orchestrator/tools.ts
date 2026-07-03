@@ -21,7 +21,8 @@ import {
   type FactCheckReport,
 } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
-import { PromptProfile, PromptProfileIDSchema } from "@/agent/prompt-profile"
+import { PromptProfileIDSchema } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus, sessionLifecycleOrderKey } from "@/session/status"
 import { Message } from "@/session/message"
@@ -7842,8 +7843,10 @@ export function createOrchestratorTools(input: {
         if (!task.session_id) {
           throw new Error(`Task ${taskID} has no root session; cannot select expert squad ${profile_id}.`)
         }
-        const baseConfig = await EffectiveConfig.base({ sessionID: task.session_id })
-        PromptProfile.assertKnownProfileID(profile_id, baseConfig)
+        await PromptProfileResolver.assertKnownProfileID({
+          projectDirectory: await EffectiveConfig.directory({ sessionID: task.session_id }),
+          profileID: profile_id,
+        })
         const before = (await EffectiveConfig.effective({ sessionID: task.session_id })).prompt_profile.active
         await Session.mergeConfigOverlay({
           sessionID: task.session_id,

@@ -13,6 +13,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
 import type { SessionKind } from "../../src/session/session.sql"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import {
   claimStageContinuationRequest,
   createStageContinuationRequest,
@@ -41,11 +42,13 @@ test(
     await using tmp = await tmpdir({
       git: true,
       config: {
+        prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         agent: {
           build: { prompt_append: "Additional build instruction" },
         },
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path)
 
     const promptCalls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
     spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
@@ -99,7 +102,12 @@ test(
     expect(promptCalls[0].agent).toBe("build")
     expect(promptCalls[0].systemMode).toBe("complete")
     expect(promptCalls[0].system.startsWith(BUILD_CORE)).toBe(true)
+    expect(promptCalls[0].system).toContain("project build overlay")
     expect(promptCalls[0].system.endsWith("Additional build instruction")).toBe(true)
+    expect(promptCalls[0].system.indexOf(BUILD_CORE)).toBeLessThan(promptCalls[0].system.indexOf("project build overlay"))
+    expect(promptCalls[0].system.indexOf("project build overlay")).toBeLessThan(
+      promptCalls[0].system.indexOf("Additional build instruction"),
+    )
     expect(promptCalls[0].extra?.runtimeContract).toBeUndefined()
     expect(promptCalls[0].extra?.workerTurnDescriptor).toBeDefined()
     const descriptor = WorkerTurnDescriptor.latestForSession(promptCalls[0].sessionID)

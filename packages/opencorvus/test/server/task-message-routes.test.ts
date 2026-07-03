@@ -25,6 +25,7 @@ import { Log } from "../../src/util/log"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -738,6 +739,7 @@ describe("task message routes", () => {
 
   test("POST /task/:taskID/message applies selected prompt profile before waking scheduler", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+    await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -775,15 +777,15 @@ describe("task message routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
-            text: "继续，但切换前端自动化 debug 专家团。",
+            text: "继续，但切换项目专家团。",
             source: "panel",
-            promptProfile: "frontend-automation-debug",
+            promptProfile: PROJECT_EXPERT_SQUAD_ID,
           }),
         })
 
         expect(response.status).toBe(200)
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "frontend-automation-debug" },
+          prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
       },
     })

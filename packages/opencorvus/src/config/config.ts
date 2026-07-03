@@ -37,7 +37,7 @@ import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
 import { withKeyedLock } from "@/util/lock"
 import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
-import { PromptProfile, PromptProfileConfigSchema, PromptProfileOverlaySchema } from "@/agent/prompt-profile"
+import { PromptProfileConfigSchema, PromptProfileOverlaySchema } from "@/agent/prompt-profile"
 import { isModelReference } from "@/provider/model-ref"
 import { BrowserMCPBuiltin } from "@/mcp/browser/builtin"
 
@@ -1684,7 +1684,6 @@ export namespace Config {
           })
         }
       }
-      PromptProfile.validateConfig(config, ctx)
     })
     .meta({
       ref: "Config",

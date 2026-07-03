@@ -13,7 +13,7 @@ import {
 import { MissionID } from "@/mission/schema"
 import { listMissionTasks, listTaskRows } from "@/engine/store"
 import { deriveTaskStatus } from "@/engine/task-status"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import {
   MissionStatusSnapshot,
   StatusSnapshotState,
@@ -27,7 +27,6 @@ import { SessionWake } from "@/session/wake"
 import { enrichStandaloneSessionTranscript } from "@/protocol/session-mirror"
 import { Provider } from "@/provider/provider"
 import { isModelReference } from "@/provider/model-ref"
-import { Config } from "@/config/config"
 import { buildMissionProjectArchive, ProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
 import { EngineService } from "@/task-api"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
@@ -434,7 +433,10 @@ export function MissionRoutes() {
         const input = c.req.valid("json")
         if (input.promptProfile) {
           try {
-            PromptProfile.assertKnownProfileID(input.promptProfile, await Config.get())
+            await PromptProfileResolver.assertKnownProfileID({
+              projectDirectory: Instance.directory,
+              profileID: input.promptProfile,
+            })
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             return c.json(badRequestBody(message), 400)

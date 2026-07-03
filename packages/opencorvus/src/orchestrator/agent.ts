@@ -48,7 +48,7 @@
 import ORCHESTRATOR_CORE from "@/prompt/core/orchestrator-core.txt"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
@@ -1290,12 +1290,15 @@ async function buildSystemParts(
   workflow?: MiniWorkflow,
   workflowState?: WorkflowState,
 ): Promise<{ parts: string[]; snapshot: TaskDesc }> {
-  const config = task.session_id
-    ? await EffectiveConfig.effective({ sessionID: task.session_id })
-    : await EffectiveConfig.effective({ taskID: task.id })
+  const profileScope = task.session_id ? { sessionID: task.session_id } : { taskID: task.id }
+  const [config, projectDirectory] = await Promise.all([
+    EffectiveConfig.effective(profileScope),
+    EffectiveConfig.directory(profileScope),
+  ])
   const instructions = appendNonExecutorSourceBoundary({
     agentID: "orchestrator",
-    prompt: PromptProfile.composeAgentPrompt({
+    prompt: await PromptProfileResolver.composeAgentPrompt({
+      projectDirectory,
       agentID: "orchestrator",
       base: ORCHESTRATOR_INSTRUCTIONS,
       config,

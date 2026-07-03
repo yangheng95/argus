@@ -116,6 +116,11 @@ export namespace ExpertSquadRegistry {
 
   export interface LoadedPackage extends PackageLocation {
     manifest: Manifest
+    promptProfile: {
+      label: string
+      description?: string
+      agents: Record<string, string>
+    }
     packageSkillRefs: Set<string>
     packageToolRefs: Set<string>
     packageMcpServerRefs: Set<string>
@@ -762,6 +767,21 @@ export namespace ExpertSquadRegistry {
     return declared
   }
 
+  async function readPromptProfile(metadata: ParsedPackageMetadata): Promise<LoadedPackage["promptProfile"]> {
+    const agents: Record<string, string> = {}
+    for (const [agentID, agent] of Object.entries(metadata.manifest.agents)) {
+      assertRoleID(agentID, `agents.${agentID}`)
+      if (!agent.prompt) continue
+      const file = await assertNonBlankFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
+      agents[agentID] = (await Filesystem.readText(file)).trim()
+    }
+    return {
+      label: metadata.label,
+      description: metadata.description,
+      agents,
+    }
+  }
+
   async function loadValidatedPackage(root: string, options: { canonicalFolder: boolean }): Promise<LoadedPackage> {
     const metadata = await readPackageMetadata(root, options)
     const { manifest } = metadata
@@ -811,10 +831,12 @@ export namespace ExpertSquadRegistry {
       }
     }
 
+    const promptProfile = await readPromptProfile(metadata)
     return {
       ...metadata,
       id: manifest.id,
       manifest,
+      promptProfile,
       packageSkillRefs: refs.skillRefs,
       packageToolRefs: refs.toolRefs,
       packageMcpServerRefs: refs.mcpServerRefs,

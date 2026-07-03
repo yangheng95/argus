@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgent, externalEventPartText, externalToolProtocolErrorMessage } from "../../src/build/agent"
 import { Config } from "../../src/config/config"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
+import { tmpdir } from "../fixture/fixture"
 
 describe("BuildAgent external coding system prompt", () => {
-  test("injects OpenCorvus MCP executor aliases without reopening webpage evidence tools", () => {
-    const composed = BuildAgent.composeExternalCodingSystem({
+  test("injects OpenCorvus MCP executor aliases without reopening webpage evidence tools", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const composed = await BuildAgent.composeExternalCodingSystem({
       executor: "codex",
       config: Config.Info.parse({ prompt_profile: { active: "frontend-replica" } }),
+      projectDirectory: tmp.path,
       baseSystem: "base system",
       userAppend: "operator build append",
     })
@@ -38,7 +42,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("On Windows, start Playwright only through Node Package Manager (`npm`)")
     expect(composed.system).toContain("never through `bun`")
     expect(composed.system).toContain("severe connection-timeout bug on Windows")
-    expect(composed.system).toContain("Build replica without drift")
+    expect(composed.system).toContain("Build one scoped component or region goal at a time without source drift")
     expect(composed.system).toContain("browser_preview_reference_regions")
     expect(composed.system).toContain("browser_preview_compare_scroll_slices")
     expect(composed.system).toContain("For any frontend project")
@@ -48,16 +52,18 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("parent container, adjacent components, spacing, typography, color")
     expect(composed.system).toContain("responsive framing, and local visual style")
     expect(composed.system).toContain("operator build append")
-    expect(composed.system!.indexOf("Build replica without drift")).toBeLessThan(
+    expect(composed.system!.indexOf("Build one scoped component or region goal at a time without source drift")).toBeLessThan(
       composed.system!.indexOf("operator build append"),
     )
     expect(composed.system).not.toContain("skill prompt")
   })
 
-  test("leaves Claude Code MCP alias injection to the Claude provider", () => {
-    const composed = BuildAgent.composeExternalCodingSystem({
+  test("leaves Claude Code MCP alias injection to the Claude provider", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const composed = await BuildAgent.composeExternalCodingSystem({
       executor: "claude-code",
       config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+      projectDirectory: tmp.path,
       baseSystem: "base system",
     })
 
@@ -68,6 +74,26 @@ describe("BuildAgent external coding system prompt", () => {
       "Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text.",
     )
     expect(composed.system).not.toContain("skill prompt")
+  })
+
+  test("composes project package build prompt overlays for external executors", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const composed = await BuildAgent.composeExternalCodingSystem({
+      executor: "codex",
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+      projectDirectory: tmp.path,
+      baseSystem: "base system",
+      userAppend: "operator build append",
+    })
+
+    expect(composed.system).toContain("base system")
+    expect(composed.system).toContain("project build overlay")
+    expect(composed.system).toContain("operator build append")
+    expect(composed.system.indexOf("base system")).toBeLessThan(composed.system.indexOf("project build overlay"))
+    expect(composed.system.indexOf("project build overlay")).toBeLessThan(
+      composed.system.indexOf("operator build append"),
+    )
   })
 
   test("does not materialize external assistant narration as card text", () => {

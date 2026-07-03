@@ -27,6 +27,7 @@ import { SessionWake } from "../../src/session/wake"
 import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -219,6 +220,7 @@ describe("POST /mission/wake — happy path", () => {
 
   test("applies selected prompt profile to the Mission session before wake", async () => {
     await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -226,14 +228,14 @@ describe("POST /mission/wake — happy path", () => {
         const res = await post("/mission/wake", tmp.path, {
           missionID: "profiled-mission",
           text: "go",
-          promptProfile: "frontend-automation-debug",
+          promptProfile: PROJECT_EXPERT_SQUAD_ID,
         })
         expect(res.status).toBe(200)
         const body = (await res.json()) as { sessionID: string }
         const session = await Session.get(body.sessionID)
         const overlay = (session.metadata as { configOverlay?: { prompt_profile?: { active?: string } } } | undefined)
           ?.configOverlay
-        expect(overlay?.prompt_profile?.active).toBe("frontend-automation-debug")
+        expect(overlay?.prompt_profile?.active).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(wakeSpy).toHaveBeenCalledTimes(1)
         expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(body.sessionID)
       },
@@ -252,7 +254,10 @@ describe("POST /mission/wake — happy path", () => {
           promptProfile: "does-not-exist",
         })
         expect(res.status).toBe(400)
-        expect(await res.json()).toEqual({ error: 'Unknown prompt profile "does-not-exist"' })
+        expect(await res.json()).toMatchObject({
+          success: false,
+          data: { message: 'Unknown prompt profile "does-not-exist"' },
+        })
         expect(wakeSpy).not.toHaveBeenCalled()
         expect(findExistingMissionSession({ missionID: "unknown-profile", directory: tmp.path })).toBeUndefined()
       },

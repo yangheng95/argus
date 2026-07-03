@@ -4,7 +4,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
 import { AgentRoleContract } from "@/agent/role-contract"
-import { PromptProfile } from "@/agent/prompt-profile"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
@@ -1550,7 +1550,10 @@ export namespace EngineService {
       })
     }
     if (input.promptProfile) {
-      PromptProfile.assertKnownProfileID(input.promptProfile, taskConfigSnapshot)
+      await PromptProfileResolver.assertKnownProfileID({
+        projectDirectory: Instance.directory,
+        profileID: input.promptProfile,
+      })
       await Session.mergeConfigOverlay({
         sessionID: session.id,
         patch: { prompt_profile: { active: input.promptProfile } },
@@ -2753,10 +2756,10 @@ export namespace EngineService {
       if (!task.session_id) {
         throw new Error(`Task ${task.id} has no root session; cannot apply prompt profile ${input.promptProfile}.`)
       }
-      PromptProfile.assertKnownProfileID(
-        input.promptProfile,
-        await EffectiveConfig.base({ sessionID: task.session_id }),
-      )
+      await PromptProfileResolver.assertKnownProfileID({
+        projectDirectory: await EffectiveConfig.directory({ sessionID: task.session_id }),
+        profileID: input.promptProfile,
+      })
       await Session.mergeConfigOverlay({
         sessionID: task.session_id,
         patch: { prompt_profile: { active: input.promptProfile } },

@@ -12,9 +12,9 @@ import {
 } from "@/conversation/view"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
 import { Agent } from "@/agent/agent"
-import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "../../session/prompt"
 import { Instance } from "@/project/instance"
@@ -383,7 +383,10 @@ export const SessionRoutes = lazy(() =>
         await validateConfigModelReferences(patch, "configOverlay")
         if (typeof patch.prompt_profile?.active === "string") {
           try {
-            PromptProfile.assertKnownProfileID(patch.prompt_profile.active, await EffectiveConfig.base({ sessionID }))
+            await PromptProfileResolver.assertKnownProfileID({
+              projectDirectory: await EffectiveConfig.directory({ sessionID }),
+              profileID: patch.prompt_profile.active,
+            })
           } catch (error) {
             return c.json(badRequestBody(error instanceof Error ? error.message : String(error)), 400)
           }

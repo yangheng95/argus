@@ -9,6 +9,8 @@ import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+const PACKAGE_ID = "custom-replica"
+
 async function writeFile(root: string, relativePath: string, content: string) {
   const target = path.join(root, relativePath)
   await fs.mkdir(path.dirname(target), { recursive: true })
@@ -31,42 +33,43 @@ async function writePromptProfileConfig(projectRoot: string) {
 }
 
 function manifest(overrides: Record<string, unknown> = {}) {
+  const id = typeof overrides.id === "string" ? overrides.id : PACKAGE_ID
   return {
     schema_version: 1,
-    id: "frontend-replica",
+    id,
     label: "Frontend Replica",
     description: "Replica squad",
     version: "2026.07.03",
     readme: "README.md",
     selector: {
       summary: "Use for replica tasks.",
-      selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+      selection_guidance: `Call select_expert_squad with profile_id ${id}.`,
     },
     capability_projection: {
       scheduler: {
         role_base: true,
         built_in_tool_ids: ["select_expert_squad", "skill", "build"],
-        package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
-        package_skill_refs: ["frontend-replica/orchestrator/scheduler"],
+        package_tool_refs: [`${id}/orchestrator/source-evidence`],
+        package_skill_refs: [`${id}/orchestrator/scheduler`],
       },
       agents: {
         build: {
           role_base: true,
-          package_skill_refs: ["frontend-replica/build/implementation"],
-          package_tool_refs: ["frontend-replica/build/build-evidence"],
+          package_skill_refs: [`${id}/build/implementation`],
+          package_tool_refs: [`${id}/build/build-evidence`],
         },
       },
     },
     agents: {
       orchestrator: {
         prompt: "agents/orchestrator/system.md",
-        skill_refs: ["frontend-replica/orchestrator/scheduler"],
-        tool_refs: ["frontend-replica/orchestrator/source-evidence"],
+        skill_refs: [`${id}/orchestrator/scheduler`],
+        tool_refs: [`${id}/orchestrator/source-evidence`],
       },
       build: {
         prompt: "agents/build/system.md",
-        skill_refs: ["frontend-replica/build/implementation"],
-        tool_refs: ["frontend-replica/build/build-evidence"],
+        skill_refs: [`${id}/build/implementation`],
+        tool_refs: [`${id}/build/build-evidence`],
       },
     },
     ...overrides,
@@ -146,10 +149,10 @@ describe("ExpertSquadPackageManager", () => {
       },
     })
 
-    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica")
-    expect(imported).toEqual({ id: "frontend-replica", targetRoot, replaced: false })
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID)
+    expect(imported).toEqual({ id: PACKAGE_ID, targetRoot, replaced: false })
     expect(await fs.readFile(path.join(targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
-    await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    await expect(ExpertSquadRegistry.loadPackage(targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
     expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
     expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
   })
@@ -166,9 +169,24 @@ describe("ExpertSquadPackageManager", () => {
       replace: false,
     })
 
-    expect(imported.id).toBe("frontend-replica")
-    expect(imported.targetRoot).toBe(path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"))
+    expect(imported.id).toBe(PACKAGE_ID)
+    expect(imported.targetRoot).toBe(path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID))
     expect(await readJsonFile(projectConfig.file)).toEqual(projectConfig.value)
+  })
+
+  test("rejects package IDs that collide with built-in expert squads", async () => {
+    await using project = await tmpdir()
+    await using source = await tmpdir()
+    const sourceRoot = await writeSourcePackage(source.path, "built-in-collision", {
+      [ExpertSquadRegistry.MANIFEST]: JSON.stringify(manifest({ id: "frontend-replica" }), null, 2),
+    })
+
+    await expect(
+      ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: false }),
+    ).rejects.toThrow(/collides with a built-in expert squad id/)
+    await expect(fs.lstat(path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica"))).rejects.toMatchObject({
+      code: "ENOENT",
+    })
   })
 
   test("rejects existing packages unless replace is explicit", async () => {
@@ -221,7 +239,7 @@ describe("ExpertSquadPackageManager", () => {
 
     expect(results).toHaveLength(replacementRoots.length)
     expect(results.every((result) => result.replaced)).toBe(true)
-    await expect(ExpertSquadRegistry.loadPackage(first.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    await expect(ExpertSquadRegistry.loadPackage(first.targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
     expect(await ExpertSquadRegistry.discover(project.path)).toHaveLength(1)
     expect(await fs.readFile(path.join(first.targetRoot, "README.md"), "utf8")).toMatch(/^# Replacement \d\n$/)
   })
@@ -239,7 +257,7 @@ describe("ExpertSquadPackageManager", () => {
     await using project = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path)
-    await writeFile(project.path, ".opencorvus/expert-squads/frontend-replica", "not a directory")
+    await writeFile(project.path, `.opencorvus/expert-squads/${PACKAGE_ID}`, "not a directory")
 
     await expect(
       ExpertSquadPackageManager.importDirectory({ projectDirectory: project.path, sourceDirectory: sourceRoot, replace: true }),
@@ -263,7 +281,7 @@ describe("ExpertSquadPackageManager", () => {
     ).rejects.toThrow(/not declared in this package/)
 
     expect(await fs.readFile(path.join(imported.targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
-    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
   })
 
   test("failed replacement after moving the new target restores the previous package", async () => {
@@ -288,14 +306,14 @@ describe("ExpertSquadPackageManager", () => {
 
     loadPackage.mockRestore()
     expect(await fs.readFile(path.join(imported.targetRoot, "README.md"), "utf8")).toContain("Frontend Replica")
-    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
   })
 
   test("failed first install removes the newly moved target", async () => {
     await using project = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path)
-    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica")
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID)
     const originalLoadPackage = ExpertSquadRegistry.loadPackage
     spyOn(ExpertSquadRegistry, "loadPackage").mockImplementation(async (root) => {
       if (path.resolve(root) === path.resolve(targetRoot)) throw new Error("post-move validation failed")
@@ -313,7 +331,7 @@ describe("ExpertSquadPackageManager", () => {
     await using project = await tmpdir()
     await using source = await tmpdir()
     const sourceRoot = await writeSourcePackage(source.path)
-    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", "frontend-replica")
+    const targetRoot = path.join(project.path, ".opencorvus", "expert-squads", PACKAGE_ID)
     const originalLoadSourcePackage = ExpertSquadRegistry.loadSourcePackage
     let loadCount = 0
     spyOn(ExpertSquadRegistry, "loadSourcePackage").mockImplementation(async (root) => {
@@ -422,7 +440,7 @@ describe("ExpertSquadPackageManager", () => {
   test("rejects export IDs that are not manifest IDs", async () => {
     await using project = await tmpdir()
 
-    await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: "../frontend-replica" })).rejects.toThrow(
+    await expect(ExpertSquadPackageManager.exportArchive({ projectDirectory: project.path, id: `../${PACKAGE_ID}` })).rejects.toThrow(
       /invalid expert squad id/,
     )
   })
@@ -434,13 +452,13 @@ describe("ExpertSquadPackageManager", () => {
     const sourceRoot = await writeSourcePackage(source.path)
     await ExpertSquadPackageManager.importDirectory({ projectDirectory: first.path, sourceDirectory: sourceRoot, replace: false })
 
-    const exported = await ExpertSquadPackageManager.exportArchive({ projectDirectory: first.path, id: "frontend-replica" })
+    const exported = await ExpertSquadPackageManager.exportArchive({ projectDirectory: first.path, id: PACKAGE_ID })
     const entries = await zipEntries(exported.bytes)
 
-    expect(exported.filename).toBe("frontend-replica-expert-squad.zip")
+    expect(exported.filename).toBe(`${PACKAGE_ID}-expert-squad.zip`)
     expect(exported.fileCount).toBe(entries.size)
     expect(entries.has(ExpertSquadRegistry.MANIFEST)).toBe(false)
-    expect(entries.get(`frontend-replica/${ExpertSquadRegistry.MANIFEST}`)).toContain('"id": "frontend-replica"')
+    expect(entries.get(`${PACKAGE_ID}/${ExpertSquadRegistry.MANIFEST}`)).toContain(`"id": "${PACKAGE_ID}"`)
     expect(Array.from(entries.keys()).some((entry) => entry.includes(".opencorvus/r"))).toBe(false)
 
     const imported = await ExpertSquadPackageManager.importArchive({
@@ -448,7 +466,7 @@ describe("ExpertSquadPackageManager", () => {
       archiveBase64: Buffer.from(exported.bytes).toString("base64"),
       replace: false,
     })
-    expect(imported.id).toBe("frontend-replica")
-    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: "frontend-replica" })
+    expect(imported.id).toBe(PACKAGE_ID)
+    await expect(ExpertSquadRegistry.loadPackage(imported.targetRoot)).resolves.toMatchObject({ id: PACKAGE_ID })
   })
 })

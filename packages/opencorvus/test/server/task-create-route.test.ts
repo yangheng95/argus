@@ -12,6 +12,7 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -217,6 +218,7 @@ describe("task creation route", () => {
 
   test("POST /task writes selected prompt profile to the root session overlay", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test/model" } })
+    await writeProjectExpertSquadPackage(tmp.path)
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
@@ -227,11 +229,11 @@ describe("task creation route", () => {
         "x-opencorvus-directory": tmp.path,
       },
       body: JSON.stringify({
-        request: "create with frontend automation debug profile",
+        request: "create with project package profile",
         executor: "opencorvus",
         requestID: "route-create-profile",
         source: "panel",
-        promptProfile: "frontend-automation-debug",
+        promptProfile: PROJECT_EXPERT_SQUAD_ID,
       }),
     })
 
@@ -241,7 +243,7 @@ describe("task creation route", () => {
     expect(task?.session_id).toBeTruthy()
     const session = await Session.get(task!.session_id!)
     expect(session.metadata?.configOverlay).toMatchObject({
-      prompt_profile: { active: "frontend-automation-debug" },
+      prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
     })
   }, 15_000)
 

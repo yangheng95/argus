@@ -1449,8 +1449,8 @@
         },
         "wiring-catalog": {
           kicker: "专家团积木 · ② 目录", title: "PromptProfile.builtIns",
-          src: "src/agent/prompt-profile.ts",
-          html: `<p>专家团目录是一组 <b>PromptProfile</b>。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
+          src: "src/expert-squad/builtin/* · src/expert-squad/prompt-profile-resolver.ts",
+          html: `<p>专家团目录是一组 package-backed <b>PromptProfile</b>。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
             <div class="kv"><div><b>Prompt</b><span>{ agents: { agentID → prompt overlay } }</span></div>
             <div><b>Capability</b><span>{ scheduler: tool_ids / skill_names / include_mcp_tools }</span></div></div>
             <p>内置档：frontend-replica · frontend-innovate · backend · algorithm · frontend-automation-debug · general。</p>
@@ -1458,13 +1458,13 @@
             <ul>
               <li>不同档的 <code>agents</code> 键不同——即覆盖<b>不同的 agent 子集</b>；不在映射里的 agent 拿基线 prompt。</li>
               <li>scheduler capability 是从 active PromptProfile 派生出的可见工具 / skill / agent 面，不是 host 端隐藏路由。</li>
-              <li>project 自定义 profile 不能覆盖内置档（<code>validateConfig</code> 报错）。</li>
+              <li>project package ID 不能覆盖内置档；内置 / 项目包冲突由 project-aware resolver 与 import manager 直接拒绝。</li>
             </ul>`
         },
         "wiring-skill-discovery": {
           kicker: "专家团积木 · ① 决策输入", title: "Mounted selector skills",
-          src: "src/skill/builtin/*-expert-squad.md · orchestrator/tools.ts (skill)",
-          html: `<p>selector skill 是 Orchestrator 可见的选档证据面：它帮助模型读取专家团适用条件，再决定是否调用 <code>select_expert_squad</code>。</p>
+          src: "src/expert-squad/builtin/*/selector.md · expert-squad.jsonc · orchestrator/tools.ts (skill)",
+          html: `<p>selector skill 是 Orchestrator 可见的选档证据面：内置 selector 从 clear-text expert-squad package manifest 与 <code>selector.md</code> 派生，帮助模型读取专家团适用条件，再决定是否调用 <code>select_expert_squad</code>。</p>
             <p>它不替代生产 workflow skill，也不通过关键词匹配自动装配专家团。active profile 后续能看到哪些 production skills，必须来自同一个 PromptProfile capability projection。</p>`
         },
         "wiring-select": {
@@ -1492,7 +1492,7 @@
         },
         "wiring-prompt-arm": {
           kicker: "专家团积木 · Block A", title: "PROMPT overlays",
-          src: "src/agent/runner.ts · PromptProfile.composeAgentPrompt",
+          src: "src/agent/runner.ts · src/expert-squad/prompt-profile-resolver.ts",
           html: `<p>每个被 dispatch 的 agent 在 session 组装时，<b>有效 system prompt</b> 由三段拼接：</p>
             <div class="kv">
               <div><b>base</b><span>该 role 的 core prompt（不变）</span></div>

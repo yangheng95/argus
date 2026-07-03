@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
@@ -274,8 +275,9 @@ describe("config prompt routes", () => {
     })
   })
 
-  test("GET /config/prompt-profile returns session-effective active profile when sessionID is supplied", async () => {
+  test("GET /config/prompt-profile returns session-effective project package profile when sessionID is supplied", async () => {
     await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
@@ -290,7 +292,7 @@ describe("config prompt routes", () => {
           sessionID: root.id,
           patch: {
             prompt_profile: {
-              active: "algorithm",
+              active: PROJECT_EXPERT_SQUAD_ID,
             },
           },
         })
@@ -307,10 +309,16 @@ describe("config prompt routes", () => {
           active: string
           project_active: string
           session_active: string | null
+          profiles: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
         }
-        expect(body.active).toBe("algorithm")
+        expect(body.active).toBe(PROJECT_EXPERT_SQUAD_ID)
         expect(body.project_active).toBe("backend")
-        expect(body.session_active).toBe("algorithm")
+        expect(body.session_active).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+          built_in: false,
+          editable: false,
+          agents: { build: "project build overlay" },
+        })
       },
     })
   })
@@ -349,6 +357,62 @@ describe("config prompt routes", () => {
         expect(build?.active_profile).toBe("frontend-automation-debug")
         expect(build?.profile_prompt).toContain("focused automation")
         expect(build?.effective_prompt).toContain("focused automation")
+      },
+    })
+  })
+
+  test("PATCH /config accepts a project package prompt profile and prompt preview uses it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+        })
+
+        expect(patchResponse.status).toBe(200)
+
+        const catalogResponse = await app.request("/config/prompt-profile", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(catalogResponse.status).toBe(200)
+        const catalog = (await catalogResponse.json()) as {
+          active: string
+          profiles: Array<{ id: string; built_in: boolean; editable: boolean; agents: Record<string, string> }>
+        }
+        expect(catalog.active).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(catalog.profiles.find((profile) => profile.id === PROJECT_EXPERT_SQUAD_ID)).toMatchObject({
+          built_in: false,
+          editable: false,
+          agents: { build: "project build overlay" },
+        })
+
+        const previewResponse = await app.request("/config/prompt", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(previewResponse.status).toBe(200)
+        const preview = (await previewResponse.json()) as Array<{
+          key: string
+          active_profile: string
+          profile_prompt: string | null
+          effective_prompt: string
+        }>
+        const build = preview.find((item) => item.key === "build")
+        expect(build?.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(build?.profile_prompt).toBe("project build overlay")
+        expect(build?.effective_prompt).toContain("project build overlay")
       },
     })
   })
