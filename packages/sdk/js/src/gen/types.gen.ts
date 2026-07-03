@@ -973,19 +973,10 @@ export type Config = {
     [key: string]: string
   }
   /**
-   * Active prompt profile and optional project-defined profile overlays.
+   * Active package-backed expert-squad prompt profile selection.
    */
   prompt_profile?: {
     active?: string
-    profiles?: {
-      [key: string]: {
-        label: string
-        description?: string
-        agents?: {
-          [key: string]: string
-        }
-      }
-    }
   }
   /**
    * Additional instruction files or patterns to include
@@ -1112,6 +1103,10 @@ export type Config = {
        * Maximum agentic steps for build agent
        */
       max_steps?: number
+      /**
+       * Maximum estimated provider replay tokens for reusing a previous Build session on retry. When omitted, OpenCorvus derives the limit from the Build model output window and existing context budget.
+       */
+      retry_replay_token_limit?: number
     }
     /**
      * Chunk-driven inactivity thresholds. Single source of truth for streaming layers (session LLM, executor events, task queue).

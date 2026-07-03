@@ -24,11 +24,6 @@ mock.module("../src/services/config", () => ({
   reloadProjectScope: async () => {
     reloadCalls += 1
   },
-  applyPromptEntries: () => {},
-  loadPromptCatalog: async () => {},
-  savePromptEntry: async () => {},
-  promptConfigValueForSave: (_entry: unknown, value: string) => value,
-  resetPromptEntry: async () => {},
 }))
 
 const { configure } = await import("../src/services/api")

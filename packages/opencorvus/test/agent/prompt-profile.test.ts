@@ -462,23 +462,14 @@ describe("prompt profiles", () => {
     }
   })
 
-  test("profile catalog exposes target metadata and editable custom profile definitions", () => {
+  test("profile catalog exposes target metadata and built-in package-backed definitions", () => {
     const config = Config.Info.parse({
       prompt_profile: {
-        active: "custom-squad",
-        profiles: {
-          "custom-squad": {
-            label: "Custom Squad",
-            description: "Project-defined prompt profile.",
-            agents: {
-              build: "Custom build guidance.",
-            },
-          },
-        },
+        active: "frontend-replica",
       },
     })
     const catalog = PromptProfile.list(config)
-    expect(catalog.project_active).toBe("custom-squad")
+    expect(catalog.project_active).toBe("frontend-replica")
     expect(catalog.session_active).toBe(null)
     expect(catalog.targets.find((target) => target.id === "build")).toMatchObject({
       id: "build",
@@ -495,39 +486,41 @@ describe("prompt profiles", () => {
       built_in: true,
       editable: false,
     })
-    expect(catalog.profiles.find((profile) => profile.id === "custom-squad")).toMatchObject({
-      id: "custom-squad",
-      built_in: false,
-      editable: true,
-      agents: {
-        build: "Custom build guidance.",
-      },
-    })
+    expect(catalog.profiles.map((profile) => profile.id)).toEqual([
+      "general",
+      "frontend-replica",
+      "frontend-innovate",
+      "backend",
+      "algorithm",
+      "frontend-automation-debug",
+    ])
+    expect(catalog.profiles.every((profile) => profile.built_in && !profile.editable)).toBe(true)
+    expect(catalog.profiles.some((profile) => profile.id === "custom-squad")).toBe(false)
   })
 
-  test("rejects unknown active profiles and built-in-only user targets", () => {
+  test("rejects unknown active profiles and removed custom profile definitions", () => {
     const unknown = Config.Info.safeParse({ prompt_profile: { active: "missing" } })
     expect(unknown.success).toBe(false)
     if (!unknown.success) expect(JSON.stringify(unknown.error.issues)).toContain("Unknown prompt profile")
 
-    const builtInOnly = Config.Info.safeParse({
+    const customProfiles = Config.Info.safeParse({
       prompt_profile: {
-        active: "custom",
+        active: "frontend-replica",
         profiles: {
-          custom: {
-            label: "Custom",
+          "custom-squad": {
+            label: "Custom Squad",
             agents: {
-              orchestrator: "not allowed",
+              build: "Custom build guidance.",
             },
           },
         },
       },
     })
-    expect(builtInOnly.success).toBe(false)
-    if (!builtInOnly.success) expect(JSON.stringify(builtInOnly.error.issues)).toContain("built-in-only")
+    expect(customProfiles.success).toBe(false)
+    if (!customProfiles.success) expect(JSON.stringify(customProfiles.error.issues)).toContain("profiles")
   })
 
-  test("rejects malformed profile ids, blank labels, and blank target overlays", () => {
+  test("rejects malformed profile ids and old custom profile bodies", () => {
     expect(PROMPT_PROFILE_ID_PATTERN.source).not.toContain("?!")
     expect(PromptProfileIDSchema.safeParse("frontend-replica").success).toBe(true)
     expect(PromptProfileIDSchema.safeParse("custom-squad-2").success).toBe(true)
@@ -544,42 +537,10 @@ describe("prompt profiles", () => {
       expectConfigRejected({ prompt_profile: { active } }, "prompt profile id")
     }
 
-    const malformedProfileID = Config.Info.safeParse({
-      prompt_profile: {
-        active: "custom-squad",
-        profiles: {
-          "Custom Squad": {
-            label: "Custom Squad",
-            agents: {
-              build: "Custom build guidance.",
-            },
-          },
-        },
-      },
-    })
-    expect(malformedProfileID.success).toBe(false)
-
     expectConfigRejected(
       {
         prompt_profile: {
-          active: "custom-squad",
-          profiles: {
-            "custom-squad": {
-              label: "   ",
-              agents: {
-                build: "Custom build guidance.",
-              },
-            },
-          },
-        },
-      },
-      "prompt profile label cannot be empty",
-    )
-
-    expectConfigRejected(
-      {
-        prompt_profile: {
-          active: "custom-squad",
+          active: "frontend-replica",
           profiles: {
             "custom-squad": {
               label: "Custom Squad",
@@ -590,7 +551,7 @@ describe("prompt profiles", () => {
           },
         },
       },
-      "cannot be blank",
+      "profiles",
     )
   })
 
@@ -601,86 +562,6 @@ describe("prompt profiles", () => {
 
     const validSyntax = Config.Overlay.safeParse({ prompt_profile: { active: "custom-squad" } })
     expect(validSyntax.success).toBe(true)
-  })
-
-  test("parses only wrapped prompt-profile imports and rejects invalid imported profiles", () => {
-    const imported = PromptProfile.parseImportPayload({
-      prompt_profile: {
-        active: "custom-squad",
-        profiles: {
-          "custom-squad": {
-            label: "Custom Squad",
-            description: "Project-defined overlays.",
-            agents: {
-              build: "Custom build guidance.",
-              requirements: "Custom requirements guidance.",
-            },
-          },
-        },
-      },
-    })
-    expect(imported.prompt_profile.active).toBe("custom-squad")
-    expect(imported.prompt_profile.profiles["custom-squad"].agents.build).toBe("Custom build guidance.")
-
-    expect(() =>
-      PromptProfile.parseImportPayload({
-        profiles: {
-          "custom-squad": {
-            label: "Custom Squad",
-            agents: { build: "Custom build guidance." },
-          },
-        },
-      }),
-    ).toThrow()
-    expect(() =>
-      PromptProfile.parseImportPayload({
-        prompt_profile: {
-          active: "missing-custom",
-          profiles: {
-            "custom-squad": {
-              label: "Custom Squad",
-              agents: { build: "Custom build guidance." },
-            },
-          },
-        },
-      }),
-    ).toThrow("Unknown prompt profile")
-    expect(() =>
-      PromptProfile.parseImportPayload({
-        prompt_profile: {
-          profiles: {
-            "frontend-replica": {
-              label: "Frontend Replica Override",
-              agents: { build: "Custom build guidance." },
-            },
-          },
-        },
-      }),
-    ).toThrow("cannot override")
-    expect(() =>
-      PromptProfile.parseImportPayload({
-        prompt_profile: {
-          profiles: {
-            "custom-squad": {
-              label: "Custom Squad",
-              agents: { unknown: "Custom guidance." },
-            },
-          },
-        },
-      }),
-    ).toThrow("Unknown prompt profile target")
-    expect(() =>
-      PromptProfile.parseImportPayload({
-        prompt_profile: {
-          profiles: {
-            "custom-squad": {
-              label: "Custom Squad",
-              agents: { orchestrator: "Custom guidance." },
-            },
-          },
-        },
-      }),
-    ).toThrow("built-in-only")
   })
 
   test("session overlay rejects prompt edits for prompt-mode none agents", () => {

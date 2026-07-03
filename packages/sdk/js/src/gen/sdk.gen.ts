@@ -933,7 +933,7 @@ export class Config extends HeyApiClient {
   /**
    * List prompt profiles
    *
-   * Returns the active prompt profile and available built-in/project prompt profiles.
+   * Returns the active expert-squad prompt profile and available package-backed prompt profiles.
    */
   public promptProfile<ThrowOnError extends boolean = false>(
     parameters?: {

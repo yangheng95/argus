@@ -191,7 +191,7 @@ export const ConfigRoutes = lazy(() =>
       "/prompt-profile",
       describeRoute({
         summary: "List prompt profiles",
-        description: "Returns the active prompt profile and available built-in/project prompt profiles.",
+        description: "Returns the active expert-squad prompt profile and available package-backed prompt profiles.",
         operationId: "config.promptProfile",
         responses: {
           200: {

@@ -23,15 +23,6 @@ async function writePromptProfileConfig(projectRoot: string) {
   const value = {
     prompt_profile: {
       active: "backend",
-      profiles: {
-        "custom-squad": {
-          label: "Custom Squad",
-          description: "Project-defined overlays stay untouched by package import.",
-          agents: {
-            build: "Custom build guidance.",
-          },
-        },
-      },
     },
   }
   const file = path.join(projectRoot, "opencorvus.json")

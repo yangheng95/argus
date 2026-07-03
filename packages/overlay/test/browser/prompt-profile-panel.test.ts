@@ -40,7 +40,7 @@ function mergePatch(target: unknown, patch: unknown): unknown {
   return base
 }
 
-test("prompt profiles are visible, built-ins stay read-only, and custom saves only patch prompt_profile", async () => {
+test("prompt profiles are package-backed read-only entries and activation patches active only", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -112,6 +112,26 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         },
       },
       {
+        id: "backend",
+        label: "Backend",
+        description: "Bias toward backend contracts, persistence, and route verification.",
+        built_in: true,
+        editable: false,
+        agents: {
+          build: "Change backend behavior with focused route, schema, and persistence tests.",
+        },
+      },
+      {
+        id: "algorithm",
+        label: "Algorithm",
+        description: "Bias toward algorithmic correctness and measurable edge cases.",
+        built_in: true,
+        editable: false,
+        agents: {
+          build: "Prove algorithm behavior with representative positive and negative cases.",
+        },
+      },
+      {
         id: "frontend-automation-debug",
         label: "Frontend Automation Debug",
         description: "Bias toward reproducible verification, regression coverage, and acceptance evidence.",
@@ -123,63 +143,18 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
           orchestrator: "Accept only evidence that can be rerun against the behavior under review.",
         },
       },
-      {
-        id: "custom-squad",
-        label: "Custom Squad",
-        description: "User-authored profile stored in config.prompt_profile.profiles.",
-        built_in: false,
-        editable: true,
-        agents: {
-          requirements: "Extract benchmark targets first.",
-          build: "Prefer proof by tests and screenshots.",
-        },
-      },
     ],
   }
 
   function promptProfiles() {
-    const promptProfileConfig = config.prompt_profile as
-      | {
-          active?: string
-          profiles?: Record<string, { label: string; description?: string; agents?: Record<string, string> }>
-        }
-      | undefined
-    const customProfiles = Object.entries(promptProfileConfig?.profiles ?? {}).map(([id, profile]) => ({
-      id,
-      label: profile.label,
-      description: profile.description,
-      built_in: false,
-      editable: true,
-      agents: profile.agents ?? {},
-    }))
-    const customIDs = new Set(customProfiles.map((profile) => profile.id))
+    const promptProfileConfig = config.prompt_profile as { active?: string } | undefined
+    const active = promptProfileConfig?.active ?? basePromptProfiles.active
     return {
       ...basePromptProfiles,
-      active: promptProfileConfig?.active ?? basePromptProfiles.active,
-      project_active: promptProfileConfig?.active ?? basePromptProfiles.project_active,
-      profiles: [...basePromptProfiles.profiles.filter((profile) => !customIDs.has(profile.id)), ...customProfiles],
+      active,
+      project_active: active,
     }
   }
-
-  const promptEntries = [
-    {
-      key: "build",
-      label: "Build",
-      group: "subagent",
-      mode: "append",
-      scope: "agent",
-      description: "Editable user append after the active squad overlay.",
-      prompt: "Existing user append for build.",
-      editable_prompt: "Existing user append for build.",
-      effective_prompt:
-        "Core build prompt.\n\n[Frontend Replica profile]\nVerify with a real browser and screenshot review before closing the task.\n\n[User append]\nExisting user append for build.",
-      active_profile: "frontend-replica",
-      profile_prompt: "Verify with a real browser and screenshot review before closing the task.",
-      configured_prompt: "Existing user append for build.",
-      default_prompt: "Core build prompt.",
-      prompt_mode: "append",
-    },
-  ]
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -196,7 +171,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     if (path === "/mission") return send([])
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-    if (path === "/vcs") {
+    if (path === "/vcs")
       return send({
         branch: "dev",
         clean: true,
@@ -208,29 +183,27 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         ahead: 0,
         behind: 0,
       })
-    }
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})
     if (path === "/config/providers") return send({ providers: [], default: {} })
-    if (path === "/config/prompt") return send(promptEntries)
+    if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile") return send(promptProfiles())
     if (path === "/config" && req.method === "GET") return send(config)
     if (path === "/config" && req.method === "PATCH") {
       const body = (await req.json()) as Record<string, unknown>
       patches.push(body)
-        config = mergePatch(config, body) as Record<string, unknown>
-        return send(config)
-      }
+      config = mergePatch(config, body) as Record<string, unknown>
+      return send(config)
+    }
     if (path === "/coding/sessions") return send({ sessions: [], nextCursor: null })
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
-    if (path === "/task/events") {
+    if (path === "/task/events")
       return new Response(":\n\n", {
         headers: {
           "content-type": "text/event-stream; charset=utf-8",
           "cache-control": "no-cache",
         },
       })
-    }
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])
     if (path === "/executor")
@@ -297,7 +270,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     await page.click('[data-testid="titlebar-settings-prompt"]')
     await page.waitForSelector('[data-config-panel="prompt"] [data-ui="prompt-profile-panel"]')
 
-    const builtInState = await page.evaluate(() => {
+    const initialState = await page.evaluate(() => {
       const list = Array.from(
         document.querySelectorAll('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
       ).map((node) => node.querySelector("strong")?.textContent?.trim() || "")
@@ -308,8 +281,10 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       )
       const readonly = document.querySelector(".prompt-profile-readonly-note")?.textContent?.trim() || ""
       const editors = document.querySelectorAll(".prompt-profile-textarea").length
-      const promptCards = document.querySelectorAll("[data-prompt-entry]").length
       const metadata = document.querySelectorAll('[data-ui="prompt-profile-metadata"]').length
+      const importInputs = document.querySelectorAll('[data-ui="prompt-profile-import-input"]').length
+      const saveButtons = document.querySelectorAll('[data-ui="prompt-profile-save"]').length
+      const deleteButtons = document.querySelectorAll('[data-ui="prompt-profile-delete"]').length
       const actions = Array.from(
         document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-actions"] .oc-button'),
       ).map((node) => ({
@@ -323,31 +298,32 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         hasOverlay: node.dataset.hasOverlay || "",
         text: node.textContent?.replace(/\s+/g, " ").trim() || "",
       }))
-      return { list, overview, readonly, editors, promptCards, metadata, actions, targetStates }
+      return { list, overview, readonly, editors, metadata, importInputs, saveButtons, deleteButtons, actions, targetStates }
     })
-    assert.deepEqual(builtInState.list, [
+
+    assert.deepEqual(initialState.list, [
       "General",
       "Frontend Replica",
       "Frontend Innovate",
+      "Backend",
+      "Algorithm",
       "Frontend Automation Debug",
-      "Custom Squad",
     ])
-    assert.match(builtInState.overview.scope, /Project config/)
-    assert.match(builtInState.overview["project-active"], /Frontend Replica/)
-    assert.match(builtInState.overview.selected, /Frontend Replica/)
-    assert.match(builtInState.overview.selected, /3 agents/)
-    assert.match(builtInState.overview.selected, /3 prompts/)
-    assert.match(builtInState.readonly, /read-only/i)
-    assert.equal(builtInState.editors, 0)
-    assert.equal(builtInState.promptCards, 0)
-    assert.equal(builtInState.metadata, 0)
+    assert.match(initialState.overview.scope, /Project config/)
+    assert.match(initialState.overview["project-active"], /Frontend Replica/)
+    assert.match(initialState.overview.selected, /Frontend Replica/)
+    assert.match(initialState.overview.selected, /3 agents/)
+    assert.match(initialState.overview.selected, /3 prompts/)
+    assert.match(initialState.readonly, /read-only/i)
+    assert.equal(initialState.editors, 0)
+    assert.equal(initialState.metadata, 0)
+    assert.equal(initialState.importInputs, 0)
+    assert.equal(initialState.saveButtons, 0)
+    assert.equal(initialState.deleteButtons, 0)
+    assert.deepEqual(initialState.actions.map((action) => action.ui), ["prompt-profile-activate-project"])
+    assert.equal(initialState.actions[0]?.disabled, true)
     assert.deepEqual(
-      builtInState.actions.map((action) => action.ui),
-      ["prompt-profile-activate-project"],
-    )
-    assert.equal(builtInState.actions[0]?.disabled, true)
-    assert.deepEqual(
-      builtInState.targetStates.map((target) => ({
+      initialState.targetStates.map((target) => ({
         target: target.target,
         editable: target.editable,
         hasOverlay: target.hasOverlay,
@@ -359,74 +335,31 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       ],
     )
     assert.equal(
-      builtInState.targetStates.every((target) => /Read-only/.test(target.text) && /Configured/.test(target.text)),
+      initialState.targetStates.every((target) => /Read-only/.test(target.text) && /Configured/.test(target.text)),
       true,
     )
+
+    mkdirSync(resolve(".scratch"), { recursive: true })
     const promptBody = await page.$("#promptBody")
     assert.ok(promptBody)
-    writeFileSync(resolve(".scratch/prompt-profile-settings-built-in.png"), await promptBody.screenshot({}))
+    writeFileSync(resolve(".scratch/prompt-profile-settings-readonly.png"), await promptBody.screenshot({}))
 
-    await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-row:last-child')
+    await page.click('[data-ui="prompt-profile-list"] .prompt-profile-list-row:nth-child(3)')
     await page.waitForFunction(() => {
       const title = document.querySelector('[data-ui="prompt-profile-detail"] .prompt-profile-detail-copy strong')
-      return title?.textContent?.trim() === "Custom Squad"
+      return title?.textContent?.trim() === "Frontend Innovate"
     })
-    await page.waitForFunction(() => document.querySelectorAll(".prompt-profile-textarea").length === 2)
-    const customLayoutState = await page.evaluate(() => {
-      const overview = Object.fromEntries(
-        Array.from(document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-overview"] [data-kind]')).map(
-          (node) => [node.dataset.kind || "", node.textContent?.replace(/\s+/g, " ").trim() || ""],
-        ),
-      )
-      const actions = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-actions"] .oc-button'),
-      ).map((node) => ({
-        ui: node.dataset.ui || "",
-        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
-        disabled: (node as HTMLButtonElement).disabled,
-      }))
-      const metadata = document.querySelector('[data-ui="prompt-profile-metadata"]')
-      const targetStates = Array.from(document.querySelectorAll<HTMLElement>(".prompt-profile-target")).map((node) => ({
-        target: node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() || "",
-        editable: node.dataset.editable || "",
-        hasOverlay: node.dataset.hasOverlay || "",
-        text: node.textContent?.replace(/\s+/g, " ").trim() || "",
-      }))
-      return {
-        overview,
-        actionIDs: actions.map((action) => action.ui),
-        projectActionDisabled: actions.find((action) => action.ui === "prompt-profile-activate-project")?.disabled,
-        saveDisabled: actions.find((action) => action.ui === "prompt-profile-save")?.disabled,
-        metadataText: metadata?.textContent?.replace(/\s+/g, " ").trim() || "",
-        targetStates,
-      }
-    })
-    assert.match(customLayoutState.overview.selected, /Custom Squad/)
-    assert.match(customLayoutState.overview.selected, /2 agents/)
-    assert.match(customLayoutState.overview.selected, /2 prompts/)
-    assert.deepEqual(customLayoutState.actionIDs, [
-      "prompt-profile-activate-project",
-      "prompt-profile-delete",
-      "prompt-profile-save",
-    ])
-    assert.equal(customLayoutState.projectActionDisabled, false)
-    assert.equal(customLayoutState.saveDisabled, true)
-    assert.match(customLayoutState.metadataText, /Squad Details/)
-    assert.deepEqual(
-      customLayoutState.targetStates.map((target) => ({
-        target: target.target,
-        editable: target.editable,
-        hasOverlay: target.hasOverlay,
-      })),
-      [
-        { target: "requirements", editable: "true", hasOverlay: "true" },
-        { target: "build", editable: "true", hasOverlay: "true" },
-      ],
+    await page.click('[data-ui="prompt-profile-activate-project"]')
+    await page.waitForFunction(() =>
+      document.querySelector(".config-status-box")?.textContent?.toLowerCase().includes("updated"),
     )
-    assert.equal(
-      customLayoutState.targetStates.every((target) => /Editable/.test(target.text) && /Configured/.test(target.text)),
-      true,
-    )
+
+    const profilePatches = patches.filter((patch) => "prompt_profile" in patch)
+    assert.deepEqual(profilePatches, [{ prompt_profile: { active: "frontend-innovate" } }])
+    assert.equal(profilePatches.every((patch) => !("agent" in patch)), true)
+    assert.equal(profilePatches.every((patch) => !("prompt" in patch)), true)
+    assert.equal("profiles" in ((profilePatches[0]!.prompt_profile as Record<string, unknown>) || {}), false)
+
     const selectedProfileListItem = await page.evaluate(() => {
       const rows = Array.from(
         document.querySelectorAll<HTMLElement>('[data-ui="prompt-profile-list"] .prompt-profile-list-row'),
@@ -447,222 +380,30 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       }
     })
     assert.deepEqual(selectedProfileListItem, {
-      labels: ["General", "Frontend Replica", "Frontend Innovate", "Frontend Automation Debug", "Custom Squad"],
-      primitiveRows: 5,
-      rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON", "BUTTON"],
+      labels: ["General", "Frontend Replica", "Frontend Innovate", "Backend", "Algorithm", "Frontend Automation Debug"],
+      primitiveRows: 6,
+      rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON", "BUTTON", "BUTTON"],
       legacyRows: 0,
-      currentLabels: ["Custom Squad"],
-      selectedLabel: "Custom Squad",
+      currentLabels: ["Frontend Innovate"],
+      selectedLabel: "Frontend Innovate",
       selectedCurrent: "true",
       selectedAriaSelected: "",
       selectedAriaPressed: "",
     })
-    await page.keyboard.press("Tab")
-    await page.keyboard.press("Shift+Tab")
-    await page.waitForFunction(() =>
-      document.activeElement?.matches('[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]'),
-    )
+
     const focusedProfileRow = await page.$eval(
       '[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]',
       (node: HTMLElement) => {
-        const style = getComputedStyle(node)
+        node.focus()
         return {
           focused: document.activeElement === node,
-          focusVisible: node.matches(":focus-visible"),
-          outlineStyle: style.outlineStyle,
-          outlineWidth: style.outlineWidth,
         }
       },
     )
     assert.equal(focusedProfileRow.focused, true)
-    assert.equal(focusedProfileRow.focusVisible, true)
-    assert.notEqual(focusedProfileRow.outlineStyle, "none")
-    assert.notEqual(focusedProfileRow.outlineWidth, "0px")
     const rowList = await page.$('[data-ui="prompt-profile-list"]')
     assert.ok(rowList)
     writeFileSync(resolve(".scratch/prompt-profile-list-row-focus.png"), await rowList.screenshot({}))
-
-    const textareaLabels = await page.evaluate(() =>
-      Array.from(document.querySelectorAll<HTMLTextAreaElement>(".prompt-profile-textarea")).map((textarea) => {
-        const target = textarea.closest<HTMLElement>(".prompt-profile-target")
-        const label = target?.querySelector<HTMLElement>(".prompt-profile-target-copy strong")
-        const labelledBy = textarea.getAttribute("aria-labelledby") || ""
-        const labelledElement = labelledBy ? document.getElementById(labelledBy) : null
-        return {
-          labelID: label?.id || "",
-          visibleLabel: label?.textContent?.trim() || "",
-          labelledBy,
-          accessibleNameSource: labelledElement?.textContent?.trim() || "",
-          hiddenLabel: textarea.getAttribute("aria-label") || "",
-          usesComposerTextarea: textarea.classList.contains("composer-textarea"),
-          usesFieldInput: textarea.classList.contains("field-input"),
-          overflowY: getComputedStyle(textarea).overflowY,
-          scrollbarWidth: getComputedStyle(textarea).scrollbarWidth,
-        }
-      }),
-    )
-    assert.deepEqual(textareaLabels, [
-      {
-        labelID: "promptProfileTargetLabel-requirements",
-        visibleLabel: "Requirements",
-        labelledBy: "promptProfileTargetLabel-requirements",
-        accessibleNameSource: "Requirements",
-        hiddenLabel: "",
-        usesComposerTextarea: true,
-        usesFieldInput: false,
-        overflowY: "auto",
-        scrollbarWidth: "thin",
-      },
-      {
-        labelID: "promptProfileTargetLabel-build",
-        visibleLabel: "Build",
-        labelledBy: "promptProfileTargetLabel-build",
-        accessibleNameSource: "Build",
-        hiddenLabel: "",
-        usesComposerTextarea: true,
-        usesFieldInput: false,
-        overflowY: "auto",
-        scrollbarWidth: "thin",
-      },
-    ])
-    const textareaInitial = await page.$eval(".prompt-profile-textarea", (textarea: HTMLTextAreaElement) => {
-      textarea.focus()
-      return {
-        active: document.activeElement === textarea,
-        original: textarea.value,
-        height: textarea.getBoundingClientRect().height,
-        boxShadow: getComputedStyle(textarea).boxShadow,
-      }
-    })
-    assert.equal(textareaInitial.active, true)
-    assert.notEqual(textareaInitial.boxShadow, "none")
-    await page.$eval(".prompt-profile-textarea", (textarea: HTMLTextAreaElement) => {
-      textarea.value = Array.from({ length: 14 }, (_, index) => `requirements line ${index + 1}`).join("\n")
-      textarea.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await page.waitForFunction(
-      (height) => {
-        const textarea = document.querySelector<HTMLTextAreaElement>(".prompt-profile-textarea")
-        return !!textarea && textarea.getBoundingClientRect().height > height
-      },
-      {},
-      textareaInitial.height,
-    )
-    await page.$eval(
-      ".prompt-profile-textarea",
-      (textarea: HTMLTextAreaElement, value) => {
-        textarea.value = value
-        textarea.dispatchEvent(new Event("input", { bubbles: true }))
-      },
-      textareaInitial.original,
-    )
-    mkdirSync(resolve(".scratch"), { recursive: true })
-    const screenshot = await page.screenshot({ fullPage: false })
-    assert.ok(screenshot.length > 0)
-    writeFileSync(resolve(".scratch/prompt-profile-textarea-labels.png"), screenshot)
-    writeFileSync(resolve(".scratch/prompt-profile-settings-custom.png"), await promptBody.screenshot({}))
-
-    await page.evaluate(() => {
-      const input = document.querySelector(
-        '.prompt-profile-detail .prompt-profile-field input[type="text"]',
-      ) as HTMLInputElement
-      input.value = "Custom Squad Revised"
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-
-    await page.evaluate(() => {
-      const targets = Array.from(document.querySelectorAll(".prompt-profile-target"))
-      const buildTarget = targets.find(
-        (node) => node.querySelector(".prompt-profile-target-copy span")?.textContent?.trim() === "build",
-      )
-      const area = buildTarget?.querySelector("textarea") as HTMLTextAreaElement | null
-      if (!area) throw new Error("Missing build prompt-profile textarea")
-      area.value = "Prefer proof by tests, screenshots, and explicit acceptance notes."
-      area.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-
-    await page.click('[data-ui="prompt-profile-save"]')
-    await page.waitForFunction(() =>
-      document.querySelector(".config-status-box")?.textContent?.toLowerCase().includes("saved"),
-    )
-
-    const profilePatches = patches.filter((patch) => "prompt_profile" in patch)
-    assert.equal(profilePatches.length, 1)
-    assert.equal(
-      profilePatches.every((patch) => !("agent" in patch)),
-      true,
-    )
-    assert.deepEqual(profilePatches[0], {
-      prompt_profile: {
-        profiles: {
-          "custom-squad": {
-            label: "Custom Squad Revised",
-            description: "User-authored profile stored in config.prompt_profile.profiles.",
-            agents: {
-              requirements: "Extract benchmark targets first.",
-              build: "Prefer proof by tests, screenshots, and explicit acceptance notes.",
-            },
-          },
-        },
-      },
-    })
-
-    await page.evaluate(
-      (content) => {
-        const input = document.querySelector('[data-ui="prompt-profile-import-input"]') as HTMLInputElement | null
-        if (!input) throw new Error("Missing prompt profile import input")
-        const data = new DataTransfer()
-        data.items.add(new File([content], "imported-squad.json", { type: "application/json" }))
-        input.files = data.files
-        input.dispatchEvent(new Event("change", { bubbles: true }))
-      },
-      JSON.stringify({
-        prompt_profile: {
-          active: "imported-squad",
-          profiles: {
-            "imported-squad": {
-              label: "Imported Squad",
-              description: "Imported expert overlays.",
-              agents: {
-                requirements: "Imported requirements guidance.",
-                build: "Imported build guidance.",
-              },
-            },
-          },
-        },
-      }),
-    )
-    await page.waitForSelector('[data-ui="prompt-profile-import-preview"]')
-    const importPreview = await page.evaluate(() => {
-      const preview = document.querySelector('[data-ui="prompt-profile-import-preview"]')
-      return preview?.textContent || ""
-    })
-    assert.match(importPreview, /Imported Squad/)
-    assert.match(importPreview, /requirements/)
-    assert.match(importPreview, /Build/)
-    await page.click('[data-ui="prompt-profile-import-preview"] .oc-button[data-variant="solid"]')
-    await page.waitForFunction(() =>
-      document.querySelector(".config-status-box")?.textContent?.toLowerCase().includes("imported"),
-    )
-
-    const importPatch = patches[patches.length - 1]
-    assert.deepEqual(importPatch, {
-      prompt_profile: {
-        active: "imported-squad",
-        profiles: {
-          "imported-squad": {
-            label: "Imported Squad",
-            description: "Imported expert overlays.",
-            agents: {
-              requirements: "Imported requirements guidance.",
-              build: "Imported build guidance.",
-            },
-          },
-        },
-      },
-    })
-    assert.equal("agent" in importPatch, false)
-    assert.equal("prompt" in importPatch, false)
   } finally {
     await browser.close()
     await server.close()

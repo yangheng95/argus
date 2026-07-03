@@ -307,7 +307,7 @@ describe("config panel sizing", () => {
     expect(PROMPT_CATALOG_TSX).not.toContain('type PromptViewMode = "code" | "preview" | "default"')
     expect(PROMPT_CATALOG_TSX).not.toContain('when={viewMode(entryID) !== "code"}')
     expect(PROMPT_CATALOG_TSX).not.toContain('class="field-input prompt-textarea"')
-    expect(PROMPT_CATALOG_TSX).toContain('class="composer-textarea prompt-profile-textarea"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('class="composer-textarea prompt-profile-textarea"')
     expect(PROMPT_CATALOG_TSX).toContain('class="prompt-preview-card prompt-preview-card--attached"')
     expect(PROMPT_CATALOG_TSX).not.toContain('class="prompt-toolbar"')
     expect(PROMPT_CATALOG_TSX).not.toContain('<details class="prompt-diff-details">')

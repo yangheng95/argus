@@ -173,7 +173,7 @@ describe("config prompt routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const patchResponse = await app.request("/config", {
+        const rejectedPatchResponse = await app.request("/config", {
           method: "PATCH",
           headers: {
             "content-type": "application/json",
@@ -191,6 +191,21 @@ describe("config prompt routes", () => {
                   },
                 },
               },
+            },
+          }),
+        })
+        expect(rejectedPatchResponse.status).toBe(400)
+        expect(await rejectedPatchResponse.text()).toContain("profiles")
+
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            prompt_profile: {
+              active: "backend",
             },
           }),
         })
@@ -217,8 +232,8 @@ describe("config prompt routes", () => {
             agents: Record<string, string>
           }>
         }
-        expect(body.active).toBe("custom-squad")
-        expect(body.project_active).toBe("custom-squad")
+        expect(body.active).toBe("backend")
+        expect(body.project_active).toBe("backend")
         expect(body.session_active).toBe(null)
         expect(body.default).toBe("general")
         expect(body.targets.find((target) => target.id === "build")).toMatchObject({
@@ -238,7 +253,6 @@ describe("config prompt routes", () => {
           "backend",
           "algorithm",
           "frontend-automation-debug",
-          "custom-squad",
         ])
         expect(body.profiles.find((profile) => profile.id === "frontend-replica")).toMatchObject({
           label: "Frontend Replica",
@@ -255,14 +269,7 @@ describe("config prompt routes", () => {
           built_in: true,
           editable: false,
         })
-        expect(body.profiles.find((profile) => profile.id === "custom-squad")).toMatchObject({
-          label: "Custom Squad",
-          built_in: false,
-          editable: true,
-          agents: {
-            build: "Custom build guidance.",
-          },
-        })
+        expect(body.profiles.every((profile) => profile.built_in && !profile.editable)).toBe(true)
       },
     })
   })

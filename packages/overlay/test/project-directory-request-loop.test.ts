@@ -212,18 +212,18 @@ describe("overlay project directory request loop", () => {
     expect(permissionsPanel).toContain("const options = currentProjectConfigRequestOptions()")
     expect(permissionsPanel).toContain("patchConfig({ tool_permissions: { [key]: action } }, options)")
     expect(agentModelsPanel).toContain("return await patchConfig(diff, currentProjectConfigRequestOptions())")
-    expect(generalPanel).toContain("currentProjectConfigRequestOptions()")
+    expect(generalPanel).not.toContain("patchConfig(")
   })
 
-  test("prompt catalog config helpers require an owning directory", () => {
+  test("removed prompt catalog mutation helpers are not directory-scoped writers", () => {
     const configService = read("src/services/config.ts")
 
-    expect(configService).toContain("function requirePromptCatalogDirectory(directory: string): string")
-    expect(configService).toContain("export async function loadPromptCatalog(directory: string): Promise<void>")
-    expect(configService).toContain("export async function savePromptEntry(entry: any, value: string, directory: string)")
-    expect(configService).toContain("export async function resetPromptEntry(entry: any, directory: string)")
-    expect(configService).toContain("await loadPromptCatalog(owningDirectory)")
-    expect(configService).toContain("}, { directory: owningDirectory })")
+    expect(configService).not.toContain("function requirePromptCatalogDirectory")
+    expect(configService).not.toContain("export async function loadPromptCatalog")
+    expect(configService).not.toContain("export async function savePromptEntry")
+    expect(configService).not.toContain("export async function resetPromptEntry")
+    expect(configService).not.toContain("promptConfigValueForSave")
+    expect(configService).not.toContain("config/prompt?directory=")
     expect(configService).not.toContain('apiJson("config/prompt")')
   })
 

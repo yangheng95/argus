@@ -13,8 +13,6 @@ export const PromptProfileIDSchema = z
     PROMPT_PROFILE_ID_PATTERN,
     "prompt profile id must use lowercase letters, digits, and single hyphens, and must start with a letter.",
   )
-const USER_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets("user")
-const BUILT_IN_ONLY_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets("builtin")
 const ALL_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets()
 
 export type PromptProfileTargetID = AgentRoleID
@@ -38,7 +36,6 @@ export const PromptProfileDefinitionSchema = z
 export const PromptProfileConfigSchema = z
   .object({
     active: PromptProfileIDSchema.default(DEFAULT_PROMPT_PROFILE_ID),
-    profiles: z.record(PromptProfileIDSchema, PromptProfileDefinitionSchema).optional(),
   })
   .strict()
   .default({ active: DEFAULT_PROMPT_PROFILE_ID })
@@ -49,25 +46,9 @@ export const PromptProfileOverlaySchema = z
   })
   .strict()
 
-export const PromptProfileImportSchema = z
-  .object({
-    prompt_profile: z
-      .object({
-        active: PromptProfileIDSchema.optional(),
-        profiles: z
-          .record(PromptProfileIDSchema, PromptProfileDefinitionSchema)
-          .refine((profiles) => Object.keys(profiles).length > 0, {
-            message: "prompt_profile.profiles must contain at least one custom profile.",
-          }),
-      })
-      .strict(),
-  })
-  .strict()
-
 export type PromptProfileDefinition = z.output<typeof PromptProfileDefinitionSchema>
 export type PromptProfileConfig = z.output<typeof PromptProfileConfigSchema>
 export type PromptProfileOverlay = z.output<typeof PromptProfileOverlaySchema>
-export type PromptProfileImport = z.output<typeof PromptProfileImportSchema>
 
 export const PromptProfileTargetCatalogEntrySchema = z
   .object({
@@ -109,8 +90,6 @@ type ConfigLike = {
   prompt_profile?: PromptProfileConfig
 }
 
-const userTargetSet = new Set<string>(USER_PROFILE_TARGETS)
-const builtInOnlyTargetSet = new Set<string>(BUILT_IN_ONLY_PROFILE_TARGETS)
 const allTargetSet = new Set<string>(ALL_PROFILE_TARGETS)
 
 export namespace PromptProfile {
@@ -124,11 +103,8 @@ export namespace PromptProfile {
     built_in_only: AgentRoleContract.promptProfileTargetMode(targetID) === "builtin",
   }))
 
-  export function catalog(config: ConfigLike): Record<string, PromptProfileDefinition> {
-    return {
-      ...builtIns,
-      ...(config.prompt_profile?.profiles ?? {}),
-    }
+  export function catalog(_config: ConfigLike): Record<string, PromptProfileDefinition> {
+    return builtIns
   }
 
   export function activeID(config: ConfigLike): string {
@@ -200,16 +176,6 @@ export namespace PromptProfile {
   ) {
     const profileConfig = config.prompt_profile
     if (!profileConfig) return
-    const configuredProfiles = profileConfig.profiles ?? {}
-    for (const id of Object.keys(configuredProfiles)) {
-      if (Object.hasOwn(builtIns, id)) {
-        ctx.addIssue({
-          code: "custom",
-          path: [...path, "profiles", id],
-          message: `prompt_profile.profiles.${id} cannot override a built-in prompt profile.`,
-        })
-      }
-    }
     const knownProfiles = catalog(config)
     if (!Object.hasOwn(knownProfiles, profileConfig.active)) {
       ctx.addIssue({
@@ -217,25 +183,6 @@ export namespace PromptProfile {
         path: [...path, "active"],
         message: `Unknown prompt profile ${JSON.stringify(profileConfig.active)}.`,
       })
-    }
-    for (const [profileID, profile] of Object.entries(configuredProfiles)) {
-      for (const target of Object.keys(profile.agents ?? {})) {
-        if (!allTargetSet.has(target)) {
-          ctx.addIssue({
-            code: "custom",
-            path: [...path, "profiles", profileID, "agents", target],
-            message: `Unknown prompt profile target ${JSON.stringify(target)}.`,
-          })
-          continue
-        }
-        if (!userTargetSet.has(target) || builtInOnlyTargetSet.has(target)) {
-          ctx.addIssue({
-            code: "custom",
-            path: [...path, "profiles", profileID, "agents", target],
-            message: `prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`,
-          })
-        }
-      }
     }
   }
 
@@ -245,30 +192,4 @@ export namespace PromptProfile {
     }
   }
 
-  export function parseImportPayload(payload: unknown): PromptProfileImport {
-    const parsed = PromptProfileImportSchema.parse(payload)
-    const profileConfig = parsed.prompt_profile
-    for (const id of Object.keys(profileConfig.profiles)) {
-      if (Object.hasOwn(builtIns, id)) {
-        throw new Error(`prompt_profile.profiles.${id} cannot override a built-in prompt profile.`)
-      }
-    }
-    const knownProfiles = new Set([...Object.keys(builtIns), ...Object.keys(profileConfig.profiles)])
-    if (profileConfig.active && !knownProfiles.has(profileConfig.active)) {
-      throw new Error(`Unknown prompt profile ${JSON.stringify(profileConfig.active)}.`)
-    }
-    for (const [profileID, profile] of Object.entries(profileConfig.profiles)) {
-      for (const target of Object.keys(profile.agents ?? {})) {
-        if (!allTargetSet.has(target)) {
-          throw new Error(`Unknown prompt profile target ${JSON.stringify(target)}.`)
-        }
-        if (!userTargetSet.has(target) || builtInOnlyTargetSet.has(target)) {
-          throw new Error(
-            `prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`,
-          )
-        }
-      }
-    }
-    return parsed
-  }
 }

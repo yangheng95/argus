@@ -1376,9 +1376,7 @@ export namespace Config {
         .record(z.string(), z.string())
         .optional()
         .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
-      prompt_profile: PromptProfileConfigSchema.describe(
-        "Active prompt profile and optional project-defined profile overlays.",
-      ),
+      prompt_profile: PromptProfileConfigSchema.describe("Active package-backed expert-squad prompt profile selection."),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
       tool_permissions: z

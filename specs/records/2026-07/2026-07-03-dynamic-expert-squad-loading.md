@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; runtime projection pending.
+Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; phase 5 custom prompt-profile source removed; runtime projection pending.
 
 Glossary:
 
@@ -954,9 +954,40 @@ Phase 4 built-in package source, 2026-07-03:
 - Updated prompt-profile, desktop-only, skill registry, skill tool, Orchestrator, role-contract, and registry tests to consume generated selector skill sources rather than old markdown paths.
 - Focused validation passed for registry loading, package manager import/export, expert-squad routes, prompt-profile catalog, built-in skill materialization, skill tool loading, agent tool contracts, role-contract catalog prompts, config routes, core prompt hygiene, Orchestrator selector flow, session exact-tool preservation, and `packages/opencorvus` typecheck.
 
+Phase 5 planned boundary, 2026-07-03:
+
+- Remove `prompt_profile.profiles` as a project custom prompt-profile source before wiring runtime projection.
+- Keep `prompt_profile.active` as the only active expert-squad ID field and keep task, mission, session, and `select_expert_squad` writes active-only.
+- Do not load project package folders through synchronous `PromptProfile` APIs in this phase; project package-backed catalog/projection remains the next runtime resolver phase.
+- Remove overlay custom prompt-profile create, duplicate, save, delete, and JSON import entry points so the UI no longer writes a rejected config shape.
+- Update tests to prove `prompt_profile.profiles` is rejected and that the catalog is built-in package-backed only until the project package resolver lands.
+
+Phase 5 implementation, 2026-07-03:
+
+- `PromptProfileConfigSchema` now accepts only `prompt_profile.active`; `prompt_profile.profiles` is rejected by the strict config schema and is no longer exposed in generated OpenAPI or SDK types.
+- `PromptProfile.catalog()` now returns only built-in package-backed prompt profiles from `builtInPromptProfiles`; it no longer merges project custom profile definitions.
+- Removed the prompt-profile JSON import parser and custom profile validation/write helpers from backend and overlay surfaces.
+- Replaced the overlay PromptCatalog editor with a read-only package-backed expert-squad selector that only writes `prompt_profile.active` for project or session scope.
+- Updated overlay i18n and source-level tests so create, duplicate, save, delete, import, metadata editing, and textarea editing cannot silently reappear.
+- Regenerated SDK OpenAPI/types and public API markdown after the config schema and route description changed.
+- Visual verification used the Node-owned browser runner for `packages/overlay/test/browser/prompt-profile-panel.test.ts`, with screenshots at `packages/overlay/.scratch/prompt-profile-settings-readonly.png` and `packages/overlay/.scratch/prompt-profile-list-row-focus.png`; manual review confirmed the read-only profile list, active badges, action strip, and guidance cards render without overlap or blank content.
+- Validation passed:
+  - `bun test --timeout 60000 packages/opencorvus/test/agent/prompt-profile.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/expert-squad/package-manager.test.ts`
+  - `bun test --timeout 60000 packages/overlay/test/prompt-profile-config.test.ts packages/overlay/test/prompt-catalog-save.test.ts packages/overlay/test/composer-textarea-unification.test.ts packages/overlay/test/config-panel-sizing.test.ts`
+  - `bun run --cwd packages/opencorvus typecheck`
+  - `bun run --cwd packages/overlay typecheck`
+  - `bun run --cwd packages/sdk/js typecheck`
+  - `bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts`
+  - `bun run --cwd packages/overlay test:browser test/browser/prompt-profile-panel.test.ts`
+  - `bun run overlay:i18n-check`
+  - `bun run typecheck`
+  - `bun run api:routes-check`
+  - `bun run docs:check`
+  - `git diff --check`
+
 Still pending:
 
-- Replacing project `prompt_profile.profiles` custom profile definitions with package-backed catalog/projection.
+- Wiring project package-backed catalog/projection after `prompt_profile.profiles` removal.
 - Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
 - Implementing delete/reference-audit service support before adding `DELETE /expert-squad/:id`; delete route must not perform its own separate config/session lookup logic.
 
@@ -1079,3 +1110,24 @@ Implementation review loop 8:
   - `Skill` built-ins derive selectable expert-squad skills from `builtInSelectorSkillSources`; the old selector markdown files were deleted.
   - `ExpertSquadRegistry.loadPackage()` validates `selector.instructions` files instead of validating that contract only for embedded packages.
   - Tests were adjusted where they depended on ambient defaults or obsolete attachment field names: `select_expert_squad` now starts from the canonical default `general`, and Frontend Design material refs assert the manifest-derived `label` field.
+
+Implementation review loop 9:
+
+- Zeno reviewed the phase 5 boundary and found the core blocker is still `PromptProfile.catalog()` merging built-ins with `prompt_profile.profiles`.
+- Zeno confirmed task creation, task message, Mission wake, session config patch, and `select_expert_squad` already write only `{ prompt_profile: { active } }`; this active-only shape must be preserved.
+- Zeno warned that changing only the backend schema while leaving overlay custom profile create/import/edit/delete flows would create a visible dead path and hidden stale writer.
+- Zeno also confirmed runtime projection remains a separate unfinished surface: Orchestrator tool creation, exact runtime contracts, SkillMount, SkillTool, SystemPrompt skills, MCP, SDK, and overlay surfaces must later share one active projection resolver.
+- Popper reviewed the runtime capability boundary and recommended a single resolver in the PromptProfile/expert-squad domain that takes `prompt_profile.active`, materialized config, and the package registry and returns prompt identity, package identity, projection hash, scheduler projection, and agent projections.
+- Popper found built-in package parsing already validates `capability_projection`, but the current built-in PromptProfile output intentionally flattens packages to `{ label, description, agents }`; preserving that prompt-only slice in phase 5 avoids a partial runtime projection that would leak inactive tools or MCP entries.
+- Popper also found that Orchestrator exact tools, worker descriptors, SkillMount, SkillTool, SystemPrompt skills, and MCP server proxy paths all need the same future projection identity; changing only one of those surfaces would be another partial implementation.
+- Phase 5 therefore removes the old custom profile source and UI writers without pretending the runtime projection work is complete.
+
+Implementation review loop 10:
+
+- Kepler found no backend/runtime blocker, but found stale public config wording that still described `prompt_profile` as allowing optional project-defined overlays even though the schema now rejects `profiles`.
+- Halley found the same generated contract wording issue and also found stale overlay prompt-catalog mutation exports (`loadPromptCatalog`, `savePromptEntry`, `promptConfigValueForSave`, and `resetPromptEntry`) that were no longer called by the new read-only `PromptCatalog` UI but remained exported and test-pinned.
+- Revisions applied:
+  - Updated `Config.Info` schema documentation so generated OpenAPI and SDK types describe `prompt_profile` as active package-backed expert-squad selection, not project custom overlays.
+  - Regenerated SDK and API documentation from the corrected schema description.
+  - Removed the stale overlay prompt-catalog mutation exports and updated overlay tests so they assert the removed writer API is absent instead of pinning it as required.
+  - Kept runtime projection explicitly pending; this loop did not add partial Orchestrator, worker, skill, tool, or MCP projection wiring.

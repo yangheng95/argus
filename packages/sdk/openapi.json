@@ -1368,7 +1368,7 @@
       "get": {
         "operationId": "config.promptProfile",
         "summary": "List prompt profiles",
-        "description": "Returns the active prompt profile and available built-in/project prompt profiles.",
+        "description": "Returns the active expert-squad prompt profile and available package-backed prompt profiles.",
         "responses": {
           "200": {
             "description": "Prompt profile catalog",
@@ -48323,7 +48323,7 @@
             }
           },
           "prompt_profile": {
-            "description": "Active prompt profile and optional project-defined profile overlays.",
+            "description": "Active package-backed expert-squad prompt profile selection.",
             "default": {
               "active": "general"
             },
@@ -48335,43 +48335,6 @@
                 "minLength": 1,
                 "maxLength": 64,
                 "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
-              },
-              "profiles": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 64,
-                  "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "label": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "description": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "agents": {
-                      "default": {},
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    }
-                  },
-                  "required": [
-                    "label"
-                  ],
-                  "additionalProperties": false
-                }
               }
             },
             "additionalProperties": false

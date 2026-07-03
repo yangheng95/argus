@@ -85,15 +85,15 @@ describe("goal / mission / chat / agent reply reuse the AutoGrowTextarea primiti
     expect(cardCss).not.toMatch(/\.interaction-card__custom-input\s*\{/)
   })
 
-  test("settings long-text editors reuse the shared primitive and form textarea chrome", () => {
+  test("settings long-text editors reuse the shared primitive and prompt profiles stay read-only", () => {
     const promptCatalog = read("components/settings/PromptCatalog.tsx")
     const providers = read("components/settings/ProvidersPanel.tsx")
     const settingsCss = read("styles/surfaces/settings.css")
 
-    expect(promptCatalog).toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
-    expect(promptCatalog).toContain("<AutoGrowTextarea")
-    expect(promptCatalog).toContain('class="composer-textarea prompt-profile-description"')
-    expect(promptCatalog).toContain('class="composer-textarea prompt-profile-textarea"')
+    expect(promptCatalog).not.toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
+    expect(promptCatalog).not.toContain("<AutoGrowTextarea")
+    expect(promptCatalog).not.toContain('class="composer-textarea prompt-profile-description"')
+    expect(promptCatalog).not.toContain('class="composer-textarea prompt-profile-textarea"')
     expect(promptCatalog).not.toMatch(/<textarea\b/)
 
     expect(providers).toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
