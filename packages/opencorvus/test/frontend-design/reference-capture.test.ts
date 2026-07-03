@@ -92,7 +92,7 @@ describe("capture reference diagnostics", () => {
     expect(source).toContain("failedSubresources")
     expect(source).toContain("opencorvusIsCriticalPageRequestFailure")
     expect(source).toContain("opencorvusIsSameOriginPageError")
-    expect(source).toContain("URL screenshot capture \" + stage + \" browser failures")
+    expect(source).toContain("URL reference capture \" + stage + \" browser failures")
     expect(source).toContain("assertNoBrowserFailures(\"content_paint\")")
     expect(source).toContain("assertNoBrowserFailures(\"screenshot\")")
     expect(source).toContain("assertNoBrowserFailures(\"artifact\")")
@@ -106,13 +106,6 @@ describe("capture reference diagnostics", () => {
     expect(source).toContain("browserProxy?: BrowserRuntime.BrowserProxyConfig")
     expect(source).toContain("proxyServer: browserProxy?.server")
     expect(source).toContain("...(input.browserProxy ? { proxy: input.browserProxy } : {})")
-  })
-
-  test("url screenshot tool does not downgrade unusable captures into attachments", () => {
-    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/url-screenshot-tool.ts"), "utf8")
-
-    expect(source).toContain("Rejects blank or no-signal captures before returning a PNG attachment")
-    expect(source).not.toContain("without rejecting the image")
   })
 
   test("captures a local HTTP visual reference through the browser runtime", async () => {

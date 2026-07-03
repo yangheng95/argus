@@ -229,7 +229,7 @@ const TaskAttachmentInput = z
  * `intent` lets evidence consumers and downstream agents consume the same
  * attachment store with different semantics. Today three intents are wired:
  *   - "visual_reference" — visual/reference evidence for review agents
- *     (user-uploaded screenshots, Figma frames, URL screenshots).
+ *     (user-uploaded screenshots, Figma frames, materialized design files).
  *   - "design_token"     — frontend-design input only, not a verification verdict.
  *   - "spec_artifact"    — generic supporting material (request docs etc).
  * Other intents may appear later (api_contract, test_fixture, …); leaving

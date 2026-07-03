@@ -12,8 +12,8 @@
  * ✓ May materialize frontend-design source projects through its own tools
  * ✗ Cannot call other agents
  * ✓ Reads codebase to discover existing design patterns/component libraries
- * ✓ Works from multimodal attachments (screenshots, PDF) and can capture a
- *   live webpage PNG via `url_screenshot` when the brief includes a visual URL.
+ * ✓ Works from multimodal attachments (screenshots, PDF) and task-runtime
+ *   webpage evidence when the brief includes a visual URL.
  * ✓ Emits terminal frontend template fields and the high-quality project
  *   contract via submit_frontend_template.
  *
@@ -59,7 +59,6 @@ import {
   type FrontendTemplateOutputCollector,
 } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
-import { createUrlScreenshotTool } from "./url-screenshot-tool"
 import { createFrontendSkeletonProjectTool } from "./skeleton-project-tool"
 import { createVisualRegionBindingPackageTool } from "./visual-region-binding-tool"
 import {
@@ -157,11 +156,10 @@ export namespace FrontendDesignAgent {
     request: string
     /**
      * The complete visual input available at dispatch time. Callers may
-     * have already resolved URLs into PNG attachments here
-     * (intent="visual_reference"). The agent may additionally capture a
-     * live http(s) webpage via its dedicated `url_screenshot` tool when
-     * the brief contains an uncaptured visual URL, but it never uses
-     * webfetch.
+     * have already resolved visual materials into attachments here
+     * (intent="visual_reference"). Live http(s) webpage pixels come from
+     * task-runtime webpage evidence, not webfetch or one-shot screenshot
+     * tools.
      */
     attachments?: Array<{
       sha: string
@@ -197,7 +195,6 @@ export namespace FrontendDesignAgent {
       processTrace,
     )
     const utilityTools = await createFrontendUtilityTools({ taskID: input.taskID, signal: input.signal }, processTrace)
-    const screenshotToolKit = createUrlScreenshotTool()
     const skeletonProjectToolKit = createFrontendSkeletonProjectTool({
       taskID: input.taskID,
       onToolEvent: (event) => recordFrontendProcessEvent(processTrace, event),
@@ -226,7 +223,6 @@ export namespace FrontendDesignAgent {
     const agentTools = {
       ...implementationTools,
       ...contextTools,
-      ...screenshotToolKit,
       ...utilityTools,
       ...skeletonProjectToolKit,
       ...visualRegionBindingToolKit,
@@ -394,18 +390,10 @@ async function buildPromptParts(
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
 ) {
   const text = buildUserPrompt(input, hostPreparedFrontendProject)
-  const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
-  const inlineAttachments = (input.attachments ?? []).filter((attachment) =>
-    shouldInlineFrontendDesignAttachment(attachment, hasLiveHttpUrl),
-  )
+  const inlineAttachments = input.attachments ?? []
   const enrichedText = text + AttachmentStore.renderAttachmentInventory(inlineAttachments)
   const inlineParts = await AttachmentStore.inlineFileParts(inlineAttachments)
   return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
-}
-
-function shouldInlineFrontendDesignAttachment(attachment: { source?: string }, hasLiveHttpUrl: boolean): boolean {
-  if (hasLiveHttpUrl && attachment.source === "url-screenshot") return false
-  return true
 }
 
 function hasNonFigmaHttpUrl(text: string): boolean {
@@ -478,10 +466,8 @@ function buildUserPrompt(
   if (frontendResearchBlueprint) sections.push(frontendResearchBlueprint)
   const manifestSection = renderDesignResourceManifestSection(input.designResourceManifest)
   if (manifestSection) sections.push(manifestSection)
-  // URL presence is a *structural* detection (syntactic protocol scheme),
-  // not a keyword policy: the agent decides whether to propose a
-  // `url_screenshot` capture based on whether a web URL is even
-  // available in the brief. Not a rule-11 violation.
+  // URL presence is a structural signal for task-runtime webpage evidence;
+  // image attachments remain ordinary visual references.
   const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
   const figmaMcpAttachments = (input.attachments ?? []).filter((a) => a.source === "figma-mcp")
   if (figmaMcpAttachments.length > 0) {
@@ -504,14 +490,11 @@ function buildUserPrompt(
         return `${i + 1}. \`${name}\` (${a.mime})${source}`
       })
       .join("\n")
-    const allVisualsAreUrlScreenshots = visualAttachments.every((a) => a.source === "url-screenshot")
     const visualReferenceMode =
-      hasLiveHttpUrl && allVisualsAreUrlScreenshots
-        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the task-runtime webpage evidence and webpage evidence tools for any missing evidence, then read the named source artifacts and write the frontend template. "
-        : "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
-          (hasLiveHttpUrl
-            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the webpage evidence tools to acquire missing evidence once before writing specs. "
-            : "")
+      "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
+      (hasLiveHttpUrl
+        ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the webpage evidence tools to acquire missing evidence once before writing specs. "
+        : "")
     sections.push(
       `# Visual References\n\n${lines}\n\n` +
         visualReferenceMode +
@@ -563,7 +546,7 @@ function buildUserPrompt(
     "# Live URL Capture\n\n" +
       `For visual webpage URLs, first check the task-runtime evidence at \`${webpageEvidenceRef}/prd-evidence-summary.md\`, \`${webpageEvidenceRef}/source-ir/component-tree.json\`, \`${webpageEvidenceRef}/source-ir/content-model.json\`, \`${webpageEvidenceRef}/source-ir/layout-map.json\`, \`${webpageEvidenceRef}/source-ir/style-tokens.json\`, \`${webpageEvidenceRef}/source-ir/interaction-hints.json\`, \`${webpageEvidenceRef}/source-ir/interaction-state-snapshots.json\`, \`${webpageEvidenceRef}/source-skeleton/critical.css\`, \`${webpageEvidenceRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${webpageEvidenceRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
       "Use webpage evidence tools only if those files are missing or stale — not `webfetch`, not dynamic skills, and not screenshot-only analysis. " +
-      "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
+      "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored webpage reference image base64 into the frontend template prompt. " +
       "Before `submit_frontend_template`, do at least two frontend template review passes: first check page inventory and visual coverage, then check downstream frontend replica implementability. Report remaining gaps in completeness_review/open_questions with exact evidence instead of looping blindly. " +
       `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity skeleton evidence project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
       `Pass \`${skeletonProjectRef}\` as the skeleton outputDir, or omit outputDir so the tool uses that default. Do not pass \`web-clone-target\`, \`${visualSkeletonRef}\`, or any target app root to \`create_frontend_skeleton_project\`. ` +

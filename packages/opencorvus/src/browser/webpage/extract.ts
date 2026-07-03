@@ -5,7 +5,7 @@
  * Browser DOM capture implementation details:
  *   - Uses opencorvus `findBrowserExecutable` (single browser-lifecycle
  *     policy shared with `browser/webpage/render.ts`,
- *     `frontend-design/url-screenshot.ts`, `runtime/visual-page.ts`).
+ *     `frontend-design/reference-capture.ts`, `runtime/visual-page.ts`).
  *   - Logs structured extraction failures through the webpage evidence logger.
  *   - Throws `UrlExtractError` (typed) on 401/403/429 + browser infra failures.
  *   - Owns image-download constants locally so capture behavior has one source.

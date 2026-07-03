@@ -103,7 +103,7 @@ export namespace AttachmentStore {
     filename?: string
     /** Semantic role for downstream evaluator gates. See TaskAttachment.intent. */
     intent?: string
-    /** Provenance of the attachment (user-upload / figma / url-screenshot / …). */
+    /** Provenance of the attachment (user-upload / figma / material / …). */
     source?: string
   }
 

@@ -549,7 +549,7 @@ async function main() {
     const assertNoBrowserFailures = (stage) => {
       const failures = browserFailures.concat(failedSubresourceText());
       if (failures.length > 0) {
-        throw new Error("URL screenshot capture " + stage + " browser failures: " + failures.join("; "));
+        throw new Error("URL reference capture " + stage + " browser failures: " + failures.join("; "));
       }
     };
     page.on("response", (res) => {
@@ -586,7 +586,7 @@ async function main() {
       process.stdout.write(JSON.stringify({
         ok: false,
         stage: "navigate",
-        message: "HTTP " + status + ": URL screenshot capture requires a successful page response",
+        message: "HTTP " + status + ": URL reference capture requires a successful page response",
       }));
       process.exitCode = 1;
       return;

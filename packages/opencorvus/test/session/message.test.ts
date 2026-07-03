@@ -623,12 +623,12 @@ describe("session.message.toModelMessage", () => {
             ...basePart(assistantID, "a1"),
             type: "tool",
             callID: "call-full-page",
-            tool: "url_screenshot",
+            tool: "visual_reference_tool",
             state: {
               status: "completed",
               input: { url: "https://example.com" },
               output: "",
-              title: "URL screenshot",
+              title: "Visual reference",
               metadata: {},
               time: { start: 0, end: 1 },
               attachments: [

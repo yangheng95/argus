@@ -33,7 +33,6 @@ export const DesignResourceOriginSchema = z.enum([
   "attachment",
   "material",
   "figma_mcp",
-  "url_screenshot",
   "webpage_evidence",
   "browser_preview",
 ])
@@ -136,7 +135,6 @@ function manifestSha(input: DesignResourceFileRef): string {
 function inferOrigin(input: DesignResourceFileRef): DesignResourceOrigin {
   if (input.source === "figma-mcp") return "figma_mcp"
   if (input.source === "material") return "material"
-  if (input.source === "url-screenshot") return "url_screenshot"
   if (input.source === "browser-preview") return "browser_preview"
   if (!input.source || input.source === "user" || input.source === "user-upload" || input.source === "figma") {
     return "attachment"
@@ -169,7 +167,6 @@ function inferFigmaKind(input: DesignResourceFileRef): DesignResourceKind | unde
 export function inferDesignResourceKind(input: DesignResourceFileRef): DesignResourceKind {
   const figmaKind = inferFigmaKind(input)
   if (figmaKind) return figmaKind
-  if (input.source === "url-screenshot") return "webpage_capture"
   if (input.source === "browser-preview") return "browser_preview_evidence"
   if (input.mime.startsWith("image/")) return "image"
   if (input.mime === "application/pdf") return "pdf"
@@ -219,7 +216,6 @@ export function createDesignResourceManifest(input: {
 
 function fileRefSource(origin: DesignResourceOrigin): string {
   if (origin === "figma_mcp") return "figma-mcp"
-  if (origin === "url_screenshot") return "url-screenshot"
   if (origin === "browser_preview") return "browser-preview"
   if (origin === "material") return "material"
   if (origin === "webpage_evidence") return "webpage-evidence"

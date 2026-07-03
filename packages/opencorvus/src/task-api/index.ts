@@ -1786,8 +1786,8 @@ export namespace EngineService {
    * requirements / frontend-design as user intent and by acceptance for visual
    * comparison.
    *
-   * For orchestrator-generated evidence (URL screenshots, rendered.png,
-   * local material reads) use `appendTaskSystemArtifact` instead — those
+   * For orchestrator-generated evidence (rendered.png, local material reads)
+   * use `appendTaskSystemArtifact` instead — those
    * must not contaminate the user-intent stream.
    *
    * Idempotent on sha collision: same content → no-op.
@@ -1804,8 +1804,8 @@ export namespace EngineService {
 
   /**
    * Register a SYSTEM-GENERATED artifact on a task. Use for evidence the
-   * orchestrator/agents produced on the user's behalf — URL screenshots,
-   * local material reads. Read only by acceptance for visual diff against the
+   * orchestrator/agents produced on the user's behalf — local material reads
+   * and rendered evidence. Read only by acceptance for visual diff against the
    * user contract; never fed to requirements or frontend-design as user
    * intent. Idempotent on sha collision.
    */

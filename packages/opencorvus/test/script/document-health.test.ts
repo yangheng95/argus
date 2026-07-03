@@ -1516,13 +1516,15 @@ describe("document health audit regressions", () => {
       true,
     )
     expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/src/frontend-design/capture-gate.ts"))).toBe(false)
+    expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/src/frontend-design/url-screenshot-tool.ts"))).toBe(
+      false,
+    )
     expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/frontend-design/capture-gate.test.ts"))).toBe(
       false,
     )
     expectFilesNotToContain(
       [
         "packages/opencorvus/src/acceptance/checks/content-fingerprint.ts",
-        "packages/opencorvus/src/frontend-design/url-screenshot-tool.ts",
         "packages/opencorvus/src/util/pixel-stats.ts",
         "packages/opencorvus/test/frontend-design/reference-capture.test.ts",
       ],

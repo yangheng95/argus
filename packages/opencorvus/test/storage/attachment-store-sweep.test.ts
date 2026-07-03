@@ -359,7 +359,7 @@ describe("AttachmentStore.sweep", () => {
       directory: tmp.path,
       fn: async () => {
         const projectID = Instance.project.id
-        const kept = await AttachmentStore.write(projectID, differentBytes(11), "image/png", "url-screenshot.png")
+        const kept = await AttachmentStore.write(projectID, differentBytes(11), "image/png", "material-reference.png")
         seedTaskWithFileRefs({
           projectID,
           taskID: Identifier.ascending("task"),

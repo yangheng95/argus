@@ -205,8 +205,8 @@ export const EngineTaskTable = sqliteTable(
      *  Read by requirements / frontend-design as the user's intent (multimodal
      *  prompt content). Read by acceptance alongside system_artifacts for visual
      *  comparison. Shown in the overlay as user-attached files.
-     *  System-generated visual evidence (URL screenshots, rendered.png, local
-     *  material reads) lives in `system_artifacts` instead — see that column
+     *  System-generated visual evidence (rendered.png, local material reads)
+     *  lives in `system_artifacts` instead — see that column
      *  for the rationale. Mixing the two previously caused requirements to
      *  hard-fail when a system-generated screenshot went missing.
      *  Base64 bytes are never stored here; the file lives on disk under the
@@ -225,11 +225,10 @@ export const EngineTaskTable = sqliteTable(
     /** SYSTEM-GENERATED artifacts. Same shape as `attachments` but covers
      *  things the orchestrator/agents created (or read off disk) on the
      *  user's behalf — never part of the user's contract:
-     *    `source: "url-screenshot"`  — frontend_design URL captures
      *    `source: "material"`        — frontend_design local file reads
      *    `source: "playwright"`      — acceptance rendered.png captures
      *  Read by acceptance for visual comparison. Frontend-design may consume
-     *  URL screenshots, local materials, and Figma MCP artifacts only after the
+     *  local materials and Figma MCP artifacts only after the
      *  orchestrator indexes them through a task-scoped design_resource_manifest;
      *  requirements still reads only user-contract attachments. Losing one of
      *  these on disk is a soft failure for downstream consumers; explicit

@@ -319,7 +319,7 @@ export namespace Agent {
         //
         // Deliberately EXCLUDED (each on purpose): edit / write / apply_patch
         // (it is not a coding executor — would let it bypass the orchestrator,
-        // rule 11); url_screenshot / webpage_* (crawling/visual capture belong
+        // rule 11); webpage_* (crawling/visual capture belong
         // to frontend-design inside a dispatched task); task (generic sub-agent
         // dispatch is not Mission's engine-task dispatch path; Mission creates
         // engine tasks through panel.create_task); bash (command evidence and

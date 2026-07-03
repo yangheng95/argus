@@ -1528,7 +1528,7 @@ const FrontendDesignUrlsField = z
   .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_design urls entries must be HTTP(S) URLs"))
   .optional()
   .describe(
-    "Fresh frontend_design visual reference URLs. Use the plural field `urls`; do not send legacy `url`, `source_url`, or `source_urls`. Provide at most one non-Figma live/page URL for the primary webpage clone evidence package, plus any Figma design links. Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization only after the live webpage clone's source-backed Page Skeleton Blueprint is already available or not needed. Figma URLs use the connected Figma MCP path. Use only when the URL is implementation/clone/visual-parity evidence, not merely PRD/SPEC/report source material.",
+    "Fresh frontend_design visual reference URLs. Use the plural field `urls`; do not send legacy `url`, `source_url`, or `source_urls`. Provide at most one non-Figma live/page URL for the primary webpage clone evidence package, plus any Figma design links. Non-Figma URLs are rendered only through task-runtime webpage evidence before template synthesis. Figma URLs use the connected Figma MCP path. Use only when the URL is implementation/clone/visual-parity evidence, not merely PRD/SPEC/report source material.",
   )
 const FrontendDesignFigmaUrlField = z
   .string()
@@ -8023,16 +8023,18 @@ export function createOrchestratorTools(input: {
           reason,
         })
 
-        // Reference materialization: every external design source (Figma
-        // frame, URL-screenshot, local file) gets pulled, written to
-        // AttachmentStore, and registered on the task. Two destination
-        // columns:
+        // Reference materialization: every external non-webpage design source
+        // (Figma frame, local file) gets pulled, written to AttachmentStore,
+        // and registered on the task. Two destination columns:
         //   • Figma MCP references → attachments (figma URL is part of the
         //     user contract — the user pointed us at it).
-        //   • URL screenshots / local materials → system_artifacts (we
-        //     captured them ourselves to feed frontend-design; not user
-        //     intent — keeping them out of attachments prevents requirements
-        //     from treating system-generated PNGs as user input).
+        //   • Local materials → system_artifacts (we read them ourselves to
+        //     feed frontend-design; not user intent — keeping them out of
+        //     attachments prevents requirements from treating system-generated
+        //     files as user input).
+        // Live webpage URLs use task-runtime webpage evidence and
+        // web-clone-source/reference.png instead of a second screenshot
+        // artifact source.
         //
         // A design-resource manifest below indexes both columns before
         // frontend-design sees file refs. Downstream review reads the persisted
@@ -8047,7 +8049,7 @@ export function createOrchestratorTools(input: {
         // only the surviving subset would make the final design untraceable.
         let materializedCount = 0
         const formatFrontendDesignMaterializationError = (failure: {
-          source: "url" | "material"
+          source: "material"
           target: string
           stage: string
           error: string
@@ -8073,89 +8075,6 @@ export function createOrchestratorTools(input: {
           } catch (figmaErr) {
             await closeFrontendDesignStep(true)
             throw figmaErr
-          }
-        }
-
-        // --- Generic URL screenshots -----------------------------------------
-        // Any non-Figma URL is rendered in Chromium so design-tool
-        // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
-        // and plain live pages contribute pixel references, not just markup.
-        //
-        // URL captures are evidence materialization, not acceptance authorities.
-        // Browser/navigation/screenshot failures are recorded; pixel-density
-        // heuristics are diagnostics attached to the materialized reference.
-        for (const liveUrl of liveUrls) {
-          try {
-            await trackStepProgress("frontend_design", `frontend_design dispatch: capturing URL screenshot ${liveUrl}`)
-            const {
-              captureReferenceManifest,
-              assessCaptureDiagnostics,
-              summarizeCaptureDiagnostics,
-              CaptureReferenceError,
-            } = await import("@/frontend-design/reference-capture")
-            const osMod = await import("node:os")
-            const outDir = pathMod.join(
-              osMod.tmpdir(),
-              "opencorvus-capture",
-              `${Identifier.shortPath(taskID)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            )
-            const capture = await captureReferenceManifest({ url: liveUrl, outDir })
-            const diagnostics = assessCaptureDiagnostics(capture.manifest)
-            const diagnosticSummary = diagnostics.length > 0 ? summarizeCaptureDiagnostics(diagnostics) : "none"
-            const hostname = (() => {
-              try {
-                return new URL(capture.manifest.url).hostname
-              } catch {
-                return "url"
-              }
-            })()
-            const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
-            const ref = await AttachmentStore.write(
-              task.project_id,
-              capture.screenshotPng,
-              "image/png",
-              `url-${slug}-${Date.now()}.png`,
-            )
-            await EngineService.appendTaskSystemArtifact(taskID, {
-              ...ref,
-              intent: "visual_reference",
-              source: "url-screenshot",
-            })
-            log.info("frontend_design: url screenshot materialized", {
-              taskID,
-              url: liveUrl,
-              sha: ref.sha,
-              size: ref.size,
-              non_white: capture.manifest.non_white_pixel_ratio,
-              unique_colors: capture.manifest.unique_color_count,
-              diagnostics: diagnosticSummary,
-            })
-            materializedCount++
-          } catch (shotErr) {
-            const { CaptureReferenceError } = await import("@/frontend-design/reference-capture")
-            const stage = shotErr instanceof CaptureReferenceError ? shotErr.stage : "unknown"
-            const error = shotErr instanceof Error ? shotErr.message : String(shotErr)
-            const failure = {
-              source: "url",
-              target: liveUrl,
-              stage,
-              error,
-            } as const
-            log.warn("frontend_design: url screenshot capture failed", {
-              taskID,
-              url: liveUrl,
-              stage,
-              error,
-            })
-            createDecisionLog(taskID).append({
-              phase: "frontend_design",
-              key: "abort_materialization_failed",
-              value: formatFrontendDesignMaterializationError(failure),
-              reason:
-                "Every explicit frontend_design URL/material source is part of the requested design-resource contract; partial continuation would hide missing evidence.",
-            })
-            await closeFrontendDesignStep(true)
-            throw new Error(formatFrontendDesignMaterializationError(failure))
           }
         }
 

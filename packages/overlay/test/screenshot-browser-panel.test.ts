@@ -173,7 +173,7 @@ describe("screenshot browser panel", () => {
           {
             id: "p4",
             type: "tool",
-            tool: "url_screenshot",
+            tool: "visual_reference_tool",
             state: {
               attachments: [
                 { url: "/attachment/project/tool.webp", mime: "image/webp", filename: "tool.webp" },

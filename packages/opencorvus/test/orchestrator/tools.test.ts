@@ -141,7 +141,6 @@ let factCheckAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let visualQaAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
-let captureReferenceManifestImpl: ((input: any) => Promise<any>) | undefined
 
 function buildToolOptions(label = "build") {
   const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -1920,32 +1919,6 @@ mock.module("@/visual-qa", () => ({
   },
 }))
 
-mock.module("@/frontend-design/reference-capture", () => {
-  class CaptureReferenceError extends Error {
-    override readonly cause?: unknown
-    constructor(
-      message: string,
-      readonly stage: "browser" | "navigate" | "content_paint" | "screenshot" | "stats",
-      cause?: unknown,
-    ) {
-      super(message)
-      this.name = "CaptureReferenceError"
-      this.cause = cause
-    }
-  }
-  return {
-    CaptureReferenceError,
-    captureReferenceManifest: (input: any) => {
-      if (!captureReferenceManifestImpl) {
-        throw new CaptureReferenceError("captureReferenceManifest mock not configured", "browser")
-      }
-      return captureReferenceManifestImpl(input)
-    },
-    assessCaptureDiagnostics: () => [],
-    summarizeCaptureDiagnostics: () => "none",
-  }
-})
-
 mock.module("@/mcp", () => ({
   MCP: {
     Status: z.any(),
@@ -2425,7 +2398,6 @@ describe("orchestrator tools", () => {
       visualQaAnalyzeImpl = undefined
       mcpServerToolsImpl = undefined
       mcpCallToolImpl = undefined
-      captureReferenceManifestImpl = undefined
       reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
     },
     { timeout: ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS },
@@ -2448,7 +2420,6 @@ describe("orchestrator tools", () => {
       visualQaAnalyzeImpl = undefined
       mcpServerToolsImpl = undefined
       mcpCallToolImpl = undefined
-      captureReferenceManifestImpl = undefined
       ExecutorRegistry.reset()
       mock.restore()
       await resetDatabase()
@@ -13756,80 +13727,14 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("frontend_design rejects URL screenshot capture failure before agent analysis", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+  test("frontend_design no longer materializes live URLs through one-shot URL screenshots", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const taskID = `tsk_frontend_design_url_fail_${stamp}`
-    const goalID = `gol_frontend_design_url_fail_${stamp}`
-    let analyzeCalled = false
-
-    designAnalyzeImpl = async () => {
-      analyzeCalled = true
-      return minimalFrontendDesignResult({ sessionID: "ses_should_not_start" })
-    }
-    captureReferenceManifestImpl = async () => {
-      const { CaptureReferenceError } = await import("@/frontend-design/reference-capture")
-      throw new CaptureReferenceError("navigation timed out", "navigate")
-    }
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "frontend design URL failure" })
-        insertWorkflowTaskWithGoal({
-          projectID: Instance.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Frontend design URL failure",
-          taskTitle: "Frontend design URL failure",
-          request: "Use the supplied URL design reference.",
-          goalTitle: "Implement URL design",
-          goalSlug: "implement-url-design",
-          objective: "Implement URL design reference.",
-          now,
-          insertProject: false,
-        })
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        await expect(
-          tools.frontend_design.execute(
-            {
-              reason: "URL capture failure must stop the design handoff.",
-              urls: ["https://example.com/dead-reference"],
-            },
-            buildToolOptions("frontend_design_url_fail"),
-          ),
-        ).rejects.toThrow(
-          "frontend_design aborted: explicit url source https://example.com/dead-reference failed during navigate",
-        )
-
-        expect(analyzeCalled).toBe(false)
-        const abortEntries = createDecisionLog(taskID).readByPhase("frontend_design")
-        const abortFailures = abortEntries.filter((entry) => entry.key === "abort_materialization_failed")
-        expect(abortFailures).toHaveLength(1)
-        expect(abortFailures[0]?.value).toContain("navigation timed out")
-        expect(
-          Database.use((db) =>
-            db
-              .select()
-              .from(EngineArtifactTable)
-              .where(
-                and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "design_resource_manifest")),
-              )
-              .all(),
-          ),
-        ).toHaveLength(0)
-      },
-    })
+    expect(source).toContain("ensureLiveWebpageEvidence")
+    expect(source).toContain("frontend_design dispatch: preparing live webpage evidence")
+    expect(source).not.toContain("captureReferenceManifest")
+    expect(source).not.toContain("source: \"url-screenshot\"")
+    expect(source).not.toContain("frontend_design dispatch: capturing URL screenshot")
   })
 
   test("frontend_design rejects material paths that only share the project root prefix", async () => {
@@ -17304,9 +17209,11 @@ describe("orchestrator tools", () => {
     ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
   )
 
-  test("goal build uses design resource manifest target once when task attachment has same screenshot", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+  test(
+    "goal build uses design resource manifest target once when task artifact has same material image",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
 
     const now = Date.now()
     const stamp = now.toString(16)
@@ -17326,10 +17233,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Manifest build evidence test",
           taskTitle: "Manifest build evidence task",
-          request: "Build from a captured URL screenshot.",
-          goalTitle: "Implement captured page",
-          goalSlug: "implement-captured-page",
-          objective: "Use the captured screenshot exactly once as target evidence.",
+          request: "Build from a captured design material image.",
+          goalTitle: "Implement captured material",
+          goalSlug: "implement-captured-material",
+          objective: "Use the captured material image exactly once as target evidence.",
           now,
           insertProject: false,
         })
@@ -17337,12 +17244,12 @@ describe("orchestrator tools", () => {
           Instance.project.id,
           Buffer.from([0x89, 0x50, 0x4e, 0x47]),
           "image/png",
-          "url-screenshot.png",
+          "material-reference.png",
         )
         Database.use((db) => {
           db.update(EngineTaskTable)
             .set({
-              attachments: [{ ...screenshot, intent: "visual_reference", source: "url-screenshot" }],
+              system_artifacts: [{ ...screenshot, intent: "visual_reference", source: "material" }],
               time_updated: now,
             })
             .where(eq(EngineTaskTable.id, taskID))
@@ -17350,7 +17257,7 @@ describe("orchestrator tools", () => {
         })
         const manifest = createDesignResourceManifest({
           taskID,
-          resources: [{ ...screenshot, intent: "visual_reference", source: "url-screenshot" }],
+          resources: [{ ...screenshot, intent: "visual_reference", source: "material" }],
           now,
         })
         recordDesignResourceManifest({ taskID, manifest, now })
@@ -17406,7 +17313,7 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute(
           {
             goalID,
-            request: "Implement from the captured URL screenshot",
+            request: "Implement from the captured design material image",
             reason: "Verify manifest evidence projection.",
           },
           buildToolOptions(),
@@ -17417,14 +17324,16 @@ describe("orchestrator tools", () => {
         expect(capturedContext?.evidencePack?.targetReferences).toHaveLength(1)
         expect(capturedContext.evidencePack.targetReferences[0]).toMatchObject({
           url: screenshot.url,
-          filename: "url-screenshot.png",
+          label: "material-reference.png",
           intent: "visual_reference",
-          source: "url-screenshot",
+          source: "material",
         })
         expect(capturedContext.evidencePack.previousOutputs ?? []).toEqual([])
       },
     })
-  })
+    },
+    ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS,
+  )
 
   test("goal build retry forwards previous rendered screenshot through attachment store URL", async () => {
     await tmp?.[Symbol.asyncDispose]?.()

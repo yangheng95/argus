@@ -19,7 +19,6 @@ describe("frontend-design webpage evidence default viewport", () => {
       "src/frontend-design/reference-capture.ts",
       "src/frontend-design/tools/webpage-extract.ts",
       "src/frontend-design/tools/webpage-runtime-state.ts",
-      "src/frontend-design/url-screenshot-tool.ts",
       "src/orchestrator/webpage-evidence.ts",
     ]
     const forbidden = [

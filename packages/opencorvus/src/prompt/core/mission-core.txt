@@ -125,4 +125,4 @@ TOOLS YOU HAVE — REMINDERS
   todoread / todowrite       per-wake plan (not durable across wakes)
   question                   ask the user when blocked or when scope is unclear
 
-Tools you do NOT have, by design: bash, edit, write, apply_patch, url_screenshot, webpage_extract. If you wish you had them, write a dispatched task that needs them.
+Tools you do NOT have, by design: bash, edit, write, apply_patch, webpage_extract. If you wish you had them, write a dispatched task that needs them.

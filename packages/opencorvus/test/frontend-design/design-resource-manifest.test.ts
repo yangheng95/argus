@@ -202,3 +202,22 @@ test("design resource manifest rejects unsupported resource sources instead of t
     }),
   ).toThrow("unsupported design resource source 'loose-source'")
 })
+
+test("design resource manifest rejects retired URL screenshot provenance", () => {
+  expect(() =>
+    createDesignResourceManifest({
+      taskID: "tsk_retired_url_screenshot",
+      resources: [
+        {
+          sha: "a".repeat(64),
+          url: "attachment://url-reference.png",
+          mime: "image/png",
+          size: 20,
+          filename: "url-reference.png",
+          intent: "visual_reference",
+          source: "url-screenshot",
+        },
+      ],
+    }),
+  ).toThrow("unsupported design resource source 'url-screenshot'")
+})

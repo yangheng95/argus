@@ -623,7 +623,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       const design = await Agent.get("frontend-design")
       const designVisible = visibleToolIDs(design)
       expect([...designVisible].sort()).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS].sort())
-      expect(designVisible.has("url_screenshot")).toBe(true)
+      expect(designVisible.has("url_screenshot")).toBe(false)
       expect(designVisible.has("webpage_render")).toBe(false)
       expect(designVisible.has("webpage_evaluate")).toBe(false)
       expect(designVisible.has("webpage_vision_judge")).toBe(false)
@@ -1264,14 +1264,14 @@ test("webfetch is allowed by default", async () => {
   })
 })
 
-test("frontend-design advertises url_screenshot and omits webfetch", async () => {
+test("frontend-design advertises webpage evidence tools and omits retired URL screenshot/webfetch", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
       const visible = visibleToolIDs(frontendDesign)
-      expect(visible.has("url_screenshot")).toBe(true)
+      expect(visible.has("url_screenshot")).toBe(false)
       expect(visible.has("bash")).toBe(true)
       expect(visible.has("edit")).toBe(true)
       expect(visible.has("write")).toBe(true)
@@ -1286,9 +1286,6 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
       expect(visible.has("webfetch")).toBe(false)
       expect(visible.has("todoread")).toBe(false)
       expect(visible.has("todowrite")).toBe(false)
-
-      const { createUrlScreenshotTool } = await import("../../src/frontend-design/url-screenshot-tool")
-      expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
     },
   })
 })

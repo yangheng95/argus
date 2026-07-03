@@ -246,32 +246,18 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt.toLowerCase()).not.toContain("gate")
   })
 
-  test("live URL tasks do not inline system URL screenshots", async () => {
-    const parts = await FrontendDesignTestHooks.buildPromptParts({
+  test("live URL tasks use task-runtime webpage evidence instead of URL screenshots", () => {
+    const prompt = FrontendDesignTestHooks.buildUserPrompt({
       title: "AMD replica",
       request: "复刻 https://chart.ainvest.com/NASDAQ-AMD/",
-      attachments: [
-        {
-          sha: "abc",
-          url: "/attachment/project/abc.png",
-          mime: "image/png",
-          size: 220_000,
-          filename: "url-chart_ainvest_com.png",
-          intent: "visual_reference",
-          source: "url-screenshot",
-        },
-      ],
     })
 
-    expect(parts).toHaveLength(1)
-    expect(parts[0]?.type).toBe("text")
-    expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
-    expect(parts[0]?.text).toContain("Use the task-runtime webpage evidence and webpage evidence tools")
-    expect(parts[0]?.text).toContain("do at least two frontend template review passes")
-    expect(parts[0]?.text).not.toContain("webpage_extract")
-    expect(parts[0]?.text).not.toContain("webpage_compile")
-    expect(parts[0]?.text).not.toContain("webpage_analyze")
-    expect(parts[0]?.text).not.toContain("[inlined as file part]")
+    expect(prompt).toContain("task-runtime evidence")
+    expect(prompt).toContain("Use webpage evidence tools only if those files are missing or stale")
+    expect(prompt).toContain("do at least two frontend template review passes")
+    expect(prompt).not.toContain("URL screenshot")
+    expect(prompt).not.toContain("url_screenshot")
+    expect(prompt).not.toContain("stored for provenance but are not inlined")
   })
 
   test("webpage rawproject prompts make frontend_design materialize visual HTML skeleton first", () => {
