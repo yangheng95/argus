@@ -22,6 +22,14 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           scope: "project" as const,
           tool_available: false,
           unmounted_pool_count: 0,
+          active_profile: "general",
+          capability_profile_id: "general",
+          projection_hash: "unbound",
+          projected_tool_ids: [],
+          projected_agents: [],
+          selector_skill_names: [],
+          production_skill_names: [],
+          projected_skill_names: [],
           skills: [],
         } satisfies SkillMount.ResolvedAgentSkillSurface)
   const mounted = surface.skills

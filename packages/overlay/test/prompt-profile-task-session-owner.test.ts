@@ -6,6 +6,7 @@ import type { HostTransport, TransportRequest } from "../src/services/host-trans
 
 const CONFIG_SOURCE = readFileSync(join(import.meta.dir, "../src/services/config.ts"), "utf8")
 const MAIN_SOURCE = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const SKILL_MARKET_SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/SkillMarketPanel.tsx"), "utf8")
 
 const { configure } = await import("../src/services/api")
 const { loadPromptProfileCatalog, markPromptProfileCatalogStale, markSessionConfigStale } = await import(
@@ -174,6 +175,13 @@ describe("prompt profile task session owner", () => {
     expect(MAIN_SOURCE).toContain("promptProfileLoadedRequestKey")
     expect(MAIN_SOURCE).toContain("requestKey === promptProfileInFlightRequestKey")
     expect(MAIN_SOURCE).not.toContain("rootTaskSessionID() || activeSessionID() || undefined")
+  })
+
+  test("skill mount matrix uses the same prompt profile session scope", () => {
+    expect(SKILL_MARKET_SOURCE).toContain('import { promptProfileCatalogScope } from "../../services/prompt-profile-scope"')
+    expect(SKILL_MARKET_SOURCE).toContain("const scope = promptProfileCatalogScope()")
+    expect(SKILL_MARKET_SOURCE).toContain('scope.kind === "pending"')
+    expect(SKILL_MARKET_SOURCE).toContain("sessionID,")
   })
 
   test("ordinary config reloads do not change the prompt profile request key", () => {

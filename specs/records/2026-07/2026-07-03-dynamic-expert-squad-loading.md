@@ -1474,3 +1474,121 @@ Phase 7B Recall, 2026-07-04:
 - `bun typecheck` passed.
 - `bun run api:routes-check`, `bun run docs:check`, `bun run overlay:i18n-check`, and `git diff --check` passed.
 - Corrected command-selection note: `bun test --timeout 60000 packages/opencorvus/test/tool/skill.test.ts -t "project package capability refs"` and `bun test --timeout 60000 packages/opencorvus/test/agent/core-prompt-hygiene.test.ts -t "select_expert_squad"` matched zero tests and were replaced by the valid focused test names above.
+
+Phase 8 Recall, 2026-07-04:
+
+### User Request
+
+- Continue implementing and testing the dynamic expert-squad architecture.
+- Preserve the original architecture goal: expert squads loaded from `.opencorvus/expert-squads/<id>` define prompts, skills, tools, and MCP definitions isolated by manifest ID; active runtime exposes the union of default capability and selected expert-squad capability without fallback, aliases, or name guessing.
+- This slice focuses on making the visible skill surface profile-projected. `SkillMount`, `SkillTool`, `SystemPrompt.skills`, and `/skill/mounts` must share one backend projection source.
+
+### Acceptance Criteria For This Slice
+
+- Add one backend expert-squad skill projection resolver derived from the same effective config, project directory, and active `prompt_profile.active` source as scheduler tool projection.
+- `SkillMount.resolve()` and `SkillMount.matrix()` consume that projected surface instead of exposing every statically mounted selector/skill as active.
+- `SkillTool` and `SystemPrompt.skills` continue to receive the same turn-scoped surface from `SessionLoop.finalizeResolvedToolSkillSurface`.
+- `/skill/mounts` returns required projection evidence: `active_profile`, `capability_profile_id`, `projection_hash`, `projected_tool_ids`, `projected_agents`, `selector_skill_names`, `production_skill_names`, and `projected_skill_names`.
+- Project package production skills are not registered into `Skill.all()` or `/skill/installed`; inactive package production skills remain invisible.
+- Package custom tools, MCP projection, and worker runtime projection remain out of this slice and must not be claimed as implemented.
+
+### Hard Constraints
+
+- No fallback, compatibility path, double source, gate, hidden route, route-local UI filter, synthetic message, or same-turn tool-table mutation.
+- Do not add `.opencorvus/expert-squads/**/SKILL.md` to the global `Skill.all()` scan.
+- Do not restart or refresh running OpenCorvus/overlay processes.
+- Do not create a worktree, do not use `git reset`, and do not stage unrelated dirty direct-build/Visual-QA files.
+- Existing dirty files include `prompt-profile-resolver.ts` and `registry.ts` WorkflowRegistry migration hunks from previous toolchain repair; Phase 8 must preserve those hunks and add only scoped changes.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/README.md`
+- `specs/records/2026-07/README.md`
+- `specs/current/architecture/README.md`
+- `specs/current/architecture/99-principles.md`
+- `specs/records/2026-07/2026-07-03-expert-squad-capability-profile.md`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/src/expert-squad/registry.ts`
+- `packages/opencorvus/src/expert-squad/builtin/index.ts`
+- `packages/opencorvus/src/skill/skill.ts`
+- `packages/opencorvus/src/skill/mounts.ts`
+- `packages/opencorvus/src/tool/skill.ts`
+- `packages/opencorvus/src/session/system.ts`
+- `packages/opencorvus/src/session/loop.ts`
+- `packages/opencorvus/src/server/routes/skill.ts`
+- `packages/overlay/src/services/extensions.ts`
+- `packages/opencorvus/test/fixture/expert-squad.ts`
+- `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
+- `packages/opencorvus/test/tool/skill.test.ts`
+- `packages/opencorvus/test/server/skill-routes.test.ts`
+
+### Repository Search Evidence
+
+- `rg -n "export namespace SkillMount|namespace SkillMount|SkillMount\\.resolve|SkillMount\\.matrix|loadSkillMountMatrix|/skill/mounts|AgentSkillMountMatrix" packages/opencorvus/src packages/opencorvus/test packages/overlay/src packages/overlay/test -g "*.ts" -g "*.tsx"`: `SkillMount` owns the backend matrix; `/skill/mounts`, overlay service, many overlay fixtures, and `SkillMount.resolve()` tests consume it.
+- `rg -n "finalizeResolvedToolSkillSurface|new SkillTool|SkillTool|SystemPrompt\\.skills|skills\\(" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`: `SessionLoop` already resolves one skill surface, rebinds `SkillTool`, and passes the same surface into `SystemPrompt.skills`.
+- `rg -n "resolveSchedulerCapability|capabilityProfileID|projectionHash|builtInToolIDs|agentIDs|selectorSkillNames|productionSkillNames|projected" packages/opencorvus/src/expert-squad packages/opencorvus/test/expert-squad packages/opencorvus/test/orchestrator packages/opencorvus/src/orchestrator -g "*.ts"`: scheduler capability projection already exists, but it has no agent skill projection output.
+- `rg -n "mounted_agents|required_tools|selector_skill_names|production_skill_names|projected_skill_names|frontend-replica-expert-squad|frontend-innovate-expert-squad|frontend-automation-debug-expert-squad" packages/opencorvus/src/skill packages/opencorvus/test/skill packages/opencorvus/test/tool packages/opencorvus/test/server packages/overlay/test -g "*.ts" -g "*.md"`: current selector skills are built-in generated skills mounted to Orchestrator; existing tests expect broad selector visibility.
+- `rg -n "capability_projection|default_skill_refs|package_skill_refs|selector|selectorInstructions|selector_skill" packages/opencorvus/src/agent/prompt-profile.ts packages/opencorvus/src/expert-squad packages/opencorvus/src/skill packages/opencorvus/test/expert-squad packages/opencorvus/test/skill packages/opencorvus/test/tool -g "*.ts" -g "*.md"`: package skill refs are manifest/path-derived; selector metadata comes from expert-squad manifests and generated built-in selector markdown.
+- `rg -n "PROJECT_EXPERT_SQUAD_ID|write.*Package|expert-squads|package_skill_refs|skill_refs|project package|selector instructions|source-evidence" packages/opencorvus/test/expert-squad packages/opencorvus/test/tool packages/opencorvus/test/server packages/opencorvus/test/session packages/opencorvus/test/agent -g "*.ts"`: project package fixture already has scheduler/build package skills plus package tool and MCP refs; existing negative test must flip only for skill projection and keep tool/MCP negatives.
+
+### Independent Agent Feedback
+
+- Carson reviewed package skill visibility. Main findings: `Skill.all()` must not scan package production skills; selector skills are generated from expert-squad metadata; project selectors currently lack a `Skill.Info` projection path; package skill frontmatter names and collisions need fail-fast handling; active package production skills should be parsed only for the active projected surface.
+- Mill reviewed backend call points. Main findings: `SkillTool` and `SystemPrompt.skills` already share the SessionLoop surface; add one expert-squad skill projection resolver beside `PromptProfileResolver.resolveSchedulerCapability`; direct `SkillTool.init({ agent })` cannot prove project package resolution without session/project scope; update `SkillMount.resolve`, `SkillMount.matrix`, `/skill/mounts`, and focused tests.
+- Singer reviewed `/skill/mounts` and overlay scope. Main findings: `/skill/mounts` has the old matrix shape; overlay `AgentSkillMountMatrix` lacks projection fields; Skill Market currently refreshes by directory/refresh but not session ID; backend must own the projected matrix and overlay must not locally filter; new fields must be required, not optional compatibility fields.
+
+### Phase 8 Planned Boundary
+
+- Add profile-skill projection helpers to the expert-squad resolver domain. The projection is derived from active package manifest data plus default `Skill.all()` entries for explicit `default/skill/<name>` refs.
+- Canonical selector skill names are model-visible skill names: `<expert-squad-id>-expert-squad`. `selector_skill_names` uses those names, not `selector/<id>` refs.
+- `general` exposes selector skills for selectable packages and no package production skills. An active non-general profile exposes its own selector skill plus production skill refs for the current agent role.
+- Package production skill names are parsed from active package `SKILL.md` files only. Projection rejects duplicate effective names, selector-name collisions, and package/default skill collisions.
+- Visibility metadata is projection-derived. Package `SKILL.md` `mounted_agents` and `agents` fields are not the authority for dynamic visibility.
+- `SkillMount.resolve()` keeps permission/platform/required-tool checks, but its candidate skills come from the projected surface.
+- `SkillMount.matrix()` resolves effective config and project directory for session scope, returns the required projection metadata, and builds rows only for projected agents.
+- Overlay service types and focused tests receive required projection fields. Broader browser fixture cleanup may continue in a later UI slice after backend/API projection is landed.
+
+### Phase 8 Implementation Result
+
+- Added `PromptProfileResolver.resolveSkillProjection()` as the backend source for expert-squad skill projection.
+- The resolver preserves the existing default skill collection and overlays only generated selector skills plus active-package production skills. Package production skills are parsed from active `package_skill_refs` only and are not registered into `Skill.all()`.
+- Project selectors are generated from expert-squad metadata and selector instructions; inactive package production skills, package tools, and package MCP definitions are not loaded through selector discovery.
+- Package production `SKILL.md` files cannot declare `agents` or `mounted_agents`; projection owns visibility.
+- Projected skill name collisions fail fast across default, selector, and package sources. Ordinary built-in skills are no longer allowed to silently shadow project selector names; only real built-in selector skills are allowed to be replaced by generated selector projection.
+- `projection_hash` now includes the scheduler projection hash, projected agent IDs, selector names, production names, complete projected skill names, and projected skill mount/source mapping.
+- `SkillMount.resolve()` and `SkillMount.matrix()` consume the same projected surface. `matrix.skills`, `matrix.matrix`, `matrix.project_mounts`, `unmounted_count`, and `projected_skill_names` are derived from `skillProjection.skills`.
+- `SkillTool` and `SystemPrompt.skills()` continue to use the turn-scoped surface resolved by `SessionLoop.finalizeResolvedToolSkillSurface()`. Direct `SystemPrompt.skills()` calls can now receive explicit config and project directory.
+- `/skill/mounts` returns required projection evidence fields, and the OpenAPI/SDK skill-mount response types include those fields as required.
+- Overlay Skill Market refresh now uses the prompt-profile catalog scope and sends `sessionID` for session-scoped active profile resolution.
+
+### Phase 8 Independent Review And Validation
+
+- Turing performed the final read-only Phase 8 review after the implementation was narrowed to the blocking projection questions and returned: `No blocking findings.`
+- Local secondary review fixed two non-blocking but real consistency risks before final validation:
+  - `projected_skill_names` now reflects the complete projected skill pool rather than only selector/production names.
+  - `project_mounts` now comes from `skillProjection.skills`, not the stale installed-skill pool.
+  - `projection_hash` now includes projected skill mount/source mapping.
+  - Built-in selector collision allowance is restricted to actual built-in selector skills.
+- Validation passed with the no-activity timeout wrapper:
+  - `bun test --timeout=2147483647 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/tool/skill.test.ts packages/opencorvus/test/server/skill-routes.test.ts packages/opencorvus/test/session/extra-tools.test.ts packages/opencorvus/test/agent/agent.test.ts -t "skill projection|active project package|skill routes|exact runtime contract|runtime expert-squad skill|runtime skill under exact stage contracts|skill policy"`: 30 pass, 1 skip.
+  - `bun test --timeout=2147483647 packages/overlay/test/extensions-service.test.ts packages/overlay/test/prompt-profile-task-session-owner.test.ts`: 20 pass.
+  - `bun run --cwd packages/opencorvus typecheck`: passed.
+  - `bun run --cwd packages/overlay typecheck`: passed.
+  - `bun run --cwd packages/sdk/js typecheck`: passed.
+  - `bun run api:routes-check`: passed.
+  - `bun run docs:check`: passed.
+  - `bun run overlay:i18n-check`: passed.
+  - `bun test --timeout=2147483647 packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts`: 65 pass.
+  - `git diff --check`: passed; output only contained existing CRLF warnings in unrelated dirty files.
+- Browser runner note: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/agent-models-panel.test.ts packages/overlay/test/browser/provider-auth-panel.test.ts packages/overlay/test/browser/skill-mcp-panel-browser.test.ts packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` produced 8 pass and 2 fail. The failing assertions were unrelated to the added skill-mount projection fields: side activity toolbar session selection after abort, and MCP connect call expectation after config patch. They remain outside this backend/API skill-projection slice and must not be represented as Phase 8 visual/browser acceptance.
+
+### Phase 8 Remaining Boundary
+
+- Package custom tool runtime projection remains unimplemented.
+- MCP projection remains unimplemented.
+- Worker runtime projection/hash binding remains unimplemented.
+- Package custom agents remain unimplemented.
+- SDK/OpenAPI generated files currently contain unrelated dirty schema drift from other worktree changes; Phase 8 staging must include only the skill-mount projection response hunks.

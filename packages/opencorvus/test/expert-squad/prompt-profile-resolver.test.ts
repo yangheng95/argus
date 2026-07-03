@@ -3,6 +3,8 @@ import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { Config } from "../../src/config/config"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { Instance } from "../../src/project/instance"
+import { Skill } from "../../src/skill/skill"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
@@ -228,6 +230,98 @@ describe("PromptProfileResolver", () => {
     expect(Object.hasOwn(projectedTools, "build")).toBe(true)
     expect(Object.hasOwn(projectedTools, `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)).toBe(false)
     expect(Object.hasOwn(projectedTools, "package-browser")).toBe(false)
+  })
+
+  test("resolves general skill projection to selector skills and default collection only", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const projection = await PromptProfileResolver.resolveSkillProjection({
+          projectDirectory: project.path,
+          config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+          agentIDs: ["orchestrator", "build"],
+        })
+
+        expect(projection.activeProfile).toBe("general")
+        expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
+        expect(projection.selectorSkillNames).toEqual([
+          "frontend-replica-expert-squad",
+          "frontend-innovate-expert-squad",
+          "frontend-automation-debug-expert-squad",
+          `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`,
+        ])
+        expect(projection.productionSkillNames).toEqual([])
+        expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
+        expect(projection.projectedSkillNames).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+        expect(projection.projectedSkillNames).not.toContain("scheduler")
+        expect(projection.projectedSkillNames).not.toContain("implementation")
+      },
+    })
+  })
+
+  test("rejects ordinary builtin skill collision with a project selector name", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path, "shadowed")
+
+    await expect(
+      PromptProfileResolver.resolveSkillProjection({
+        projectDirectory: project.path,
+        config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+        defaultSkills: [
+          {
+            name: "shadowed-expert-squad",
+            description: "Ordinary builtin skill with a selector-shaped name.",
+            platforms: [],
+            builtin: true,
+            location: "builtin://ordinary-shadow",
+            content: "",
+            priority: 0,
+            required_tools: [],
+            agents: [],
+            mounted_agents: ["orchestrator"],
+            duplicate_locations: [],
+          },
+        ],
+        agentIDs: ["orchestrator"],
+      }),
+    ).rejects.toThrow("collides with an expert-squad selector skill name")
+  })
+
+  test("resolves active project package skill projection without registering package production skills globally", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const projection = await PromptProfileResolver.resolveSkillProjection({
+          projectDirectory: project.path,
+          config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+          agentIDs: ["orchestrator", "build"],
+        })
+
+        expect(projection.activeProfile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(projection.projectedToolIDs).toContain("build")
+        expect(projection.projectedAgentIDs).toEqual(["orchestrator", "build"])
+        expect(projection.selectorSkillNames).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
+        expect(projection.productionSkillNames.sort()).toEqual(["implementation", "scheduler"])
+        expect(projection.projectedSkillNames).toEqual(projection.skills.map((skill) => skill.name))
+        expect(projection.projectedSkillNames).toEqual(
+          expect.arrayContaining(["implementation", `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`, "scheduler"]),
+        )
+        expect(projection.projectedSkillNames).not.toContain("source-evidence")
+        expect(projection.projectedSkillNames).not.toContain("package-browser")
+        expect(projection.skills.find((skill) => skill.name === "scheduler")?.mounted_agents).toEqual(["orchestrator"])
+        expect(projection.skills.find((skill) => skill.name === "implementation")?.mounted_agents).toEqual(["build"])
+        expect(projection.skills.map((skill) => skill.name)).not.toContain("source-evidence")
+        expect(projection.skills.map((skill) => skill.name)).not.toContain("package-browser")
+        expect((await Skill.all()).map((skill) => skill.name)).not.toContain("scheduler")
+        expect((await Skill.all()).map((skill) => skill.name)).not.toContain("implementation")
+      },
+    })
   })
 
   test("fails visibly when a projected built-in Orchestrator tool has no raw implementation", async () => {

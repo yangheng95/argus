@@ -6,12 +6,14 @@ import { Config } from "../../src/config/config"
 import type { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { SkillTool } from "../../src/tool/skill"
 import { Agent } from "../../src/agent/agent"
 import type { Tool } from "../../src/tool/tool"
 import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
 import { resetDatabase } from "../fixture/db"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 import { TextReader, Uint8ArrayWriter, ZipWriter } from "@zip.js/zip.js"
 
@@ -520,6 +522,71 @@ describe("skill routes", () => {
     })
   }, 20000)
 
+  test("GET /skill/mounts with sessionID returns the active expert-squad skill projection", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.update({ prompt_profile: { active: "backend" } })
+        const root = await Session.create({ kind: "root", title: "skill projection root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
+        })
+
+        const app = Server.App()
+        const response = await app.request(`/skill/mounts?sessionID=${encodeURIComponent(root.id)}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          scope: string
+          active_profile: string
+          capability_profile_id: string
+          projection_hash: string
+          projected_tool_ids: string[]
+          projected_agents: string[]
+          selector_skill_names: string[]
+          production_skill_names: string[]
+          projected_skill_names: string[]
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          project_mounts: { agents?: Record<string, string[]> }
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+        }
+
+        expect(body.scope).toBe("session")
+        expect(body.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.capability_profile_id).toBe(PROJECT_EXPERT_SQUAD_ID)
+        expect(body.projection_hash).toMatch(/^[a-f0-9]{64}$/)
+        expect(body.projected_tool_ids).toContain("build")
+        expect(body.projected_tool_ids).not.toContain("source-evidence")
+        expect(body.projected_agents).toEqual(["orchestrator", "build"])
+        expect(body.selector_skill_names).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
+        expect(body.production_skill_names.sort()).toEqual(["implementation", "scheduler"])
+        expect(body.projected_skill_names).toEqual(body.skills.map((entry) => entry.name))
+        expect(body.projected_skill_names).toEqual(
+          expect.arrayContaining(["implementation", `${PROJECT_EXPERT_SQUAD_ID}-expert-squad`, "scheduler"]),
+        )
+        expect(body.projected_skill_names).not.toContain("source-evidence")
+        expect(body.projected_skill_names).not.toContain("package-browser")
+        expect(body.skills.find((entry) => entry.name === "scheduler")?.mounted_agents).toEqual(["orchestrator"])
+        expect(body.skills.find((entry) => entry.name === "implementation")?.mounted_agents).toEqual(["build"])
+        expect(body.skills.map((entry) => entry.name)).not.toContain("source-evidence")
+        expect(body.project_mounts.agents?.orchestrator).toContain("scheduler")
+        expect(body.project_mounts.agents?.build).toContain("implementation")
+        expect(body.project_mounts.agents?.build ?? []).not.toContain("source-evidence")
+        expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "implementation", enabled: true }),
+        )
+      },
+    })
+  }, 20000)
+
   test("POST /skill/install invalidates discovery cache before the next mount matrix read", async () => {
     await using tmp = await tmpdir({ git: true })
     const skillDir = path.join(tmp.path, "installed-after-cache")
@@ -755,7 +822,7 @@ describe("skill routes", () => {
             "name: integrity-preview-review",
             "description: Integrity preview review workflow.",
             "required_tools:",
-            "  - browser_preview_compare_scroll_slices",
+            "  - browser_preview",
             "agents:",
             "  - integrity",
             "---",
@@ -801,7 +868,7 @@ describe("skill routes", () => {
             skill: "integrity-preview-review",
           }),
         })
-        expect(mounted.status).toBe(200)
+        expect(mounted.status, await mounted.clone().text()).toBe(200)
         const body = (await mounted.json()) as {
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>

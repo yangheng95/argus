@@ -15,6 +15,7 @@ import { pickDirectory, syncActiveDirectoryApiContext } from "../../services/wor
 import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
+import { promptProfileCatalogScope } from "../../services/prompt-profile-scope"
 import { nativeConfirm, nativeOpen } from "../../utils/native"
 import { formatErrorDetails, notifyError } from "../../services/notify"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
@@ -622,11 +623,17 @@ function ExtensionSettingsPanel(props: {
   }
 
   async function refreshSkillMounts(options: { refresh?: boolean; directory?: string } = {}) {
-    const directory = options.directory ?? currentDirectory()
+    const scope = promptProfileCatalogScope()
+    if (!options.directory && scope.kind === "pending") return undefined
+    const directory =
+      options.directory ??
+      (scope.kind === "project" || scope.kind === "session" ? scope.directory : currentDirectory())
     if (!directory) return undefined
+    const sessionID = scope.kind === "session" && scope.directory === directory ? scope.sessionID : undefined
     return await loadSkillMountMatrix({
       refresh: options.refresh,
       directory,
+      sessionID,
       isCurrentDirectory: sourceMatchesDirectory,
     })
   }

@@ -107,6 +107,14 @@ function fakeExtensionLoadTransport(requests: TransportRequest[]): HostTransport
           headers: {},
           body: {
             scope: "project",
+            active_profile: "frontend-replica",
+            capability_profile_id: "frontend-replica",
+            projection_hash: "projection-test",
+            projected_tool_ids: ["skill"],
+            projected_agents: ["build"],
+            selector_skill_names: ["frontend-replica-expert-squad"],
+            production_skill_names: [],
+            projected_skill_names: ["frontend-replica-expert-squad"],
             skills: [
               {
                 name: "mounted-skill",
@@ -188,11 +196,12 @@ describe("Extension overlay service", () => {
     __setHostTransportForTest(fakeExtensionLoadTransport(requests))
     configure({ directory: PROJECT_DIR })
 
-    const result = await loadSkillMountMatrix({ refresh: true })
+    const result = await loadSkillMountMatrix({ refresh: true, sessionID: "ses_scope" })
 
     expect(requests.map((item) => `${item.method ?? "GET"} ${item.path}`)).toEqual(["GET skill/mounts"])
-    expect(requests[0]?.query).toEqual({ refresh: "true", directory: PROJECT_DIR })
+    expect(requests[0]?.query).toEqual({ refresh: "true", sessionID: "ses_scope", directory: PROJECT_DIR })
     expect(result.skills.map((item) => item.name)).toEqual(["mounted-skill"])
+    expect(result.projection_hash).toBe("projection-test")
     expect(appStore.skills.map((item) => item.name)).toEqual(["mounted-skill"])
   })
 
@@ -201,7 +210,21 @@ describe("Extension overlay service", () => {
     __setHostTransportForTest(fakeExtensionLoadTransport(requests))
     configure({ directory: "D:/repo/current" })
     setSkills([{ name: "current-skill" }])
-    setSkillMounts({ skills: [{ name: "current-skill" }], agents: [], matrix: [], unmounted_count: 0 })
+    setSkillMounts({
+      scope: "project",
+      active_profile: "general",
+      capability_profile_id: "general",
+      projection_hash: "current-projection",
+      projected_tool_ids: [],
+      projected_agents: [],
+      selector_skill_names: [],
+      production_skill_names: [],
+      projected_skill_names: [],
+      skills: [{ name: "current-skill" }],
+      agents: [],
+      matrix: [],
+      unmounted_count: 0,
+    })
 
     const result = await loadSkillMountMatrix({
       directory: "D:/repo/stale",

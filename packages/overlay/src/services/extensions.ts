@@ -22,6 +22,14 @@ export interface SkillDescriptor {
 
 export interface AgentSkillMountMatrix {
   scope: "project" | "session"
+  active_profile: string
+  capability_profile_id: string
+  projection_hash: string
+  projected_tool_ids: string[]
+  projected_agents: string[]
+  selector_skill_names: string[]
+  production_skill_names: string[]
+  projected_skill_names: string[]
   skills: Array<SkillDescriptor & { mounted_agents?: string[]; unmounted?: boolean; warning?: string }>
   agents: Array<{
     name: string

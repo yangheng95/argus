@@ -10,6 +10,7 @@ import { SystemPrompt } from "../../src/session/system"
 import { MCP } from "../../src/mcp"
 import { SkillTool } from "../../src/tool/skill"
 import { ToolRegistry } from "../../src/tool/registry"
+import { Config } from "../../src/config/config"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
 
@@ -385,7 +386,7 @@ Use this skill.
     }
   })
 
-  test("active project package prompt profile does not leak package capability refs into skill, tool, or MCP surfaces", async () => {
+  test("active project package prompt profile projects package skills but not package tools or MCP surfaces", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -404,23 +405,46 @@ Use this skill.
           const [orchestrator, build] = await Promise.all([Agent.get("orchestrator"), Agent.get("build")])
           expect(orchestrator).toBeDefined()
           expect(build).toBeDefined()
+          const config = Config.Info.parse({
+            prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
+            mcp: { browser: { enabled: false } },
+          })
 
-          const allSkills = await SkillMount.resolve({ agent: orchestrator! })
-          expect(allSkills.skills.map((skill) => skill.name)).not.toContain("scheduler")
-          expect(allSkills.skills.map((skill) => skill.name)).not.toContain("implementation")
+          const orchestratorSurface = await SkillMount.resolve({ agent: orchestrator!, config })
+          expect(orchestratorSurface.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+          expect(orchestratorSurface.selector_skill_names).toEqual([`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`])
+          expect(orchestratorSurface.production_skill_names).toContain("scheduler")
+          expect(orchestratorSurface.skills.map((skill) => skill.name)).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+          expect(orchestratorSurface.skills.map((skill) => skill.name)).toContain("scheduler")
+          expect(orchestratorSurface.skills.map((skill) => skill.name)).not.toContain("implementation")
 
-          const skillPrompt = await SystemPrompt.skills(orchestrator!)
-          expect(skillPrompt).not.toContain("project-replica")
+          const buildSurface = await SkillMount.resolve({ agent: build!, config })
+          expect(buildSurface.active_profile).toBe(PROJECT_EXPERT_SQUAD_ID)
+          expect(buildSurface.skills.map((skill) => skill.name)).toContain("implementation")
+          expect(buildSurface.skills.map((skill) => skill.name)).not.toContain("scheduler")
+
+          const skillPrompt = await SystemPrompt.skills(orchestrator!, { config, projectDirectory: tmp.path })
+          expect(skillPrompt).toContain(`${PROJECT_EXPERT_SQUAD_ID}-expert-squad`)
+          expect(skillPrompt).toContain("scheduler")
           expect(skillPrompt).not.toContain("source-evidence")
           expect(skillPrompt).not.toContain("build-evidence")
           expect(skillPrompt).not.toContain("package-browser")
 
-          const tool = await SkillTool.init({ agent: orchestrator! })
+          const tool = await SkillTool.init({ agent: orchestrator!, config })
           const ctx: Tool.Context = { ...baseCtx, agent: "orchestrator", ask: async () => {} }
-          const search = await tool.execute({ query: "project scheduler source evidence implementation" }, ctx)
-          expect(search.output).not.toContain("<name>scheduler</name>")
+          const search = await tool.execute({}, ctx)
+          expect(search.output).toContain(`<name>${PROJECT_EXPERT_SQUAD_ID}-expert-squad</name>`)
+          expect(search.output).toContain("<name>scheduler</name>")
           expect(search.output).not.toContain("<name>implementation</name>")
-          await expect(tool.execute({ name: "scheduler" }, ctx)).rejects.toThrow("not found or not allowed")
+          const loaded = await tool.execute({ name: "scheduler" }, ctx)
+          expect(loaded.output).toContain('<skill_content name="scheduler">')
+
+          const buildSkill = await SkillTool.init({ agent: build!, skillSurface: buildSurface })
+          const buildSearch = await buildSkill.execute(
+            { query: "project implementation" },
+            { ...baseCtx, agent: "build", ask: async () => {} },
+          )
+          expect(buildSearch.output).toContain("<name>implementation</name>")
 
           const toolIDs = await ToolRegistry.ids()
           expect(toolIDs).not.toContain("source-evidence")

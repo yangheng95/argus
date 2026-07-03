@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import path from "node:path"
+import matter from "gray-matter"
 import {
   DEFAULT_PROMPT_PROFILE_ID,
   PromptProfile,
@@ -10,10 +11,11 @@ import {
   type PromptProfileConfig,
   type PromptProfileDefinition,
 } from "@/agent/prompt-profile"
-import { AgentRoleContract, type OrchestratorWorkflowToolName } from "@/agent/role-contract"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { Skill } from "@/skill/skill"
 import { Filesystem } from "@/util/filesystem"
+import { AgentRoleContract, type OrchestratorWorkflowToolName } from "@/agent/role-contract"
 import { loadedBuiltInPackages } from "./builtin"
 import { ExpertSquadRegistry } from "./registry"
 
@@ -62,10 +64,39 @@ export namespace PromptProfileResolver {
     includeMcpTools: false
   }
 
-  type PackageWithCapability = {
-    id: string
-    manifest: ExpertSquadRegistry.Manifest
+  export interface SkillProjectionInput extends ProjectScope {
+    config: ConfigLike
+    defaultSkills?: Skill.Info[]
+    agentIDs?: string[]
   }
+
+  export interface ResolvedSkillProjection {
+    activeProfile: string
+    expertSquadID: string
+    capabilityProfileID: string
+    builtIn: boolean
+    projectionHash: string
+    projectedToolIDs: string[]
+    projectedAgentIDs: string[]
+    selectorSkillNames: string[]
+    productionSkillNames: string[]
+    projectedSkillNames: string[]
+    skills: Skill.Info[]
+  }
+
+  type BuiltInPackage = (typeof loadedBuiltInPackages)[number]
+  type PackageWithCapability = BuiltInPackage | ExpertSquadRegistry.LoadedPackage
+  type ActiveProfilePackage =
+    | {
+        profileID: string
+        builtIn: true
+        pkg: BuiltInPackage
+      }
+    | {
+        profileID: string
+        builtIn: false
+        pkg: ExpertSquadRegistry.LoadedPackage
+      }
 
   const builtInPackages = Object.fromEntries(loadedBuiltInPackages.map((pkg) => [pkg.id, pkg])) as Record<
     string,
@@ -111,11 +142,7 @@ export namespace PromptProfileResolver {
     return definitions(projectDirectory)
   }
 
-  async function packageForActiveProfile(input: SchedulerCapabilityInput): Promise<{
-    profileID: string
-    builtIn: boolean
-    pkg: PackageWithCapability
-  }> {
+  async function packageForActiveProfile(input: SchedulerCapabilityInput): Promise<ActiveProfilePackage> {
     const profileID = PromptProfile.activeID(input.config)
     const builtIn = builtInPackages[profileID]
     const projectPackagesByID = input.projectDirectory ? await projectPackages(input.projectDirectory) : {}
@@ -223,6 +250,259 @@ export namespace PromptProfileResolver {
       projected[toolID] = tools[toolID]
     }
     return projected
+  }
+
+  function unique(input: Iterable<string>): string[] {
+    return [...new Set(input)]
+  }
+
+  function selectorSkillName(id: string): string {
+    return `${id}-expert-squad`
+  }
+
+  function selectorSkillFromPackage(input: {
+    pkg: Pick<ExpertSquadRegistry.PackageCatalogEntry, "id" | "label" | "description" | "selector"> & {
+      selectorInstructions?: string
+      manifestPath?: string
+    }
+    builtin: boolean
+    defaultSkillsByName: Map<string, Skill.Info>
+  }): Skill.Info | undefined {
+    const markdown = ExpertSquadRegistry.renderSelectorSkillMarkdown(input.pkg)
+    if (!markdown) return undefined
+    const parsed = matter(markdown)
+    const name = selectorSkillName(input.pkg.id)
+    const defaultSkill = input.defaultSkillsByName.get(name)
+    const location = input.builtin && defaultSkill?.builtin ? defaultSkill.location : input.pkg.manifestPath
+    if (!location) {
+      throw new Error(`Expert squad selector ${JSON.stringify(name)} has no canonical location.`)
+    }
+    return {
+      name,
+      description: `Orchestrator skill for ${input.pkg.label} tasks. ${input.pkg.selector!.summary}`,
+      platforms: [],
+      builtin: input.builtin,
+      location,
+      content: parsed.content,
+      priority: 90,
+      required_tools: ["select_expert_squad"],
+      agents: ["orchestrator"],
+      mounted_agents: ["orchestrator"],
+      duplicate_locations: [],
+    }
+  }
+
+  function assertNoSelectorCollision(
+    defaultSkills: Skill.Info[],
+    selectorNames: Set<string>,
+    builtInSelectorNames: Set<string>,
+  ) {
+    for (const skill of defaultSkills) {
+      if (!selectorNames.has(skill.name)) continue
+      if (skill.builtin && builtInSelectorNames.has(skill.name)) continue
+      throw new Error(
+        `Skill ${JSON.stringify(skill.name)} collides with an expert-squad selector skill name. Rename the ordinary skill or the expert squad id.`,
+      )
+    }
+  }
+
+  function defaultSkillNameFromRef(ref: string): string {
+    const prefix = "default/skill/"
+    if (!ref.startsWith(prefix)) throw new Error(`Invalid default skill ref ${JSON.stringify(ref)}`)
+    return ref.slice(prefix.length)
+  }
+
+  function packageSkillPath(pkg: ExpertSquadRegistry.LoadedPackage, ref: string): string {
+    const prefix = `${pkg.id}/`
+    if (!ref.startsWith(prefix)) throw new Error(`Package skill ref ${JSON.stringify(ref)} is not namespaced by ${pkg.id}`)
+    const parts = ref.slice(prefix.length).split("/")
+    const owner = parts.shift()
+    if (!owner || parts.length === 0) throw new Error(`Invalid package skill ref ${JSON.stringify(ref)}`)
+    const base = owner === "shared" ? path.join(pkg.root, "skills") : path.join(pkg.root, "agents", owner, "skills")
+    return path.join(base, ...parts, "SKILL.md")
+  }
+
+  async function packageSkillFromRef(pkg: ExpertSquadRegistry.LoadedPackage, ref: string, role: string): Promise<Skill.Info> {
+    const location = packageSkillPath(pkg, ref)
+    const parsed = matter(await Filesystem.readText(location))
+    if (Object.hasOwn(parsed.data, "mounted_agents") || Object.hasOwn(parsed.data, "agents")) {
+      throw new Error(
+        `Package skill ${ref} must not declare agents or mounted_agents; active expert-squad projection owns visibility.`,
+      )
+    }
+    const info = Skill.Info.pick({
+      name: true,
+      description: true,
+      platforms: true,
+      auto_detect: true,
+      priority: true,
+      required_tools: true,
+      expires_at: true,
+    }).parse(parsed.data)
+    return {
+      name: info.name,
+      description: info.description,
+      platforms: info.platforms,
+      builtin: false,
+      location,
+      content: parsed.content,
+      auto_detect: info.auto_detect,
+      priority: info.priority,
+      required_tools: info.required_tools,
+      agents: [],
+      mounted_agents: [role],
+      expires_at: info.expires_at,
+      duplicate_locations: [],
+    }
+  }
+
+  type SkillSourceKind = "default" | "package" | "selector"
+
+  function addProjectedSkill(
+    byName: Map<string, { skill: Skill.Info; source: SkillSourceKind }>,
+    skill: Skill.Info,
+    source: SkillSourceKind,
+  ) {
+    const existing = byName.get(skill.name)
+    if (!existing) {
+      byName.set(skill.name, { skill, source })
+      return
+    }
+    if (existing.source === "default" && source === "default" && existing.skill.location === skill.location) {
+      existing.skill.mounted_agents = unique([...existing.skill.mounted_agents, ...skill.mounted_agents])
+      return
+    }
+    throw new Error(
+      `Projected skill name ${JSON.stringify(skill.name)} collides between ${existing.source} and ${source} skill sources.`,
+    )
+  }
+
+  async function selectorCatalog(projectDirectory: string | undefined): Promise<ExpertSquadRegistry.PackageCatalogEntry[]> {
+    if (!projectDirectory) return []
+    const entries = await ExpertSquadRegistry.discover(projectDirectory)
+    for (const entry of entries) assertNoBuiltInCollision(entry.id)
+    return entries
+  }
+
+  export async function resolveSkillProjection(input: SkillProjectionInput): Promise<ResolvedSkillProjection> {
+    const [capability, active, defaultSkills, projectSelectors] = await Promise.all([
+      resolveSchedulerCapability(input),
+      packageForActiveProfile(input),
+      input.defaultSkills ?? Skill.all(),
+      selectorCatalog(input.projectDirectory),
+    ])
+    const defaultSkillsByName = new Map(defaultSkills.map((skill) => [skill.name, skill]))
+    const builtInSelectorPackages = loadedBuiltInPackages.filter((pkg) => pkg.selector)
+    const projectSelectorPackages = projectSelectors.filter((pkg) => pkg.selector)
+    const builtInSelectorNames = new Set(builtInSelectorPackages.map((pkg) => selectorSkillName(pkg.id)))
+    const allSelectorNames = new Set([
+      ...builtInSelectorNames,
+      ...projectSelectorPackages.map((pkg) => selectorSkillName(pkg.id)),
+    ])
+    assertNoSelectorCollision(defaultSkills, allSelectorNames, builtInSelectorNames)
+
+    const projectedAgentIDs =
+      active.profileID === DEFAULT_PROMPT_PROFILE_ID && input.agentIDs
+        ? unique(input.agentIDs)
+        : unique(["orchestrator", ...Object.keys(active.pkg.manifest.capability_projection.agents)])
+
+    const projected = new Map<string, { skill: Skill.Info; source: SkillSourceKind }>()
+    for (const skill of defaultSkills) {
+      if (allSelectorNames.has(skill.name)) continue
+      addProjectedSkill(projected, { ...skill, mounted_agents: [...skill.mounted_agents] }, "default")
+    }
+
+    const selectorPackages =
+      active.profileID === DEFAULT_PROMPT_PROFILE_ID
+        ? [
+            ...builtInSelectorPackages.map((pkg) => ({ pkg, builtin: true })),
+            ...projectSelectorPackages.map((pkg) => ({
+              pkg: {
+                ...pkg,
+                manifestPath: path.join(canonicalBase(input.projectDirectory!), pkg.id, ExpertSquadRegistry.MANIFEST),
+              },
+              builtin: false,
+            })),
+          ]
+        : active.pkg.selector
+          ? [{ pkg: active.pkg, builtin: active.builtIn }]
+          : []
+    const selectorSkills = selectorPackages
+      .map((entry) =>
+        selectorSkillFromPackage({
+          pkg: entry.pkg,
+          builtin: entry.builtin,
+          defaultSkillsByName,
+        }),
+      )
+      .filter((skill): skill is Skill.Info => Boolean(skill))
+    for (const skill of selectorSkills) addProjectedSkill(projected, skill, "selector")
+
+    const roleProjections = new Map<string, ExpertSquadRegistry.Projection>([
+      ["orchestrator", active.pkg.manifest.capability_projection.scheduler],
+      ...Object.entries(active.pkg.manifest.capability_projection.agents),
+    ])
+    const productionSkillNames: string[] = []
+    for (const [role, projection] of roleProjections) {
+      for (const ref of projection.default_skill_refs) {
+        const name = defaultSkillNameFromRef(ref)
+        const skill = defaultSkillsByName.get(name)
+        if (!skill) throw new Error(`Active expert squad ${active.profileID} projects missing default skill ${ref}.`)
+        productionSkillNames.push(name)
+        addProjectedSkill(
+          projected,
+          {
+            ...skill,
+            mounted_agents: unique([...skill.mounted_agents, role]),
+          },
+          "default",
+        )
+      }
+      if (!active.builtIn) {
+        for (const ref of projection.package_skill_refs) {
+          const skill = await packageSkillFromRef(active.pkg, ref, role)
+          productionSkillNames.push(skill.name)
+          addProjectedSkill(projected, skill, "package")
+        }
+      }
+    }
+
+    const selectorSkillNames = selectorSkills.map((skill) => skill.name)
+    const uniqueProductionSkillNames = unique(productionSkillNames)
+    const projectedSkillNames = [...projected.keys()]
+    const projectedSkillMounts = Object.fromEntries(
+      [...projected.entries()].map(([name, entry]) => [
+        name,
+        {
+          source: entry.source,
+          mounted_agents: entry.skill.mounted_agents,
+        },
+      ]),
+    )
+    return {
+      activeProfile: capability.promptProfileID,
+      expertSquadID: capability.expertSquadID,
+      capabilityProfileID: capability.capabilityProfileID,
+      builtIn: capability.builtIn,
+      projectionHash: createHash("sha256")
+        .update(
+          stable({
+            schedulerProjectionHash: capability.projectionHash,
+            projectedAgentIDs,
+            selectorSkillNames,
+            productionSkillNames: uniqueProductionSkillNames,
+            projectedSkillNames,
+            projectedSkillMounts,
+          }),
+        )
+        .digest("hex"),
+      projectedToolIDs: capability.builtInToolIDs,
+      projectedAgentIDs,
+      selectorSkillNames,
+      productionSkillNames: uniqueProductionSkillNames,
+      projectedSkillNames,
+      skills: [...projected.values()].map((entry) => entry.skill),
+    }
   }
 
   export async function overlayFor(input: PromptInput): Promise<string | undefined> {

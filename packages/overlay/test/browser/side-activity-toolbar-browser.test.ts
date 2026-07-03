@@ -184,6 +184,14 @@ const SIDE_ACTIVITY_SKILL = {
 function skillMountMatrixPayload() {
   return {
     scope: "project",
+    active_profile: "general",
+    capability_profile_id: "general",
+    projection_hash: "test-side-activity-skill-mounts",
+    projected_tool_ids: [],
+    projected_agents: ["requirements"],
+    selector_skill_names: [],
+    production_skill_names: [],
+    projected_skill_names: [SIDE_ACTIVITY_SKILL.name],
     skills: [SIDE_ACTIVITY_SKILL],
     agents: [
       {

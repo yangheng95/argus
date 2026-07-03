@@ -57,8 +57,10 @@ export function projectExpertSquadFiles(id = PROJECT_EXPERT_SQUAD_ID, prefix = "
     [`${root}README.md`]: "# Project Replica\n",
     [`${root}agents/orchestrator/system.md`]: "project orchestrator overlay",
     [`${root}agents/build/system.md`]: "project build overlay",
-    [`${root}agents/orchestrator/skills/scheduler/SKILL.md`]: "---\nname: scheduler\n---\n",
-    [`${root}agents/build/skills/implementation/SKILL.md`]: "---\nname: implementation\n---\n",
+    [`${root}agents/orchestrator/skills/scheduler/SKILL.md`]:
+      "---\nname: scheduler\ndescription: Project scheduler skill.\n---\n",
+    [`${root}agents/build/skills/implementation/SKILL.md`]:
+      "---\nname: implementation\ndescription: Project implementation skill.\n---\n",
     [`${root}agents/orchestrator/tools/source-evidence.ts`]: "export default {}",
     [`${root}agents/build/tools/build-evidence.ts`]: "export default {}",
     [`${root}agents/orchestrator/mcp/package-browser.jsonc`]: JSON.stringify(

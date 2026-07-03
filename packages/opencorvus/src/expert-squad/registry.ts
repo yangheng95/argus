@@ -116,6 +116,7 @@ export namespace ExpertSquadRegistry {
 
   export interface LoadedPackage extends PackageLocation {
     manifest: Manifest
+    selectorInstructions?: string
     promptProfile: {
       label: string
       description?: string
@@ -708,7 +709,14 @@ export namespace ExpertSquadRegistry {
     }
   }
 
-  export function renderSelectorSkillMarkdown(pkg: EmbeddedPackage): string | undefined {
+  type SelectorSkillPackage = Pick<
+    EmbeddedPackage | LoadedPackage | PackageCatalogEntry,
+    "id" | "label" | "description" | "selector"
+  > & {
+    selectorInstructions?: string
+  }
+
+  export function renderSelectorSkillMarkdown(pkg: SelectorSkillPackage): string | undefined {
     if (!pkg.selector) return undefined
     const skillName = `${pkg.id}-expert-squad`
     const description = `Orchestrator skill for ${pkg.label} tasks. ${pkg.selector.summary}`
@@ -790,8 +798,10 @@ export namespace ExpertSquadRegistry {
       assertRoleID(agentID, `agents.${agentID}`)
       if (agent.prompt) await assertFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
     }
+    let selectorInstructions: string | undefined
     if (manifest.selector?.instructions) {
-      await assertNonBlankFile(metadata.root, manifest.selector.instructions, "selector.instructions")
+      const selectorPath = await assertNonBlankFile(metadata.root, manifest.selector.instructions, "selector.instructions")
+      selectorInstructions = (await Filesystem.readText(selectorPath)).trim()
     }
 
     const refs = await collectPackageRefs(metadata.root, manifest.id)
@@ -836,6 +846,7 @@ export namespace ExpertSquadRegistry {
       ...metadata,
       id: manifest.id,
       manifest,
+      selectorInstructions,
       promptProfile,
       packageSkillRefs: refs.skillRefs,
       packageToolRefs: refs.toolRefs,

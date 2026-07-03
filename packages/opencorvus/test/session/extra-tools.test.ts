@@ -23,6 +23,7 @@ import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-e
 import { SessionPromptState } from "../../src/session/prompt/state"
 import { SkillTool } from "../../src/tool/skill"
 import { MCP } from "../../src/mcp"
+import { Config } from "../../src/config/config"
 
 const dummyTool = () =>
   tool({
@@ -130,7 +131,7 @@ describe("SessionLoop session runtime contract", () => {
             } as any,
             bypassAgentCheck: false,
             messages: [],
-            config: {} as any,
+            config: Config.Info.parse(await Config.get()),
           })
 
           expect(toolsSpy).toHaveBeenCalled()
@@ -623,6 +624,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
       directory: tmp.path,
       fn: async () => {
         const sessionID = `ses_runtime_${Date.now()}_orchestrator_skill_exact`
+        const config = Config.Info.parse(await Config.get())
         SessionLoop.setSessionRuntimeContract(
           sessionID,
           runtimeContract(sessionID, {
@@ -653,7 +655,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
           } as any,
           bypassAgentCheck: false,
           messages: [],
-          config: {} as any,
+          config,
         })
 
         expect(Object.keys(resolved).sort()).toEqual(["select_expert_squad", "skill"])
@@ -675,6 +677,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
       directory: tmp.path,
       fn: async () => {
         const sessionID = `ses_runtime_${Date.now()}_frontend_research_exact`
+        const config = Config.Info.parse(await Config.get())
         SessionLoop.setSessionRuntimeContract(
           sessionID,
           runtimeContract(sessionID, {
@@ -705,7 +708,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
           } as any,
           bypassAgentCheck: false,
           messages: [],
-          config: {} as any,
+          config,
         })
 
         expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_research_brief"])
@@ -722,6 +725,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
       directory: tmp.path,
       fn: async () => {
         const sessionID = `ses_runtime_${Date.now()}_frontend_design_exact`
+        const config = Config.Info.parse(await Config.get())
         SessionLoop.setSessionRuntimeContract(
           sessionID,
           runtimeContract(sessionID, {
@@ -752,7 +756,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
           } as any,
           bypassAgentCheck: false,
           messages: [],
-          config: {} as any,
+          config,
         })
 
         expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])
@@ -794,7 +798,8 @@ mounted_agents:
           const sessionID = `ses_runtime_${Date.now()}_skill_surface`
           const frontendDesign = await Agent.get("frontend-design")
           expect(frontendDesign).toBeDefined()
-          const staleSkill = await SkillTool.init({ agent: frontendDesign })
+          const config = Config.Info.parse(await Config.get())
+          const staleSkill = await SkillTool.init({ agent: frontendDesign, config })
           const staleExtraSkill = tool({
             description: staleSkill.description,
             inputSchema: staleSkill.parameters,
@@ -842,7 +847,7 @@ mounted_agents:
             } as any,
             bypassAgentCheck: false,
             messages: [],
-            config: {} as any,
+            config,
           })
 
           expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])

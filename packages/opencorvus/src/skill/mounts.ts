@@ -2,7 +2,9 @@ import type { Agent } from "@/agent/agent"
 import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
+import { PromptProfileResolver } from "@/expert-squad/prompt-profile-resolver"
 import { PermissionNext } from "@/permission/next"
+import { Instance } from "@/project/instance"
 import z from "zod"
 import { Skill } from "./skill"
 import { SkillManager } from "./manager"
@@ -59,6 +61,14 @@ export namespace SkillMount {
 
   export const Matrix = z.object({
     scope: z.enum(["project", "session"]),
+    active_profile: z.string(),
+    capability_profile_id: z.string(),
+    projection_hash: z.string(),
+    projected_tool_ids: z.array(z.string()),
+    projected_agents: z.array(z.string()),
+    selector_skill_names: z.array(z.string()),
+    production_skill_names: z.array(z.string()),
+    projected_skill_names: z.array(z.string()),
     skills: z.array(PoolSkill),
     agents: z.array(AgentEntry),
     matrix: z.array(MatrixRow),
@@ -89,6 +99,14 @@ export namespace SkillMount {
     scope: "project" | "session"
     tool_available: boolean
     unmounted_pool_count: number
+    active_profile: string
+    capability_profile_id: string
+    projection_hash: string
+    projected_tool_ids: string[]
+    projected_agents: string[]
+    selector_skill_names: string[]
+    production_skill_names: string[]
+    projected_skill_names: string[]
     skills: ResolvedSkill[]
   }
 
@@ -99,10 +117,22 @@ export namespace SkillMount {
     availableToolNames?: Iterable<string>
     skills?: Skill.Info[]
     agents?: Agent.Info[]
+    projectDirectory?: string
+    skillProjection?: PromptProfileResolver.ResolvedSkillProjection
   }): Promise<ResolvedAgentSkillSurface> {
-    const skills = input.skills ?? (await Skill.all())
+    const defaultSkills = input.skills ?? (await Skill.all())
+    const config = input.config ?? (input.sessionID ? await EffectiveConfig.effective({ sessionID: input.sessionID }) : await Config.get())
     const allAgents: Agent.Info[] =
-      input.agents ?? (await import("@/agent/agent").then(({ Agent }) => Agent.list({ config: input.config })))
+      input.agents ?? (await import("@/agent/agent").then(({ Agent }) => Agent.list({ config })))
+    const skillProjection =
+      input.skillProjection ??
+      (await PromptProfileResolver.resolveSkillProjection({
+        projectDirectory: input.projectDirectory ?? (input.sessionID ? await EffectiveConfig.directory({ sessionID: input.sessionID }) : Instance.directory),
+        config,
+        defaultSkills,
+        agentIDs: allAgents.map((agent) => agent.name),
+      }))
+    const skills = skillProjection.skills
     assertKnownMountedAgents(skills, allAgents)
     const byName = skillByName(skills)
     const mountedNames = skills
@@ -110,7 +140,8 @@ export namespace SkillMount {
       .map((skill) => skill.name)
     const mountedAgents = mountedAgentsBySkill(skills)
     const availableToolNames = input.availableToolNames ? new Set(input.availableToolNames) : undefined
-    const toolAvailable = agentCanUseSkillTool(input.agent, availableToolNames)
+    const projectedAgent = skillProjection.projectedAgentIDs.includes(input.agent.name)
+    const toolAvailable = projectedAgent && agentCanUseSkillTool(input.agent, availableToolNames)
     const mounted = mountedNames.map((name) => {
       const skill = byName.get(name)!
       const reason = disabledReason(skill, input.agent, toolAvailable, availableToolNames)
@@ -130,6 +161,14 @@ export namespace SkillMount {
       scope: input.sessionID ? "session" : "project",
       tool_available: toolAvailable,
       unmounted_pool_count: skills.filter((skill) => (mountedAgents.get(skill.name) ?? []).length === 0).length,
+      active_profile: skillProjection.activeProfile,
+      capability_profile_id: skillProjection.capabilityProfileID,
+      projection_hash: skillProjection.projectionHash,
+      projected_tool_ids: skillProjection.projectedToolIDs,
+      projected_agents: skillProjection.projectedAgentIDs,
+      selector_skill_names: skillProjection.selectorSkillNames,
+      production_skill_names: skillProjection.productionSkillNames,
+      projected_skill_names: skillProjection.projectedSkillNames,
       skills: mounted,
     }
   }
@@ -143,14 +182,24 @@ export namespace SkillMount {
     const config = input?.sessionID
       ? await EffectiveConfig.effective({ sessionID: input.sessionID })
       : await Config.get()
+    const projectDirectory = input?.sessionID ? await EffectiveConfig.directory({ sessionID: input.sessionID }) : Instance.directory
     const [installed, agents] = await Promise.all([SkillManager.installed(), Agent.list({ config })])
-    assertKnownMountedAgents(installed, agents)
-    const mountableAgents = agents.filter((agent) => agentSkillMountable(agent) && agentCanUseSkillTool(agent))
-    const mountedAgents = mountedAgentsBySkill(installed)
-    const pool = installed.map((skill) => {
+    const skillProjection = await PromptProfileResolver.resolveSkillProjection({
+      projectDirectory,
+      config,
+      defaultSkills: installed,
+      agentIDs: agents.map((agent) => agent.name),
+    })
+    const projectedAgentNames = new Set(skillProjection.projectedAgentIDs)
+    assertKnownMountedAgents(skillProjection.skills, agents)
+    const mountableAgents = agents.filter(
+      (agent) => projectedAgentNames.has(agent.name) && agentSkillMountable(agent) && agentCanUseSkillTool(agent),
+    )
+    const mountedAgents = mountedAgentsBySkill(skillProjection.skills)
+    const pool = skillProjection.skills.map((skill) => {
       const agents = mountedAgents.get(skill.name) ?? []
       return {
-        ...skill,
+        ...poolSkill(skill),
         mounted_agents: agents,
         unmounted: agents.length === 0,
         ...(agents.length === 0 ? { warning: "unmounted" as const } : {}),
@@ -158,7 +207,15 @@ export namespace SkillMount {
     })
     const rows = await Promise.all(
       mountableAgents.map(async (agent) => {
-        const surface = await resolve({ agent, config, sessionID: input?.sessionID, skills: installed, agents })
+        const surface = await resolve({
+          agent,
+          config,
+          sessionID: input?.sessionID,
+          skills: installed,
+          agents,
+          projectDirectory,
+          skillProjection,
+        })
         return {
           agent: agent.name,
           mounted: surface.skills.map(({ skill: _skill, mounted: _mounted, ...item }) => item),
@@ -168,6 +225,14 @@ export namespace SkillMount {
 
     return Matrix.parse({
       scope,
+      active_profile: skillProjection.activeProfile,
+      capability_profile_id: skillProjection.capabilityProfileID,
+      projection_hash: skillProjection.projectionHash,
+      projected_tool_ids: skillProjection.projectedToolIDs,
+      projected_agents: skillProjection.projectedAgentIDs,
+      selector_skill_names: skillProjection.selectorSkillNames,
+      production_skill_names: skillProjection.productionSkillNames,
+      projected_skill_names: skillProjection.projectedSkillNames,
       skills: pool,
       agents: mountableAgents.map((agent) => ({
         name: agent.name,
@@ -179,7 +244,7 @@ export namespace SkillMount {
         skill_tool_available: agentCanUseSkillTool(agent),
       })),
       matrix: rows,
-      project_mounts: mountsByAgent(installed),
+      project_mounts: mountsByAgent(skillProjection.skills),
       unmounted_count: pool.filter((skill) => skill.unmounted).length,
     })
   }
@@ -343,6 +408,28 @@ export namespace SkillMount {
       mounted_agents: skill.mounted_agents,
       duplicate_locations: [],
     }
+  }
+
+  function poolSkill(skill: Skill.Info): z.infer<typeof SkillManager.Installed> {
+    const candidate = skill as Skill.Info & Partial<z.infer<typeof SkillManager.Installed>>
+    return SkillManager.Installed.parse({
+      ...skill,
+      dir: candidate.dir,
+      source_type: candidate.source_type ?? (skill.builtin ? "builtin" : "unknown"),
+      source: candidate.source,
+      trust: candidate.trust ?? (skill.builtin ? "builtin" : "local"),
+      risk: candidate.risk ?? {
+        level: "low",
+        has_scripts: false,
+        has_agents: false,
+        has_references: false,
+        has_templates: false,
+      },
+      recommended_policy: candidate.recommended_policy ?? "ask",
+      policy: candidate.policy ?? "ask",
+      managed: candidate.managed ?? false,
+      writable: candidate.writable ?? false,
+    })
   }
 
   export function agentCanUseSkillTool(agent: Agent.Info, availableToolNames?: ReadonlySet<string>): boolean {

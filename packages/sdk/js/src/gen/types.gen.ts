@@ -8174,6 +8174,14 @@ export type SkillMountsResponses = {
    */
   200: {
     scope: "project" | "session"
+    active_profile: string
+    capability_profile_id: string
+    projection_hash: string
+    projected_tool_ids: Array<string>
+    projected_agents: Array<string>
+    selector_skill_names: Array<string>
+    production_skill_names: Array<string>
+    projected_skill_names: Array<string>
     skills: Array<{
       name: string
       description: string
@@ -8273,6 +8281,14 @@ export type SkillMountResponses = {
    */
   200: {
     scope: "project" | "session"
+    active_profile: string
+    capability_profile_id: string
+    projection_hash: string
+    projected_tool_ids: Array<string>
+    projected_agents: Array<string>
+    selector_skill_names: Array<string>
+    production_skill_names: Array<string>
+    projected_skill_names: Array<string>
     skills: Array<{
       name: string
       description: string
@@ -8372,6 +8388,14 @@ export type SkillUnmountResponses = {
    */
   200: {
     scope: "project" | "session"
+    active_profile: string
+    capability_profile_id: string
+    projection_hash: string
+    projected_tool_ids: Array<string>
+    projected_agents: Array<string>
+    selector_skill_names: Array<string>
+    production_skill_names: Array<string>
+    projected_skill_names: Array<string>
     skills: Array<{
       name: string
       description: string
@@ -8482,6 +8506,14 @@ export type SkillImportAndMountResponses = {
    */
   200: {
     scope: "project" | "session"
+    active_profile: string
+    capability_profile_id: string
+    projection_hash: string
+    projected_tool_ids: Array<string>
+    projected_agents: Array<string>
+    selector_skill_names: Array<string>
+    production_skill_names: Array<string>
+    projected_skill_names: Array<string>
     skills: Array<{
       name: string
       description: string

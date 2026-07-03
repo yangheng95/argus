@@ -10389,6 +10389,45 @@
                         "session"
                       ]
                     },
+                    "active_profile": {
+                      "type": "string"
+                    },
+                    "capability_profile_id": {
+                      "type": "string"
+                    },
+                    "projection_hash": {
+                      "type": "string"
+                    },
+                    "projected_tool_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "selector_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "production_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "skills": {
                       "type": "array",
                       "items": {
@@ -10716,6 +10755,14 @@
                   },
                   "required": [
                     "scope",
+                    "active_profile",
+                    "capability_profile_id",
+                    "projection_hash",
+                    "projected_tool_ids",
+                    "projected_agents",
+                    "selector_skill_names",
+                    "production_skill_names",
+                    "projected_skill_names",
                     "skills",
                     "agents",
                     "matrix",
@@ -10781,6 +10828,45 @@
                         "session"
                       ]
                     },
+                    "active_profile": {
+                      "type": "string"
+                    },
+                    "capability_profile_id": {
+                      "type": "string"
+                    },
+                    "projection_hash": {
+                      "type": "string"
+                    },
+                    "projected_tool_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "selector_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "production_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "skills": {
                       "type": "array",
                       "items": {
@@ -11108,6 +11194,14 @@
                   },
                   "required": [
                     "scope",
+                    "active_profile",
+                    "capability_profile_id",
+                    "projection_hash",
+                    "projected_tool_ids",
+                    "projected_agents",
+                    "selector_skill_names",
+                    "production_skill_names",
+                    "projected_skill_names",
                     "skills",
                     "agents",
                     "matrix",
@@ -11186,6 +11280,45 @@
                         "session"
                       ]
                     },
+                    "active_profile": {
+                      "type": "string"
+                    },
+                    "capability_profile_id": {
+                      "type": "string"
+                    },
+                    "projection_hash": {
+                      "type": "string"
+                    },
+                    "projected_tool_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "selector_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "production_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "skills": {
                       "type": "array",
                       "items": {
@@ -11513,6 +11646,14 @@
                   },
                   "required": [
                     "scope",
+                    "active_profile",
+                    "capability_profile_id",
+                    "projection_hash",
+                    "projected_tool_ids",
+                    "projected_agents",
+                    "selector_skill_names",
+                    "production_skill_names",
+                    "projected_skill_names",
                     "skills",
                     "agents",
                     "matrix",
@@ -11591,6 +11732,45 @@
                         "session"
                       ]
                     },
+                    "active_profile": {
+                      "type": "string"
+                    },
+                    "capability_profile_id": {
+                      "type": "string"
+                    },
+                    "projection_hash": {
+                      "type": "string"
+                    },
+                    "projected_tool_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "selector_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "production_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "projected_skill_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "skills": {
                       "type": "array",
                       "items": {
@@ -11918,6 +12098,14 @@
                   },
                   "required": [
                     "scope",
+                    "active_profile",
+                    "capability_profile_id",
+                    "projection_hash",
+                    "projected_tool_ids",
+                    "projected_agents",
+                    "selector_skill_names",
+                    "production_skill_names",
+                    "projected_skill_names",
                     "skills",
                     "agents",
                     "matrix",

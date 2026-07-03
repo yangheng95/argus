@@ -3009,6 +3009,7 @@ export namespace SessionLoop {
         agent: input.agent,
         config: input.config,
         sessionID: input.session.id,
+        projectDirectory: input.session.directory || Instance.directory,
         availableToolNames,
       })
       resolvedToolSkillSurfaces.set(tools, surface)

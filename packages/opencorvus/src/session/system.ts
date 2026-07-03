@@ -4,6 +4,7 @@ import { Project } from "../project/project"
 import { Shell } from "@/shell/shell"
 import { EffectiveConfig } from "@/config/effective"
 import { SkillMount } from "@/skill/mounts"
+import type { Config } from "@/config/config"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
@@ -100,10 +101,21 @@ export namespace SystemPrompt {
 
   export async function skills(
     agent: Agent.Info,
-    input?: { availableToolNames?: Iterable<string>; surface?: SkillMount.ResolvedAgentSkillSurface },
+    input?: {
+      availableToolNames?: Iterable<string>
+      surface?: SkillMount.ResolvedAgentSkillSurface
+      config?: Config.Info
+      projectDirectory?: string
+    },
   ): Promise<string | undefined> {
     const surface =
-      input?.surface ?? (await SkillMount.resolve({ agent, availableToolNames: input?.availableToolNames }))
+      input?.surface ??
+      (await SkillMount.resolve({
+        agent,
+        availableToolNames: input?.availableToolNames,
+        config: input?.config,
+        projectDirectory: input?.projectDirectory,
+      }))
     if (!surface.tool_available) return
     const compatible = surface.skills.filter((skill) => skill.enabled)
     const skillRows =

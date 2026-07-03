@@ -28,6 +28,14 @@ function send(value: unknown, init?: ResponseInit) {
 
 const emptySkillMountMatrix = {
   scope: "project",
+  active_profile: "general",
+  capability_profile_id: "general",
+  projection_hash: "test-empty-skill-mounts",
+  projected_tool_ids: [],
+  projected_agents: [],
+  selector_skill_names: [],
+  production_skill_names: [],
+  projected_skill_names: [],
   skills: [],
   agents: [],
   matrix: [],
