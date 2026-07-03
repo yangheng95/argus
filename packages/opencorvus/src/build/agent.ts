@@ -34,6 +34,7 @@ import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import { PromptProfile, type PromptProfileConfig } from "@/agent/prompt-profile"
+import { resolveAgentModel } from "@/agent/model"
 import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { EffectiveConfig } from "@/config/effective"
@@ -109,6 +110,7 @@ import {
   findOriginalBuildSessionInputEvidenceManifest,
   type BuildInputEvidenceManifest,
 } from "./evidence-manifest"
+import { BuildSessionReplayPressure } from "./session-replay-pressure"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -1366,6 +1368,21 @@ export namespace BuildAgent {
               lastMergeBackOutcome: lastMergeBackOutcome ?? null,
             })
             if (!contractErr) throw err
+            const pressureScope = { taskID: input.task.id }
+            const pressure = BuildSessionReplayPressure.evaluate({
+              sessionID: buildSession.id,
+              config: await EffectiveConfig.effective(pressureScope),
+              model: await resolveAgentModel("build", {
+                ...pressureScope,
+                explicitModel: input.model,
+              }),
+            })
+            const overweightTerminalError = createMissingTerminalReplayPressureError({
+              sessionID: buildSession.id,
+              lastMergeBackOutcome: lastMergeBackOutcome ?? null,
+              pressure,
+            })
+            if (overweightTerminalError) throw overweightTerminalError
             const continuation = createBuildTerminalContinuationRequest({
               taskID: input.task.id,
               parentSessionID: input.parentSessionID,
@@ -1951,6 +1968,25 @@ export function convertMissingTerminalToolError(
       "build report. Files already written to the goal worktree by prior attempt(s); " +
       "this turn MUST read/glob what is there and complete the build per the " +
       "standard build-agent contract (structured terminal report, not turn-final prose).",
+  )
+}
+
+export function createMissingTerminalReplayPressureError(input: {
+  sessionID: string
+  lastMergeBackOutcome?: string | null
+  pressure: BuildSessionReplayPressure.Evaluation
+}): BuildAgentContractError | null {
+  if (!input.pressure.contextUnavailableReason) return null
+  return new BuildAgentContractError(
+    "missing_terminal_report",
+    {
+      sessionID: input.sessionID,
+      lastMergeBackOutcome: input.lastMergeBackOutcome ?? null,
+    },
+    "Previous build session ended without producing the terminal build report, " +
+      "and its transcript is no longer reusable for same-session recovery " +
+      `(${input.pressure.contextUnavailableReason}). The next build retry must start a fresh Build session ` +
+      "on the recorded goal worktree and use durable retry facts rather than replaying this oversized transcript.",
   )
 }
 

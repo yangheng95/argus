@@ -1510,6 +1510,14 @@ export namespace Config {
           build: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
+              retry_replay_token_limit: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe(
+                  "Maximum estimated provider replay tokens for reusing a previous Build session on retry. When omitted, OpenCorvus derives the limit from the Build model output window and existing context budget.",
+                ),
             })
             .optional()
             .describe(

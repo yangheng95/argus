@@ -48258,6 +48258,12 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
+                  },
+                  "retry_replay_token_limit": {
+                    "description": "Maximum estimated provider replay tokens for reusing a previous Build session on retry. When omitted, OpenCorvus derives the limit from the Build model output window and existing context budget.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
                   }
                 }
               },

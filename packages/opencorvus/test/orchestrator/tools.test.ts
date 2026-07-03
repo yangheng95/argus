@@ -122,6 +122,7 @@ import {
   createDesignResourceManifest,
   recordDesignResourceManifest,
 } from "../../src/frontend-design/design-resource-manifest"
+import { installControlModel } from "../workspace/mock-control-model"
 
 const ORCHESTRATOR_TOOLS_TEST_TIMEOUT_MS = TEST_DATABASE_LOCK_DIAGNOSTIC_TIMEOUT_MS + 15_000
 
@@ -2289,6 +2290,43 @@ async function seedLatestAssistantError(input: {
     tokens: { total: 171_746, input: 8_144, output: 148, reasoning: 0, cache: { read: 163_454, write: 0 } },
     error: input.error,
     finish: "error",
+    time: { created: input.now + 1, completed: input.now + 2 },
+  } satisfies Message.Assistant)
+}
+
+async function seedLatestAssistantUsage(input: {
+  sessionID: string
+  now: number
+  inputTokens: number
+  totalTokens?: number
+}) {
+  const userMessageID = Identifier.ascending("message")
+  await Session.updateMessage({
+    id: userMessageID,
+    sessionID: input.sessionID,
+    role: "user",
+    time: { created: input.now },
+    agent: "build",
+    model: { providerID: "mock-control", modelID: "control" },
+  } satisfies Message.User)
+  await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID: input.sessionID,
+    role: "assistant",
+    parentID: userMessageID,
+    agent: "build",
+    modelID: "control",
+    providerID: "mock-control",
+    path: { cwd: Instance.directory, root: Instance.worktree },
+    cost: 0,
+    tokens: {
+      total: input.totalTokens ?? input.inputTokens + 100,
+      input: input.inputTokens,
+      output: 100,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+    finish: "stop",
     time: { created: input.now + 1, completed: input.now + 2 },
   } satisfies Message.Assistant)
 }
@@ -15710,8 +15748,9 @@ describe("orchestrator tools", () => {
   })
 
   test("goal build retry reuses the prior build session by default", async () => {
+    installControlModel()
     await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+    tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
 
     const now = Date.now()
     const stamp = now.toString(16)
@@ -15887,6 +15926,128 @@ describe("orchestrator tools", () => {
         expect(JSON.stringify(originalContract?.input_evidence)).toContain(originalRefUrl)
         expect(retryContract?.session_id).toBe(priorSessionID)
         expect(retryContract?.input_evidence).toBeNull()
+      },
+    })
+  }, 30_000)
+
+  test("goal build retry opens a fresh session on the same worktree when prior replay pressure is too high", async () => {
+    installControlModel()
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "mock-control/control",
+        agent: { build: { retry_replay_token_limit: 1_000 } },
+      },
+    })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_replay_pressure_${stamp}`
+    const taskID = `tsk_retry_replay_pressure_${stamp}`
+    const goalID = `gol_retry_replay_pressure_${stamp}`
+    const priorSessionID = `ses_prior_replay_pressure_${stamp}`
+    const freshSessionID = `ses_fresh_replay_pressure_${stamp}`
+    let observedExistingSessionID: unknown = "not-observed"
+    let observedWorktreeDir = ""
+    let observedRetryFeedback = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "fresh retry replay pressure test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Fresh retry replay pressure test",
+          taskTitle: "Fresh retry replay pressure task",
+          request: "Retry a failed goal after the prior build session became expensive to replay",
+          goalTitle: "Fresh retry after replay pressure",
+          goalSlug: "fresh-retry-replay-pressure",
+          objective: "Verify replay pressure opens fresh context on the same worktree",
+          now,
+          insertProject: false,
+        })
+        await Session.createNext({
+          id: priorSessionID,
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "Prior expensive build session",
+          directory: tmp.path,
+        })
+        const priorGoalRunID = seedTerminalFailedBuildRun({
+          taskID,
+          goalID,
+          sessionID: priorSessionID,
+          workspaceDir: tmp.path,
+          now: now + 10,
+        })
+        await seedLatestAssistantUsage({
+          sessionID: priorSessionID,
+          now: now + 20,
+          inputTokens: 1_500,
+        })
+        createDecisionLog(taskID).append({
+          phase: "retry",
+          goalID,
+          key: `build_retry_previous_${priorGoalRunID}`,
+          value: "Terminal error: exact replay-pressure failure from persisted facts",
+          reason: "replay_pressure_audit",
+        })
+
+        buildAgentRunImpl = async (input: any) => {
+          observedExistingSessionID = input.existingSessionID
+          observedWorktreeDir = input.managedWorktree.directory
+          observedRetryFeedback = String(input.context?.retryFeedback ?? "")
+          await markBuildSlotAcquired(input, freshSessionID)
+          return {
+            result: {
+              status: "failed",
+              summary: "Fresh retry used the preserved worktree after replay pressure.",
+              files_changed: [],
+              tests: [],
+              error: "fresh retry still failed",
+            },
+            sessionID: freshSessionID,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Retry without replaying the oversized prior transcript.",
+            reason: "Prior build session replay pressure is above the configured Build replay limit.",
+          },
+          buildToolOptions(),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(goalID, "failed")
+        expect(observedExistingSessionID).toBeUndefined()
+        expect(observedWorktreeDir).toBe(tmp.path)
+        expect(observedRetryFeedback).toContain("Terminal error: exact replay-pressure failure from persisted facts")
+        expect(observedRetryFeedback).not.toContain("prior_session_replay_pressure")
+        expect(observedRetryFeedback).not.toContain("Build retry selected a fresh build session")
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
+        const latest = listGoalRunsByGoal(goalID).at(0)
+        expect(latest?.session_id).toBe(freshSessionID)
+        const decision = createDecisionLog(taskID).readByKey(`build_retry_fresh_session_${priorGoalRunID}`)
+        expect(decision?.value).toContain("prior_session_replay_pressure")
+        expect(decision?.value).toContain("estimate=1500")
+        expect(decision?.value).toContain("limit=1000")
       },
     })
   }, 30_000)

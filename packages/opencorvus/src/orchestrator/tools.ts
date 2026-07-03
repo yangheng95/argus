@@ -78,6 +78,7 @@ import {
 } from "@/frontend-design/design-resource-manifest"
 import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from "@/build/evidence-pack"
 import { bindBuildInputEvidenceManifest } from "@/build/evidence-manifest"
+import { BuildSessionReplayPressure } from "@/build/session-replay-pressure"
 import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
@@ -763,6 +764,7 @@ function pendingCompactionControlContextUnavailableReason(sessionID: string): st
 }
 
 async function selectGoalBuildRetrySession(input: {
+  taskID: string
   goalID: string
   priorGoalRun?: NonNullable<ReturnType<typeof findLatestTipGoalRun>>
   managedWorktree?: { directory: string; branch: string; baseRef?: string | null }
@@ -812,6 +814,27 @@ async function selectGoalBuildRetrySession(input: {
   const latestAssistant = await latestAssistantMessageForSession(priorSessionID)
   const contextUnavailableReason = contextUnavailableReasonFromAssistantError(latestAssistant)
   if (contextUnavailableReason) return { priorSessionID, contextUnavailableReason }
+
+  const pressureConfigScope = { taskID: input.taskID }
+  const pressure = BuildSessionReplayPressure.evaluate({
+    sessionID: priorSessionID,
+    config: await EffectiveConfig.effective(pressureConfigScope),
+    model: await resolveAgentModel("build", pressureConfigScope),
+  })
+  if (pressure.contextUnavailableReason) {
+    log.info("build retry selected fresh session for replay pressure", {
+      taskID: input.taskID,
+      goalID: input.goalID,
+      priorSessionID,
+      replayTokensEstimate: pressure.summary.replayTokensEstimate,
+      replayTokenLimit: pressure.limit.tokenLimit,
+      latestAssistantInputTokens: pressure.summary.latestAssistantInputTokens,
+      toolOutputChars: pressure.summary.toolOutputChars,
+      toolInputChars: pressure.summary.toolInputChars,
+      uncompactedToolParts: pressure.summary.uncompactedToolParts,
+    })
+    return { priorSessionID, contextUnavailableReason: pressure.contextUnavailableReason }
+  }
 
   const executor = input.executor ?? "opencorvus"
   if (executor !== "opencorvus") {
@@ -13537,6 +13560,7 @@ export function createOrchestratorTools(input: {
               }
               if (priorGoalRunForRetry && !isLiveGoalRunStatus(priorGoalRunForRetry.status)) {
                 const selectedBuildSession = await selectGoalBuildRetrySession({
+                  taskID,
                   goalID: attachedGoalID,
                   priorGoalRun: priorGoalRunForRetry,
                   managedWorktree,
