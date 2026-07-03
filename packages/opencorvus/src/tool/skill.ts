@@ -10,6 +10,10 @@ import type { SkillMount } from "@/skill/mounts"
 
 const DEFAULT_SKILL_SEARCH_RESULT_LIMIT = 5
 
+function isFilesystemSkillFile(location: string) {
+  return path.basename(location).toLowerCase() === "skill.md"
+}
+
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const { SkillMount } = await import("@/skill/mounts")
   const agent = ctx?.agent
@@ -105,28 +109,39 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         metadata: {},
       })
 
-      const dir = path.dirname(skill.location)
-      const base = pathToFileURL(dir).href
-
       const limit = 10
-      const files = await iife(async () => {
-        const arr: string[] = []
-        for await (const file of Ripgrep.files({
-          cwd: dir,
-          follow: false,
-          hidden: true,
-          signal: ctx.abort,
-        })) {
-          if (file.includes("SKILL.md")) {
-            continue
-          }
-          arr.push(path.resolve(dir, file))
-          if (arr.length >= limit) {
-            break
-          }
-        }
-        return arr
-      }).then((f) => f.map((file) => `<file>${file}</file>`).join("\n"))
+      const dir = isFilesystemSkillFile(skill.location) ? path.dirname(skill.location) : ""
+      const files = dir
+        ? await iife(async () => {
+            const arr: string[] = []
+            for await (const file of Ripgrep.files({
+              cwd: dir,
+              follow: false,
+              hidden: true,
+              signal: ctx.abort,
+            })) {
+              if (file.includes("SKILL.md")) {
+                continue
+              }
+              arr.push(path.resolve(dir, file))
+              if (arr.length >= limit) {
+                break
+              }
+            }
+            return arr
+          }).then((f) => f.map((file) => `<file>${file}</file>`).join("\n"))
+        : ""
+      const bundledFileLines = dir
+        ? [
+            `Base directory for this skill: ${pathToFileURL(dir).href}`,
+            "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
+            "Note: file list is sampled.",
+            "",
+            "<skill_files>",
+            files,
+            "</skill_files>",
+          ]
+        : ["<skill_files>", "</skill_files>"]
 
       return {
         title: `Loaded skill: ${skill.name}`,
@@ -136,13 +151,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "",
           skill.content.trim(),
           "",
-          `Base directory for this skill: ${base}`,
-          "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
-          "Note: file list is sampled.",
-          "",
-          "<skill_files>",
-          files,
-          "</skill_files>",
+          ...bundledFileLines,
           "</skill_content>",
         ].join("\n"),
         metadata: {

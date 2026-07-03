@@ -1,6 +1,7 @@
 import { afterEach, test, expect } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
+import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { AgentToolPool } from "../../src/agent/tool-pool-contract"
@@ -408,7 +409,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
   })
 })
 
-test("orchestrator skill policy exposes only mounted expert-squad skills", async () => {
+test("orchestrator skill policy excludes unprojected default ordinary skills", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
@@ -450,7 +451,7 @@ mounted_agents:
       expect(prompt).toContain("The `skill` tool can search mounted skills")
       expect(prompt).toContain("fuzzy-search mounted skill titles and SKILL.md contents")
       expect(prompt).toContain("Before planning or tool use")
-      expect(prompt).toContain("tool-skill")
+      expect(prompt).not.toContain("tool-skill")
     },
   })
 })
@@ -473,6 +474,7 @@ test("skill policy still advertises search when no enabled skills are mounted", 
 test("skill policy follows the current resolved tool surface", async () => {
   await using tmp = await tmpdir({
     git: true,
+    config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
     init: async (dir) => {
       await Bun.write(
         path.join(dir, ".opencorvus", "skill", "tool-skill", "SKILL.md"),
@@ -486,6 +488,11 @@ mounted_agents:
 # Tool Skill
 `,
       )
+    },
+  })
+  await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+    agentDefaultSkillRefs: {
+      requirements: ["default/skill/tool-skill"],
     },
   })
   await Instance.provide({
@@ -505,6 +512,7 @@ mounted_agents:
 test("frontend agents expose skill loading without reopening retrieval tools", async () => {
   await using tmp = await tmpdir({
     git: true,
+    config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
     init: async (dir) => {
       await Bun.write(
         path.join(dir, ".opencorvus", "skill", "frontend-skill", "SKILL.md"),
@@ -519,6 +527,12 @@ mounted_agents:
 # Frontend Skill
 `,
       )
+    },
+  })
+  await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+    agentDefaultSkillRefs: {
+      "frontend-design": ["default/skill/frontend-skill"],
+      "frontend-research": ["default/skill/frontend-skill"],
     },
   })
   await Instance.provide({

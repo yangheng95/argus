@@ -1,10 +1,34 @@
 import fs from "fs/promises"
 import path from "node:path"
-import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 
 export const PROJECT_EXPERT_SQUAD_ID = "project-replica"
+const EXPERT_SQUAD_DIRECTORY = "expert-squads"
+const EXPERT_SQUAD_MANIFEST = "expert-squad.jsonc"
 
-export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID) {
+export interface ProjectExpertSquadManifestOptions {
+  schedulerDefaultSkillRefs?: string[]
+  buildDefaultSkillRefs?: string[]
+  agentDefaultSkillRefs?: Record<string, string[]>
+}
+
+export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID, options: ProjectExpertSquadManifestOptions = {}) {
+  const buildProjection = {
+    role_base: true,
+    ...(options.buildDefaultSkillRefs?.length ? { default_skill_refs: options.buildDefaultSkillRefs } : {}),
+    package_skill_refs: [`${id}/build/implementation`],
+    package_tool_refs: [`${id}/build/build-evidence`],
+  }
+  const extraAgentProjections = Object.fromEntries(
+    Object.entries(options.agentDefaultSkillRefs ?? {})
+      .filter(([agentID]) => agentID !== "build")
+      .map(([agentID, refs]) => [
+        agentID,
+        {
+          role_base: true,
+          ...(refs.length ? { default_skill_refs: refs } : {}),
+        },
+      ]),
+  )
   return {
     schema_version: 1,
     id,
@@ -20,6 +44,9 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID) {
       scheduler: {
         role_base: true,
         built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+        ...(options.schedulerDefaultSkillRefs?.length
+          ? { default_skill_refs: options.schedulerDefaultSkillRefs }
+          : {}),
         package_skill_refs: [`${id}/orchestrator/scheduler`],
         package_tool_refs: [`${id}/orchestrator/source-evidence`],
         package_mcp_server_refs: [`${id}/orchestrator/package-browser`],
@@ -28,11 +55,8 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID) {
         package_mcp_resource_refs: [`${id}/orchestrator/package-browser/resource/dom`],
       },
       agents: {
-        build: {
-          role_base: true,
-          package_skill_refs: [`${id}/build/implementation`],
-          package_tool_refs: [`${id}/build/build-evidence`],
-        },
+        build: buildProjection,
+        ...extraAgentProjections,
       },
     },
     agents: {
@@ -51,7 +75,11 @@ export function projectExpertSquadManifest(id = PROJECT_EXPERT_SQUAD_ID) {
   }
 }
 
-export function projectExpertSquadFiles(id = PROJECT_EXPERT_SQUAD_ID, prefix = ""): Record<string, string> {
+export function projectExpertSquadFiles(
+  id = PROJECT_EXPERT_SQUAD_ID,
+  prefix = "",
+  options: ProjectExpertSquadManifestOptions = {},
+): Record<string, string> {
   const root = prefix ? `${prefix.replace(/\/+$/, "")}/` : ""
   return {
     [`${root}README.md`]: "# Project Replica\n",
@@ -68,13 +96,17 @@ export function projectExpertSquadFiles(id = PROJECT_EXPERT_SQUAD_ID, prefix = "
       null,
       2,
     ),
-    [`${root}${ExpertSquadRegistry.MANIFEST}`]: JSON.stringify(projectExpertSquadManifest(id), null, 2),
+    [`${root}${EXPERT_SQUAD_MANIFEST}`]: JSON.stringify(projectExpertSquadManifest(id, options), null, 2),
   }
 }
 
-export async function writeProjectExpertSquadPackage(projectRoot: string, id = PROJECT_EXPERT_SQUAD_ID): Promise<string> {
-  const packageRoot = path.join(projectRoot, ".opencorvus", ExpertSquadRegistry.DIRECTORY, id)
-  for (const [relativePath, content] of Object.entries(projectExpertSquadFiles(id))) {
+export async function writeProjectExpertSquadPackage(
+  projectRoot: string,
+  id = PROJECT_EXPERT_SQUAD_ID,
+  options: ProjectExpertSquadManifestOptions = {},
+): Promise<string> {
+  const packageRoot = path.join(projectRoot, ".opencorvus", EXPERT_SQUAD_DIRECTORY, id)
+  for (const [relativePath, content] of Object.entries(projectExpertSquadFiles(id, "", options))) {
     const target = path.join(packageRoot, relativePath)
     await fs.mkdir(path.dirname(target), { recursive: true })
     await fs.writeFile(target, content)

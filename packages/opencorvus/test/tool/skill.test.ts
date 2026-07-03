@@ -63,13 +63,15 @@ description: Skill that must stay unavailable until mounted.
         },
       })
     } finally {
-      process.env.OPENCORVUS_TEST_HOME = home
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
     }
   })
 
   test("execute without name searches compatible skill metadata", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const skillDir = path.join(dir, ".opencorvus", "skill", "tool-skill")
         await Bun.write(
@@ -86,6 +88,9 @@ mounted_agents:
         )
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: ["default/skill/tool-skill"],
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -96,7 +101,8 @@ mounted_agents:
         fn: async () => {
           const build = await Agent.get("build")
           expect(build).toBeDefined()
-          const tool = await SkillTool.init({ agent: build })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const tool = await SkillTool.init({ agent: build, config })
           const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
@@ -127,27 +133,31 @@ mounted_agents:
   })
 
   test("execute without name defaults list and search results to five skills", async () => {
+    const defaultLimitSkillNames = Array.from({ length: 7 }, (_, index) => `default-limit-skill-${index + 1}`)
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
-        for (let index = 1; index <= 7; index++) {
-          const name = `default-limit-skill-${index}`
+        for (const [index, name] of defaultLimitSkillNames.entries()) {
           await Bun.write(
             path.join(dir, ".opencorvus", "skill", name, "SKILL.md"),
             `---
 name: ${name}
-description: Common default limit workflow ${index}.
+description: Common default limit workflow ${index + 1}.
 mounted_agents:
   - build
 ---
 
-# Default Limit Skill ${index}
+# Default Limit Skill ${index + 1}
 
-Common default limit workflow body ${index}.
+Common default limit workflow body ${index + 1}.
 `,
           )
         }
       },
+    })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: defaultLimitSkillNames.map((name) => `default/skill/${name}`),
     })
 
     const home = process.env.OPENCORVUS_TEST_HOME
@@ -159,7 +169,8 @@ Common default limit workflow body ${index}.
         fn: async () => {
           const build = await Agent.get("build")
           expect(build).toBeDefined()
-          const tool = await SkillTool.init({ agent: build })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const tool = await SkillTool.init({ agent: build, config })
           const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
 
           const listResult = await tool.execute({}, ctx)
@@ -188,6 +199,7 @@ Common default limit workflow body ${index}.
   test("execute without name fuzzy-searches skill title and content", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const skillDir = path.join(dir, ".opencorvus", "skill", "semantic-workflow")
         await Bun.write(
@@ -206,6 +218,9 @@ Use viewport parity ledger notes and DOM affordance analysis before implementati
         )
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: ["default/skill/semantic-workflow"],
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -216,7 +231,8 @@ Use viewport parity ledger notes and DOM affordance analysis before implementati
         fn: async () => {
           const build = await Agent.get("build")
           expect(build).toBeDefined()
-          const tool = await SkillTool.init({ agent: build })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const tool = await SkillTool.init({ agent: build, config })
           const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
 
           const titleResult = await tool.execute({ query: "evdnc cntrct" }, ctx)
@@ -237,6 +253,7 @@ Use viewport parity ledger notes and DOM affordance analysis before implementati
   test("uses the turn-scoped resolved surface for prompt and tool search", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const skillDir = path.join(dir, ".opencorvus", "skill", "needs-websearch")
         await Bun.write(
@@ -255,6 +272,9 @@ mounted_agents:
         )
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: ["default/skill/needs-websearch"],
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -265,7 +285,8 @@ mounted_agents:
         fn: async () => {
           const build = await Agent.get("build")
           expect(build).toBeDefined()
-          const surface = await SkillMount.resolve({ agent: build!, availableToolNames: ["skill"] })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const surface = await SkillMount.resolve({ agent: build!, config, availableToolNames: ["skill"] })
           expect(surface.skills.find((skill) => skill.name === "needs-websearch")?.reason).toBe("missing_required_tool")
           const prompt = await SystemPrompt.skills(build!, { surface })
           expect(prompt ?? "").not.toContain("needs-websearch")
@@ -286,6 +307,7 @@ mounted_agents:
   test("execute returns skill content block with files", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const skillDir = path.join(dir, ".opencorvus", "skill", "tool-skill")
         await Bun.write(
@@ -305,6 +327,9 @@ Use this skill.
         await Bun.write(path.join(skillDir, "scripts", "demo.txt"), "demo")
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: ["default/skill/tool-skill"],
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -315,7 +340,8 @@ Use this skill.
         fn: async () => {
           const build = await Agent.get("build")
           expect(build).toBeDefined()
-          const tool = await SkillTool.init({ agent: build })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const tool = await SkillTool.init({ agent: build, config })
           const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
@@ -378,6 +404,41 @@ Use this skill.
           expect(innovate.output).toContain("Design Philosophy Contract")
           expect(innovate.output).toContain("Existing URL Redesign Flow")
           expect(innovate.output).toContain("rejected shallow or generic draft traits")
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
+  test("project expert-squad selector load does not sample package production files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(tmp.path)
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const orchestrator = await Agent.get("orchestrator")
+          expect(orchestrator).toBeDefined()
+          const tool = await SkillTool.init({ agent: orchestrator })
+          const ctx: Tool.Context = { ...baseCtx, agent: "orchestrator", ask: async () => {} }
+
+          const loaded = await tool.execute({ name: `${PROJECT_EXPERT_SQUAD_ID}-expert-squad` }, ctx)
+
+          expect(loaded.output).toContain(`<skill_content name="${PROJECT_EXPERT_SQUAD_ID}-expert-squad">`)
+          expect(loaded.output).toContain(`profile_id ${PROJECT_EXPERT_SQUAD_ID}`)
+          expect(loaded.output).not.toContain("Base directory for this skill")
+          expect(loaded.output).not.toContain(`${path.sep}agents${path.sep}`)
+          expect(loaded.output).not.toContain(`${path.sep}tools${path.sep}`)
+          expect(loaded.output).not.toContain(`${path.sep}mcp${path.sep}`)
+          expect(loaded.output).not.toContain("source-evidence")
+          expect(loaded.output).not.toContain("build-evidence")
+          expect(loaded.output).not.toContain("package-browser")
+          expect(loaded.metadata.dir).toBe("")
         },
       })
     } finally {
@@ -476,6 +537,73 @@ Use this skill.
     }
   })
 
+  test("default skill mounted_agents do not grant visibility outside manifest refs", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, ".opencorvus", "skill", "shared-note", "SKILL.md"),
+          [
+            "---",
+            "name: shared-note",
+            "description: Default skill with stale mounted agents.",
+            "mounted_agents:",
+            "  - requirements",
+            "---",
+            "",
+            "# Shared Note",
+            "",
+            "This default skill is projected only to Build.",
+          ].join("\n"),
+        )
+      },
+    })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      buildDefaultSkillRefs: ["default/skill/shared-note"],
+    })
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const [build, requirements] = await Promise.all([Agent.get("build"), Agent.get("requirements")])
+          expect(build).toBeDefined()
+          expect(requirements).toBeDefined()
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+
+          const buildSurface = await SkillMount.resolve({ agent: build!, config })
+          expect(buildSurface.skills.map((skill) => skill.name)).toContain("shared-note")
+          expect(buildSurface.skills.find((skill) => skill.name === "shared-note")?.skill.mounted_agents).toEqual([
+            "build",
+          ])
+          const buildSkill = await SkillTool.init({ agent: build, skillSurface: buildSurface })
+          expect((await buildSkill.execute({ query: "shared" }, { ...baseCtx, ask: async () => {} })).output).toContain(
+            "<name>shared-note</name>",
+          )
+          expect(
+            (await buildSkill.execute({ name: "shared-note" }, { ...baseCtx, ask: async () => {} })).output,
+          ).toContain('<skill_content name="shared-note">')
+
+          const requirementsSurface = await SkillMount.resolve({ agent: requirements!, config })
+          expect(requirementsSurface.skills.map((skill) => skill.name)).not.toContain("shared-note")
+          expect((await SystemPrompt.skills(requirements!, { surface: requirementsSurface })) ?? "").not.toContain(
+            "shared-note",
+          )
+          const requirementsSkill = await SkillTool.init({ agent: requirements, skillSurface: requirementsSurface })
+          await expect(
+            requirementsSkill.execute({ name: "shared-note" }, { ...baseCtx, agent: "requirements", ask: async () => {} }),
+          ).rejects.toThrow('Skill "shared-note" not found or not allowed')
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("removed webpage-generate and ainvest design system builtins are not visible or loadable", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME
@@ -519,6 +647,7 @@ Use this skill.
   test("visual-qa can load acceptance skills without reopening webpage extraction skills", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const visualSkillDir = path.join(dir, ".opencorvus", "skill", "visual-acceptance")
         await Bun.write(
@@ -564,6 +693,12 @@ Collect source webpage evidence.
         )
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      agentDefaultSkillRefs: {
+        "visual-qa": ["default/skill/visual-acceptance", "default/skill/visual-extraction"],
+        "frontend-design": ["default/skill/visual-extraction"],
+      },
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -579,9 +714,10 @@ Collect source webpage evidence.
           expect(frontendDesign).toBeDefined()
           expect(build).toBeDefined()
 
-          const visualQaSkill = await SkillTool.init({ agent: visualQa })
-          const frontendDesignSkill = await SkillTool.init({ agent: frontendDesign })
-          const buildSkill = await SkillTool.init({ agent: build })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const visualQaSkill = await SkillTool.init({ agent: visualQa, config })
+          const frontendDesignSkill = await SkillTool.init({ agent: frontendDesign, config })
+          const buildSkill = await SkillTool.init({ agent: build, config })
           const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
 
           const visualQaResult = await visualQaSkill.execute({ query: "visual" }, ctx)
@@ -611,6 +747,7 @@ Collect source webpage evidence.
   test("integrity can search and load mounted preview-compatible skills through the canonical skill tool", async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } },
       init: async (dir) => {
         const allowedSkillDir = path.join(dir, ".opencorvus", "skill", "integrity-acceptance")
         await Bun.write(
@@ -651,6 +788,11 @@ This should stay unavailable to integrity.
         )
       },
     })
+    await writeProjectExpertSquadPackage(tmp.path, PROJECT_EXPERT_SQUAD_ID, {
+      agentDefaultSkillRefs: {
+        integrity: ["default/skill/integrity-acceptance", "default/skill/integrity-extraction"],
+      },
+    })
 
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -662,7 +804,8 @@ This should stay unavailable to integrity.
           const integrity = await Agent.get("integrity")
           expect(integrity).toBeDefined()
 
-          const integritySkill = await SkillTool.init({ agent: integrity })
+          const config = Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } })
+          const integritySkill = await SkillTool.init({ agent: integrity, config })
           const ctx: Tool.Context = { ...baseCtx, agent: "integrity", ask: async () => {} }
 
           const result = await integritySkill.execute({ query: "integrity" }, ctx)

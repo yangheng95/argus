@@ -407,10 +407,6 @@ export namespace PromptProfileResolver {
         : unique(["orchestrator", ...Object.keys(active.pkg.manifest.capability_projection.agents)])
 
     const projected = new Map<string, { skill: Skill.Info; source: SkillSourceKind }>()
-    for (const skill of defaultSkills) {
-      if (allSelectorNames.has(skill.name)) continue
-      addProjectedSkill(projected, { ...skill, mounted_agents: [...skill.mounted_agents] }, "default")
-    }
 
     const selectorPackages =
       active.profileID === DEFAULT_PROMPT_PROFILE_ID
@@ -453,7 +449,7 @@ export namespace PromptProfileResolver {
           projected,
           {
             ...skill,
-            mounted_agents: unique([...skill.mounted_agents, role]),
+            mounted_agents: [role],
           },
           "default",
         )
