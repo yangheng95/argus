@@ -275,6 +275,355 @@ Prior art changes the emphasis of the consensus design:
 4. `SessionPrompt` byte materialization must receive the same explicit run/session owner as the Build manifest. Ambient `Instance.project.id` is the pattern that prior-art systems avoid for job/run artifacts.
 5. Retry semantics should follow run identity rather than title/goal labels: same Build session keeps the original manifest; new Build session means a new manifest.
 
+## Detailed Goal Execution Plan
+
+Execute these goals in order. Do not merge a later goal before the earlier goal's focused tests pass. Each implementation goal must leave a commit trail before moving to the next behavior surface.
+
+### Goal 0: Recall And Ownership Freeze
+
+Purpose: prevent implementation drift before code changes.
+
+Steps:
+
+1. Re-read this record's `Recall`, `Current Evidence`, `Expanded Impact Surface Investigation`, and `External Prior Art Check`.
+2. Run the current whole-repository greps for `build_session_contract`, `BuildEvidencePack`, `AttachmentStore.write`, `writeFromPath`, `stageToWorktree`, `SessionPrompt`, `beginBuildAttempt`, and `collectReferencedShas`.
+3. Record any newly discovered callsite in this file before editing code.
+4. Confirm the worktree has unrelated changes isolated from this repair.
+
+Acceptance:
+
+- The implementation owner can list every affected callsite and whether it is in scope for this repair.
+- No code file has been edited before the Recall and grep evidence are refreshed.
+
+Do not:
+
+- Start with `BuildAgent.run` edits from memory.
+- Add a new artifact kind, table, or route before the callsite map is current.
+
+### Goal 1: Contract Schema And Validation Surface
+
+Purpose: define one typed Build input evidence contract before callers write it.
+
+Primary files:
+
+- `packages/opencorvus/src/build/agent.ts`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- a focused new or existing test file under `packages/opencorvus/test/build-agent` or `packages/opencorvus/test/orchestrator`
+
+Steps:
+
+1. Introduce a typed value for `build_session_contract.input_evidence` with fields listed in this record.
+2. Add a pure validator/composer that accepts task-owned candidate evidence and returns an immutable manifest.
+3. Validate owner project, attachment metadata, readable bytes, sha, role, source, and intent before any Build session prompt or provider replay can use the entries.
+4. Make validation errors name the offending role and ref.
+
+Tests first:
+
+- foreign-project ref is rejected with the expected project and actual project in the error;
+- missing blob is rejected before provider replay;
+- metadata sha mismatch is rejected before contract creation.
+
+Acceptance:
+
+- The validator is callable without starting a Build session.
+- The validator has no fallback copy path and never rewrites foreign attachment URLs.
+
+Do not:
+
+- Create a parallel `build_input_evidence` artifact.
+- Treat `legacy_attachment_url` as semantic ownership.
+
+### Goal 2: Orchestrator Dispatch Uses The Manifest
+
+Purpose: make Build dispatch create the single input manifest before `BuildAgent.run`.
+
+Primary files:
+
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/test/orchestrator/tools.test.ts`
+
+Steps:
+
+1. Change `composeBuildEvidencePack` / `targetEvidenceForBuild` / `loadPreviousRenderedOutputEvidence` flow so their output feeds the manifest composer.
+2. Reject invalid evidence before calling `BuildAgent.run`.
+3. Pass the validated manifest into `BuildAgent.run` through the existing context or a precise typed input.
+4. Extend `buildSessionContractArtifactForAttempt` so `build_session_contract.payload.input_evidence` is written through `beginBuildAttempt.extraArtifacts`.
+5. Include the input evidence digest in the existing contract digest calculation.
+
+Tests first:
+
+- `BuildAgent.run` spy is not called when manifest validation fails;
+- `build_session_contract` payload contains `input_evidence` when dispatch succeeds;
+- direct task-level Build and goal Build both use the same validation path.
+
+Acceptance:
+
+- `build_session_contract` is the only durable Build input authority.
+- Dispatch failure is visible as a Build/orchestrator error, not a downstream provider error.
+
+Do not:
+
+- Persist a half contract before the Build session exists.
+- Add a route-level global task lookup to find evidence.
+
+### Goal 3: BuildAgent Stages From The Manifest Owner
+
+Purpose: remove ambient project ownership from Build evidence staging.
+
+Primary files:
+
+- `packages/opencorvus/src/build/agent.ts`
+- `packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts`
+
+Steps:
+
+1. Replace `AttachmentStore.stageToWorktree(Instance.project.id, ...)` with the manifest/task owner project.
+2. Ensure `buildEvidenceEntries` cannot reintroduce entries that were not validated into the manifest.
+3. Carry staged relative paths back into the manifest or contract projection if staging is the source for provider-bound file parts.
+4. Keep `AttachmentStore.stageToWorktree` strict.
+
+Tests first:
+
+- active `Instance.project.id` differs from `input.task.project_id`; staging uses `input.task.project_id`;
+- foreign evidence still fails before staging;
+- staged list renders only validated entries.
+
+Acceptance:
+
+- No Build-owned staging call in `build/agent.ts` uses ambient `Instance.project.id`.
+- Errors still surface as hard failures.
+
+Do not:
+
+- Copy foreign blobs into the task project.
+- Catch staging errors and continue without evidence.
+
+### Goal 4: SessionPrompt Byte Materialization Owner
+
+Purpose: ensure provider-bound byte writes use the Build/session owner, not ambient project context.
+
+Primary files:
+
+- `packages/opencorvus/src/session/prompt/parts.ts`
+- `packages/opencorvus/src/session/prompt/schema.ts`
+- `packages/opencorvus/src/agent/runner.ts`
+- `packages/opencorvus/src/orchestrator/agent.ts`
+- `packages/opencorvus/src/scheduler/task-queue-service.ts`
+- `packages/opencorvus/test/session/prompt*.test.ts`
+- `packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts`
+
+Steps:
+
+1. Add an explicit byte materialization owner to `SessionPrompt.PromptInput` or session runtime contract.
+2. For Build sessions, populate that owner from `task.project_id` / the validated Build manifest.
+3. Use that owner in MCP blob, `data:` file part, and binary `file://` materialization paths.
+4. Preserve ordinary non-Build session behavior by requiring their existing session project as the explicit owner at the call boundary.
+5. Ensure queued prompt replay serializes and restores the owner, rather than recomputing it from the active Instance.
+
+Tests first:
+
+- Build-bound MCP blob writes `/attachment/<task.project_id>/...` even when active Instance differs;
+- Build-bound `data:` file writes `/attachment/<task.project_id>/...`;
+- Build-bound binary `file://` writes `/attachment/<task.project_id>/...`;
+- queued prompt replay preserves the original owner.
+
+Acceptance:
+
+- `session/prompt/parts.ts` has no Build-relevant `AttachmentStore.write(Instance.project.id, ...)` or `writeFromPath(Instance.project.id, ...)`.
+- Missing owner is a structural error for Build-bound prompts.
+
+Do not:
+
+- Infer owner from attachment URL.
+- Add a "try task project, else Instance project" fallback.
+
+### Goal 5: Same-Session Retry Reuses The Original Manifest
+
+Purpose: make retry semantics match Build session identity.
+
+Primary files:
+
+- `packages/opencorvus/src/build/agent.ts`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/src/workbench/board.ts`
+- `packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts`
+- `packages/opencorvus/test/orchestrator/tools.test.ts`
+
+Steps:
+
+1. When `existingSessionID` is present, load the original `build_session_contract.input_evidence` for that session.
+2. Reject retry if the existing session has no contract or the contract task/project/session does not match.
+3. Repair staged file parts only from the original manifest/staged paths.
+4. Ensure a fresh Build session creates a new manifest.
+
+Tests first:
+
+- same-session retry does not add fresh model file parts;
+- same-session retry fails if original manifest is absent;
+- fresh session writes a new manifest with a different session id;
+- retry repair uses the manifest owner, not ambient project.
+
+Acceptance:
+
+- Retry behavior is derived from Build session identity, not goal title, current task attachments, or current active project.
+
+Do not:
+
+- Re-run evidence discovery for a reused Build session.
+- Silently continue when a previous contract is missing.
+
+### Goal 6: Garbage Collection Keeps Contract-Held Evidence
+
+Purpose: prevent manifest-owned evidence from being swept while the Build contract is live.
+
+Primary files:
+
+- `packages/opencorvus/src/storage/attachment-store.ts`
+- `packages/opencorvus/test/storage/attachment-store-sweep.test.ts`
+
+Steps:
+
+1. Confirm `collectReferencedShas` sees `build_session_contract.payload.input_evidence.legacy_attachment_url`.
+2. Add a test with a live Build contract whose only reference to the blob is inside `input_evidence`.
+3. Keep regex harvesting as legacy retention for Phase 1.
+4. Document that Phase 2 replaces this with `artifact_file_ref`.
+
+Tests first:
+
+- sweep retains a blob referenced only by `build_session_contract.input_evidence`;
+- sweep does not retain a blob with no DB reference.
+
+Acceptance:
+
+- Build input evidence does not disappear between dispatch and retry.
+
+Do not:
+
+- Add a second GC live-set source for the same Phase 1 attachment URL contract.
+
+### Goal 7: Projection Readers Stay Single-Source
+
+Purpose: keep board, compaction, and redispatch readers aligned with the extended contract.
+
+Primary files:
+
+- `packages/opencorvus/src/workbench/board.ts`
+- `packages/opencorvus/src/session/compaction.ts`
+- `packages/opencorvus/src/session/compaction-handoff.ts`
+- tests covering contract summaries/projections
+
+Steps:
+
+1. Audit every `build_session_contract` reader.
+2. If a reader exposes Build input summaries, read `payload.input_evidence` from the same contract.
+3. If a reader does not expose Build inputs, leave it unchanged and document why.
+4. Ensure compaction handoff does not invent a second Build evidence summary.
+
+Tests first:
+
+- board/compaction readers tolerate the new contract field;
+- any surfaced Build input summary uses the contract field, not recomputed task attachments.
+
+Acceptance:
+
+- No projection layer recomputes Build evidence ownership from current task state.
+
+Do not:
+
+- Add duplicate summary artifacts to make UI rendering easier.
+
+### Goal 8: Project/Route Boundary Regression Coverage
+
+Purpose: ensure the repair does not become a route fallback or project lookup bypass.
+
+Primary files:
+
+- `packages/transport-protocol/src/index.ts`
+- `packages/sdk/js/src/client.ts`
+- `packages/overlay/src/services/api.ts`
+- existing server route tests for task/orchestrator reads and writes
+
+Steps:
+
+1. Confirm no route policy change is required for the Phase 1 fix.
+2. Add or preserve regression tests proving task record reads may bypass directory while writes remain project-scoped.
+3. Add a Build dispatch test where active project and task project differ, proving dispatch rejects or re-provides the task project before evidence materialization.
+
+Acceptance:
+
+- No global task fallback is introduced.
+- SDK and overlay directory injection behavior remain unchanged unless a separate route design is written.
+
+Do not:
+
+- Modify `routeRequiresProjectDirectory` to hide Build ownership bugs.
+
+### Goal 9: Documentation And Current Architecture Update
+
+Purpose: make the implemented behavior the current architecture after tests pass.
+
+Primary files:
+
+- `specs/current/architecture/02-data.md`
+- `specs/current/architecture/10-worktree-lifecycle.md`
+- `specs/records/2026-07/README.md`
+- this record
+
+Steps:
+
+1. After implementation tests pass, update current architecture docs with storage namespace, Build manifest, retry, and byte materialization owner behavior.
+2. Mark this record's implementation status and final verification commands.
+3. Run docs health tests.
+
+Verification:
+
+```powershell
+bun test packages/opencorvus/test/script/historical-docs-links.test.ts packages/opencorvus/test/script/document-health.test.ts packages/opencorvus/test/script/product-docs-single-source.test.ts --timeout 120000
+```
+
+Acceptance:
+
+- Current docs do not describe this as a future plan after implementation lands.
+
+Do not:
+
+- Update current architecture before code behavior exists.
+
+### Goal 10: End-To-End Failure Reproduction
+
+Purpose: verify the original failure class is actually sealed.
+
+Steps:
+
+1. Create or reuse a fixture that simulates a task with Build evidence refs owned by another project namespace and missing blob refs.
+2. Run Build dispatch and assert failure occurs before provider replay.
+3. Run a valid Build evidence case and assert the contract is written, staged evidence uses the manifest owner, and provider-bound parts materialize under the same owner.
+4. Run same-session retry and fresh-session retry cases.
+5. Run final typecheck and focused test suites.
+
+Focused verification commands:
+
+```powershell
+bun test packages/opencorvus/test/orchestrator/tools.test.ts --timeout 120000
+bun test packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts --timeout 120000
+bun test packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/session/prompt-parts-model-resolution.test.ts --timeout 120000
+bun test packages/opencorvus/test/storage/attachment-store-sweep.test.ts --timeout 120000
+bun run --cwd packages/opencorvus typecheck
+```
+
+Acceptance:
+
+- Foreign project and missing blob evidence fail before provider replay.
+- Valid evidence produces one `build_session_contract.input_evidence` authority.
+- Build-bound bytes are written under the manifest/session owner.
+- Same-session retry reuses the original manifest.
+- Fresh session retry writes a new manifest.
+
+Do not:
+
+- Call the repair complete after mocked contract-only tests.
+- Use a provider 401 as evidence that namespace repair failed; provider auth remains separate.
+
 ## Implementation Phases
 
 ### Phase 1: Seal The Current Failure Chain
