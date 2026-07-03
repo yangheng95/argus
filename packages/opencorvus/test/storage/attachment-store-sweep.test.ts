@@ -445,6 +445,73 @@ describe("AttachmentStore.sweep", () => {
     })
   })
 
+  test("retains blobs referenced only by build session contract input evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const taskID = Identifier.ascending("task")
+        const kept = await AttachmentStore.write(projectID, differentBytes(29), "image/png", "contract-held.png")
+        const orphan = await AttachmentStore.write(projectID, differentBytes(30), "image/png", "orphan.png")
+
+        seedTaskWithFileRefs({ projectID, taskID })
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              kind: "build_session_contract",
+              label: "build-session-contract",
+              payload: {
+                session_id: "ses_contract_held",
+                task_id: taskID,
+                goal_id: "gol_contract_held",
+                goal_run_id: "gr_contract_held",
+                input_evidence: {
+                  version: 1,
+                  project_id: projectID,
+                  task_id: taskID,
+                  goal_id: "gol_contract_held",
+                  goal_run_id: "gr_contract_held",
+                  session_id: "ses_contract_held",
+                  entries: [
+                    {
+                      role: "target_reference",
+                      project_id: projectID,
+                      sha: kept.sha,
+                      mime: kept.mime,
+                      size: kept.size,
+                      filename: kept.filename,
+                      source_task_id: taskID,
+                      legacy_attachment_url: kept.url,
+                      sha_verified_at: 123,
+                    },
+                  ],
+                },
+              },
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
+        )
+
+        const retain = AttachmentStore.collectReferencedShas(projectID).get(projectID) ?? new Set<string>()
+        expect([...retain]).toEqual([kept.sha])
+
+        await ageFile(attachmentAbs(projectID, kept.url), 120_000)
+        await ageFile(attachmentAbs(projectID, orphan.url), 120_000)
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.deleted).toBe(1)
+        expect(result.kept).toBe(1)
+        const remaining = (await AttachmentStore.listOnDisk(projectID)).map((file) => file.sha)
+        expect(remaining).toEqual([kept.sha])
+      },
+    })
+  })
+
   test("project-scoped retain scan ignores foreign project rows", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })

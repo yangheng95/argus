@@ -843,7 +843,8 @@ export namespace AttachmentStore {
    *   • `engine_task.system_artifacts`      (SYSTEM-GENERATED evidence)
    *   • `decision_log.value/reason`         (Visual QA annotated evidence refs)
    *   • `engine_artifact.payload`           (design manifests, browser-preview
-   *                                          evidence, acceptance evidence)
+   *                                          evidence, acceptance evidence,
+   *                                          build_session_contract.input_evidence)
    *   • `engine_interaction_request`,
    *     `engine_progress_snapshot`, and
    *     `engine_channel_binding` payloads    (durable task-scoped runtime facts)
