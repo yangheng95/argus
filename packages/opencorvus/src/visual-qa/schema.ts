@@ -56,7 +56,9 @@ export const VisualQaCheckItemSchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe("Required reference parity key in region_id@viewport_id form when this check covers one bound reference region."),
+    .describe(
+      "Required reference parity key in region_id@viewport_id form when this check covers one bound reference region.",
+    ),
   status: VisualQaCheckItemStatusSchema,
   expected: z.string().min(1).describe("Expected visual or functional condition from task/source evidence."),
   observed: z.string().min(1).describe("Observed rendered result from fresh evidence."),
@@ -65,8 +67,10 @@ export const VisualQaCheckItemSchema = z.object({
   source_refs: z.array(z.string().min(1)).default([]),
   evidence_refs: z
     .array(z.string().min(1))
-    .min(1)
-    .describe("Fresh evidence refs that prove this check result."),
+    .default([])
+    .describe(
+      "Fresh evidence refs that prove this check result when already known. Initial check registration may leave this empty; the final report must still have registered evidence rows tied to this check ID.",
+    ),
   required_correction: z
     .string()
     .min(1)
@@ -137,7 +141,9 @@ export const VisualQaUnresolvedCodeModuleProblemSchema = z.object({
   reason: z
     .string()
     .min(1)
-    .describe("Evidence-backed reason Visual QA cannot safely repair this code module problem inside the current worktree."),
+    .describe(
+      "Evidence-backed reason Visual QA cannot safely repair this code module problem inside the current worktree.",
+    ),
   blocker_ids: z.array(z.string().min(1)).min(1).describe("Production blocker IDs that expose this problem."),
   evidence_refs: z.array(z.string().min(1)).default([]),
 })
@@ -156,11 +162,7 @@ export const VisualQaProblemDomRegionSchema = z.object({
   route: z.string().min(1).optional().describe("Rendered app route where this DOM region was observed."),
   viewport: VisualQaViewportSchema.optional(),
   locator: z.string().min(1).describe("Stable selector or locator expression for the problematic rendered DOM node."),
-  dom_path: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Concise path from the target node through relevant ancestors."),
+  dom_path: z.string().min(1).optional().describe("Concise path from the target node through relevant ancestors."),
   outer_html_excerpt: z.string().min(1).describe("Bounded HTML excerpt for the target DOM node."),
   ancestor_context: z
     .array(z.string().min(1))
@@ -177,7 +179,9 @@ export const VisualQaProblemDomRegionSchema = z.object({
   computed_style: z
     .record(z.string(), z.string())
     .default({})
-    .describe("Selected computed style values such as display, position, margin, padding, font, color, overflow, width, and height."),
+    .describe(
+      "Selected computed style values such as display, position, margin, padding, font, color, overflow, width, and height.",
+    ),
   attributes: z
     .record(z.string(), z.string())
     .default({})

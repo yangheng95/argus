@@ -60,6 +60,22 @@ export type SourceRegionCandidate = {
   sourceRefs: string[]
   score?: number
   matchedAnchors?: string[]
+  matchedIdentityAnchors?: string[]
+  matchedExplicitAnchors?: string[]
+  matchedPrimaryPhrases?: string[]
+  matchedCorePrimaryPhrases?: string[]
+  moduleCoverage?: SourceRegionCandidateCoverage
+}
+
+export type SourceRegionCandidateCoverage = {
+  areaRatio: number
+  accepted: boolean
+  reason: string
+  coveragePrimaryPhraseCount: number
+  matchedCoveragePrimaryPhraseCount: number
+  corePrimaryPhraseCount: number
+  matchedCorePrimaryPhraseCount: number
+  matchedIdentityAnchorCount: number
 }
 
 export type LocalModuleSourceBindingResult = {
@@ -268,20 +284,53 @@ export function selectSourceRegionCandidate(input: {
     ...input.componentFiles.flatMap((file) => path.basename(file, path.extname(file)).split(/[-_.]/g)),
   ])
   const explicitAnchors = normalizeAnchors(input.explicitTextAnchors)
-  const localAnchors = normalizeAnchors([
-    ...input.localCapture.textAnchors,
-    input.localCapture.fullText.slice(0, 200),
-  ])
+  const localAnchors = normalizeAnchors([...input.localCapture.textAnchors, input.localCapture.fullText.slice(0, 200)])
+  const primaryPhrases = normalizePrimaryPhrases([...input.localCapture.textAnchors, ...input.explicitTextAnchors])
+  const corePrimaryPhrases = normalizePrimaryPhrases(input.localCapture.textAnchors.slice(0, 4))
+  const effectiveCorePrimaryPhrases =
+    corePrimaryPhrases.length > 0 ? corePrimaryPhrases : normalizePrimaryPhrases(input.explicitTextAnchors.slice(0, 4))
   const anchors = Array.from(new Set([...identityAnchors, ...explicitAnchors, ...localAnchors]))
   if (anchors.length === 0) throw new Error("Local module source binding needs text anchors from the locator or input.")
   const localArea = input.localCapture.bbox.width * input.localCapture.bbox.height
-  const scored = input.candidates
-    .map((candidate) => scoreCandidate(candidate, { all: anchors, explicit: explicitAnchors }, localArea))
+  const evaluated = input.candidates
+    .map((candidate) =>
+      scoreCandidate(
+        candidate,
+        {
+          all: anchors,
+          identity: identityAnchors,
+          explicit: explicitAnchors,
+          primaryPhrases,
+          corePrimaryPhrases: effectiveCorePrimaryPhrases,
+        },
+        localArea,
+      ),
+    )
     .filter((candidate) => candidate.score > 0)
+  const scored = evaluated
+    .filter((candidate) => candidate.moduleCoverage?.accepted)
     .sort((a, b) => b.score - a.score || candidateArea(a) - candidateArea(b))
   const selected = scored[0]
   if (!selected) {
-    throw new Error(`No source candidate matched local module anchors: ${anchors.slice(0, 12).join(", ")}`)
+    const topCandidates = evaluated
+      .sort((a, b) => b.score - a.score || candidateArea(a) - candidateArea(b))
+      .slice(0, 5)
+      .map((candidate) => {
+        const coverage = candidate.moduleCoverage
+        const areaRatio = coverage ? coverage.areaRatio.toFixed(2) : "n/a"
+        const primary = coverage
+          ? `${coverage.matchedCoveragePrimaryPhraseCount}/${coverage.coveragePrimaryPhraseCount}`
+          : "n/a"
+        const core = coverage ? `${coverage.matchedCorePrimaryPhraseCount}/${coverage.corePrimaryPhraseCount}` : "n/a"
+        const reason = coverage?.reason ?? "not evaluated"
+        return `${sourceCandidateLabel(candidate)} score=${candidate.score} primary=${primary} core=${core} areaRatio=${areaRatio} reason=${reason}`
+      })
+      .join("; ")
+    throw new Error(
+      `No source candidate satisfied local module identity/coverage for anchors: ${anchors
+        .slice(0, 12)
+        .join(", ")}. Top candidates: ${topCandidates || "(none)"}`,
+    )
   }
   const ambiguous = scored.filter(
     (candidate) => candidate.score === selected.score && candidateArea(candidate) === candidateArea(selected),
@@ -523,7 +572,8 @@ async function readSourceComponentPatternCandidates(
   return rows.flatMap((row, index) => {
     const record = asRecord(row)
     const nodeID = readString(record.nodeId)
-    if (!nodeID) throw new Error(`Malformed content model JSON: ${file}: sourceComponentPatterns[${index}] missing nodeId`)
+    if (!nodeID)
+      throw new Error(`Malformed content model JSON: ${file}: sourceComponentPatterns[${index}] missing nodeId`)
     const hasBounds = Object.hasOwn(record, "bounds")
     const bbox = hasBounds ? readBounds(record.bounds) : undefined
     if (hasBounds && !bbox && !hasZeroAreaBounds(record.bounds)) {
@@ -651,7 +701,13 @@ function errorMessage(error: unknown): string {
 
 function scoreCandidate(
   candidate: SourceRegionCandidate,
-  anchors: { all: string[]; explicit: string[] },
+  anchors: {
+    all: string[]
+    identity: string[]
+    explicit: string[]
+    primaryPhrases: string[]
+    corePrimaryPhrases: string[]
+  },
   localArea: number,
 ): SourceRegionCandidate & {
   score: number
@@ -659,7 +715,12 @@ function scoreCandidate(
 } {
   const haystack = normalizeText([candidate.id, candidate.text, ...candidate.sourceRefs].join(" "))
   const matchedAnchors = anchors.all.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedIdentityAnchors = anchors.identity.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
   const matchedExplicitAnchors = anchors.explicit.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedPrimaryPhrases = anchors.primaryPhrases.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedCorePrimaryPhrases = anchors.corePrimaryPhrases.filter((anchor) =>
+    anchorMatchesNormalizedText(haystack, anchor),
+  )
   const sourceRefHaystack = normalizeText(candidate.sourceRefs.join(" "))
   const matchedSourceRefAnchors = anchors.all.filter((anchor) => anchorMatchesNormalizedText(sourceRefHaystack, anchor))
   const sourceWeight =
@@ -682,15 +743,81 @@ function scoreCandidate(
     420,
     matchedExplicitAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
   )
+  const primaryPhraseScore = Math.min(
+    520,
+    matchedPrimaryPhrases.reduce((sum, anchor) => sum + anchorWeight(anchor) * 2, 0),
+  )
+  const corePrimaryPhraseScore = Math.min(
+    700,
+    matchedCorePrimaryPhrases.reduce((sum, anchor) => sum + anchorWeight(anchor) * 4, 0),
+  )
   const sourceRefScore = Math.min(
     240,
     matchedSourceRefAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
   )
   const areaWeight = candidateAreaWeight(candidateArea(candidate), localArea)
+  const moduleCoverage = evaluateCandidateModuleCoverage(candidate, anchors, localArea)
   return {
     ...candidate,
-    score: explicitAnchorScore + anchorScore + sourceRefScore + identityWeight + sourceWeight + areaWeight,
+    score:
+      explicitAnchorScore +
+      primaryPhraseScore +
+      corePrimaryPhraseScore +
+      anchorScore +
+      sourceRefScore +
+      identityWeight +
+      sourceWeight +
+      areaWeight,
     matchedAnchors,
+    matchedIdentityAnchors,
+    matchedExplicitAnchors,
+    matchedPrimaryPhrases,
+    matchedCorePrimaryPhrases,
+    moduleCoverage,
+  }
+}
+
+function evaluateCandidateModuleCoverage(
+  candidate: SourceRegionCandidate,
+  anchors: {
+    identity: string[]
+    primaryPhrases: string[]
+    corePrimaryPhrases: string[]
+  },
+  localArea: number,
+): SourceRegionCandidateCoverage {
+  const haystack = normalizeText([candidate.id, candidate.text, ...candidate.sourceRefs].join(" "))
+  const coveragePrimaryPhrases = anchors.primaryPhrases.filter(isCoveragePrimaryPhrase)
+  const corePrimaryPhrases = anchors.corePrimaryPhrases.filter(isCoveragePrimaryPhrase)
+  const matchedCoveragePrimaryPhrases = coveragePrimaryPhrases.filter((anchor) =>
+    anchorMatchesNormalizedText(haystack, anchor),
+  )
+  const matchedCorePrimaryPhrases = corePrimaryPhrases.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedIdentityAnchors = anchors.identity.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const areaRatio = localArea > 0 ? candidateArea(candidate) / localArea : 0
+  const areaPlausible = areaRatio >= 0.12 && areaRatio <= 6
+  const hasIdentityMatch = matchedIdentityAnchors.length > 0
+  const hasCoreMatch = matchedCorePrimaryPhrases.length > 0
+  const requiredPrimaryMatches = requiredModuleCoverageMatchCount(coveragePrimaryPhrases.length)
+  const hasPrimaryCoverage =
+    coveragePrimaryPhrases.length === 0 || matchedCoveragePrimaryPhrases.length >= requiredPrimaryMatches
+  const accepted = areaPlausible && (hasIdentityMatch || hasCoreMatch) && (hasIdentityMatch || hasPrimaryCoverage)
+  const reason = !areaPlausible
+    ? "source candidate size is not plausible for the local module"
+    : !hasIdentityMatch && !hasCoreMatch
+      ? "source candidate only matched incidental anchors, not module identity or core local phrases"
+      : !hasIdentityMatch && !hasPrimaryCoverage
+        ? "source candidate matched the local module heading but not enough primary module phrases"
+        : "source candidate covers module identity/core phrases"
+  return {
+    areaRatio,
+    accepted,
+    reason,
+    coveragePrimaryPhraseCount: coveragePrimaryPhrases.length,
+    matchedCoveragePrimaryPhraseCount: matchedCoveragePrimaryPhrases.length,
+    corePrimaryPhraseCount: corePrimaryPhrases.length,
+    matchedCorePrimaryPhraseCount: matchedCorePrimaryPhrases.length,
+    matchedIdentityAnchorCount: matchedIdentityAnchors.length,
   }
 }
 
@@ -725,6 +852,66 @@ function normalizeAnchors(values: string[]): string[] {
     }
   }
   return Array.from(out).slice(0, 60)
+}
+
+function normalizePrimaryPhrases(values: string[]): string[] {
+  const out = new Set<string>()
+  const keys = new Set<string>()
+  for (const value of values) {
+    for (const expanded of expandAnchorText(value)) {
+      const normalized = normalizeText(expanded)
+      const key = primaryPhraseEquivalenceKey(normalized)
+      if ((isSignificantPrimaryPhrase(normalized) || isRawAcronymPhrase(expanded)) && !keys.has(key)) {
+        out.add(normalized)
+        keys.add(key)
+      }
+    }
+  }
+  return Array.from(out).slice(0, 40)
+}
+
+function isSignificantPrimaryPhrase(anchor: string): boolean {
+  const generic = new Set([
+    "overview",
+    "section",
+    "content",
+    "page",
+    "card",
+    "item",
+    "list",
+    "markets",
+    "economy",
+    "main",
+  ])
+  if (!anchor || generic.has(anchor)) return false
+  if (anchorHasUnspacedScript(anchor)) return true
+  if (/[0-9%$+.-]/.test(anchor)) return true
+  const words = anchor.split(/\s+/g).filter(Boolean)
+  return words.length >= 2
+}
+
+function isCoveragePrimaryPhrase(anchor: string): boolean {
+  if (!anchor) return false
+  if (anchorHasUnspacedScript(anchor)) return true
+  if (/[0-9%$+.-]/.test(anchor)) return true
+  if (/^[a-z]{2,6}$/.test(anchor)) return true
+  return anchor.split(/\s+/g).filter(Boolean).length >= 2
+}
+
+function primaryPhraseEquivalenceKey(anchor: string): string {
+  return anchor.replace(/[^\p{L}\p{N}%$+]+/gu, "")
+}
+
+function isRawAcronymPhrase(value: string): boolean {
+  const trimmed = value.trim()
+  return /^[A-Z]{2,6}$/.test(trimmed) || /^(?:[A-Z]\.){2,}[A-Z]?\.?$/.test(trimmed)
+}
+
+function requiredModuleCoverageMatchCount(count: number): number {
+  if (count <= 0) return 0
+  if (count <= 2) return 1
+  if (count <= 4) return 2
+  return Math.ceil(count * 0.6)
 }
 
 function expandAnchorText(value: string): string[] {
@@ -931,9 +1118,10 @@ function anchorWeight(anchor: string): number {
 function candidateAreaWeight(candidateAreaValue: number, localArea: number): number {
   if (!Number.isFinite(localArea) || localArea <= 0) return 0
   const ratio = candidateAreaValue / localArea
-  if (ratio > 12) return -420
-  if (ratio > 6) return -240
-  if (ratio > 3) return -120
+  if (ratio > 20) return -1600
+  if (ratio > 12) return -900
+  if (ratio > 6) return -420
+  if (ratio > 3) return -180
   if (ratio < 0.05) return -140
   if (ratio < 0.12) return -70
   return 40 - Math.round(Math.abs(Math.log2(ratio)) * 18)

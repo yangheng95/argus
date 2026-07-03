@@ -9,10 +9,7 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
-import {
-  VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY,
-  type VisualQaReport,
-} from "../../src/visual-qa/schema"
+import { VISUAL_QA_MULTI_VIEWPORT_ALIGNMENT_CATEGORY, type VisualQaReport } from "../../src/visual-qa/schema"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -114,7 +111,10 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
   }
 }
 
-async function submitReport(kit: ReturnType<typeof createVisualQaOutputTools>, report: VisualQaReport): Promise<string> {
+async function submitReport(
+  kit: ReturnType<typeof createVisualQaOutputTools>,
+  report: VisualQaReport,
+): Promise<string> {
   for (const item of report.check_items) await callTool(kit.tools, "register_visual_qa_check_item", item)
   for (const row of report.coverage) await callTool(kit.tools, "register_visual_qa_coverage", row)
   for (const row of report.evidence) await callTool(kit.tools, "register_visual_qa_evidence", row)
@@ -127,7 +127,8 @@ async function submitReport(kit: ReturnType<typeof createVisualQaOutputTools>, r
   for (const row of report.repairs) await callTool(kit.tools, "register_visual_qa_repair", row)
   for (const row of report.commands) await callTool(kit.tools, "register_visual_qa_command", row)
   for (const file of report.changed_files) await callTool(kit.tools, "register_visual_qa_changed_file", { file })
-  for (const question of report.open_questions) await callTool(kit.tools, "register_visual_qa_open_question", { question })
+  for (const question of report.open_questions)
+    await callTool(kit.tools, "register_visual_qa_open_question", { question })
   for (const item of report.fact_check_items) await callTool(kit.tools, "register_visual_qa_fact_check_item", item)
   await callTool(kit.tools, "set_visual_qa_reference_parity", report.reference_parity)
   return callTool(kit.tools, "submit_visual_qa_report", {
@@ -199,6 +200,59 @@ describe("visual-qa output tools", () => {
 
     expect(result).toContain("check graph is incomplete")
     expect(result).toContain("unregistered evidence_ref: artifacts/desktop.png")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
+  test("records checks registered before evidence when evidence rows cite the check IDs", async () => {
+    const kit = createVisualQaOutputTools()
+    const result = await submitReport(
+      kit,
+      validReport({
+        check_items: [checkItem({ evidence_refs: [] })],
+      }),
+    )
+
+    expect(result).toContain("RECORDED")
+    expect(result).toContain("effective_accepted=true")
+    expect(kit.getCollector().final?.check_items[0]?.evidence_refs).toEqual([])
+    expect(kit.getCollector().final?.evidence[0]?.check_ids).toContain(DEFAULT_CHECK_ID)
+  })
+
+  test("rejects final reports when a check item has neither refs nor registered evidence rows", async () => {
+    const kit = createVisualQaOutputTools()
+    const failedCheckID = "check_missing_visual_evidence"
+    const result = await submitReport(
+      kit,
+      validReport({
+        accepted: false,
+        check_items: [
+          checkItem({
+            id: failedCheckID,
+            status: "failed",
+            evidence_refs: [],
+            required_correction: "Capture and inspect the missing visual evidence.",
+          }),
+        ],
+        coverage: [],
+        evidence: [],
+        production_blockers: [
+          {
+            id: "blocker_missing_visual_evidence",
+            check_ids: [failedCheckID],
+            principle_ids: ["component-truth"],
+            region: "home/table",
+            reason: "The failed visual check has no concrete screenshot or functional evidence.",
+            impact: "The report cannot prove the visible defect or its scope.",
+            required_correction: "Register real visual evidence tied to the failed check.",
+            source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
+            evidence_refs: [],
+          },
+        ],
+      }),
+    )
+
+    expect(result).toContain("check graph is incomplete")
+    expect(result).toContain(`check_item "${failedCheckID}" has no evidence support`)
     expect(kit.getCollector().final).toBeUndefined()
   })
 
@@ -282,9 +336,9 @@ describe("visual-qa output tools", () => {
             region: "hero tabs",
             route: "/markets/world-stocks/",
             viewport: { width: 320, height: 240 },
-            locator: "main [data-testid=\"hero-tabs\"]",
+            locator: 'main [data-testid="hero-tabs"]',
             dom_path: "body > div#root > main > nav.hero-tabs",
-            outer_html_excerpt: "<nav data-testid=\"hero-tabs\" class=\"hero-tabs is-clipped\">Stocks Futures</nav>",
+            outer_html_excerpt: '<nav data-testid="hero-tabs" class="hero-tabs is-clipped">Stocks Futures</nav>',
             bbox: { x: 24, y: 32, width: 180, height: 48 },
             computed_style: { display: "flex", overflow: "hidden" },
             attributes: { "data-testid": "hero-tabs", class: "hero-tabs is-clipped" },
@@ -334,7 +388,7 @@ describe("visual-qa output tools", () => {
             question: "Is the economy map rendered as the required choropleth surface?",
             expected: "The map uses the source-backed topology implementation.",
             observed: "The rendered map is a low-fidelity placeholder.",
-            evidence_refs: ["artifacts/map.png"],
+            evidence_refs: [],
             required_correction: "Replace the simplified map with the source-backed topology implementation.",
           }),
         ],
@@ -966,7 +1020,8 @@ describe("visual-qa output tools", () => {
             states: ["default"],
             source_refs: ["decision_log:frontend_design/visual_consistency_contract"],
             evidence_refs: ["artifacts/desktop.png", "artifacts/mobile.png"],
-            notes: "Checked shared layout anchors, gutters, wrapping, overflow, and control placement across both viewports.",
+            notes:
+              "Checked shared layout anchors, gutters, wrapping, overflow, and control placement across both viewports.",
           },
         ],
         evidence: [
@@ -1052,10 +1107,9 @@ describe("visual-qa output tools", () => {
             region: "hero",
             route: "/",
             viewport: { width: 1440, height: 900 },
-            locator: "[data-testid=\"hero-heading\"]",
+            locator: '[data-testid="hero-heading"]',
             dom_path: "main > section.hero > h1",
-            outer_html_excerpt:
-              '<h1 data-testid="hero-heading" class="hero-title">United States market overview</h1>',
+            outer_html_excerpt: '<h1 data-testid="hero-heading" class="hero-title">United States market overview</h1>',
             ancestor_context: ['<section class="hero">...</section>'],
             sibling_context: ['<p class="hero-subtitle">...</p>'],
             text_content: "United States market overview",
@@ -1116,10 +1170,7 @@ describe("visual-qa output tools", () => {
     const result = await submitReport(
       kit,
       validReport({
-        check_items: [
-          checkItem(),
-          referenceCheckItem("region_header@desktop", "browser_preview_evidence:art_header"),
-        ],
+        check_items: [checkItem(), referenceCheckItem("region_header@desktop", "browser_preview_evidence:art_header")],
         evidence: [
           validReport().evidence[0]!,
           {

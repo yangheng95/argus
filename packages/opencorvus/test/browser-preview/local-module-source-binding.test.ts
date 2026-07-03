@@ -824,8 +824,7 @@ describe("browser preview local module source binding", () => {
         id: "node-operations-summary",
         source: "source-component-pattern",
         bbox: { x: 40, y: 362, width: 1360, height: 679 },
-        text:
-          "data_grid_surface Operations summary Open tickets Assigned owner Queue SLA Customer alpha Customer beta Escalated",
+        text: "data_grid_surface Operations summary Open tickets Assigned owner Queue SLA Customer alpha Customer beta Escalated",
         sourceRefs: [
           "web-clone-source/source-ir/content-model.json",
           "node:node-operations-summary",
@@ -836,8 +835,7 @@ describe("browser preview local module source binding", () => {
         id: "node-catalog-analysis-grid",
         source: "layout-map",
         bbox: { x: 40, y: 2042, width: 1360, height: 1238 },
-        text:
-          "Catalog analysis Inventory ranking Product Demand change Inventory level Supplier ranking Backorders Returns See all products Customer alpha Customer beta",
+        text: "Catalog analysis Inventory ranking Product Demand change Inventory level Supplier ranking Backorders Returns See all products Customer alpha Customer beta",
         sourceRefs: [
           "web-clone-source/source-ir/layout-map.json",
           "node:node-catalog-analysis-grid",
@@ -869,6 +867,129 @@ describe("browser preview local module source binding", () => {
     expect(selected.id).toBe("node-catalog-analysis-grid")
     expect(selected.source).toBe("layout-map")
     expect(selected.matchedAnchors).toEqual(expect.arrayContaining(["catalog analysis", "inventory ranking"]))
+  })
+
+  test("binds composite hero regions to the owning source section instead of a child tab strip", () => {
+    const candidates: SourceRegionCandidate[] = [
+      {
+        id: "CountriesIdeasEconomicIndicatorsHeatRegion3",
+        source: "layout-map",
+        bbox: { x: 40, y: 222, width: 1360, height: 44 },
+        text: "Overview Countries Ideas Economic indicators Heatmap",
+        sourceRefs: ["web-clone-source/source-ir/layout-map.json", "selector:nav.section-tabs"],
+      },
+      {
+        id: "node_000805",
+        source: "layout-map",
+        bbox: { x: 0, y: 56, width: 1440, height: 202 },
+        text: "World Economy Global economy overview with markets, countries, ideas, and economic indicators for macro analysis",
+        sourceRefs: ["web-clone-source/source-ir/layout-map.json", "node:node_000805"],
+      },
+    ]
+
+    const selected = selectSourceRegionCandidate({
+      candidates,
+      regionID: "breadcrumb-hero-section-tabs",
+      componentFiles: ["src/components/BreadcrumbHeroAndSectionTabs.tsx"],
+      explicitTextAnchors: ["World Economy", "Countries", "Ideas", "Economic indicators"],
+      localCapture: {
+        bbox: { x: 0, y: 56, width: 1360, height: 202 },
+        textAnchors: [
+          "World Economy",
+          "Global economy overview",
+          "Markets",
+          "Countries",
+          "Ideas",
+          "Economic indicators",
+        ],
+        fullText: "World Economy Global economy overview Markets Countries Ideas Economic indicators",
+      },
+    })
+
+    expect(selected.id).toBe("node_000805")
+    expect(selected.moduleCoverage?.accepted).toBe(true)
+    expect(selected.matchedPrimaryPhrases).toEqual(expect.arrayContaining(["world economy", "global economy overview"]))
+  })
+
+  test("binds heatmap tables to table source regions instead of same-page section tabs", () => {
+    const candidates: SourceRegionCandidate[] = [
+      {
+        id: "CountriesIdeasEconomicIndicatorsHeatRegion3",
+        source: "layout-map",
+        bbox: { x: 40, y: 222, width: 1360, height: 44 },
+        text: "Overview Countries Ideas Economic indicators Heatmap",
+        sourceRefs: ["web-clone-source/source-ir/layout-map.json", "selector:nav.section-tabs"],
+      },
+      {
+        id: "node_002052",
+        source: "layout-map",
+        bbox: { x: 40, y: 2124, width: 1360, height: 688 },
+        text: "Economic indicators heatmap GDP GDP Growth Interest Rate Inflation Rate Unemployment Rate Balance of Trade Current Account United States Germany China Japan",
+        sourceRefs: ["web-clone-source/source-ir/layout-map.json", "node:node_002052"],
+      },
+    ]
+
+    const selected = selectSourceRegionCandidate({
+      candidates,
+      regionID: "economic-indicators-heatmap-table",
+      componentFiles: ["src/components/EconomicIndicatorsHeatmapTable.tsx"],
+      explicitTextAnchors: ["Economic indicators heatmap", "GDP", "GDP Growth", "Interest Rate", "Inflation Rate"],
+      localCapture: {
+        bbox: { x: 40, y: 720, width: 1360, height: 650 },
+        textAnchors: [
+          "Economic indicators heatmap",
+          "GDP",
+          "GDP Growth",
+          "Interest Rate",
+          "Inflation Rate",
+          "Unemployment Rate",
+          "Balance of Trade",
+          "Current Account",
+        ],
+        fullText:
+          "Economic indicators heatmap GDP GDP Growth Interest Rate Inflation Rate Unemployment Rate Balance of Trade Current Account",
+      },
+    })
+
+    expect(selected.id).toBe("node_002052")
+    expect(selected.moduleCoverage?.accepted).toBe(true)
+    expect(selected.moduleCoverage?.matchedCoveragePrimaryPhraseCount).toBeGreaterThanOrEqual(4)
+  })
+
+  test("rejects a tab-only source candidate for a full heatmap table module", () => {
+    const candidates: SourceRegionCandidate[] = [
+      {
+        id: "CountriesIdeasEconomicIndicatorsHeatRegion3",
+        source: "layout-map",
+        bbox: { x: 40, y: 222, width: 1360, height: 44 },
+        text: "Overview Countries Ideas Economic indicators Heatmap",
+        sourceRefs: ["web-clone-source/source-ir/layout-map.json", "selector:nav.section-tabs"],
+      },
+    ]
+
+    expect(() =>
+      selectSourceRegionCandidate({
+        candidates,
+        regionID: "economic-indicators-heatmap-table",
+        componentFiles: ["src/components/EconomicIndicatorsHeatmapTable.tsx"],
+        explicitTextAnchors: ["Economic indicators heatmap", "GDP", "GDP Growth", "Interest Rate", "Inflation Rate"],
+        localCapture: {
+          bbox: { x: 40, y: 720, width: 1360, height: 650 },
+          textAnchors: [
+            "Economic indicators heatmap",
+            "GDP",
+            "GDP Growth",
+            "Interest Rate",
+            "Inflation Rate",
+            "Unemployment Rate",
+            "Balance of Trade",
+            "Current Account",
+          ],
+          fullText:
+            "Economic indicators heatmap GDP GDP Growth Interest Rate Inflation Rate Unemployment Rate Balance of Trade Current Account",
+        },
+      }),
+    ).toThrow("No source candidate satisfied local module identity/coverage")
   })
 
   test("fails content component patterns whose bounds field is present but invalid", async () => {
@@ -1545,9 +1666,7 @@ describe("browser preview local module source binding", () => {
         const implementationCrop = await sharp(result.artifacts.implementation_crop).metadata()
         expect(implementationCrop.width).toBeGreaterThan(160)
         expect(implementationCrop.height).toBeGreaterThan(90)
-        const cropPixels = await sharp(result.artifacts.implementation_crop)
-          .raw()
-          .toBuffer({ resolveWithObject: true })
+        const cropPixels = await sharp(result.artifacts.implementation_crop).raw().toBuffer({ resolveWithObject: true })
         const sampleOffset = (8 * cropPixels.info.width + 8) * cropPixels.info.channels
         expect(cropPixels.data[sampleOffset]).toBeGreaterThan(180)
         expect(cropPixels.data[sampleOffset + 1]).toBeGreaterThan(220)

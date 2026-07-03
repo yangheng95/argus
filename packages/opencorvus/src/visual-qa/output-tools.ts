@@ -117,10 +117,16 @@ function unknownCheckIDs(report: VisualQaReport, label: string, id: string, chec
 
 function visualQaEvidenceRefIssues(report: VisualQaReport): string[] {
   const evidenceByRef = new Map<string, VisualQaReport["evidence"]>()
+  const evidenceRefsByCheckID = new Map<string, Set<string>>()
   for (const row of report.evidence) {
     const existing = evidenceByRef.get(row.ref) ?? []
     existing.push(row)
     evidenceByRef.set(row.ref, existing)
+    for (const checkID of row.check_ids) {
+      const refs = evidenceRefsByCheckID.get(checkID) ?? new Set<string>()
+      refs.add(row.ref)
+      evidenceRefsByCheckID.set(checkID, refs)
+    }
   }
   const rows: Array<{ label: string; id: string; refs: readonly string[]; checkIDs: readonly string[] }> = [
     ...report.check_items.map((row) => ({
@@ -167,6 +173,14 @@ function visualQaEvidenceRefIssues(report: VisualQaReport): string[] {
     },
   ]
   const issues: string[] = []
+  for (const item of report.check_items) {
+    const hasRegisteredEvidenceRow = (evidenceRefsByCheckID.get(item.id)?.size ?? 0) > 0
+    if (item.evidence_refs.length === 0 && !hasRegisteredEvidenceRow) {
+      issues.push(
+        `check_item "${item.id}" has no evidence support; register evidence tied to this check_id or update the check_item with registered evidence_refs.`,
+      )
+    }
+  }
   for (const row of rows) {
     for (const ref of row.refs) {
       const evidenceRows = evidenceByRef.get(ref) ?? []
@@ -230,9 +244,7 @@ function visualQaMultiViewportAlignmentIssues(report: VisualQaReport): string[] 
     ]
   }
   const alignmentCheckIDs = new Set(alignmentChecks.map((item) => item.id))
-  const alignmentCheckViewportCount = visualQaViewportKeySet(
-    alignmentChecks.flatMap((item) => item.viewports),
-  ).size
+  const alignmentCheckViewportCount = visualQaViewportKeySet(alignmentChecks.flatMap((item) => item.viewports)).size
   const hasAlignmentCoverage = report.coverage.some(
     (row) =>
       row.check_ids.some((checkID) => alignmentCheckIDs.has(checkID)) &&
@@ -297,7 +309,9 @@ function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutpu
   for (const blocker of report.production_blockers) {
     const linked = blocker.check_ids.map((checkID) => checkByID.get(checkID)).filter((item) => item !== undefined)
     if (linked.length > 0 && linked.every((item) => item.status === "passed")) {
-      issues.push(`production_blocker "${blocker.id}" references only passed check_items; blockers require a failed or inconclusive check.`)
+      issues.push(
+        `production_blocker "${blocker.id}" references only passed check_items; blockers require a failed or inconclusive check.`,
+      )
     }
   }
   issues.push(...visualQaMultiViewportAlignmentIssues(report))
@@ -309,7 +323,9 @@ function visualQaCheckGraphIssues(report: VisualQaReport, context: VisualQaOutpu
     for (const key of requiredRegions) {
       const hasCheck = report.check_items.some((item) => item.reference_region_key === key)
       if (!hasCheck) {
-        issues.push(`reference parity required region ${key} has no registered check_item with reference_region_key=${key}.`)
+        issues.push(
+          `reference parity required region ${key} has no registered check_item with reference_region_key=${key}.`,
+        )
       }
     }
   }
@@ -476,8 +492,12 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
       Object.keys(region.attributes).length ? `attributes=${compactRecord(region.attributes)}` : undefined,
       Object.keys(region.computed_style).length ? `computed_style=${compactRecord(region.computed_style)}` : undefined,
       `outer_html=${compactText(region.outer_html_excerpt, 360)}`,
-      region.ancestor_context.length ? `ancestors=${region.ancestor_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
-      region.sibling_context.length ? `siblings=${region.sibling_context.map((item) => compactText(item, 180)).join(" | ")}` : undefined,
+      region.ancestor_context.length
+        ? `ancestors=${region.ancestor_context.map((item) => compactText(item, 180)).join(" | ")}`
+        : undefined,
+      region.sibling_context.length
+        ? `siblings=${region.sibling_context.map((item) => compactText(item, 180)).join(" | ")}`
+        : undefined,
       `evidence=${region.evidence_refs.join(", ") || "(none)"}`,
       region.annotated_evidence_refs.length
         ? `annotated_evidence=${region.annotated_evidence_refs.join(", ")}`
@@ -512,7 +532,7 @@ export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {
   const tools = {
     register_visual_qa_check_item: tool({
       description:
-        "Register one concrete Visual QA check item before reporting coverage, evidence, findings, blockers, DOM regions, repairs, or final acceptance. Every report row must reference registered check item IDs.",
+        "Register one concrete Visual QA check item before reporting coverage, evidence, findings, blockers, DOM regions, repairs, or final acceptance. Initial check registration may leave evidence_refs empty; final evidence support comes from registered evidence rows tied to the check ID or from registered evidence_refs on the item. Every report row must reference registered check item IDs.",
       inputSchema: VisualQaCheckItemSchema,
       execute: async (raw) => {
         if (collector.final) return "Error: visual QA report already submitted; collector is closed."
