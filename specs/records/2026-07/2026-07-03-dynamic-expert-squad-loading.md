@@ -1378,3 +1378,99 @@ Phase 7A self-review result:
 - Hume and Dirac blockers were resolved by adding the missing `frontend-automation-debug` frontend workflow tools, replacing the source-order proof with `packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`, pinning literal scheduler role-base expectations, and covering all non-general built-in scheduler manifests.
 - The implemented Orchestrator runtime test captures the installed `SessionRuntimeContract.tools` during `Orchestrator.processTask()` for `general`, `frontend-automation-debug`, and project package `project-replica`; it proves MCP/package custom tools remain inactive in Phase 7A.
 - Remaining scope is explicit future work: select continuation wake, worker runtime projection, SkillMount/SkillTool/SystemPrompt projection, package custom tools, and MCP projection.
+
+Phase 7B Recall, 2026-07-04:
+
+### User Request
+
+- Continue implementing and testing the dynamic expert-squad architecture.
+- Use independent agents for adversarial implementation/review cooperation.
+- Preserve the original architecture goal: `select_expert_squad` remains the visible active expert-squad write path, and selection must cause a later Orchestrator wake to reload the active prompt profile and scheduler capability projection.
+
+### Acceptance Criteria For This Slice
+
+- `select_expert_squad` validates the requested profile through `PromptProfileResolver` and writes only `{ prompt_profile: { active: profile_id } }` to the task root session overlay.
+- The tool records visible durable evidence with previous profile, next profile, capability profile ID, and projection hash.
+- The tool schedules a real task-loop continuation wake through the existing queue/wake mechanism with an explicit wake note telling Orchestrator to reload the active prompt profile and scheduler capability projection.
+- The continuation wake must not be a hidden route, keyword classifier, synthetic user message, host-side gate, fallback, or same-turn tool-table mutation.
+- Tests must prove the next Orchestrator wake installs the projected tool table from the newly active profile.
+- Worker runtime projection, SkillMount/SkillTool/SystemPrompt projection, package custom tools, and MCP projection remain out of this slice and must not be claimed as implemented.
+
+### Hard Constraints
+
+- No fallback/compat/double-source/gate behavior.
+- Do not restart or refresh running OpenCorvus/overlay processes.
+- Do not create a worktree, do not use `git reset`, and do not stage unrelated dirty direct-build/Visual-QA files.
+- This repository currently has unrelated dirty direct-build/Visual-QA/API work, including `orchestrator/tools.ts`; Phase 7B edits must stay in tight hunks and must not absorb unrelated changes into the commit.
+- Code changes require focused tests; docs change must preserve `specs/` as the only plan source.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/README.md`
+- `specs/records/2026-07/README.md`
+- `specs/current/architecture/README.md`
+- `specs/current/architecture/01-agents.md`
+- `specs/current/architecture/04-extensions.md`
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `specs/records/2026-07/2026-07-03-expert-squad-capability-profile.md`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/src/orchestrator/agent.ts`
+- `packages/opencorvus/src/orchestrator/loop.ts`
+- `packages/opencorvus/src/engine/queue.ts`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/test/orchestrator/tools.test.ts`
+- `packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`
+
+### Repository Search Evidence
+
+- `rg -n "select_expert_squad|prompt_profile|interruptTaskLoop|runTaskLoop|wake|schedule.*wake|TaskLoop|decisionLog|write.*decision|append.*decision|DecisionLog" packages/opencorvus/src/orchestrator packages/opencorvus/src/engine packages/opencorvus/src/decision-log packages/opencorvus/test/orchestrator packages/opencorvus/test/expert-squad -g "*.ts"`
+- `rg -n "SessionPrompt\\.setSessionRuntimeContract|setSessionRuntimeContract|SessionRuntimeContract|runtime contract|includeMcpTools|projectOrchestratorTools|resolveSchedulerCapability" packages/opencorvus/src packages/opencorvus/test -g "*.ts"`
+- `rg -n "createOrchestratorTools\\(|select_expert_squad|prompt profile|expert squad" packages/opencorvus/test/orchestrator packages/opencorvus/test/expert-squad packages/opencorvus/test/agent -g "*.ts"`
+- `rg -n "dispatchTaskLoop|dispatchTaskLoopInBackground|engine/queue" packages/opencorvus/src/orchestrator/tools.ts packages/opencorvus/src/engine/queue.ts packages/opencorvus/test/orchestrator -g "*.ts"`
+
+### Independent Agent Feedback
+
+- Erdos, Kierkegaard, and Schrodinger were started as read-only independent reviewers for Phase 7B selection continuation, test evidence, and boundary protection. They were explicitly instructed not to edit files and not to spawn subagents.
+- Feedback was still pending when this Recall block was first written; returned findings must be appended before Phase 7B is considered accepted.
+- Schrodinger returned the Phase 7B boundary review:
+  - Phase 7B must not touch `SkillMount`, `SkillTool`, `SystemPrompt.skills`, `ToolRegistry`, MCP projection, or worker runtime projection.
+  - `WorkerTurnDescriptor` still has no prompt profile / capability profile / projection hash fields; worker projection remains a later slice.
+  - Valid Phase 7B claim: `select_expert_squad` schedules a visible later Orchestrator wake, and that later wake uses the existing Phase 7A exact scheduler contract path.
+  - Existing negative tests must keep proving package capability refs remain inert through SkillMount/SystemPrompt/SkillTool/ToolRegistry/MCP, and project package scheduler wakes do not activate package tools or MCP.
+  - Add tests for visible continuation wake evidence, overlay write shape, no same-turn tool-table mutation, next wake projected contract, and inert package skills/tools/MCP after selecting a project package.
+- Kierkegaard returned the Phase 7B test-evidence review:
+  - Expand the existing `select_expert_squad` tool test to assert overlay writes only `prompt_profile.active`, result text includes previous/next/capability/hash, decision-log row records the same evidence, and unknown profile leaves overlay/log/dispatch unchanged.
+  - Add a scheduler-capability transition test that starts from `general`, calls `select_expert_squad`, captures the scheduled continuation event through `EngineQueue.dispatchTaskLoop`, runs `Orchestrator.processTask(taskID, event)`, and asserts the installed runtime contract is the selected profile's projected tool table.
+  - Reuse the existing Phase 7A runtime-contract capture pattern and existing `PROJECT_EXPERT_SQUAD_ID` fixture; do not alter package skill/tool/MCP negative tests.
+- Erdos returned the Phase 7B selection/wake review:
+  - The current selection path is Orchestrator selector guidance, generated selector skills, SessionLoop SkillTool rebinding, `select_expert_squad`, then the next Orchestrator wake resolving Phase 7A scheduler capability before exact runtime contract installation.
+  - `dispatchTaskLoop({ taskID, event: { note } })` is the correct continuation primitive because it handles active, queued, and live-ownership cases; `SessionWake` and delayed cron wake are the wrong primitives for immediate expert-squad continuation.
+  - Remaining checks: update Orchestrator core wording so `select_expert_squad` mentions the visible continuation wake, update the pinned tool-description test, and consider whether a real `dispatchTaskLoop` integration proof is needed beyond spy-captured event plus manual next-wake runtime contract proof.
+  - Pitfall: if continuation dispatch returns `ignored`, the overlay and decision-log evidence have already persisted; this is acceptable only as a visible failure, not an atomic rollback or fallback.
+
+### Phase 7B Planned Boundary
+
+- Keep `select_expert_squad` as the only active profile write path.
+- After a successful overlay write, resolve the next scheduler capability from the same root session effective config and project directory.
+- Append a task-scoped `decision_log` row under phase `orchestrator` and key `select_expert_squad`, carrying previous profile, next profile, capability profile ID, projection hash, reason, and the planned continuation note.
+- Call `dispatchTaskLoop({ taskID, event: { note } })` with a wake message that explicitly says this is not a user-authored message and that the next wake must reload active prompt profile and scheduler capability projection.
+- Return the continuation dispatch result in the visible tool result.
+- Update focused tests:
+  - existing `select_expert_squad` tool test asserts overlay shape, decision-log evidence, and dispatch call/note;
+  - scheduler runtime projection test simulates the next wake after selection and captures `SessionRuntimeContract.tools` to prove the new active profile's projected tools are installed.
+
+### Phase 7B Final Validation
+
+- `bun test --timeout 60000 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts` passed: 11 tests. The transition test used real `dispatchTaskLoop` and observed the next Orchestrator wake installing `frontend-replica` projected tools.
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "select_expert_squad"` passed: overlay write shape, decision-log evidence, visible continuation note, and unknown-profile no-dispatch behavior.
+- `bun test --timeout 60000 packages/opencorvus/test/tool/skill.test.ts -t "active project package prompt profile does not leak"` passed: project package skill/tool/MCP refs remain inert outside scheduler projection.
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts -t "expert-squad tools"` passed.
+- `bun test --timeout 60000 packages/opencorvus/test/agent/core-prompt-hygiene.test.ts -t "orchestrator prompt owns request-based expert-squad scheduling"` passed.
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts` passed: 19 tests.
+- `bun test packages/opencorvus/test/script/document-health.test.ts` passed: 46 tests.
+- `bun typecheck` passed.
+- `bun run api:routes-check`, `bun run docs:check`, `bun run overlay:i18n-check`, and `git diff --check` passed.
+- Corrected command-selection note: `bun test --timeout 60000 packages/opencorvus/test/tool/skill.test.ts -t "project package capability refs"` and `bun test --timeout 60000 packages/opencorvus/test/agent/core-prompt-hygiene.test.ts -t "select_expert_squad"` matched zero tests and were replaced by the valid focused test names above.

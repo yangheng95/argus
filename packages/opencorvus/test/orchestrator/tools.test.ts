@@ -67,6 +67,7 @@ import {
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 import { EngineService } from "../../src/task-api"
+import * as EngineQueue from "../../src/engine/queue"
 import { Question } from "../../src/question"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { SessionStatus, sessionLifecycleOrderKey } from "../../src/session/status"
@@ -2440,11 +2441,11 @@ describe("orchestrator tools", () => {
     )
   })
 
-  test("select_expert_squad writes a validated prompt profile to the task root session overlay", async () => {
+  test("select_expert_squad writes only active profile and schedules a visible continuation wake", async () => {
     const now = Date.now()
     const projectID = "prj_select_expert_squad"
-    await writeProjectExpertSquadPackage(tmp.path)
     const taskID = "tsk_select_expert_squad"
+    await writeProjectExpertSquadPackage(tmp.path)
     Database.use((db) => {
       db.insert(ProjectTable)
         .values({
@@ -2489,6 +2490,7 @@ describe("orchestrator tools", () => {
           agentSessionID: root.id,
           signal: new AbortController().signal,
         })
+        const dispatchTaskLoop = spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
         expect(Object.keys(tools)).not.toContain("source-evidence")
         expect(Object.keys(tools)).not.toContain("build-evidence")
         expect(Object.keys(tools)).not.toContain("package-browser")
@@ -2501,11 +2503,36 @@ describe("orchestrator tools", () => {
           },
           buildToolOptions("select_expert_squad"),
         )
-        expect(toolText(result)).toContain("- previous: general")
-        expect(toolText(result)).toContain("- active: frontend-innovate")
-        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+        const resultText = toolText(result)
+        expect(resultText).toContain("- previous: general")
+        expect(resultText).toContain("- active: frontend-innovate")
+        expect(resultText).toContain("- capability_profile_id: frontend-innovate")
+        expect(resultText).toMatch(/- projection_hash: [a-f0-9]{64}/)
+        expect(resultText).toContain("- continuation_wake: started")
+        const firstOverlay = (await Session.get(root.id)).metadata?.configOverlay as Record<string, unknown>
+        expect(firstOverlay).toEqual({
           prompt_profile: { active: "frontend-innovate" },
         })
+        expect(firstOverlay).not.toHaveProperty("tools")
+        expect(firstOverlay).not.toHaveProperty("mcp")
+        expect(firstOverlay).not.toHaveProperty("permissions")
+        expect(firstOverlay).not.toHaveProperty("model")
+        expect(firstOverlay).not.toHaveProperty("workflow")
+        expect(firstOverlay).not.toHaveProperty("agents")
+        const firstSelection = createDecisionLog(taskID).readByKey("select_expert_squad")
+        expect(firstSelection?.phase).toBe("orchestrator")
+        expect(firstSelection?.reason).toBe("select_expert_squad")
+        expect(firstSelection?.value).toContain("previous_profile=general")
+        expect(firstSelection?.value).toContain("active_profile=frontend-innovate")
+        expect(firstSelection?.value).toContain("capability_profile_id=frontend-innovate")
+        expect(firstSelection?.value).toMatch(/projection_hash=[a-f0-9]{64}/)
+        expect(firstSelection?.value).toContain("continuation_note=This is a wake message, not a user-authored message.")
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        const firstDispatch = dispatchTaskLoop.mock.calls[0]?.[0]
+        expect(firstDispatch?.taskID).toBe(taskID)
+        expect(firstDispatch?.event?.note).toContain("This is a wake message, not a user-authored message.")
+        expect(firstDispatch?.event?.note).toContain("Expert squad selected: frontend-innovate.")
+        expect(firstDispatch?.event?.note).toContain("Reload the active prompt profile and scheduler capability projection")
 
         const projectPackageResult = await tools.select_expert_squad.execute(
           {
@@ -2514,11 +2541,19 @@ describe("orchestrator tools", () => {
           },
           buildToolOptions("select_expert_squad_project_package"),
         )
-        expect(toolText(projectPackageResult)).toContain("- previous: frontend-innovate")
-        expect(toolText(projectPackageResult)).toContain(`- active: ${PROJECT_EXPERT_SQUAD_ID}`)
-        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+        const projectPackageText = toolText(projectPackageResult)
+        expect(projectPackageText).toContain("- previous: frontend-innovate")
+        expect(projectPackageText).toContain(`- active: ${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(projectPackageText).toContain(`- capability_profile_id: ${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(projectPackageText).toMatch(/- projection_hash: [a-f0-9]{64}/)
+        expect((await Session.get(root.id)).metadata?.configOverlay).toEqual({
           prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
+        const secondSelection = createDecisionLog(taskID).readByKey("select_expert_squad")
+        expect(secondSelection?.value).toContain("previous_profile=frontend-innovate")
+        expect(secondSelection?.value).toContain(`active_profile=${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(secondSelection?.value).toContain(`capability_profile_id=${PROJECT_EXPERT_SQUAD_ID}`)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(2)
 
         await expect(
           tools.select_expert_squad.execute(
@@ -2526,9 +2561,11 @@ describe("orchestrator tools", () => {
             buildToolOptions("select_expert_squad_unknown"),
           ),
         ).rejects.toThrow("Unknown prompt profile")
-        expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
+        expect((await Session.get(root.id)).metadata?.configOverlay).toEqual({
           prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID },
         })
+        expect(createDecisionLog(taskID).readByKey("select_expert_squad")?.id).toBe(secondSelection?.id)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(2)
       },
     })
   })

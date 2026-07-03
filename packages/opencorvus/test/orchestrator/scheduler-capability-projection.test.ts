@@ -2,6 +2,8 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Orchestrator } from "../../src/orchestrator/agent"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import * as TaskLoop from "../../src/orchestrator/loop"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
@@ -77,6 +79,35 @@ function toolCallFinish(sessionID: string): Message.WithParts {
     },
     parts: [],
   }
+}
+
+function toolOptions(label: string) {
+  const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  return {
+    toolCallId: `cal_${label}_${stamp}`,
+    opencorvus: {
+      sessionID: `ses_${label}_${stamp}`,
+      messageID: `msg_${label}_${stamp}`,
+      toolCallID: `cal_${label}_${stamp}`,
+      toolPartID: `prt_${label}_${stamp}`,
+    },
+  } as any
+}
+
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "final" &&
+    typeof (result as { output?: unknown }).output === "string"
+  ) {
+    return (result as { output: string }).output
+  }
+  if (result && typeof result === "object" && typeof (result as { output?: unknown }).output === "string") {
+    return (result as { output: string }).output
+  }
+  return String(result)
 }
 
 async function captureOrchestratorRuntimeContract(input: {
@@ -175,5 +206,76 @@ describe("orchestrator scheduler capability projection", () => {
     expect(captured.toolIDs).toContain("build")
     expect(captured.toolIDs).not.toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
     expect(captured.toolIDs).not.toContain("package-browser")
+  })
+
+  test("select_expert_squad continuation wake installs selected profile projected tool table", async () => {
+    installControlModel()
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+    let captured: CapturedRuntimeContract | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "scheduler transition selection" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: {
+            model: "mock-control/control",
+            prompt_profile: { active: "general" },
+          },
+        })
+        insertWorkflowTask({
+          taskID,
+          rootSessionID: root.id,
+          now,
+          title: "scheduler transition selection",
+        })
+
+        spyOn(SessionPrompt, "prompt").mockImplementation((async (promptInput) => {
+          const contract = SessionPrompt.getSessionRuntimeContract(promptInput.sessionID)
+          captured = {
+            toolIDs: Object.keys(contract?.tools ?? {}),
+            includeMcpTools: contract?.includeMcpTools,
+            identity: {
+              agentKind: contract?.identity.agentKind,
+              contractKind: contract?.identity.contractKind,
+              sessionID: contract?.identity.sessionID,
+            },
+          }
+          return toolCallFinish(promptInput.sessionID)
+        }) as never)
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: root.id,
+          signal: new AbortController().signal,
+        })
+        const result = await tools.select_expert_squad.execute(
+          {
+            profile_id: "frontend-replica",
+            reason: "The task requires source URL/reference-screenshot replica workflow evidence.",
+          },
+          toolOptions("select_expert_squad_transition"),
+        )
+
+        expect(toolText(result)).toContain("- continuation_wake: started")
+        await TaskLoop.awaitTaskLoopIdle(taskID, 15_000)
+      },
+    })
+
+    expect(captured).toBeDefined()
+    expect(captured?.includeMcpTools).toBe(false)
+    expect(captured?.toolIDs).toContain("select_expert_squad")
+    expect(captured?.toolIDs).toContain("skill")
+    expect(captured?.toolIDs).toContain("frontend_research")
+    expect(captured?.toolIDs).toContain("frontend_design")
+    expect(captured?.toolIDs).toContain("visual_qa")
+    expect(captured?.toolIDs).toContain("integrity")
+    expect(captured?.toolIDs).toContain("browser_preview")
+    expect(captured?.toolIDs).toContain("bash")
+    expect(captured?.toolIDs).not.toContain("deep_research")
+    expect(captured?.toolIDs).not.toContain("fact_check")
   })
 })

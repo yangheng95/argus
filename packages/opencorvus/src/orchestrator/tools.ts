@@ -7826,6 +7826,7 @@ export function createOrchestratorTools(input: {
       description:
         "Select the active expert squad prompt profile for this task's root session. " +
         "This writes only `prompt_profile.active` to the root session config overlay, so future Orchestrator wakes and dispatched agents compose prompts and scheduler capability from that expert squad. " +
+        "After the write it records visible selection evidence and schedules a visible continuation wake that reloads the active prompt profile and scheduler capability projection. " +
         "It does not dispatch work, reroute the workflow, change models, mutate per-agent prompt fields, infer the profile from keywords, or change the tool table available in this current model call.",
       inputSchema: z
         .object({
@@ -7843,8 +7844,9 @@ export function createOrchestratorTools(input: {
         if (!task.session_id) {
           throw new Error(`Task ${taskID} has no root session; cannot select expert squad ${profile_id}.`)
         }
+        const projectDirectory = await EffectiveConfig.directory({ sessionID: task.session_id })
         await PromptProfileResolver.assertKnownProfileID({
-          projectDirectory: await EffectiveConfig.directory({ sessionID: task.session_id }),
+          projectDirectory,
           profileID: profile_id,
         })
         const before = (await EffectiveConfig.effective({ sessionID: task.session_id })).prompt_profile.active
@@ -7852,10 +7854,48 @@ export function createOrchestratorTools(input: {
           sessionID: task.session_id,
           patch: { prompt_profile: { active: profile_id } },
         })
+        const afterConfig = await EffectiveConfig.effective({ sessionID: task.session_id })
+        const capability = await PromptProfileResolver.resolveSchedulerCapability({
+          config: afterConfig,
+          projectDirectory,
+        })
+        const continuationNote = [
+          "This is a wake message, not a user-authored message.",
+          `Expert squad selected: ${profile_id}.`,
+          `Previous expert squad: ${before}.`,
+          `Capability profile: ${capability.capabilityProfileID}.`,
+          `Projection hash: ${capability.projectionHash}.`,
+          "Reload the active prompt profile and scheduler capability projection, then continue scheduling from current task evidence.",
+        ].join("\n")
+        createDecisionLog(taskID).append({
+          phase: "orchestrator",
+          key: "select_expert_squad",
+          value: [
+            `previous_profile=${before}`,
+            `active_profile=${profile_id}`,
+            `capability_profile_id=${capability.capabilityProfileID}`,
+            `projection_hash=${capability.projectionHash}`,
+            `projected_built_in_tools=${capability.builtInToolIDs.join(",")}`,
+            `reason=${reason}`,
+            `continuation_note=${continuationNote}`,
+          ].join("\n"),
+          reason: "select_expert_squad",
+        })
+        const { dispatchTaskLoop } = await import("@/engine/queue")
+        const dispatchResult = await dispatchTaskLoop({
+          taskID,
+          event: { note: continuationNote },
+        })
+        if (dispatchResult === "ignored") {
+          throw new Error(`Expert squad selection persisted, but continuation wake dispatch was ignored for task ${taskID}.`)
+        }
         return [
           `Expert squad selected for task ${taskID}.`,
           `- previous: ${before}`,
           `- active: ${profile_id}`,
+          `- capability_profile_id: ${capability.capabilityProfileID}`,
+          `- projection_hash: ${capability.projectionHash}`,
+          `- continuation_wake: ${dispatchResult}`,
           `- reason: ${reason}`,
           "This change affects future prompt composition and scheduler capability projection through the root session overlay only.",
         ].join("\n")

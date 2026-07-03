@@ -190,6 +190,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("hidden skill injection")
     expect(normalized).toContain("per-agent prompt mutation")
     expect(normalized).toContain("fallback profile selection")
+    expect(normalized).toContain("schedules a continuation wake")
+    expect(normalized).toContain("current model call's tool table does not change")
     expect(normalized).toContain("never deliverable production")
     expect(normalized).toContain("Do not load production, research, report, or implementation skills")
   })

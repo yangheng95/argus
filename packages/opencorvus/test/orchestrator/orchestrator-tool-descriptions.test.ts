@@ -94,6 +94,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.select_expert_squad.description).toContain("root session config overlay")
     expect(tools.select_expert_squad.description).toContain("future Orchestrator wakes")
     expect(tools.select_expert_squad.description).toContain("scheduler capability")
+    expect(tools.select_expert_squad.description).toContain("visible selection evidence")
+    expect(tools.select_expert_squad.description).toContain("visible continuation wake")
     expect(tools.select_expert_squad.description).toContain("does not dispatch work")
     expect(tools.select_expert_squad.description).toContain("current model call")
     expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")

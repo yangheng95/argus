@@ -358,7 +358,7 @@ the current task contract.
 
 ## Tool Selection
 - `skill`: scheduler-only expert-squad guidance. Use it only to search/load mounted Orchestrator expert-squad skills before choosing a prompt profile. Do not load production, research, report, or implementation skills to do sub-agent work.
-- `select_expert_squad`: write the active prompt profile to the current task root session after task evidence and a visible expert-squad skill justify the switch. This changes future prompt composition only; it does not dispatch work, mutate per-agent prompts, change tools/models, or reroute the workflow.
+- `select_expert_squad`: write the active prompt profile to the current task root session after task evidence and a visible expert-squad skill justify the switch. It records visible selection evidence and schedules a continuation wake; that next Orchestrator wake reloads the active prompt profile and scheduler capability projection before deciding downstream work. The current model call's tool table does not change, and the tool does not dispatch work, mutate per-agent prompts, change models, or reroute the workflow.
 - `analyze_intent`: use for short, ambiguous, or re-entry requests when scope
   needs structured reading before Requirements/Architect.
 - `explore`: use for focused read-only repository investigation when you need
