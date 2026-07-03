@@ -41,7 +41,7 @@ async function saveElementScreenshot(page: any, selector: string, filename: stri
   return screenshotPath
 }
 
-test("right task-scope Section summary exposes tokenized keyboard focus", async () => {
+test("right task-scope acceptance Section summary exposes tokenized keyboard focus", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
@@ -59,7 +59,7 @@ test("right task-scope Section summary exposes tokenized keyboard focus", async 
     snapshotVersion: "section-summary-focus-board",
     lastSequence: 0,
     task,
-    run: { executor: "opencorvus", phase: "requirements", status: "active" },
+    run: { executor: "opencorvus", phase: "deliver", status: "active" },
     workflow: {
       steps: [
         { id: "requirements", label: "Requirements", status: "running" },
@@ -92,7 +92,20 @@ test("right task-scope Section summary exposes tokenized keyboard focus", async 
         steps: [{ stepID: "build", label: "Build", status: "running" }],
       },
     ],
-    acceptance: null,
+    acceptance: {
+      status: "candidate",
+      verdict: "accepted",
+      summary: "Acceptance summary focus remains visible inside the Goals panel.",
+      evidenceManifest: {
+        iteration: 1,
+        checkResults: [],
+        reviewEvidence: [],
+      },
+      result: {
+        summary: "No files changed.",
+        changedFiles: [],
+      },
+    },
     interactions: [],
   }
 
@@ -219,12 +232,12 @@ test("right task-scope Section summary exposes tokenized keyboard focus", async 
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { visible: true, timeout: 15_000 })
     await page.click(`.task-row-main[data-task-id="${taskID}"]`)
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]', {
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="goals"]', {
       visible: true,
       timeout: 15_000,
     })
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="requirements"]')
-    await page.waitForSelector('[data-ui="workflow-section-stack"] .oc-section__head', {
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="goals"]')
+    await page.waitForSelector('#acceptanceSection .oc-section__head', {
       visible: true,
       timeout: 15_000,
     })
@@ -277,7 +290,7 @@ test("right task-scope Section summary exposes tokenized keyboard focus", async 
 
     const screenshot = await saveElementScreenshot(
       page,
-      '[data-ui="workflow-section-stack"]',
+      '#centerWorkbenchGoals [data-ui="workflow-section-stack"]',
       "section-summary-focus-visible.png",
     )
     assert.ok(screenshot.endsWith("section-summary-focus-visible.png"))

@@ -446,7 +446,7 @@ test("workflow generating panels expose live busy status regions", async () => {
     assert.ok(screenshot.endsWith("workflow-generating-status-live.png"))
     const workflowBadgeScreenshot = await saveElementScreenshot(
       page,
-      "#requirementsSection .oc-section__head",
+      "#centerWorkbenchRequirements .task-scope-panel__header",
       "workflow-running-badge-label.png",
     )
     assert.ok(workflowBadgeScreenshot.endsWith("workflow-running-badge-label.png"))

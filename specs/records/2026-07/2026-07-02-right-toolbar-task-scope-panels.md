@@ -90,3 +90,55 @@
 8. Verify with targeted unit/static tests, overlay typecheck, i18n check, an
    isolated Vite preview served without touching any running OpenCorvus window,
    Playwright/browser screenshot review, and final self-review.
+
+## 2026-07-03 GUI/UX Verification Correction
+
+### Recall
+
+- User correction: the first delivery mechanically moved Inspector content but
+  did not complete real GUI/UX validation.
+- Re-read source of truth before editing:
+  - this record's Recall and acceptance criteria;
+  - `packages/overlay/src/components/Board.tsx`;
+  - `packages/overlay/src/components/GoalWorkflowGroup.tsx`;
+  - `packages/overlay/src/styles/surfaces/inspector.css`;
+  - `packages/overlay/test/acceptance-panel-mount.test.ts`;
+  - `packages/overlay/test/primitives-panel-section.test.ts`;
+  - `packages/overlay/test/overlay-architecture-guards.test.ts`;
+  - relevant browser tests under `packages/overlay/test/browser/`.
+- GUI evidence from isolated desktop preview at 1440x900:
+  - Requirements, Architect, and Goals opened simultaneously from the right
+    toolbar using a task-scoped fixture.
+  - The pre-correction screenshot showed duplicated panel titles: each new
+    task-scope panel had an outer header plus an inner `SectionFrame` header
+    repeating the same title.
+  - Goals rows were too narrow because revision/branch metadata competed with
+    the goal title.
+  - A fixture timestamp issue produced a toast that was removed from the
+    verification fixture before final screenshot review.
+
+### Correction
+
+- Removed the obsolete `SectionFrame` wrapper from the standalone Requirements,
+  Architect, and Goals panels. Their content now renders directly under the
+  task-scope panel header.
+- Moved `requirementsBadge`, `architectBadge`, and `goalWorkflowsBadge` to the
+  outer task-scope header, which is the only visible title/badge source for
+  those panels.
+- Kept Acceptance as its own `Section` inside Goals because it is a distinct
+  evidence surface, not a duplicate Goals title.
+- Added direct task-scope content styles and narrow-panel goal-header behavior
+  so goal titles remain readable when panels are opened side by side.
+
+### Verification
+
+- `bun test packages/overlay/test/acceptance-panel-mount.test.ts packages/overlay/test/task-scope-direct-content.test.ts packages/overlay/test/primitives-panel-section.test.ts packages/overlay/test/overlay-architecture-guards.test.ts packages/overlay/test/right-panel-tabs-flat.test.ts packages/overlay/test/coding-assistant-panel.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+- `bun run --cwd packages/overlay check:i18n`
+- `bun run --cwd packages/overlay build:vite`
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/workflow-generating-status-browser.test.ts packages/overlay/test/browser/section-summary-focus-visible-browser.test.ts`
+- Manual screenshot review via in-app browser:
+  - no repeated Requirements/Architect/Goals title inside the panel body;
+  - no task timestamp toast;
+  - goals titles render as readable text in a 291px side-by-side panel;
+  - Acceptance remains adjacent to Goals and visually separate as evidence.

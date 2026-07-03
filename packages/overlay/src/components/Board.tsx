@@ -3,7 +3,7 @@
 // acceptance evidence, task actions, and status badges.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
-import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
+import { createMemo, createSignal, For, Show } from "solid-js"
 import { useDisclosure } from "../solid/disclosure"
 import { boardStore } from "../store/board"
 import { t, tc } from "../utils/i18n"
@@ -394,6 +394,7 @@ interface TaskScopePanelShellProps {
   panelID: TaskScopePanelID
   title: string
   icon: IconName
+  badgeId?: string
   badgeText?: string
   badgeTone?: string
   badgeVariant?: "status" | "metric"
@@ -412,6 +413,7 @@ function TaskScopePanelShell(props: TaskScopePanelShellProps) {
         </div>
         <Show when={props.badgeText}>
           <span
+            id={props.badgeId}
             class="task-scope-panel__badge"
             data-tone={props.badgeTone || undefined}
             data-variant={props.badgeVariant || "status"}
@@ -426,64 +428,6 @@ function TaskScopePanelShell(props: TaskScopePanelShellProps) {
         </div>
       </div>
     </div>
-  )
-}
-
-interface SectionFrameProps {
-  id: string
-  title: string
-  bodyId: string
-  /** Section header icon. Identifier resolves through the Icon
-   * primitive registry (components/Icon.tsx); inline innerHTML svg
-   * strings were retired 2026-05-04 (flat-redesign Step 3). */
-  icon?: IconName
-  badgeId?: string
-  badgeText?: string
-  badgeTone?: string
-  badgeVariant?: "status" | "metric"
-  phaseState?: "active" | "related" | ""
-  /** Initial open state at mount only; user toggle is preserved afterwards. */
-  defaultOpen?: boolean
-  children: any
-}
-
-function SectionFrame(props: SectionFrameProps) {
-  let detailsEl: HTMLDetailsElement | undefined
-  // First mount: open the section so the operator sees the data that just
-  // became available (the section only renders when taskScopeSections marks
-  // it visible — i.e. it has concrete state or data). Without this, the
-  // pre-bug behaviour was "section appears collapsed after the agent already
-  // ran" and operators had to click to see what the agent produced.
-  onMount(() => {
-    if (!detailsEl) return
-    if (props.defaultOpen ?? true) detailsEl.open = true
-  })
-  // Re-open whenever the section transitions back to "active" (e.g. requirements
-  // running again after a rewind, or architect being re-entered). The effect
-  // never force-closes — once the user manually collapses, it stays collapsed
-  // until phaseState flips away and back, matching the spirit of the original
-  // "user toggle is preserved" comment.
-  createEffect(() => {
-    if (!detailsEl) return
-    if (props.phaseState === "active") detailsEl.open = true
-  })
-  return (
-    <Section
-      ref={(el: HTMLDetailsElement) => {
-        detailsEl = el
-      }}
-      id={props.id}
-      bodyId={props.bodyId}
-      title={props.title}
-      icon={props.icon ? <Icon name={props.icon} /> : undefined}
-      badge={props.badgeText || undefined}
-      badgeId={props.badgeId}
-      badgeTone={props.badgeTone}
-      badgeVariant={props.badgeVariant || "status"}
-      attr:data-phase-state={props.phaseState || undefined}
-    >
-      {props.children}
-    </Section>
   )
 }
 
@@ -573,25 +517,22 @@ export function RequirementsBoardPanel() {
       panelID="requirements"
       title={t("workflow.requirements")}
       icon="spec"
+      badgeId="requirementsBadge"
       badgeText={badgeText()}
       badgeTone={badgeTone()}
     >
-      <SectionFrame
+      <div
         id="requirementsSection"
-        title={t("workflow.requirements")}
-        icon="spec"
-        bodyId="requirementsBody"
-        badgeId="requirementsBadge"
-        phaseState={scope.phaseFor("requirements")}
-        badgeText={badgeText()}
-        badgeTone={badgeTone()}
+        class="task-scope-panel__content"
+        data-task-scope-content="requirements"
+        data-phase-state={scope.phaseFor("requirements") || undefined}
       >
         <RequirementsPanel
           requirements={scope.requirements()}
           specContent={scope.spec()?.content}
           isGenerating={scope.isRequirementsGenerating()}
         />
-      </SectionFrame>
+      </div>
     </TaskScopePanelShell>
   )
 }
@@ -614,21 +555,18 @@ export function ArchitectBoardPanel() {
       panelID="architect"
       title={t("workflow.architect")}
       icon="plan"
+      badgeId="architectBadge"
       badgeText={badgeText()}
       badgeTone={badgeTone()}
     >
-      <SectionFrame
+      <div
         id="architectSection"
-        title={t("workflow.architect")}
-        icon="plan"
-        bodyId="architectBody"
-        badgeId="architectBadge"
-        phaseState={scope.phaseFor("architect")}
-        badgeText={badgeText()}
-        badgeTone={badgeTone()}
+        class="task-scope-panel__content"
+        data-task-scope-content="architect"
+        data-phase-state={scope.phaseFor("architect") || undefined}
       >
         <ArchitectPanel architect={scope.architect()} isGenerating={scope.isArchitectGenerating()} />
-      </SectionFrame>
+      </div>
     </TaskScopePanelShell>
   )
 }
@@ -653,6 +591,7 @@ export function GoalsBoardPanel(props: BoardPanelProps) {
       panelID="goals"
       title={t("workflow.goals")}
       icon="goals"
+      badgeId="goalWorkflowsBadge"
       badgeText={badgeText()}
       badgeTone={badgeTone()}
       badgeVariant="metric"
@@ -666,16 +605,11 @@ export function GoalsBoardPanel(props: BoardPanelProps) {
         />
       </div>
 
-      <SectionFrame
+      <div
         id="goalWorkflowsSection"
-        title={t("workflow.goals")}
-        icon="goals"
-        bodyId="goalWorkflowsBody"
-        badgeId="goalWorkflowsBadge"
-        phaseState={scope.phaseFor("goalWorkflows")}
-        badgeText={badgeText()}
-        badgeVariant="metric"
-        badgeTone={badgeTone()}
+        class="task-scope-panel__content task-scope-panel__content--goals"
+        data-task-scope-content="goals"
+        data-phase-state={scope.phaseFor("goalWorkflows") || undefined}
       >
         <Show
           when={scope.goalWorkflows().length > 0}
@@ -687,7 +621,7 @@ export function GoalsBoardPanel(props: BoardPanelProps) {
             onDeleteGoal={props.onDeleteGoal}
           />
         </Show>
-      </SectionFrame>
+      </div>
 
       <Show when={scope.acceptance()}>
         <AcceptancePanel acceptance={scope.acceptance()} phaseState={scope.phaseFor("acceptance")} />

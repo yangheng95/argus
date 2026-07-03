@@ -140,19 +140,25 @@ test("Goals panel keeps acceptance adjacent to goals and file changes outside it
   const board = await readSrc("src/components/Board.tsx")
   expect(board).toContain("export function GoalsBoardPanel")
   expect(board).toContain('class="sections-stack workflow-section-stack task-scope-panel__stack"')
+  expect(board).toContain('id="goalWorkflowsSection"')
+  expect(board).toContain('data-task-scope-content="goals"')
+  expect(board).not.toContain("<SectionFrame")
   const acceptanceAt = board.indexOf("<AcceptancePanel")
   const goalsPanelAt = board.indexOf("export function GoalsBoardPanel")
+  const goalsContentAt = board.indexOf('id="goalWorkflowsSection"')
   expect(acceptanceAt).toBeGreaterThan(-1)
   expect(acceptanceAt).toBeGreaterThan(goalsPanelAt)
+  expect(acceptanceAt).toBeGreaterThan(goalsContentAt)
   expect(board).not.toContain("<FilesSection")
 })
 
-test("task-scope workflow sections render through the shared contiguous stack", async () => {
+test("task-scope panels render direct content through the shared scroll stack", async () => {
   const css = await readSrc("src/styles/surfaces/inspector.css")
   expect(css).toMatch(/\.task-scope-panel\s*\{/)
   expect(css).toMatch(/\.task-scope-panel__stack\.workflow-section-stack\s*\{/)
+  expect(css).toMatch(/\.task-scope-panel__content\s*\{/)
+  expect(css).toContain('.task-scope-panel__content[data-phase-state="active"]')
   expect(css).toMatch(/\.workflow-section-stack\s*\{/)
-  expect(css).toMatch(/\.workflow-section-stack \.oc-section \+ \.oc-section\s*\{/)
   expect(css).toContain('.workflow-section-stack .oc-section[data-phase-state="active"]')
 })
 

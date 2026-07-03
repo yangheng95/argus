@@ -253,8 +253,9 @@ describe("Board.tsx — Section primitive adoption", () => {
     expect(before).not.toContain("<details")
   })
 
-  test('SectionFrame uses <Section> not bare <details class="section"', () => {
-    // The bare <details class="section"> should be gone
+  test("task-scope direct panels removed the old SectionFrame wrapper", () => {
+    expect(tsx).not.toContain("function SectionFrame")
+    expect(tsx).not.toContain("<SectionFrame")
     expect(tsx).not.toMatch(/<details[^>]*class="section"/)
   })
 

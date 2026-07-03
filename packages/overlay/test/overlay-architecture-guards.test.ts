@@ -634,6 +634,7 @@ describe("overlay architecture guards", () => {
       "task-scope-panel__header",
       "task-scope-panel__body",
       "task-scope-panel__stack",
+      "task-scope-panel__content",
       "right-activity-body",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1780,7 +1781,7 @@ describe("overlay architecture guards", () => {
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const goalWorkflowGroup = readText(join(OVERLAY_ROOT, "src/components/GoalWorkflowGroup.tsx"))
 
-    for (const className of ["gwg-title-row", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
+    for (const className of ["gwg-title-row", "gwg-header-meta", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
