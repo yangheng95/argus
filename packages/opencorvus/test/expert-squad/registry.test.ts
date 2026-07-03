@@ -1,0 +1,526 @@
+import { describe, expect, test } from "bun:test"
+import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
+import { tmpdir } from "../fixture/fixture"
+import fs from "fs/promises"
+import path from "path"
+
+async function writeFile(root: string, relativePath: string, content: string) {
+  const target = path.join(root, relativePath)
+  await fs.mkdir(path.dirname(target), { recursive: true })
+  await fs.writeFile(target, content)
+}
+
+function manifest(overrides: Record<string, unknown> = {}) {
+  return {
+    schema_version: 1,
+    id: "frontend-replica",
+    label: "Frontend Replica",
+    description: "Replica squad",
+    version: "2026.07.03",
+    readme: "README.md",
+    selector: {
+      summary: "Use for replica tasks.",
+      selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+    },
+    capability_projection: {
+      scheduler: {
+        role_base: true,
+        built_in_tool_ids: ["select_expert_squad", "skill", "build"],
+        default_skill_refs: ["default/skill/workspace-guidance"],
+        default_tool_refs: ["default/tool/project-index"],
+        package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
+        package_skill_refs: ["frontend-replica/orchestrator/scheduler"],
+        package_mcp_server_refs: ["frontend-replica/orchestrator/browser"],
+        package_mcp_tool_refs: ["frontend-replica/orchestrator/browser/tool/snapshot"],
+        package_mcp_prompt_refs: ["frontend-replica/orchestrator/browser/prompt/inspect"],
+        package_mcp_resource_refs: ["frontend-replica/orchestrator/browser/resource/dom"],
+      },
+      agents: {
+        build: {
+          role_base: true,
+          package_skill_refs: ["frontend-replica/build/implementation"],
+          package_tool_refs: ["frontend-replica/build/build-evidence"],
+        },
+      },
+    },
+    agents: {
+      general: {
+        prompt: "agents/general/system.md",
+      },
+      orchestrator: {
+        prompt: "agents/orchestrator/system.md",
+        skill_refs: ["frontend-replica/orchestrator/scheduler"],
+        tool_refs: ["frontend-replica/orchestrator/source-evidence"],
+        mcp_server_refs: ["frontend-replica/orchestrator/browser"],
+      },
+      build: {
+        prompt: "agents/build/system.md",
+        skill_refs: ["frontend-replica/build/implementation"],
+        tool_refs: ["frontend-replica/build/build-evidence"],
+      },
+    },
+    ...overrides,
+  }
+}
+
+async function writeValidPackage(root: string, overrides: Record<string, unknown> = {}, folder = "frontend-replica") {
+  const packageRoot = path.join(root, ".opencorvus", "expert-squads", folder)
+  await writeFile(packageRoot, "README.md", "# Frontend Replica\n")
+  await writeFile(packageRoot, "agents/general/system.md", "general overlay")
+  await writeFile(packageRoot, "agents/orchestrator/system.md", "orchestrator overlay")
+  await writeFile(packageRoot, "agents/build/system.md", "build overlay")
+  await writeFile(packageRoot, "agents/orchestrator/skills/scheduler/SKILL.md", "---\nname: scheduler\n---\n")
+  await writeFile(packageRoot, "agents/build/skills/implementation/SKILL.md", "---\nname: implementation\n---\n")
+  await writeFile(packageRoot, "agents/orchestrator/tools/source-evidence.ts", "export default {}")
+  await writeFile(packageRoot, "agents/build/tools/build-evidence.ts", "export default {}")
+  await writeFile(
+    packageRoot,
+    "agents/orchestrator/mcp/browser.jsonc",
+    JSON.stringify({
+      command: "node",
+      args: ["browser.js"],
+      capabilities: {
+        tools: ["snapshot"],
+        prompts: ["inspect"],
+        resources: ["dom"],
+      },
+    }),
+  )
+  await writeFile(packageRoot, ExpertSquadRegistry.MANIFEST, JSON.stringify(manifest(overrides), null, 2))
+  return packageRoot
+}
+
+describe("ExpertSquadRegistry", () => {
+  test("loads a valid package and generates selector metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.id).toBe("frontend-replica")
+    expect(loaded.selector).toEqual({
+      ref: "selector/frontend-replica",
+      id: "frontend-replica",
+      label: "Frontend Replica",
+      description: "Replica squad",
+      summary: "Use for replica tasks.",
+      selection_guidance: "Call select_expert_squad with profile_id frontend-replica.",
+    })
+    expect(loaded.packageSkillRefs.has("frontend-replica/build/implementation")).toBe(true)
+    expect(loaded.packageToolRefs.has("frontend-replica/build/build-evidence")).toBe(true)
+    expect(loaded.packageMcpToolRefs.has("frontend-replica/orchestrator/browser/tool/snapshot")).toBe(true)
+    expect(loaded.packageMcpPromptRefs.has("frontend-replica/orchestrator/browser/prompt/inspect")).toBe(true)
+    expect(loaded.packageMcpResourceRefs.has("frontend-replica/orchestrator/browser/resource/dom")).toBe(true)
+    expect(loaded.projectedWorkflowTools).toEqual(["build"])
+  })
+
+  test("discovers packages under .opencorvus expert-squads", async () => {
+    await using tmp = await tmpdir()
+    await writeValidPackage(tmp.path)
+
+    const loaded = await ExpertSquadRegistry.discover(tmp.path)
+
+    expect(loaded.map((item) => item.id)).toEqual(["frontend-replica"])
+  })
+
+  test("discovers selector metadata without parsing inactive package MCP definitions", async () => {
+    await using tmp = await tmpdir()
+    await writeValidPackage(tmp.path)
+    const inactiveRoot = path.join(tmp.path, ".opencorvus", "expert-squads", "backend-debug")
+    await writeFile(inactiveRoot, "README.md", "# Backend Debug\n")
+    await writeFile(inactiveRoot, "agents/general/system.md", "general overlay")
+    await writeFile(inactiveRoot, "mcp/broken.jsonc", "{")
+    await writeFile(
+      inactiveRoot,
+      ExpertSquadRegistry.MANIFEST,
+      JSON.stringify(
+        manifest({
+          id: "backend-debug",
+          label: "Backend Debug",
+          description: "Debug backend tasks",
+          capability_projection: {
+            scheduler: {
+              role_base: true,
+              built_in_tool_ids: ["select_expert_squad", "skill"],
+            },
+            agents: {},
+          },
+          agents: {
+            general: {
+              prompt: "agents/general/system.md",
+            },
+          },
+        }),
+        null,
+        2,
+      ),
+    )
+
+    const loaded = await ExpertSquadRegistry.discover(tmp.path)
+
+    expect(loaded.map((item) => item.id)).toEqual(["backend-debug", "frontend-replica"])
+    expect(loaded.find((item) => item.id === "backend-debug")?.selector?.ref).toBe("selector/backend-debug")
+  })
+
+  test("rejects id and folder mismatch", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, { id: "frontend-replica-v2" })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/must match folder/)
+  })
+
+  test("validates source packages without using source folder name as identity", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {}, "uploaded-folder")
+
+    const loaded = await ExpertSquadRegistry.loadSourcePackage(packageRoot)
+
+    expect(loaded.id).toBe("frontend-replica")
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/must match folder/)
+  })
+
+  test("rejects manifest-declared paths with parent-directory segments", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        ...manifest().agents,
+        general: {
+          prompt: "../system.md",
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unsafe relative path/)
+  })
+
+  test("rejects contained parent-directory path segments instead of normalizing them", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        ...manifest().agents,
+        build: {
+          ...manifest().agents.build,
+          prompt: "agents/build/../build/system.md",
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unsafe relative path/)
+  })
+
+  test("rejects manifest paths that cross an intermediate symlink", async () => {
+    await using tmp = await tmpdir()
+    const outside = path.join(tmp.path, "outside")
+    await writeFile(outside, "system.md", "outside prompt")
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        ...manifest().agents,
+        general: {
+          prompt: "agents/general-link/system.md",
+        },
+      },
+    })
+    await fs.symlink(outside, path.join(packageRoot, "agents", "general-link"), process.platform === "win32" ? "junction" : "dir")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/symbolic links are not allowed/)
+  })
+
+  test("rejects unknown top-level package entries", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "notes.txt", "not part of the package contract")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown top-level entry "notes.txt"/)
+  })
+
+  test("rejects runtime-internal package entries", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "r/session.json", "{}")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/runtime-internal entry "r"/)
+  })
+
+  test("rejects nested runtime-internal entries during package traversal", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "skills/research/runtime/session.json", "{}")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/runtime-internal entry "runtime"/)
+  })
+
+  test("rejects runtime-internal entries outside capability traversal paths", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "agents/build/runtime/session.json", "{}")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/runtime-internal entry "runtime"/)
+  })
+
+  test("discovers recursive skill folders by SKILL.md location", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "agents/build/skills/planning/deep/SKILL.md", "---\nname: deep\n---\n")
+    await writeFile(packageRoot, "skills/research/deep/SKILL.md", "---\nname: shared-deep\n---\n")
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.packageSkillRefs.has("frontend-replica/build/planning/deep")).toBe(true)
+    expect(loaded.packageSkillRefs.has("frontend-replica/shared/research/deep")).toBe(true)
+  })
+
+  test("rejects package-defined custom agents in phase 1", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        "custom-build": { prompt: "agents/build/system.md" },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown agent role/)
+  })
+
+  test("rejects unknown nested manifest fields", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          selector_refs: ["selector/frontend-replica"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/Unrecognized key/)
+  })
+
+  test("rejects selector disable fields instead of treating them as fallback", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, { selector: { enabled: false } })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow()
+  })
+
+  test("omitted selector does not generate selector metadata", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, { selector: undefined })
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.selector).toBeUndefined()
+  })
+
+  test("selector metadata is manifest-derived and does not expose package skill content", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "skills/selector/SKILL.md", "inactive production skill content")
+
+    const [metadata] = await ExpertSquadRegistry.discover(tmp.path)
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(metadata.selector?.summary).toBe("Use for replica tasks.")
+    expect(JSON.stringify(metadata.selector)).not.toContain("inactive production skill content")
+    expect("root" in metadata).toBe(false)
+    expect("manifestPath" in metadata).toBe(false)
+    expect("readmePath" in metadata).toBe(false)
+    expect("packageSkillRefs" in metadata).toBe(false)
+    expect(loaded.packageSkillRefs.has("selector/frontend-replica")).toBe(false)
+  })
+
+  test("rejects unknown built-in tools", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          built_in_tool_ids: ["select_expert_squad", "not_a_tool"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/unknown built-in tool/)
+  })
+
+  test("requires worker projections for workflow dispatch tools", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        agents: {},
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(
+      /requires capability_projection\.agents\.build/,
+    )
+  })
+
+  test("rejects package refs that are not declared in package files", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          package_skill_refs: ["frontend-replica/orchestrator/missing"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/is not declared in this package/)
+  })
+
+  test("rejects projection refs that bypass agent ownership declarations", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        ...manifest().agents,
+        build: {
+          prompt: "agents/build/system.md",
+          tool_refs: ["frontend-replica/build/build-evidence"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/not declared in agents\.build/)
+  })
+
+  test("rejects agent ownership declarations for another agent-local ref", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      agents: {
+        ...manifest().agents,
+        build: {
+          ...manifest().agents.build,
+          skill_refs: ["frontend-replica/orchestrator/scheduler"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/owned by agents\.build/)
+  })
+
+  test("rejects worker projection refs owned by another agent", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        agents: {
+          build: {
+            ...manifest().capability_projection.agents.build,
+            package_tool_refs: ["frontend-replica/orchestrator/source-evidence"],
+          },
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/owned by agents\.build/)
+  })
+
+  test("rejects default refs outside the default namespace", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          default_skill_refs: ["frontend-replica/orchestrator/scheduler"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/must match default\/skill\/<name>/)
+  })
+
+  test("rejects typed default MCP refs in the server-ref list", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          default_mcp_server_refs: ["default/mcp/browser/tool/snapshot"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/must match default\/mcp\/<name>/)
+  })
+
+  test("rejects typed MCP refs not statically declared by the package MCP definition", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          package_mcp_tool_refs: ["frontend-replica/orchestrator/browser/tool/missing"],
+        },
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/is not declared in this package/)
+  })
+
+  test("rejects MCP capability names that cannot form canonical refs", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(
+      packageRoot,
+      "agents/orchestrator/mcp/browser.jsonc",
+      JSON.stringify({ command: "node", args: ["browser.js"], capabilities: { tools: ["bad/name"] } }),
+    )
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/canonical ref segments/)
+  })
+
+  test("rejects tool files with empty canonical ref segments", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "agents/build/tools/.ts", "export default {}")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/invalid canonical ref segment/)
+  })
+
+  test("rejects MCP files with empty canonical ref segments", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path)
+    await writeFile(packageRoot, "agents/orchestrator/mcp/.jsonc", "{}")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/invalid canonical ref segment/)
+  })
+
+  test("keeps agent-local and shared MCP refs distinct", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      capability_projection: {
+        ...manifest().capability_projection,
+        scheduler: {
+          ...manifest().capability_projection.scheduler,
+          package_mcp_server_refs: [
+            "frontend-replica/orchestrator/browser",
+            "frontend-replica/shared/browser",
+          ],
+          package_mcp_tool_refs: [
+            "frontend-replica/orchestrator/browser/tool/snapshot",
+            "frontend-replica/shared/browser/tool/snapshot",
+          ],
+        },
+      },
+    })
+    await writeFile(
+      packageRoot,
+      "mcp/browser.jsonc",
+      JSON.stringify({ command: "node", args: ["browser.js"], capabilities: { tools: ["snapshot"] } }),
+    )
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.packageMcpServerRefs.has("frontend-replica/orchestrator/browser")).toBe(true)
+    expect(loaded.packageMcpServerRefs.has("frontend-replica/shared/browser")).toBe(true)
+    expect(loaded.packageMcpToolRefs.has("frontend-replica/orchestrator/browser/tool/snapshot")).toBe(true)
+    expect(loaded.packageMcpToolRefs.has("frontend-replica/shared/browser/tool/snapshot")).toBe(true)
+  })
+})

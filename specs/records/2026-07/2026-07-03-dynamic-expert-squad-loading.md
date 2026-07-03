@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: design record under independent review; pending implementation.
+Status: reviewed design; phase 1 registry implementation in progress.
 
 Glossary:
 
@@ -897,6 +897,32 @@ Docs/schema validation:
 - `bun run api:routes-check`
 - `bun run docs:check`
 - `git diff --check`
+
+## Implementation Progress
+
+Phase 1 registry foundation, 2026-07-03:
+
+- Added `ExpertSquadRegistry` as the first parser/validator for canonical folders under `.opencorvus/expert-squads/<expert_squad_id>/`.
+- Added strict manifest parsing for nested objects, manifest-ID/folder-ID matching, canonical `README.md`, known `AgentRoleContract` roles, package refs, default refs, typed MCP refs, and scheduler workflow tool to worker projection consistency.
+- Added package root validation so runtime-internal entries and unknown top-level package entries are rejected instead of imported.
+- Added recursive `skills/**/SKILL.md` package skill discovery while keeping selector metadata manifest-derived rather than skill-content-derived.
+- Split canonical package loading from source package validation so folder/ZIP import can validate manifest identity before copying into `.opencorvus/expert-squads/<id>/`.
+- Tightened manifest path safety to reject raw `.` / `..` segments, Windows drive prefixes, backslashes, and intermediate symlink escapes.
+- Tightened projection validation so agent-local refs must be declared by the same agent, while shared refs remain package-level.
+- Tightened default MCP server refs and package MCP typed capability names so canonical refs remain unambiguous.
+- Split metadata discovery from active package loading so selector/catalog discovery does not parse inactive package MCP definitions.
+- Kept inactive discovery output to display and selector metadata only; package source paths remain active-load data.
+- Rejected empty tool and MCP server canonical ref segments such as `.ts`, `.js`, `.json`, and `.jsonc` file names.
+- Added whole-package recursive validation for symlinks and runtime-internal entries, including directories not otherwise traversed for capabilities.
+- Required `agents.<agent_id>.*_refs` ownership declarations themselves to point only at shared refs or that same agent's local refs.
+- Added focused registry tests in `packages/opencorvus/test/expert-squad/registry.test.ts`.
+
+Still pending:
+
+- Migrating built-in expert squads into package-shaped definitions.
+- Replacing `PromptProfile` TypeScript built-ins with registry-backed catalog/projection.
+- Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
+- Implementing folder/ZIP import and export routes.
 
 ## Open Risks For Review
 
