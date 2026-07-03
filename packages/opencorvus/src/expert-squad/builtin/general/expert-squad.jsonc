@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "general",
+  "label": "General",
+  "description": "No domain-specific expert overlay.",
+  "version": "2026.07.03",
+  "readme": "README.md",
+  "capability_projection": {
+    "scheduler": {
+      "role_base": true
+    },
+    "agents": {}
+  },
+  "agents": {}
+}

@@ -1,15 +1,3 @@
----
-name: frontend-replica-expert-squad
-description: Orchestrator skill for frontend replica tasks. Use when a task is a webpage clone, reference-screenshot port, reference-page recreation, or frontend implementation where source information architecture, module order, layout density, desktop visual behavior, and interaction semantics must stay aligned with source URL/screenshot/DOM evidence.
-agents:
-  - orchestrator
-mounted_agents:
-  - orchestrator
-required_tools:
-  - select_expert_squad
-priority: 90
----
-
 # Frontend Replica Expert Squad
 
 Use this skill when the task is a frontend replica task: webpage clone, reference-screenshot port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on source URL/screenshot/DOM evidence.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { PROMPT_PROFILE_ID_PATTERN, PromptProfile, PromptProfileIDSchema } from "../../src/agent/prompt-profile"
 import { Config } from "../../src/config/config"
+import { builtInSelectorSkillSources } from "../../src/expert-squad/builtin"
 
 const requiredBuiltInTargetMatrix = {
   "frontend-replica": [
@@ -95,6 +96,12 @@ function overlayLines(overlay: string): string[] {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
+}
+
+function selectorSkillText(name: string): string {
+  const source = builtInSelectorSkillSources.find((item) => item.id === name)
+  expect(source, name).toBeDefined()
+  return source!.skill
 }
 
 describe("prompt profiles", () => {
@@ -226,9 +233,7 @@ describe("prompt profiles", () => {
   test("frontend innovate expert squad uses concrete task surfaces instead of quality placeholders", async () => {
     const profile = PromptProfile.builtIns["frontend-innovate"]
     const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
-    const skillText = (
-      await Bun.file("packages/opencorvus/src/skill/builtin/frontend-innovate-expert-squad.md").text()
-    ).toLowerCase()
+    const skillText = selectorSkillText("frontend-innovate-expert-squad").toLowerCase()
     const forbidden = [
       "anti-slop",
       "enterprise polish",
@@ -264,9 +269,7 @@ describe("prompt profiles", () => {
   test("frontend replica expert squad uses source evidence instead of parity placeholders", async () => {
     const profile = PromptProfile.builtIns["frontend-replica"]
     const profileText = [profile.description, ...Object.values(profile.agents)].join("\n").toLowerCase()
-    const skillText = (
-      await Bun.file("packages/opencorvus/src/skill/builtin/frontend-replica-expert-squad.md").text()
-    ).toLowerCase()
+    const skillText = selectorSkillText("frontend-replica-expert-squad").toLowerCase()
     const forbidden = [
       "visual rhythm",
       "style rhythm",

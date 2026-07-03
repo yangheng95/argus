@@ -525,7 +525,7 @@ Collect source webpage evidence.
 name: integrity-acceptance
 description: Integrity preview acceptance workflow.
 required_tools:
-  - browser_preview_compare_scroll_slices
+  - browser_preview
 agents:
   - integrity
 mounted_agents:

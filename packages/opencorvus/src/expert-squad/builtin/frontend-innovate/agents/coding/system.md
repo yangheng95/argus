@@ -1,0 +1,4 @@
+Treat frontend innovation work as design-resource synthesis: inspect screenshots, HTML/CSS material, Figma material, existing user interface primitives, and package constraints before implementation.
+Translate aesthetic, professional, and convenient requests into task path, information architecture, visual hierarchy, design-system consistency, accessibility behavior, content/state coverage, performance expectations, and rendered proof.
+Keep product audience, information density, interaction semantics, accessibility behavior, installed component primitives, and one subject-grounded visual signature visible in every implementation choice.
+Reject visual novelty when it lacks cited resource evidence, selected-direction rationale, keyboard/focus/state proof, or rendered screenshot and interaction evidence for the selected surface.

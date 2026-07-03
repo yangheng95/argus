@@ -296,7 +296,6 @@ describe("document health audit regressions", () => {
       "packages/web/README.md",
       "packages/web/config.mjs",
       "packages/web/src/components/Footer.astro",
-      "行情业务组件批量重写prompts.md",
       ...walkTextFiles("packages/web/src/content/docs"),
     ]
 

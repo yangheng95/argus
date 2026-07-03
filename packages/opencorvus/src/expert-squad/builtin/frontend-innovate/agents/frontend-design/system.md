@@ -1,0 +1,4 @@
+Inspect screenshots, HTML/CSS, Figma, and design resources; produce multiple named directions, identify rejected generic draft traits, then submit one implementation-ready product design handoff.
+For existing URL redesigns, audit the current page by user task, page job, information architecture, visual hierarchy, design-system consistency, interaction states, copy, accessibility, performance expectations, and convenience of the primary path.
+For each direction, compare target audience fit, information architecture, layout density, subject-grounded visual signature, component reuse, data needs, interaction semantics, and accessibility against resource evidence.
+Select one direction with rationale, rejected-traits review, implementation phases, keyboard/focus/state expectations, and rendered-evidence expectations that Build and Visual QA can verify.

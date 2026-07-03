@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: phase 1 registry landed; phase 2 package manager service implemented; routes and runtime projection pending.
+Status: phase 1 registry landed; phase 2 package manager service implemented; phase 3 routes landed; phase 4 built-in package source landed; runtime projection pending.
 
 Glossary:
 
@@ -735,8 +735,8 @@ Overlay changes:
 
 2. Migrate built-in expert squads into package-shaped definitions.
    - Represent `general`, `frontend-replica`, `frontend-innovate`, `frontend-automation-debug`, `backend`, and `algorithm` through the same parser.
-   - Delete or replace TypeScript-only PromptProfile built-ins.
-   - Delete hardcoded expert-squad skill imports that duplicate package selectors.
+   - Completed in phase 4: replace TypeScript-only PromptProfile built-in prompt bodies with clear-text package files.
+   - Completed in phase 4: delete hardcoded expert-squad skill imports that duplicate package selectors.
 
 3. Replace custom profile config with package manifests.
    - Remove `prompt_profile.profiles` as a runtime source, or make it fail with a clear migration error.
@@ -941,10 +941,22 @@ Phase 3 import/export routes, 2026-07-03:
 - A second package-security review found and drove fixes for replace rollback after post-move validation failure and for enforcing actual decompressed bytes through a bounded ZIP writer instead of only after full materialization.
 - Package-manager tests now cover first-install cleanup after post-move validation failure, replace rollback after post-move validation failure, staging manifest ID changes, and ZIP archive resource-limit rejection.
 
+Phase 4 built-in package source, 2026-07-03:
+
+- Moved built-in expert-squad prompt-profile text out of the inline `PromptProfile.builtIns` TypeScript object into clear-text package directories under `packages/opencorvus/src/expert-squad/builtin/<expert_squad_id>/`.
+- Each built-in package now has `expert-squad.jsonc`, `README.md`, and per-agent `agents/<agent_id>/system.md` files where that built-in profile contributes an overlay.
+- `PromptProfile.builtIns` now derives synchronously from embedded built-in package sources through `ExpertSquadRegistry.loadEmbeddedPackage()` instead of owning the prompt text directly.
+- `ExpertSquadRegistry` exposes the same manifest parser for embedded and filesystem-backed packages, with embedded checks for manifest ID, README presence, known agent roles, safe prompt paths, and prompt file presence.
+- Registry tests now materialize every embedded built-in package into a temporary `.opencorvus/expert-squads/<id>/` directory and load it through `ExpertSquadRegistry.loadPackage()` so built-ins must pass the filesystem package parser.
+- Moved built-in selector instructions into each selectable package's `selector.md`, declared by `selector.instructions` in `expert-squad.jsonc`.
+- Deleted the old `packages/opencorvus/src/skill/builtin/*-expert-squad.md` files; visible Orchestrator selector skills now derive from embedded package manifests through `ExpertSquadRegistry.renderSelectorSkillMarkdown()`.
+- Filesystem package loading now accepts manifest-declared top-level `selector.md` and validates `selector.instructions` as a real non-blank file, so embedded and disk packages share the same selector-instruction contract.
+- Updated prompt-profile, desktop-only, skill registry, skill tool, Orchestrator, role-contract, and registry tests to consume generated selector skill sources rather than old markdown paths.
+- Focused validation passed for registry loading, package manager import/export, expert-squad routes, prompt-profile catalog, built-in skill materialization, skill tool loading, agent tool contracts, role-contract catalog prompts, config routes, core prompt hygiene, Orchestrator selector flow, session exact-tool preservation, and `packages/opencorvus` typecheck.
+
 Still pending:
 
-- Migrating built-in expert squads into package-shaped definitions.
-- Replacing `PromptProfile` TypeScript built-ins with registry-backed catalog/projection.
+- Replacing project `prompt_profile.profiles` custom profile definitions with package-backed catalog/projection.
 - Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
 - Implementing delete/reference-audit service support before adding `DELETE /expert-squad/:id`; delete route must not perform its own separate config/session lookup logic.
 
@@ -952,7 +964,7 @@ Still pending:
 
 1. Keeping `prompt_profile.active` as expert-squad ID is the least disruptive single source, but the UI language must make clear that the user-facing entity is now an expert squad package.
 2. Replacing `prompt_profile.profiles` with package manifests will break old local custom profiles by design. The implementation needs explicit errors and a manual migration note, not compatibility code.
-3. Built-in packages must pass the same parser as project packages. If they remain TypeScript-only, this design fails the single-source requirement.
+3. Built-in packages now pass the same parser as project packages. Future built-in changes must keep clear-text package files as the source and must not reintroduce TypeScript-owned prompt or selector bodies.
 4. Package tool names need provider-safe names. The mapping from canonical refs to provider names must be deterministic, reversible for logs, and collision-free.
 5. Active MCP projection requires changing the current flat MCP shape across tools, prompts, resources, proxy, auth, status, connect, disconnect, and call paths. Partial implementation would leak inactive MCP capabilities.
 6. Import replacement needs careful atomicity. A failed package import must not corrupt the current package folder.
@@ -1055,3 +1067,15 @@ Implementation review loop 7:
   - Replace rollback after post-move validation failure restores the previous package and does not delete the restored target during cleanup.
   - ZIP extraction now uses a bounded writer so actual decompressed bytes are checked while chunks are written, not only after full materialization.
   - Staging will include only expert-squad route/package/docs/SDK route artifacts; unrelated dirty files remain outside this phase.
+
+Implementation review loop 8:
+
+- Volta reviewed the synchronous PromptProfile/config/task/session boundary and found that the built-in package-backed catalog slice is safe only while `PromptProfile` remains synchronous and built-ins-only; forcing async project package registry loading into the current sync API would create a runtime split.
+- Lagrange reviewed the built-in migration and found a selector double-source blocker if old `src/skill/builtin/*-expert-squad.md` files survived beside package `selector` metadata.
+- Both reviewers flagged `prompt_profile.profiles` as a remaining custom-profile source that must be replaced in a later phase before claiming the full package-backed expert-squad refactor complete.
+- Revisions applied:
+  - Built-in prompt overlays and selector instructions now live in clear-text package folders under `packages/opencorvus/src/expert-squad/builtin/<id>/`.
+  - `PromptProfile.builtIns` derives from `builtInPromptProfiles`, which is produced by `ExpertSquadRegistry.loadEmbeddedPackage()`.
+  - `Skill` built-ins derive selectable expert-squad skills from `builtInSelectorSkillSources`; the old selector markdown files were deleted.
+  - `ExpertSquadRegistry.loadPackage()` validates `selector.instructions` files instead of validating that contract only for embedded packages.
+  - Tests were adjusted where they depended on ambient defaults or obsolete attachment field names: `select_expert_squad` now starts from the canonical default `general`, and Frontend Design material refs assert the manifest-derived `label` field.

@@ -11,7 +11,7 @@ export namespace ExpertSquadRegistry {
   export const DIRECTORY = "expert-squads"
   export const MANIFEST = "expert-squad.jsonc"
 
-  const TOP_LEVEL_FILES = new Set([MANIFEST, "README.md"])
+  const TOP_LEVEL_FILES = new Set([MANIFEST, "README.md", "selector.md"])
   const TOP_LEVEL_DIRECTORIES = new Set(["agents", "skills", "tools", "mcp"])
   const RUNTIME_INTERNAL_ENTRIES = new Set([".opencorvus", "r", "runtime", "worktrees", ".opencorvus-meta.json"])
 
@@ -24,6 +24,7 @@ export namespace ExpertSquadRegistry {
     .object({
       summary: z.string().min(1),
       selection_guidance: z.string().min(1),
+      instructions: RelativePath.optional(),
     })
     .strict()
     .optional()
@@ -124,6 +125,27 @@ export namespace ExpertSquadRegistry {
     projectedWorkflowTools: OrchestratorWorkflowToolName[]
   }
 
+  export interface EmbeddedPackageSource {
+    id: string
+    manifestText: string
+    files: Record<string, string>
+  }
+
+  export interface EmbeddedPackage {
+    id: string
+    label: string
+    description?: string
+    version?: string
+    selector?: SelectorMetadata
+    manifest: Manifest
+    selectorInstructions?: string
+    promptProfile: {
+      label: string
+      description?: string
+      agents: Record<string, string>
+    }
+  }
+
   interface ParsedPackageMetadata extends PackageLocation {
     manifest: Manifest
   }
@@ -150,15 +172,15 @@ export namespace ExpertSquadRegistry {
     return parseJsoncText(await Filesystem.readText(file), file)
   }
 
+  export function parseManifestText(text: string, source: string): Manifest {
+    return Manifest.parse(parseJsoncText(text, source))
+  }
+
   function assertRoleID(value: string, context: string): asserts value is AgentRoleID {
     if (!AgentRoleContract.isRoleID(value)) throw new Error(`${context}: unknown agent role "${value}"`)
   }
 
-  function assertContained(root: string, candidate: string, context: string) {
-    if (!Filesystem.contains(root, candidate)) throw new Error(`${context}: path escapes expert squad package root`)
-  }
-
-  function resolveManifestPath(root: string, relativePath: string, context: string): string {
+  function assertSafeManifestRelativePath(relativePath: string, context: string) {
     const segments = relativePath.split("/")
     if (
       !relativePath ||
@@ -171,6 +193,15 @@ export namespace ExpertSquadRegistry {
     ) {
       throw new Error(`${context}: unsafe relative path "${relativePath}"`)
     }
+  }
+
+  function assertContained(root: string, candidate: string, context: string) {
+    if (!Filesystem.contains(root, candidate)) throw new Error(`${context}: path escapes expert squad package root`)
+  }
+
+  function resolveManifestPath(root: string, relativePath: string, context: string): string {
+    assertSafeManifestRelativePath(relativePath, context)
+    const segments = relativePath.split("/")
     const resolved = path.resolve(root, ...segments)
     assertContained(root, resolved, context)
     return resolved
@@ -183,6 +214,13 @@ export namespace ExpertSquadRegistry {
     if (!info?.isFile()) throw new Error(`${context}: referenced file does not exist`)
     const [realRoot, realTarget] = await Promise.all([realpath(root), realpath(resolved)])
     assertContained(realRoot, realTarget, context)
+    return resolved
+  }
+
+  async function assertNonBlankFile(root: string, relativePath: string, context: string): Promise<string> {
+    const resolved = await assertFile(root, relativePath, context)
+    const content = await Filesystem.readText(resolved)
+    if (!content.trim()) throw new Error(`${context}: referenced file is blank`)
     return resolved
   }
 
@@ -586,16 +624,7 @@ export namespace ExpertSquadRegistry {
       description: manifest.description,
       version: manifest.version,
       manifest,
-      selector: manifest.selector
-        ? {
-            ref: `selector/${manifest.id}`,
-            id: manifest.id,
-            label: manifest.label,
-            description: manifest.description,
-            summary: manifest.selector.summary,
-            selection_guidance: manifest.selector.selection_guidance,
-          }
-        : undefined,
+      selector: selectorMetadata(manifest),
     }
   }
 
@@ -607,6 +636,103 @@ export namespace ExpertSquadRegistry {
       version: metadata.version,
       selector: metadata.selector,
     }
+  }
+
+  function selectorMetadata(manifest: Manifest): SelectorMetadata | undefined {
+    return manifest.selector
+      ? {
+          ref: `selector/${manifest.id}`,
+          id: manifest.id,
+          label: manifest.label,
+          description: manifest.description,
+          summary: manifest.selector.summary,
+          selection_guidance: manifest.selector.selection_guidance,
+        }
+      : undefined
+  }
+
+  export function loadEmbeddedPackage(source: EmbeddedPackageSource): EmbeddedPackage {
+    const manifest = parseManifestText(source.manifestText, `built-in expert squad ${source.id}/${MANIFEST}`)
+    if (manifest.id !== source.id) {
+      throw new Error(`built-in expert squad source id "${source.id}" does not match manifest id "${manifest.id}"`)
+    }
+    if (typeof source.files[manifest.readme] !== "string") {
+      throw new Error(`built-in expert squad ${manifest.id}: missing ${manifest.readme}`)
+    }
+
+    let selectorInstructions: string | undefined
+    if (manifest.selector?.instructions) {
+      assertSafeManifestRelativePath(manifest.selector.instructions, `built-in expert squad ${manifest.id}.selector.instructions`)
+      const instructions = source.files[manifest.selector.instructions]
+      if (typeof instructions !== "string") {
+        throw new Error(`built-in expert squad ${manifest.id}: missing selector instructions ${manifest.selector.instructions}`)
+      }
+      selectorInstructions = instructions.trim()
+      if (!selectorInstructions) {
+        throw new Error(`built-in expert squad ${manifest.id}: blank selector instructions ${manifest.selector.instructions}`)
+      }
+    }
+
+    const agents: Record<string, string> = {}
+    for (const [agentID, agent] of Object.entries(manifest.agents)) {
+      assertRoleID(agentID, `built-in expert squad ${manifest.id}.agents.${agentID}`)
+      if (!agent.prompt) continue
+      assertSafeManifestRelativePath(agent.prompt, `built-in expert squad ${manifest.id}.agents.${agentID}.prompt`)
+      const prompt = source.files[agent.prompt]
+      if (typeof prompt !== "string") {
+        throw new Error(`built-in expert squad ${manifest.id}: missing prompt file ${agent.prompt}`)
+      }
+      const trimmed = prompt.trim()
+      if (!trimmed) throw new Error(`built-in expert squad ${manifest.id}: blank prompt file ${agent.prompt}`)
+      agents[agentID] = trimmed
+    }
+
+    return {
+      id: manifest.id,
+      label: manifest.label,
+      description: manifest.description,
+      version: manifest.version,
+      selector: selectorMetadata(manifest),
+      manifest,
+      selectorInstructions,
+      promptProfile: {
+        label: manifest.label,
+        description: manifest.description,
+        agents,
+      },
+    }
+  }
+
+  export function renderSelectorSkillMarkdown(pkg: EmbeddedPackage): string | undefined {
+    if (!pkg.selector) return undefined
+    const skillName = `${pkg.id}-expert-squad`
+    const description = `Orchestrator skill for ${pkg.label} tasks. ${pkg.selector.summary}`
+    const body =
+      pkg.selectorInstructions ??
+      [
+        `# ${pkg.label} Expert Squad`,
+        "",
+        pkg.selector.selection_guidance,
+        "",
+        "Call `select_expert_squad` with the manifest ID from this package when the task evidence matches this expert squad.",
+      ].join("\n")
+
+    return [
+      "---",
+      `name: ${JSON.stringify(skillName)}`,
+      `description: ${JSON.stringify(description)}`,
+      "agents:",
+      "  - orchestrator",
+      "mounted_agents:",
+      "  - orchestrator",
+      "required_tools:",
+      "  - select_expert_squad",
+      "priority: 90",
+      "---",
+      "",
+      body.trim(),
+      "",
+    ].join("\n")
   }
 
   function collectDeclaredRefs(manifest: Manifest, refs: Awaited<ReturnType<typeof collectPackageRefs>>): DeclaredPackageRefs {
@@ -643,6 +769,9 @@ export namespace ExpertSquadRegistry {
     for (const [agentID, agent] of Object.entries(manifest.agents)) {
       assertRoleID(agentID, `agents.${agentID}`)
       if (agent.prompt) await assertFile(metadata.root, agent.prompt, `agents.${agentID}.prompt`)
+    }
+    if (manifest.selector?.instructions) {
+      await assertNonBlankFile(metadata.root, manifest.selector.instructions, "selector.instructions")
     }
 
     const refs = await collectPackageRefs(metadata.root, manifest.id)

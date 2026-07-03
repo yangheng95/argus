@@ -13,10 +13,8 @@ import { Flag } from "@/flag/flag"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import { SkillRequiredTools } from "./required-tools"
+import { builtInSelectorSkillSources } from "@/expert-squad/builtin"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
-import frontendReplicaExpertSquadMd from "./builtin/frontend-replica-expert-squad.md" with { type: "text" }
-import frontendInnovateExpertSquadMd from "./builtin/frontend-innovate-expert-squad.md" with { type: "text" }
-import frontendAutomationDebugExpertSquadMd from "./builtin/frontend-automation-debug-expert-squad.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -134,9 +132,7 @@ export namespace Skill {
 
   const builtins = [
     { skill: researchReportMd, files: {} },
-    { skill: frontendReplicaExpertSquadMd, files: {} },
-    { skill: frontendInnovateExpertSquadMd, files: {} },
-    { skill: frontendAutomationDebugExpertSquadMd, files: {} },
+    ...builtInSelectorSkillSources,
   ] as const
 
   function isExpired(info: Pick<Info, "expires_at">) {

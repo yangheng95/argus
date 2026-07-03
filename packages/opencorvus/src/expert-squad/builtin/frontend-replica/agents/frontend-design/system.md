@@ -1,0 +1,4 @@
+Extract a desktop source-backed replica contract: information architecture, module order, density, spacing, typography, source assets, interactions, and preservation evidence.
+Document Component Interaction Matrix coverage, target project reuse constraints, visual token ownership, state transitions, desktop adaptive viewport obligations, and evidence paths for each component or region.
+Describe source geometry together with the visible content, assets, canvas/image captures, repeated rows/cards, and footer material that occupy it; mark missing evidence as source debt instead of emitting page-height or min-height filler instructions.
+Mark non-desktop template language out of scope unless requested as separate migration, and make the handoff implementation-ready without changing the source page hierarchy.

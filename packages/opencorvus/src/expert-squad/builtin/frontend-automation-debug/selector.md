@@ -1,15 +1,3 @@
----
-name: frontend-automation-debug-expert-squad
-description: Orchestrator skill for frontend automation debugging. Use when a task concerns browser automation failures, Playwright checks, preview wiring, visual regression, flaky frontend tests, rendered UI diagnostics, or failures where screenshots, selectors, runtime state, and reproducible commands decide acceptance.
-agents:
-  - orchestrator
-mounted_agents:
-  - orchestrator
-required_tools:
-  - select_expert_squad
-priority: 85
----
-
 # Frontend Automation Debug Expert Squad
 
 Use this skill when the task is about frontend automation, browser-runtime debugging, visual regression, Playwright evidence, preview diagnostics, or flaky UI checks.

@@ -72,7 +72,7 @@ test("editable native prompt catalog entries have non-empty defaults", async () 
 
 test("build prompt catalog default matches the runtime build core prompt", async () => {
   const buildOverlay = PromptProfile.builtIns["frontend-replica"].agents.build
-  await using tmp = await tmpdir({ git: true })
+  await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -94,7 +94,7 @@ test("build prompt catalog default matches the runtime build core prompt", async
 
 test("visual-qa prompt catalog default matches the runtime visual QA core prompt", async () => {
   const visualQaOverlay = PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]
-  await using tmp = await tmpdir({ git: true })
+  await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -117,7 +117,7 @@ test("visual-qa prompt catalog default matches the runtime visual QA core prompt
 
 test("coding prompt catalog default matches the direct assistant prompt", async () => {
   const codingOverlay = PromptProfile.builtIns["frontend-replica"].agents.coding
-  await using tmp = await tmpdir({ git: true })
+  await using tmp = await tmpdir({ git: true, config: { prompt_profile: { active: "frontend-replica" } } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -142,6 +142,7 @@ test("coding override and build append catalog entries stay distinct", async () 
   await using tmp = await tmpdir({
     git: true,
     config: {
+      prompt_profile: { active: "frontend-replica" },
       agent: {
         coding: { prompt: "Custom coding prompt" },
         build: { prompt_append: "Extra build-stage instruction" },

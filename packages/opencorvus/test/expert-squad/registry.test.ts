@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { PromptProfile } from "../../src/agent/prompt-profile"
+import { builtInPackageSources } from "../../src/expert-squad/builtin"
 import { ExpertSquadRegistry } from "../../src/expert-squad/registry"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
@@ -8,6 +10,10 @@ async function writeFile(root: string, relativePath: string, content: string) {
   const target = path.join(root, relativePath)
   await fs.mkdir(path.dirname(target), { recursive: true })
   await fs.writeFile(target, content)
+}
+
+async function writeEmbeddedPackage(root: string, source: (typeof builtInPackageSources)[number]) {
+  for (const [relativePath, content] of Object.entries(source.files)) await writeFile(root, relativePath, content)
 }
 
 function manifest(overrides: Record<string, unknown> = {}) {
@@ -121,6 +127,23 @@ describe("ExpertSquadRegistry", () => {
     const loaded = await ExpertSquadRegistry.discover(tmp.path)
 
     expect(loaded.map((item) => item.id)).toEqual(["frontend-replica"])
+  })
+
+  test("loads every built-in expert squad package through the registry parser", async () => {
+    await using tmp = await tmpdir()
+
+    for (const source of builtInPackageSources) {
+      const packageRoot = path.join(tmp.path, ".opencorvus", "expert-squads", source.id)
+      await writeEmbeddedPackage(packageRoot, source)
+
+      const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+      const embedded = ExpertSquadRegistry.loadEmbeddedPackage(source)
+
+      expect(loaded.id).toBe(source.id)
+      expect(loaded.manifest).toEqual(embedded.manifest)
+      expect(PromptProfile.builtIns[loaded.id]).toEqual(embedded.promptProfile)
+      expect(loaded.readmePath.endsWith(path.join(source.id, "README.md"))).toBe(true)
+    }
   })
 
   test("discovers selector metadata without parsing inactive package MCP definitions", async () => {
@@ -309,6 +332,46 @@ describe("ExpertSquadRegistry", () => {
     const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
 
     expect(loaded.selector).toBeUndefined()
+  })
+
+  test("allows manifest-declared selector instructions as a top-level package file", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        ...manifest().selector,
+        instructions: "selector.md",
+      },
+    })
+    await writeFile(packageRoot, "selector.md", "# Selector Instructions\n")
+
+    const loaded = await ExpertSquadRegistry.loadPackage(packageRoot)
+
+    expect(loaded.selector?.ref).toBe("selector/frontend-replica")
+  })
+
+  test("rejects missing manifest-declared selector instructions", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        ...manifest().selector,
+        instructions: "selector.md",
+      },
+    })
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/selector\.instructions/)
+  })
+
+  test("rejects blank manifest-declared selector instructions", async () => {
+    await using tmp = await tmpdir()
+    const packageRoot = await writeValidPackage(tmp.path, {
+      selector: {
+        ...manifest().selector,
+        instructions: "selector.md",
+      },
+    })
+    await writeFile(packageRoot, "selector.md", "\n")
+
+    await expect(ExpertSquadRegistry.loadPackage(packageRoot)).rejects.toThrow(/selector\.instructions/)
   })
 
   test("selector metadata is manifest-derived and does not expose package skill content", async () => {

@@ -1,0 +1,3 @@
+Prioritize desktop source information architecture, module order, density, states, and source screenshot/DOM/computed-style correspondence. Do not introduce tablet/mobile scope unless the operator asks for a separate multi-end migration task.
+Treat target project primitives, business components, and code as reuse options only when they preserve source region layout, typography/spacing/color tokens, content density, and interaction semantics.
+When the desktop contract names adaptive layout, verify multiple desktop-class viewport widths before claiming the replica is done; this remains desktop scope, not tablet/mobile migration.

@@ -2525,7 +2525,7 @@ describe("orchestrator tools", () => {
           },
           buildToolOptions("select_expert_squad"),
         )
-        expect(toolText(result)).toContain("- previous: frontend-replica")
+        expect(toolText(result)).toContain("- previous: general")
         expect(toolText(result)).toContain("- active: frontend-innovate")
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
           prompt_profile: { active: "frontend-innovate" },
@@ -14087,7 +14087,7 @@ describe("orchestrator tools", () => {
             })
             expect(input.attachments).toHaveLength(1)
             expect(input.attachments[0]).toMatchObject({
-              filename: "reference.html",
+              label: "reference.html",
               mime: "text/html",
               source: "material",
               intent: "visual_reference",

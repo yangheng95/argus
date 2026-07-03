@@ -1,15 +1,3 @@
----
-name: frontend-innovate-expert-squad
-description: Orchestrator skill for frontend design-resource synthesis. Use when a task asks for innovative webpage design, product UI redesign, design screenshots, HTML/CSS design references, Figma designs, multiple design directions, convergence into an implementation-ready frontend plan, or implementation of a webpage from design resources with rendered verification.
-agents:
-  - orchestrator
-mounted_agents:
-  - orchestrator
-required_tools:
-  - select_expert_squad
-priority: 92
----
-
 # Frontend Innovate Expert Squad
 
 Use this skill when the task is frontend design-resource synthesis: design screenshot interpretation, HTML/CSS or Figma resource synthesis, product UI redesign, multiple design directions, selected-direction convergence, or implementation of a webpage from design evidence with rendered verification.
