@@ -2,7 +2,7 @@
 
 Date: 2026-07-03
 
-Status: reviewed design; phase 1 registry implementation in progress.
+Status: phase 1 registry landed; phase 2 package manager service implemented; routes and runtime projection pending.
 
 Glossary:
 
@@ -917,12 +917,25 @@ Phase 1 registry foundation, 2026-07-03:
 - Required `agents.<agent_id>.*_refs` ownership declarations themselves to point only at shared refs or that same agent's local refs.
 - Added focused registry tests in `packages/opencorvus/test/expert-squad/registry.test.ts`.
 
+Phase 2 package manager foundation, 2026-07-03:
+
+- Added `ExpertSquadPackageManager` for folder import, ZIP import, and ZIP export at the service layer.
+- Folder and ZIP import normalize source packages through `ExpertSquadRegistry.loadSourcePackage()` before installing to `.opencorvus/expert-squads/<manifest id>/`, then validate the installed canonical folder with `loadPackage()`.
+- ZIP import uses per-entry validation through `zip.js`, rejects traversal, POSIX absolute paths, Windows drive paths, colon paths, duplicate normalized entries, case collisions, and file/directory collisions.
+- Import staging and replacement backup directories live under `.opencorvus/expert-squad-staging/`, outside the `.opencorvus/expert-squads/` discovery catalog.
+- Replacement is explicit via `replace`; failed replacement restores the previous package or surfaces a restore failure instead of silently swallowing it.
+- Import refuses source directories inside OpenCorvus runtime storage such as `.opencorvus/r`.
+- Export validates the requested ID through the registry ID schema, loads the canonical package, rejects symlink/runtime entries, writes stable ZIP paths under the single `<id>/` package root, and names archives from manifest ID only.
+- Import/export tests live in `packages/opencorvus/test/expert-squad/package-manager.test.ts`.
+- Independent package-manager review found and drove fixes for staging/backup catalog pollution, export path traversal, restore failure swallowing, runtime filter duplication, active-selection mutation risk, concurrent replace serialization, ZIP colon path rejection, and export wrapper contract alignment.
+
 Still pending:
 
 - Migrating built-in expert squads into package-shaped definitions.
 - Replacing `PromptProfile` TypeScript built-ins with registry-backed catalog/projection.
 - Wiring active projection into Orchestrator runtime tools, worker runtime contracts, skill mounts, custom tools, MCP, routes, SDK, and overlay.
-- Implementing folder/ZIP import and export routes.
+- Implementing folder/ZIP import and export routes on top of `ExpertSquadPackageManager`; route code must map package validation errors to precise HTTP responses instead of returning generic 500s.
+- Implementing delete/reference-audit service support before adding `DELETE /expert-squad/:id`; delete route must not perform its own separate config/session lookup logic.
 
 ## Open Risks For Review
 

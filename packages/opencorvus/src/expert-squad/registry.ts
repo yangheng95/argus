@@ -80,6 +80,16 @@ export namespace ExpertSquadRegistry {
   export type Manifest = z.infer<typeof Manifest>
   export type Projection = z.infer<typeof Projection>
 
+  export function parseID(value: string, context = "expert squad id") {
+    const parsed = ID.safeParse(value)
+    if (!parsed.success) throw new Error(`${context}: invalid expert squad id "${value}"`)
+    return parsed.data
+  }
+
+  export function isRuntimeInternalEntry(name: string, isDirectory: boolean) {
+    return name === ".opencorvus-meta.json" || (isDirectory && RUNTIME_INTERNAL_ENTRIES.has(name))
+  }
+
   export interface SelectorMetadata {
     ref: string
     id: string
@@ -177,7 +187,7 @@ export namespace ExpertSquadRegistry {
   }
 
   function assertNoRuntimeInternalEntry(entry: Dirent, context: string) {
-    if (entry.name === ".opencorvus-meta.json" || (entry.isDirectory() && RUNTIME_INTERNAL_ENTRIES.has(entry.name))) {
+    if (isRuntimeInternalEntry(entry.name, entry.isDirectory())) {
       throw new Error(`${context}.${entry.name}: runtime-internal entry "${entry.name}" is not allowed`)
     }
   }
