@@ -829,6 +829,80 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
+  test("fresh build dispatch rejects active project mismatch before evidence staging", async () => {
+    await using activeProject = await tmpdir({ git: true })
+    await using taskProject = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: activeProject.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskProjectID = `project_fresh_dispatch_owner_${suffix}`
+        seedProjectRow({ projectID: taskProjectID, worktree: taskProject.path })
+        const taskID = `tsk_fresh_dispatch_owner_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Fresh dispatch active project mismatch",
+          directory: activeProject.path,
+        })
+        const targetRef = await AttachmentStore.write(
+          taskProjectID,
+          await pngImage(16, 16),
+          "image/png",
+          "task-project-reference.png",
+        )
+        seedTask({
+          projectID: taskProjectID,
+          taskID,
+          sessionID: rootSession.id,
+          executor: "codex",
+          attachments: [{ ...targetRef, intent: "visual_reference", source: "user-upload" }],
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const evidencePack: BuildEvidencePack = {
+          targetReferences: [{ ...targetRef, intent: "visual_reference", source: "user-upload" }],
+        }
+        const inputEvidenceManifest = await composeBuildInputEvidenceManifest({
+          projectID: taskProjectID,
+          taskID,
+          evidencePack,
+        })
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+        const stageToWorktree = AttachmentStore.stageToWorktree
+        const stageSpy = spyOn(AttachmentStore, "stageToWorktree").mockImplementation(stageToWorktree)
+        try {
+          await expect(
+            BuildAgent.run({
+              task: task!,
+              parentSessionID: rootSession.id,
+              target: {
+                kind: "request",
+                text: "fresh dispatch must not use the active project for task evidence",
+              },
+              context: {
+                evidencePack,
+                inputEvidenceManifest,
+              },
+            }),
+          ).rejects.toThrow("fresh build dispatch must enter the task project before evidence materialization")
+          expect(stageSpy).not.toHaveBeenCalled()
+          expect(captured.run).toBeUndefined()
+          expect(captured.resume).toBeUndefined()
+          const childSessions = Database.use((db) =>
+            db.select().from(SessionTable).where(eq(SessionTable.parent_id, rootSession.id)).all(),
+          )
+          expect(childSessions.filter((session) => session.kind === "build")).toHaveLength(0)
+        } finally {
+          stageSpy.mockRestore()
+        }
+      },
+    })
+  }, 30_000)
+
   test("managed build retry invokes persisted file part repair before provider resume", async () => {
     await using tmp = await tmpdir({
       git: true,

@@ -869,6 +869,12 @@ export namespace BuildAgent {
       if (input.workDir && input.managedWorktree) {
         throw new Error("BuildAgent.run: workDir and managedWorktree are mutually exclusive")
       }
+      if (!input.existingSessionID && Instance.project.id !== input.task.project_id) {
+        throw new Error(
+          `BuildAgent.run: active project ${Instance.project.id} does not match task project ${input.task.project_id}; ` +
+            "fresh build dispatch must enter the task project before evidence materialization",
+        )
+      }
       const ownsWorktree = !input.workDir
       let worktreeDir = input.managedWorktree?.directory ?? input.workDir
       let worktreeBranch: string | undefined
