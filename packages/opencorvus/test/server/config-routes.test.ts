@@ -220,7 +220,7 @@ describe("config prompt routes", () => {
         expect(body.active).toBe("custom-squad")
         expect(body.project_active).toBe("custom-squad")
         expect(body.session_active).toBe(null)
-        expect(body.default).toBe("frontend-replica")
+        expect(body.default).toBe("general")
         expect(body.targets.find((target) => target.id === "build")).toMatchObject({
           id: "build",
           editable: true,
@@ -371,7 +371,7 @@ describe("config prompt routes", () => {
         expect(body.success).toBe(false)
         expect(body.data.message).toContain("Unknown prompt profile")
         expect(body.error[0]?.message).toBe(body.data.message)
-        expect((await Config.get()).prompt_profile.active).toBe("frontend-replica")
+        expect((await Config.get()).prompt_profile.active).toBe("general")
       },
     })
   })

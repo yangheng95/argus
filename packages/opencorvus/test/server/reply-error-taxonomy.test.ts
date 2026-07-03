@@ -491,7 +491,7 @@ describe("task agent session reply fails loudly when direct continuation is unav
     })
   })
 
-  test("healthy direct sessions still append directly to that session", async () => {
+  test("healthy direct sessions append stored attachments with canonical filenames", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({
       directory: tmp.path,
@@ -523,15 +523,24 @@ describe("task agent session reply fails loudly when direct continuation is unav
           "image/png",
           "design.png",
         )
+        const loopSpy = spyOn(SessionPrompt, "loop").mockResolvedValue({
+          info: {
+            id: Identifier.ascending("message"),
+            role: "assistant",
+            sessionID: assistant.id,
+          },
+          parts: [],
+        } as any)
 
         const response = await postReply({
           taskID,
           sessionID: assistant.id,
           directory: tmp.path,
-          attachments: [{ mime: ref.mime, url: ref.url, filename: ref.filename }],
+          attachments: [{ mime: ref.mime, url: ref.url, filename: "renamed-by-caller.png" }],
         })
 
         expect(response.status).toBe(202)
+        expect(loopSpy).toHaveBeenCalledTimes(1)
         const directMessages = await Session.messages({ sessionID: assistant.id })
         const userMessages = directMessages.filter((message) => message.info.role === "user")
         expect(userMessages).toHaveLength(2)

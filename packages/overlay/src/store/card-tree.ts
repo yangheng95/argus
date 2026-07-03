@@ -85,6 +85,9 @@ export interface StepPayload {
   diffBaseRef?: string
   diffHeadRef?: string
   changedFiles?: string[]
+  attemptChangedFiles?: string[]
+  attemptCommitRef?: string
+  attemptPublishedCommitRef?: string
   changedFileDiffs?: Array<{
     file: string
     additions?: number

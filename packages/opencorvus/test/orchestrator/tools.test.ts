@@ -15195,7 +15195,7 @@ describe("orchestrator tools", () => {
     })
   }, 15000)
 
-  test("goal build session contract records validated input evidence manifest", async () => {
+  test("goal build session contract records generic evidence without a dispatch manifest", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -15247,12 +15247,12 @@ describe("orchestrator tools", () => {
           return {
             result: {
               status: "passed",
-              summary: "Goal consumed validated input evidence.",
+              summary: "Goal consumed task-owned evidence.",
               files_changed: [
                 {
                   path: "src/index.ts",
-                  summary: "Used validated visual evidence.",
-                  reason: "Input evidence manifest was present.",
+                  summary: "Used visual evidence.",
+                  reason: "Evidence pack was present.",
                 },
               ],
               tests: [],
@@ -15281,20 +15281,15 @@ describe("orchestrator tools", () => {
 
         expectGoalBuildStarted(result)
         await waitForGoalStatus(goalID, "passed")
-        expect(capturedInput.context.inputEvidenceManifest).toMatchObject({
-          version: 1,
-          project_id: Instance.project.id,
-          task_id: taskID,
-          goal_id: goalID,
-          entries: [
-            {
-              role: "target_reference",
-              project_id: Instance.project.id,
-              legacy_attachment_url: targetRef.url,
-              intent: "visual_reference",
-              source: "task-attachment",
-            },
-          ],
+        expect(capturedInput.context.inputEvidenceManifest).toBeUndefined()
+        expect(capturedInput.context.evidencePack.targetReferences).toHaveLength(1)
+        expect(capturedInput.context.evidencePack.targetReferences[0]).toMatchObject({
+          url: targetRef.url,
+          sha: targetRef.sha,
+          mime: targetRef.mime,
+          size: targetRef.size,
+          intent: "visual_reference",
+          source: "task-attachment",
         })
         const contractArtifact = Database.use((db) =>
           db
@@ -15304,28 +15299,12 @@ describe("orchestrator tools", () => {
             .get(),
         )
         const payload = contractArtifact?.payload as any
-        expect(payload.input_evidence).toMatchObject({
-          version: 1,
-          project_id: Instance.project.id,
-          task_id: taskID,
-          goal_id: goalID,
-          session_id: buildSessionID,
-        })
-        expect(payload.input_evidence.entries).toHaveLength(1)
-        expect(payload.input_evidence.entries[0]).toMatchObject({
-          role: "target_reference",
-          project_id: Instance.project.id,
-          source_task_id: taskID,
-          legacy_attachment_url: targetRef.url,
-          sha: targetRef.sha,
-          mime: targetRef.mime,
-          size: targetRef.size,
-        })
+        expect(payload.input_evidence).toBeNull()
       },
     })
   }, 15000)
 
-  test("direct build rejects foreign input evidence before BuildAgent.run", async () => {
+  test("direct build forwards foreign input evidence to BuildAgent", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
     await using foreignTmp = await tmpdir({ git: true })
@@ -15363,10 +15342,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Direct foreign input evidence test",
           taskTitle: "Direct foreign input evidence task",
-          request: "Direct build should reject foreign visual evidence.",
-          goalTitle: "Foreign input evidence guard",
-          goalSlug: "foreign-input-evidence-guard",
-          objective: "Reject evidence from another project before BuildAgent.run.",
+          request: "Direct build should forward foreign visual evidence to Build.",
+          goalTitle: "Foreign input evidence forwarding",
+          goalSlug: "foreign-input-evidence-forwarding",
+          objective: "Forward evidence from another project to BuildAgent.run without a dispatch gate.",
           now,
           insertProject: false,
         })
@@ -15379,9 +15358,24 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run(),
         )
-        buildAgentRunImpl = async () => {
+        let capturedInput: any
+        buildAgentRunImpl = async (input: any) => {
           buildCalls += 1
-          throw new Error("BuildAgent.run must not start for foreign input evidence")
+          capturedInput = input
+          await markBuildSlotAcquired(input, `ses_direct_foreign_input_evidence_${stamp}`)
+          return {
+            result: {
+              status: "failed",
+              summary: "Build execution observed a foreign evidence reference.",
+              files_changed: [],
+              tests: [],
+              error: "foreign evidence reaches the Build boundary",
+            },
+            sessionID: `ses_direct_foreign_input_evidence_${stamp}`,
+            worktreeDir: input.workDir ?? input.managedWorktree?.directory ?? Instance.directory,
+            worktreeBranch: input.managedWorktree?.branch,
+            worktreeBaseRef: input.managedWorktree?.baseRef,
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -15392,17 +15386,27 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        await expect(
-          tools.build.execute(
-            {
-              request: "Repair implementation using task evidence.",
-              reason: "Validate direct build input evidence owner.",
-              directBuildIntent: "modify_files",
-            },
-            buildToolOptions("direct_foreign_input_evidence"),
-          ),
-        ).rejects.toThrow("belongs to project")
-        expect(buildCalls).toBe(0)
+        const result = await tools.build.execute(
+          {
+            request: "Repair implementation using task evidence.",
+            reason: "Validate direct build input evidence owner.",
+            directBuildIntent: "modify_files",
+          },
+          buildToolOptions("direct_foreign_input_evidence"),
+        )
+
+        expect(toolText(result)).toContain("Build agent finished (status=failed")
+        expect(buildCalls).toBe(1)
+        expect(capturedInput.context.inputEvidenceManifest).toBeUndefined()
+        expect(capturedInput.context.evidencePack.targetReferences).toHaveLength(1)
+        expect(capturedInput.context.evidencePack.targetReferences[0]).toMatchObject({
+          url: foreignRef.url,
+          sha: foreignRef.sha,
+          mime: foreignRef.mime,
+          size: foreignRef.size,
+          intent: "visual_reference",
+          source: "task-attachment",
+        })
       },
     })
   }, 15000)
@@ -15828,8 +15832,9 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedRetryFeedback = input.context?.retryFeedback
-          expect(JSON.stringify(input.context?.inputEvidenceManifest)).toContain(currentRefUrl)
-          expect(JSON.stringify(input.context?.inputEvidenceManifest)).not.toContain(originalRefUrl)
+          expect(input.context?.inputEvidenceManifest).toBeUndefined()
+          expect(JSON.stringify(input.context?.evidencePack)).toContain(currentRefUrl)
+          expect(JSON.stringify(input.context?.evidencePack)).not.toContain(originalRefUrl)
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -15878,9 +15883,10 @@ describe("orchestrator tools", () => {
             .all(),
         )
         const retryContract = contracts.at(-1)?.payload as any
+        const originalContract = contracts[0]?.payload as any
+        expect(JSON.stringify(originalContract?.input_evidence)).toContain(originalRefUrl)
         expect(retryContract?.session_id).toBe(priorSessionID)
-        expect(JSON.stringify(retryContract?.input_evidence)).toContain(currentRefUrl)
-        expect(JSON.stringify(retryContract?.input_evidence)).not.toContain(originalRefUrl)
+        expect(retryContract?.input_evidence).toBeNull()
       },
     })
   }, 30_000)

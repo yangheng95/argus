@@ -1168,11 +1168,11 @@ test("compileBoard projects terminal build outcome when goal has no acceptance",
             error: "lost process ownership",
             no_diff_reason: null,
             host_facts: {
-              contribution_commit_ref: null,
+              contribution_commit_ref: "attemptabc",
               published_commit_ref: null,
               diff_base_ref: null,
               diff_head_ref: null,
-              actual_changed_files: [],
+              actual_changed_files: ["src/components/VisualParity.tsx"],
             },
             workspace: {
               dir: "C:/tmp/visual-parity",
@@ -1204,12 +1204,16 @@ test("compileBoard projects terminal build outcome when goal has no acceptance",
         summary: "Build attempt aborted: lost process ownership",
         error: "lost process ownership",
         noDiffReason: undefined,
-        changedFiles: [],
-        commitRef: undefined,
+        changedFiles: ["src/components/VisualParity.tsx"],
+        commitRef: "attemptabc",
         publishedCommitRef: undefined,
         diffBaseRef: undefined,
         diffHeadRef: undefined,
       })
+      expect(payload?.changedFiles).toBeUndefined()
+      expect(payload?.attemptChangedFiles).toEqual(["src/components/VisualParity.tsx"])
+      expect(payload?.attemptCommitRef).toBe("attemptabc")
+      expect(payload?.attemptPublishedCommitRef).toBeUndefined()
     },
   })
 })

@@ -83,7 +83,7 @@ describe("Attachment project isolation", () => {
     }
 
     await expect(EngineService.appendTaskAttachment(taskID, drifted)).rejects.toThrow(
-      "file metadata does not match canonical AttachmentStore metadata (sha, mime, size, filename)",
+      "file metadata does not match canonical AttachmentStore metadata (sha, mime, size)",
     )
     await expect(
       EngineService.appendTaskSystemArtifact(taskID, {
@@ -105,6 +105,37 @@ describe("Attachment project isolation", () => {
     )
     expect(task?.attachments).toBeNull()
     expect(task?.systemArtifacts).toEqual([])
+  })
+
+  test("task attachment registration permits display filename drift for the same bytes", async () => {
+    await using project = await tmpdir()
+    const projectID = `proj_attach_filename_${Date.now()}`
+    const taskID = `tsk_attach_filename_${Date.now()}`
+    seedProject({ id: projectID, worktree: project.path })
+    seedTask({ id: taskID, projectID })
+
+    const ref = await AttachmentStore.write(projectID, Buffer.from("canonical-bytes"), "image/png", "canonical.png")
+    await EngineService.appendTaskAttachment(taskID, {
+      ...ref,
+      filename: "caller-display-name.png",
+    })
+
+    const task = Database.use((db) =>
+      db
+        .select({ attachments: EngineTaskTable.attachments })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.id, taskID))
+        .get(),
+    )
+    expect(task?.attachments).toEqual([
+      {
+        sha: ref.sha,
+        url: ref.url,
+        mime: ref.mime,
+        size: ref.size,
+        filename: ref.filename,
+      },
+    ])
   })
 
   test("task system artifact registration stores AttachmentStore metadata with caller semantic intent only", async () => {

@@ -77,11 +77,7 @@ import {
   recordDesignResourceManifest,
 } from "@/frontend-design/design-resource-manifest"
 import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from "@/build/evidence-pack"
-import {
-  bindBuildInputEvidenceManifest,
-  composeBuildInputEvidenceManifest,
-  type BuildInputEvidenceManifest,
-} from "@/build/evidence-manifest"
+import { bindBuildInputEvidenceManifest } from "@/build/evidence-manifest"
 import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
@@ -4741,7 +4737,9 @@ function renderVisualQaImplementationContextForIntegrity(entries: DecisionEntry[
   }
   const parsed = VisualQaDecisionRecordSchema.safeParse(payload)
   if (!parsed.success) {
-    throw new Error(`Visual QA implementation context decision ${latestReport.id} is malformed: ${parsed.error.message}`)
+    throw new Error(
+      `Visual QA implementation context decision ${latestReport.id} is malformed: ${parsed.error.message}`,
+    )
   }
   const report = parsed.data.report
   const openFindings = report.findings.filter((finding) => finding.status === "open")
@@ -4835,12 +4833,7 @@ function collectVisualQaReportEvidenceRefs(report: VisualQaReport): string[] {
   ].filter((ref) => ref.trim().length > 0)
 }
 
-const VISUAL_FEEDBACK_IMAGE_ARTIFACT_KEYS = [
-  "side_by_side",
-  "diff",
-  "source_crop",
-  "implementation_crop",
-] as const
+const VISUAL_FEEDBACK_IMAGE_ARTIFACT_KEYS = ["side_by_side", "diff", "source_crop", "implementation_crop"] as const
 
 function browserPreviewVisualFeedbackArtifactEntries(input: {
   evidence: PersistedBrowserPreviewEvidence
@@ -5199,6 +5192,7 @@ function targetEvidenceForBuild(task: TaskRow): BuildEvidenceFile[] {
           sha: ref.sha,
           size: ref.size,
           ...(ref.filename ? { filename: ref.filename } : {}),
+          ...(ref.label ? { label: ref.label } : {}),
           intent: "visual_reference",
           source: ref.source ?? "design_resource_manifest",
           scope: { kind: "task", taskID: task.id },
@@ -7697,9 +7691,7 @@ export function createOrchestratorTools(input: {
           `visual_qa cannot persist visual feedback verification for task ${taskID}: no active run is available.`,
         )
       }
-      let persistedVisualFeedback:
-        | Awaited<ReturnType<typeof persistVisualFeedbackVerification>>
-        | undefined = undefined
+      let persistedVisualFeedback: Awaited<ReturnType<typeof persistVisualFeedbackVerification>> | undefined = undefined
       if (needsVisualFeedbackVerification && activeRun) {
         persistedVisualFeedback = await persistVisualFeedbackVerification({
           taskID,
@@ -13410,7 +13402,6 @@ export function createOrchestratorTools(input: {
           const { Worktree } = await import("@/worktree")
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
-          let inputEvidenceManifest: BuildInputEvidenceManifest | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
           let callerOwnedBuildWorkDir: string | undefined
           let existingBuildSessionID: string | undefined
@@ -13662,13 +13653,6 @@ export function createOrchestratorTools(input: {
               includePreviousOutput:
                 retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
-            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
-              projectID: task.project_id,
-              taskID: task.id,
-              goalID: goal.id,
-              evidencePack,
-            })
-
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
             // only when the latest workload artifact targets the active
             // architect snapshot — a stale brief (architect re-ran after the
@@ -13700,7 +13684,6 @@ export function createOrchestratorTools(input: {
               retryFeedback,
               acceptanceFeedback,
               evidencePack,
-              inputEvidenceManifest,
               workloadBrief,
             }
           } else {
@@ -13721,11 +13704,6 @@ export function createOrchestratorTools(input: {
             const evidencePack = await composeBuildEvidencePack({
               task,
               includePreviousOutput: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
-            })
-            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
-              projectID: task.project_id,
-              taskID: task.id,
-              evidencePack,
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             if (selectedWorktreeUsage === "current_project") {
@@ -13758,7 +13736,6 @@ export function createOrchestratorTools(input: {
                     visualQaFeedback,
                     acceptanceFeedback,
                     evidencePack,
-                    inputEvidenceManifest,
                   }
                 : undefined
           }
@@ -13808,8 +13785,8 @@ export function createOrchestratorTools(input: {
             const artifactID = Identifier.ascending("artifact")
             const activePlan = findActivePlanForTask(taskID)
             const graphArtifact = findLatestArchitectContractGraphArtifact(taskID)
-            const contractInputEvidence = inputEvidenceManifest
-              ? bindBuildInputEvidenceManifest(inputEvidenceManifest, {
+            const contractInputEvidence = context?.inputEvidenceManifest
+              ? bindBuildInputEvidenceManifest(context.inputEvidenceManifest, {
                   sessionID: input.sessionID,
                   goalRunID: input.goalRunID,
                 })

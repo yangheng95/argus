@@ -28,9 +28,16 @@ function promptProfileCatalog() {
     active: "frontend-replica",
     project_active: "frontend-replica",
     session_active: null,
-    default: "frontend-replica",
+    default: "general",
     targets: [],
     profiles: [
+      {
+        id: "general",
+        label: "General",
+        description: "General prompt profile.",
+        built_in: true,
+        editable: false,
+      },
       {
         id: "frontend-replica",
         label: "Expert Squad",
@@ -449,8 +456,8 @@ test(
               directory: (window as any).settingsStore?.directory,
               disabled: button?.disabled ?? null,
               title: button?.title ?? "",
-              codingItems: Array.from(document.querySelectorAll("[data-coding-cli]")).map((node) =>
-                (node as HTMLElement).dataset.codingCli,
+              codingItems: Array.from(document.querySelectorAll("[data-coding-cli]")).map(
+                (node) => (node as HTMLElement).dataset.codingCli,
               ),
             }
           })
@@ -482,10 +489,7 @@ test(
 
       assert.equal(codingBody.cwd, DIR_B)
       assert.equal(codingBody.cliID, "gemini")
-      assert.equal(
-        profileRequestDirectories.includes(DIR_A) && profileRequestDirectories.includes(DIR_B),
-        true,
-      )
+      assert.equal(profileRequestDirectories.includes(DIR_A) && profileRequestDirectories.includes(DIR_B), true)
     } finally {
       await browser.close()
       await server.close()

@@ -154,4 +154,30 @@ describe("Build input evidence manifest", () => {
       }),
     ).rejects.toThrow("sha does not match canonical AttachmentStore metadata")
   })
+
+  test("records canonical filename when caller display filename drifts", async () => {
+    await using project = await tmpdir()
+    const projectID = unique("proj_manifest_filename")
+    const taskID = unique("tsk_manifest_filename")
+    seedProject({ id: projectID, worktree: project.path })
+
+    const ref = await AttachmentStore.write(projectID, Buffer.from("canonical"), "image/png", "canonical.png")
+
+    const manifest = await composeBuildInputEvidenceManifest({
+      projectID,
+      taskID,
+      evidencePack: {
+        targetReferences: [
+          {
+            ...ref,
+            filename: "region-label-not-storage-filename.png",
+            intent: "visual_reference",
+            source: "test",
+          },
+        ],
+      },
+    })
+
+    expect(manifest.entries[0]?.filename).toBe("canonical.png")
+  })
 })

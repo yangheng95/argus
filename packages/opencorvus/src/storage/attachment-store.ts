@@ -181,7 +181,21 @@ export namespace AttachmentStore {
       size: data.byteLength,
       filename,
     }
-    await fs.writeFile(metadataPath(abs), JSON.stringify(reference, null, 2))
+    const metadataAbs = metadataPath(abs)
+    const existingMetadata = await fs.readFile(metadataAbs, "utf8").catch((error) => {
+      if (hasNodeErrorCode(error, "ENOENT") || hasNodeErrorCode(error, "ENOTDIR")) return null
+      throw error
+    })
+    if (existingMetadata === null) {
+      await fs.writeFile(metadataAbs, JSON.stringify(reference, null, 2))
+    } else {
+      const canonical = parseReferenceMetadata(JSON.parse(existingMetadata), { projectID, name, abs })
+      if (canonical.sha !== sha || canonical.mime !== mime || canonical.size !== data.byteLength) {
+        throw new Error(
+          `AttachmentStore.write: existing metadata for ${projectID}/${name} does not match the content being written`,
+        )
+      }
+    }
     return reference
   }
 

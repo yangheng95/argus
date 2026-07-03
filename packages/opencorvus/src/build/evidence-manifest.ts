@@ -82,9 +82,7 @@ export class BuildInputEvidenceValidationError extends Error {
 }
 
 function issueSummary(error: z.ZodError): string {
-  return error.issues
-    .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
-    .join("; ")
+  return error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`).join("; ")
 }
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
@@ -136,12 +134,12 @@ function assertManifestMatchesBuildSession(
   }
 }
 
-export function readOriginalBuildSessionInputEvidenceManifest(input: {
+export function findOriginalBuildSessionInputEvidenceManifest(input: {
   sessionID: string
   taskID: string
   projectID: string
   goalID?: string
-}): BuildInputEvidenceManifest {
+}): BuildInputEvidenceManifest | undefined {
   const rows = Database.use((db) =>
     db
       .select({
@@ -158,11 +156,7 @@ export function readOriginalBuildSessionInputEvidenceManifest(input: {
     const payload = recordValue(candidate.payload)
     return payload?.session_id === input.sessionID
   })
-  if (!row) {
-    throw new BuildInputEvidenceValidationError(
-      `${context} has no build_session_contract for task ${input.taskID}`,
-    )
-  }
+  if (!row) return undefined
   const payload = recordValue(row.payload)
   if (!payload) {
     throw new BuildInputEvidenceValidationError(`${context} contract ${row.id} payload is not an object`)
@@ -179,9 +173,7 @@ export function readOriginalBuildSessionInputEvidenceManifest(input: {
       `${context} contract ${row.id} goal_id=${actualGoalID ?? "<unset>"} does not match ${expectedGoalID ?? "<unset>"}`,
     )
   }
-  if (payload.input_evidence === null || payload.input_evidence === undefined) {
-    throw new BuildInputEvidenceValidationError(`${context} contract ${row.id} is missing input_evidence`)
-  }
+  if (payload.input_evidence === null || payload.input_evidence === undefined) return undefined
   const manifest = parseBuildInputEvidenceManifest(payload.input_evidence, `${context} contract ${row.id}`)
   assertManifestMatchesBuildSession(manifest, {
     context: `${context} contract ${row.id}`,
@@ -193,12 +185,27 @@ export function readOriginalBuildSessionInputEvidenceManifest(input: {
   return manifest
 }
 
+export function readOriginalBuildSessionInputEvidenceManifest(input: {
+  sessionID: string
+  taskID: string
+  projectID: string
+  goalID?: string
+}): BuildInputEvidenceManifest {
+  const manifest = findOriginalBuildSessionInputEvidenceManifest(input)
+  if (!manifest) {
+    throw new BuildInputEvidenceValidationError(
+      `Build session ${input.sessionID} has no build_session_contract.input_evidence for task ${input.taskID}`,
+    )
+  }
+  return manifest
+}
+
 function entryLabel(entry: BuildEvidenceEntry) {
   return entry.filename ?? entry.sha ?? entry.url
 }
 
 function assertStringMatches(input: {
-  field: "sha" | "mime" | "filename"
+  field: "sha" | "mime"
   role: BuildEvidenceRole
   label: string
   candidate?: string
@@ -266,13 +273,6 @@ async function manifestEntryFromEvidence(input: {
     label,
     candidate: input.entry.mime,
     canonical: reference.mime,
-  })
-  assertStringMatches({
-    field: "filename",
-    role: input.entry.role,
-    label,
-    candidate: input.entry.filename,
-    canonical: reference.filename,
   })
   assertNumberMatches({
     field: "size",
@@ -375,7 +375,9 @@ function fileFromManifestEntry(entry: BuildInputEvidenceManifestEntry): BuildEvi
   }
 }
 
-export function buildEvidencePackFromInputManifest(manifest: BuildInputEvidenceManifest | undefined): BuildEvidencePack | undefined {
+export function buildEvidencePackFromInputManifest(
+  manifest: BuildInputEvidenceManifest | undefined,
+): BuildEvidencePack | undefined {
   if (!manifest || manifest.entries.length === 0) return undefined
   const pack: BuildEvidencePack = {}
   for (const entry of manifest.entries) {

@@ -14063,6 +14063,9 @@ export type TaskConversationResponses = {
             diffBaseRef?: string
             diffHeadRef?: string
             changedFiles?: Array<string>
+            attemptChangedFiles?: Array<string>
+            attemptCommitRef?: string
+            attemptPublishedCommitRef?: string
             changedFileDiffs?: Array<{
               file: string
               additions: number
@@ -15248,6 +15251,9 @@ export type TaskBoardResponses = {
           diffBaseRef?: string
           diffHeadRef?: string
           changedFiles?: Array<string>
+          attemptChangedFiles?: Array<string>
+          attemptCommitRef?: string
+          attemptPublishedCommitRef?: string
           changedFileDiffs?: Array<{
             file: string
             additions: number

@@ -225,9 +225,12 @@ describe("prompt profile task session owner", () => {
             active: "frontend-replica",
             project_active: "frontend-replica",
             session_active: "frontend-replica",
-            default: "frontend-replica",
+            default: "general",
             targets: [],
-            profiles: [{ id: "frontend-replica", label: "Frontend Replica" }],
+            profiles: [
+              { id: "general", label: "General" },
+              { id: "frontend-replica", label: "Frontend Replica" },
+            ],
           },
         }
       },
@@ -262,9 +265,12 @@ describe("prompt profile task session owner", () => {
       active: "frontend-replica",
       project_active: "frontend-replica",
       session_active: "frontend-replica",
-      default: "frontend-replica",
+      default: "general",
       targets: [],
-      profiles: [{ id: "frontend-replica", label: "Frontend Replica" }],
+      profiles: [
+        { id: "general", label: "General" },
+        { id: "frontend-replica", label: "Frontend Replica" },
+      ],
     }
     __setHostTransportForTest({
       kind: "browser",

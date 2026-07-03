@@ -1046,7 +1046,9 @@ function orderPhaseProjection(
   return out
 }
 
-function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" | "aborted" {
+function isWorkflowStepStatus(
+  value: unknown,
+): value is "pending" | "running" | "completed" | "skipped" | "failed" | "aborted" {
   return (
     value === "pending" ||
     value === "running" ||
@@ -1279,6 +1281,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   let diffBaseRef: string | undefined
   let diffHeadRef: string | undefined
   let changedFiles: string[] | undefined
+  let attemptChangedFiles: string[] | undefined
+  let attemptCommitRef: string | undefined
+  let attemptPublishedCommitRef: string | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
   let buildOutcome: GoalStepPayload["buildOutcome"]
@@ -1311,6 +1316,11 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
         publishedCommitRef: outcome.published_commit_ref ?? undefined,
         diffBaseRef: outcome.diff_base_ref ?? undefined,
         diffHeadRef: outcome.diff_head_ref ?? undefined,
+      }
+      if (outcome.outcome_kind !== "delivered" || !buildOutcome.acceptancePresent) {
+        attemptChangedFiles = outcome.changed_files.length > 0 ? outcome.changed_files : undefined
+        attemptCommitRef = outcome.commit_ref ?? undefined
+        attemptPublishedCommitRef = outcome.published_commit_ref ?? undefined
       }
     }
   }
@@ -1402,6 +1412,9 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     diffBaseRef,
     diffHeadRef,
     changedFiles,
+    attemptChangedFiles,
+    attemptCommitRef,
+    attemptPublishedCommitRef,
     changedFileDiffs,
     diffStats,
     buildOutcome,

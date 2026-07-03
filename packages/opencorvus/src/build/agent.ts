@@ -106,7 +106,7 @@ import {
 } from "./evidence-pack"
 import {
   buildEvidencePackFromInputManifest,
-  readOriginalBuildSessionInputEvidenceManifest,
+  findOriginalBuildSessionInputEvidenceManifest,
   type BuildInputEvidenceManifest,
 } from "./evidence-manifest"
 
@@ -1003,7 +1003,7 @@ export namespace BuildAgent {
       }
       const retryingExistingBuildSession = Boolean(input.existingSessionID)
       const originalInputEvidenceManifest = retryingExistingBuildSession
-        ? readOriginalBuildSessionInputEvidenceManifest({
+        ? findOriginalBuildSessionInputEvidenceManifest({
             sessionID: buildSession.id,
             taskID: input.task.id,
             projectID: input.task.project_id,
@@ -1025,13 +1025,12 @@ export namespace BuildAgent {
       const currentInputEvidenceManifest = promptContext?.inputEvidenceManifest
       const inputEvidenceManifest =
         currentInputEvidenceManifest ?? (retryingExistingBuildSession ? originalInputEvidenceManifest : undefined)
-      if (evidencePack && !currentInputEvidenceManifest) {
-        throw new Error("BuildAgent.run: evidencePack requires validated inputEvidenceManifest before staging")
-      }
-      const promptEvidencePack = buildEvidencePackFromInputManifest(
-        currentInputEvidenceManifest ?? (!retryingExistingBuildSession ? inputEvidenceManifest : undefined),
-      )
-      const reportContractEvidencePack = buildEvidencePackFromInputManifest(inputEvidenceManifest)
+      const promptEvidencePack = currentInputEvidenceManifest
+        ? buildEvidencePackFromInputManifest(currentInputEvidenceManifest)
+        : evidencePack
+      const reportContractEvidencePack = inputEvidenceManifest
+        ? buildEvidencePackFromInputManifest(inputEvidenceManifest)
+        : evidencePack
       const evidenceEntries = buildEvidenceEntries(promptEvidencePack)
       const targetReferences = buildEvidenceTargetReferences(promptEvidencePack)
       const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(reportContractEvidencePack)
@@ -1073,22 +1072,21 @@ export namespace BuildAgent {
         }
       }
       if (retryingExistingBuildSession && ownsWorktree && worktreeDir) {
-        if (!originalInputEvidenceManifest) {
-          throw new Error("BuildAgent.run: retrying existing build session without original input evidence manifest")
-        }
-        const repaired = await repairManagedBuildSessionStagedFileParts({
-          sessionID: buildSession.id,
-          projectID: originalInputEvidenceManifest.project_id,
-          worktreeDir,
-        })
-        if (repaired.repaired > 0) {
-          log.info("build agent: repaired persisted staged reference file parts for retry replay", {
-            taskID: input.task.id,
+        if (originalInputEvidenceManifest) {
+          const repaired = await repairManagedBuildSessionStagedFileParts({
             sessionID: buildSession.id,
-            repaired: repaired.repaired,
-            checked: repaired.checked,
+            projectID: originalInputEvidenceManifest.project_id,
             worktreeDir,
           })
+          if (repaired.repaired > 0) {
+            log.info("build agent: repaired persisted staged reference file parts for retry replay", {
+              taskID: input.task.id,
+              sessionID: buildSession.id,
+              repaired: repaired.repaired,
+              checked: repaired.checked,
+              worktreeDir,
+            })
+          }
         }
       }
       const evidenceRoleSections = renderBuildEvidenceRoleSections(promptEvidencePack)
@@ -1489,7 +1487,9 @@ export namespace BuildAgent {
         "consumed_visual_qa_annotation_refs",
       )
       if (visualQaAnnotationConsumptionError) {
-        throw new Error(`build agent: Visual QA annotation consumption contract failed: ${visualQaAnnotationConsumptionError}`)
+        throw new Error(
+          `build agent: Visual QA annotation consumption contract failed: ${visualQaAnnotationConsumptionError}`,
+        )
       }
       const visualQaDiagnosticConsumptionError = buildMissingConsumedRefsIssue(
         parsed.data,
@@ -1497,7 +1497,9 @@ export namespace BuildAgent {
         "consumed_visual_qa_diagnostic_refs",
       )
       if (visualQaDiagnosticConsumptionError) {
-        throw new Error(`build agent: Visual QA diagnostic consumption contract failed: ${visualQaDiagnosticConsumptionError}`)
+        throw new Error(
+          `build agent: Visual QA diagnostic consumption contract failed: ${visualQaDiagnosticConsumptionError}`,
+        )
       }
       const visualFeedbackComparisonConsumptionError = buildMissingConsumedRefsIssue(
         parsed.data,
@@ -2840,9 +2842,9 @@ async function runWithExternalProviderImpl(args: {
   // alongside this report, so the orchestrator LLM has the truth without
   // the synthesized placeholder. Spec ...md (B18).
   const mergedStructuredBuildResult = structuredBuildResult
-    ? (record(structuredBuildResult)
-        ? { ...record(structuredBuildResult), commit_ref: mergedHead.slice(0, 12) }
-        : structuredBuildResult)
+    ? record(structuredBuildResult)
+      ? { ...record(structuredBuildResult), commit_ref: mergedHead.slice(0, 12) }
+      : structuredBuildResult
     : undefined
   return {
     sessionID: session.id,

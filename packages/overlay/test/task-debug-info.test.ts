@@ -30,7 +30,9 @@ test("task debug info includes only the compact Files panel board projection sum
   const debugInfo = source("src/utils/debug-info.ts")
 
   expect(debugInfo).toContain("files:     ${debugGoalBoardFiles(gw)}")
-  expect(debugInfo).toContain("changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; ")
+  expect(debugInfo).toContain(
+    "acceptedChangedFiles=${acceptedChangedFiles}; attemptChangedFiles=${attemptChangedFiles}; changedFileDiffs=${changedFileDiffs}; ",
+  )
   expect(debugInfo).toContain("contributionCommits=${commitRefs.size")
   expect(debugInfo).toContain("publishedCommits=${publishedCommitRefs.size")
   expect(debugInfo).toContain("diffRefs=${diffRefs.size")
@@ -83,7 +85,8 @@ test("task debug info explains zero changed files with terminal build outcome", 
     { database: "C:/runtime/opencorvus.db" },
   )
 
-  expect(blob).toContain("changedFiles=0")
+  expect(blob).toContain("acceptedChangedFiles=0; attemptChangedFiles=0; changedFileDiffs=0")
+  expect(blob).not.toContain("changedFiles=0")
   expect(blob).toContain("task.directory: C:/repo")
   expect(blob).toContain("project.worktree: C:/canonical/project")
   expect(blob).toContain("outcomes=grun_debug_outcome:aborted/aborted")

@@ -231,7 +231,7 @@ describe("BuildAgent managed worktree runtime", () => {
     expect(source).toContain('mode: "staged-only"')
     expect(source).toContain('return [{ type: "text" as const, text: enrichedText }]')
     expect(source).not.toContain("filePartsFromStagedReferences(stagedAttachments)")
-    expect(source).not.toContain("return [{ type: \"text\" as const, text: enrichedText }, ...inline]")
+    expect(source).not.toContain('return [{ type: "text" as const, text: enrichedText }, ...inline]')
   })
 
   test("managed worktrees do not receive copied runtime evidence views", async () => {
@@ -389,7 +389,7 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
-  test("build rejects an evidence pack without a validated input manifest", async () => {
+  test("build stages an evidence pack without a prevalidated input manifest", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -421,21 +421,25 @@ describe("BuildAgent managed worktree runtime", () => {
           targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
         }
 
-        await expect(
-          BuildAgent.run({
-            task: task!,
-            parentSessionID: rootSession.id,
-            target: {
-              kind: "request",
-              text: "verify evidence staging is strict",
-            },
-            context: {
-              evidencePack,
-            },
-            workDir,
-          }),
-        ).rejects.toThrow("evidencePack requires validated inputEvidenceManifest")
-        expect(captured.run).toBeUndefined()
+        const output = await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          target: {
+            kind: "request",
+            text: "verify evidence staging reaches Build",
+          },
+          context: {
+            evidencePack,
+          },
+          workDir,
+        })
+
+        expect(output.result.status).toBe("passed")
+        expect(captured.run?.worktreeDir).toBe(workDir)
+        expect(captured.run?.prompt).toContain("## Visual Reference Contract")
+        expect(captured.run?.prompt).toContain("## Staged Reference Files")
+        expect(captured.run?.prompt).toContain("references/target-reference.png")
+        await expect(fs.stat(path.join(workDir, "references", "target-reference.png"))).resolves.toBeTruthy()
       },
     })
   }, 30_000)
@@ -1009,7 +1013,7 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
-  test("managed build retry rejects an existing session without the original input evidence contract", async () => {
+  test("managed build retry continues an existing session without the original input evidence contract", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -1055,23 +1059,24 @@ describe("BuildAgent managed worktree runtime", () => {
           model: "test-model",
         })
 
-        await expect(
-          BuildAgent.run({
-            task: task!,
-            parentSessionID: rootSession.id,
-            existingSessionID: buildSession.id,
-            target: {
-              kind: "request",
-              text: "retry managed build without contract",
-            },
-            managedWorktree: {
-              directory: worktree.directory,
-              branch: worktree.branch,
-            },
-          }),
-        ).rejects.toThrow("has no build_session_contract")
+        const output = await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          existingSessionID: buildSession.id,
+          target: {
+            kind: "request",
+            text: "retry managed build without contract",
+          },
+          managedWorktree: {
+            directory: worktree.directory,
+            branch: worktree.branch,
+          },
+        })
+
+        expect(output.sessionID).toBe(buildSession.id)
         expect(captured.run).toBeUndefined()
-        expect(captured.resume).toBeUndefined()
+        expect(captured.resume?.sessionID).toBe("provider-native-missing-contract-session")
+        expect(captured.resume?.logicalSessionID).toBe(buildSession.id)
       },
     })
   }, 30_000)
@@ -1594,7 +1599,9 @@ describe("BuildAgent managed worktree runtime", () => {
         expect(prompt).toContain("references/visual-feedback.side-by-side.png")
         expect(prompt).toContain("references/visual-feedback.layout.json")
         expect(prompt).not.toContain("references/reference-target.png")
-        await expect(fs.stat(path.join(workDir, "references", "visual-feedback.side-by-side.png"))).resolves.toBeTruthy()
+        await expect(
+          fs.stat(path.join(workDir, "references", "visual-feedback.side-by-side.png")),
+        ).resolves.toBeTruthy()
         await expect(fs.stat(path.join(workDir, "references", "visual-feedback.layout.json"))).resolves.toBeTruthy()
       },
     })

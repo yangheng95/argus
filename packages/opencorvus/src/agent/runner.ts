@@ -290,24 +290,6 @@ export function promptToolSwitchesForAgentRun(input: {
   return switches
 }
 
-function isReferenceModality(mime: string): boolean {
-  const normalized = mime.toLowerCase()
-  return normalized.startsWith("image/") || normalized === "application/pdf"
-}
-
-export function shouldFailUnreadableReferenceForRole(input: {
-  role: AgentRoleID
-  userText: string
-  droppedFileParts: Array<{ mime: string }>
-}): boolean {
-  const marker = AgentRoleContract.unreadableReferencePromptMarker(input.role)
-  return (
-    typeof marker === "string" &&
-    input.userText.includes(marker) &&
-    input.droppedFileParts.some((part) => isReferenceModality(part.mime))
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Error types — every failure surfaces as AgentRunError so callers do not
 // need to know about kind-specific exception classes.
@@ -656,19 +638,6 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     })
     const dropped = before - parts.filter((p) => p.type === "file").length
     if (dropped > 0) {
-      const filteredReferences = fileParts.filter((part) => isReferenceModality(part.mime))
-      if (shouldFailUnreadableReferenceForRole({ role, userText, droppedFileParts: filteredReferences })) {
-        throw new AgentRunError(
-          kind,
-          [
-            "visual_reference_unreadable:",
-            `${model.providerID}/${model.id} does not accept required visual reference input.`,
-            `filtered=${filteredReferences.map((part) => part.filename ?? part.mime).join(", ")}`,
-            "Build cannot report success without reading the reference pixels; choose a model/tool path with image/pdf input or remove the visual reference contract.",
-          ].join(" "),
-          { nonRetryable: true },
-        )
-      }
       // Append an explicit text marker so the model is aware it was sent
       // attachments it can't see. Prevents silent confabulation: the
       // prompt's textual inventory may still list filenames, and without

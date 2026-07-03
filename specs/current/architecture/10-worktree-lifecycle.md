@@ -68,21 +68,22 @@ projection used by the next agent.
 
 ## Build Input Evidence And Retry
 
-Build input evidence is session-scoped. The single durable owner is the
+Build input evidence is session-scoped audit data. The durable owner is the
 `build_session_contract` artifact for the Build session, specifically
-`payload.input_evidence`. Board and compaction projections carry contract ids,
-source artifact ids, and digests only; they do not summarize or recompute input
-ownership from current task attachments.
+`payload.input_evidence` when an explicit manifest exists. Board and compaction
+projections carry contract ids, source artifact ids, and digests only; they do
+not summarize or recompute existing-session input ownership from current task
+attachments.
 
-Fresh Build dispatch must run in the task's project namespace before evidence
-materialization. If the active project differs from `task.project_id`, fresh
-dispatch fails before creating a Build child session, staging evidence, or
-calling a provider. Existing-session retry is different: it must reuse the
-original session's contract manifest and may repair persisted staged file parts
-only from the recorded manifest owner.
+Fresh Build dispatch must not require an input-evidence manifest before
+`BuildAgent.run`. It carries the task-scoped `BuildEvidencePack` into Build, and
+real project/byte failures surface at AttachmentStore staging/read or
+SessionPrompt byte materialization. Existing-session retry may reuse the
+original session's contract manifest to repair persisted staged file parts, but
+absence of `payload.input_evidence` is not a Build dispatch failure.
 
 For managed worktrees, `AttachmentStore.stageToWorktree` receives the task
-project from the validated manifest/task, not ambient `Instance.project.id`.
+project from the Build task/session context, not ambient `Instance.project.id`.
 For provider-bound bytes, `SessionPrompt` receives the Build/session project
 owner explicitly so MCP blobs, `data:` file parts, and `file://` parts are
 written under the same owner.
@@ -99,7 +100,7 @@ Required coverage for worktree lifecycle changes:
 - cleanup failures propagate to tests and logs
 - no source or current architecture document uses destructive history reset as a
   lifecycle mechanism
-- fresh Build project mismatch fails before Build child session, staging, or
-  provider dispatch
+- fresh Build dispatch reaches BuildAgent before evidence-specific failures are
+  reported
 - same-session Build retry reuses the original
-  `build_session_contract.input_evidence`
+  `build_session_contract.input_evidence` when that manifest exists

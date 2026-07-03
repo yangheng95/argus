@@ -96,9 +96,9 @@ The current system is internally consistent but wrong for the user's requirement
    - `PromptProfile.composeAgentPrompt()` appends the active profile text to the role prompt.
    - No profile data can express tool, skill, scheduler, or dispatch-agent availability.
 
-2. The project default is already thick, not thin.
-   - `DEFAULT_PROMPT_PROFILE_ID = "frontend-replica"`.
-   - That means a new config starts in a domain expert squad instead of a thin `general` selector profile.
+2. The project default was thick at the time of this design, not thin.
+   - Historical finding: `DEFAULT_PROMPT_PROFILE_ID = "frontend-replica"`.
+   - 2026-07-03 update: `2026-07-03-generic-build-evidence-gate-removal.md` changed the default to `general` without implementing the broader capability-projection design.
 
 3. Orchestrator tool availability is installed as a full exact runtime contract before the model call.
    - `orchestrator/agent.ts` calls `createOrchestratorTools(...)`.
@@ -123,7 +123,7 @@ The current system is internally consistent but wrong for the user's requirement
    - Prompt Catalog reads `/config/prompt-profile`.
    - Skill Market reads `/skill/mounts`.
    - `SkillMarketPanel.refreshSkillMounts()` does not pass the prompt-profile session scope.
-   - `packages/overlay/src/main.tsx` initializes `activePromptProfile` to `frontend-replica`, which is stale once `general` becomes the default.
+   - Historical finding: `packages/overlay/src/main.tsx` initialized `activePromptProfile` to `frontend-replica`. The generic Build gate-removal repair changed this initializer to `general`; the rest of the profile-aware Skill Market work remains separate.
 
 7. Current docs encode the wrong invariant.
    - `17-agent-team-infrastructure.html` says expert squads change prompt only and that tools / agent / model / MCP / workflow remain unchanged.
@@ -387,7 +387,7 @@ Records that must be explicitly superseded or amended in current docs:
    - Add capability projection schemas.
    - Add built-in-only internal type requiring `capability_projection`.
    - Add custom-profile `capability_profile_id`.
-   - Change `DEFAULT_PROMPT_PROFILE_ID` to `general`.
+   - Change `DEFAULT_PROMPT_PROFILE_ID` to `general` (implemented by `2026-07-03-generic-build-evidence-gate-removal.md`).
    - Reject custom profiles without explicit capability profile reference.
    - Keep capability resolution over materialized config only; do not import session/project services into `prompt-profile.ts`.
    - Update import/save helpers and OpenAPI examples.
@@ -417,7 +417,7 @@ Records that must be explicitly superseded or amended in current docs:
 
 5. Overlay
    - Update prompt-profile and skill-matrix service types.
-   - Remove hardcoded `frontend-replica` active initializer.
+   - Remove hardcoded `frontend-replica` active initializer (implemented by `2026-07-03-generic-build-evidence-gate-removal.md`).
    - Share session scope between Prompt Catalog and Skill Market.
    - Make `/config/prompt` or its replacement session-effective.
    - Reload matrix on profile activation.

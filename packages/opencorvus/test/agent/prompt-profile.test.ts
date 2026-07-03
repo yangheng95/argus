@@ -98,10 +98,10 @@ function overlayLines(overlay: string): string[] {
 }
 
 describe("prompt profiles", () => {
-  test("Config.Info materializes frontend-replica as the explicit default profile", () => {
+  test("Config.Info materializes general as the explicit default profile", () => {
     const config = Config.Info.parse({})
-    expect(config.prompt_profile.active).toBe("frontend-replica")
-    expect(PromptProfile.activeID(config)).toBe("frontend-replica")
+    expect(config.prompt_profile.active).toBe("general")
+    expect(PromptProfile.activeID(config)).toBe("general")
   })
 
   test("composer orders base, profile overlay, then user append", () => {
@@ -167,9 +167,7 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).toContain(
       "second consecutive evidence-backed rendered-feedback non-pass",
     )
-    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
-      "multiple named directions",
-    )
+    expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain("multiple named directions")
     expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
       "rejected generic draft traits",
     )
@@ -328,7 +326,9 @@ describe("prompt profiles", () => {
     expect(agents["frontend-design"]).toContain("source geometry together with the visible content")
     expect(agents["frontend-research"]).toContain("reference screenshots, source structure evidence, computed styles")
     expect(agents.build).toContain("one scoped component or region goal at a time")
-    expect(agents.build).toContain("Reuse target project components and business code only where they preserve source parity")
+    expect(agents.build).toContain(
+      "Reuse target project components and business code only where they preserve source parity",
+    )
     expect(agents.build).toContain("Do not satisfy source page height")
     expect(agents.build).toContain("consumed diagnostic refs")
     expect(agents.build).toContain("unchanged visible surfaces")
@@ -529,7 +529,15 @@ describe("prompt profiles", () => {
     expect(PromptProfileIDSchema.safeParse("frontend-replica").success).toBe(true)
     expect(PromptProfileIDSchema.safeParse("custom-squad-2").success).toBe(true)
 
-    for (const active of ["custom squad", " frontend ", "Backend!", "custom--squad", "custom-", "1custom", "custom_squad"]) {
+    for (const active of [
+      "custom squad",
+      " frontend ",
+      "Backend!",
+      "custom--squad",
+      "custom-",
+      "1custom",
+      "custom_squad",
+    ]) {
       expectConfigRejected({ prompt_profile: { active } }, "prompt profile id")
     }
 

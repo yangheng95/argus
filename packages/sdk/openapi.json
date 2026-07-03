@@ -29950,6 +29950,18 @@
                                             "type": "string"
                                           }
                                         },
+                                        "attemptChangedFiles": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "attemptCommitRef": {
+                                          "type": "string"
+                                        },
+                                        "attemptPublishedCommitRef": {
+                                          "type": "string"
+                                        },
                                         "changedFileDiffs": {
                                           "type": "array",
                                           "items": {
@@ -34635,6 +34647,18 @@
                                       "items": {
                                         "type": "string"
                                       }
+                                    },
+                                    "attemptChangedFiles": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "attemptCommitRef": {
+                                      "type": "string"
+                                    },
+                                    "attemptPublishedCommitRef": {
+                                      "type": "string"
                                     },
                                     "changedFileDiffs": {
                                       "type": "array",
@@ -47986,12 +48010,12 @@
           "prompt_profile": {
             "description": "Active prompt profile and optional project-defined profile overlays.",
             "default": {
-              "active": "frontend-replica"
+              "active": "general"
             },
             "type": "object",
             "properties": {
               "active": {
-                "default": "frontend-replica",
+                "default": "general",
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,

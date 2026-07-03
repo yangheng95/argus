@@ -188,6 +188,9 @@ goalWorkflows?: Array<{
       diffBaseRef?: string,
       diffHeadRef?: string,
       changedFiles?: string[],
+      attemptChangedFiles?: string[],
+      attemptCommitRef?: string,
+      attemptPublishedCommitRef?: string,
       changedFileDiffs?: Array<{ file: string, additions: number, deletions: number, status: "added" | "deleted" | "modified" }>,
       diffStats?: { files?: number, additions?: number, deletions?: number },
       buildOutcome?: {
@@ -220,6 +223,12 @@ goalWorkflows?: Array<{
   acceptanceSpecs?: AcceptanceSpec[],
 }>                                           // per-goal 工作流状态
 ```
+
+`changedFiles` / `commitRef` / `publishedCommitRef` describe files accepted into
+the delivered/published result. `attemptChangedFiles` / `attemptCommitRef` /
+`attemptPublishedCommitRef` describe terminal Build-attempt host facts when the
+attempt failed, aborted, or produced no accepted delivery. Debug copy uses both
+counts so a failed attempt with file changes is not shown as `changedFiles=0`.
 
 ### 废弃字段
 

@@ -1,7 +1,7 @@
 # Multi-Task Storage Namespace Consensus
 
 Date: 2026-07-03
-Status: Phase 1 implemented through documentation update; end-to-end reproduction pending
+Status: Superseded in part by `2026-07-03-generic-build-evidence-gate-removal.md`
 
 ## Recall
 
@@ -16,17 +16,31 @@ Status: Phase 1 implemented through documentation update; end-to-end reproductio
 | Second independent review | Wegener rejected implementing a new `user_project` table for this failure chain and required using existing Mission/task grouping unless product requirements exceed it. Heisenberg and Wegener both rejected parallel `build_input_evidence` and `build_session_contract` authorities. Heisenberg required `artifact_file_ref` rather than attachment-only ownership and required missing blobs to fail during dispatch evidence composition. Socrates required a fuller `project_id` surface table, linked-worktree wording, cache handling, current duplicate-project preflights, and explicit Build callsite replacements. |
 | External prior art check | Read official docs for [OpenHands Docker Sandbox](https://docs.openhands.dev/sdk/guides/agent-server/docker-sandbox), [OpenHands GUI workspace mounting](https://docs.openhands.dev/openhands/usage/cli/gui-server), [GitHub Codespaces isolation](https://docs.github.com/en/codespaces/reference/security-in-github-codespaces), [Claude Code parallel sessions with worktrees](https://code.claude.com/docs/en/common-workflows), [Git worktree](https://git-scm.com/docs/git-worktree), [SWE-agent output trajectories](https://swe-agent.com/latest/usage/trajectories/), [SWE-agent command-line environment examples](https://swe-agent.com/latest/usage/cl_tutorial/), [GitLab job artifacts](https://docs.gitlab.com/ci/jobs/job_artifacts/), [GitLab CI/CD architecture notes](https://docs.gitlab.com/development/cicd/), [MLflow artifact stores](https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/), [Bazel remote caching](https://bazel.build/remote/caching), [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence), and [Temporal Workflow Id / Run Id](https://docs.temporal.io/workflow-execution/workflowid-runid). |
 
-## Implementation Status
+## 2026-07-03 Supersession
 
-Phase 1 is implemented in code and current architecture docs:
+The storage namespace analysis remains useful for backend `project_id` and
+AttachmentStore ownership, but the Phase 1 Build preflight conclusion was too
+broad. `build_session_contract.payload.input_evidence` is now an optional
+session audit/retry manifest, not a generic Build dispatch gate. Fresh Build
+must be allowed to enter `BuildAgent.run` with a `BuildEvidencePack`; concrete
+foreign-project, missing-blob, MIME, size, and SHA failures surface at
+AttachmentStore read/stage, SessionPrompt byte materialization, or explicit
+storage APIs.
+
+## Historical Implementation Status
+
+Phase 1 was implemented in code and current architecture docs before the
+superseding generic-Build investigation. Current architecture is in
+`specs/current/architecture/02-data.md` and
+`specs/current/architecture/10-worktree-lifecycle.md`.
 
 - `build_session_contract.payload.input_evidence` is the single durable Build input manifest.
-- Build dispatch composes and validates evidence before provider replay; foreign refs, missing blobs, and sha mismatch fail before contract/provider use.
+- Build dispatch no longer composes input evidence as a mandatory pre-`BuildAgent.run` condition.
 - Build staging, same-session retry repair, and Build-bound `SessionPrompt` byte materialization use the task/session manifest owner instead of ambient `Instance.project.id`.
-- Same-session retry reuses the original manifest and does not resend fresh file parts; fresh Build sessions write a new manifest.
+- Same-session retry reuses the original manifest when it exists and does not resend fresh file parts.
 - GC retains blobs referenced only through a live `build_session_contract.input_evidence`.
 - Board and compaction projections keep Build inputs single-source by carrying only contract locators.
-- Fresh Build dispatch rejects active-project/task-project mismatch before creating a Build child session, staging evidence, or calling a provider.
+- Fresh Build dispatch project/evidence failures are Build execution/storage-boundary failures, not orchestrator gates.
 
 Goal 10 still remains: run the end-to-end failure reproduction bundle listed below before calling the entire repair complete.
 
@@ -222,11 +236,11 @@ This is a resource ownership boundary, not a gate that teaches the language mode
 
 | Callsite | Current issue | Decision |
 | --- | --- | --- |
-| `orchestrator/tools.ts::composeBuildEvidencePack` | Builds an in-memory pack from task fields and optional previous output without a durable input owner. | Keep the role projection, but make it feed the validated `build_session_contract.input_evidence` section before BuildAgent starts. |
-| `orchestrator/tools.ts::targetEvidenceForBuild` | Can pass task attachments/design resource refs without uniform project/readability/sha validation. | Validate each entry against `task.project_id`, canonical metadata, readable bytes, and sha before contract write. |
+| `orchestrator/tools.ts::composeBuildEvidencePack` | Builds an in-memory pack from task fields and optional previous output. | Keep this as the generic Build input projection; do not require a `build_session_contract.input_evidence` section before BuildAgent starts. |
+| `orchestrator/tools.ts::targetEvidenceForBuild` | Can pass task attachments/design resource refs into generic Build. | Preserve role/source/intent context and let AttachmentStore read/stage or explicit manifest composition enforce byte/project identity. |
 | `orchestrator/tools.ts::loadPreviousRenderedOutputEvidence` | Reads task-level latest rendered output and checks resolvability, but not full owner/sha/goal-run provenance. | Treat as `previous_output` only after task project, bytes, sha, and available goal/run provenance are recorded. If provenance is absent, record it as task-scoped repair context, not goal-scoped fact. |
 | `orchestrator/tools.ts` Visual QA diagnostic attachment writes | Some writes use ambient `Instance.project.id`. | Use `task.project_id` when the diagnostic belongs to a task. Ambient project is not an evidence owner. |
-| `build/agent.ts::BuildAgent.run` staging | Staging and retry repair currently pass `Instance.project.id` in paths that are task-owned. | Use `input.task.project_id`; reject active-project/task-project mismatch during evidence composition before provider replay. |
+| `build/agent.ts::BuildAgent.run` staging | Staging and retry repair previously passed `Instance.project.id` in paths that are task-owned. | Use `input.task.project_id`; expose active-project/task-project mismatches through Build/storage execution, not an orchestrator dispatch gate. |
 | `build/agent.ts` same-session retry | Existing-session retry ignores fresh evidence packs and repairs old session parts. | Preserve no-resend semantics, but bind repair to the existing session's original `build_session_contract.input_evidence`. |
 
 ## Expanded Impact Surface Investigation
@@ -610,8 +624,8 @@ Purpose: verify the original failure class is actually sealed.
 Steps:
 
 1. Create or reuse a fixture that simulates a task with Build evidence refs owned by another project namespace and missing blob refs.
-2. Run Build dispatch and assert failure occurs before provider replay.
-3. Run a valid Build evidence case and assert the contract is written, staged evidence uses the manifest owner, and provider-bound parts materialize under the same owner.
+2. Run Build dispatch and assert foreign/missing evidence reaches Build and fails at AttachmentStore read/stage or provider byte materialization.
+3. Run a valid Build evidence case and assert staged evidence uses the task/session owner; explicit manifests are written only when supplied.
 4. Run same-session retry and fresh-session retry cases.
 5. Run final typecheck and focused test suites.
 
@@ -627,8 +641,8 @@ bun run --cwd packages/opencorvus typecheck
 
 Acceptance:
 
-- Foreign project and missing blob evidence fail before provider replay.
-- Valid evidence produces one `build_session_contract.input_evidence` authority.
+- Foreign project and missing blob evidence fail at the Build/storage boundary, not as an orchestrator preflight gate.
+- Valid evidence reaches Build; explicit `build_session_contract.input_evidence` remains the single session audit manifest when present.
 - Build-bound bytes are written under the manifest/session owner.
 - Same-session retry reuses the original manifest.
 - Fresh session retry writes a new manifest.
@@ -642,12 +656,12 @@ Do not:
 
 ### Phase 1: Seal The Current Failure Chain
 
-- Status: implemented.
-- Extended `build_session_contract` with `input_evidence` and treats it as the single Build dispatch manifest.
-- Composes and validates Build input evidence before BuildAgent/provider replay:
-  - foreign-project target references fail before staging;
-  - missing blobs fail as corrupt Build input before provider replay;
-  - sha mismatch fails before contract write.
+- Status: implemented at the time of this record; Build preflight portions are superseded by `2026-07-03-generic-build-evidence-gate-removal.md`.
+- Extended `build_session_contract` with optional `input_evidence` as a Build session audit/retry manifest.
+- Build evidence no longer has a generic pre-`BuildAgent.run` manifest gate:
+  - foreign-project target references are Build/storage-boundary failures;
+  - missing blobs are corrupt input at AttachmentStore read/stage or provider materialization;
+  - sha mismatch fails at explicit storage/manifest composition APIs, not by blocking every Build dispatch.
 - Replaced task-owned ambient `Instance.project.id` usage in Build evidence materialization/staging/repair with `task.project_id`.
 - Bound SessionPrompt byte materialization for Build-bound MCP blobs, `data:` file parts, and `file://` parts so it cannot use the wrong ambient project.
 - Ensures the extended `build_session_contract` is written through `beginBuildAttempt.extraArtifacts` in the same transaction as the running attempt.
@@ -697,7 +711,7 @@ Status: implemented for `specs/current/architecture/02-data.md` and `10-worktree
 | --- | --- |
 | `user_project` is unnecessary and could create directory/worktree dual-source semantics. | Removed from current implementation. Kept only as future product design if Mission/task grouping is insufficient. |
 | `build_input_evidence` and `build_session_contract` would be dual sources. | Chose `build_session_contract.input_evidence` as the single durable Build dispatch manifest. |
-| Draft timing around `beginBuildAttempt` was wrong. | Revised to compose/validate before BuildAgent starts, then write the extended contract through `beginBuildAttempt.extraArtifacts` when the Build session exists. |
+| Draft timing around `beginBuildAttempt` was wrong. | Superseded: `input_evidence` is optional audit/retry data. Build starts with `BuildEvidencePack`; explicit manifests are bound into `beginBuildAttempt.extraArtifacts` only when they already exist. |
 | `attachment_ref` was too narrow. | Replaced long-term model with generic `artifact_file_ref` and made it Phase 2, not Phase 1. |
 | Same-session retry was ambiguous. | Defined retry by Build session: reused session reuses original input evidence; fresh session gets a new contract. |
 | DB/runtime surfaces were incomplete. | Added backend namespace, cache, linked-worktree, duplicate preflight, and Build callsite tables. |
@@ -715,7 +729,7 @@ Phase 1 implementation verification run during execution:
 ```powershell
 bun test packages/opencorvus/test/build-agent/evidence-manifest.test.ts --timeout 120000
 bun test packages/opencorvus/test/build-agent/managed-worktree-runtime.test.ts --timeout 120000
-bun test packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "goal build retry reuses the prior build session by default|goal build session contract records validated input evidence manifest|direct build rejects foreign input evidence" --timeout 120000
+bun test packages/opencorvus/test/orchestrator/tools.test.ts --test-name-pattern "goal build retry reuses the prior build session by default|goal build session contract records generic evidence without a dispatch manifest|direct build forwards foreign input evidence" --timeout 120000
 bun test packages/opencorvus/test/session/prompt.test.ts packages/opencorvus/test/session/prompt-parts-model-resolution.test.ts --timeout 120000
 bun test packages/opencorvus/test/storage/attachment-store-sweep.test.ts --timeout 120000
 bun test packages/opencorvus/test/workbench/board.test.ts --timeout 120000

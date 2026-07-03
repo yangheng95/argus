@@ -345,9 +345,17 @@ function promptProfileCatalog() {
     active: "frontend-replica",
     project_active: "frontend-replica",
     session_active: null,
-    default: "frontend-replica",
+    default: "general",
     targets: [],
     profiles: [
+      {
+        id: "general",
+        label: "General",
+        description: "General profile.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
       {
         id: "frontend-replica",
         label: "Frontend Replica",
@@ -480,7 +488,11 @@ test(
       const errors = installBrowserErrorCollector(page, {
         allowRequestFailure: (failure) => {
           if (failure.errorText !== "net::ERR_ABORTED") return false
-          if (!/^\/attachment\/project\/screenshot-\d+\.png\?variant=screenshot-browser-thumbnail$/.test(failure.pathWithSearch)) {
+          if (
+            !/^\/attachment\/project\/screenshot-\d+\.png\?variant=screenshot-browser-thumbnail$/.test(
+              failure.pathWithSearch,
+            )
+          ) {
             return false
           }
           expectedThumbnailAborts.push(failure.pathWithSearch)
@@ -780,9 +792,10 @@ test(
       assert.equal(state.groupOwnerKey, "build:goal:goal_screenshot_browser:revision:#G1V1")
       assert.ok(state.groupTitle?.startsWith("#G1V1 · "), JSON.stringify(state))
       assert.equal(state.groupCount, "120", JSON.stringify(state))
-      assert.deepEqual(state.visibleGroups.map((group) => group.ownerKey), [
-        "build:goal:goal_screenshot_browser:revision:#G1V1",
-      ])
+      assert.deepEqual(
+        state.visibleGroups.map((group) => group.ownerKey),
+        ["build:goal:goal_screenshot_browser:revision:#G1V1"],
+      )
       assert.ok(
         state.visibleGroups.every((group) => group.title?.startsWith("#G1V1 · ")),
         JSON.stringify(state.visibleGroups),

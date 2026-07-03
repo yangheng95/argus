@@ -13,13 +13,14 @@ const catalog = {
   active: "frontend-replica",
   project_active: "frontend-replica",
   session_active: null,
-  default: "frontend-replica",
+  default: "general",
   targets: [
     { id: "build", label: "Build", editable: true, built_in_only: false },
     { id: "requirements", label: "Requirements", editable: true, built_in_only: false },
     { id: "orchestrator", label: "Orchestrator", editable: false, built_in_only: true },
   ],
   profiles: [
+    { id: "general", label: "General", built_in: true, editable: false, agents: {} },
     { id: "frontend-replica", label: "Frontend Replica", built_in: true, editable: false, agents: {} },
     {
       id: "frontend-innovate",

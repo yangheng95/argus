@@ -63,7 +63,6 @@ export interface AgentRoleContract {
   archetype: AgentArchetype
   controlSurface: AgentControlSurface
   description: string
-  unreadableReferencePromptMarker?: string
   promptEditable: boolean
   defaultPromptRequired: boolean
   promptConfigMode: "override" | "append" | "none"
@@ -135,7 +134,6 @@ export namespace AgentRoleContract {
       controlSurface: "task-worker",
       description:
         "General workflow executor. Produces one scoped task or goal deliverable through the build-core terminal-report contract.",
-      unreadableReferencePromptMarker: "## Visual Reference Contract (binding for this dispatch)",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -400,7 +398,11 @@ export namespace AgentRoleContract {
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
       orchestratorWorkflowToolName: "architect",
-      agentCoordinationRedispatchBinding: { dispatcher: "architect_stage", stage: "architect", target_kind: "architect" },
+      agentCoordinationRedispatchBinding: {
+        dispatcher: "architect_stage",
+        stage: "architect",
+        target_kind: "architect",
+      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: false,
@@ -477,7 +479,11 @@ export namespace AgentRoleContract {
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
       orchestratorWorkflowToolName: "integrity",
-      agentCoordinationRedispatchBinding: { dispatcher: "integrity_stage", stage: "integrity", target_kind: "integrity" },
+      agentCoordinationRedispatchBinding: {
+        dispatcher: "integrity_stage",
+        stage: "integrity",
+        target_kind: "integrity",
+      },
       directSessionReply: true,
       disableConfigurable: true,
       nonExecutorSourceBoundaryExempt: true,
@@ -500,7 +506,11 @@ export namespace AgentRoleContract {
       liveRuntimeContinuation: true,
       protocolStageContinuation: true,
       orchestratorWorkflowToolName: "fact_check",
-      agentCoordinationRedispatchBinding: { dispatcher: "fact_check_stage", stage: "fact-check", target_kind: "fact-check" },
+      agentCoordinationRedispatchBinding: {
+        dispatcher: "fact_check_stage",
+        stage: "fact-check",
+        target_kind: "fact-check",
+      },
       directSessionReply: false,
       disableConfigurable: false,
       nonExecutorSourceBoundaryExempt: false,
@@ -643,9 +653,7 @@ export namespace AgentRoleContract {
     return taskWorkerIDs().filter((id) => get(id).agentCoordinationRedispatchBinding !== null)
   }
 
-  export function agentCoordinationRedispatchBinding(
-    id: AgentRoleID,
-  ): AgentCoordinationRedispatchBinding | undefined {
+  export function agentCoordinationRedispatchBinding(id: AgentRoleID): AgentCoordinationRedispatchBinding | undefined {
     return get(id).agentCoordinationRedispatchBinding ?? undefined
   }
 
@@ -671,10 +679,6 @@ export namespace AgentRoleContract {
 
   export function usesLiveOrchestratorToolOwnershipControl(id: string): boolean {
     return isRoleID(id) && get(id).liveOrchestratorToolOwnershipControl
-  }
-
-  export function unreadableReferencePromptMarker(id: AgentRoleID): string | undefined {
-    return get(id).unreadableReferencePromptMarker
   }
 
   export function promptProfileTargets(mode?: PromptProfileTargetMode): AgentRoleID[] {

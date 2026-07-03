@@ -28,9 +28,17 @@ function promptProfileCatalog() {
     active: "frontend-replica",
     project_active: "frontend-replica",
     session_active: null,
-    default: "frontend-replica",
+    default: "general",
     targets: [],
     profiles: [
+      {
+        id: "general",
+        label: "General",
+        description: "General profile.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
       {
         id: "frontend-replica",
         label: "Frontend Replica",

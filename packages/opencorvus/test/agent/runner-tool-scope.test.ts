@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { promptToolSwitchesForAgentRun, shouldFailUnreadableReferenceForRole } from "../../src/agent/runner"
+import { promptToolSwitchesForAgentRun } from "../../src/agent/runner"
 import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { renderPreTerminalReflectionPrompt as preTerminalReflectionPrompt } from "../../src/prompt/fragments/pre-terminal-reflection"
 
@@ -75,34 +75,19 @@ describe("agent runner build tool scope", () => {
   })
 
   test("runner does not own build-specific runtime tool policy", () => {
-    const source = readFileSync(
-      fileURLToPath(new URL("../../src/agent/runner.ts", import.meta.url)),
-      "utf8",
-    )
+    const source = readFileSync(fileURLToPath(new URL("../../src/agent/runner.ts", import.meta.url)), "utf8")
 
     expect(source).not.toContain("BUILD_DEFAULT_DISABLED_TOOLS")
     expect(source).not.toContain('input.kind !== "build"')
     expect(source).not.toContain('input.kind === "build"')
   })
 
-  test("build visual reference contract still fails unreadable reference bytes before guessing", () => {
-    expect(
-      shouldFailUnreadableReferenceForRole({
-        role: "build",
-        userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
-        droppedFileParts: [{ mime: "image/png" }],
-      }),
-    ).toBe(true)
-  })
+  test("generic runner does not own a visual reference hard-fail gate", () => {
+    const source = readFileSync(fileURLToPath(new URL("../../src/agent/runner.ts", import.meta.url)), "utf8")
 
-  test("non-build filtered images keep the existing visible marker path", () => {
-    expect(
-      shouldFailUnreadableReferenceForRole({
-        role: "architect",
-        userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
-        droppedFileParts: [{ mime: "image/png" }],
-      }),
-    ).toBe(false)
+    expect(source).not.toContain("visual_reference_unreadable")
+    expect(source).not.toContain("unreadableReferencePromptMarker")
+    expect(source).not.toContain("shouldFailUnreadableReferenceForRole")
   })
 
   test("pre-terminal reflection applies to terminal tools", () => {

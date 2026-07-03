@@ -101,8 +101,9 @@ test("design resource manifest indexes Figma, HTML, and webpage evidence through
   expect(manifest.entries[2]?.origin).toBe("material")
   expect(manifest.entries[2]?.size).toBe(240)
   expect(manifest.entries[3]?.origin).toBe("attachment")
-  expect(manifest.entries.every((entry) => entry.artifact_paths.includes("webpage-evidence/sourceProjectManifest.json")))
-    .toBe(true)
+  expect(
+    manifest.entries.every((entry) => entry.artifact_paths.includes("webpage-evidence/sourceProjectManifest.json")),
+  ).toBe(true)
   expect(designResourceManifestFileRefs(manifest).map((entry) => entry.source)).toEqual([
     "figma-mcp",
     "figma-mcp",
@@ -113,9 +114,10 @@ test("design resource manifest indexes Figma, HTML, and webpage evidence through
     url: "attachment://reference.html",
     mime: "text/html",
     size: 240,
-    filename: "reference.html",
+    label: "reference.html",
     intent: "visual_reference",
   })
+  expect(designResourceManifestFileRefs(manifest)[2]).not.toHaveProperty("filename")
 
   const artifactID = recordDesignResourceManifest({ taskID, manifest, now: 1001 })
   const row = Database.use((db) =>
@@ -142,6 +144,25 @@ test("design resource manifest rejects unsupported resource MIME instead of inde
       ],
     }),
   ).toThrow("unsupported design resource mime 'application/octet-stream'")
+})
+
+test("design resource manifest rejects missing byte identity instead of deriving sha from display metadata", () => {
+  expect(() =>
+    createDesignResourceManifest({
+      taskID: "tsk_bad_design_sha",
+      resources: [
+        {
+          sha: "not-a-storage-sha",
+          url: "attachment://reference.html",
+          mime: "text/html",
+          size: 20,
+          filename: "reference.html",
+          intent: "visual_reference",
+          source: "material",
+        },
+      ],
+    }),
+  ).toThrow("requires a 64-hex sha")
 })
 
 test("design resource manifest rejects unsupported explicit intents instead of remapping them", () => {

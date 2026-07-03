@@ -682,7 +682,7 @@ async function appendDirectAgentSessionReply(input: {
         reason: "missing_attachment",
       })
     }
-    if (attachment.mime !== reference.mime || (attachment.filename ?? "") !== (reference.filename ?? "")) {
+    if (attachment.mime !== reference.mime) {
       throw new AgentSessionAttachmentReferenceError({
         message: `Direct reply attachment metadata must match stored AttachmentStore metadata: ${attachment.url}`,
         taskID: input.taskID,
@@ -1757,7 +1757,6 @@ export namespace EngineService {
       file.sha !== reference.sha ? "sha" : "",
       file.mime !== reference.mime ? "mime" : "",
       file.size !== reference.size ? "size" : "",
-      (file.filename ?? "") !== (reference.filename ?? "") ? "filename" : "",
     ].filter(Boolean)
     if (metadataMismatches.length > 0) {
       throw new Error(

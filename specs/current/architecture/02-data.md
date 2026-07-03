@@ -160,10 +160,17 @@ wake）。Agent 代码不手工调 trace；命名空间是 `AgentTrace`，不是
 
 ## Build Input Evidence
 
-Build 输入证据的 durable authority 是
+Build 输入证据的 durable audit authority 是
 `engine_artifact[kind="build_session_contract"].payload.input_evidence`。不要新增
 平行的 `build_input_evidence` artifact，也不要从当前 task attachments、ambient
-`Instance.project.id` 或 board/compaction 投影重新计算 Build 输入 owner。
+`Instance.project.id` 或 board/compaction 投影重新计算已创建 Build session 的输入
+owner。
+
+`input_evidence` 不是通用 Build 启动 gate。Fresh Build 可以只携带
+`BuildEvidencePack` 进入 `BuildAgent.run`；真实 byte/project 校验发生在
+AttachmentStore read/stage、SessionPrompt byte materialization 和明确的 storage
+API 边界。只有调用方已经持有显式 manifest 时，`build_session_contract` 才写入
+`input_evidence`；否则该字段为 `null`。
 
 当前 contract 记录：
 
@@ -176,14 +183,13 @@ Build 输入证据的 durable authority 是
   `artifact_file_ref_id?`
 - staged path `staged_rel_path?` 与 `sha_verified_at`
 
-Orchestrator 在 BuildAgent/provider replay 前组成并验证 manifest：task project
-ownership、canonical metadata、bytes 可读性、sha 一致性、role/source/intent 都必须先
-成立。`beginBuildAttempt.extraArtifacts` 将同一 manifest 写入
-`build_session_contract`，与 running `goal_run_attempt` 在同一事务中落库。
+`filename` 是 display/provenance metadata，不是 byte identity。硬身份校验只能使用
+project URL、`sha`、`mime`、`size` 和实际可读 bytes。
 
-同一 Build session retry 读取原 session 的
-`build_session_contract.input_evidence`，不重新附带 fresh model file parts。fresh
-Build session / redispatch 会写新的 contract input section。
+同一 Build session retry 在存在原 session
+`build_session_contract.input_evidence` 时读取它，用于重建 staged references 和避免重新
+附带 fresh model file parts。没有 `input_evidence` 的 legacy/通用 Build session 不因此
+失败；它只跳过 manifest-bound staged-file repair。
 
 后续长期文件 owner 是通用 `artifact_file_ref`，不是 attachment-only
 `attachment_ref`。在该表实施前，GC 仍可对 legacy `/attachment/...` 嵌入引用做

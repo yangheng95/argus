@@ -787,6 +787,11 @@ export const TaskBoardGoalStepPayload = z.object({
   diffBaseRef: z.string().optional(),
   diffHeadRef: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),
+  /** Files reported by the latest Build attempt outcome, including failed or
+   *  no-acceptance attempts. This is not the accepted/published diff list. */
+  attemptChangedFiles: z.array(z.string()).optional(),
+  attemptCommitRef: z.string().optional(),
+  attemptPublishedCommitRef: z.string().optional(),
   /** Per-file diff stats sourced from the goal_run acceptance row. Carries
    *  additions/deletions/status so the overlay's ChangesPanel renders
    *  +N/-N immediately from the board payload — no second `goal-run/<id>/acceptance`

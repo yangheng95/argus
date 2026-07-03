@@ -275,6 +275,12 @@ describe("AttachmentStore.sweep", () => {
 
         const second = await AttachmentStore.write(projectID, bytes, "image/png", "second.png")
         expect(second.url).toBe(first.url)
+        expect(second.filename).toBe("second.png")
+        await expect(
+          AttachmentStore.readReference(projectID, AttachmentStore.nameFromUrl(first.url)!.name),
+        ).resolves.toMatchObject({
+          filename: "first.png",
+        })
 
         const result = await AttachmentStore.sweep(projectID)
         expect(result.deleted).toBe(0)
@@ -387,7 +393,12 @@ describe("AttachmentStore.sweep", () => {
         // D-H: referenced from additional durable task-scoped owner rows
         const decisionRef = await AttachmentStore.write(projectID, differentBytes(23), "image/png", "decision.png")
         const artifactRef = await AttachmentStore.write(projectID, differentBytes(24), "image/png", "artifact.png")
-        const interactionRef = await AttachmentStore.write(projectID, differentBytes(25), "image/png", "interaction.png")
+        const interactionRef = await AttachmentStore.write(
+          projectID,
+          differentBytes(25),
+          "image/png",
+          "interaction.png",
+        )
         const progressRef = await AttachmentStore.write(projectID, differentBytes(26), "image/png", "progress.png")
         const channelRef = await AttachmentStore.write(projectID, differentBytes(27), "image/png", "channel.png")
         // I: orphan — not referenced anywhere

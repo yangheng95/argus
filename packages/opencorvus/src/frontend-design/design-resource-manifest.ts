@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import { z } from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Identifier } from "@/id/id"
@@ -76,6 +75,7 @@ export type DesignResourceFileRef = {
   mime: string
   size: number
   filename?: string
+  label?: string
   intent?: string
   source?: string
 }
@@ -130,7 +130,7 @@ function resourceID(input: DesignResourceFileRef, index: number): string {
 function manifestSha(input: DesignResourceFileRef): string {
   const sha = input.sha.trim().toLowerCase()
   if (/^[a-f0-9]{64}$/i.test(sha)) return sha
-  return createHash("sha256").update(`${input.url}\0${input.filename ?? ""}\0${input.mime}\0${input.size}`).digest("hex")
+  throw new Error(`design resource ${input.filename ?? input.url} requires a 64-hex sha`)
 }
 
 function inferOrigin(input: DesignResourceFileRef): DesignResourceOrigin {
@@ -238,7 +238,7 @@ export function designResourceManifestFileRefs(manifest: DesignResourceManifest)
     url: entry.canonical_ref,
     mime: entry.mime,
     size: entry.size,
-    ...(entry.region ? { filename: entry.region } : {}),
+    ...(entry.region ? { label: entry.region } : {}),
     intent: fileRefIntent(entry.intent),
     source: fileRefSource(entry.origin),
   }))

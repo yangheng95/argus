@@ -17,7 +17,8 @@ export function formatDebugTime(ms: unknown): string {
 
 function debugGoalBoardFiles(gw: any): string {
   const steps = Array.isArray(gw?.steps) ? gw.steps : []
-  let changedFiles = 0
+  let acceptedChangedFiles = 0
+  let attemptChangedFiles = 0
   let changedFileDiffs = 0
   const commitRefs = new Set<string>()
   const publishedCommitRefs = new Set<string>()
@@ -30,14 +31,17 @@ function debugGoalBoardFiles(gw: any): string {
   for (const step of steps) {
     const payload = step?.payload
     if (!payload || typeof payload !== "object") continue
-    if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
+    if (Array.isArray(payload.changedFiles)) acceptedChangedFiles += payload.changedFiles.length
+    if (Array.isArray(payload.attemptChangedFiles)) attemptChangedFiles += payload.attemptChangedFiles.length
     if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
     const buildOutcome = payload.buildOutcome
     if (buildOutcome && typeof buildOutcome === "object") {
+      if (!Array.isArray(payload.attemptChangedFiles) && Array.isArray(buildOutcome.changedFiles)) {
+        attemptChangedFiles += buildOutcome.changedFiles.length
+      }
       const goalRunID = typeof buildOutcome.goalRunID === "string" ? buildOutcome.goalRunID : "unknown"
       const outcomeKind = typeof buildOutcome.outcomeKind === "string" ? buildOutcome.outcomeKind : "unknown"
-      const terminalStatus =
-        typeof buildOutcome.terminalStatus === "string" ? buildOutcome.terminalStatus : "unknown"
+      const terminalStatus = typeof buildOutcome.terminalStatus === "string" ? buildOutcome.terminalStatus : "unknown"
       outcomes.add(`${goalRunID}:${terminalStatus}/${outcomeKind}`)
       if (buildOutcome.acceptancePresent !== true) {
         const reason =
@@ -48,8 +52,22 @@ function debugGoalBoardFiles(gw: any): string {
       }
     }
     if (typeof payload.commitRef === "string" && payload.commitRef.trim()) commitRefs.add(payload.commitRef.trim())
+    if (typeof payload.attemptCommitRef === "string" && payload.attemptCommitRef.trim()) {
+      commitRefs.add(payload.attemptCommitRef.trim())
+    }
     if (typeof payload.publishedCommitRef === "string" && payload.publishedCommitRef.trim()) {
       publishedCommitRefs.add(payload.publishedCommitRef.trim())
+    }
+    if (typeof payload.attemptPublishedCommitRef === "string" && payload.attemptPublishedCommitRef.trim()) {
+      publishedCommitRefs.add(payload.attemptPublishedCommitRef.trim())
+    }
+    if (buildOutcome && typeof buildOutcome === "object") {
+      if (typeof buildOutcome.commitRef === "string" && buildOutcome.commitRef.trim()) {
+        commitRefs.add(buildOutcome.commitRef.trim())
+      }
+      if (typeof buildOutcome.publishedCommitRef === "string" && buildOutcome.publishedCommitRef.trim()) {
+        publishedCommitRefs.add(buildOutcome.publishedCommitRef.trim())
+      }
     }
     if (
       typeof payload.diffBaseRef === "string" &&
@@ -68,7 +86,7 @@ function debugGoalBoardFiles(gw: any): string {
   }
   const statText = statFiles === undefined ? "-" : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
   return (
-    `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; ` +
+    `acceptedChangedFiles=${acceptedChangedFiles}; attemptChangedFiles=${attemptChangedFiles}; changedFileDiffs=${changedFileDiffs}; ` +
     `contributionCommits=${commitRefs.size ? Array.from(commitRefs).join(",") : "none"}; ` +
     `publishedCommits=${publishedCommitRefs.size ? Array.from(publishedCommitRefs).join(",") : "none"}; ` +
     `diffRefs=${diffRefs.size ? Array.from(diffRefs).join(",") : "-"}; diffStats=${statText}; ` +

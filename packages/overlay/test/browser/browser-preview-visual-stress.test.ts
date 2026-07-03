@@ -526,11 +526,19 @@ test(
       active: "frontend-replica",
       project_active: "frontend-replica",
       session_active: null,
-      default: "frontend-replica",
+      default: "general",
       targets: [
         { id: "build", label: "Build", description: "Build agent prompt.", editable: true, built_in_only: false },
       ],
       profiles: [
+        {
+          id: "general",
+          label: "General",
+          description: "General profile.",
+          built_in: true,
+          editable: false,
+          agents: {},
+        },
         {
           id: "frontend-replica",
           label: "Frontend Replica",
@@ -737,8 +745,7 @@ test(
         if (path === "/task/events" || path === `/task/${taskID}/conversation/events`) {
           return eventStream()
         }
-        if (path === `/task/${taskID}/events`)
-          return eventStream()
+        if (path === `/task/${taskID}/events`) return eventStream()
         if (path === `/task/${otherTaskID}/events`) return eventStream()
         if (path === `/task/${otherTaskID}/browser-preview`)
           return json({
