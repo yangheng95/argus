@@ -440,7 +440,7 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
-  test("caller-owned external build rejects evidence without staged references", async () => {
+  test("caller-owned external build stages evidence into the supplied workDir", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -473,22 +473,25 @@ describe("BuildAgent managed worktree runtime", () => {
         }
         const inputEvidenceManifest = await composeTestInputEvidenceManifest(taskID, evidencePack)
 
-        await expect(
-          BuildAgent.run({
-            task: task!,
-            parentSessionID: rootSession.id,
-            target: {
-              kind: "request",
-              text: "verify evidence staging is strict",
-            },
-            context: {
-              evidencePack,
-              inputEvidenceManifest,
-            },
-            workDir,
-          }),
-        ).rejects.toThrow("external executor received build evidence but no staged references were created")
-        expect(captured.run).toBeUndefined()
+        const output = await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          target: {
+            kind: "request",
+            text: "verify caller-owned evidence staging",
+          },
+          context: {
+            evidencePack,
+            inputEvidenceManifest,
+          },
+          workDir,
+        })
+
+        expect(output.result.status).toBe("passed")
+        expect(captured.run?.worktreeDir).toBe(workDir)
+        expect(captured.run?.prompt).toContain("## Staged Reference Files")
+        expect(captured.run?.prompt).toContain("references/target-reference.png")
+        await expect(fs.stat(path.join(workDir, "references", "target-reference.png"))).resolves.toBeTruthy()
       },
     })
   }, 30_000)
@@ -1073,6 +1076,120 @@ describe("BuildAgent managed worktree runtime", () => {
     })
   }, 30_000)
 
+  test("managed build retry still requires consumed comparison artifact refs from the original input manifest", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          coding: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_retry_comparison_contract_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "Retry comparison contract root",
+          directory: tmp.path,
+        })
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const worktree = await Worktree.create({
+          name: `retry-comparison-contract-${suffix}`,
+          taskID,
+          sessionID: rootSession.id,
+        })
+        const buildSession = await Session.createNext({
+          kind: "build",
+          parentID: rootSession.id,
+          title: "Retry comparison contract build",
+          directory: worktree.directory,
+        })
+        const comparisonRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(16, 16),
+          "image/png",
+          "visual-feedback.side-by-side.png",
+        )
+        const manifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: buildSession.id,
+          evidencePack: {
+            comparisonArtifacts: [
+              {
+                ...comparisonRef,
+                intent: "visual_feedback_comparison",
+                source: "browser_preview_reference_comparison",
+              },
+            ],
+          },
+        })
+        insertBuildSessionContract({ taskID, sessionID: buildSession.id, manifest })
+        await persistExecutorSessionRef({
+          sessionID: buildSession.id,
+          provider: "codex",
+          ref: { nativeSessionID: "provider-native-retry-comparison-contract" },
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        ExecutorRegistry.registerCoding(
+          "codex",
+          {
+            name: "codex",
+            capabilities: () => ({
+              builtinTools: true,
+              customTools: true,
+              stream: true,
+              resume: true,
+              interrupt: true,
+              cwd: true,
+              system: true,
+            }),
+            run: async function* () {
+              yield { type: "done", output: "unused" }
+            },
+            resume: async function* () {
+              yield {
+                type: "structured",
+                output: {
+                  status: "passed",
+                  summary: "Retry claimed repair without consuming comparison image.",
+                  files_changed: [],
+                  tests: [],
+                  fact_check_items: [],
+                },
+              }
+            },
+            interrupt: async () => true,
+          },
+          { model: "test-model" },
+        )
+
+        await expect(
+          BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            existingSessionID: buildSession.id,
+            target: {
+              kind: "request",
+              text: "retry visual repair",
+            },
+            managedWorktree: {
+              directory: worktree.directory,
+              branch: worktree.branch,
+            },
+          }),
+        ).rejects.toThrow("visual feedback comparison consumption contract failed")
+      },
+    })
+  }, 30_000)
+
   test("managed build retry repairs persisted file parts through the original manifest project", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -1311,6 +1428,174 @@ describe("BuildAgent managed worktree runtime", () => {
         expect(captured.resume?.prompt).not.toContain("## Visual Reference Contract")
         expect(captured.resume?.prompt).not.toContain("## Task Attachments")
         expect(captured.resume?.prompt).not.toContain("reference-target.png")
+      },
+    })
+  }, 30_000)
+
+  test("external build retry stages current visual feedback evidence before provider resume", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_external_retry_visual_feedback_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "External retry visual feedback root",
+          directory: tmp.path,
+        })
+        const workDir = path.join(tmp.path, "external-retry-visual-feedback-worktree")
+        await fs.mkdir(workDir, { recursive: true })
+        const buildSession = await Session.createNext({
+          kind: "build",
+          parentID: rootSession.id,
+          title: "External retry visual feedback build",
+          directory: workDir,
+        })
+        const originalTarget = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(16, 16),
+          "image/png",
+          "reference-target.png",
+        )
+        const comparison = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(20, 12),
+          "image/png",
+          "visual-feedback.side-by-side.png",
+        )
+        const diagnostic = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(JSON.stringify({ problem: "hero spacing", severity: "blocking" })),
+          "application/json",
+          "visual-feedback.layout.json",
+        )
+        seedTask({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: rootSession.id,
+          executor: "codex",
+          attachments: [{ ...originalTarget, intent: "visual_reference", source: "user-upload" }],
+        })
+        const originalManifest = await composeBuildInputEvidenceManifest({
+          projectID: Instance.project.id,
+          taskID,
+          sessionID: buildSession.id,
+          evidencePack: {
+            targetReferences: [{ ...originalTarget, intent: "visual_reference", source: "user-upload" }],
+          },
+        })
+        insertBuildSessionContract({ taskID, sessionID: buildSession.id, manifest: originalManifest })
+        await persistExecutorSessionRef({
+          sessionID: buildSession.id,
+          provider: "codex",
+          ref: { nativeSessionID: "provider-native-retry-visual-feedback-session" },
+        })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+
+        const currentEvidencePack: BuildEvidencePack = {
+          comparisonArtifacts: [
+            {
+              ...comparison,
+              intent: "visual_feedback_comparison",
+              source: "browser_preview_reference_comparison",
+            },
+          ],
+          visualQaDiagnostics: [
+            {
+              ...diagnostic,
+              intent: "visual_qa_diagnostic",
+              source: "visual_qa_layout_geometry",
+            },
+          ],
+        }
+        const currentManifest = await composeTestInputEvidenceManifest(taskID, currentEvidencePack)
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding(
+          "codex",
+          {
+            name: "codex",
+            capabilities: () => ({
+              builtinTools: true,
+              customTools: true,
+              stream: true,
+              resume: true,
+              interrupt: true,
+              cwd: true,
+              system: true,
+            }),
+            run: async function* (input) {
+              captured.run = input
+              yield { type: "done", output: "unused" }
+            },
+            resume: async function* (input) {
+              captured.resume = input
+              const output = {
+                status: "passed",
+                summary: "Consumed current visual feedback evidence during retry.",
+                files_changed: [],
+                tests: [],
+                consumed_visual_feedback_comparison_refs: [comparison.url],
+                consumed_visual_qa_diagnostic_refs: [diagnostic.url],
+                contract_restatement: "Retry repaired the existing direct build from current Visual QA feedback.",
+                followup_workload_guidance:
+                  "Future agents must keep consuming the task-scoped Visual QA comparison and diagnostic refs.",
+                fact_check_items: [],
+              }
+              yield {
+                type: "tool_call",
+                id: "call_structured_build_result",
+                name: "structured_output",
+                input: output,
+              }
+              yield {
+                type: "tool_result",
+                id: "call_structured_build_result",
+                name: "structured_output",
+                input: output,
+                output: JSON.stringify(output),
+              }
+              yield { type: "done", output: "structured build result submitted" }
+            },
+            interrupt: async () => true,
+          },
+          { model: "test-model" },
+        )
+
+        const output = await BuildAgent.run({
+          task: task!,
+          parentSessionID: rootSession.id,
+          existingSessionID: buildSession.id,
+          target: {
+            kind: "request",
+            text: "repair the existing direct build from visual feedback",
+          },
+          context: {
+            visualQaFeedback: "Visual QA found hero spacing mismatch; consume the comparison and layout evidence.",
+            evidencePack: currentEvidencePack,
+            inputEvidenceManifest: currentManifest,
+          },
+          workDir,
+        })
+
+        expect(output.sessionID).toBe(buildSession.id)
+        expect(captured.run).toBeUndefined()
+        expect(captured.resume?.sessionID).toBe("provider-native-retry-visual-feedback-session")
+        expect(captured.resume?.tools?.some((tool) => tool.name === "structured_output")).toBe(true)
+        const prompt = captured.resume?.prompt ?? ""
+        expect(prompt).toContain("Visual QA found hero spacing mismatch")
+        expect(prompt).toContain("### Comparison And Verification Artifacts")
+        expect(prompt).toContain("visual-feedback.side-by-side.png")
+        expect(prompt).toContain("### Visual QA Diagnostic Artifacts")
+        expect(prompt).toContain("visual-feedback.layout.json")
+        expect(prompt).toContain("## Staged Reference Files")
+        expect(prompt).toContain("references/visual-feedback.side-by-side.png")
+        expect(prompt).toContain("references/visual-feedback.layout.json")
+        expect(prompt).not.toContain("references/reference-target.png")
+        await expect(fs.stat(path.join(workDir, "references", "visual-feedback.side-by-side.png"))).resolves.toBeTruthy()
+        await expect(fs.stat(path.join(workDir, "references", "visual-feedback.layout.json"))).resolves.toBeTruthy()
       },
     })
   }, 30_000)

@@ -123,7 +123,8 @@ export namespace PromptProfile {
     },
     "frontend-replica": {
       label: "Frontend Replica",
-      description: "Source URL/reference-screenshot replica, desktop region mapping, source evidence, and rendered proof expert squad.",
+      description:
+        "Source URL/reference-screenshot replica, desktop surface ledger, bounded evidence-backed acceptance, source evidence, and rendered proof expert squad.",
       agents: {
         coding: expertOverlay(
           "Prioritize desktop source information architecture, module order, density, states, and source screenshot/DOM/computed-style correspondence. Do not introduce tablet/mobile scope unless the operator asks for a separate multi-end migration task.",
@@ -147,7 +148,7 @@ export namespace PromptProfile {
         ),
         mission: expertOverlay(
           "Keep frontend replica work tied to the target surface, the source-backed structure, the interaction states that must work, and rendered evidence.",
-          "Track progress by meaningful source component or region so one goal proves one accountable slice instead of a single page-level claim.",
+          "Track progress by meaningful user-visible source component or region so one goal proves one accountable slice instead of a single page-level claim.",
           "Do not accept completion until source structure, target project reuse decisions, visual evidence, and unresolved scope defects are visible in the task record.",
         ),
         "intent-analysis": expertOverlay(
@@ -156,7 +157,7 @@ export namespace PromptProfile {
           "Produce intent that downstream Requirements and Architect can check against source screenshots, source structure evidence, and component interaction obligations.",
         ),
         requirements: expertOverlay(
-          "Write desktop observable replica requirements: information architecture, module sequence, component states, source assets, rendered screenshot acceptance, and interaction outcomes.",
+          "Write desktop observable replica requirements for source-backed surfaces: information architecture, module sequence, component states, source assets, rendered screenshot acceptance, and interaction outcomes.",
           "Register webpage-generation coverage beyond responsive behavior as explicit REQ or decision scope: source evidence binding, region completeness, visual style fidelity, interaction semantics, data/UI contracts, accessibility semantics, asset/media ownership, runtime integration, and browser verification evidence.",
           "Do not create tablet/mobile/non-desktop REQ rows from generic text; each requirement must bind to a source component, region, or state.",
           "Treat source page height, footer y, region y, and full-page dimensions as visible source-content boundaries, not as blank spacer or min-height acceptance.",
@@ -165,8 +166,8 @@ export namespace PromptProfile {
           "Require Component Interaction Matrix coverage for clickable, hoverable, focusable, sortable, filterable, chart, map, table, and popover surfaces before implementation is accepted.",
         ),
         architect: expertOverlay(
-          "Turn replica requirements into desktop component boundaries, data flow, target project reuse decisions, and one accountable goal per meaningful component or region.",
-          "When the operator does not specify granularity, generally produce 10 or more source-component goals; do not merge several source components, unrelated regions, or whole-page work into one Build goal.",
+          "Turn replica requirements into desktop component boundaries, data flow, target reuse, and one accountable goal per meaningful component or region.",
+          "When granularity is unspecified, generally produce 10 or more source-component goals; do not merge several source components or unrelated regions, and never register source rows, visual-source rows, style-profile rows, DOM records, evidence-table rows, no_project_diff work, or docs-only work as Build goals.",
           "Do not register tablet/mobile/non-desktop goals, acceptance specs, or build work without explicit current multi-end migration; desktop adaptive viewport acceptance stays on desktop goals when the current contract names it.",
           "Do not create goals or acceptance specs that allow footer/page y alignment, source document height, or scroll-slice alignment to pass through empty CSS spacing, fake spacer components, or unrendered media slots.",
           "Preserve the source module order, density, visual token source, state model, and interaction contracts while mapping target project code reuse to each goal.",
@@ -183,28 +184,32 @@ export namespace PromptProfile {
           "Do not publish tablet/mobile work packets for default replica tasks; report missing source evidence instead of filling gaps with target project conventions.",
         ),
         build: expertOverlay(
-          "Build approved desktop replica work without source drift, one scoped component or region goal at a time. Reuse target project components and business code only where they preserve source parity.",
-          "Implement real user interface, real state, and data-backed tables/charts/maps; use browser_preview_reference_regions only for one source-binding module comparison when source and concrete local component regions exist, and capture desktop adaptive evidence across multiple desktop-class widths when the contract requires it.",
-          "Do not satisfy source page height, footer transition y coordinates, scroll-slice alignment, or full-page dimensions by adding blank margin, padding, height/min-height filler, phantom cards, or empty image/canvas slots; restore missing source-backed content/assets/interactions or report the blocker.",
-          "Use Browser MCP screenshot/observe tools for ordinary browser inspection, not a weakened duplicate screenshot tool. Do not use page-shell, whole-page, body/main/app-root locators as first-viewport reference-region proof; use browser_preview_compare_scroll_slices for first-viewport and page-slice visual_diff support. Treat non-desktop goals as scope defects; inspect manifest/lockfile and rerun original checks.",
+          "Build one scoped component or region goal at a time without source drift. Reuse target project components and business code only where they preserve source parity.",
+          "Implement real UI/state and data-backed tables/charts/maps; use browser_preview_reference_regions only for one source-binding module comparison when concrete source/local regions exist, and capture required evidence across multiple desktop-class widths.",
+          "After Visual QA or Integrity blockers, cite consumed diagnostic refs, repair owning files, and produce fresh proof before pass; do not pass no_project_diff, docs-only output, screenshot-only commentary, or unchanged visible surfaces.",
+          "Do not satisfy source page height, footer y, scroll-slice alignment, or full-page dimensions with blank margin, padding, height/min-height filler, phantom cards, or empty media slots; restore missing source-backed content/assets/interactions or report the blocker.",
+          "Use Browser MCP screenshot/observe for ordinary inspection. Do not use page-shell/whole-page/body/main/app-root locators as first-viewport reference-region proof; use browser_preview_compare_scroll_slices for first-viewport/page-slice visual_diff, read comparison_guidance LEFT reference / RIGHT implementation, and inspect layout, content hallucinations, geometry, and placeholder UI. Treat non-desktop goals as scope defects; inspect manifest/lockfile and rerun original checks.",
         ),
         "visual-qa": expertOverlay(
-          "Audit desktop structure, spacing, density, typography, interactions, source assets, component states, and any scoped desktop adaptive layout behavior against the exact source evidence and rendered target page.",
-          "Own final module source-binding review with browser_preview_reference_regions when source and concrete local component regions exist; use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, and use browser_preview_compare_scroll_slices only for first-viewport and page-slice visual_diff support.",
-          "Reject large blank filler bands between completed regions, empty thumbnail/canvas/image slots, and CSS spacer/min-height padding used to align source geometry as production blockers; cite the source/reference slice and owning DOM/source module for Build repair.",
-          "Do not require mobile/tablet evidence; if the desktop contract names adaptive layout, inspect multiple desktop-class widths and register multi-viewport alignment for those desktop viewports. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, or target project reuse proof is missing.",
+          "Audit desktop structure, spacing, density, typography, interactions, source assets, component states, and scoped desktop adaptive layout behavior against exact source evidence and current rendered page.",
+          "Own final module source-binding review with browser_preview_reference_regions when concrete source/local regions exist; use Browser MCP screenshot/observe tools for ordinary screenshots/browser operations, and use browser_preview_compare_scroll_slices only for first-viewport and page-slice visual_diff support. Read comparison_guidance LEFT reference / RIGHT implementation; inspect layout, assets, colors, spacing, typography, content hallucinations, states, chart/table/map geometry, layering, and placeholder UI.",
+          "Reject large blank filler bands between completed regions, empty thumbnail/canvas/image slots, and CSS spacer/min-height padding used to align source geometry as production blockers; cite the source/reference slice and owning DOM/source module for Build repair, and carry unresolved prior blockers forward until fresh evidence proves repair.",
+          "Do not require mobile/tablet evidence; if the desktop contract names adaptive layout, inspect multiple desktop-class widths and register multi-viewport alignment. Reject acceptance when Component Interaction Matrix coverage, source-token ownership, target project reuse proof, current proof, or repeated blocker accounting is missing.",
         ),
         integrity: expertOverlay(
           "Treat replica delivery as incomplete unless desktop source structure, requested surface, component-per-goal request, interactions, rendered screenshots, and browser evidence are shown.",
           "Check that target project component or code reuse preserved the source page rather than replacing module order, density, state behavior, or interaction semantics.",
           "Treat footer/page geometry satisfied by blank CSS space, phantom source intervals, or unrendered media slots as unresolved source-backed content debt, not completed visual parity.",
           "Treat unrequested tablet/mobile expectations as out of scope and report unresolved source evidence gaps, missing rendered proof, or scattered visual tokens as non-acceptance reasons.",
+          "Review implementation evidence only; after a second evidence-backed implementation non-pass for the same surface, recommend not accepted with blockers. Do not count Integrity review as the rendered visual verdict.",
         ),
         orchestrator: expertOverlay(
           "Keep replica decisions grounded in exact reference surface, source evidence, goals, acceptance, and the operator's component-per-goal request.",
-          "When the operator did not name goal granularity, ask Architect for one source component or meaningful region per goal, generally 10 or more goals, and reject bundled multi-component goals.",
+          "When the operator did not name goal granularity, ask Architect for one source component or meaningful region per goal, generally 10 or more goals, and reject bundled multi-component goals or raw source-row goals.",
           "Assign downstream work so Build and Visual QA produce reference-region proof and scroll-slice supporting evidence, plus scoped desktop adaptive viewport checks when the current desktop contract requires them.",
           "When evidence mentions footer y coordinates, source page height, or full-page geometry, keep downstream instructions tied to restoring the visible source regions that occupy those coordinates, not to padding blank page space.",
+          "Maintain a per-surface rendered-feedback ledger: count only Visual QA / visual-feedback-verification non-pass rounds from current rendered output; preview setup, missing evidence, and Integrity implementation blockers stay separate.",
+          "After the second consecutive evidence-backed rendered-feedback non-pass for the same surface, mark not accepted with blockers, failed requirements, and cited evidence instead of blind repair.",
           "Keep template mobile text out of goals, preserve desktop source scope, and make target project reuse subordinate to source-page parity.",
         ),
       },

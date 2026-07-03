@@ -21,7 +21,7 @@ export type BrowserPreviewCompareScrollSlicesToolParameters = z.infer<
 
 export const BrowserPreviewCompareScrollSlicesTool = Tool.define(BrowserPreviewCompareScrollSlicesToolID, {
   description:
-    "Compare an implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png; never accepts source URLs. Returns a side-by-side PNG attachment for direct inspection.",
+    "Compare an implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png; never accepts source URLs. Returns a side-by-side PNG attachment for direct inspection plus comparison_guidance: LEFT is the source/reference image, RIGHT is the rendered/local implementation, and the checklist names layout, icon/asset, color, spacing, typography, content, state, chart/table/map, and placeholder defects to inspect.",
   parameters: BrowserPreviewCompareScrollSlicesToolParameters,
   async execute(params: BrowserPreviewCompareScrollSlicesToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""

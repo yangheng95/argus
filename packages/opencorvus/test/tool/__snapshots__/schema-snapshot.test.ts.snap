@@ -2012,13 +2012,12 @@ Output: Creates directory 'foo'"
                             "type": "string",
                           },
                           "inputs": {
-                            "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                            "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                             "items": {
                               "enum": [
                                 "acceptance_summary",
                                 "changed_files",
                                 "requirement_text",
-                                "visual_evidence",
                               ],
                               "type": "string",
                             },
@@ -2092,7 +2091,7 @@ Output: Creates directory 'foo'"
                           },
                           "expect": {
                             "additionalProperties": false,
-                            "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                            "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                             "properties": {
                               "status": {
                                 "const": "passed",
@@ -2112,16 +2111,16 @@ Output: Creates directory 'foo'"
                               "exact_match",
                               "length_within",
                               "json_schema",
-                              "visual-evidence-bundle",
+                              "visual-feedback-verification",
                             ],
                             "type": "string",
                           },
                           "spec": {
                             "additionalProperties": false,
-                            "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                            "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                             "properties": {
                               "kind": {
-                                "const": "visual_evidence_bundle",
+                                "const": "visual_feedback_verification",
                                 "type": "string",
                               },
                               "viewport": {
@@ -2191,7 +2190,7 @@ Output: Creates directory 'foo'"
                           },
                           "type": {
                             "const": "contract_audit",
-                            "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                            "description": "contract_audit — static audit of typed-contract field literals and graph artifact path materialization against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
                             "type": "string",
                           },
                         },

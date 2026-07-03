@@ -6,10 +6,8 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
 import z from "zod"
-import { readLatestTaskVisualEvidenceBundleSync } from "../../src/acceptance/visual-evidence"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
 import { composeBuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
-import type { BrowserPreviewRegionBinding } from "../../src/browser-preview/region-comparison"
 import { Bus } from "../../src/bus"
 import { Database, and, eq, sql } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
@@ -866,7 +864,7 @@ function minimalVisualQaReportWithRequiredReferenceParity() {
       required_regions: ["main surface"],
       reference_comparison_evidence_refs: [],
       missing_regions: ["main surface"],
-      blocker_ids: ["authoritative-rendered-reference-visual"],
+      blocker_ids: ["missing-rendered-reference-comparison"],
     },
   }
 }
@@ -912,24 +910,28 @@ async function writeVisualQaReferenceImage(projectRoot: string, taskID: string):
     .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
 }
 
-async function seedVisualQaSourceBindingEvidence(input: {
+async function seedVisualQaReferenceComparisonEvidence(input: {
   projectRoot: string
   taskID: string
+  runID: string
   targetID: string
-  binding: BrowserPreviewRegionBinding
+  regionID: string
+  viewportID: string
 }): Promise<string> {
-  const jobID = `art_visualqa_source_binding_${Date.now().toString(16)}`
+  const jobID = `art_visualqa_reference_comparison_${Date.now().toString(16)}`
   const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
-  const artifactDir = path.join(outDir, "source-binding")
+  const artifactDir = path.join(outDir, "reference-comparison")
   await fs.mkdir(artifactDir, { recursive: true })
   const sourceCrop = path.join(artifactDir, "source.png")
   const implementationCrop = path.join(artifactDir, "implementation.png")
   const sideBySide = path.join(artifactDir, "side-by-side.png")
-  for (const filePath of [sourceCrop, implementationCrop, sideBySide]) {
+  const diff = path.join(artifactDir, "diff.png")
+  const implementationScreenshot = path.join(artifactDir, "implementation-full.png")
+  for (const filePath of [sourceCrop, implementationCrop, sideBySide, diff, implementationScreenshot]) {
     await sharp({
       create: {
-        width: 10,
-        height: 10,
+        width: 800,
+        height: 600,
         channels: 4,
         background: "#e7f5ee",
       },
@@ -940,24 +942,50 @@ async function seedVisualQaSourceBindingEvidence(input: {
   const evidenceID = await persistBrowserPreviewEvidence({
     projectRoot: input.projectRoot,
     taskID: input.taskID,
+    runID: input.runID,
     targetID: input.targetID,
-    viewportID: input.binding.viewport_id,
-    operationKind: "source-binding",
-    regionID: input.binding.region_id,
-    stateID: input.binding.state_id,
-    manifestPath: path.join(outDir, "source-binding.json"),
+    viewportID: input.viewportID,
+    operationKind: "reference-comparison",
+    regionID: input.regionID,
+    cropIntent: "full-region",
     artifactPaths: {
       source_crop: sourceCrop,
       implementation_crop: implementationCrop,
       side_by_side: sideBySide,
+      diff,
     },
     status: "passed",
-    summary: "seeded Visual QA source-binding evidence",
+    summary: "seeded Visual QA reference-comparison evidence",
     capture: {
+      operation: "reference-comparison",
       status: "passed",
-      binding: input.binding,
+      region: {
+        region_id: input.regionID,
+        viewport_id: input.viewportID,
+        crop_intent: "full-region",
+        source_bbox: { x: 0, y: 0, width: 800, height: 600 },
+        source_image_size: { width: 800, height: 600 },
+        implementation_screenshot_path: implementationScreenshot,
+        visual: {
+          dimensions_match: true,
+          total_pixels: 480_000,
+        },
+        coverage: {
+          implementation_matches_source_size: true,
+        },
+        content: {
+          source: {
+            non_white_pixel_ratio: 1,
+            unique_color_count: 1,
+          },
+          implementation: {
+            non_white_pixel_ratio: 1,
+            unique_color_count: 1,
+          },
+        },
+      },
     },
-    diagnostics: ["seeded Visual QA source-binding evidence"],
+    diagnostics: ["seeded Visual QA reference-comparison evidence"],
   })
   return `browser_preview_evidence:${evidenceID}`
 }
@@ -3549,14 +3577,24 @@ describe("orchestrator tools", () => {
               scorers: [
                 {
                   type: "prebuilt",
-                  name: "visual-evidence-bundle",
-                  spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+                  name: "visual-feedback-verification",
+                  spec: { kind: "visual_feedback_verification", viewport: "desktop-primary" },
                 },
               ],
               severity: "essential",
             },
           ],
           insertProject: false,
+        })
+        const run = createRun({
+          taskID,
+          planVersionID: null,
+          sessionID: parent.id,
+          executor: "opencorvus",
+          status: "running",
+          phase: "execute",
+          summary: "active visual qa run",
+          now,
         })
         visualQaAnalyzeImpl = async (input: any) => {
           visualQaInput = input
@@ -3590,7 +3628,11 @@ describe("orchestrator tools", () => {
           buildToolOptions("visual_qa"),
         )
 
-        expect(toolText(result)).toContain("visual_qa complete: effective_accepted=false")
+        const firstResultText = toolText(result)
+        expect(firstResultText).toContain("visual_qa complete: effective_accepted=false")
+        expect(firstResultText).toContain("visual_feedback_verification_failed_attempts")
+        expect(firstResultText).toContain("1")
+        expect(firstResultText).not.toContain("visual_feedback_next_action")
         expect(visualQaInput.parentSessionID).toBe(parent.id)
         expect(visualQaInput.taskID).toBe(taskID)
         expect(visualQaInput.reason).toBe("Need final frontend GUI review.")
@@ -3602,24 +3644,54 @@ describe("orchestrator tools", () => {
         expect(visualQaDecisions.some((entry) => entry.key === "latest_summary")).toBe(true)
         expect(visualQaDecisions.some((entry) => entry.value.includes("effective_accepted=false"))).toBe(true)
         expect(visualQaDecisions.some((entry) => entry.value.includes("Recovered visual QA report."))).toBe(true)
-        expect(
-          visualQaDecisions.some(
-            (entry) =>
-              entry.key === "latest_summary" &&
-              entry.value.includes("visual_evidence_bundle_materialization=not_ready"),
-          ),
-        ).toBe(true)
-        const materializationDecision = visualQaDecisions.find((entry) =>
-          entry.key.startsWith("visual_evidence_bundle_"),
+        const visualFeedbackVerification = visualQaDecisions.find((entry) =>
+          entry.key.startsWith("visual_feedback_verification_"),
         )
-        expect(materializationDecision?.value).toContain("status=not_ready")
-        expect(materializationDecision?.value).toContain("issues=no browser_preview evidence refs")
+        expect(visualFeedbackVerification).toBeTruthy()
+        const parsedPointer = JSON.parse(visualFeedbackVerification!.value)
+        expect(String(parsedPointer.artifact_id)).toMatch(/^art_/)
+        const parsedVerification = parsedPointer.visual_feedback_verification
+        expect(parsedVerification).toMatchObject({
+          taskID,
+          runID: run.id,
+          status: "failed",
+          requiredReferenceRegions: ["main surface"],
+          referenceComparisonEvidenceRefs: [],
+          productionBlockerIDs: ["missing-rendered-reference-comparison", "missing_reference_region:main surface"],
+        })
+
+        const secondResult = await tools.visual_qa.execute(
+          {
+            reason: "Re-check after Build repair.",
+            focus: "Main screen",
+            app_url: "http://127.0.0.1:5173",
+            preview_command: "npm run dev",
+          },
+          buildToolOptions("visual_qa_second_failed"),
+        )
+
+        const secondResultText = toolText(secondResult)
+        expect(secondResultText).toContain("visual_qa complete: effective_accepted=false")
+        expect(secondResultText).toContain("visual_feedback_verification_failed_attempts")
+        expect(secondResultText).toContain("2")
+        expect(secondResultText).not.toContain("visual_feedback_next_action")
+        const secondVisualQaDecisions = createDecisionLog(taskID).readByPhase("visual_qa")
+        expect(
+          secondVisualQaDecisions.filter((entry) => entry.key.startsWith("visual_feedback_verification_")),
+        ).toHaveLength(2)
+        const latestSummaryEntries = secondVisualQaDecisions.filter((entry) => entry.key === "latest_summary")
+        expect(latestSummaryEntries[latestSummaryEntries.length - 1]?.value).toContain(
+          "visual_feedback_verification_failed_attempts=2",
+        )
+        expect(latestSummaryEntries[latestSummaryEntries.length - 1]?.value).not.toContain(
+          "visual_feedback_next_action",
+        )
       },
     })
   })
 
   test(
-    "visual_qa materializes a passing bundle from source-binding refs before recording stage acceptance",
+    "visual_qa accepts required parity from direct reference-comparison refs and materializes visual feedback verification",
     async () => {
       const now = Date.now()
       const stamp = now.toString(16)
@@ -3657,14 +3729,24 @@ describe("orchestrator tools", () => {
                   scorers: [
                     {
                       type: "prebuilt",
-                      name: "visual-evidence-bundle",
-                      spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+                      name: "visual-feedback-verification",
+                      spec: { kind: "visual_feedback_verification", viewport: "desktop-primary" },
                     },
                   ],
                   severity: "essential",
                 },
               ],
               insertProject: false,
+            })
+            createRun({
+              taskID,
+              planVersionID: null,
+              sessionID: parent.id,
+              executor: "opencorvus",
+              status: "running",
+              phase: "execute",
+              summary: "active visual qa materialized run",
+              now,
             })
             await writeVisualQaReferenceImage(tmp.path, taskID)
             const target = await persistTestBrowserPreviewTarget({
@@ -3679,37 +3761,21 @@ describe("orchestrator tools", () => {
                 },
               ],
             })
-            const binding: BrowserPreviewRegionBinding = {
-              region_id: "economy-page",
-              viewport_id: "desktop",
-              state_id: "default",
-              region_scope: "page-section",
-              crop_intent: "full-region",
-              source: {
-                reference_artifact_id: "web-clone-source/reference.png",
-                bbox: { x: 0, y: 0, width: 800, height: 600 },
-                semantic_role: "economy page",
-                text_anchors: ["economy"],
-                source_refs: ["web-clone-source/reference.png"],
-              },
-              implementation: {
-                route: "/economy",
-                locator: { kind: "data-oc-region", value: "economy-page" },
-                component_files: ["src/EconomyPanel.tsx"],
-              },
-              acceptance_refs: ["REQ-visual-materialized"],
-            }
-            const sourceBindingRef = await seedVisualQaSourceBindingEvidence({
+            const activeRun = findActiveRunForTask(taskID)
+            expect(activeRun?.id).toBeTruthy()
+            const comparisonRef = await seedVisualQaReferenceComparisonEvidence({
               projectRoot: tmp.path,
               taskID,
+              runID: activeRun!.id,
               targetID: target.id,
-              binding,
+              regionID: "economy-page",
+              viewportID: "desktop",
             })
             visualQaAnalyzeImpl = async (input: any) => {
               const child = await Session.create({
                 kind: "visual-qa",
                 parentID: parent.id,
-                title: "visual qa materialized worker",
+                title: "visual qa reference-comparison worker",
               })
               input.onSessionCreated?.(child.id)
               const report = minimalVisualQaReport()
@@ -3717,14 +3783,14 @@ describe("orchestrator tools", () => {
                 sessionID: child.id,
                 report: {
                   ...report,
-                  summary: "Source-binding visual QA process evidence accepted.",
+                  summary: "Reference-comparison visual QA evidence accepted.",
                   check_items: report.check_items.map((item) => ({
                     ...item,
                     region: "economy-page",
                     reference_region_key: "economy-page@desktop",
                     viewports: [{ width: 800, height: 600 }],
                     source_refs: ["web-clone-source/reference.png"],
-                    evidence_refs: [sourceBindingRef],
+                    evidence_refs: [comparisonRef],
                   })),
                   coverage: [
                     {
@@ -3733,24 +3799,24 @@ describe("orchestrator tools", () => {
                       viewports: [{ width: 800, height: 600 }],
                       states: ["default"],
                       source_refs: ["web-clone-source/reference.png"],
-                      evidence_refs: [sourceBindingRef],
-                      notes: "Checked the bound source region before host materialization.",
+                      evidence_refs: [comparisonRef],
+                      notes: "Checked task-scoped rendered reference-comparison evidence.",
                     },
                   ],
                   evidence: [
                     {
                       check_ids: ["check-main-surface"],
                       type: "screenshot" as const,
-                      ref: sourceBindingRef,
+                      ref: comparisonRef,
                       viewport: { width: 800, height: 600 },
                       state: "default",
-                      note: "Task-scoped source-binding evidence for host VisualEvidenceBundle materialization.",
+                      note: "Task-scoped reference-comparison evidence for Visual QA acceptance.",
                     },
                   ],
                   reference_parity: {
                     required: true,
                     required_regions: ["economy-page@desktop"],
-                    reference_comparison_evidence_refs: [],
+                    reference_comparison_evidence_refs: [comparisonRef],
                     missing_regions: [],
                     blocker_ids: [],
                   },
@@ -3764,7 +3830,6 @@ describe("orchestrator tools", () => {
               agentSessionID: parent.id,
               signal: new AbortController().signal,
             })
-
             const result = await tools.visual_qa.execute(
               {
                 reason: "Need final frontend GUI review.",
@@ -3780,21 +3845,25 @@ describe("orchestrator tools", () => {
             const latestSummary = visualQaDecisions.find((entry) => entry.key === "latest_summary")
             expect(latestSummary?.value).toContain("effective_accepted=true")
             expect(latestSummary?.value).toContain("visual_qa_process_accepted=true")
-            expect(latestSummary?.value).toContain("visual_evidence_bundle_materialization=materialized")
-            expect(latestSummary?.value).toContain("visual_evidence_bundle_validation=true")
-            expect(visualQaDecisions.some((entry) => entry.value.includes("authoritative-rendered-reference-visual"))).toBe(
-              false,
-            )
             expect(
               visualQaDecisions.some((entry) => entry.value.includes("without reference_comparison evidence refs")),
             ).toBe(false)
-            const materializationDecision = visualQaDecisions.find((entry) =>
-              entry.key.startsWith("visual_evidence_bundle_"),
+            const visualFeedbackVerification = visualQaDecisions.find((entry) =>
+              entry.key.startsWith("visual_feedback_verification_"),
             )
-            expect(materializationDecision?.value).toContain("status=materialized")
-            const bundle = readLatestTaskVisualEvidenceBundleSync({ projectDir: tmp.path, taskID })
-            expect(bundle?.[0]?.inspection.status).toBe("passing")
-            expect(bundle?.[0]?.regions[0]?.id).toBe("economy-page")
+            expect(visualFeedbackVerification).toBeTruthy()
+            const parsedPointer = JSON.parse(visualFeedbackVerification!.value)
+            expect(String(parsedPointer.artifact_id)).toMatch(/^art_/)
+            const parsedVerification = parsedPointer.visual_feedback_verification
+            expect(parsedVerification).toMatchObject({
+              taskID,
+              runID: activeRun!.id,
+              previewTargetID: target.id,
+              status: "passed",
+              requiredReferenceRegions: ["economy-page@desktop"],
+              referenceComparisonEvidenceRefs: [comparisonRef],
+              productionBlockerIDs: [],
+            })
           },
         })
       } finally {
@@ -12318,6 +12387,7 @@ describe("orchestrator tools", () => {
     let capturedTarget: any
     let capturedRunInput: any
     let capturedLayoutGeometryEvidenceID = ""
+    let capturedComparisonEvidenceID = ""
 
     await Instance.provide({
       directory: tmp.path,
@@ -12424,6 +12494,48 @@ describe("orchestrator tools", () => {
         })
         capturedLayoutGeometryEvidenceID = layoutGeometryEvidenceID
         const layoutGeometryEvidenceRef = `browser_preview_evidence:${layoutGeometryEvidenceID}`
+        const comparisonJobID = `art_reference_comparison_${stamp}`
+        const comparisonDir = ProjectRuntimePaths.browserPreviewJobRoot(tmp.path, taskID, comparisonJobID)
+        await fs.mkdir(comparisonDir, { recursive: true })
+        const comparisonArtifactPaths = {
+          source_crop: path.join(comparisonDir, "source.png"),
+          implementation_crop: path.join(comparisonDir, "implementation.png"),
+          side_by_side: path.join(comparisonDir, "side-by-side.png"),
+          diff: path.join(comparisonDir, "diff.png"),
+        }
+        const comparisonColors = ["#dde7ff", "#ffe1dd", "#f8f8f8", "#ff00aa"]
+        for (const [index, filePath] of Object.values(comparisonArtifactPaths).entries()) {
+          await sharp({
+            create: {
+              width: 24,
+              height: 18,
+              channels: 4,
+              background: comparisonColors[index],
+            },
+          })
+            .png()
+            .toFile(filePath)
+        }
+        const comparisonEvidenceID = persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: "art_preview_target",
+          viewportID: "desktop",
+          operationKind: "reference-comparison",
+          regionID: "market-tabs",
+          cropIntent: "full-region",
+          artifactPaths: comparisonArtifactPaths,
+          status: "failed",
+          summary: "reference comparison failed market tabs spacing",
+          capture: {
+            status: "failed",
+            regionID: "market-tabs",
+            pixel_diff_percent: 31,
+          },
+          diagnostics: ["reference comparison failed market tabs spacing"],
+        })
+        capturedComparisonEvidenceID = comparisonEvidenceID
+        const comparisonEvidenceRef = `browser_preview_evidence:${comparisonEvidenceID}`
 
         const visualQaRecord: any = minimalVisualQaDecisionRecord()
         visualQaRecord.report.accepted = false
@@ -12437,14 +12549,14 @@ describe("orchestrator tools", () => {
           status: "failed",
           expected: "The market tab row matches the source hierarchy and first-viewport spacing.",
           observed: "The market tab row is clipped and spacing is too loose.",
-          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
+          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
           required_correction: "Restore tab row spacing and hierarchy from the source page.",
         }
         visualQaRecord.report.coverage[0] = {
           ...visualQaRecord.report.coverage[0],
           check_ids: ["check-market-tabs"],
           region: "market tabs",
-          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
+          evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
         }
         visualQaRecord.report.evidence[0] = {
           ...visualQaRecord.report.evidence[0],
@@ -12461,6 +12573,13 @@ describe("orchestrator tools", () => {
           viewport: { width: 1440, height: 900 },
           note: "Layout geometry manifest shows primary-content-rail left spread=504px.",
         })
+        visualQaRecord.report.evidence.push({
+          check_ids: ["check-market-tabs"],
+          type: "screenshot",
+          ref: comparisonEvidenceRef,
+          viewport: { width: 1440, height: 900 },
+          note: "Browser Preview reference comparison shows market tab spacing mismatch.",
+        })
         visualQaRecord.report.production_blockers = [
           {
             id: "blocker-market-tabs",
@@ -12471,7 +12590,7 @@ describe("orchestrator tools", () => {
             impact: "The first viewport reads as a redesigned page instead of a replica.",
             required_correction: "Restore tab row spacing and hierarchy from the source page.",
             source_refs: ["frontend_design:desktop-reference"],
-            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
+            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
           },
         ]
         visualQaRecord.report.problem_dom_regions = [
@@ -12494,11 +12613,18 @@ describe("orchestrator tools", () => {
             computed_style: { display: "flex", gap: "32px", "margin-top": "40px" },
             attributes: { class: "market-tabs loose", "data-testid": "market-tabs" },
             code_search_terms: ["market-tabs", "MarketTabs", "loose"],
-            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef],
+            evidence_refs: ["screenshot://local/market-tabs.png", layoutGeometryEvidenceRef, comparisonEvidenceRef],
             annotated_evidence_refs: [annotatedVisualQaRef.url],
             notes: "Repair the tab component before repainting adjacent overview cards.",
           },
         ]
+        visualQaRecord.report.reference_parity = {
+          required: true,
+          required_regions: ["market tabs"],
+          reference_comparison_evidence_refs: [comparisonEvidenceRef],
+          missing_regions: [],
+          blocker_ids: ["blocker-market-tabs"],
+        }
         visualQaRecord.acceptance = {
           submittedAccepted: false,
           effectiveAccepted: false,
@@ -12580,6 +12706,19 @@ describe("orchestrator tools", () => {
       intent: "visual_qa_annotation",
       source: "visual_qa_problem_dom_region",
       label: "dom-market-tabs",
+    })
+    expect(capturedContext?.evidencePack?.comparisonArtifacts?.map((item: any) => item.filename)).toEqual([
+      `${capturedComparisonEvidenceID}.side_by_side.png`,
+      `${capturedComparisonEvidenceID}.diff.png`,
+      `${capturedComparisonEvidenceID}.source_crop.png`,
+      `${capturedComparisonEvidenceID}.implementation_crop.png`,
+    ])
+    expect(capturedContext?.evidencePack?.comparisonArtifacts?.[0]).toMatchObject({
+      url: expect.stringContaining("/attachment/"),
+      mime: "image/png",
+      intent: "visual_feedback_comparison",
+      source: "browser_preview_reference_comparison",
+      label: `${capturedComparisonEvidenceID}:side_by_side`,
     })
     expect(capturedContext?.evidencePack?.visualQaDiagnostics).toHaveLength(1)
     expect(capturedContext?.evidencePack?.visualQaDiagnostics?.[0]).toMatchObject({
@@ -14094,7 +14233,13 @@ describe("orchestrator tools", () => {
             expect(input.frontendDesign).toContain("anti-slop-generic-cards")
             expect(input.frontendDesign).toContain("Existing URL Redesign Evidence")
             expect(input.frontendDesign).toContain("keyboard focus")
-            expect(input.visualQa).toContain("effective_accepted=true")
+            expect(input.visualQa).toContain("Visual QA Implementation Defect Context")
+            expect(input.visualQa).toContain("report summary")
+            expect(input.visualQa).toContain("This is not a visual acceptance verdict.")
+            expect(input.visualQa).not.toContain("Frontend Innovate selected implementation passed visual QA.")
+            expect(input.visualQa).not.toContain("effective_accepted=true")
+            expect(input.visualQa).not.toContain("reference_comparison_evidence")
+            expect(input.visualQa).not.toContain("visual_feedback_verification")
             expect(JSON.stringify(input.replayContext)).toContain(selectedImplementationGoalID)
             return integrityTeamResult({
               sessionID: `ses_integrity_frontend_innovate_${stamp}`,
@@ -14332,6 +14477,112 @@ describe("orchestrator tools", () => {
         const resultText = toolText(result)
         expect(resultText).toContain("blocked by unfinished dependencies")
         expect(resultText).toContain(`${parentGoalID}=needs_redispatch(architecture_review_rework; status=passed)`)
+        expect(buildStarted).toBe(false)
+        expect(listGoalRunsByGoal(childGoalID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("goal build treats dependency no-project-diff outcome as unfinished", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_dep_nodiff_${stamp}`
+    const taskID = `tsk_build_dep_nodiff_${stamp}`
+    const parentGoalID = `gol_dep_nodiff_parent_${stamp}`
+    const childGoalID = `gol_dep_nodiff_child_${stamp}`
+    const specID = `spec_dep_nodiff_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID: parentGoalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "No diff dependency guard project",
+      taskTitle: "No diff dependency guard task",
+      request: "Build dependent goals only after dependencies delivered real files.",
+      goalTitle: "Shared source registry",
+      goalSlug: "shared-source-registry",
+      objective: "Provide shared source registry files for child goals.",
+      now,
+      specID,
+    })
+    Database.use((db) => {
+      db.insert(EngineGoalTable)
+        .values({
+          id: childGoalID,
+          task_id: taskID,
+          spec_snapshot_id: specID,
+          title: "Dependent source region",
+          slug: "dependent-source-region",
+          objective: "Consume delivered registry files.",
+          acceptance_specs: [],
+          owned_paths: ["src/region.ts"],
+          depends_on: [parentGoalID],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+    const parentGoalRunID = beginBuildAttempt({
+      taskID,
+      goalID: parentGoalID,
+      sessionID: "ses_build_dep_nodiff_parent",
+      workspaceDir: tmp.path,
+      workspaceBranch: "opencorvus/no-diff-parent",
+      workspaceBaseRef: "base123",
+      now,
+    })
+    EnginePersist.finalizeBuildAttempt({
+      goalRunID: parentGoalRunID,
+      taskID,
+      goalID: parentGoalID,
+      status: "completed",
+      commitRef: "abc1234",
+      workspaceDir: tmp.path,
+      workspaceBranch: "opencorvus/no-diff-parent",
+      workspaceBaseRef: "base123",
+      summary: "Build reported success but host diff was empty.",
+      diffs: [],
+      now: now + 1,
+    })
+    expect(goalStatusByID(parentGoalID)).toBe("passed")
+
+    let buildStarted = false
+    buildAgentRunImpl = async () => {
+      buildStarted = true
+      return { status: "passed", summary: "should not run", files_changed: ["src/region.ts"], tests: [] }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "no diff dependency guard test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: childGoalID,
+            reason: "dependency was falsely projected as delivered",
+          },
+          buildToolOptions(),
+        )
+
+        const resultText = toolText(result)
+        expect(resultText).toContain("blocked by unfinished dependencies")
+        expect(resultText).toContain(`${parentGoalID}=no_project_diff(actual_changed_files_empty; status=passed)`)
         expect(buildStarted).toBe(false)
         expect(listGoalRunsByGoal(childGoalID)).toHaveLength(0)
       },
@@ -14875,6 +15126,7 @@ describe("orchestrator tools", () => {
                 to_goal_id: consumerGoalID,
                 reason: "integration_order",
                 contract_ids: [],
+                summary: "Consumer runs after the feature goal so it can wire the feature output.",
               },
             ],
           },
@@ -15188,6 +15440,12 @@ describe("orchestrator tools", () => {
         })
 
         Database.use((db) => {
+          db.update(EngineGoalTable)
+            .set({
+              depends_on: [siblingGoalID],
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
           db.insert(EngineGoalTable)
             .values({
               id: siblingGoalID,
@@ -15262,6 +15520,13 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run()
         })
+        const siblingRunID = beginBuildAttempt({
+          taskID,
+          goalID: siblingGoalID,
+          sessionID: `ses_arch_sibling_${stamp}`,
+          now: now + 10,
+        })
+        updateGoalRun(siblingRunID, { status: "completed", time_completed: now + 11 })
         insertArchitectContractGraphArtifact({
           taskID,
           now: now + 1,
@@ -15563,8 +15828,8 @@ describe("orchestrator tools", () => {
         buildAgentRunImpl = async (input: any) => {
           observedExistingSessionID = input.existingSessionID
           observedRetryFeedback = input.context?.retryFeedback
-          expect(input.context?.inputEvidenceManifest?.entries?.[0]?.legacy_attachment_url).toBe(originalRefUrl)
-          expect(JSON.stringify(input.context?.inputEvidenceManifest)).not.toContain(currentRefUrl)
+          expect(JSON.stringify(input.context?.inputEvidenceManifest)).toContain(currentRefUrl)
+          expect(JSON.stringify(input.context?.inputEvidenceManifest)).not.toContain(originalRefUrl)
           await markBuildSlotAcquired(input, priorSessionID)
           return {
             result: {
@@ -15614,8 +15879,8 @@ describe("orchestrator tools", () => {
         )
         const retryContract = contracts.at(-1)?.payload as any
         expect(retryContract?.session_id).toBe(priorSessionID)
-        expect(retryContract?.input_evidence?.entries?.[0]?.legacy_attachment_url).toBe(originalRefUrl)
-        expect(JSON.stringify(retryContract?.input_evidence)).not.toContain(currentRefUrl)
+        expect(JSON.stringify(retryContract?.input_evidence)).toContain(currentRefUrl)
+        expect(JSON.stringify(retryContract?.input_evidence)).not.toContain(originalRefUrl)
       },
     })
   }, 30_000)

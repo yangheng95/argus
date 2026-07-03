@@ -158,6 +158,9 @@ describe("tool.browser_preview", () => {
     const normalized = tool.description.replace(/\s+/g, " ")
 
     expect(normalized).toContain("exactly one module comparison screenshot attachment")
+    expect(normalized).toContain("comparison_guidance")
+    expect(normalized).toContain("LEFT is the source/reference image")
+    expect(normalized).toContain("RIGHT is the rendered/local implementation")
     expect(normalized).toContain("does not run a second reference-comparison pass")
     expect(normalized).toContain("does not auto-call other tools on bind failure")
     expect(normalized).toContain("Use browser_preview_compare_scroll_slices for first-viewport")
@@ -976,6 +979,13 @@ describe("tool.browser_preview", () => {
             expect(payload.sourceBinding.binding.region_id).toBe("tool-local-module")
             expect(payload.sourceBinding.binding.source.bbox).toEqual({ x: 24, y: 30, width: 180, height: 92 })
             expect(payload).not.toHaveProperty("referenceComparison")
+            expect(payload.sourceBinding.comparison_guidance.side_by_side_legend.left.role).toBe("source_reference")
+            expect(payload.sourceBinding.comparison_guidance.side_by_side_legend.right.role).toBe(
+              "local_implementation",
+            )
+            expect(
+              payload.sourceBinding.comparison_guidance.inspection_checklist.map((item: { id: string }) => item.id),
+            ).toEqual(expect.arrayContaining(["icon_asset_fidelity", "content_truth", "spacing_density"]))
             const artifacts = payload.sourceBinding.artifacts
             expect(bindingEvidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
             expect(bindingEvidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)

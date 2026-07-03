@@ -385,7 +385,7 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final?.unresolved_code_module_problems[0]?.id).toBe("problem_map_module")
   })
 
-  test("records reference parity screenshot-only report as process accepted with formal evidence advisory", async () => {
+  test("rejects accepted reference parity report without comparison refs", async () => {
     const kit = createVisualQaOutputTools({
       referenceParityRequired: true,
       requiredReferenceRegions: ["region_header@desktop"],
@@ -411,10 +411,9 @@ describe("visual-qa output tools", () => {
     )
 
     expect(result).toContain("RECORDED")
-    expect(result).toContain("effective_accepted=true")
-    expect(result).toContain("ADVISORIES")
-    expect(result).toContain("host materialization must produce a scoped VisualEvidenceBundle")
-    expect(result).not.toContain("BLOCKERS")
+    expect(result).toContain("effective_accepted=false")
+    expect(result).toContain("BLOCKERS")
+    expect(result).toContain("without reference_comparison_evidence_refs")
     expect(kit.getCollector().final?.reference_parity.required).toBe(true)
   })
 
@@ -449,7 +448,7 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final).toBeUndefined()
   })
 
-  test("records accepted reference parity with non-formal comparison refs as process accepted advisories", async () => {
+  test("rejects accepted reference parity with non-formal comparison refs", async () => {
     await using tmp = await tmpdir({ git: true })
     const cases: Array<{
       label: string
@@ -520,12 +519,12 @@ describe("visual-qa output tools", () => {
           )
 
           expect(result, item.label).toContain("RECORDED")
-          expect(result, item.label).toContain("effective_accepted=true")
-          expect(result, item.label).toContain("ADVISORIES")
+          expect(result, item.label).toContain("effective_accepted=false")
+          expect(result, item.label).toContain("BLOCKERS")
           expect(result, item.label).toContain(
             "no submitted reference comparison refs resolved to readable passed browser_preview_evidence",
           )
-          expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(true)
+          expect(kit.getCollector().acceptance?.effectiveAccepted, item.label).toBe(false)
         }
       },
     })
@@ -586,9 +585,9 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=true")
-        expect(result).toContain("host materialization must produce a scoped VisualEvidenceBundle")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("without reference_comparison_evidence_refs")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
       },
     })
   }, 20_000)
@@ -644,7 +643,7 @@ describe("visual-qa output tools", () => {
     })
   }, 20_000)
 
-  test("records host-required parity without authoritative regions as advisory", async () => {
+  test("rejects host-required parity without required reference regions", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_no_authoritative_regions_${Date.now()}`
     await Instance.provide({
@@ -678,7 +677,7 @@ describe("visual-qa output tools", () => {
             ],
             reference_parity: {
               required: true,
-              required_regions: ["region_header@desktop"],
+              required_regions: [],
               reference_comparison_evidence_refs: [evidenceID],
               missing_regions: [],
               blocker_ids: [],
@@ -687,14 +686,14 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=true")
-        expect(result).toContain("no authoritative requiredReferenceRegions")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
+        expect(result).toContain("effective_accepted=false")
+        expect(result).toContain("without required reference regions")
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
       },
     })
   }, 20_000)
 
-  test("records unreadable reference-comparison evidence as advisory", async () => {
+  test("records unreadable reference-comparison evidence as a blocking failed acceptance", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_unreadable_ref_${Date.now()}`
     await Instance.provide({
@@ -740,9 +739,9 @@ describe("visual-qa output tools", () => {
         )
 
         expect(result).toContain("RECORDED")
-        expect(result).toContain("effective_accepted=true")
+        expect(result).toContain("effective_accepted=false")
         expect(result).toContain("unreadable")
-        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(true)
+        expect(kit.getCollector().acceptance?.effectiveAccepted).toBe(false)
       },
     })
   }, 20_000)

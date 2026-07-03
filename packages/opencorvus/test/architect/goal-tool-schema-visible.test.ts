@@ -39,8 +39,8 @@ function assertArchitectAcceptanceSpecSchemaVisible(node: JsonObject) {
   expect(rendered).toContain("shell")
   expect(rendered).toContain("llm_judge")
   expect(rendered).toContain("contract_audit")
-  expect(rendered).toContain("visual-evidence-bundle")
-  expect(rendered).toContain("visual_evidence")
+  expect(rendered).toContain("visual-feedback-verification")
+  expect(rendered).toContain("visual_feedback")
   expect(rendered).not.toContain("script_ref")
 }
 
@@ -58,14 +58,14 @@ test("architect goal tool schemas expose scriptless acceptance_specs shape to th
   )
 })
 
-test("architect exposes canonical final visual evidence acceptance helper", () => {
+test("architect exposes canonical final visual feedback acceptance helper", () => {
   const architect = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
-  const schema = asObject(asSchema(architect.tools.register_visual_evidence_acceptance.inputSchema as never).jsonSchema)
+  const schema = asObject(asSchema(architect.tools.register_visual_feedback_acceptance.inputSchema as never).jsonSchema)
   const rendered = JSON.stringify(schema)
 
   expect(Object.keys(asObject(schema.properties))).toEqual(
     expect.arrayContaining(["goal_id", "source_requirement_id", "criteria", "reference_tokens"]),
   )
-  expect(rendered).toContain("visual evidence")
+  expect(rendered).toContain("visual feedback")
   expect(rendered).toContain("reference_tokens")
 })

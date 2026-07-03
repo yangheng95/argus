@@ -186,6 +186,13 @@ const BuildResultBase = {
       "Host-forwarded Visual QA diagnostic refs, such as layout-geometry manifests, the build actually inspected and used for repair. " +
         "Required for passed reports when the dispatch included Visual QA diagnostic evidence.",
     ),
+  consumed_visual_feedback_comparison_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Host-forwarded visual feedback comparison artifact refs from the Build Evidence Pack that the build actually inspected and used for repair. " +
+        "Required for passed reports when the dispatch included visual feedback comparison artifacts.",
+    ),
   contract_restatement: z
     .string()
     .trim()

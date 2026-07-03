@@ -558,9 +558,14 @@ export namespace AttachmentStore {
   export const STAGED_REFERENCES_SUBDIR = "references"
 
   /**
-   * Copy each multimodal task attachment into `<worktreeDir>/references/<file>`
+   * Copy each selected task attachment into `<worktreeDir>/references/<file>`
    * so the build agent can pass worktree-LOCAL relative paths to sandboxed
    * tools that require worktree-local paths.
+   *
+   * This stages every attachment the caller selected for build evidence,
+   * including JSON/text diagnostics. Provider inline support is handled only
+   * by `inlineFileParts`; worktree staging is a file-access contract, not a
+   * multimodal capability filter.
    *
    * Why copy not symlink: cross-FS robustness on Windows (symlinks need admin
    * by default) and content-addressed inputs are small enough that a copy
@@ -585,15 +590,15 @@ export namespace AttachmentStore {
     attachments: readonly AttachmentLike[] | undefined,
     worktreeDir: string,
   ): Promise<StagedAttachment[]> {
-    const { multimodal } = partition(attachments)
-    if (multimodal.length === 0) return []
+    const selected = attachments ?? []
+    if (selected.length === 0) return []
 
     const refsDir = path.join(worktreeDir, STAGED_REFERENCES_SUBDIR)
     await fs.mkdir(refsDir, { recursive: true })
 
     const staged: StagedAttachment[] = []
-    for (let i = 0; i < multimodal.length; i++) {
-      const a = multimodal[i]
+    for (let i = 0; i < selected.length; i++) {
+      const a = selected[i]
       const located = nameFromUrl(String(a.url ?? ""))
       if (!located) {
         throw new Error(

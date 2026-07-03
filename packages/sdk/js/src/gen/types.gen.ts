@@ -6840,6 +6840,7 @@ export type SessionPromptData = {
     extra?: {
       [key: string]: unknown
     }
+    byteMaterializationProjectID?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -7179,6 +7180,7 @@ export type SessionPromptAsyncData = {
     extra?: {
       [key: string]: unknown
     }
+    byteMaterializationProjectID?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -10450,9 +10452,9 @@ export type GatewayControlActionData = {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -10466,19 +10468,19 @@ export type GatewayControlActionData = {
                   | "exact_match"
                   | "length_within"
                   | "json_schema"
-                  | "visual-evidence-bundle"
+                  | "visual-feedback-verification"
                 config?: {
                   [key: string]: unknown
                 }
                 /**
-                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
                 spec?: {
-                  kind: "visual_evidence_bundle"
+                  kind: "visual_feedback_verification"
                   viewport?: string
                 }
                 /**
-                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
                 expect?: {
                   status: "passed"
@@ -11187,6 +11189,10 @@ export type BrowserPreviewTaskTargetData = {
 
 export type BrowserPreviewTaskTargetErrors = {
   /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
    * Not found
    */
   404:
@@ -11269,6 +11275,10 @@ export type BrowserPreviewReadTaskEvidenceData = {
 
 export type BrowserPreviewReadTaskEvidenceErrors = {
   /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
    * Not found
    */
   404:
@@ -11305,6 +11315,9 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
   200: {
     id: string
     taskID: string
+    runID?: string
+    goalRunID?: string
+    acceptanceID?: string
     targetID: string
     viewportID: string
     operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
@@ -11729,6 +11742,27 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
     operation: "reference-comparison"
     comparison_mode: "true-size"
     artifact_note: string
+    comparison_guidance: {
+      side_by_side_legend: {
+        left: {
+          role: "source_reference"
+          label: "LEFT: source/reference image"
+          meaning: "Expected visual source of truth."
+        }
+        right: {
+          role: "local_implementation"
+          label: "RIGHT: rendered/local implementation"
+          meaning: "Actual implementation under review."
+        }
+        source_of_truth: "left"
+        instruction: "Compare the right implementation against the left reference; do not reverse them."
+      }
+      inspection_checklist: Array<{
+        id: string
+        label: string
+        inspect_for: string
+      }>
+    }
     evidenceIDs: {
       [key: string]: string
     }
@@ -12116,9 +12150,9 @@ export type TaskCreateData = {
                 passes: boolean
               }>
               /**
-               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
             }
           | {
               /**
@@ -12132,19 +12166,19 @@ export type TaskCreateData = {
                 | "exact_match"
                 | "length_within"
                 | "json_schema"
-                | "visual-evidence-bundle"
+                | "visual-feedback-verification"
               config?: {
                 [key: string]: unknown
               }
               /**
-               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                */
               spec?: {
-                kind: "visual_evidence_bundle"
+                kind: "visual_feedback_verification"
                 viewport?: string
               }
               /**
-               * For name=visual-evidence-bundle, requires a passing current bundle.
+               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                */
               expect?: {
                 status: "passed"
@@ -12281,9 +12315,9 @@ export type TaskCreateData = {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -12297,19 +12331,19 @@ export type TaskCreateData = {
                   | "exact_match"
                   | "length_within"
                   | "json_schema"
-                  | "visual-evidence-bundle"
+                  | "visual-feedback-verification"
                 config?: {
                   [key: string]: unknown
                 }
                 /**
-                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
                 spec?: {
-                  kind: "visual_evidence_bundle"
+                  kind: "visual_feedback_verification"
                   viewport?: string
                 }
                 /**
-                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
                 expect?: {
                   status: "passed"
@@ -14169,9 +14203,9 @@ export type TaskConversationResponses = {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -14185,19 +14219,19 @@ export type TaskConversationResponses = {
                   | "exact_match"
                   | "length_within"
                   | "json_schema"
-                  | "visual-evidence-bundle"
+                  | "visual-feedback-verification"
                 config?: {
                   [key: string]: unknown
                 }
                 /**
-                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
                 spec?: {
-                  kind: "visual_evidence_bundle"
+                  kind: "visual_feedback_verification"
                   viewport?: string
                 }
                 /**
-                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
                 expect?: {
                   status: "passed"
@@ -15354,9 +15388,9 @@ export type TaskBoardResponses = {
                 passes: boolean
               }>
               /**
-               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
             }
           | {
               /**
@@ -15370,19 +15404,19 @@ export type TaskBoardResponses = {
                 | "exact_match"
                 | "length_within"
                 | "json_schema"
-                | "visual-evidence-bundle"
+                | "visual-feedback-verification"
               config?: {
                 [key: string]: unknown
               }
               /**
-               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                */
               spec?: {
-                kind: "visual_evidence_bundle"
+                kind: "visual_feedback_verification"
                 viewport?: string
               }
               /**
-               * For name=visual-evidence-bundle, requires a passing current bundle.
+               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                */
               expect?: {
                 status: "passed"
@@ -17374,9 +17408,9 @@ export type GoalUpdateData = {
               passes: boolean
             }>
             /**
-             * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+             * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
              */
-            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+            inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
           }
         | {
             /**
@@ -17390,19 +17424,19 @@ export type GoalUpdateData = {
               | "exact_match"
               | "length_within"
               | "json_schema"
-              | "visual-evidence-bundle"
+              | "visual-feedback-verification"
             config?: {
               [key: string]: unknown
             }
             /**
-             * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+             * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
              */
             spec?: {
-              kind: "visual_evidence_bundle"
+              kind: "visual_feedback_verification"
               viewport?: string
             }
             /**
-             * For name=visual-evidence-bundle, requires a passing current bundle.
+             * For name=visual-feedback-verification, requires a passing current visual feedback verification.
              */
             expect?: {
               status: "passed"

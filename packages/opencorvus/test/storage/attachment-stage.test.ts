@@ -64,7 +64,7 @@ describe("AttachmentStore.stageToWorktree", () => {
     })
   })
 
-  test("skips non-multimodal attachments and returns empty for empty input", async () => {
+  test("copies diagnostic text attachments and returns empty for empty input", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -73,16 +73,20 @@ describe("AttachmentStore.stageToWorktree", () => {
         const txt = await AttachmentStore.write(projectID, Buffer.from("hello"), "text/plain", "spec.txt")
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
         const staged = await AttachmentStore.stageToWorktree(projectID, [txt], worktreeDir)
-        expect(staged).toEqual([])
+        expect(staged).toHaveLength(1)
+        expect(staged[0].relPath).toBe("references/spec.txt")
+        expect(staged[0].mime).toBe("text/plain")
+        expect(await fs.readFile(staged[0].absPath, "utf8")).toBe("hello")
+
+        const emptyWorktreeDir = await fs.mkdtemp(path.join(tmp.path, "empty-worktree-"))
+        const empty = await AttachmentStore.stageToWorktree(projectID, [], emptyWorktreeDir)
+        expect(empty).toEqual([])
         const refsDirExists = await fs
-          .stat(path.join(worktreeDir, "references"))
+          .stat(path.join(emptyWorktreeDir, "references"))
           .then(() => true)
           .catch(() => false)
-        // Empty input → no references/ directory created
+        // Empty input -> no references/ directory created.
         expect(refsDirExists).toBe(false)
-
-        const empty = await AttachmentStore.stageToWorktree(projectID, [], worktreeDir)
-        expect(empty).toEqual([])
       },
     })
   })

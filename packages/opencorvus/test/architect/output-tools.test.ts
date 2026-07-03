@@ -909,7 +909,7 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
   )
 })
 
-test("register_visual_evidence_acceptance attaches canonical final visual judge and owns references", async () => {
+test("register_visual_feedback_acceptance attaches canonical final visual feedback verification and owns references", async () => {
   const kit = createArchitectOutputTools({
     existingGoals: [],
     workDir: process.cwd(),
@@ -957,7 +957,7 @@ test("register_visual_evidence_acceptance attaches canonical final visual judge 
     {} as any,
   )
 
-  const out = await kit.tools.register_visual_evidence_acceptance.execute!(
+  const out = await kit.tools.register_visual_feedback_acceptance.execute!(
     {
       goal_id: "goal_visual_verify",
       source_requirement_id: "REQ-1",
@@ -969,13 +969,15 @@ test("register_visual_evidence_acceptance attaches canonical final visual judge 
     {} as any,
   )
 
-  expect(out).toContain('OK: final visual evidence acceptance registered on goal "goal_visual_verify"')
-  expect(out).toContain("llm_judge:visual_evidence")
+  expect(out).toContain('OK: final visual feedback acceptance registered on goal "goal_visual_verify"')
+  expect(out).toContain("prebuilt:visual-feedback-verification")
   const goal = kit.getCollector().goals.find((item) => item.id === "goal_visual_verify")
-  expect(goal?.acceptance_specs.some((spec) => spec.trigger === "on_integrity")).toBe(true)
+  expect(goal?.acceptance_specs.some((spec) => spec.trigger === "on_goal")).toBe(true)
   expect(goal?.acceptance_specs.at(-1)?.scorers[0]).toMatchObject({
-    type: "llm_judge",
-    inputs: ["visual_evidence"],
+    type: "prebuilt",
+    name: "visual-feedback-verification",
+    spec: { kind: "visual_feedback_verification" },
+    expect: { status: "passed" },
   })
   const findings = architectValidationFindings(kit.getCollector(), {
     requireReferenceCoverage: true,
@@ -985,7 +987,7 @@ test("register_visual_evidence_acceptance attaches canonical final visual judge 
   expect(findings.some((finding) => finding.code === "missing_visual_region_acceptance_ownership")).toBe(false)
 })
 
-test("register_visual_evidence_acceptance rejects non-final goal kinds without mutation", async () => {
+test("register_visual_feedback_acceptance rejects non-final goal kinds without mutation", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
   await kit.tools.register_goal.execute!(
     {
@@ -1004,7 +1006,7 @@ test("register_visual_evidence_acceptance rejects non-final goal kinds without m
   )
   const before = JSON.stringify(kit.getCollector().goals)
 
-  const out = await kit.tools.register_visual_evidence_acceptance.execute!(
+  const out = await kit.tools.register_visual_feedback_acceptance.execute!(
     {
       goal_id: "goal_feature_visual",
       source_requirement_id: "REQ-1",
@@ -1016,11 +1018,11 @@ test("register_visual_evidence_acceptance rejects non-final goal kinds without m
     {} as any,
   )
 
-  expect(out).toContain("final visual evidence acceptance must be attached to a verification or integration goal")
+  expect(out).toContain("final visual feedback acceptance must be attached to a verification or integration goal")
   expect(JSON.stringify(kit.getCollector().goals)).toBe(before)
 })
 
-test("register_goal accepts final visual verification with contract_audit and visual_evidence judge", async () => {
+test("register_goal accepts final visual verification with contract_audit and visual feedback verification", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
   const out = await kit.tools.register_goal.execute!(
@@ -1036,7 +1038,7 @@ test("register_goal accepts final visual verification with contract_audit and vi
           goal_id: "goal_we_verification",
           title: "World economy final graph and visual fidelity",
           severity: "essential",
-          trigger: "on_integrity",
+          trigger: "on_goal",
           scorers: [
             {
               type: "contract_audit",
@@ -1045,11 +1047,11 @@ test("register_goal accepts final visual verification with contract_audit and vi
               expect: { status: "passed" },
             },
             {
-              type: "llm_judge",
-              name: "judge-visuals",
-              criteria:
-                "Compare current rendered visual evidence against the TradingView reference screenshots, DOM evidence, spacing, density, and interaction captures.",
-              inputs: ["visual_evidence"],
+              type: "prebuilt",
+              name: "visual-feedback-verification",
+              config: {},
+              spec: { kind: "visual_feedback_verification", viewport: "desktop-primary" },
+              expect: { status: "passed" },
             },
           ],
         },
@@ -1065,7 +1067,7 @@ test("register_goal accepts final visual verification with contract_audit and vi
 
   expect(out).toContain('OK: goal "goal_we_verification" registered')
   expect(out).toContain("contract_audit:contract_world_economy_page")
-  expect(out).toContain("llm_judge:visual_evidence")
+  expect(out).toContain("prebuilt:visual-feedback-verification")
   expect(out).not.toContain("script_ref")
 })
 

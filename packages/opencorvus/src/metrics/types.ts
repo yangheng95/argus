@@ -24,7 +24,7 @@ export type MetricGateClass = z.infer<typeof MetricGateClass>
 export const MetricEvaluatorKind = z.enum([
   "shell", // invoke a shell command, map exit/stdout to raw_value
   "judge", // LLM-judge with rubric → ordinal level → normalized value
-  "prebuilt", // deterministic built-in evaluator such as visual-evidence-bundle
+  "prebuilt", // deterministic built-in evaluator such as visual-feedback-verification
   "query", // SQL query over engine_* tables
   "aggregator", // composes other metric_result rows by op (mean/min/max/sum)
 ])

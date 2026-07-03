@@ -80,7 +80,6 @@ import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from
 import {
   bindBuildInputEvidenceManifest,
   composeBuildInputEvidenceManifest,
-  readOriginalBuildSessionInputEvidenceManifest,
   type BuildInputEvidenceManifest,
 } from "@/build/evidence-manifest"
 import {
@@ -94,16 +93,12 @@ import {
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import {
   browserPreviewEvidenceIDFromRef,
-  readLatestTaskVisualEvidenceBundleSync,
-  validateVisualEvidenceBundleReferenceComparisons,
-} from "@/acceptance/visual-evidence"
-import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "@/browser-preview/persist"
-import {
-  collectVisualEvidenceMaterializationRefs,
-  materializeVisualEvidenceBundleFromEvidenceRefs,
-  renderVisualEvidenceBundleMaterializationSummary,
-  type VisualEvidenceBundleMaterializationResult,
-} from "@/acceptance/visual-evidence-materializer"
+  findReadableBrowserPreviewEvidenceByID,
+  findReadableBrowserPreviewEvidenceCapturePath,
+  collectRuntimePathRefs,
+  resolveRuntimeRelativePath,
+  type PersistedBrowserPreviewEvidence,
+} from "@/browser-preview/persist"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import {
   renderVisualQaBuildEvidenceContext,
@@ -113,8 +108,14 @@ import {
   renderVisualQaPriorReportContext,
 } from "@/visual-qa/context"
 import { visualQaDecisionRecordEffectiveAcceptance } from "@/visual-qa/acceptance-semantics"
-import { VisualQaDecisionRecordSchema, type VisualQaAcceptance, type VisualQaReport } from "@/visual-qa/schema"
+import { VisualQaDecisionRecordSchema, type VisualQaReport } from "@/visual-qa/schema"
 import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
+import {
+  persistVisualFeedbackVerificationArtifact,
+  validateVisualFeedbackVerification,
+  VisualFeedbackVerificationSchema,
+  type VisualFeedbackVerification,
+} from "@/acceptance/visual-feedback-verification"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
   EngineArtifactTable,
@@ -164,6 +165,7 @@ import {
   getGoalRetryCount,
   listGoals,
   listGoalsForPlan,
+  findBuildOutcomeByGoalRun,
   findBuildOutcomesForTask,
   listGoalRunsByGoal,
   listGoalRunsForTask,
@@ -4528,36 +4530,6 @@ export function validatePersistedArchitectFidelity(input: {
   })
 }
 
-function visualQaStageAcceptance(input: {
-  acceptance: VisualQaAcceptance
-  referenceParityRequired: boolean
-  materialization?: VisualEvidenceBundleMaterializationResult
-  validation?: { passing: boolean; issues: string[] }
-}): VisualQaAcceptance {
-  const blockingIssues = [...input.acceptance.blockingIssues]
-  if (input.referenceParityRequired) {
-    if (!input.materialization) {
-      blockingIssues.push("VisualEvidenceBundle materialization was not attempted for required reference parity.")
-    } else if (input.materialization.status !== "materialized") {
-      const detail = input.materialization.issues.join("; ") || "no formal VisualEvidenceBundle was materialized"
-      blockingIssues.push(`VisualEvidenceBundle materialization not_ready: ${detail}`)
-    } else if (!input.validation?.passing) {
-      const validationIssues =
-        input.validation && input.validation.issues.length > 0
-          ? input.validation.issues
-          : [`bundle inspection status is ${input.materialization.bundle.inspection.status}`]
-      blockingIssues.push(...validationIssues.map((issue) => `VisualEvidenceBundle validation failed: ${issue}`))
-    }
-  }
-  const uniqueBlockingIssues = [...new Set(blockingIssues)]
-  return {
-    submittedAccepted: input.acceptance.submittedAccepted,
-    effectiveAccepted: input.acceptance.effectiveAccepted && uniqueBlockingIssues.length === 0,
-    selfReportIssues: input.acceptance.selfReportIssues,
-    blockingIssues: uniqueBlockingIssues,
-  }
-}
-
 function latestFailedVisualQaDecisionRecord(taskID: string) {
   const reportEntries = createDecisionLog(taskID)
     .readByPhase("visual_qa")
@@ -4577,6 +4549,122 @@ function latestFailedVisualQaDecisionRecord(taskID: string) {
   }
   const acceptance = visualQaDecisionRecordEffectiveAcceptance(parsed.data)
   return acceptance.effectiveAccepted ? undefined : { ...parsed.data, acceptance }
+}
+
+async function visualFeedbackVerificationFromVisualQaRecord(input: {
+  taskID: string
+  runID: string
+  projectRoot: string
+  report: VisualQaReport
+  effectiveAccepted: boolean
+}): Promise<VisualFeedbackVerification | undefined> {
+  const refs = input.report.reference_parity.reference_comparison_evidence_refs
+  if (!input.report.reference_parity.required && refs.length === 0) return undefined
+  const targetIDs = new Set<string>()
+  for (const ref of refs) {
+    const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+    if (!evidenceID) continue
+    try {
+      const evidence = await findReadableBrowserPreviewEvidenceByID({
+        projectRoot: input.projectRoot,
+        taskID: input.taskID,
+        evidenceID,
+      })
+      if (evidence?.targetID) targetIDs.add(evidence.targetID)
+    } catch {
+      // The validator below reports unreadable evidence as the blocking issue.
+    }
+  }
+  const blockerIDs = [
+    ...input.report.production_blockers.map((blocker) => blocker.id),
+    ...input.report.reference_parity.blocker_ids,
+    ...input.report.reference_parity.missing_regions.map((region) => `missing_reference_region:${region}`),
+  ].filter((id, index, all) => id.trim().length > 0 && all.indexOf(id) === index)
+  return VisualFeedbackVerificationSchema.parse({
+    id: `visual_feedback_verification_${Identifier.uuid4First8()}`,
+    taskID: input.taskID,
+    runID: input.runID,
+    previewTargetID: targetIDs.size === 1 ? [...targetIDs][0] : undefined,
+    projectRoot: input.projectRoot,
+    status: input.effectiveAccepted ? "passed" : "failed",
+    summary: input.report.summary,
+    requiredReferenceRegions: input.report.reference_parity.required_regions,
+    referenceComparisonEvidenceRefs: refs,
+    productionBlockerIDs: blockerIDs,
+  })
+}
+
+async function persistVisualFeedbackVerification(input: {
+  taskID: string
+  runID: string
+  verification: VisualFeedbackVerification | undefined
+}): Promise<
+  | {
+      artifactID: string
+      status: VisualFeedbackVerification["status"]
+      consecutiveFailedAttempts: number
+    }
+  | undefined
+> {
+  if (!input.verification) return undefined
+  if (input.verification.status === "passed") {
+    const validation = await validateVisualFeedbackVerification({
+      verification: input.verification,
+      expectedTaskID: input.taskID,
+      expectedRunID: input.runID,
+    })
+    if (!validation.passing) {
+      throw new Error(
+        `Visual QA produced a passing visual feedback verification that does not validate: ${validation.issues.join("; ")}`,
+      )
+    }
+  }
+  const artifactID = persistVisualFeedbackVerificationArtifact({
+    taskID: input.taskID,
+    runID: input.runID,
+    verification: input.verification,
+  })
+  createDecisionLog(input.taskID).append({
+    phase: "visual_qa",
+    key: `visual_feedback_verification_${Date.now()}`,
+    value: JSON.stringify({ artifact_id: artifactID, visual_feedback_verification: input.verification }, null, 2),
+    reason:
+      "Pointer to the task/run-scoped visual feedback verification artifact produced from the latest Visual QA report and reference-comparison evidence.",
+  })
+  const consecutiveFailedAttempts = latestConsecutiveFailedVisualFeedbackVerificationAttempts(
+    createDecisionLog(input.taskID).readByPhase("visual_qa"),
+  )
+  return {
+    artifactID,
+    status: input.verification.status,
+    consecutiveFailedAttempts,
+  }
+}
+
+function latestConsecutiveFailedVisualFeedbackVerificationAttempts(entries: DecisionEntry[]): number {
+  let attempts = 0
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    if (!entry.key.startsWith("visual_feedback_verification_")) continue
+    const verification = parseVisualFeedbackVerificationDecisionValue(entry.value)
+    if (!verification) return attempts
+    if (verification.status === "failed") {
+      attempts += 1
+      continue
+    }
+    return attempts
+  }
+  return attempts
+}
+
+function parseVisualFeedbackVerificationDecisionValue(value: string): VisualFeedbackVerification | undefined {
+  try {
+    const payload = JSON.parse(value) as Record<string, unknown>
+    const parsed = VisualFeedbackVerificationSchema.safeParse(payload.visual_feedback_verification)
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
@@ -4640,6 +4728,69 @@ function renderVisualQaProblemDomFeedback(taskID: string): string | undefined {
   return lines.join("\n")
 }
 
+function renderVisualQaImplementationContextForIntegrity(entries: DecisionEntry[]): string {
+  const reportEntries = entries.filter((entry) => entry.key.startsWith("report_"))
+  if (reportEntries.length === 0) return ""
+  const latestReport = reportEntries[reportEntries.length - 1]
+  let payload: unknown
+  try {
+    payload = JSON.parse(latestReport.value)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`Visual QA implementation context decision ${latestReport.id} is not JSON: ${detail}`)
+  }
+  const parsed = VisualQaDecisionRecordSchema.safeParse(payload)
+  if (!parsed.success) {
+    throw new Error(`Visual QA implementation context decision ${latestReport.id} is malformed: ${parsed.error.message}`)
+  }
+  const report = parsed.data.report
+  const openFindings = report.findings.filter((finding) => finding.status === "open")
+  const lines = [
+    "# Visual QA Implementation Defect Context",
+    "Visual verdict fields, report summary, reference-comparison authority, and visual-feedback-verification artifact pointers are intentionally omitted. Integrity uses this only to audit implementation completeness and correctness.",
+    `changed_files: ${report.changed_files.join(", ") || "(none)"}`,
+    `open_findings: ${openFindings.length}`,
+    `production_blockers: ${report.production_blockers.length}`,
+    `production_blocker_ids: ${report.production_blockers.map((blocker) => blocker.id).join(", ") || "(none)"}`,
+    `unresolved_code_module_problems: ${report.unresolved_code_module_problems.length}`,
+    `problem_dom_regions: ${report.problem_dom_regions.length}`,
+  ]
+  if (report.unresolved_code_module_problems.length > 0) {
+    lines.push("Unresolved code module problems:")
+    for (const problem of report.unresolved_code_module_problems) {
+      lines.push(
+        `- ${problem.id} entity=${problem.code_module_reference.entity} problem=${problem.code_module_reference.problem} reason=${problem.reason} blocker_ids=${problem.blocker_ids.join(", ")} evidence_refs=${problem.evidence_refs.join(", ") || "(none)"}`,
+      )
+    }
+  }
+  if (report.problem_dom_regions.length > 0) {
+    lines.push("Problem DOM regions:")
+    for (const region of report.problem_dom_regions) {
+      const bbox = region.bbox
+        ? ` bbox=x:${region.bbox.x},y:${region.bbox.y},w:${region.bbox.width},h:${region.bbox.height}`
+        : ""
+      const computedStyle = Object.entries(region.computed_style)
+        .map(([key, value]) => `${key}=${value}`)
+        .join("; ")
+      const attributes = Object.entries(region.attributes)
+        .map(([key, value]) => `${key}=${value}`)
+        .join("; ")
+      lines.push(
+        `- ${region.id} region=${region.region} locator=${region.locator}${bbox} blocker_ids=${region.blocker_ids.join(", ")} code_search_terms=${region.code_search_terms.join(", ") || "(none)"} dom_path=${region.dom_path ?? "(none)"} computed_style=${computedStyle || "(none)"} attributes=${attributes || "(none)"}`,
+      )
+    }
+  }
+  if (
+    openFindings.length === 0 &&
+    report.production_blockers.length === 0 &&
+    report.unresolved_code_module_problems.length === 0 &&
+    report.problem_dom_regions.length === 0
+  ) {
+    lines.push("No Visual QA implementation defect rows were reported. This is not a visual acceptance verdict.")
+  }
+  return lines.join("\n")
+}
+
 async function visualQaAnnotationEvidenceForBuild(taskID: string): Promise<BuildEvidenceFile[]> {
   const record = latestFailedVisualQaDecisionRecord(taskID)
   if (!record) return []
@@ -4684,6 +4835,126 @@ function collectVisualQaReportEvidenceRefs(report: VisualQaReport): string[] {
   ].filter((ref) => ref.trim().length > 0)
 }
 
+const VISUAL_FEEDBACK_IMAGE_ARTIFACT_KEYS = [
+  "side_by_side",
+  "diff",
+  "source_crop",
+  "implementation_crop",
+] as const
+
+function browserPreviewVisualFeedbackArtifactEntries(input: {
+  evidence: PersistedBrowserPreviewEvidence
+  capturePath?: string
+}): Array<{ name: string; runtimePath: string; filename: string }> {
+  if (input.evidence.operationKind === "layout-geometry") return []
+  if (input.evidence.operationKind === "preview-capture") {
+    return input.capturePath
+      ? [
+          {
+            name: "preview_capture",
+            runtimePath: input.capturePath,
+            filename: `${input.evidence.id}.preview-capture.png`,
+          },
+        ]
+      : []
+  }
+  const entries: Array<{ name: string; runtimePath: string; filename: string }> = []
+  for (const key of VISUAL_FEEDBACK_IMAGE_ARTIFACT_KEYS) {
+    const runtimePath = input.evidence.artifactPaths?.[key]
+    if (!runtimePath) continue
+    entries.push({
+      name: key,
+      runtimePath,
+      filename: `${input.evidence.id}.${key}.png`,
+    })
+  }
+  const alreadyIncluded = new Set(entries.map((entry) => entry.runtimePath))
+  const captureImagePaths = collectRuntimePathRefs(input.evidence.capture).filter(
+    (runtimePath) => /\.(?:png|jpe?g|webp)$/i.test(runtimePath) && !alreadyIncluded.has(runtimePath),
+  )
+  for (const [index, runtimePath] of captureImagePaths.entries()) {
+    entries.push({
+      name: `capture_image_${index + 1}`,
+      runtimePath,
+      filename: `${input.evidence.id}.capture-image-${index + 1}.png`,
+    })
+  }
+  return entries
+}
+
+async function visualQaComparisonArtifactEvidenceForBuild(input: {
+  taskID: string
+  projectRoot: string
+}): Promise<BuildEvidenceFile[]> {
+  const record = latestFailedVisualQaDecisionRecord(input.taskID)
+  if (!record) return []
+  const files: BuildEvidenceFile[] = []
+  const seenArtifactRefs = new Set<string>()
+  for (const rawRef of collectVisualQaReportEvidenceRefs(record.report)) {
+    const ref = rawRef.trim()
+    const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+    if (!evidenceID) continue
+    const explicitBrowserPreviewRef = true
+    let evidence
+    try {
+      evidence = await findReadableBrowserPreviewEvidenceByID({
+        projectRoot: input.projectRoot,
+        taskID: input.taskID,
+        evidenceID,
+      })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`Visual QA comparison evidence ref ${ref} is unreadable: ${detail}`)
+    }
+    if (!evidence) {
+      if (explicitBrowserPreviewRef) {
+        throw new Error(`Visual QA comparison evidence ref ${ref} does not resolve to browser_preview_evidence`)
+      }
+      continue
+    }
+    const capturePath =
+      evidence.operationKind === "preview-capture"
+        ? await findReadableBrowserPreviewEvidenceCapturePath({
+            projectRoot: input.projectRoot,
+            taskID: input.taskID,
+            evidenceID,
+          })
+        : undefined
+    const artifacts = browserPreviewVisualFeedbackArtifactEntries({ evidence, capturePath })
+    if (artifacts.length === 0) {
+      if (explicitBrowserPreviewRef && evidence.operationKind !== "layout-geometry") {
+        throw new Error(`Visual QA comparison evidence ref ${ref} has no forwardable image artifacts`)
+      }
+      continue
+    }
+    for (const artifact of artifacts) {
+      const artifactRef = `${evidence.id}:${artifact.name}`
+      if (seenArtifactRefs.has(artifactRef)) continue
+      seenArtifactRefs.add(artifactRef)
+      const absArtifactPath = resolveRuntimeRelativePath(input.projectRoot, artifact.runtimePath)
+      await fs.stat(absArtifactPath)
+      const attachment = await AttachmentStore.writeFromPath(
+        Instance.project.id,
+        absArtifactPath,
+        "image/png",
+        artifact.filename,
+      )
+      files.push({
+        url: attachment.url,
+        mime: attachment.mime,
+        sha: attachment.sha,
+        size: attachment.size,
+        filename: attachment.filename,
+        intent: "visual_feedback_comparison",
+        source: `browser_preview_${evidence.operationKind.replaceAll("-", "_")}`,
+        label: artifactRef,
+        scope: { kind: "task", taskID: input.taskID },
+      })
+    }
+  }
+  return files
+}
+
 async function visualQaDiagnosticEvidenceForBuild(input: {
   taskID: string
   projectRoot: string
@@ -4694,9 +4965,9 @@ async function visualQaDiagnosticEvidenceForBuild(input: {
   const seenEvidenceIDs = new Set<string>()
   for (const rawRef of collectVisualQaReportEvidenceRefs(record.report)) {
     const ref = rawRef.trim()
-    const explicitBrowserPreviewRef = ref.startsWith("browser_preview_evidence:")
     const evidenceID = browserPreviewEvidenceIDFromRef(ref)
     if (!evidenceID || seenEvidenceIDs.has(evidenceID)) continue
+    const explicitBrowserPreviewRef = true
     let evidence
     try {
       evidence = await findReadableBrowserPreviewEvidenceByID({
@@ -4978,18 +5249,24 @@ async function composeBuildEvidencePack(input: {
   includePreviousOutput: boolean
 }): Promise<BuildEvidencePack | undefined> {
   const targetReferences = targetEvidenceForBuild(input.task)
+  const projectRoot = taskPrimaryProjectRoot(input.task.id, { activeProjectID: Instance.project.id })
   const previousOutput = await loadPreviousRenderedOutputEvidence({
     taskID: input.task.id,
     enabled: input.includePreviousOutput,
   })
   const visualQaAnnotations = await visualQaAnnotationEvidenceForBuild(input.task.id)
+  const comparisonArtifacts = await visualQaComparisonArtifactEvidenceForBuild({
+    taskID: input.task.id,
+    projectRoot,
+  })
   const visualQaDiagnostics = await visualQaDiagnosticEvidenceForBuild({
     taskID: input.task.id,
-    projectRoot: taskPrimaryProjectRoot(input.task.id, { activeProjectID: Instance.project.id }),
+    projectRoot,
   })
   const pack: BuildEvidencePack = {
     ...(targetReferences.length > 0 ? { targetReferences } : {}),
     ...(previousOutput ? { previousOutputs: [previousOutput] } : {}),
+    ...(comparisonArtifacts.length > 0 ? { comparisonArtifacts } : {}),
     ...(visualQaAnnotations.length > 0 ? { visualQaAnnotations } : {}),
     ...(visualQaDiagnostics.length > 0 ? { visualQaDiagnostics } : {}),
   }
@@ -5313,6 +5590,11 @@ export function createOrchestratorTools(input: {
     const supersededIDs = new Set(rows.flatMap((row) => (row.supersede_of ? [row.supersede_of] : [])))
     const tip = rows.find((row) => !supersededIDs.has(row.id))
     if (tip?.superseded_reason) return `needs_redispatch(${tip.superseded_reason}; status=${status})`
+    const buildOutcome = tip ? findBuildOutcomeByGoalRun(tip.id) : undefined
+    if (buildOutcome && buildOutcome.outcome_kind !== "delivered") {
+      const reason = buildOutcome.no_diff_reason ?? buildOutcome.error ?? "build_attempt_not_delivered"
+      return `${buildOutcome.outcome_kind}(${reason}; status=${status})`
+    }
     return status
   }
 
@@ -5930,11 +6212,8 @@ export function createOrchestratorTools(input: {
     const frontendDesignContract = frontendDesignEntries
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
-    const visualQaContract = visualQaEntries
-      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
-      .join("\n\n")
+    const visualQaImplementationContext = renderVisualQaImplementationContextForIntegrity(visualQaEntries)
     const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
-    const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
     const latestIntegrityAttempt = findLatestIntegrityAttemptArtifact({
       taskID,
       specSnapshotID: activeSpec.id,
@@ -5945,7 +6224,6 @@ export function createOrchestratorTools(input: {
       specSnapshotID: activeSpec.id,
       goals: listGoals(taskID),
       frontendDesignEntries,
-      visualEvidence,
     })
     const normalizedStageInput = IntegrityStageInputSchema.parse({
       reason: toolInput.reason,
@@ -5959,7 +6237,6 @@ export function createOrchestratorTools(input: {
         frontend_design_decisions: frontendDesignEntries,
         goal_runs: goalRunsForReview,
         latest_integrity_attempt: latestIntegrityAttempt,
-        latest_visual_evidence_bundle: visualEvidence,
         requirement_decisions: requirementDecisions,
         requirement_status: requirementStatus,
         requirements,
@@ -6073,9 +6350,7 @@ export function createOrchestratorTools(input: {
           diffs: acceptanceDiffs,
         },
         frontendDesign: frontendDesignContract,
-        visualQa: visualQaContract,
-        visualEvidence,
-        visualEvidenceRequired: phase === "post_build" && referenceParity.required,
+        visualQa: visualQaImplementationContext,
         projectRoot: projectDir,
         replayContext,
         signal: input.signal,
@@ -7332,7 +7607,6 @@ export function createOrchestratorTools(input: {
     const activeSpec = findActiveSpecForTask(taskID)
     const activeGoals = listGoals(taskID)
     const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
-    const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
     const latestIntegrityAttempt = activeSpec
       ? findLatestIntegrityAttemptArtifact({
           taskID,
@@ -7346,7 +7620,6 @@ export function createOrchestratorTools(input: {
       specSnapshotID: activeSpec?.id,
       goals: activeGoals,
       frontendDesignEntries,
-      visualEvidence,
     })
     const normalizedStageInput = {
       task: taskContinuationScope(task),
@@ -7357,7 +7630,6 @@ export function createOrchestratorTools(input: {
         frontend_research_briefs: frontendResearchBriefs,
         build_deliveries: buildDeliveries,
         prior_visual_qa_decisions: priorVisualQaEntries,
-        latest_visual_evidence_bundle: visualEvidence,
         latest_integrity_attempt: latestIntegrityAttempt,
       }),
     }
@@ -7409,33 +7681,7 @@ export function createOrchestratorTools(input: {
       })
       const report = normalizedVisualQa.report
       const visualQaSemantics = normalizedVisualQa.acceptance
-      const visualEvidenceMaterialization = referenceParity.required
-        ? await materializeVisualEvidenceBundleFromEvidenceRefs({
-            projectRoot,
-            taskID,
-            source: "integrity",
-            evidenceRefs: collectVisualEvidenceMaterializationRefs({
-              checkItems: report.check_items,
-              coverage: report.coverage,
-              evidence: report.evidence,
-              referenceParity: report.reference_parity,
-            }),
-          })
-        : undefined
-      const visualEvidenceValidation =
-        visualEvidenceMaterialization?.status === "materialized"
-          ? await validateVisualEvidenceBundleReferenceComparisons({
-              projectRoot,
-              bundle: visualEvidenceMaterialization.bundle,
-              expectedTaskID: taskID,
-            })
-          : undefined
-      const visualQaStageSemantics = visualQaStageAcceptance({
-        acceptance: visualQaSemantics,
-        referenceParityRequired: referenceParity.required,
-        materialization: visualEvidenceMaterialization,
-        validation: visualEvidenceValidation,
-      })
+      const visualQaStageSemantics = visualQaSemantics
 
       decisionLog.append({
         phase: "visual_qa",
@@ -7443,6 +7689,30 @@ export function createOrchestratorTools(input: {
         value: JSON.stringify({ report, acceptance: visualQaStageSemantics }, null, 2),
         reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
       })
+      const activeRun = findActiveRunForTask(taskID)
+      const needsVisualFeedbackVerification =
+        report.reference_parity.required || report.reference_parity.reference_comparison_evidence_refs.length > 0
+      if (needsVisualFeedbackVerification && !activeRun) {
+        throw new Error(
+          `visual_qa cannot persist visual feedback verification for task ${taskID}: no active run is available.`,
+        )
+      }
+      let persistedVisualFeedback:
+        | Awaited<ReturnType<typeof persistVisualFeedbackVerification>>
+        | undefined = undefined
+      if (needsVisualFeedbackVerification && activeRun) {
+        persistedVisualFeedback = await persistVisualFeedbackVerification({
+          taskID,
+          runID: activeRun.id,
+          verification: await visualFeedbackVerificationFromVisualQaRecord({
+            taskID,
+            runID: activeRun.id,
+            projectRoot,
+            report,
+            effectiveAccepted: visualQaStageSemantics.effectiveAccepted,
+          }),
+        })
+      }
       decisionLog.append({
         phase: "visual_qa",
         key: "latest_summary",
@@ -7463,26 +7733,14 @@ export function createOrchestratorTools(input: {
           `reference_parity_required=${report.reference_parity.required}`,
           `reference_comparison_evidence=${report.reference_parity.reference_comparison_evidence_refs.join(", ") || "(none)"}`,
           `reference_missing_regions=${report.reference_parity.missing_regions.join(", ") || "(none)"}`,
-          visualEvidenceMaterialization
-            ? `visual_evidence_bundle_materialization=${visualEvidenceMaterialization.status}`
-            : "",
-          visualEvidenceValidation ? `visual_evidence_bundle_validation=${visualEvidenceValidation.passing}` : "",
+          `visual_feedback_verification_status=${persistedVisualFeedback?.status ?? "not_required"}`,
+          `visual_feedback_verification_failed_attempts=${persistedVisualFeedback?.consecutiveFailedAttempts ?? 0}`,
           `changed_files=${report.changed_files.join(", ") || "(none)"}`,
         ]
           .filter(Boolean)
           .join("\n"),
-        reason: "Latest structured visual QA summary for read_context and integrity review.",
+        reason: "Latest structured visual QA summary for read_context and Build repair.",
       })
-      if (visualEvidenceMaterialization) {
-        decisionLog.append({
-          phase: "visual_qa",
-          key: `visual_evidence_bundle_${Date.now()}`,
-          value: renderVisualEvidenceBundleMaterializationSummary(visualEvidenceMaterialization),
-          reason:
-            "Post-Visual-QA formal VisualEvidenceBundle materialization from task-scoped browser preview evidence.",
-        })
-      }
-
       await close()
       return {
         status: "reviewed",
@@ -7511,6 +7769,11 @@ export function createOrchestratorTools(input: {
             ["problem_dom_regions", String(report.problem_dom_regions.length)],
             ["evidence", String(report.evidence.length)],
             ["repairs", String(report.repairs.length)],
+            ["visual_feedback_verification_status", persistedVisualFeedback?.status ?? "not_required"],
+            [
+              "visual_feedback_verification_failed_attempts",
+              String(persistedVisualFeedback?.consecutiveFailedAttempts ?? 0),
+            ],
             ["changed_files", report.changed_files.join(", ") || "(none)"],
             ["open_questions", String(report.open_questions.length)],
           ],
@@ -13390,28 +13653,21 @@ export function createOrchestratorTools(input: {
 
             // Visual feedback closure-loop: target references and previous
             // outputs stay separated by role so rendered retry evidence never
-            // becomes a binding clone target.
-            let evidencePack: BuildEvidencePack | undefined
-            if (existingBuildSessionID) {
-              inputEvidenceManifest = readOriginalBuildSessionInputEvidenceManifest({
-                sessionID: existingBuildSessionID,
-                taskID: task.id,
-                projectID: task.project_id,
-                goalID: goal.id,
-              })
-            } else {
-              evidencePack = await composeBuildEvidencePack({
-                task,
-                includePreviousOutput:
-                  retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
-              })
-              inputEvidenceManifest = await composeBuildInputEvidenceManifest({
-                projectID: task.project_id,
-                taskID: task.id,
-                goalID: goal.id,
-                evidencePack,
-              })
-            }
+            // becomes a binding clone target. A same-session retry still
+            // carries a fresh repair evidence manifest; the original session
+            // contract remains available to BuildAgent only for replay/staged
+            // file repair of older messages.
+            let evidencePack: BuildEvidencePack | undefined = await composeBuildEvidencePack({
+              task,
+              includePreviousOutput:
+                retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
+            })
+            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
+              projectID: task.project_id,
+              taskID: task.id,
+              goalID: goal.id,
+              evidencePack,
+            })
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
             // only when the latest workload artifact targets the active
@@ -13815,6 +14071,7 @@ export function createOrchestratorTools(input: {
                   tests: [],
                   files_changed: [],
                   error: runErr.message,
+                  consumed_visual_feedback_comparison_refs: [],
                   consumed_visual_qa_annotation_refs: [],
                   consumed_visual_qa_diagnostic_refs: [],
                   // Host-synthesised BuildResult on contract violation: the LLM

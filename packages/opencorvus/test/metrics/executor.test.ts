@@ -12,18 +12,23 @@ import { Shell } from "../../src/shell/shell"
 import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { readResultsForIteration, registerBaselineSpec, writeMetricResult } from "../../src/metrics/store"
 import { resetDatabase } from "../fixture/db"
-import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
+import {
+  persistVisualFeedbackVerificationArtifact,
+  type VisualFeedbackVerification,
+} from "../../src/acceptance/visual-feedback-verification"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
 import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 import { tmpdir } from "../fixture/fixture"
 
 let projectID = ""
 let taskID = ""
+let metricsRunID = ""
 
 function seedProjectAndTask() {
   const now = Date.now()
   projectID = "prj_" + Math.random().toString(36).slice(2, 10)
   taskID = Identifier.ascending("task")
+  metricsRunID = Identifier.ascending("run")
   Database.use((db) =>
     db
       .insert(ProjectTable)
@@ -55,98 +60,47 @@ function seedProjectAndTask() {
   )
 }
 
-function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvidenceBundle {
-  const bundle: VisualEvidenceBundle = {
-    id: "veb_desktop",
+function visualFeedbackVerification(
+  overrides: Partial<VisualFeedbackVerification> = {},
+): VisualFeedbackVerification {
+  const verification: VisualFeedbackVerification = {
+    id: "vfv_desktop",
     taskID,
-    source: "integrity",
-    reference: {
-      path: "webpage-evidence/reference.png",
-      sha256: "sha_reference",
-      width: 1440,
-      height: 900,
-    },
-    rendered: {
-      path: "webpage-evidence/rendered.png",
-      sha256: "sha_rendered",
-      width: 1440,
-      height: 900,
-      capturedAt: "2026-06-08T00:00:00.000Z",
-      viewport: { width: 1440, height: 900 },
-      appURL: "http://127.0.0.1:4173",
-      projectDirectory: os.tmpdir(),
-      commitRef: "abc123",
-    },
-    inspection: {
-      path: "visual-qa-report.json",
-      reviewedAt: "2026-06-08T00:00:00.000Z",
-      status: "passing",
-      blockerCount: 0,
-      notes: "No production blockers remain.",
-    },
-    pageCoverage: {
-      coordinateSpace: "source_reference_image_px",
-      implementationUse: "evidence_only",
-      requiredRegionIDs: ["region_header"],
-      coveredIntervals: [
-        {
-          id: "coverage_full_reference",
-          label: "Full reference page",
-          y: 0,
-          height: 900,
-          regionIDs: ["region_header"],
-          evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-          notes: "Required evidence covers the full source reference height.",
-        },
-      ],
-      unexplainedBlankIntervals: [],
-    },
-    regions: [
-      {
-        id: "region_header",
-        label: "Header",
-        requirementIDs: ["REQ-visual"],
-        acceptanceSpecIDs: ["acc-final-visual"],
-        sourceRefs: ["webpage-evidence/reference.png"],
-        viewport: "desktop-primary",
-        cropIntent: "full-region",
-        required: true,
-        status: "passing",
-        evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-        notes: "Header matches the reference.",
-      },
-    ],
+    runID: metricsRunID,
+    projectRoot: os.tmpdir(),
+    status: "passed",
+    summary: "Current rendered Visual QA feedback accepts the reference comparison.",
+    requiredReferenceRegions: ["region_header@desktop-primary"],
+    referenceComparisonEvidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+    productionBlockerIDs: [],
   }
-  return { ...bundle, ...overrides }
+  return { ...verification, ...overrides }
 }
 
-function visualBundleWithReferenceComparison(input: { projectDirectory: string; evidenceID: string }): VisualEvidenceBundle {
-  const bundle = visualBundle()
-  const evidenceRefs = [`browser_preview_evidence:${input.evidenceID}`]
-  return {
-    ...bundle,
-    rendered: {
-      ...bundle.rendered,
-      projectDirectory: input.projectDirectory,
-    },
-    pageCoverage: {
-      ...bundle.pageCoverage,
-      coveredIntervals: bundle.pageCoverage.coveredIntervals.map((interval) => ({
-        ...interval,
-        evidenceRefs,
-      })),
-    },
-    regions: bundle.regions.map((region) => ({
-      ...region,
-      evidenceRefs,
-    })),
-  }
+function visualFeedbackVerificationWithReferenceComparison(input: {
+  projectDirectory: string
+  evidenceID: string
+  targetID: string
+}): VisualFeedbackVerification {
+  return visualFeedbackVerification({
+    projectRoot: input.projectDirectory,
+    previewTargetID: input.targetID,
+    referenceComparisonEvidenceRefs: [`browser_preview_evidence:${input.evidenceID}`],
+  })
+}
+
+function persistMetricsVisualFeedbackVerification(verification: VisualFeedbackVerification): string {
+  return persistVisualFeedbackVerificationArtifact({
+    taskID,
+    runID: metricsRunID,
+    verification,
+  })
 }
 
 async function seedMetricsReferenceComparisonEvidence(input: {
   projectDirectory: string
   blankImplementation?: boolean
-}): Promise<string> {
+}): Promise<{ evidenceID: string; targetID: string }> {
   const artifactDir = ProjectRuntimePaths.taskAbsolute(input.projectDirectory, taskID, "bp", "metrics-visual")
   await fs.mkdir(artifactDir, { recursive: true })
   const sourceCrop = path.join(artifactDir, "source.png")
@@ -162,9 +116,10 @@ async function seedMetricsReferenceComparisonEvidence(input: {
   const implementationContent = input.blankImplementation
     ? { non_white_pixel_ratio: 0, unique_color_count: 1 }
     : { non_white_pixel_ratio: 0.12, unique_color_count: 16 }
-  return persistBrowserPreviewEvidence({
+  const evidenceID = persistBrowserPreviewEvidence({
     projectRoot: input.projectDirectory,
     taskID,
+    runID: metricsRunID,
     targetID: target.id,
     viewportID: "desktop-primary",
     operationKind: "reference-comparison",
@@ -212,6 +167,7 @@ async function seedMetricsReferenceComparisonEvidence(input: {
     },
     diagnostics: [],
   })
+  return { evidenceID, targetID: target.id }
 }
 
 beforeEach(async () => {
@@ -482,13 +438,13 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
     expect(outcome.skipped[0].reason).toContain("no runner injected")
   })
 
-  test("visual judge requiring visual evidence but omitting visual_evidence input is non-fresh", async () => {
+  test("judge evaluator rejects visual_feedback input because visual verdicts use the prebuilt evaluator", async () => {
     registerBaselineSpec({
       task_id: taskID,
       scope: "global",
       goal_id: null,
-      name: "visual_text_only",
-      description: "visual judge must declare visual evidence input",
+      name: "visual_feedback_judge_rejected",
+      description: "visual feedback cannot be consumed by LLM judges",
       unit: "ratio",
       direction: "higher_better",
       target: 1,
@@ -498,8 +454,7 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       evaluator_kind: "judge",
       evaluator_config: {
         criteria: "Judge final rendered-vs-reference visual fidelity.",
-        requires_visual_evidence: true,
-        inputs: ["acceptance_summary"],
+        inputs: ["visual_feedback", "requirement_text"],
       },
       source_requirement_ids: ["REQ-visual"],
     })
@@ -513,71 +468,27 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       {
         task_id: taskID,
         iteration: 0,
-        acceptance: { summary: "visual verification passed" },
+        acceptance: {
+          requirement_text: "Match the reference screenshot.",
+        },
       },
       { judge },
     )
 
     expect(calls).toEqual([])
     expect(outcome.results[0].evidence_fresh).toBe(false)
-    expect(outcome.results[0].evidence_ref).toContain("visual_evidence input required")
-    expect(outcome.skipped[0].reason).toContain("visual_evidence input required")
+    expect(outcome.results[0].evidence_ref).toContain("unsupported input(s)")
+    expect(outcome.results[0].evidence_ref).toContain("visual_feedback")
+    expect(outcome.skipped[0].reason).toContain("unsupported input(s)")
   })
 
-  test("visual judge with visual_evidence input receives structured bundle artifacts", async () => {
-    registerBaselineSpec({
-      task_id: taskID,
-      scope: "global",
-      goal_id: null,
-      name: "visual_with_bundle",
-      description: "visual judge consumes bundle artifacts",
-      unit: "ratio",
-      direction: "higher_better",
-      target: 1,
-      floor: 0.5,
-      weight: 1,
-      gate_class: "diagnostic",
-      evaluator_kind: "judge",
-      evaluator_config: {
-        criteria: "Judge final rendered-vs-reference visual fidelity.",
-        requires_visual_evidence: true,
-        inputs: ["visual_evidence", "requirement_text"],
-      },
-      source_requirement_ids: ["REQ-visual"],
-    })
-    const calls: Array<VisualEvidenceBundle[] | undefined> = []
-    const judge: JudgeRunner = async (req) => {
-      calls.push(req.inputs.visual_evidence)
-      return { score: 1, rationale: "bundle supports pass" }
-    }
-    const bundle = visualBundle()
-
-    const outcome = await executeMetrics(
-      {
-        task_id: taskID,
-        iteration: 0,
-        acceptance: {
-          requirement_text: "Match the reference screenshot.",
-          visual_evidence: [bundle],
-        },
-      },
-      { judge },
-    )
-
-    expect(calls).toHaveLength(1)
-    expect(calls[0]?.[0]?.id).toBe(bundle.id)
-    expect(outcome.results[0].evidence_fresh).toBe(true)
-    expect(outcome.results[0].evidence_ref).toContain("visual_evidence_bundle=veb_desktop")
-    expect(outcome.results[0].evidence_ref).toContain("reference=webpage-evidence/reference.png")
-  })
-
-  test("prebuilt visual-evidence-bundle passes with evidence-backed full reference coverage", async () => {
+  test("prebuilt visual-feedback-verification passes with evidence-backed reference comparison", async () => {
     registerBaselineSpec({
       task_id: taskID,
       scope: "global",
       goal_id: null,
       name: "visual_prebuilt",
-      description: "prebuilt visual evidence bundle validator",
+      description: "prebuilt visual feedback verification validator",
       unit: "ratio",
       direction: "higher_better",
       target: 1,
@@ -585,32 +496,37 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       weight: 1,
       gate_class: "blocking",
       evaluator_kind: "prebuilt",
-      evaluator_config: { name: "visual-evidence-bundle" },
+      evaluator_config: { name: "visual-feedback-verification" },
       source_requirement_ids: ["REQ-visual"],
     })
     await using dir = await tmpdir()
-    const evidenceID = await seedMetricsReferenceComparisonEvidence({ projectDirectory: dir.path })
-    const bundle = visualBundleWithReferenceComparison({ projectDirectory: dir.path, evidenceID })
+    const seeded = await seedMetricsReferenceComparisonEvidence({ projectDirectory: dir.path })
+    const verification = visualFeedbackVerificationWithReferenceComparison({
+      projectDirectory: dir.path,
+      evidenceID: seeded.evidenceID,
+      targetID: seeded.targetID,
+    })
+    persistMetricsVisualFeedbackVerification(verification)
 
     const outcome = await executeMetrics({
       task_id: taskID,
       iteration: 0,
-      acceptance: { visual_evidence: [bundle] },
+      run_id: metricsRunID,
     })
 
     expect(outcome.results[0].raw_value).toBe(1)
     expect(outcome.results[0].met_target).toBe(true)
     expect(outcome.results[0].evidence_fresh).toBe(true)
-    expect(outcome.results[0].evidence_ref).toContain("prebuilt://visual-evidence-bundle passed")
+    expect(outcome.results[0].evidence_ref).toContain("prebuilt://visual-feedback-verification passed")
   })
 
-  test("prebuilt visual-evidence-bundle rejects blank implementation content metrics", async () => {
+  test("prebuilt visual-feedback-verification requires a run id instead of reading task-latest artifacts", async () => {
     registerBaselineSpec({
       task_id: taskID,
       scope: "global",
       goal_id: null,
-      name: "visual_prebuilt_blank",
-      description: "prebuilt visual evidence bundle validator",
+      name: "visual_prebuilt_requires_run",
+      description: "prebuilt visual feedback verification validator",
       unit: "ratio",
       direction: "higher_better",
       target: 1,
@@ -618,20 +534,62 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
       weight: 1,
       gate_class: "blocking",
       evaluator_kind: "prebuilt",
-      evaluator_config: { name: "visual-evidence-bundle" },
+      evaluator_config: { name: "visual-feedback-verification" },
       source_requirement_ids: ["REQ-visual"],
     })
     await using dir = await tmpdir()
-    const evidenceID = await seedMetricsReferenceComparisonEvidence({
-      projectDirectory: dir.path,
-      blankImplementation: true,
-    })
-    const bundle = visualBundleWithReferenceComparison({ projectDirectory: dir.path, evidenceID })
+    const seeded = await seedMetricsReferenceComparisonEvidence({ projectDirectory: dir.path })
+    persistMetricsVisualFeedbackVerification(
+      visualFeedbackVerificationWithReferenceComparison({
+        projectDirectory: dir.path,
+        evidenceID: seeded.evidenceID,
+        targetID: seeded.targetID,
+      }),
+    )
 
     const outcome = await executeMetrics({
       task_id: taskID,
       iteration: 0,
-      acceptance: { visual_evidence: [bundle] },
+    })
+
+    expect(outcome.results[0].raw_value).toBe(0)
+    expect(outcome.results[0].evidence_fresh).toBe(false)
+    expect(outcome.results[0].evidence_ref).toContain("requires run_id")
+  })
+
+  test("prebuilt visual-feedback-verification rejects blank implementation content metrics", async () => {
+    registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "visual_prebuilt_blank",
+      description: "prebuilt visual feedback verification validator",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0.5,
+      weight: 1,
+      gate_class: "blocking",
+      evaluator_kind: "prebuilt",
+      evaluator_config: { name: "visual-feedback-verification" },
+      source_requirement_ids: ["REQ-visual"],
+    })
+    await using dir = await tmpdir()
+    const seeded = await seedMetricsReferenceComparisonEvidence({
+      projectDirectory: dir.path,
+      blankImplementation: true,
+    })
+    const verification = visualFeedbackVerificationWithReferenceComparison({
+      projectDirectory: dir.path,
+      evidenceID: seeded.evidenceID,
+      targetID: seeded.targetID,
+    })
+    persistMetricsVisualFeedbackVerification(verification)
+
+    const outcome = await executeMetrics({
+      task_id: taskID,
+      iteration: 0,
+      run_id: metricsRunID,
     })
 
     expect(outcome.results[0].raw_value).toBe(0)

@@ -11,6 +11,7 @@ import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs } from "./persis
 import { BrowserPreviewSourceReferenceArtifactID } from "./region-schema"
 import { resolveSourceReferencePath } from "./source-reference"
 import { BrowserPreviewViewportID } from "./viewport"
+import { BrowserPreviewComparisonGuidance, BrowserPreviewComparisonGuidanceSchema } from "./comparison-guidance"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 const SCROLL_SLICE_CAPTURE_EXTRA_TIMEOUT_MS = 45_000
@@ -82,6 +83,7 @@ export const BrowserPreviewScrollSliceComparisonResult = z
       side_by_side: z.string(),
       diff: z.string().optional(),
     }),
+    comparison_guidance: BrowserPreviewComparisonGuidanceSchema,
     diagnostics: z.array(z.string()),
   })
   .strict()
@@ -205,6 +207,7 @@ export async function compareBrowserPreviewScrollSlice(
       dimensions_match: visual.dimensionsMatch,
     },
     artifacts,
+    comparison_guidance: BrowserPreviewComparisonGuidance,
     diagnostics: [
       "Scroll-slice comparison is supporting Visual QA evidence only.",
       "It is not reference-comparison proof.",
@@ -325,8 +328,8 @@ async function makeScrollSliceSideBySide(input: {
           ? `<text x="12" y="${titleHeight + 20}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#b45309">${escapeXml(input.warning)}</text>`
           : ""
       }
-      <text x="12" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference slice</text>
-      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Implementation slice</text>
+      <text x="12" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">LEFT: Source reference slice</text>
+      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + warningHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">RIGHT: Local implementation slice</text>
     </svg>
   `)
   await sharp({

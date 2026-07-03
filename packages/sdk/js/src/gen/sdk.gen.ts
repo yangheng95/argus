@@ -2621,6 +2621,7 @@ export class Session extends HeyApiClient {
       extra?: {
         [key: string]: unknown
       }
+      byteMaterializationProjectID?: string
       parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2642,6 +2643,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "systemMode" },
             { in: "body", key: "variant" },
             { in: "body", key: "extra" },
+            { in: "body", key: "byteMaterializationProjectID" },
             { in: "body", key: "parts" },
           ],
         },
@@ -2753,6 +2755,7 @@ export class Session extends HeyApiClient {
       extra?: {
         [key: string]: unknown
       }
+      byteMaterializationProjectID?: string
       parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2774,6 +2777,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "systemMode" },
             { in: "body", key: "variant" },
             { in: "body", key: "extra" },
+            { in: "body", key: "byteMaterializationProjectID" },
             { in: "body", key: "parts" },
           ],
         },
@@ -5380,9 +5384,9 @@ export class Control2 extends HeyApiClient {
                       passes: boolean
                     }>
                     /**
-                     * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                     * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                      */
-                    inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                    inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
                   }
                 | {
                     /**
@@ -5396,19 +5400,19 @@ export class Control2 extends HeyApiClient {
                       | "exact_match"
                       | "length_within"
                       | "json_schema"
-                      | "visual-evidence-bundle"
+                      | "visual-feedback-verification"
                     config?: {
                       [key: string]: unknown
                     }
                     /**
-                     * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                     * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                      */
                     spec?: {
-                      kind: "visual_evidence_bundle"
+                      kind: "visual_feedback_verification"
                       viewport?: string
                     }
                     /**
-                     * For name=visual-evidence-bundle, requires a passing current bundle.
+                     * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                      */
                     expect?: {
                       status: "passed"
@@ -6853,9 +6857,9 @@ export class Task extends HeyApiClient {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                  */
-                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -6869,19 +6873,19 @@ export class Task extends HeyApiClient {
                   | "exact_match"
                   | "length_within"
                   | "json_schema"
-                  | "visual-evidence-bundle"
+                  | "visual-feedback-verification"
                 config?: {
                   [key: string]: unknown
                 }
                 /**
-                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                  */
                 spec?: {
-                  kind: "visual_evidence_bundle"
+                  kind: "visual_feedback_verification"
                   viewport?: string
                 }
                 /**
-                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                  */
                 expect?: {
                   status: "passed"
@@ -7018,9 +7022,9 @@ export class Task extends HeyApiClient {
                     passes: boolean
                   }>
                   /**
-                   * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                   * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                    */
-                  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
                 }
               | {
                   /**
@@ -7034,19 +7038,19 @@ export class Task extends HeyApiClient {
                     | "exact_match"
                     | "length_within"
                     | "json_schema"
-                    | "visual-evidence-bundle"
+                    | "visual-feedback-verification"
                   config?: {
                     [key: string]: unknown
                   }
                   /**
-                   * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                   * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                    */
                   spec?: {
-                    kind: "visual_evidence_bundle"
+                    kind: "visual_feedback_verification"
                     viewport?: string
                   }
                   /**
-                   * For name=visual-evidence-bundle, requires a passing current bundle.
+                   * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                    */
                   expect?: {
                     status: "passed"
@@ -8312,9 +8316,9 @@ export class Goal extends HeyApiClient {
                 passes: boolean
               }>
               /**
-               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.
                */
-              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
             }
           | {
               /**
@@ -8328,19 +8332,19 @@ export class Goal extends HeyApiClient {
                 | "exact_match"
                 | "length_within"
                 | "json_schema"
-                | "visual-evidence-bundle"
+                | "visual-feedback-verification"
               config?: {
                 [key: string]: unknown
               }
               /**
-               * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+               * For name=visual-feedback-verification, identifies the required visual feedback verification shape.
                */
               spec?: {
-                kind: "visual_evidence_bundle"
+                kind: "visual_feedback_verification"
                 viewport?: string
               }
               /**
-               * For name=visual-evidence-bundle, requires a passing current bundle.
+               * For name=visual-feedback-verification, requires a passing current visual feedback verification.
                */
               expect?: {
                 status: "passed"

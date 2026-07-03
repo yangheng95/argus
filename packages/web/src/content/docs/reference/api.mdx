@@ -108,10 +108,10 @@ OpenAPI marks project-scoped operations with a `directory` query parameter. Thes
 | GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
 | GET | `/task/{taskID}/board` | Get task board Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.board` |
 | GET | `/task/{taskID}/brief` | Get task brief Errors: `LogFileNotFoundError`, `NotFoundError`. | `task.brief` |
-| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
+| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target Errors: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence Body: `targetID`, `viewportIDs`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.captureTaskTarget` |
 | POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence Body: `inlineBindings`, `targetID`, `viewportIDs`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.compareTaskTargetRegions` |
-| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence Errors: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceArtifact` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot Errors: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceCapture` |
 | PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target Body: `targetID`; Errors: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.selectTaskTarget` |

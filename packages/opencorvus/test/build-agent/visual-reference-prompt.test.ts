@@ -193,17 +193,28 @@ describe("BuildEvidencePack role rendering", () => {
       filename: "layout-geometry.json",
       sha: "diagnostic",
     }
+    const comparison = {
+      url: "/attachment/project/art_header.side_by_side.png",
+      mime: "image/png",
+      filename: "art_header.side_by_side.png",
+      sha: "comparison",
+    }
 
     const contract = renderVisualContractPreamble([target])
     const sections = renderBuildEvidenceRoleSections({
       targetReferences: [target],
+      comparisonArtifacts: [comparison],
       visualQaAnnotations: [annotation],
       visualQaDiagnostics: [diagnostic],
     })
 
     expect(contract).toContain("target.png")
     expect(contract).not.toContain("dom-annotated.png")
+    expect(contract).not.toContain("art_header.side_by_side.png")
     expect(contract).not.toContain("layout-geometry.json")
+    expect(sections).toContain("### Comparison And Verification Artifacts")
+    expect(sections).toContain("art_header.side_by_side.png")
+    expect(sections).toContain("consumed_visual_feedback_comparison_refs")
     expect(sections).toContain("### Visual QA Annotated Problem Screenshots")
     expect(sections).toContain("dom-annotated.png")
     expect(sections).toContain("consumed_visual_qa_annotation_refs")

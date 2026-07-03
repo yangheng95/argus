@@ -137,12 +137,35 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("height/min-height filler")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_reference_regions")
     expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("browser_preview_compare_scroll_slices")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain(
+      "comparison_guidance LEFT reference / RIGHT implementation",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("consumed diagnostic refs")
+    expect(PromptProfile.builtIns["frontend-replica"].agents.build).toContain("no_project_diff")
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
       "browser_preview_reference_regions",
     )
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain("Reject large blank filler bands")
     expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
       "browser_preview_compare_scroll_slices",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
+      "comparison_guidance LEFT reference / RIGHT implementation",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents["visual-qa"]).toContain(
+      "carry unresolved prior blockers forward",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.integrity).toContain(
+      "second evidence-backed implementation non-pass",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.integrity).toContain(
+      "Do not count Integrity review as the rendered visual verdict",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).toContain(
+      "per-surface rendered-feedback ledger",
+    )
+    expect(PromptProfile.builtIns["frontend-replica"].agents.orchestrator).toContain(
+      "second consecutive evidence-backed rendered-feedback non-pass",
     )
     expect(PromptProfile.builtIns["frontend-innovate"].agents["frontend-design"]).toContain(
       "multiple named directions",
@@ -260,9 +283,21 @@ describe("prompt profiles", () => {
     expect(profileText).toContain("typography/spacing/color")
     expect(profileText).toContain("rendered screenshot proof")
     expect(profileText).toContain("rendered screenshots")
+    expect(profileText).toContain("bounded evidence-backed acceptance")
+    expect(profileText).toContain("consumed diagnostic refs")
+    expect(profileText).toContain("per-surface rendered-feedback ledger")
+    expect(profileText).toContain("second consecutive evidence-backed rendered-feedback non-pass")
     expect(skillText).toContain("source url/screenshot/dom evidence")
     expect(skillText).toContain("layout/style/data/interaction constraints")
     expect(skillText).toContain("rendered screenshot and interaction evidence review")
+    expect(skillText).toContain("acceptance attempt budget")
+    expect(skillText).toContain("evidence-backed non-pass rounds")
+    expect(skillText).toContain("failure taxonomy")
+    expect(skillText).toContain("visual qa and integrity feedback consumption")
+    expect(skillText).toContain("implementation non-delivery")
+    expect(skillText).toContain("not accepted")
+    expect(skillText).toContain("second consecutive evidence-backed rendered-feedback non-pass")
+    expect(skillText).toContain("integrity non-pass rows are implementation completeness evidence")
     expect(skillText).toContain("blank filler geometry boundary")
     expect(skillText).toContain("source page height")
     expect(skillText).toContain("not implementation targets by themselves")
@@ -286,6 +321,7 @@ describe("prompt profiles", () => {
     expect(agents.architect).toContain("one accountable goal per meaningful component or region")
     expect(agents.architect).toContain("generally produce 10 or more source-component goals")
     expect(agents.architect).toContain("do not merge several source components")
+    expect(agents.architect).toContain("no_project_diff work")
     expect(agents.architect).toContain("empty CSS spacing")
     expect(agents["frontend-design"]).toContain("source-backed replica contract")
     expect(agents["frontend-design"]).toContain("target project reuse constraints")
@@ -294,16 +330,23 @@ describe("prompt profiles", () => {
     expect(agents.build).toContain("one scoped component or region goal at a time")
     expect(agents.build).toContain("Reuse target project components and business code only where they preserve source parity")
     expect(agents.build).toContain("Do not satisfy source page height")
+    expect(agents.build).toContain("consumed diagnostic refs")
+    expect(agents.build).toContain("unchanged visible surfaces")
     expect(agents.build).toContain("restore missing source-backed content/assets/interactions")
     expect(agents["visual-qa"]).toContain("source-token ownership")
     expect(agents["visual-qa"]).toContain("Reject large blank filler bands")
     expect(agents["visual-qa"]).toContain("owning DOM/source module")
+    expect(agents["visual-qa"]).toContain("repeated blocker accounting")
     expect(agents.integrity).toContain("component-per-goal request")
     expect(agents.integrity).toContain("blank CSS space")
+    expect(agents.integrity).toContain("second evidence-backed implementation non-pass")
+    expect(agents.integrity).toContain("rendered visual verdict")
     expect(agents.orchestrator).toContain("component-per-goal request")
     expect(agents.orchestrator).toContain("one source component or meaningful region per goal")
     expect(agents.orchestrator).toContain("reject bundled multi-component goals")
     expect(agents.orchestrator).toContain("not to padding blank page space")
+    expect(agents.orchestrator).toContain("per-surface rendered-feedback ledger")
+    expect(agents.orchestrator).toContain("second consecutive evidence-backed rendered-feedback non-pass")
     expect(allReplicaText).not.toContain("TradingView")
     expect(allReplicaText).not.toContain("AInvest")
   })

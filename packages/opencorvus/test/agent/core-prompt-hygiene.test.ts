@@ -119,6 +119,15 @@ describe("core prompt hygiene", () => {
     expect(taskClonePrompt).toContain("task-scoped backend browser evidence runner")
   })
 
+  test("integrity prompt does not expose the final visual acceptance artifact contract", async () => {
+    const integrity = await readPrompt("integrity")
+    const normalizedIntegrity = integrity.replace(/\s+/g, " ")
+
+    expect(integrity).not.toContain("VisualFeedbackVerification")
+    expect(integrity).not.toContain("visual-feedback-verification")
+    expect(normalizedIntegrity).toContain("does not validate the final visual acceptance artifact")
+  })
+
   test("shared file-mutation ownership principle appears exactly once per core prompt", async () => {
     const principle =
       "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."
@@ -909,7 +918,8 @@ describe("core prompt hygiene", () => {
     expect(buildOverlays).toContain("Preserve visible text, layout hierarchy")
     expect(buildOverlays).toContain("Run source/visual audits only when the handoff")
 
-    expect(integrity).toContain("score thresholds or judge verdicts are not acceptance")
+    expect(integrity).toContain("final rendered visual acceptance is owned by Visual")
+    expect(integrity).toContain("QA / metrics acceptance, not by Integrity")
     expect(integrity).toContain("`final_acceptance_mode`")
     expect(integrity).toContain("`quality_project_contract`")
     expect(integrity).toContain("`component_reuse_plan`")
@@ -918,13 +928,17 @@ describe("core prompt hygiene", () => {
       "Do not maintain a separate integrity-side webpage-clone file inventory",
     )
     expect(integrity).toContain("component/data ownership")
-    expect(integrity).toContain("inspect_visual_evidence")
-    expect(integrity).toContain("VisualEvidenceBundle")
-    expect(integrity).toContain("build/typecheck success are not rendered-vs-reference evidence")
-    expect(integrity).toContain("focused visual acceptance evidence")
+    const normalizedIntegrity = integrity.replace(/\s+/g, " ")
+    expect(integrity).not.toContain("latest Visual QA report")
+    expect(normalizedIntegrity).toContain("Visual QA implementation-defect context only")
+    expect(normalizedIntegrity).toContain("does not decide final rendered-vs-reference visual acceptance")
+    expect(normalizedIntegrity).toContain("does not validate")
+    expect(normalizedIntegrity).toContain("must not require a separate visual feedback")
+    expect(integrity).not.toContain(["inspect", "visual", "evidence"].join("_"))
+    expect(integrity).toContain("build success")
+    expect(integrity).toContain("typecheck success")
+    expect(integrity).toContain("leave that verdict to Visual QA / metrics acceptance")
     expect(integrity).not.toContain("visual acceptance virtual gate")
-    expect(integrity).toContain("production_blockers")
-    expect(integrity).toContain("failing Visual QA process evidence")
     expect(orchestrator).toContain("Routine web-clone policy belongs to internal agent/tool prompts")
     expect(design).toContain("recurring webpage-clone workflow as internal policy")
     expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff names")
@@ -1071,6 +1085,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
+    expect(normalized).toContain("visual_feedback_verification_failed_attempts=1")
+    expect(normalized).toContain("failed twice consecutively")
+    expect(normalized).toContain("instead of sending the visual verdict to Integrity")
     expect(normalized).toContain("Use `integrity` as an optional system-completeness review report")
     expect(normalized).toContain("If it reports unresolved_code_module_problems")
     expect(normalized).toContain(

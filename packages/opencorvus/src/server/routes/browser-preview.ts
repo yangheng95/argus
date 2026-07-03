@@ -1,5 +1,6 @@
 import { lazy } from "@/util/lazy"
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import fs from "node:fs/promises"
 import z from "zod"
@@ -26,6 +27,7 @@ import {
   compareBrowserPreviewRegions,
 } from "../../browser-preview/region-comparison"
 import { browserPreviewTaskEvidenceRoot } from "../../browser-preview/task-evidence-root"
+import { findActiveRunForTask } from "../../engine/store"
 import { NotFoundError } from "../../storage/db"
 import { errors, namedErrorResponse } from "../error"
 
@@ -60,7 +62,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
-          ...errors(404),
+          ...errors(400, 404),
           500: namedErrorResponse("Browser preview evidence is corrupt", "BrowserPreviewEvidenceCorruptionError"),
         },
       }),
@@ -95,7 +97,7 @@ export const BrowserPreviewRoutes = lazy(() =>
               },
             },
           },
-          ...errors(404),
+          ...errors(400, 404),
           500: namedErrorResponse(
             "Browser preview evidence capture is corrupt",
             "BrowserPreviewEvidenceCorruptionError",
@@ -319,9 +321,16 @@ export const BrowserPreviewRoutes = lazy(() =>
         const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
         const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
         if (!target) throw new NotFoundError({ message: `Browser preview target not found: ${body.targetID}` })
+        const activeRun = findActiveRunForTask(taskID)
+        if (!activeRun) {
+          throw new HTTPException(400, {
+            message: `Browser preview reference comparison requires an active run for task ${taskID}.`,
+          })
+        }
         const result = await compareBrowserPreviewRegions({
           projectRoot,
           taskID,
+          runID: activeRun.id,
           targetID: body.targetID,
           viewportIDs: body.viewportIDs,
           bindings: body.inlineBindings,

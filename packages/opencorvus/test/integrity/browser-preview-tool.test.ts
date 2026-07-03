@@ -21,29 +21,29 @@ function reviewerReport(reviewerID: string) {
     verdict: "pass",
     summary: `${reviewerID} passed.`,
     investigationPlan: {
-      requestPromise: "The task must provide reference visual evidence.",
-      hypothesis: "The submitted surface could lack required comparison evidence.",
-      evidencePlan: ["Inspect visual evidence bundle."],
-      passCriteria: ["Visual evidence bundle is present and passing."],
+      requestPromise: "The task must provide a complete implementation for the requested surface.",
+      hypothesis: "The submitted surface could hide implementation defects behind review prose.",
+      evidencePlan: ["Inspect scoped implementation and Visual QA report context."],
+      passCriteria: ["Implementation evidence and Visual QA context show no implementation defect."],
     },
     drilldowns: [
       {
         checkIDs: [checkID],
-        kind: "inspect_visual_evidence",
-        target: "VisualEvidenceBundle",
-        purpose: "Verify reference-comparison evidence.",
+        kind: "inspect_integrity_evidence",
+        target: "visual_qa_report",
+        purpose: "Review Visual QA context for implementation defects.",
         result: "No issue found.",
       },
     ],
     coverage: [
       {
         checkIDs: [checkID],
-        userRequestQuote: "reference visual evidence",
+        userRequestQuote: "complete implementation",
         status: "covered",
-        evidence: "Visual evidence inspected.",
+        evidence: "Implementation review evidence inspected.",
       },
     ],
-    evidence: [{ checkIDs: [checkID], note: "Visual evidence inspected." }],
+    evidence: [{ checkIDs: [checkID], note: "Implementation review evidence inspected." }],
     openQuestions: [],
   }
 }
@@ -57,34 +57,34 @@ function passConsensusReport() {
       {
         id: "check_reviewer_a",
         reviewerID: "reviewer_a",
-        category: "visual-evidence",
-        target: "VisualEvidenceBundle",
-        question: "Does the task provide required reference visual evidence?",
+        category: "implementation",
+        target: "visual_qa_report",
+        question: "Does Visual QA context expose unresolved implementation defects?",
         status: "passed",
-        expected: "Reference visual evidence is available and passing.",
-        observed: "Reviewers inspected the visual evidence bundle.",
-        evidence: ["Visual evidence inspected."],
+        expected: "No implementation defect remains in the scoped evidence.",
+        observed: "Reviewers inspected implementation context and Visual QA report.",
+        evidence: ["Implementation review evidence inspected."],
       },
       {
         id: "check_reviewer_b",
         reviewerID: "reviewer_b",
-        category: "visual-evidence",
-        target: "VisualEvidenceBundle",
-        question: "Does the second reviewer confirm required visual evidence?",
+        category: "implementation",
+        target: "visual_qa_report",
+        question: "Does the second reviewer confirm implementation completeness?",
         status: "passed",
-        expected: "Reference visual evidence is available and passing.",
-        observed: "Second reviewer inspected the visual evidence bundle.",
-        evidence: ["Visual evidence inspected."],
+        expected: "No implementation defect remains in the scoped evidence.",
+        observed: "Second reviewer inspected implementation context and Visual QA report.",
+        evidence: ["Implementation review evidence inspected."],
       },
     ],
     reviewers: [reviewerReport("reviewer_a"), reviewerReport("reviewer_b")],
     coverageAudit: [
       {
         checkIDs: ["check_reviewer_a", "check_reviewer_b"],
-        promise: "Reference visual evidence was checked.",
+        promise: "Implementation completeness was checked.",
         reviewerIDs: ["reviewer_a", "reviewer_b"],
         status: "covered",
-        notes: "Both reviewers inspected the evidence.",
+        notes: "Both reviewers inspected implementation review evidence.",
       },
     ],
     uninspectedRisks: [],
@@ -134,6 +134,7 @@ describe("integrity browser preview tool surface", () => {
         const toolInfos = await loadIntegrityPreviewToolInfos()
         expect(toolInfos.map((info) => info.id)).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
         expect(toolInfos.map((info) => info.id)).not.toContain("skill")
+        expect(toolInfos.map((info) => info.id)).not.toContain("browser_preview_compare_scroll_slices")
 
         for (const info of toolInfos) {
           const initialized = await info.init()
@@ -149,7 +150,7 @@ describe("integrity browser preview tool surface", () => {
     })
   }, 30_000)
 
-  test("task-backed integrity reviews expose the preview repair toolchain", async () => {
+  test("task-backed integrity reviews expose runtime preview inspection without visual comparison tools", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -163,6 +164,7 @@ describe("integrity browser preview tool surface", () => {
         for (const toolID of INTEGRITY_PREVIEW_TOOL_IDS) {
           expect(Object.keys(kit.tools)).toContain(toolID)
         }
+        expect(Object.keys(kit.tools)).not.toContain("browser_preview_compare_scroll_slices")
         for (const toolID of INTEGRITY_OUTPUT_TOOL_IDS) {
           expect(Object.keys(kit.tools)).toContain(toolID)
         }
@@ -204,7 +206,7 @@ describe("integrity browser preview tool surface", () => {
     })
   })
 
-  test("pass consensus is rejected when required visual evidence is missing", async () => {
+  test("pass consensus records without a legacy visual bundle host gate", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -212,16 +214,15 @@ describe("integrity browser preview tool surface", () => {
         const collector = IntegrityTestHooks.emptyConsensusCollector()
         const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
           collector,
-          taskID: "tsk_integrity_missing_visual_evidence",
+          taskID: "tsk_integrity_missing_visual_feedback",
           goals: [],
           projectRoot: tmp.path,
-          visualEvidenceRequired: true,
         })
         const result = await submitRegisteredIntegrityReport(kit.tools, passConsensusReport())
 
-        expect(String(result)).toContain("Error: pass verdict requires passing task-scoped VisualEvidenceBundle evidence")
-        expect(String(result)).toContain("VisualEvidenceBundle")
-        expect((collector as { report?: unknown }).report).toBeUndefined()
+        expect(String(result)).toContain("RECORDED: integrity review recorded with verdict=pass")
+        expect(String(result)).not.toContain("inspect_visual_feedback_evidence")
+        expect((collector as { report?: { verdict?: string } }).report?.verdict).toBe("pass")
       },
     })
   })

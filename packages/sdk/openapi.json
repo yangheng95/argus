@@ -17178,15 +17178,14 @@
                                         }
                                       },
                                       "inputs": {
-                                        "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                        "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                         "type": "array",
                                         "items": {
                                           "type": "string",
                                           "enum": [
                                             "acceptance_summary",
                                             "changed_files",
-                                            "requirement_text",
-                                            "visual_evidence"
+                                            "requirement_text"
                                           ]
                                         }
                                       }
@@ -17214,7 +17213,7 @@
                                           "exact_match",
                                           "length_within",
                                           "json_schema",
-                                          "visual-evidence-bundle"
+                                          "visual-feedback-verification"
                                         ]
                                       },
                                       "config": {
@@ -17226,12 +17225,12 @@
                                         "additionalProperties": {}
                                       },
                                       "spec": {
-                                        "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                        "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                         "type": "object",
                                         "properties": {
                                           "kind": {
                                             "type": "string",
-                                            "const": "visual_evidence_bundle"
+                                            "const": "visual_feedback_verification"
                                           },
                                           "viewport": {
                                             "type": "string",
@@ -17243,7 +17242,7 @@
                                         ]
                                       },
                                       "expect": {
-                                        "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                        "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                         "type": "object",
                                         "properties": {
                                           "status": {
@@ -19577,6 +19576,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not found",
             "content": {
@@ -19703,6 +19712,15 @@
                     "taskID": {
                       "type": "string"
                     },
+                    "runID": {
+                      "type": "string"
+                    },
+                    "goalRunID": {
+                      "type": "string"
+                    },
+                    "acceptanceID": {
+                      "type": "string"
+                    },
                     "targetID": {
                       "type": "string"
                     },
@@ -19779,6 +19797,16 @@
                     "timeCompleted",
                     "timeCreated"
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
                 }
               }
             }
@@ -20883,6 +20911,109 @@
                     "artifact_note": {
                       "type": "string"
                     },
+                    "comparison_guidance": {
+                      "type": "object",
+                      "properties": {
+                        "side_by_side_legend": {
+                          "type": "object",
+                          "properties": {
+                            "left": {
+                              "type": "object",
+                              "properties": {
+                                "role": {
+                                  "type": "string",
+                                  "const": "source_reference"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "const": "LEFT: source/reference image"
+                                },
+                                "meaning": {
+                                  "type": "string",
+                                  "const": "Expected visual source of truth."
+                                }
+                              },
+                              "required": [
+                                "role",
+                                "label",
+                                "meaning"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "right": {
+                              "type": "object",
+                              "properties": {
+                                "role": {
+                                  "type": "string",
+                                  "const": "local_implementation"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "const": "RIGHT: rendered/local implementation"
+                                },
+                                "meaning": {
+                                  "type": "string",
+                                  "const": "Actual implementation under review."
+                                }
+                              },
+                              "required": [
+                                "role",
+                                "label",
+                                "meaning"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "source_of_truth": {
+                              "type": "string",
+                              "const": "left"
+                            },
+                            "instruction": {
+                              "type": "string",
+                              "const": "Compare the right implementation against the left reference; do not reverse them."
+                            }
+                          },
+                          "required": [
+                            "left",
+                            "right",
+                            "source_of_truth",
+                            "instruction"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "inspection_checklist": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "inspect_for": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "inspect_for"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "side_by_side_legend",
+                        "inspection_checklist"
+                      ],
+                      "additionalProperties": false
+                    },
                     "evidenceIDs": {
                       "type": "object",
                       "propertyNames": {
@@ -21322,6 +21453,7 @@
                     "operation",
                     "comparison_mode",
                     "artifact_note",
+                    "comparison_guidance",
                     "evidenceIDs",
                     "regions",
                     "diagnostics"
@@ -22697,15 +22829,14 @@
                                           }
                                         },
                                         "inputs": {
-                                          "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                          "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                           "type": "array",
                                           "items": {
                                             "type": "string",
                                             "enum": [
                                               "acceptance_summary",
                                               "changed_files",
-                                              "requirement_text",
-                                              "visual_evidence"
+                                              "requirement_text"
                                             ]
                                           }
                                         }
@@ -22733,7 +22864,7 @@
                                             "exact_match",
                                             "length_within",
                                             "json_schema",
-                                            "visual-evidence-bundle"
+                                            "visual-feedback-verification"
                                           ]
                                         },
                                         "config": {
@@ -22745,12 +22876,12 @@
                                           "additionalProperties": {}
                                         },
                                         "spec": {
-                                          "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                          "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                           "type": "object",
                                           "properties": {
                                             "kind": {
                                               "type": "string",
-                                              "const": "visual_evidence_bundle"
+                                              "const": "visual_feedback_verification"
                                             },
                                             "viewport": {
                                               "type": "string",
@@ -22762,7 +22893,7 @@
                                           ]
                                         },
                                         "expect": {
-                                          "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                          "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                           "type": "object",
                                           "properties": {
                                             "status": {
@@ -23149,15 +23280,14 @@
                                                 }
                                               },
                                               "inputs": {
-                                                "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                                "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                                 "type": "array",
                                                 "items": {
                                                   "type": "string",
                                                   "enum": [
                                                     "acceptance_summary",
                                                     "changed_files",
-                                                    "requirement_text",
-                                                    "visual_evidence"
+                                                    "requirement_text"
                                                   ]
                                                 }
                                               }
@@ -23185,7 +23315,7 @@
                                                   "exact_match",
                                                   "length_within",
                                                   "json_schema",
-                                                  "visual-evidence-bundle"
+                                                  "visual-feedback-verification"
                                                 ]
                                               },
                                               "config": {
@@ -23197,12 +23327,12 @@
                                                 "additionalProperties": {}
                                               },
                                               "spec": {
-                                                "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                                "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                                 "type": "object",
                                                 "properties": {
                                                   "kind": {
                                                     "type": "string",
-                                                    "const": "visual_evidence_bundle"
+                                                    "const": "visual_feedback_verification"
                                                   },
                                                   "viewport": {
                                                     "type": "string",
@@ -23214,7 +23344,7 @@
                                                 ]
                                               },
                                               "expect": {
-                                                "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                                "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                                 "type": "object",
                                                 "properties": {
                                                   "status": {
@@ -30229,15 +30359,14 @@
                                                 }
                                               },
                                               "inputs": {
-                                                "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                                "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                                 "type": "array",
                                                 "items": {
                                                   "type": "string",
                                                   "enum": [
                                                     "acceptance_summary",
                                                     "changed_files",
-                                                    "requirement_text",
-                                                    "visual_evidence"
+                                                    "requirement_text"
                                                   ]
                                                 }
                                               }
@@ -30265,7 +30394,7 @@
                                                   "exact_match",
                                                   "length_within",
                                                   "json_schema",
-                                                  "visual-evidence-bundle"
+                                                  "visual-feedback-verification"
                                                 ]
                                               },
                                               "config": {
@@ -30277,12 +30406,12 @@
                                                 "additionalProperties": {}
                                               },
                                               "spec": {
-                                                "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                                "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                                 "type": "object",
                                                 "properties": {
                                                   "kind": {
                                                     "type": "string",
-                                                    "const": "visual_evidence_bundle"
+                                                    "const": "visual_feedback_verification"
                                                   },
                                                   "viewport": {
                                                     "type": "string",
@@ -30294,7 +30423,7 @@
                                                 ]
                                               },
                                               "expect": {
-                                                "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                                "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                                 "type": "object",
                                                 "properties": {
                                                   "status": {
@@ -34916,15 +35045,14 @@
                                             }
                                           },
                                           "inputs": {
-                                            "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                            "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                             "type": "array",
                                             "items": {
                                               "type": "string",
                                               "enum": [
                                                 "acceptance_summary",
                                                 "changed_files",
-                                                "requirement_text",
-                                                "visual_evidence"
+                                                "requirement_text"
                                               ]
                                             }
                                           }
@@ -34952,7 +35080,7 @@
                                               "exact_match",
                                               "length_within",
                                               "json_schema",
-                                              "visual-evidence-bundle"
+                                              "visual-feedback-verification"
                                             ]
                                           },
                                           "config": {
@@ -34964,12 +35092,12 @@
                                             "additionalProperties": {}
                                           },
                                           "spec": {
-                                            "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                            "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                             "type": "object",
                                             "properties": {
                                               "kind": {
                                                 "type": "string",
-                                                "const": "visual_evidence_bundle"
+                                                "const": "visual_feedback_verification"
                                               },
                                               "viewport": {
                                                 "type": "string",
@@ -34981,7 +35109,7 @@
                                             ]
                                           },
                                           "expect": {
-                                            "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                            "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                             "type": "object",
                                             "properties": {
                                               "status": {
@@ -40732,15 +40860,14 @@
                                     }
                                   },
                                   "inputs": {
-                                    "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                    "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
                                     "type": "array",
                                     "items": {
                                       "type": "string",
                                       "enum": [
                                         "acceptance_summary",
                                         "changed_files",
-                                        "requirement_text",
-                                        "visual_evidence"
+                                        "requirement_text"
                                       ]
                                     }
                                   }
@@ -40768,7 +40895,7 @@
                                       "exact_match",
                                       "length_within",
                                       "json_schema",
-                                      "visual-evidence-bundle"
+                                      "visual-feedback-verification"
                                     ]
                                   },
                                   "config": {
@@ -40780,12 +40907,12 @@
                                     "additionalProperties": {}
                                   },
                                   "spec": {
-                                    "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                    "description": "For name=visual-feedback-verification, identifies the required visual feedback verification shape.",
                                     "type": "object",
                                     "properties": {
                                       "kind": {
                                         "type": "string",
-                                        "const": "visual_evidence_bundle"
+                                        "const": "visual_feedback_verification"
                                       },
                                       "viewport": {
                                         "type": "string",
@@ -40797,7 +40924,7 @@
                                     ]
                                   },
                                   "expect": {
-                                    "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                    "description": "For name=visual-feedback-verification, requires a passing current visual feedback verification.",
                                     "type": "object",
                                     "properties": {
                                       "status": {

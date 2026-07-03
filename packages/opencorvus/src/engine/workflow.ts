@@ -15,8 +15,14 @@
  * "推荐路径 + 当前进度" 的形式注入。
  */
 import { createDecisionLog } from "@/decision-log"
+import {
+  readVisualFeedbackVerificationArtifactByID,
+  type VisualFeedbackVerification,
+  VisualFeedbackVerificationSchema,
+} from "@/acceptance/visual-feedback-verification"
 import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
 import { visualQaDecisionRecordEffectiveAcceptance } from "@/visual-qa/acceptance-semantics"
+import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { VisualQaDecisionRecordSchema } from "@/visual-qa/schema"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
@@ -403,13 +409,30 @@ function taskStepStatusByTool(
 }
 
 function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
-  const entries = createDecisionLog(taskID).readByPhase("visual_qa")
+  const decisionLog = createDecisionLog(taskID)
+  const entries = decisionLog.readByPhase("visual_qa")
+  const activeSpec = findActiveSpecForTask(taskID)
+  const visualFeedbackVerificationRequired = deriveVisualQaReferenceParityContext({
+    taskID,
+    specSnapshotID: activeSpec?.id,
+    goals: listGoals(taskID),
+    frontendDesignEntries: decisionLog.readByPhase("frontend_design"),
+  }).required
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.key.startsWith("report_")) {
-      const effectiveAccepted = parseVisualQaReportProjection(entry.value)
-      if (effectiveAccepted === undefined) return "failed"
-      return effectiveAccepted ? "completed" : "failed"
+      const projection = parseVisualQaReportProjection(entry.value)
+      if (!projection) return "failed"
+      const requiresVisualFeedbackVerification =
+        visualFeedbackVerificationRequired || projection.requiresVisualFeedbackVerification
+      if (!requiresVisualFeedbackVerification) return projection.effectiveAccepted ? "completed" : "failed"
+      const verified = parseVisualFeedbackVerificationProjectionAfterReport({
+        taskID,
+        entries,
+        reportIndex: index,
+      })
+      if (verified === undefined) return "failed"
+      return verified ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
       continue
@@ -418,11 +441,56 @@ function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
   return "pending"
 }
 
-function parseVisualQaReportProjection(value: string): boolean | undefined {
+function parseVisualQaReportProjection(
+  value: string,
+): { effectiveAccepted: boolean; requiresVisualFeedbackVerification: boolean } | undefined {
   try {
     const parsed = VisualQaDecisionRecordSchema.safeParse(JSON.parse(value))
     if (!parsed.success) return undefined
-    return visualQaDecisionRecordEffectiveAcceptance(parsed.data).effectiveAccepted
+    return {
+      effectiveAccepted: visualQaDecisionRecordEffectiveAcceptance(parsed.data).effectiveAccepted,
+      requiresVisualFeedbackVerification:
+        parsed.data.report.reference_parity.required ||
+        parsed.data.report.reference_parity.reference_comparison_evidence_refs.length > 0,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function parseVisualFeedbackVerificationProjectionAfterReport(input: {
+  taskID: string
+  entries: DecisionEntryLike[]
+  reportIndex: number
+}): boolean | undefined {
+  for (let index = input.entries.length - 1; index > input.reportIndex; index -= 1) {
+    const entry = input.entries[index]
+    if (entry.key.startsWith("report_")) return undefined
+    if (!entry.key.startsWith("visual_feedback_verification_")) continue
+    const parsed = parseVisualFeedbackVerificationDecision(entry.value)
+    if (!parsed) return undefined
+    const artifact = readVisualFeedbackVerificationArtifactByID({
+      taskID: input.taskID,
+      artifactID: parsed.artifactID,
+    })
+    if (!artifact) return undefined
+    if (artifact.id !== parsed.verification.id || artifact.runID !== parsed.verification.runID) return undefined
+    return artifact.status === "passed"
+  }
+  return undefined
+}
+
+type DecisionEntryLike = { key: string; value: string }
+
+function parseVisualFeedbackVerificationDecision(
+  value: string,
+): { artifactID: string; verification: VisualFeedbackVerification } | undefined {
+  try {
+    const payload = JSON.parse(value) as Record<string, unknown>
+    if (!payload || typeof payload !== "object" || typeof payload.artifact_id !== "string") return undefined
+    const parsed = VisualFeedbackVerificationSchema.safeParse(payload.visual_feedback_verification)
+    if (!parsed.success) return undefined
+    return { artifactID: payload.artifact_id, verification: parsed.data }
   } catch {
     return undefined
   }

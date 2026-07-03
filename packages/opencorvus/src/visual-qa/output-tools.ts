@@ -1,8 +1,8 @@
 import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
-import { browserPreviewEvidenceIDFromRef } from "@/acceptance/visual-evidence"
 import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
+import { browserPreviewEvidenceIDFromRef } from "@/browser-preview/persist"
 import { FactCheckItemSchema } from "@/fact-check/schema"
 import { visualQaOpenBlockingFindings, visualQaReportAcceptanceSemantics } from "./acceptance-semantics"
 import { annotateVisualQaProblemDomRegion } from "./annotated-screenshot"
@@ -345,19 +345,17 @@ async function summarizeVisualQaReportFeedback(
         "accepted=true was submitted while context expects reference parity but report.reference_parity.required=false.",
       )
     }
-    if (report.accepted && context.referenceParityRequired && (context.requiredReferenceRegions?.length ?? 0) === 0) {
-      advisories.push(
-        "context expects reference parity but no authoritative requiredReferenceRegions were available from task evidence.",
-      )
+    if (report.accepted && requiredRegionKeys.length === 0) {
+      blockers.push("accepted=true was submitted for required reference parity without required reference regions.")
     }
     if (report.accepted && refs.size === 0) {
-      advisories.push(
-        "reference parity report did not submit formal reference_comparison evidence refs; host materialization must produce a scoped VisualEvidenceBundle before final integrity acceptance.",
+      blockers.push(
+        "accepted=true was submitted for required reference parity without reference_comparison_evidence_refs.",
       )
     }
     if (report.accepted && refs.size > 0) {
       if (!context.taskID || !context.projectRoot) {
-        advisories.push(
+        blockers.push(
           "reference comparison refs were submitted, but task-scoped project context was unavailable for advisory verification.",
         )
       } else {
@@ -378,23 +376,23 @@ async function summarizeVisualQaReportFeedback(
             }
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error)
-            advisories.push(`submitted reference comparison evidence ${evidenceID} is unreadable: ${detail}`)
+            blockers.push(`submitted reference comparison evidence ${evidenceID} is unreadable: ${detail}`)
           }
         }
         if (validEvidence.length === 0) {
-          advisories.push("no submitted reference comparison refs resolved to readable passed browser_preview_evidence.")
+          blockers.push("no submitted reference comparison refs resolved to readable passed browser_preview_evidence.")
         }
         for (const key of requiredRegionKeys) {
           const parsed = parseReferenceRegionKey(key)
           if ("issue" in parsed) {
-            advisories.push(parsed.issue)
+            blockers.push(parsed.issue)
             continue
           }
           const matched = validEvidence.some(
             (evidence) => evidence.regionID === parsed.regionID && evidence.viewportID === parsed.viewportID,
           )
           if (!matched) {
-            advisories.push(
+            blockers.push(
               `submitted report lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`,
             )
           }

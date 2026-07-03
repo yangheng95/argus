@@ -403,6 +403,41 @@ describe("evaluateBuildReportSubmission", () => {
     expect(evaluated.accepted).toBe(true)
   })
 
+  test("rejects passed report that does not consume dispatched visual feedback comparison artifacts", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the comparison mismatch.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+      },
+      ownsWorktree: false,
+      requiredVisualFeedbackComparisonRefs: ["/attachment/proj/art_header.side_by_side.png"],
+    })
+
+    expect(evaluated.accepted).toBe(false)
+    expect(evaluated.output).toContain("REJECTED: build report did not consume dispatched visual feedback comparison evidence")
+    expect(evaluated.output).toContain("consumed_visual_feedback_comparison_refs")
+  })
+
+  test("accepts passed report that lists consumed visual feedback comparison artifacts", () => {
+    const evaluated = evaluateBuildReportSubmission({
+      result: {
+        status: "passed",
+        summary: "Fixed the comparison mismatch.",
+        files_changed: [],
+        tests: [],
+        fact_check_items: [],
+        consumed_visual_feedback_comparison_refs: ["/attachment/proj/art_header.side_by_side.png"],
+      },
+      ownsWorktree: false,
+      requiredVisualFeedbackComparisonRefs: ["/attachment/proj/art_header.side_by_side.png"],
+    })
+
+    expect(evaluated.accepted).toBe(true)
+  })
+
   test("accepts valid build terminal payload and normalizes managed worktree commit_ref", () => {
     const evaluated = evaluateBuildReportSubmission({
       result: {

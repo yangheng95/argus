@@ -20,7 +20,7 @@ const essentialAcceptanceVisualSpec: AcceptanceSpec = {
       name: "rendered-reference-fidelity",
       criteria:
         "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
-      inputs: ["visual_evidence"],
+      inputs: ["visual_feedback"],
     },
   ],
 }
@@ -37,14 +37,15 @@ const textOnlyAcceptanceVisualSpec: AcceptanceSpec = {
   ],
 }
 
-const prebuiltVisualEvidenceSpec: AcceptanceSpec = {
+const prebuiltVisualFeedbackSpec: AcceptanceSpec = {
   ...essentialAcceptanceVisualSpec,
+  trigger: "on_goal",
   scorers: [
     {
       type: "prebuilt",
-      name: "visual-evidence-bundle",
+      name: "visual-feedback-verification",
       config: {},
-      spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+      spec: { kind: "visual_feedback_verification", viewport: "desktop-primary" },
       expect: { status: "passed" },
     },
   ],
@@ -241,7 +242,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
-  test("reports reference-driven architecture without visual evidence acceptance as a concern", () => {
+  test("reports reference-driven architecture without visual feedback acceptance as a concern", () => {
     const weakVisualSpec: AcceptanceSpec = {
       ...essentialAcceptanceVisualSpec,
       severity: "important",
@@ -255,7 +256,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
         (finding) =>
           finding.severity === "blocker" &&
           finding.message.includes(
-            "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal",
+            "Missing visual feedback acceptance advisory: reference-driven tasks should include a verification/integration goal",
           ),
       ),
     ).toBe(false)
@@ -264,7 +265,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
         (finding) =>
           finding.severity === "concern" &&
           finding.message.includes(
-            "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal",
+            "Missing visual feedback acceptance advisory: reference-driven tasks should include a verification/integration goal",
           ),
       ),
     ).toBe(true)
@@ -273,7 +274,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     ).toEqual([])
   })
 
-  test("reports text-only visual judge as missing visual evidence acceptance", () => {
+  test("reports text-only visual judge as missing visual feedback acceptance", () => {
     const findings = architectValidationFindings(collectorForReferenceTask([textOnlyAcceptanceVisualSpec]), {
       requireReferenceCoverage: true,
     })
@@ -285,8 +286,8 @@ describe("orchestrator architect fidelity diagnostics", () => {
 
   test("reports final visual evidence spec that omits a registered reference region as a concern", () => {
     const spec: AcceptanceSpec = {
-      ...prebuiltVisualEvidenceSpec,
-      title: "Desktop visual evidence bundle passes",
+      ...prebuiltVisualFeedbackSpec,
+      title: "Desktop visual feedback verification passes",
     }
     const findings = architectValidationFindings(collectorForReferenceTask([spec]), {
       requireReferenceCoverage: true,
@@ -300,16 +301,18 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(architectValidationIssues(collectorForReferenceTask([spec]), { requireReferenceCoverage: true })).toEqual([])
   })
 
-  test("allows reference-driven architecture with visual_evidence judge input", () => {
-    const issues = architectValidationIssues(collectorForReferenceTask([essentialAcceptanceVisualSpec]), {
+  test("reports visual_feedback LLM judge input as missing deterministic visual feedback verification", () => {
+    const findings = architectValidationFindings(collectorForReferenceTask([essentialAcceptanceVisualSpec]), {
       requireReferenceCoverage: true,
     })
 
-    expect(issues).toEqual([])
+    expect(
+      findings.some((finding) => finding.code === "missing_final_visual_acceptance" && finding.severity === "concern"),
+    ).toBe(true)
   })
 
-  test("allows reference-driven architecture with visual evidence bundle prebuilt scorer", () => {
-    const issues = architectValidationIssues(collectorForReferenceTask([prebuiltVisualEvidenceSpec]), {
+  test("allows reference-driven architecture with visual feedback verification prebuilt scorer", () => {
+    const issues = architectValidationIssues(collectorForReferenceTask([prebuiltVisualFeedbackSpec]), {
       requireReferenceCoverage: true,
     })
 

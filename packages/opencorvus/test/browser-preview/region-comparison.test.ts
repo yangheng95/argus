@@ -13,6 +13,7 @@ import {
   compareBrowserPreviewRegions,
   resolveSourceReferencePath,
 } from "../../src/browser-preview/region-comparison"
+import { BrowserPreviewComparisonGuidance } from "../../src/browser-preview/comparison-guidance"
 import { findReadableBrowserPreviewEvidenceByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -98,6 +99,7 @@ describe("browser preview region comparison", () => {
       operation: "reference-comparison",
       comparison_mode: "true-size",
       artifact_note: "true-size comparison",
+      comparison_guidance: BrowserPreviewComparisonGuidance,
       evidenceIDs: {},
       regions: [
         {
@@ -184,6 +186,11 @@ describe("browser preview region comparison", () => {
         expect(result.status).toBe("passed")
         expect(result.comparison_mode).toBe("true-size")
         expect(result.artifact_note).toContain("True-size comparison")
+        expect(result.comparison_guidance.side_by_side_legend.left.role).toBe("source_reference")
+        expect(result.comparison_guidance.side_by_side_legend.right.role).toBe("local_implementation")
+        expect(result.comparison_guidance.inspection_checklist.map((item) => item.id)).toEqual(
+          expect.arrayContaining(["layout_alignment", "icon_asset_fidelity", "data_visualization_geometry"]),
+        )
         expect(result.diagnostics[0]).toContain("True-size comparison")
         expect(result.regions).toHaveLength(1)
         expect(result.regions[0].crop_intent).toBe("full-region")

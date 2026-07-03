@@ -39,6 +39,14 @@ export const BrowserPreviewEvidenceCorruptionError = NamedError.create(
   }),
 )
 
+export function browserPreviewEvidenceIDFromRef(ref: string): string | undefined {
+  const trimmed = ref.trim()
+  const withoutPrefix = trimmed.startsWith("browser_preview_evidence:")
+    ? trimmed.slice("browser_preview_evidence:".length).trim()
+    : trimmed
+  return withoutPrefix.startsWith("art_") ? withoutPrefix : undefined
+}
+
 export const PersistedBrowserPreviewTarget = z.object({
   id: z.string(),
   taskID: z.string(),
@@ -53,6 +61,9 @@ export type PersistedBrowserPreviewTarget = z.infer<typeof PersistedBrowserPrevi
 export const PersistedBrowserPreviewEvidence = z.object({
   id: z.string(),
   taskID: z.string(),
+  runID: z.string().optional(),
+  goalRunID: z.string().optional(),
+  acceptanceID: z.string().optional(),
   targetID: z.string(),
   viewportID: z.string(),
   operationKind: BrowserPreviewEvidenceOperationKind,
@@ -372,6 +383,9 @@ function findBrowserPreviewEvidenceByID(input: {
   return {
     id: row.id,
     taskID: row.task_id,
+    runID: row.run_id ?? undefined,
+    goalRunID: row.goal_run_id ?? undefined,
+    acceptanceID: row.acceptance_id ?? undefined,
     targetID: payload.target_id,
     viewportID: payload.viewport_id,
     operationKind: payload.operation_kind,
@@ -432,6 +446,9 @@ export async function findReadableBrowserPreviewEvidenceArtifactPath(input: {
 export function persistBrowserPreviewEvidence(input: {
   projectRoot: string
   taskID: string
+  runID?: string
+  goalRunID?: string
+  acceptanceID?: string
   targetID: string
   viewportID: string
   operationKind: "preview-capture" | "reference-comparison" | "source-binding" | "layout-geometry"
@@ -473,9 +490,9 @@ export function persistBrowserPreviewEvidence(input: {
       .values({
         id,
         task_id: input.taskID,
-        run_id: null,
-        goal_run_id: null,
-        acceptance_id: null,
+        run_id: input.runID ?? null,
+        goal_run_id: input.goalRunID ?? null,
+        acceptance_id: input.acceptanceID ?? null,
         kind: BROWSER_PREVIEW_EVIDENCE_KIND,
         label: "capture",
         payload: {

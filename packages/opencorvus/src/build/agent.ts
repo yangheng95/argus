@@ -57,6 +57,7 @@ import {
   record,
   structuredInput,
   type CodingEventInfo,
+  type CodingToolInfo,
   type CodingProvider,
   type CodingProviderOptions,
 } from "@/executor/contract"
@@ -503,6 +504,7 @@ export function evaluateBuildReportSubmission(input: {
   worktreeBranch?: string
   requiredVisualQaAnnotationRefs?: readonly string[]
   requiredVisualQaDiagnosticRefs?: readonly string[]
+  requiredVisualFeedbackComparisonRefs?: readonly string[]
 }): BuildReportSubmission {
   const parsedResult = BuildResultSchema.safeParse(input.result)
   if (!parsedResult.success) {
@@ -542,6 +544,20 @@ export function evaluateBuildReportSubmission(input: {
         "Inspect the diagnostic files, list every consumed ref in consumed_visual_qa_diagnostic_refs, and call report_build_result again.",
     }
   }
+  const visualFeedbackComparisonIssue = buildMissingConsumedRefsIssue(
+    parsedResult.data,
+    input.requiredVisualFeedbackComparisonRefs,
+    "consumed_visual_feedback_comparison_refs",
+  )
+  if (visualFeedbackComparisonIssue) {
+    return {
+      accepted: false,
+      output:
+        "REJECTED: build report did not consume dispatched visual feedback comparison evidence. " +
+        `${visualFeedbackComparisonIssue} ` +
+        "Inspect the comparison images, list every consumed ref in consumed_visual_feedback_comparison_refs, and call report_build_result again.",
+    }
+  }
 
   const commit_ref = input.mergedHead
     ? input.mergedHead.slice(0, 12)
@@ -559,7 +575,10 @@ export function evaluateBuildReportSubmission(input: {
 function buildMissingConsumedRefsIssue(
   result: BuildResult,
   requiredRefs: readonly string[] | undefined,
-  consumedField: "consumed_visual_qa_annotation_refs" | "consumed_visual_qa_diagnostic_refs",
+  consumedField:
+    | "consumed_visual_qa_annotation_refs"
+    | "consumed_visual_qa_diagnostic_refs"
+    | "consumed_visual_feedback_comparison_refs",
 ): string | undefined {
   const required = [...new Set(requiredRefs ?? [])].filter((ref) => ref.trim().length > 0).sort()
   if (required.length === 0 || result.status !== "passed") return undefined
@@ -574,6 +593,10 @@ function buildEvidenceVisualQaAnnotationRefs(pack: BuildEvidencePack | undefined
 
 function buildEvidenceVisualQaDiagnosticRefs(pack: BuildEvidencePack | undefined): string[] {
   return [...new Set((pack?.visualQaDiagnostics ?? []).map((file) => file.url).filter((url) => url.trim().length > 0))]
+}
+
+function buildEvidenceVisualFeedbackComparisonRefs(pack: BuildEvidencePack | undefined): string[] {
+  return [...new Set((pack?.comparisonArtifacts ?? []).map((file) => file.url).filter((url) => url.trim().length > 0))]
 }
 
 export namespace BuildAgent {
@@ -998,20 +1021,22 @@ export namespace BuildAgent {
       const promptContext = input.context
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
-      const evidencePack = retryingExistingBuildSession ? undefined : promptContext?.evidencePack
-      const inputEvidenceManifest = retryingExistingBuildSession
-        ? originalInputEvidenceManifest
-        : promptContext?.inputEvidenceManifest
-      if (evidencePack && !inputEvidenceManifest) {
+      const evidencePack = promptContext?.evidencePack
+      const currentInputEvidenceManifest = promptContext?.inputEvidenceManifest
+      const inputEvidenceManifest =
+        currentInputEvidenceManifest ?? (retryingExistingBuildSession ? originalInputEvidenceManifest : undefined)
+      if (evidencePack && !currentInputEvidenceManifest) {
         throw new Error("BuildAgent.run: evidencePack requires validated inputEvidenceManifest before staging")
       }
-      const validatedEvidencePack = retryingExistingBuildSession
-        ? undefined
-        : buildEvidencePackFromInputManifest(inputEvidenceManifest)
-      const evidenceEntries = buildEvidenceEntries(validatedEvidencePack)
-      const targetReferences = buildEvidenceTargetReferences(validatedEvidencePack)
-      const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(validatedEvidencePack)
-      const requiredVisualQaDiagnosticRefs = buildEvidenceVisualQaDiagnosticRefs(validatedEvidencePack)
+      const promptEvidencePack = buildEvidencePackFromInputManifest(
+        currentInputEvidenceManifest ?? (!retryingExistingBuildSession ? inputEvidenceManifest : undefined),
+      )
+      const reportContractEvidencePack = buildEvidencePackFromInputManifest(inputEvidenceManifest)
+      const evidenceEntries = buildEvidenceEntries(promptEvidencePack)
+      const targetReferences = buildEvidenceTargetReferences(promptEvidencePack)
+      const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(reportContractEvidencePack)
+      const requiredVisualQaDiagnosticRefs = buildEvidenceVisualQaDiagnosticRefs(reportContractEvidencePack)
+      const requiredVisualFeedbackComparisonRefs = buildEvidenceVisualFeedbackComparisonRefs(reportContractEvidencePack)
       const buildPromptText = () =>
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
@@ -1026,7 +1051,7 @@ export namespace BuildAgent {
       // AttachmentStore.writeFromPath, so Build no longer reads the original
       // content-addressed blob a second time after staging.
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
-      if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && evidenceEntries.length > 0) {
+      if (worktreeDir && evidenceEntries.length > 0) {
         try {
           stagedAttachments = await AttachmentStore.stageToWorktree(input.task.project_id, evidenceEntries, worktreeDir)
           if (stagedAttachments.length > 0) {
@@ -1066,7 +1091,7 @@ export namespace BuildAgent {
           })
         }
       }
-      const evidenceRoleSections = renderBuildEvidenceRoleSections(validatedEvidencePack)
+      const evidenceRoleSections = renderBuildEvidenceRoleSections(promptEvidencePack)
       const buildUserPartsFn =
         evidenceEntries.length > 0
           ? async () => {
@@ -1102,7 +1127,7 @@ export namespace BuildAgent {
       // pixels in the message). Mirrors the opencorvus path so external
       // executors stop free-styling away from screenshots they were given.
       const buildExternalPromptText =
-        !retryingExistingBuildSession && evidenceEntries.length > 0
+        evidenceEntries.length > 0
           ? () => {
               if (stagedAttachments.length === 0) {
                 throw new Error(
@@ -1210,6 +1235,7 @@ export namespace BuildAgent {
               worktreeBranch,
               requiredVisualQaAnnotationRefs,
               requiredVisualQaDiagnosticRefs,
+              requiredVisualFeedbackComparisonRefs,
             })
             if (!evaluated.accepted) return evaluated.output
             // No host-side enforcement of merge_back-before-passed and no
@@ -1473,6 +1499,16 @@ export namespace BuildAgent {
       if (visualQaDiagnosticConsumptionError) {
         throw new Error(`build agent: Visual QA diagnostic consumption contract failed: ${visualQaDiagnosticConsumptionError}`)
       }
+      const visualFeedbackComparisonConsumptionError = buildMissingConsumedRefsIssue(
+        parsed.data,
+        requiredVisualFeedbackComparisonRefs,
+        "consumed_visual_feedback_comparison_refs",
+      )
+      if (visualFeedbackComparisonConsumptionError) {
+        throw new Error(
+          `build agent: visual feedback comparison consumption contract failed: ${visualFeedbackComparisonConsumptionError}`,
+        )
+      }
 
       // commit_ref policy: in managed worktree mode, only the merged primary
       // HEAD is a valid published commit. If the LLM reported passed without
@@ -1639,6 +1675,56 @@ function externalToolResultInput(event: Extract<CodingEventInfo, { type: "tool_r
   if (meta.arguments !== undefined) return externalToolInput(meta.arguments)
   if (meta.input !== undefined) return externalToolInput(meta.input)
   return {}
+}
+
+const EXTERNAL_STRUCTURED_BUILD_OUTPUT_TOOL = "structured_output"
+const EXTERNAL_STRUCTURED_BUILD_OUTPUT_ALIASES = new Set([
+  "structuredoutput",
+  "structured_output",
+  "taskoutput",
+  "task_output",
+  "json_schema_output",
+  "final",
+])
+
+function isExternalStructuredBuildOutputTool(name: string | undefined): boolean {
+  const normalized = name?.trim().toLowerCase()
+  return Boolean(normalized && EXTERNAL_STRUCTURED_BUILD_OUTPUT_ALIASES.has(normalized))
+}
+
+function externalBuildResultTool(): CodingToolInfo {
+  return {
+    type: "function",
+    name: EXTERNAL_STRUCTURED_BUILD_OUTPUT_TOOL,
+    description:
+      "Submit the final build result as structured JSON matching the BuildResult schema. " +
+      "Use this instead of prose when the build is complete.",
+    inputSchema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
+  }
+}
+
+function externalBuildTools(
+  configuredTools: CodingToolInfo[] | undefined,
+  capabilities: { customTools: boolean },
+): CodingToolInfo[] | undefined {
+  if (!capabilities.customTools) return configuredTools
+  const tools = configuredTools ?? []
+  if (tools.some((item) => isExternalStructuredBuildOutputTool(item.name))) return tools
+  return [...tools, externalBuildResultTool()]
+}
+
+function parseExternalStructuredBuildResult(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    throw new Error("external structured build result was empty")
+  }
+  const parsed = JSON.parse(raw) as unknown
+  const parsedRecord = record(parsed)
+  if (parsedRecord && !("status" in parsedRecord)) {
+    const output = record(parsedRecord.output)
+    if (output) return output
+  }
+  return parsed
 }
 
 function externalQuestionLine(question: Record<string, unknown>): string {
@@ -2060,6 +2146,7 @@ function makeExternalPassedBuildResult(input: {
       "For follow-up agents: do not estimate remaining work from this synthesized summary alone. Read the build prompt, workload brief, diffs, verification evidence, and any unresolved executor events before planning more implementation.",
     consumed_visual_qa_annotation_refs: [],
     consumed_visual_qa_diagnostic_refs: [],
+    consumed_visual_feedback_comparison_refs: [],
     fact_check_items: [],
   }
 }
@@ -2084,6 +2171,7 @@ function makeExternalFailedBuildResult(input: {
       "For follow-up agents: treat this failed external run as a workload-underestimation risk. Re-read the build prompt, workload brief, source evidence, failed merge or verification output, and consider workload_analysis / Architect re-sizing before another implementation pass.",
     consumed_visual_qa_annotation_refs: [],
     consumed_visual_qa_diagnostic_refs: [],
+    consumed_visual_feedback_comparison_refs: [],
     fact_check_items: [],
   }
 }
@@ -2150,6 +2238,7 @@ async function runWithExternalProviderImpl(args: {
   signal?: AbortSignal
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   const { provider, options } = ExecutorRegistry.requireCoding(args.executor)
+  const providerCapabilities = provider.capabilities()
 
   const session = await Session.get(args.existingSessionID)
   if (session.kind !== "build") {
@@ -2224,6 +2313,7 @@ async function runWithExternalProviderImpl(args: {
   let toolUseCount = 0
   let textCharCount = 0
   let doneOutput: string | undefined
+  let structuredBuildResult: unknown | undefined
   let errored: string | undefined
   const protocolErrors: string[] = []
 
@@ -2277,7 +2367,7 @@ async function runWithExternalProviderImpl(args: {
     userAppend,
   })
 
-  const configuredTools = resolveOption(options.tools)
+  const configuredTools = externalBuildTools(resolveOption(options.tools), providerCapabilities)
   // Per-build idle monitor. The external executor's `provider.run` yields events
   // by streaming over its own subprocess stdio; if the LLM-side connection
   // stalls (e.g. the 2026-04-27 codex benchmark caught a build subprocess
@@ -2472,6 +2562,15 @@ async function runWithExternalProviderImpl(args: {
             errored = protocolError
             break
           }
+          if (isExternalStructuredBuildOutputTool(name)) {
+            try {
+              structuredBuildResult = parseExternalStructuredBuildResult(event.output)
+            } catch (error) {
+              errored = `external executor returned invalid structured build result: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            }
+          }
           await Session.updatePart({
             id: t.id,
             sessionID: session.id,
@@ -2512,6 +2611,9 @@ async function runWithExternalProviderImpl(args: {
           break
         case "done":
           doneOutput = event.output ?? undefined
+          if (event.meta && "structured_output" in event.meta) {
+            structuredBuildResult = parseExternalStructuredBuildResult(event.meta.structured_output)
+          }
           break
         case "error":
           await appendExternalEventPart(event)
@@ -2589,14 +2691,16 @@ async function runWithExternalProviderImpl(args: {
     // so a synthesized placeholder file entry is redundant misinformation.
     return {
       sessionID: session.id,
-      structured: makeExternalPassedBuildResult({
-        commit_ref: "",
-        summary:
-          doneOutput?.trim() ||
-          `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
-        files_changed: [],
-        tests: [],
-      }),
+      structured:
+        structuredBuildResult ??
+        makeExternalPassedBuildResult({
+          commit_ref: "",
+          summary:
+            doneOutput?.trim() ||
+            `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+          files_changed: [],
+          tests: [],
+        }),
     }
   }
 
@@ -2735,16 +2839,23 @@ async function runWithExternalProviderImpl(args: {
   // shows the host's actual_changed_files (computed from baseRef..HEAD)
   // alongside this report, so the orchestrator LLM has the truth without
   // the synthesized placeholder. Spec ...md (B18).
+  const mergedStructuredBuildResult = structuredBuildResult
+    ? (record(structuredBuildResult)
+        ? { ...record(structuredBuildResult), commit_ref: mergedHead.slice(0, 12) }
+        : structuredBuildResult)
+    : undefined
   return {
     sessionID: session.id,
-    structured: makeExternalPassedBuildResult({
-      commit_ref: mergedHead.slice(0, 12),
-      summary:
-        doneOutput?.trim() ||
-        `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
-      files_changed: [],
-      tests: [],
-    }),
+    structured:
+      mergedStructuredBuildResult ??
+      makeExternalPassedBuildResult({
+        commit_ref: mergedHead.slice(0, 12),
+        summary:
+          doneOutput?.trim() ||
+          `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+        files_changed: [],
+        tests: [],
+      }),
     mergedHead,
   }
 }
@@ -3094,6 +3205,7 @@ function renderBuildTerminalReportContract(): string {
     "- `reference_comparison_evidence_refs`: optional supporting visual evidence refs when you actually produced task-scoped region comparison artifacts. If you could not produce them, explain the remaining visual gap or blocker in the report instead of inventing refs.",
     "- `consumed_visual_qa_annotation_refs`: every Visual QA annotated screenshot url from the Build Evidence Pack that you inspected and used for repair. When such evidence is present, passed reports without these refs are rejected.",
     "- `consumed_visual_qa_diagnostic_refs`: every Visual QA diagnostic url from the Build Evidence Pack that you inspected and used for repair, such as layout-geometry manifests. When such evidence is present, passed reports without these refs are rejected.",
+    "- `consumed_visual_feedback_comparison_refs`: every visual feedback comparison artifact url from the Build Evidence Pack that you inspected and used for repair. When such evidence is present, passed reports without these refs are rejected.",
     "",
     "Do not shrink the report to the files you happened to touch. Weak follow-up models must be able to recover the real work surface from your terminal report without re-underestimating it.",
   ].join("\n")

@@ -13,7 +13,7 @@ import z from "zod"
 
 export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
 export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity"])
-export const LlmJudgeInputKind = z.enum(["acceptance_summary", "changed_files", "requirement_text", "visual_evidence"])
+export const LlmJudgeInputKind = z.enum(["acceptance_summary", "changed_files", "requirement_text"])
 
 const GherkinScenarioSchema = z
   .object({
@@ -73,7 +73,9 @@ const LlmJudgeScorerSchema = z.object({
   inputs: z
     .array(LlmJudgeInputKind)
     .optional()
-    .describe("Which parts of the acceptance to feed the judge. Default: acceptance_summary."),
+    .describe(
+      "Which parts of the acceptance to feed the judge. Default: acceptance_summary. LLM judges cannot consume visual feedback; final rendered reference parity uses prebuilt visual-feedback-verification.",
+    ),
 })
 
 export const PREBUILT_SCORER_NAMES = [
@@ -83,7 +85,7 @@ export const PREBUILT_SCORER_NAMES = [
   "exact_match",
   "length_within",
   "json_schema",
-  "visual-evidence-bundle",
+  "visual-feedback-verification",
 ] as const
 
 const PrebuiltScorerSchema = z.object({
@@ -96,17 +98,17 @@ const PrebuiltScorerSchema = z.object({
   config: z.record(z.string(), z.unknown()).default({}),
   spec: z
     .object({
-      kind: z.literal("visual_evidence_bundle"),
+      kind: z.literal("visual_feedback_verification"),
       viewport: z.string().min(1).optional(),
     })
     .optional()
-    .describe("For name=visual-evidence-bundle, identifies the required visual evidence bundle shape."),
+    .describe("For name=visual-feedback-verification, identifies the required visual feedback verification shape."),
   expect: z
     .object({
       status: z.literal("passed"),
     })
     .optional()
-    .describe("For name=visual-evidence-bundle, requires a passing current bundle."),
+    .describe("For name=visual-feedback-verification, requires a passing current visual feedback verification."),
 })
 
 const ContractAuditScorerSchema = z.object({
@@ -193,11 +195,11 @@ export function renderSpecsAsText(specs: readonly AcceptanceSpec[]): string {
           `    - [contract_audit] ${sc.name} — ${sc.spec.kind} contracts=${sc.spec.contract_ids.join(", ")} expect=${sc.expect.status}`,
         )
       } else {
-        const visualBundle =
-          sc.name === "visual-evidence-bundle" && sc.spec?.kind === "visual_evidence_bundle"
+        const visualFeedback =
+          sc.name === "visual-feedback-verification" && sc.spec?.kind === "visual_feedback_verification"
             ? ` — ${sc.spec.kind}${sc.spec.viewport ? ` viewport=${sc.spec.viewport}` : ""} expect=${sc.expect?.status ?? "(unspecified)"}`
             : ""
-        lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}${visualBundle}`)
+        lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}${visualFeedback}`)
       }
     }
   }

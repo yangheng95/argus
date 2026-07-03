@@ -10,6 +10,10 @@ import { requireRuntimePackage } from "@/runtime/package-require"
 import { RUNTIME_CAPTURE_DEFAULTS } from "@/runtime/capture-contract"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 import {
+  BrowserPreviewComparisonGuidance,
+  type BrowserPreviewComparisonGuidance as BrowserPreviewComparisonGuidanceValue,
+} from "./comparison-guidance"
+import {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionBox,
   BrowserPreviewRegionLocator,
@@ -45,7 +49,12 @@ export type LocalModuleCapture = {
 
 export type SourceRegionCandidate = {
   id: string
-  source: "source-dom-region" | "visual-surface-candidate" | "layout-map"
+  source:
+    | "component-tree"
+    | "source-component-pattern"
+    | "source-dom-region"
+    | "visual-surface-candidate"
+    | "layout-map"
   bbox: BrowserPreviewRegionBox
   text: string
   sourceRefs: string[]
@@ -70,6 +79,7 @@ export type LocalModuleSourceBindingResult = {
     implementation_crop: string
     module_comparison: string
   }
+  comparison_guidance: BrowserPreviewComparisonGuidanceValue
   diagnostics: string[]
 }
 
@@ -174,6 +184,7 @@ export async function bindLocalModuleToSourceRegion(
     localCapture,
     binding,
     artifacts,
+    comparison_guidance: BrowserPreviewComparisonGuidance,
     diagnostics,
   })
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8")
@@ -208,6 +219,7 @@ export async function bindLocalModuleToSourceRegion(
     binding,
     evidenceID,
     artifacts,
+    comparison_guidance: BrowserPreviewComparisonGuidance,
     diagnostics,
   }
 }
@@ -225,6 +237,12 @@ export async function collectSourceRegionCandidates(input: {
     ...(await readLayoutMapCandidates(path.join(paths.sourcePackageAbsolute, "source-ir", "layout-map.json"))),
   )
   candidates.push(
+    ...(await readComponentModelCandidates({
+      componentTreePath: path.join(paths.sourcePackageAbsolute, "source-ir", "component-tree.json"),
+      contentModelPath: path.join(paths.sourcePackageAbsolute, "source-ir", "content-model.json"),
+    })),
+  )
+  candidates.push(
     ...(await readSourceDomRegionCandidates(
       path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomRegions.ts"),
     )),
@@ -232,7 +250,7 @@ export async function collectSourceRegionCandidates(input: {
   const deduped = dedupeCandidates(candidates)
   if (deduped.length === 0) {
     throw new Error(
-      "No source region candidates found. Expected visual-surface-candidates.json, source-ir/layout-map.json, or frontend-design-skeleton/src/data/sourceDomRegions.ts.",
+      "No source region candidates found. Expected source-ir/component-tree.json, source-ir/content-model.json, visual-surface-candidates.json, source-ir/layout-map.json, or frontend-design-skeleton/src/data/sourceDomRegions.ts.",
     )
   }
   return deduped
@@ -245,17 +263,20 @@ export function selectSourceRegionCandidate(input: {
   componentFiles: string[]
   explicitTextAnchors: string[]
 }): SourceRegionCandidate {
-  const anchors = normalizeAnchors([
+  const identityAnchors = normalizeAnchors([
     input.regionID,
     ...input.componentFiles.flatMap((file) => path.basename(file, path.extname(file)).split(/[-_.]/g)),
-    ...input.explicitTextAnchors,
+  ])
+  const explicitAnchors = normalizeAnchors(input.explicitTextAnchors)
+  const localAnchors = normalizeAnchors([
     ...input.localCapture.textAnchors,
     input.localCapture.fullText.slice(0, 200),
   ])
+  const anchors = Array.from(new Set([...identityAnchors, ...explicitAnchors, ...localAnchors]))
   if (anchors.length === 0) throw new Error("Local module source binding needs text anchors from the locator or input.")
   const localArea = input.localCapture.bbox.width * input.localCapture.bbox.height
   const scored = input.candidates
-    .map((candidate) => scoreCandidate(candidate, anchors, localArea))
+    .map((candidate) => scoreCandidate(candidate, { all: anchors, explicit: explicitAnchors }, localArea))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || candidateArea(a) - candidateArea(b))
   const selected = scored[0]
@@ -418,6 +439,136 @@ async function readLayoutMapCandidates(file: string): Promise<SourceRegionCandid
   })
 }
 
+type ComponentTreeCandidate = SourceRegionCandidate & { rootNodeID?: string }
+
+async function readComponentModelCandidates(input: {
+  componentTreePath: string
+  contentModelPath: string
+}): Promise<SourceRegionCandidate[]> {
+  const componentCandidates = await readComponentTreeCandidates(input.componentTreePath)
+  const componentByRootNodeID = new Map(
+    componentCandidates
+      .map((candidate) => (candidate.rootNodeID ? ([candidate.rootNodeID, candidate] as const) : undefined))
+      .filter((entry): entry is readonly [string, ComponentTreeCandidate] => Boolean(entry)),
+  )
+  const patternCandidates = await readSourceComponentPatternCandidates(input.contentModelPath, componentByRootNodeID)
+  const patternComponentIDs = new Set(patternCandidates.map((candidate) => `${candidate.source}:${candidate.id}`))
+  return [
+    ...componentCandidates.filter((candidate) => !patternComponentIDs.has(`${candidate.source}:${candidate.id}`)),
+    ...patternCandidates,
+  ]
+}
+
+async function readComponentTreeCandidates(file: string): Promise<ComponentTreeCandidate[]> {
+  const json = await readJsonFile(file)
+  if (json === undefined) return []
+  const rows = asRecord(json).components
+  if (!Array.isArray(rows)) {
+    throw new Error(`Malformed component tree JSON: ${file}: expected components array`)
+  }
+  return rows.flatMap((row, index) => {
+    const record = asRecord(row)
+    const bbox = readBounds(record.bounds)
+    if (!bbox) throw new Error(`Malformed component tree JSON: ${file}: components[${index}] missing bounds`)
+    const sourceID = readString(record.id)
+    const rootNodeID = readString(record.rootNodeId)
+    const name = readString(record.name)
+    const id = sourceCandidateID({
+      label: `component tree ${file} components[${index}]`,
+      values: [name, sourceID, rootNodeID],
+    })
+    const kind = readString(record.kind)
+    const tag = readString(record.tag)
+    const text = [
+      name,
+      kind,
+      tag,
+      ...readStringArray(record.classNames),
+      ...readStringArray(record.textPreview),
+      readString(record.implementationHint),
+    ]
+      .filter(Boolean)
+      .join(" ")
+    const sourceRefs = [
+      "web-clone-source/source-ir/component-tree.json",
+      name ? `component:${name}` : undefined,
+      sourceID ? `component-id:${sourceID}` : undefined,
+      rootNodeID ? `node:${rootNodeID}` : undefined,
+      kind ? `kind:${kind}` : undefined,
+      tag ? `tag:${tag}` : undefined,
+    ].filter((sourceRef): sourceRef is string => typeof sourceRef === "string")
+    return [
+      {
+        id,
+        source: "component-tree" as const,
+        bbox,
+        text,
+        sourceRefs,
+        rootNodeID,
+      },
+    ]
+  })
+}
+
+async function readSourceComponentPatternCandidates(
+  file: string,
+  componentByRootNodeID: Map<string, ComponentTreeCandidate>,
+): Promise<SourceRegionCandidate[]> {
+  const json = await readJsonFile(file)
+  if (json === undefined) return []
+  const rows = asRecord(json).sourceComponentPatterns
+  if (!Array.isArray(rows)) {
+    throw new Error(`Malformed content model JSON: ${file}: expected sourceComponentPatterns array`)
+  }
+  return rows.flatMap((row, index) => {
+    const record = asRecord(row)
+    const nodeID = readString(record.nodeId)
+    if (!nodeID) throw new Error(`Malformed content model JSON: ${file}: sourceComponentPatterns[${index}] missing nodeId`)
+    const hasBounds = Object.hasOwn(record, "bounds")
+    const bbox = hasBounds ? readBounds(record.bounds) : undefined
+    if (hasBounds && !bbox && !hasZeroAreaBounds(record.bounds)) {
+      throw new Error(`Malformed content model JSON: ${file}: sourceComponentPatterns[${index}] invalid bounds`)
+    }
+    const kind = readString(record.kind)
+    const tag = readString(record.tag)
+    const replacementKind = readString(record.recommendedReplacementKind)
+    const textPreview = readString(record.textPreview) ?? readStringArray(record.textPreview).join(" ")
+    const signalText = renderSignalText(asRecord(record.signals))
+    const component = componentByRootNodeID.get(nodeID)
+    const sourceRefs = [
+      ...(component?.sourceRefs ?? []),
+      "web-clone-source/source-ir/content-model.json",
+      `node:${nodeID}`,
+      kind ? `kind:${kind}` : undefined,
+      tag ? `tag:${tag}` : undefined,
+      replacementKind ? `replacement:${replacementKind}` : undefined,
+    ].filter((sourceRef): sourceRef is string => typeof sourceRef === "string")
+    if (component) {
+      return [
+        {
+          ...component,
+          bbox: component.bbox,
+          text: [component.text, kind, tag, replacementKind, textPreview, signalText].filter(Boolean).join(" "),
+          sourceRefs: Array.from(new Set(sourceRefs)),
+        },
+      ]
+    }
+    if (!bbox) return []
+    return [
+      {
+        id: sourceCandidateID({
+          label: `content model ${file} sourceComponentPatterns[${index}]`,
+          values: [nodeID],
+        }),
+        source: "source-component-pattern" as const,
+        bbox,
+        text: [kind, tag, replacementKind, textPreview, signalText].filter(Boolean).join(" "),
+        sourceRefs: Array.from(new Set(sourceRefs)),
+      },
+    ]
+  })
+}
+
 async function readSourceDomRegionCandidates(file: string): Promise<SourceRegionCandidate[]> {
   let text: string
   try {
@@ -500,23 +651,36 @@ function errorMessage(error: unknown): string {
 
 function scoreCandidate(
   candidate: SourceRegionCandidate,
-  anchors: string[],
+  anchors: { all: string[]; explicit: string[] },
   localArea: number,
 ): SourceRegionCandidate & {
   score: number
   matchedAnchors: string[]
 } {
   const haystack = normalizeText([candidate.id, candidate.text, ...candidate.sourceRefs].join(" "))
-  const matchedAnchors = anchors.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedAnchors = anchors.all.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const matchedExplicitAnchors = anchors.explicit.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
   const sourceRefHaystack = normalizeText(candidate.sourceRefs.join(" "))
-  const matchedSourceRefAnchors = anchors.filter((anchor) => anchorMatchesNormalizedText(sourceRefHaystack, anchor))
+  const matchedSourceRefAnchors = anchors.all.filter((anchor) => anchorMatchesNormalizedText(sourceRefHaystack, anchor))
   const sourceWeight =
-    candidate.source === "source-dom-region" ? 45 : candidate.source === "visual-surface-candidate" ? 35 : 5
+    candidate.source === "source-dom-region"
+      ? 52
+      : candidate.source === "component-tree"
+        ? 48
+        : candidate.source === "source-component-pattern"
+          ? 42
+          : candidate.source === "visual-surface-candidate"
+            ? 35
+            : 5
   const candidateID = normalizeText(expandAnchorText(candidate.id).join(" "))
   const identityWeight = matchedAnchors.some((anchor) => anchorMatchesNormalizedText(candidateID, anchor)) ? 90 : 0
   const anchorScore = Math.min(
     360,
     matchedAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
+  )
+  const explicitAnchorScore = Math.min(
+    420,
+    matchedExplicitAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
   )
   const sourceRefScore = Math.min(
     240,
@@ -525,7 +689,7 @@ function scoreCandidate(
   const areaWeight = candidateAreaWeight(candidateArea(candidate), localArea)
   return {
     ...candidate,
-    score: anchorScore + sourceRefScore + identityWeight + sourceWeight + areaWeight,
+    score: explicitAnchorScore + anchorScore + sourceRefScore + identityWeight + sourceWeight + areaWeight,
     matchedAnchors,
   }
 }
@@ -611,25 +775,52 @@ function anchorHasUnspacedScript(anchor: string): boolean {
 }
 
 function dedupeCandidates(candidates: SourceRegionCandidate[]): SourceRegionCandidate[] {
-  const seen = new Set<string>()
+  const byVisualCandidate = new Map<string, SourceRegionCandidate>()
   const out: SourceRegionCandidate[] = []
   for (const candidate of candidates) {
-    const key = `${candidate.source}:${candidate.id}:${candidate.bbox.x},${candidate.bbox.y},${candidate.bbox.width},${candidate.bbox.height}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const key = [
+      candidate.source,
+      candidate.bbox.x,
+      candidate.bbox.y,
+      candidate.bbox.width,
+      candidate.bbox.height,
+    ].join(":")
+    const existing = byVisualCandidate.get(key)
+    if (existing) {
+      const merged = {
+        ...existing,
+        text: Array.from(new Set([existing.text, candidate.text].filter(Boolean))).join(" "),
+        sourceRefs: Array.from(new Set([...existing.sourceRefs, ...candidate.sourceRefs])),
+      }
+      byVisualCandidate.set(key, merged)
+      out[out.indexOf(existing)] = merged
+      continue
+    }
+    byVisualCandidate.set(key, candidate)
     out.push(candidate)
   }
   return out
 }
 
 function readBounds(input: unknown): BrowserPreviewRegionBox | undefined {
+  const bounds = readBoundsParts(input)
+  if (!bounds) return undefined
+  if (bounds.width <= 0 || bounds.height <= 0) return undefined
+  return bounds
+}
+
+function hasZeroAreaBounds(input: unknown): boolean {
+  const bounds = readBoundsParts(input)
+  return Boolean(bounds && (bounds.width === 0 || bounds.height === 0))
+}
+
+function readBoundsParts(input: unknown): BrowserPreviewRegionBox | undefined {
   const record = asRecord(input)
   const x = readNumber(record.x)
   const y = readNumber(record.y)
   const width = readNumber(record.w) ?? readNumber(record.width)
   const height = readNumber(record.h) ?? readNumber(record.height)
   if (x === undefined || y === undefined || width === undefined || height === undefined) return undefined
-  if (width <= 0 || height <= 0) return undefined
   return { x, y, width, height }
 }
 
@@ -680,8 +871,8 @@ async function writeModuleComparison(input: {
     <text x="16" y="30" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">${escapeXml(input.title)} module source binding</text>
     <text x="16" y="56" font-family="Arial, sans-serif" font-size="14" fill="#374151">source: ${escapeXml(input.sourceCandidate.id)} (${escapeXml(input.sourceCandidate.source)}) bbox=${boxLabel(input.sourceCandidate.bbox)}</text>
     <text x="16" y="78" font-family="Arial, sans-serif" font-size="14" fill="#374151">local bbox=${boxLabel(input.localCapture.bbox)} anchors=${escapeXml(input.localCapture.textAnchors.slice(0, 5).join(" | "))}</text>
-    <text x="16" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Source crop</text>
-    <text x="${source.width + gap + 16}" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">Local implementation crop</text>
+    <text x="16" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">LEFT: Source crop</text>
+    <text x="${source.width + gap + 16}" y="${headerHeight + 26}" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#374151">RIGHT: Local implementation crop</text>
   </svg>`
   await sharp({
     create: { width, height, channels: 4, background: "#f6f7f9" },
@@ -774,6 +965,27 @@ function readStringArray(value: unknown): string[] {
     return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
   const stringValue = readString(value)
   return stringValue ? [stringValue] : []
+}
+
+function sourceCandidateID(input: { label: string; values: Array<string | undefined> }): string {
+  const value = input.values.find((candidate) => candidate && candidate.trim().length > 0)
+  if (!value) throw new Error(`Malformed ${input.label}: missing candidate identity`)
+  return value
+}
+
+function renderSignalText(signals: Record<string, unknown>): string {
+  const values: string[] = []
+  for (const key of Object.keys(signals).sort()) {
+    const value = signals[key]
+    if (typeof value === "string" && value.trim()) values.push(`${key}:${value.trim()}`)
+    else if (typeof value === "number" && Number.isFinite(value)) values.push(`${key}:${value}`)
+    else if (typeof value === "boolean") values.push(`${key}:${String(value)}`)
+    else if (Array.isArray(value)) {
+      const text = readStringArray(value).join(" ")
+      if (text) values.push(`${key}:${text}`)
+    }
+  }
+  return values.join(" ")
 }
 
 function readNumber(value: unknown): number | undefined {
@@ -1004,6 +1216,8 @@ async function main() {
       }, box);
       await fs.mkdir(input.outDir, { recursive: true });
       screenshotPath = path.join(input.outDir, "local-fullpage.png");
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(100);
       await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
       browserFailures.assertNoFailures("source binding capture");
     } finally {

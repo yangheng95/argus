@@ -3,7 +3,6 @@ import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import { deriveVisualQaReferenceParityContext } from "../../src/visual-qa/reference-parity-context"
 import { VisualQaTestHooks } from "../../src/visual-qa"
 import { renderVisualQaFrontendDesignContext, renderVisualQaFrontendResearchContext } from "../../src/visual-qa/context"
-import { VisualEvidenceBundleSchema } from "../../src/acceptance/visual-evidence"
 import type { ResearchBrief } from "../../src/research/schema"
 
 describe("visual-qa final blocker-based acceptance", () => {
@@ -57,6 +56,12 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("supporting first-viewport and page-slice visual inspection")
     expect(normalized).toContain("Keep `scrollY` and `sliceHeight` aligned with the source slice")
     expect(normalized).toContain("share the same viewport-slice contract")
+    expect(normalized).toContain("comparison_guidance.side_by_side_legend")
+    expect(normalized).toContain("LEFT is the source/reference image")
+    expect(normalized).toContain("RIGHT is the rendered/local implementation")
+    expect(normalized).toContain("missing or wrong icons/assets")
+    expect(normalized).toContain("hallucinated or missing content")
+    expect(normalized).toContain("chart/table/map scale errors")
     expect(normalized).toContain("do not treat a status flag alone as proof")
     expect(normalized).toContain("does not run a second `reference-comparison` pass")
     expect(normalized).toContain("Browser MCP screenshot/observe tools")
@@ -74,7 +79,7 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("shared layout anchors")
     expect(normalized).toContain("cross-viewport alignment")
     expect(normalized).toContain("A passed visual QA report for a bound module should cite fresh")
-    expect(normalized).toContain("cannot replace the scoped `VisualEvidenceBundle`")
+    expect(normalized).toContain("does not replace required task-scoped `reference-comparison` evidence")
     expect(normalized).toContain("submit the visual QA report with the exact blocker or remaining evidence gap")
     expect(normalized).toContain(
       "A single full-page screenshot or single slice cannot prove the whole page is accepted",
@@ -109,6 +114,11 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(prompt).toContain("shared layout anchors")
     expect(prompt).toContain("instead of inventing proof or reference-comparison refs")
     expect(prompt).toContain("supporting visual_diff evidence")
+    expect(prompt).toContain("comparison_guidance.side_by_side_legend")
+    expect(prompt).toContain("LEFT is the source/reference image")
+    expect(prompt).toContain("RIGHT is the rendered/local implementation")
+    expect(prompt).toContain("missing or wrong icons/assets")
+    expect(prompt).toContain("hallucinated or missing content")
     expect(prompt).toContain("per-screen screenshots or scroll-slice comparisons")
     expect(prompt).toContain("problem_dom_regions")
     expect(prompt).toContain("computed styles")
@@ -142,7 +152,7 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(withReference).toContain("Enforce reference/parity fidelity only when")
   })
 
-  test("reference artifacts alone do not require authoritative region parity", () => {
+  test("reference artifacts require rendered visual feedback verification without becoming pass evidence", () => {
     const artifactOnly = deriveVisualQaReferenceParityContext({
       taskID: "tsk_visual_ref",
       goals: [],
@@ -153,69 +163,23 @@ describe("visual-qa final blocker-based acceptance", () => {
         },
       ],
     })
-    const evidenceBundle = deriveVisualQaReferenceParityContext({
+
+    expect(artifactOnly).toEqual({ required: true, regions: [] })
+  })
+
+  test("frontend final acceptance mode requires rendered visual feedback verification", () => {
+    const finalAcceptanceModeOnly = deriveVisualQaReferenceParityContext({
       taskID: "tsk_visual_ref",
       goals: [],
-      visualEvidence: [
+      frontendDesignEntries: [
         {
-          id: "bundle_1",
-          taskID: "tsk_visual_ref",
-          source: "frontend_design",
-          reference: { path: "reference.png", sha256: "ref", width: 1440, height: 900 },
-          rendered: {
-            path: "rendered.png",
-            sha256: "rendered",
-            width: 1440,
-            height: 900,
-            capturedAt: "2026-06-21T00:00:00.000Z",
-            viewport: { width: 1440, height: 900 },
-            appURL: "http://127.0.0.1:4173/",
-            projectDirectory: "/tmp/project",
-          },
-            inspection: {
-              reviewedAt: "2026-06-21T00:00:00.000Z",
-              status: "passing",
-              blockerCount: 0,
-              notes: "Reviewed.",
-            },
-            pageCoverage: {
-              coordinateSpace: "source_reference_image_px",
-              implementationUse: "evidence_only",
-              requiredRegionIDs: ["region_header"],
-              coveredIntervals: [
-                {
-                  id: "coverage_full_reference",
-                  label: "Full reference page",
-                  y: 0,
-                  height: 900,
-                  regionIDs: ["region_header"],
-                  evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-                  notes: "Required evidence covers the full source reference height.",
-                },
-              ],
-              unexplainedBlankIntervals: [],
-            },
-            regions: [
-            {
-              id: "region_header",
-              label: "Header",
-              requirementIDs: ["REQ-1"],
-              acceptanceSpecIDs: ["acc-1"],
-              sourceRefs: ["reference.png"],
-              viewport: "desktop",
-              cropIntent: "full-region",
-              required: true,
-              status: "passing",
-              evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-              notes: "Compared.",
-            },
-          ],
+          key: "final_acceptance_mode",
+          value: "visual_baseline_allowed",
         },
       ],
     })
 
-    expect(artifactOnly).toEqual({ required: false, regions: [] })
-    expect(evidenceBundle).toEqual({ required: true, regions: ["region_header@desktop"] })
+    expect(finalAcceptanceModeOnly).toEqual({ required: true, regions: [] })
   })
 
   test("frontend research reference image ids trigger strict context", () => {
@@ -229,93 +193,7 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(context).toContain("not an automatic universal clone requirement")
   })
 
-  test("VisualEvidenceBundle schema rejects unknown fields instead of stripping parallel evidence sources", () => {
-    const bundle = visualEvidenceBundle()
-
-    expect(VisualEvidenceBundleSchema.safeParse(bundle).success).toBe(true)
-    expect(VisualEvidenceBundleSchema.safeParse({ ...bundle, sourceUrl: "https://example.com" }).success).toBe(false)
-    expect(
-      VisualEvidenceBundleSchema.safeParse({
-        ...bundle,
-        rendered: { ...bundle.rendered, appUrl: "http://127.0.0.1:4173/" },
-      }).success,
-    ).toBe(false)
-    expect(
-      VisualEvidenceBundleSchema.safeParse({
-        ...bundle,
-        regions: [{ ...bundle.regions[0], screenshotArtifact: "standalone.png" }],
-      }).success,
-    ).toBe(false)
-    expect(
-      VisualEvidenceBundleSchema.safeParse({
-        ...bundle,
-        regions: [
-          {
-            ...bundle.regions[0],
-            bounds: { x: 0, y: 0, width: 100, height: 60, sourceUrl: "https://example.com" },
-          },
-        ],
-      }).success,
-    ).toBe(false)
-  })
 })
-
-function visualEvidenceBundle() {
-  return {
-    id: "bundle_1",
-    taskID: "tsk_visual_ref",
-    source: "frontend_design",
-    reference: { path: "reference.png", sha256: "ref", width: 1440, height: 900 },
-    rendered: {
-      path: "rendered.png",
-      sha256: "rendered",
-      width: 1440,
-      height: 900,
-      capturedAt: "2026-06-21T00:00:00.000Z",
-      viewport: { width: 1440, height: 900 },
-      appURL: "http://127.0.0.1:4173/",
-      projectDirectory: "/tmp/project",
-    },
-    inspection: {
-      reviewedAt: "2026-06-21T00:00:00.000Z",
-      status: "passing",
-      blockerCount: 0,
-      notes: "Reviewed.",
-    },
-    pageCoverage: {
-      coordinateSpace: "source_reference_image_px",
-      implementationUse: "evidence_only",
-      requiredRegionIDs: ["region_header"],
-      coveredIntervals: [
-        {
-          id: "coverage_full_reference",
-          label: "Full reference page",
-          y: 0,
-          height: 900,
-          regionIDs: ["region_header"],
-          evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-          notes: "Required evidence covers the full source reference height.",
-        },
-      ],
-      unexplainedBlankIntervals: [],
-    },
-    regions: [
-      {
-        id: "region_header",
-        label: "Header",
-        requirementIDs: ["REQ-1"],
-        acceptanceSpecIDs: ["acc-1"],
-        sourceRefs: ["reference.png"],
-        viewport: "desktop",
-        cropIntent: "full-region",
-        required: true,
-        status: "passing",
-        evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
-        notes: "Compared.",
-      },
-    ],
-  }
-}
 
 function researchBriefWithReference(): ResearchBrief {
   return {

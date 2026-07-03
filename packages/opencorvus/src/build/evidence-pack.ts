@@ -120,7 +120,7 @@ export function renderBuildEvidenceRoleSections(pack: BuildEvidencePack | undefi
     ),
     ...roleSection(
       "Comparison And Verification Artifacts",
-      "Diagnostic artifacts for investigation and verification. They are not target references.",
+      "Diagnostic artifacts for investigation and verification. They are not target references. Consume visual feedback comparison artifacts for repair and list their urls in consumed_visual_feedback_comparison_refs before reporting status='passed'.",
       pack?.comparisonArtifacts,
     ),
     ...roleSection(

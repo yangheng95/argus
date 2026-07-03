@@ -57,15 +57,14 @@ describe("architect grep-only acceptance spec discipline", () => {
     expect(prompt).toContain('for graph-contract checks use `type:"contract_audit"` with registered contract ids')
   })
 
-  test("core prompt gives exact final visual evidence acceptance repair path", async () => {
+  test("core prompt gives exact final visual feedback acceptance repair path", async () => {
     const prompt = await readArchitectPrompt()
 
-    expect(prompt).toContain("register_visual_evidence_acceptance")
+    expect(prompt).toContain("register_visual_feedback_acceptance")
     expect(prompt).toContain("reference_tokens")
-    expect(prompt).toContain('"type":"prebuilt"')
-    expect(prompt).toContain('"name":"visual-evidence-bundle"')
-    expect(prompt).toContain('"kind":"visual_evidence_bundle"')
-    expect(prompt).toContain('"inputs":["visual_evidence"]')
+    expect(prompt).toContain('"name":"visual-feedback-verification"')
+    expect(prompt).toContain('"kind":"visual_feedback_verification"')
+    expect(prompt).toContain("Do not use an Integrity-owned LLM judge for the final visual verdict.")
   })
 
   test("core prompt forbids internal runtime owned paths", async () => {

@@ -108,10 +108,10 @@ OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 T
 | GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
 | GET | `/task/{taskID}/board` | Get task board 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.board` |
 | GET | `/task/{taskID}/brief` | Get task brief 错误: `LogFileNotFoundError`, `NotFoundError`. | `task.brief` |
-| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
+| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target 错误: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence 请求体: `targetID`, `viewportIDs`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.captureTaskTarget` |
 | POST | `/task/{taskID}/browser-preview/compare` | Compare browser preview regions against source visual evidence 请求体: `inlineBindings`, `targetID`, `viewportIDs`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.compareTaskTargetRegions` |
-| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence 错误: `BadRequestError`, `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidence` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/artifact/{artifactName}` | Read browser preview region comparison artifact 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceArtifact` |
 | GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}/capture.png` | Read browser preview evidence screenshot 错误: `BrowserPreviewEvidenceCorruptionError`, `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.readTaskEvidenceCapture` |
 | PUT | `/task/{taskID}/browser-preview/target` | Select task browser preview target 请求体: `targetID`; 错误: `LogFileNotFoundError`, `NotFoundError`. | `browserPreview.selectTaskTarget` |

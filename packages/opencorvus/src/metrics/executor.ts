@@ -12,7 +12,7 @@
  *   - shell:      { cmd, cwd?, parse: 'exit_code' | 'stdout_number' | 'stdout_pattern',
  *                   pattern?, timeout_ms?, expected_exit_code? }
  *   - judge:      { criteria, rubric?: RubricLevel[], inputs?: string[] }
- *   - prebuilt:   { name: 'visual-evidence-bundle' }
+ *   - prebuilt:   { name: 'visual-feedback-verification' }
  *   - query:      { sql, value_column? }
  *   - aggregator: { of: string[], op: 'mean' | 'min' | 'max' | 'sum' }
  *
@@ -30,12 +30,12 @@ import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
-  summarizeVisualEvidenceBundle,
-  validateVisualEvidenceBundleReferenceComparisons,
-  visualEvidenceBundlePasses,
-  VisualEvidenceBundleListSchema,
-  type VisualEvidenceBundle,
-} from "@/acceptance/visual-evidence"
+  readLatestTaskVisualFeedbackVerification,
+  summarizeVisualFeedbackVerification,
+  validateVisualFeedbackVerification,
+  VisualFeedbackVerificationListSchema,
+  type VisualFeedbackVerification,
+} from "@/acceptance/visual-feedback-verification"
 import { readResultsForIteration, readSpecsForTask, writeMetricResult } from "./store"
 import type { MetricDirection, MetricResult, MetricSpec } from "./types"
 
@@ -55,6 +55,7 @@ export interface MetricExecutorContext {
 export interface ExecuteMetricsInput {
   task_id: string
   iteration: number
+  run_id?: string | null
   /** Goal-run this iteration belongs to, if any. Attached to every result row. */
   goal_run_id?: string | null
   /** Acceptance context fed to the judge evaluator (summary, diff text, etc.). */
@@ -65,7 +66,6 @@ export interface AcceptanceContext {
   summary?: string
   changed_files?: string[]
   requirement_text?: string
-  visual_evidence?: VisualEvidenceBundle[]
 }
 
 export interface ExecuteMetricsOutcome {
@@ -303,7 +303,6 @@ export interface JudgeRequest {
     acceptance_summary?: string
     changed_files?: string[]
     requirement_text?: string
-    visual_evidence?: VisualEvidenceBundle[]
   }
 }
 
@@ -318,9 +317,11 @@ export type JudgeRunner = (req: JudgeRequest) => Promise<JudgeResponse>
 interface JudgeConfig {
   criteria: string
   rubric?: Array<{ score: number; label: string; anchor: string; passes: boolean }>
-  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
-  requires_visual_evidence?: boolean
+  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
 }
+
+const JUDGE_INPUT_KINDS = ["acceptance_summary", "changed_files", "requirement_text"] as const
+const JUDGE_INPUT_KIND_SET = new Set<string>(JUDGE_INPUT_KINDS)
 
 async function runJudge(
   spec: MetricSpec,
@@ -343,27 +344,17 @@ async function runJudge(
       evidence_fresh: false,
     }
   }
-  const requested = new Set(cfg.inputs ?? ["acceptance_summary"])
-  if (cfg.requires_visual_evidence && !requested.has("visual_evidence")) {
+  const inputKinds = cfg.inputs ?? ["acceptance_summary"]
+  const unsupportedInputs = inputKinds.filter((kind) => !JUDGE_INPUT_KIND_SET.has(String(kind)))
+  if (unsupportedInputs.length > 0) {
     return {
       raw_value: 0,
-      evidence_ref: `judge://visual_evidence input required by ${spec.id} but evaluator_config.inputs omitted it`,
+      evidence_ref: `judge://unsupported input(s) for ${spec.id}: ${unsupportedInputs.join(", ")}`,
       evidence_fresh: false,
     }
   }
+  const requested = new Set(inputKinds)
   const acceptance = input.acceptance ?? {}
-  let visualEvidence: VisualEvidenceBundle[] | undefined
-  if (requested.has("visual_evidence")) {
-    const parsed = VisualEvidenceBundleListSchema.safeParse(acceptance.visual_evidence ?? [])
-    if (!parsed.success || parsed.data.length === 0) {
-      return {
-        raw_value: 0,
-        evidence_ref: `judge://visual_evidence missing or invalid for ${spec.id}`,
-        evidence_fresh: false,
-      }
-    }
-    visualEvidence = parsed.data
-  }
   const req: JudgeRequest = {
     spec,
     criteria: cfg.criteria,
@@ -372,20 +363,14 @@ async function runJudge(
       acceptance_summary: requested.has("acceptance_summary") ? acceptance.summary : undefined,
       changed_files: requested.has("changed_files") ? acceptance.changed_files : undefined,
       requirement_text: requested.has("requirement_text") ? acceptance.requirement_text : undefined,
-      visual_evidence: visualEvidence,
     },
   }
   const resp = await ctx.judge(req)
   return {
     raw_value: resp.score,
-    evidence_ref: `judge://${truncate(formatJudgeEvidenceRef(resp.rationale, visualEvidence), 400)}`,
+    evidence_ref: `judge://${truncate(resp.rationale, 400)}`,
     evidence_fresh: true,
   }
-}
-
-function formatJudgeEvidenceRef(rationale: string, visualEvidence: VisualEvidenceBundle[] | undefined): string {
-  if (!visualEvidence?.length) return rationale
-  return [rationale, ...visualEvidence.map((bundle) => summarizeVisualEvidenceBundle(bundle))].join(" | ")
 }
 
 // ---------------------------------------------------------------------------
@@ -393,51 +378,63 @@ function formatJudgeEvidenceRef(rationale: string, visualEvidence: VisualEvidenc
 // ---------------------------------------------------------------------------
 
 interface PrebuiltConfig {
-  name: "visual-evidence-bundle"
+  name: "visual-feedback-verification"
 }
 
 async function runPrebuilt(spec: MetricSpec, input: ExecuteMetricsInput): Promise<RawEvaluation> {
   const cfg = spec.evaluator_config as unknown as PrebuiltConfig
-  if (!cfg || cfg.name !== "visual-evidence-bundle") {
-    throw new Error(`prebuilt evaluator for ${spec.id} must use name=visual-evidence-bundle`)
+  if (!cfg || cfg.name !== "visual-feedback-verification") {
+    throw new Error(`prebuilt evaluator for ${spec.id} must use name=visual-feedback-verification`)
   }
-  const parsed = VisualEvidenceBundleListSchema.safeParse(input.acceptance?.visual_evidence ?? [])
+  if (!input.run_id) {
+    return {
+      raw_value: 0,
+      evidence_ref: `prebuilt://visual-feedback-verification requires run_id for ${spec.id}`,
+      evidence_fresh: false,
+    }
+  }
+  const parsed = VisualFeedbackVerificationListSchema.safeParse(
+    visualFeedbackForMetrics({ taskID: input.task_id, runID: input.run_id }) ?? [],
+  )
   if (!parsed.success || parsed.data.length === 0) {
     return {
       raw_value: 0,
-      evidence_ref: `prebuilt://visual_evidence missing or invalid for ${spec.id}`,
+      evidence_ref: `prebuilt://visual-feedback-verification artifact missing or invalid for ${spec.id}`,
       evidence_fresh: false,
     }
   }
   const issues: string[] = []
   const summaries: string[] = []
-  for (const bundle of parsed.data) {
-    summaries.push(summarizeVisualEvidenceBundle(bundle))
-    const validation = await validateVisualEvidenceBundleReferenceComparisons({
-      projectRoot: bundle.rendered.projectDirectory,
-      bundle,
+  for (const verification of parsed.data) {
+    summaries.push(summarizeVisualFeedbackVerification(verification))
+    const validation = await validateVisualFeedbackVerification({
+      verification,
       expectedTaskID: input.task_id,
+      expectedRunID: input.run_id ?? undefined,
     })
-    if (!visualEvidenceBundlePasses(bundle) || !validation.passing) {
-      issues.push(
-        `VisualEvidenceBundle ${bundle.id}: ${
-          validation.issues.join("; ") || "required visual regions are not fully passing"
-        }`,
-      )
+    if (!validation.passing) {
+      issues.push(`visual feedback verification ${verification.id}: ${validation.issues.join("; ")}`)
     }
   }
   if (issues.length > 0) {
     return {
       raw_value: 0,
-      evidence_ref: `prebuilt://visual-evidence-bundle failed: ${truncate(issues.join(" | "), 400)}`,
+      evidence_ref: `prebuilt://visual-feedback-verification failed: ${truncate(issues.join(" | "), 400)}`,
       evidence_fresh: true,
     }
   }
   return {
     raw_value: 1,
-    evidence_ref: `prebuilt://visual-evidence-bundle passed: ${truncate(summaries.join(" | "), 400)}`,
+    evidence_ref: `prebuilt://visual-feedback-verification passed: ${truncate(summaries.join(" | "), 400)}`,
     evidence_fresh: true,
   }
+}
+
+function visualFeedbackForMetrics(input: { taskID: string; runID: string }): VisualFeedbackVerification[] | undefined {
+  return readLatestTaskVisualFeedbackVerification({
+    taskID: input.taskID,
+    runID: input.runID,
+  })
 }
 
 // ---------------------------------------------------------------------------

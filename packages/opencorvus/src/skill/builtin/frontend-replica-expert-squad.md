@@ -14,6 +14,8 @@ priority: 90
 
 Use this skill when the task is a frontend replica task: webpage clone, reference-screenshot port, reference-page recreation, design-system rewrite that must preserve source structure, or a UI task whose acceptance depends on source URL/screenshot/DOM evidence.
 
+Vocabulary: DOM means Document Object Model; CSS means Cascading Style Sheets; QA means Quality Assurance; URL means Uniform Resource Locator.
+
 ## First action
 
 Call `select_expert_squad` with `profile_id: "frontend-replica"` unless the current task root session is already using that profile.
@@ -31,18 +33,58 @@ The reason must cite task evidence, such as source URL, reference screenshot, de
 - After an agent has already produced its task-scope artifact, consume the persisted artifact instead of calling that same agent again for another angle. Exceptions are explicit retry of a failed/incomplete call, Build implementation or repair, Visual QA review or re-review, and Integrity review or re-review after repair.
 - Do not re-run Requirements, Architect, `frontend_research`, `frontend_design`, or the whole workflow as a convenience loop after their valid artifacts exist. If evidence proves a prior artifact invalid, name the invalid artifact and exact evidence, then perform a scoped retry/correction rather than restarting the workflow.
 
+## Source authority
+
+- Source URL/screenshot/DOM/computed-style/interaction evidence defines the replica contract. Target project primitives, component libraries, data mocks, and business code are subordinate implementation choices.
+- Source evidence rows are not user-visible deliverables by themselves. They become implementation work only after Requirements or Architect maps them to a visible component, state, region, interaction, asset, table, chart, map, or media slot with target files and rendered acceptance.
+- Do not accept screenshot-only prose, source-row labels, or unchecked design summaries as proof that the rendered implementation matches the source. The proof must tie source evidence to local rendered output and the owning implementation surface.
+
+## Replica surface model
+
+- Track each requested surface as a visible source-backed component or region with source evidence refs, target implementation files, Component Interaction Matrix rows, rendered proof, current Visual QA / Integrity blockers, and acceptance-attempt count.
+- Treat target project reuse as a constraint inside that surface. Reuse may reduce code volume, but it must not rewrite source module order, density, typography, colors, interaction semantics, or content ownership.
+- A Build result with no target project diff, no owning module binding, or no fresh rendered proof is non-delivery for that surface. It must not satisfy downstream acceptance or dependency decisions.
+- For support goals, require an explicit consumer list. A shared registry, mock contract, asset extractor, or token module is valid only when downstream visible surface goals import it and prove it in rendered output.
+
+## Acceptance attempt budget
+
+- Orchestrator must maintain a visible rendered-feedback ledger per requested surface. Count only evidence-backed non-pass rounds where Visual QA / visual-feedback verification inspected the current rendered implementation against the current source surface and reported concrete visual blockers. Integrity non-pass rows are implementation completeness evidence, not rendered-feedback attempts.
+- Toolchain failures, unavailable preview targets, missing source evidence, browser crashes, or unmaterialized screenshots are blockers that must be repaired or reported, but they are not rendered-feedback attempts.
+- After the first evidence-backed rendered-feedback non-pass round, dispatch scoped Build repair with exact blocker IDs, source/reference refs, local screenshot refs, affected files, and the expected proof to produce next.
+- After the second consecutive evidence-backed rendered-feedback non-pass round for the same requested surface, do not schedule another blind repair loop. Use the Orchestrator lifecycle to mark the surface/task not accepted, list unresolved blockers, failed requirements, cited evidence, and why the current turn cannot truthfully deliver it.
+- Never reword a second failed rendered-feedback acceptance round as "basically complete" or "minor issues" unless the recorded blockers themselves prove they are out of scope.
+
 ## Goal decomposition discipline
 
-- If the operator does not specify goal granularity, default to one source component or meaningful source region per goal.
-- Do not mix several source components, unrelated regions, or a whole page into one Build goal.
-- Normal webpage replica decomposition generally needs 10 or more goals. Fewer goals require source evidence that the page has fewer than 10 meaningful components or regions, plus an explicit Architect note explaining why each remaining goal is still one component or region.
-- Keep each goal tied to its source evidence, target implementation files, Component Interaction Matrix entries, and rendered verification evidence.
+- If the operator does not specify goal granularity, default to one user-visible implementation component or meaningful source-backed page region per Build goal.
+- Source rows, visual-source rows, style-profile rows, DOM records, evidence-table rows, and data-extraction rows are evidence inputs only. Do not register them as Build goal titles, objectives, or acceptance surfaces unless they map to a user-visible component or region with target files and acceptance proof.
+- Do not mix several user-visible source components, unrelated regions, or a whole page into one Build goal.
+- Normal webpage replica decomposition generally needs 10 or more goals. Fewer goals require source evidence that the page has fewer than 10 meaningful user-visible components or regions, plus an explicit Architect note explaining why each remaining goal is still one component or region.
+- Keep each goal tied to its source evidence, target implementation files, Component Interaction Matrix entries, and rendered verification evidence. A support goal such as source registry or shared mock contracts may exist only when it writes shared source/data modules consumed by user-visible region goals.
+- Do not accept `no_project_diff`, documentation-only output, screenshot-only commentary, blank spacer changes, or source-evidence restatement as completion for a Build goal that was supposed to implement a visible surface.
+
+## Failure taxonomy
+
+- Evidence blocker: source URL, screenshot, DOM, computed style, interaction trace, asset, or data evidence is missing, stale, unreadable, or contradicted by newer task evidence.
+- Modeling failure: Requirements or Architect turned evidence rows into Build goals, bundled unrelated components into one goal, omitted Component Interaction Matrix coverage, or omitted target files and proof for a visible surface.
+- Implementation non-delivery: Build produced no project diff, only docs/prose, scaffold-only code, fake placeholder UI, or code that is not bound to the requested rendered surface.
+- Rendered parity failure: current output disagrees with source order, layout, density, spacing, typography, color, icon/assets, table/chart/map geometry, state visuals, layering, content, or interaction behavior.
+- Structural drift: the implementation recreates a different information architecture, skips source modules, changes the page job, or fills source intervals with blank CSS instead of real source-backed content.
+- Verification blocker: preview startup, browser automation, screenshot capture, comparison artifact, or evidence attachment failed before a rendered acceptance decision could be made.
+
+## Visual QA and Integrity feedback consumption
+
+- Build repair after Visual QA or Integrity must consume the latest blocker evidence before claiming pass. The repair report must cite consumed diagnostic refs, affected source regions, target files changed, and fresh rendered proof.
+- Visual QA must carry unresolved prior blockers forward unless fresh rendered evidence proves they are fixed. A clean new screenshot that does not inspect the blocked region is not proof of repair.
+- Integrity must review the implementation evidence ledger, not just the latest optimistic report. Repeated implementation blockers across attempts are delivery facts, and the second evidence-backed implementation non-pass round should recommend not accepted instead of another generic repair. Do not let Integrity re-judge the rendered visual verdict.
+- Annotated Visual QA screenshots and DOM diagnostics are repair inputs. They do not replace source/reference proof, and they must stay separate from target reference evidence.
 
 ## Browser preview evidence ownership
 
 - Build owns changed-region module binding proof for implemented desktop replica regions: when source/reference evidence and local implementation regions exist, it must call `browser_preview_reference_regions` and inspect the single returned source/local module comparison attachment.
 - Visual QA owns independent final rendered parity review as source-to-target review: it must use Browser MCP screenshot/observe tools for ordinary screenshots and browser operations, call `browser_preview_reference_regions` only for one module source-binding comparison, and call `browser_preview_compare_scroll_slices` only for supporting page-slice `visual_diff` evidence.
 - `browser_preview_reference_regions` is for concrete component or module regions, not first-viewport slices, whole-page screenshots, body/main/app roots, or page-shell locators. It does not run a second `reference-comparison` pass and does not auto-call slice or screenshot tools on bind failure. First-viewport and screen-by-screen checks use `browser_preview_compare_scroll_slices` with aligned `scrollY` and `sliceHeight`.
+- Every returned comparison artifact must be inspected with `comparison_guidance`: LEFT is the source/reference image, RIGHT is the rendered/local implementation, and the checklist covers layout alignment, region order, icons/assets, colors, spacing/density, typography, content hallucinations or omissions, component family drift, chart/table/map geometry, state visuals, layering, scoped desktop viewport drift, and placeholder/fake UI.
 - Orchestrator must preserve that ownership when selecting this expert squad; do not shift these browser preview proof calls to Requirements, Architect, Integrity, or unowned review prose.
 
 ## Blank filler geometry boundary

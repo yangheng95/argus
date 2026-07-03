@@ -62,6 +62,12 @@ describe("browser preview scroll-slice comparison", () => {
         expect(result.operation).toBe("scroll-slice-comparison")
         expect(result.implementation.actualScrollY).toBe(300)
         expect(result.implementation.viewport).toEqual({ width: 360, height: 180 })
+        expect(result.comparison_guidance.side_by_side_legend.left.role).toBe("source_reference")
+        expect(result.comparison_guidance.side_by_side_legend.right.role).toBe("local_implementation")
+        expect(result.comparison_guidance.side_by_side_legend.source_of_truth).toBe("left")
+        expect(result.comparison_guidance.inspection_checklist.map((item) => item.id)).toEqual(
+          expect.arrayContaining(["layout_alignment", "icon_asset_fidelity", "content_truth", "spacing_density"]),
+        )
         expect(result.diagnostics.join("\n")).toContain("supporting Visual QA evidence only")
         expect(result.diagnostics.join("\n")).toContain("not reference-comparison proof")
         const sourceCrop = resolveRuntimeRelativePath(tmp.path, result.artifacts.source_crop)
@@ -255,6 +261,14 @@ describe("browser preview scroll-slice comparison", () => {
         expect(output.attachments[0]?.mime).toBe("image/png")
         expect(output.metadata.referenceComparisonProof).toBe(false)
         expect(output.output).toContain("Supporting visual_diff evidence only")
+        const payload = JSON.parse(output.output)
+        expect(payload.comparison_guidance.side_by_side_legend.left.label).toBe("LEFT: source/reference image")
+        expect(payload.comparison_guidance.side_by_side_legend.right.label).toBe(
+          "RIGHT: rendered/local implementation",
+        )
+        expect(payload.comparison_guidance.inspection_checklist.map((item: { id: string }) => item.id)).toEqual(
+          expect.arrayContaining(["color_surface_tokens", "typography_text", "implementation_artifacts"]),
+        )
       } finally {
         await server.close()
       }

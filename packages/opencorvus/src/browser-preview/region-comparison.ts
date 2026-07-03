@@ -12,6 +12,7 @@ import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewp
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 import { BrowserPreviewCropIntent, BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-schema"
 import { resolveSourceReferencePath } from "./source-reference"
+import { BrowserPreviewComparisonGuidance, BrowserPreviewComparisonGuidanceSchema } from "./comparison-guidance"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
@@ -98,6 +99,7 @@ export const BrowserPreviewRegionComparisonResult = z.object({
   operation: z.literal("reference-comparison"),
   comparison_mode: z.literal("true-size"),
   artifact_note: z.string(),
+  comparison_guidance: BrowserPreviewComparisonGuidanceSchema,
   evidenceIDs: z.record(z.string(), z.string()),
   regions: z.array(
     z.object({
@@ -190,6 +192,9 @@ type RegionContentMetrics = {
 type BrowserPreviewRegionComparisonInput = {
   projectRoot: string
   taskID: string
+  runID?: string
+  goalRunID?: string
+  acceptanceID?: string
   targetID: string
   bindings: BrowserPreviewRegionBinding[]
   viewportIDs: BrowserPreviewViewportID[]
@@ -360,6 +365,9 @@ export async function compareBrowserPreviewRegions(
     const evidenceID = persistBrowserPreviewEvidence({
       projectRoot: input.projectRoot,
       taskID: input.taskID,
+      runID: input.runID,
+      goalRunID: input.goalRunID,
+      acceptanceID: input.acceptanceID,
       targetID: input.targetID,
       viewportID: region.viewport_id,
       operationKind: "reference-comparison",
@@ -391,6 +399,7 @@ export async function compareBrowserPreviewRegions(
     operation: "reference-comparison",
     comparison_mode: "true-size",
     artifact_note: TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
+    comparison_guidance: BrowserPreviewComparisonGuidance,
     evidenceIDs,
     regions,
     diagnostics: [TRUE_SIZE_COMPARISON_ARTIFACT_NOTE, ...diagnostics],
@@ -633,8 +642,8 @@ async function makeSideBySide(input: {
       <rect width="100%" height="100%" fill="#f6f7f9"/>
       <text x="12" y="28" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">${escapeXml(input.title)}</text>
       <text x="12" y="50" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#4b5563">TRUE-SIZE: no runner-side crop scaling; dimensions are part of parity.</text>
-      <text x="12" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference (true size)</text>
-      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Local implementation (true size)</text>
+      <text x="12" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">LEFT: Source reference (true size)</text>
+      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">RIGHT: Local implementation (true size)</text>
     </svg>
   `)
   await sharp({

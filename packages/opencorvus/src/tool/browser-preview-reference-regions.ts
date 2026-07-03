@@ -83,6 +83,7 @@ export const BrowserPreviewReferenceRegionsTool = Tool.define<
   description:
     "Bind one local implementation module to one source/reference region and return exactly one module comparison screenshot attachment. " +
     "This is module-level evidence only: it compares the selected source crop with the selected local module crop. " +
+    "The returned comparison_guidance states that LEFT is the source/reference image and RIGHT is the rendered/local implementation, with a checklist for layout, icon/asset, color, spacing, typography, content, state, chart/table/map, and placeholder defects. " +
     "It does not run page-slice comparison, does not run a second reference-comparison pass, does not accept raw source URLs, and does not auto-call other tools on bind failure. " +
     "Use browser_preview_compare_scroll_slices for first-viewport or screen-by-screen page comparison, and Browser MCP screenshot/observe tools for ordinary browser screenshots when they are exposed in the current toolset.",
   parameters: BrowserPreviewReferenceRegionsToolParameters,
@@ -203,6 +204,7 @@ function renderSourceBindingResult(projectRoot: string, result: LocalModuleSourc
     localTextAnchors: result.localCapture.textAnchors,
     binding: result.binding,
     artifacts: result.artifacts,
+    comparison_guidance: result.comparison_guidance,
     diagnostics: result.diagnostics,
   }) as Record<string, unknown>
 }

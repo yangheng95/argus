@@ -67,7 +67,7 @@ describe("browser preview local module source binding", () => {
         id: "WorldEconomyPage",
         source: "source-dom-region",
         bbox: { x: 0, y: 0, width: 1440, height: 5200 },
-        text: "Header Navigation Markets News Economy Calendar Countries Ideas Overview Bonds Stocks GDP Inflation Calendar",
+        text: "Header Navigation Markets News Economy Calendar Countries Ideas Overview Reports GDP Inflation Calendar",
         sourceRefs: ["sourceDomRegions.ts"],
       },
       {
@@ -689,6 +689,571 @@ describe("browser preview local module source binding", () => {
     expect(selected.sourceRefs).toContain("selector:[data-source-node='calendar-primary']")
   })
 
+  test("skips unbounded and zero-area source component patterns without dropping bounded candidates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_local_module_mixed_content_model_patterns"
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+    await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "content-model.json"),
+      JSON.stringify(
+        {
+          sourceComponentPatterns: [
+            {
+              nodeId: "page-structure-only",
+              tag: "div",
+              kind: "data_grid_surface",
+              textPreview: "Page shell Calendar Metrics News",
+              signals: { elementCount: 120, textLength: 64 },
+            },
+            {
+              nodeId: "sticky-navigation-wrapper",
+              tag: "div",
+              kind: "navigation_surface",
+              bounds: { x: 0, y: 302, w: 1440, h: 0 },
+              textPreview: "Overview Reports Alerts Integrations Settings",
+              signals: { elementCount: 29, linkCount: 8, textLength: 58 },
+            },
+            sourcePatternRow({
+              nodeId: "service-availability-chart",
+              kind: "media_chart_surface",
+              bounds: { x: 40, y: 454, w: 899, h: 587 },
+              textPreview: "Service availability 99.95% Incidents Response time",
+              recommendedReplacementKind: "chart_component",
+            }),
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    )
+
+    const candidates = await collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })
+    expect(candidates.map((candidate) => candidate.id)).not.toContain("page-structure-only")
+    expect(candidates.map((candidate) => candidate.id)).not.toContain("sticky-navigation-wrapper")
+    const selected = selectSourceRegionCandidate({
+      candidates,
+      regionID: "service-availability-chart",
+      componentFiles: ["src/components/ServiceAvailabilityChart.tsx"],
+      explicitTextAnchors: ["Service availability", "Incidents", "Response time"],
+      localCapture: {
+        bbox: { x: 40, y: 420, width: 900, height: 560 },
+        textAnchors: ["Service availability", "Incidents", "Response time"],
+        fullText: "Service availability 99.95% Incidents Response time",
+      },
+    })
+
+    expect(selected.id).toBe("service-availability-chart")
+    expect(selected.source).toBe("source-component-pattern")
+  })
+
+  test("merges duplicate source component patterns with identical visual crop geometry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_local_module_duplicate_content_model_patterns"
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+    await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "content-model.json"),
+      JSON.stringify(
+        {
+          sourceComponentPatterns: [
+            sourcePatternRow({
+              nodeId: "node-service-chart-inner-a",
+              kind: "media_chart_surface",
+              bounds: { x: 57, y: 471, w: 865, h: 553 },
+              textPreview: "Service availability 99.95% Incidents Response time",
+              recommendedReplacementKind: "chart_component",
+              signals: {
+                display: "block",
+                elementCount: 46,
+                gridOrFlex: false,
+                linkCount: 1,
+                mediaCount: 4,
+                tableRowCount: 2,
+                textLength: 90,
+              },
+            }),
+            sourcePatternRow({
+              nodeId: "node-service-chart-inner-b",
+              kind: "media_chart_surface",
+              bounds: { x: 57, y: 471, w: 865, h: 553 },
+              textPreview: "Service availability 99.95% Incidents Response time",
+              recommendedReplacementKind: "chart_component",
+              signals: {
+                display: "flex",
+                elementCount: 45,
+                gridOrFlex: true,
+                linkCount: 1,
+                mediaCount: 4,
+                tableRowCount: 2,
+                textLength: 90,
+              },
+            }),
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    )
+
+    const candidates = await collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]?.sourceRefs).toEqual(
+      expect.arrayContaining(["node:node-service-chart-inner-a", "node:node-service-chart-inner-b"]),
+    )
+    const selected = selectSourceRegionCandidate({
+      candidates,
+      regionID: "service-availability-chart",
+      componentFiles: ["src/components/ServiceAvailabilityChart.tsx"],
+      explicitTextAnchors: ["Service availability", "Incidents", "Response time"],
+      localCapture: {
+        bbox: { x: 40, y: 420, width: 900, height: 560 },
+        textAnchors: ["Service availability", "Incidents", "Response time"],
+        fullText: "Service availability 99.95% Incidents Response time",
+      },
+    })
+
+    expect(selected.id).toBe("node-service-chart-inner-a")
+  })
+
+  test("explicit region anchors outrank incidental local table text from a stronger source kind", () => {
+    const candidates: SourceRegionCandidate[] = [
+      {
+        id: "node-operations-summary",
+        source: "source-component-pattern",
+        bbox: { x: 40, y: 362, width: 1360, height: 679 },
+        text:
+          "data_grid_surface Operations summary Open tickets Assigned owner Queue SLA Customer alpha Customer beta Escalated",
+        sourceRefs: [
+          "web-clone-source/source-ir/content-model.json",
+          "node:node-operations-summary",
+          "kind:data_grid_surface",
+        ],
+      },
+      {
+        id: "node-catalog-analysis-grid",
+        source: "layout-map",
+        bbox: { x: 40, y: 2042, width: 1360, height: 1238 },
+        text:
+          "Catalog analysis Inventory ranking Product Demand change Inventory level Supplier ranking Backorders Returns See all products Customer alpha Customer beta",
+        sourceRefs: [
+          "web-clone-source/source-ir/layout-map.json",
+          "node:node-catalog-analysis-grid",
+          "selector:section.catalog-analysis-grid",
+        ],
+      },
+    ]
+
+    const selected = selectSourceRegionCandidate({
+      candidates,
+      regionID: "catalog-analysis-grid",
+      componentFiles: ["src/components/CatalogAnalysisGrid.tsx"],
+      explicitTextAnchors: [
+        "Catalog analysis",
+        "Inventory ranking",
+        "Supplier ranking",
+        "Backorders",
+        "Returns",
+        "See all products",
+      ],
+      localCapture: {
+        bbox: { x: 40, y: 2038, width: 1360, height: 1390 },
+        textAnchors: ["Catalog analysis", "Customer alpha", "Customer beta", "Open tickets"],
+        fullText:
+          "Catalog analysis Inventory ranking Product Demand change Inventory level Customer alpha Customer beta Open tickets Supplier ranking Backorders Returns See all products",
+      },
+    })
+
+    expect(selected.id).toBe("node-catalog-analysis-grid")
+    expect(selected.source).toBe("layout-map")
+    expect(selected.matchedAnchors).toEqual(expect.arrayContaining(["catalog analysis", "inventory ranking"]))
+  })
+
+  test("fails content component patterns whose bounds field is present but invalid", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_local_module_invalid_content_model_bounds"
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+    await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "content-model.json"),
+      JSON.stringify(
+        {
+          sourceComponentPatterns: [
+            {
+              nodeId: "bad-pattern",
+              tag: "section",
+              kind: "data_grid_surface",
+              bounds: { x: 10, y: 20 },
+              textPreview: "Bad bounds",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    )
+
+    await expect(collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })).rejects.toThrow("invalid bounds")
+  })
+
+  test("benchmark binds constructed webpage components above ninety percent", async () => {
+    const cases: BindingBenchmarkCase[] = [
+      {
+        id: "component-tree-navigation",
+        expectedID: "PrimaryNavigation",
+        regionID: "primary-navigation",
+        componentFiles: ["src/components/PrimaryNavigation.tsx"],
+        explicitTextAnchors: ["Markets", "Screeners", "Community"],
+        localText: "Markets Screeners Community Products",
+        localAnchors: ["Markets", "Screeners", "Community"],
+        localBox: { x: 0, y: 0, width: 1280, height: 72 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-nav",
+            name: "PrimaryNavigation",
+            kind: "navigation",
+            rootNodeId: "source-nav-root",
+            bounds: { x: 0, y: 0, w: 1440, h: 82 },
+            textPreview: ["Markets", "Screeners", "Community", "Products"],
+          }),
+        ],
+      },
+      {
+        id: "pattern-card-collection",
+        expectedID: "catalog-grid",
+        regionID: "catalog-cards",
+        componentFiles: ["src/components/CatalogCards.tsx"],
+        explicitTextAnchors: ["Alpha Lamp", "Beta Chair"],
+        localText: "Alpha Lamp Ships today Beta Chair Ships tomorrow",
+        localAnchors: ["Alpha Lamp", "Beta Chair"],
+        localBox: { x: 40, y: 120, width: 980, height: 340 },
+        sourceComponentPatterns: [
+          sourcePatternRow({
+            nodeId: "catalog-grid",
+            kind: "card_collection_surface",
+            bounds: { x: 48, y: 140, w: 1020, h: 360 },
+            textPreview: "Alpha Lamp Ships today Beta Chair Ships tomorrow Gamma Desk Ships Friday",
+            recommendedReplacementKind: "card_collection_component",
+          }),
+        ],
+      },
+      {
+        id: "pattern-data-grid",
+        expectedID: "earnings-table",
+        regionID: "earnings-table",
+        componentFiles: ["src/components/EarningsTable.tsx"],
+        explicitTextAnchors: ["Company", "Revenue", "EPS"],
+        localText: "Company Revenue EPS Acme 12.4B 1.42",
+        localAnchors: ["Company", "Revenue", "EPS"],
+        localBox: { x: 60, y: 260, width: 1120, height: 420 },
+        sourceComponentPatterns: [
+          sourcePatternRow({
+            nodeId: "earnings-table",
+            kind: "data_grid_surface",
+            bounds: { x: 72, y: 300, w: 1160, h: 460 },
+            textPreview: "Company Revenue EPS Acme 12.4B 1.42",
+            recommendedReplacementKind: "data_table_or_heatmap_component",
+          }),
+        ],
+      },
+      {
+        id: "repeated-card-source-node",
+        expectedID: "AnalystCardList",
+        regionID: "analyst-cards",
+        componentFiles: ["src/components/AnalystCardList.tsx"],
+        explicitTextAnchors: ["node-analyst-cards"],
+        localText: "Analyst Picks Buy Hold Sell",
+        localAnchors: ["Analyst Picks", "Buy", "Hold"],
+        localBox: { x: 40, y: 120, width: 860, height: 260 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-page",
+            name: "PageShell",
+            kind: "page",
+            rootNodeId: "node-page",
+            bounds: { x: 0, y: 0, w: 1440, h: 2400 },
+            textPreview: ["Analyst Picks", "Buy", "Hold", "Sell", "Overview"],
+          }),
+          componentTreeRow({
+            id: "cmp-analyst",
+            name: "AnalystCardList",
+            kind: "list",
+            rootNodeId: "node-analyst-cards",
+            bounds: { x: 56, y: 180, w: 900, h: 300 },
+            textPreview: ["Analyst Picks", "Buy", "Hold", "Sell"],
+          }),
+        ],
+      },
+      {
+        id: "repeated-table-source-node",
+        expectedID: "CalendarTable",
+        regionID: "calendar-table",
+        componentFiles: ["src/components/CalendarTable.tsx"],
+        explicitTextAnchors: ["node-calendar-table"],
+        localText: "Time Event Actual Forecast GDP Growth CPI Rate",
+        localAnchors: ["Time", "Event", "Actual", "Forecast"],
+        localBox: { x: 32, y: 180, width: 1180, height: 520 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-calendar",
+            name: "CalendarTable",
+            kind: "table",
+            rootNodeId: "node-calendar-table",
+            bounds: { x: 42, y: 220, w: 1220, h: 560 },
+            textPreview: ["Time", "Event", "Actual", "Forecast", "GDP Growth", "CPI Rate"],
+          }),
+        ],
+        layoutMap: [
+          layoutMapRow({
+            nodeId: "calendar-time-cell",
+            selector: "td.time",
+            role: "cell",
+            bounds: { x: 48, y: 260, w: 80, h: 24 },
+            textPreview: "Time",
+          }),
+        ],
+      },
+      {
+        id: "generic-page-shell-shared-words",
+        expectedID: "OverviewMetrics",
+        regionID: "overview-metrics",
+        componentFiles: ["src/components/OverviewMetrics.tsx"],
+        explicitTextAnchors: ["Overview", "Price", "Volume"],
+        localText: "Overview Price Volume Market Cap",
+        localAnchors: ["Overview", "Price", "Volume"],
+        localBox: { x: 70, y: 240, width: 740, height: 220 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-shell",
+            name: "PageOverviewShell",
+            kind: "page",
+            rootNodeId: "node-page-shell",
+            bounds: { x: 0, y: 0, w: 1440, h: 3800 },
+            textPreview: ["Overview", "Price", "Volume", "Market Cap", "News", "Ideas"],
+          }),
+          componentTreeRow({
+            id: "cmp-metrics",
+            name: "OverviewMetrics",
+            kind: "section",
+            rootNodeId: "node-overview-metrics",
+            bounds: { x: 80, y: 260, w: 760, h: 240 },
+            textPreview: ["Overview", "Price", "Volume", "Market Cap"],
+          }),
+        ],
+      },
+      {
+        id: "component-level-outranks-tiny-layout-leaf",
+        expectedID: "ResourceTabs",
+        regionID: "resource-tabs",
+        componentFiles: ["src/components/ResourceTabs.tsx"],
+        explicitTextAnchors: ["Docs", "API", "Tutorials"],
+        localText: "Docs API Tutorials Changelog",
+        localAnchors: ["Docs", "API", "Tutorials"],
+        localBox: { x: 100, y: 110, width: 620, height: 56 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-tabs",
+            name: "ResourceTabs",
+            kind: "control",
+            rootNodeId: "node-resource-tabs",
+            bounds: { x: 112, y: 124, w: 640, h: 64 },
+            textPreview: ["Docs", "API", "Tutorials", "Changelog"],
+          }),
+        ],
+        layoutMap: [
+          layoutMapRow({
+            nodeId: "tutorials-tab-text",
+            selector: "button:nth-child(3)",
+            role: "button",
+            bounds: { x: 240, y: 132, w: 48, h: 18 },
+            textPreview: "Tutorials",
+          }),
+        ],
+      },
+      {
+        id: "non-latin-component-tree",
+        expectedID: "国内生产总值卡片",
+        regionID: "gdp-card",
+        componentFiles: ["src/components/GdpCard.tsx"],
+        explicitTextAnchors: ["国内生产总值", "同比增长"],
+        localText: "国内生产总值 同比增长 预测",
+        localAnchors: ["国内生产总值", "同比增长"],
+        localBox: { x: 40, y: 120, width: 360, height: 180 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-cn-gdp",
+            name: "国内生产总值卡片",
+            kind: "card",
+            rootNodeId: "node-cn-gdp",
+            bounds: { x: 80, y: 420, w: 380, h: 200 },
+            textPreview: ["国内生产总值", "同比增长", "预测"],
+          }),
+        ],
+      },
+      {
+        id: "signed-numeric-pattern",
+        expectedID: "gdp-negative-card",
+        regionID: "gdp-growth-card",
+        componentFiles: ["src/components/GdpGrowthCard.tsx"],
+        explicitTextAnchors: ["GDP Growth", "-2.1%", "Forecast"],
+        localText: "GDP Growth -2.1% Forecast",
+        localAnchors: ["GDP Growth", "-2.1%", "Forecast"],
+        localBox: { x: 32, y: 80, width: 320, height: 160 },
+        sourceComponentPatterns: [
+          sourcePatternRow({
+            nodeId: "gdp-positive-card",
+            kind: "section_shell_surface",
+            bounds: { x: 80, y: 220, w: 320, h: 160 },
+            textPreview: "GDP Growth +2.1% Forecast",
+          }),
+          sourcePatternRow({
+            nodeId: "gdp-negative-card",
+            kind: "section_shell_surface",
+            bounds: { x: 80, y: 420, w: 320, h: 160 },
+            textPreview: "GDP Growth -2.1% Forecast",
+          }),
+        ],
+      },
+      {
+        id: "sparse-chart-identity",
+        expectedID: "LiquidityChart",
+        regionID: "liquidity-chart",
+        componentFiles: ["src/components/LiquidityChart.tsx"],
+        explicitTextAnchors: ["node-liquidity-chart", "Liquidity"],
+        localText: "Liquidity",
+        localAnchors: ["Liquidity"],
+        localBox: { x: 72, y: 300, width: 860, height: 360 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-chart",
+            name: "LiquidityChart",
+            kind: "chart",
+            rootNodeId: "node-liquidity-chart",
+            bounds: { x: 86, y: 340, w: 900, h: 380 },
+            textPreview: ["Liquidity"],
+          }),
+        ],
+        sourceComponentPatterns: [
+          sourcePatternRow({
+            nodeId: "node-liquidity-chart",
+            kind: "media_chart_surface",
+            bounds: { x: 86, y: 340, w: 900, h: 380 },
+            textPreview: "Liquidity",
+            recommendedReplacementKind: "map_or_chart_asset_component",
+          }),
+        ],
+      },
+      {
+        id: "footer-duplicated-links",
+        expectedID: "GlobalFooterLinks",
+        regionID: "footer-links",
+        componentFiles: ["src/components/GlobalFooterLinks.tsx"],
+        explicitTextAnchors: ["Products", "Community", "Company"],
+        localText: "Products Community Company Terms Privacy",
+        localAnchors: ["Products", "Community", "Company"],
+        localBox: { x: 0, y: 1600, width: 1440, height: 280 },
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-header",
+            name: "HeaderLinks",
+            kind: "navigation",
+            rootNodeId: "node-header-links",
+            bounds: { x: 0, y: 0, w: 1440, h: 72 },
+            textPreview: ["Products", "Community", "Markets"],
+          }),
+          componentTreeRow({
+            id: "cmp-footer",
+            name: "GlobalFooterLinks",
+            kind: "footer",
+            rootNodeId: "node-footer-links",
+            bounds: { x: 0, y: 1680, w: 1440, h: 300 },
+            textPreview: ["Products", "Community", "Company", "Terms", "Privacy"],
+          }),
+        ],
+      },
+      {
+        id: "source-dom-region-identity",
+        expectedID: "GeneratedWatchlistPanel",
+        regionID: "watchlist-panel",
+        componentFiles: ["src/components/WatchlistPanel.tsx"],
+        explicitTextAnchors: ["segment-watchlist"],
+        localText: "Watchlist Symbol Last Change",
+        localAnchors: ["Watchlist", "Symbol", "Last"],
+        localBox: { x: 980, y: 160, width: 360, height: 620 },
+        sourceDomRegions: [
+          {
+            componentName: "GeneratedWatchlistPanel",
+            sourceNodeId: "node-watchlist",
+            sourceSegmentId: "segment-watchlist",
+            sourceBounds: { x: 1000, y: 180, width: 380, height: 640 },
+            heading: "Watchlist",
+            textPreview: "Watchlist Symbol Last Change",
+          },
+        ],
+        componentTree: [
+          componentTreeRow({
+            id: "cmp-watchlist-shell",
+            name: "WatchlistShell",
+            kind: "section",
+            rootNodeId: "node-watchlist-shell",
+            bounds: { x: 960, y: 140, w: 420, h: 700 },
+            textPreview: ["Watchlist", "Symbol", "Last", "Change"],
+          }),
+        ],
+      },
+    ]
+
+    const outcomes: Array<{ id: string; expected: string; actual?: string; error?: string }> = []
+    for (const [index, item] of cases.entries()) {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_component_binding_benchmark_${index}_${item.id}`
+      await writeBindingBenchmarkSourceEvidence(tmp.path, taskID, item)
+      try {
+        const candidates = await collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })
+        const selected = selectSourceRegionCandidate({
+          candidates,
+          regionID: item.regionID,
+          componentFiles: item.componentFiles,
+          explicitTextAnchors: item.explicitTextAnchors,
+          localCapture: {
+            bbox: item.localBox,
+            textAnchors: item.localAnchors,
+            fullText: item.localText,
+          },
+        })
+        outcomes.push({ id: item.id, expected: item.expectedID, actual: selected.id })
+      } catch (error) {
+        outcomes.push({
+          id: item.id,
+          expected: item.expectedID,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    const passed = outcomes.filter((item) => item.actual === item.expected).length
+    const ratio = passed / outcomes.length
+    expect(
+      passed,
+      `component binding benchmark exact failures=${JSON.stringify(
+        outcomes.filter((item) => item.actual !== item.expected),
+        null,
+        2,
+      )}`,
+    ).toBe(outcomes.length)
+    expect(
+      ratio,
+      `component binding benchmark passed ${passed}/${outcomes.length}; failures=${JSON.stringify(
+        outcomes.filter((item) => item.actual !== item.expected),
+        null,
+        2,
+      )}`,
+    ).toBeGreaterThanOrEqual(0.9)
+  })
+
   test("fails present but malformed sourceDomRegions evidence instead of silently dropping it", async () => {
     for (const [caseID, content] of [
       ["wrong-shape", "export const sourceDomRegions = { bad: true } as const\n"],
@@ -924,6 +1489,14 @@ describe("browser preview local module source binding", () => {
           })
 
           expect(result.status).toBe("passed")
+          expect(result.comparison_guidance.side_by_side_legend.source_of_truth).toBe("left")
+          expect(result.comparison_guidance.side_by_side_legend.left.label).toBe("LEFT: source/reference image")
+          expect(result.comparison_guidance.side_by_side_legend.right.label).toBe(
+            "RIGHT: rendered/local implementation",
+          )
+          expect(result.comparison_guidance.inspection_checklist.map((check) => check.id)).toEqual(
+            expect.arrayContaining(["layout_alignment", "icon_asset_fidelity", "implementation_artifacts"]),
+          )
           expect(result.sourceCandidate.id).toBe("LocatorModuleSurface")
           expect(result.binding.implementation.locator).toEqual(item.locator)
           expect(result.localCapture.textAnchors).toContain("Locator Module")
@@ -972,6 +1545,13 @@ describe("browser preview local module source binding", () => {
         const implementationCrop = await sharp(result.artifacts.implementation_crop).metadata()
         expect(implementationCrop.width).toBeGreaterThan(160)
         expect(implementationCrop.height).toBeGreaterThan(90)
+        const cropPixels = await sharp(result.artifacts.implementation_crop)
+          .raw()
+          .toBuffer({ resolveWithObject: true })
+        const sampleOffset = (8 * cropPixels.info.width + 8) * cropPixels.info.channels
+        expect(cropPixels.data[sampleOffset]).toBeGreaterThan(180)
+        expect(cropPixels.data[sampleOffset + 1]).toBeGreaterThan(220)
+        expect(cropPixels.data[sampleOffset + 2]).toBeGreaterThan(230)
       } finally {
         await server.close()
       }
@@ -979,6 +1559,163 @@ describe("browser preview local module source binding", () => {
     { timeout: LOCAL_MODULE_BINDING_TEST_TIMEOUT_MILLISECONDS },
   )
 })
+
+type BindingBenchmarkCase = {
+  id: string
+  expectedID: string
+  regionID: string
+  componentFiles: string[]
+  explicitTextAnchors: string[]
+  localText: string
+  localAnchors: string[]
+  localBox: LocalModuleCapture["bbox"]
+  componentTree?: unknown[]
+  sourceComponentPatterns?: unknown[]
+  visualSurfaceCandidates?: unknown[]
+  layoutMap?: unknown[]
+  sourceDomRegions?: unknown[]
+}
+
+function componentTreeRow(input: {
+  id: string
+  name: string
+  kind: string
+  rootNodeId: string
+  bounds: { x: number; y: number; w: number; h: number }
+  textPreview: string[]
+}): Record<string, unknown> {
+  return {
+    id: input.id,
+    name: input.name,
+    kind: input.kind,
+    rootNodeId: input.rootNodeId,
+    tag: input.kind === "navigation" ? "nav" : input.kind === "footer" ? "footer" : "section",
+    strategy: "dom-component",
+    bounds: input.bounds,
+    classNames: [],
+    textPreview: input.textPreview,
+    assetSummary: { total: 0, byKind: {} },
+    assetRefs: [],
+    childElementCount: input.textPreview.length,
+    implementationHint: "Benchmark source component.",
+  }
+}
+
+function sourcePatternRow(input: {
+  nodeId: string
+  kind: string
+  bounds: { x: number; y: number; w: number; h: number }
+  textPreview: string
+  recommendedReplacementKind?: string
+  signals?: Record<string, unknown>
+}): Record<string, unknown> {
+  return {
+    nodeId: input.nodeId,
+    tag: input.kind === "navigation_surface" ? "nav" : "section",
+    classNames: [],
+    bounds: input.bounds,
+    textPreview: input.textPreview,
+    kind: input.kind,
+    signals: input.signals ?? {
+      elementCount: 8,
+      linkCount: input.kind === "navigation_surface" ? 5 : 0,
+      mediaCount: input.kind === "media_chart_surface" ? 2 : 0,
+      tableRowCount: input.kind === "data_grid_surface" ? 6 : 0,
+      maxRepeatedSiblingCount: input.kind === "card_collection_surface" ? 3 : 0,
+      textLength: input.textPreview.length,
+    },
+    recommendedReplacementKind: input.recommendedReplacementKind ?? "baseline_defer",
+    implementationHint: "Benchmark source component pattern.",
+  }
+}
+
+function layoutMapRow(input: {
+  nodeId: string
+  selector: string
+  role: string
+  bounds: { x: number; y: number; w: number; h: number }
+  textPreview: string
+}): Record<string, unknown> {
+  return {
+    nodeId: input.nodeId,
+    tag: input.role === "button" ? "button" : "div",
+    selector: input.selector,
+    role: input.role,
+    bounds: input.bounds,
+    styles: {},
+    textPreview: input.textPreview,
+  }
+}
+
+async function writeBindingBenchmarkSourceEvidence(
+  projectRoot: string,
+  taskID: string,
+  item: BindingBenchmarkCase,
+): Promise<void> {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(projectRoot, taskID)
+  await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+  await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
+  await fs.mkdir(path.join(paths.skeletonProjectAbsolute, "src", "data"), { recursive: true })
+
+  if (item.componentTree) {
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "component-tree.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          purpose: "web-clone-component-tree",
+          components: item.componentTree,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    )
+  }
+  if (item.sourceComponentPatterns) {
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "content-model.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          purpose: "web-clone-content-model",
+          tables: [],
+          lists: [],
+          cards: [],
+          controls: [],
+          links: [],
+          media: [],
+          repeatedGroups: [],
+          sourceComponentPatterns: item.sourceComponentPatterns,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    )
+  }
+  if (item.visualSurfaceCandidates) {
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "visual-surface-candidates.json"),
+      JSON.stringify({ candidates: item.visualSurfaceCandidates }, null, 2),
+      "utf8",
+    )
+  }
+  if (item.layoutMap) {
+    await fs.writeFile(
+      path.join(paths.sourcePackageAbsolute, "source-ir", "layout-map.json"),
+      JSON.stringify({ version: 1, purpose: "web-clone-layout-map", elements: item.layoutMap }, null, 2),
+      "utf8",
+    )
+  }
+  if (item.sourceDomRegions) {
+    await fs.writeFile(
+      path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomRegions.ts"),
+      `export const sourceDomRegions = ${JSON.stringify(item.sourceDomRegions, null, 2)} as const\n`,
+      "utf8",
+    )
+  }
+}
 
 async function seedTask(directory: string): Promise<string> {
   const taskID = `tsk_local_module_visible_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -1215,6 +1952,20 @@ async function startBelowFoldModuleServer(): Promise<{ url: string; close: () =>
           <title>Below fold local module</title>
           <style>
             body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; min-height: 1500px; }
+            header {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              height: 96px;
+              z-index: 20;
+              display: flex;
+              align-items: center;
+              padding-left: 24px;
+              box-sizing: border-box;
+              background: #020617;
+              color: white;
+            }
             [data-oc-region="local-module"] {
               margin-top: 1120px;
               margin-left: 36px;
@@ -1230,6 +1981,7 @@ async function startBelowFoldModuleServer(): Promise<{ url: string; close: () =>
           </style>
         </head>
         <body>
+          <header>Fixed Header Should Not Pollute Crop</header>
           <section data-oc-region="local-module"><h2>Local Module</h2><p>Deep Anchor</p></section>
         </body>
       </html>`

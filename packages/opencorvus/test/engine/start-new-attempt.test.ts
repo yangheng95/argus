@@ -636,6 +636,7 @@ describe("Goal.startNewAttempt — options", () => {
     expect(outcome?.terminal_status).toBe("completed")
     expect(outcome?.outcome_kind).toBe("delivered")
     expect(outcome?.changed_files).toEqual(["src/index.ts"])
+    expect(goalStatusByID(goalID)).toBe("passed")
   })
 
   test("persistTaskAcceptance keeps acceptance summaries bounded and stores workspace preview bodies", () => {

@@ -1,5 +1,3 @@
-import type { VisualEvidenceBundle } from "@/acceptance/visual-evidence"
-
 type ReferenceParityDecisionEntry = {
   key: string
   value: string
@@ -8,7 +6,6 @@ type ReferenceParityDecisionEntry = {
 type ReferenceParityScorer = {
   type?: string
   name?: string
-  inputs?: string[]
 }
 
 type ReferenceParityAcceptanceSpec = {
@@ -25,7 +22,6 @@ export function deriveVisualQaReferenceParityContext(input: {
   specSnapshotID?: string
   goals: ReferenceParityGoal[]
   frontendDesignEntries?: ReferenceParityDecisionEntry[]
-  visualEvidence?: VisualEvidenceBundle[]
 }): { required: boolean; regions: string[] } {
   let required = false
   const regions = new Set<string>()
@@ -34,17 +30,22 @@ export function deriveVisualQaReferenceParityContext(input: {
   )) {
     for (const spec of goal.acceptance_specs ?? []) {
       for (const scorer of spec.scorers ?? []) {
-        if (scorer.type === "prebuilt" && scorer.name === "visual-evidence-bundle") required = true
-        if (scorer.type === "llm_judge" && scorer.inputs?.includes("visual_evidence")) required = true
+        if (scorer.type === "prebuilt" && scorer.name === "visual-feedback-verification") required = true
       }
     }
   }
-  for (const bundle of input.visualEvidence ?? []) {
-    if (bundle.taskID !== input.taskID) continue
-    for (const region of bundle.regions.filter((item) => item.required)) {
-      required = true
-      regions.add(`${region.id}@${region.viewport}`)
-    }
+  if (frontendDesignRequiresRenderedVisualFeedback(input.frontendDesignEntries ?? [])) {
+    required = true
   }
   return { required, regions: [...regions].sort() }
+}
+
+function frontendDesignRequiresRenderedVisualFeedback(entries: ReferenceParityDecisionEntry[]): boolean {
+  const latest = new Map<string, string>()
+  for (const entry of entries) latest.set(entry.key, entry.value)
+  const finalAcceptanceMode = latest.get("final_acceptance_mode")?.trim()
+  if (finalAcceptanceMode) return true
+  const referenceArtifacts = latest.get("reference_artifacts")?.trim()
+  if (referenceArtifacts) return true
+  return false
 }

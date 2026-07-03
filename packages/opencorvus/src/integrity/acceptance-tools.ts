@@ -6,13 +6,6 @@ import { Instance } from "@/project/instance"
 import { runGuardedCommand } from "@/shell/guarded-command"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
-import {
-  summarizeVisualEvidenceBundle,
-  validateVisualEvidenceBundleReferenceComparisons,
-  visualEvidenceBundlePasses,
-  VisualEvidenceBundleListSchema,
-  type VisualEvidenceBundle,
-} from "@/acceptance/visual-evidence"
 
 /**
  * Integrity acceptance tools are scoped to semantic review. They expose
@@ -63,7 +56,6 @@ export type IntegrityEvidenceToolContext = {
   }
   frontendDesign?: string
   visualQa?: string
-  visualEvidence?: VisualEvidenceBundle[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }
@@ -135,73 +127,7 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           max_chars,
         ),
     }),
-    inspect_visual_evidence: tool({
-      description:
-        "Inspect the scoped VisualEvidenceBundle artifacts for reference-driven UI review. " +
-        "Use this before accepting visual fidelity claims; it returns reference/rendered paths, blocker-based inspection status, region coverage, and provenance from the reviewed task context.",
-      inputSchema: z.object({
-        bundle_id: z
-          .string()
-          .optional()
-          .describe("Specific VisualEvidenceBundle id. Omit to inspect every scoped bundle."),
-        max_chars: z.number().int().min(1_000).max(40_000).default(12_000),
-      }),
-      execute: async ({ bundle_id, max_chars }) =>
-        truncateIntegrityEvidence(
-          await renderVisualEvidenceSection({
-            projectDir,
-            visualEvidence: input?.visualEvidence,
-            bundleID: bundle_id,
-            taskID: input?.taskID,
-          }),
-          max_chars,
-        ),
-    }),
   }
-}
-
-async function renderVisualEvidenceSection(input: {
-  projectDir: string
-  visualEvidence: VisualEvidenceBundle[] | undefined
-  bundleID: string | undefined
-  taskID: string | undefined
-}): Promise<string> {
-  const { projectDir, visualEvidence, bundleID, taskID } = input
-  const parsed = VisualEvidenceBundleListSchema.safeParse(visualEvidence ?? [])
-  if (!parsed.success || parsed.data.length === 0) {
-    return "# Visual Evidence\n\nNo VisualEvidenceBundle was provided in scoped integrity context."
-  }
-  const bundles = bundleID ? parsed.data.filter((bundle) => bundle.id === bundleID) : parsed.data
-  if (bundles.length === 0) {
-    return `# Visual Evidence\n\nNo VisualEvidenceBundle matched id=${bundleID}. Available: ${parsed.data.map((bundle) => bundle.id).join(", ")}`
-  }
-  const lines = ["# Visual Evidence"]
-  for (const bundle of bundles) {
-    const comparisonValidation = await validateVisualEvidenceBundleReferenceComparisons({
-      projectRoot: projectDir,
-      bundle,
-      expectedTaskID: taskID,
-    })
-    lines.push("")
-    lines.push(`## ${bundle.id}`)
-    lines.push(
-      `status=${visualEvidenceBundlePasses(bundle) && comparisonValidation.passing ? "passing" : "not_passing"}`,
-    )
-    lines.push(summarizeVisualEvidenceBundle(bundle))
-    if (comparisonValidation.issues.length > 0) {
-      lines.push("Reference comparison issues:")
-      for (const issue of comparisonValidation.issues) lines.push(`- ${issue}`)
-    }
-    if (bundle.regions.length > 0) {
-      lines.push("Regions:")
-      for (const region of bundle.regions) {
-        lines.push(
-          `- ${region.id}: ${region.label}; crop_intent=${region.cropIntent}; required=${region.required}; status=${region.status}; acceptance_specs=${region.acceptanceSpecIDs.join(", ") || "(none)"}; evidence=${region.evidenceRefs.join(", ") || "(none)"}`,
-        )
-      }
-    }
-  }
-  return lines.join("\n")
 }
 
 function renderIntegrityEvidenceSection(
@@ -301,7 +227,7 @@ function renderIntegrityEvidenceSection(
       return "# Frontend Design Contract\n\n" + (input?.frontendDesign?.trim() || "(none)")
 
     case "visual_qa_report":
-      return "# Visual QA Report\n\n" + (input?.visualQa?.trim() || "(none)")
+      return "# Visual QA Implementation Defect Context\n\n" + (input?.visualQa?.trim() || "(none)")
 
     case "attachments":
       return [

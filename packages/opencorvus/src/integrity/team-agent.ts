@@ -9,12 +9,6 @@ import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registr
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { FactCheckItemSchema } from "@/fact-check/schema"
-import {
-  summarizeVisualEvidenceBundle,
-  validateVisualEvidenceBundleReferenceComparisons,
-  visualEvidenceBundlePasses,
-  type VisualEvidenceBundle,
-} from "@/acceptance/visual-evidence"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import type { TaskRow } from "@/engine/store"
@@ -202,8 +196,6 @@ export type ReviewPromptInput = {
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
   visualQa?: string
-  visualEvidence?: VisualEvidenceBundle[]
-  visualEvidenceRequired?: boolean
   projectRoot?: string
   replayContext: IntegrityReplayContext
   signal?: AbortSignal
@@ -513,8 +505,6 @@ export async function reviewIntegrity(input: {
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
   visualQa?: string
-  visualEvidence?: VisualEvidenceBundle[]
-  visualEvidenceRequired?: boolean
   projectRoot?: string
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
@@ -561,8 +551,6 @@ export async function reviewIntegrity(input: {
       acceptance: input.acceptance,
       frontendDesign: input.frontendDesign,
       visualQa: input.visualQa,
-      visualEvidence: input.visualEvidence,
-      visualEvidenceRequired: input.visualEvidenceRequired,
       projectRoot: input.projectRoot,
       attachments: input.attachments,
       signal: input.signal,
@@ -646,8 +634,6 @@ async function createSingleSessionIntegrityToolKit(input: {
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
   visualQa?: string
-  visualEvidence?: VisualEvidenceBundle[]
-  visualEvidenceRequired?: boolean
   projectRoot?: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
@@ -659,7 +645,6 @@ async function createSingleSessionIntegrityToolKit(input: {
         buildEvidence: input.acceptance,
         frontendDesign: input.frontendDesign,
         visualQa: input.visualQa,
-        visualEvidence: input.visualEvidence,
         attachments: input.attachments,
         signal: input.signal,
       })
@@ -837,16 +822,6 @@ async function createSingleSessionIntegrityToolKit(input: {
           if (requirementCoverageIssues.length > 0) {
             return `Error: integrity review omitted active requirement coverage: ${requirementCoverageIssues.join("; ")}`
           }
-          const visualEvidenceIssues = await integrityConsensusVisualEvidenceBlockingIssues({
-            report: parsed.data,
-            projectRoot: input.projectRoot,
-            taskID: input.taskID,
-            visualEvidence: input.visualEvidence,
-            visualEvidenceRequired: input.visualEvidenceRequired,
-          })
-          if (visualEvidenceIssues.length > 0) {
-            return `Error: pass verdict requires passing task-scoped VisualEvidenceBundle evidence: ${visualEvidenceIssues.join("; ")}`
-          }
           input.collector.report = parsed.data
           return `RECORDED: integrity review recorded with verdict=${parsed.data.verdict}.`
         },
@@ -858,43 +833,6 @@ async function createSingleSessionIntegrityToolKit(input: {
       detail: input.collector.report?.teamReportMarkdown ?? "No integrity review submitted.",
     }),
   }
-}
-
-async function integrityConsensusVisualEvidenceBlockingIssues(input: {
-  report: IntegrityTeamReport
-  projectRoot?: string
-  taskID?: string
-  visualEvidence?: VisualEvidenceBundle[]
-  visualEvidenceRequired?: boolean
-}): Promise<string[]> {
-  if (input.report.verdict !== "pass" || !input.visualEvidenceRequired) return []
-  if (!input.taskID || !input.projectRoot) {
-    return [
-      "pass verdict was submitted while reference visual evidence was expected, but task-scoped project context was unavailable.",
-    ]
-  }
-  const bundles = input.visualEvidence ?? []
-  if (bundles.length === 0) {
-    return [
-      "pass verdict was submitted while reference visual evidence was expected, but no VisualEvidenceBundle was available.",
-    ]
-  }
-  const advisories: string[] = []
-  for (const bundle of bundles) {
-    const comparisonValidation = await validateVisualEvidenceBundleReferenceComparisons({
-      projectRoot: input.projectRoot,
-      bundle,
-      expectedTaskID: input.taskID,
-    })
-    if (!visualEvidenceBundlePasses(bundle) || !comparisonValidation.passing) {
-      advisories.push(
-        `VisualEvidenceBundle ${bundle.id} is not passing visual evidence checks: ${
-          comparisonValidation.issues.join("; ") || "required visual regions are not fully passing"
-        }`,
-      )
-    }
-  }
-  return advisories
 }
 
 function integrityRequirementCoverageIssues(
@@ -1017,7 +955,7 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     [
       "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report with `requestPromise`, `hypothesis`, `evidencePlan[]`, and `passCriteria[]`.",
       "Actively try to falsify your scoped pass story before writing it. Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
-      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, frontend_design_contract, and visual_qa_report when visual/reference fidelity matters. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
+      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, frontend_design_contract, and visual_qa_report when Visual QA localized implementation defects matter. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
       "When prior attempts exist, you are reviewing the current attempt, not starting from zero. Prior findings and required repairs are evidence. First check whether prior blockers relevant to your scope were repaired in the files/evidence changed since the latest review. If the same blocker remains, report it as persistent and cite both the prior finding id and current evidence. Then inspect new risk introduced by the repair. Do not relabel an unchanged prior blocker as a brand-new discovery.",
@@ -1087,9 +1025,6 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   if (input.visualQa?.trim()) {
     sections.push(renderVisualQaSummary(input.visualQa))
   }
-  if (input.visualEvidence?.length) {
-    sections.push(renderVisualEvidenceSummary(input.visualEvidence))
-  }
   sections.push(renderGoalContractSummary(input.goals))
   sections.push(renderScopeBoundedMaturityEvidenceSection(input))
   return clipIntegrityEvidenceText(
@@ -1110,19 +1045,11 @@ function renderFrontendDesignSummary(frontendDesign: string): string {
 
 function renderVisualQaSummary(visualQa: string): string {
   return [
-    "# Visual QA Report",
+    "# Visual QA Implementation Defect Context",
     sanitizePromptBlock(visualQa, 2_400),
     "",
-    "Reviewers must consider this fresh frontend visual GUI and functional evidence when assessing acceptance. GUI means Graphical User Interface.",
-    'Use `inspect_integrity_evidence({ section: "visual_qa_report" })` for the bounded full report excerpt when visual and functional QA matters to your scope.',
-  ].join("\n")
-}
-
-function renderVisualEvidenceSummary(visualEvidence: VisualEvidenceBundle[]): string {
-  return [
-    "# Visual Evidence Bundles",
-    ...visualEvidence.slice(0, 4).map((bundle) => `- ${summarizeVisualEvidenceBundle(bundle)}`),
-    "Use `inspect_visual_evidence` for region-level details before accepting reference visual fidelity.",
+    "Use this only to audit implementation completeness and correctness for defects Visual QA localized. It is not the final rendered visual acceptance verdict; final visual acceptance artifacts are outside Integrity.",
+    'Use `inspect_integrity_evidence({ section: "visual_qa_report" })` for the bounded implementation-defect excerpt when these defects matter to your scope.',
   ].join("\n")
 }
 

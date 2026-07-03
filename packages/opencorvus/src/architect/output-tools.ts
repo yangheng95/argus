@@ -113,7 +113,9 @@ const ArchitectLlmJudgeScorerSchema = z.object({
   inputs: z
     .array(LlmJudgeInputKind)
     .optional()
-    .describe("Which parts of the acceptance to feed the judge. Use visual_evidence for final reference parity."),
+    .describe(
+      "Which parts of the acceptance to feed the judge. LLM judges cannot consume visual feedback; use prebuilt visual-feedback-verification for final reference parity.",
+    ),
 })
 
 const ArchitectPrebuiltScorerSchema = z.object({
@@ -122,17 +124,17 @@ const ArchitectPrebuiltScorerSchema = z.object({
   config: z.record(z.string(), z.unknown()).default({}),
   spec: z
     .object({
-      kind: z.literal("visual_evidence_bundle"),
+      kind: z.literal("visual_feedback_verification"),
       viewport: z.string().min(1).optional(),
     })
     .optional()
-    .describe("For name=visual-evidence-bundle, identifies the required visual evidence bundle shape."),
+    .describe("For name=visual-feedback-verification, identifies the required visual feedback verification shape."),
   expect: z
     .object({
       status: z.literal("passed"),
     })
     .optional()
-    .describe("For name=visual-evidence-bundle, requires a passing current bundle."),
+    .describe("For name=visual-feedback-verification, requires a passing current visual feedback verification."),
 })
 
 const ArchitectContractAuditScorerSchema = z.object({
@@ -173,11 +175,11 @@ const ArchitectAcceptanceSpecSchema = z.object({
     .array(ArchitectScorerSchema)
     .min(1)
     .describe(
-      "At least one scorer. Architect-visible scorers are shell, llm_judge, prebuilt visual-evidence-bundle, or contract_audit.",
+      "At least one scorer. Architect-visible scorers are shell, llm_judge, prebuilt visual-feedback-verification, or contract_audit.",
     ),
   severity: AcceptanceSeverity,
   trigger: AcceptanceTrigger.optional().describe(
-    "Override default trigger. Use on_integrity for final visual evidence acceptance.",
+    "Override default trigger. Use prebuilt visual-feedback-verification for final rendered visual acceptance.",
   ),
 })
 
@@ -193,23 +195,23 @@ const ArchitectGoalContractUpdateSchema = GoalContractUpdateSchema.extend({
     .optional(),
 })
 
-const RegisterVisualEvidenceAcceptanceToolInputSchema = z
+const RegisterVisualFeedbackAcceptanceToolInputSchema = z
   .object({
     goal_id: z.string().min(1).describe("Existing verification or integration goal that owns final visual parity."),
     source_requirement_id: z
       .string()
       .min(1)
-      .describe("REQ-N claimed by the goal and represented by this final visual acceptance."),
-    title: z.string().min(8).describe("Human-readable final visual acceptance title."),
+      .describe("REQ-N claimed by the goal and represented by this final visual feedback acceptance."),
+    title: z.string().min(8).describe("Human-readable final visual feedback acceptance title."),
     criteria: z
       .string()
       .min(40)
-      .describe("Rubric question comparing the implementation's rendered visual evidence against the references."),
+      .describe("Rubric question comparing the implementation's rendered visual feedback against the references."),
     reference_tokens: z
       .array(z.string().trim().min(1))
       .min(1)
       .describe(
-        "Reference coverage ids, surface names, visual spec ids, screenshot artifact ids, or region ids that the final visual acceptance must own.",
+        "Reference coverage ids, surface names, visual spec ids, screenshot artifact ids, or region ids that the final visual feedback acceptance must own.",
       ),
   })
   .strict()
@@ -775,26 +777,26 @@ export function architectValidationFindings(
     const visualAcceptanceOwners = collector.goals.filter(
       (goal) =>
         (goal.kind === "verification" || goal.kind === "integration") &&
-        goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec),
+        goal.acceptance_specs.some(isEssentialVisualFeedbackAcceptanceSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
       concern(
         "missing_final_visual_acceptance",
         [
-          "Missing visual evidence acceptance advisory: reference-driven tasks should include a verification/integration goal with an on_integrity acceptance spec that consumes a VisualEvidenceBundle, but this is not a submit-time host gate.",
+          "Missing visual feedback acceptance advisory: reference-driven tasks should include a verification/integration goal with an essential prebuilt visual-feedback-verification acceptance spec, but this is not a submit-time host gate.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
-          "Preferred repair: call register_visual_evidence_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
-          "Recommended stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
+          "Preferred repair: call register_visual_feedback_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
+          "Recommended stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_goal and scorer=prebuilt name=visual-feedback-verification.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },
-        ["register_visual_evidence_acceptance", "register_goal", "modify_goal"],
+        ["register_visual_feedback_acceptance", "register_goal", "modify_goal"],
       )
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
         concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
-          "register_visual_evidence_acceptance",
+          "register_visual_feedback_acceptance",
           "register_reference_coverage",
         ])
       }
@@ -829,7 +831,7 @@ function formatGoalSnapshot(goal: RegisteredGoal): string {
   const deps = goal.depends_on.length > 0 ? goal.depends_on.join(",") : "(none)"
   const finalReferenceAcceptance =
     (goal.kind === "verification" || goal.kind === "integration") &&
-    goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec)
+    goal.acceptance_specs.some(isEssentialVisualFeedbackAcceptanceSpec)
       ? "yes"
       : "no"
   return `${goal.id} kind=${goal.kind} priority=${goal.priority} depends_on=[${deps}] acceptance_specs=[${specs}] final_reference_acceptance=${finalReferenceAcceptance}`
@@ -904,7 +906,7 @@ function scriptRefError(goalID: string, issues: readonly ScriptRefValidationIssu
   )
 }
 
-function buildFinalVisualEvidenceAcceptanceSpec(input: {
+function buildFinalVisualFeedbackAcceptanceSpec(input: {
   goalID: string
   sourceRequirementID: string
   title: string
@@ -914,37 +916,33 @@ function buildFinalVisualEvidenceAcceptanceSpec(input: {
   const referenceTokens = [...new Set(input.referenceTokens.map((token) => token.trim()).filter(Boolean))]
   const referenceText = referenceTokens.join(", ")
   return {
-    id: `acc-${input.goalID}-visual-evidence`,
+    id: `acc-${input.goalID}-visual-feedback`,
     source_requirement_id: input.sourceRequirementID,
     goal_id: input.goalID,
     title: `${input.title.trim()} [reference anchors: ${referenceText}]`,
     severity: "essential",
-    trigger: "on_integrity",
+    trigger: "on_goal",
     scorers: [
       {
-        type: "llm_judge",
-        name: "rendered-reference-fidelity",
-        criteria:
-          `${input.criteria.trim()}\n\n` +
-          `Reference anchors this acceptance owns: ${referenceText}. ` +
-          "Use the current VisualEvidenceBundle, rendered screenshots, reference screenshots, DOM/style evidence, and interaction evidence.",
-        inputs: ["visual_evidence"],
+        type: "prebuilt",
+        name: "visual-feedback-verification",
+        config: {
+          criteria: input.criteria.trim(),
+          reference_tokens: referenceTokens,
+        },
+        spec: { kind: "visual_feedback_verification" },
+        expect: { status: "passed" },
       },
     ],
   }
 }
 
-function isEssentialVisualEvidenceAcceptanceSpec(spec: AcceptanceSpec): boolean {
+function isEssentialVisualFeedbackAcceptanceSpec(spec: AcceptanceSpec): boolean {
   return (
     spec.severity === "essential" &&
-    spec.trigger === "on_integrity" &&
     spec.scorers.some((scorer) => {
-      if (scorer.type === "prebuilt") {
-        return scorer.name === "visual-evidence-bundle" && scorer.spec?.kind === "visual_evidence_bundle"
-      }
-      if (scorer.type === "llm_judge") {
-        return scorer.inputs?.includes("visual_evidence") === true
-      }
+      if (scorer.type === "prebuilt")
+        return scorer.name === "visual-feedback-verification" && scorer.spec?.kind === "visual_feedback_verification"
       return false
     })
   )
@@ -966,7 +964,7 @@ function visualAcceptanceRegionOwnershipFindings(
     goalIDs: [...new Set([...row.goal_ids, ...visualAcceptanceOwners.map((goal) => goal.id)])],
     message:
       `Reference coverage ${row.id} (${row.surface}) has no matching final visual acceptance ownership. ` +
-      `Add the reference id, surface, or visual_spec_id to the final VisualEvidenceBundle acceptance spec so Integrity can anchor region evidence.`,
+      `Add the reference id, surface, or visual_spec_id to the final visual feedback acceptance spec so Visual QA / metrics can anchor region evidence.`,
   }))
 }
 
@@ -1071,21 +1069,21 @@ export function createArchitectOutputTools(input: {
   }
 
   const tools = {
-    register_visual_evidence_acceptance: tool({
+    register_visual_feedback_acceptance: tool({
       description:
-        "Attach the canonical final visual evidence acceptance to an existing verification/integration goal. " +
+        "Attach the canonical final visual feedback acceptance to an existing verification/integration goal. " +
         "Use this for reference-driven UI/page replica tasks instead of hand-writing the nested llm_judge/prebuilt acceptance spec through modify_goal. " +
-        "It stores an essential on_integrity llm_judge scorer with inputs=[visual_evidence] and embeds the supplied reference tokens for region ownership.",
-      inputSchema: RegisterVisualEvidenceAcceptanceToolInputSchema,
+        "It stores an essential on_goal prebuilt visual-feedback-verification scorer and embeds the supplied reference tokens for region ownership.",
+      inputSchema: RegisterVisualFeedbackAcceptanceToolInputSchema,
       execute: async (input) => {
-        const parsed = RegisterVisualEvidenceAcceptanceToolInputSchema.parse(input)
+        const parsed = RegisterVisualFeedbackAcceptanceToolInputSchema.parse(input)
         const idx = collector.goals.findIndex((goal) => goal.id === parsed.goal_id)
         if (idx < 0) {
-          return `Error: goal "${parsed.goal_id}" not registered. Register a verification/integration goal before adding final visual evidence acceptance.`
+          return `Error: goal "${parsed.goal_id}" not registered. Register a verification/integration goal before adding final visual feedback acceptance.`
         }
         const prior = collector.goals[idx]
         if (prior.kind !== "verification" && prior.kind !== "integration") {
-          return `Error: goal "${parsed.goal_id}" is kind=${prior.kind}; final visual evidence acceptance must be attached to a verification or integration goal.`
+          return `Error: goal "${parsed.goal_id}" is kind=${prior.kind}; final visual feedback acceptance must be attached to a verification or integration goal.`
         }
         if (knownRequirementIDs && !knownRequirementIDs.has(parsed.source_requirement_id)) {
           return `Error: source_requirement_id "${parsed.source_requirement_id}" is not a known requirement id; collector unchanged.`
@@ -1093,7 +1091,7 @@ export function createArchitectOutputTools(input: {
         if (!prior.requirement_ids.includes(parsed.source_requirement_id)) {
           return `Error: goal "${parsed.goal_id}" does not claim source_requirement_id "${parsed.source_requirement_id}" in requirement_ids. Use modify_goal to claim the requirement first; collector unchanged.`
         }
-        const visualSpec = buildFinalVisualEvidenceAcceptanceSpec({
+        const visualSpec = buildFinalVisualFeedbackAcceptanceSpec({
           goalID: parsed.goal_id,
           sourceRequirementID: parsed.source_requirement_id,
           title: parsed.title,
@@ -1111,15 +1109,15 @@ export function createArchitectOutputTools(input: {
             return `- ${pathLabel}: ${issue.message}`
           })
           return [
-            `Error: register_visual_evidence_acceptance produced an invalid goal after merge; collector unchanged.`,
+            `Error: register_visual_feedback_acceptance produced an invalid goal after merge; collector unchanged.`,
             ...issueLines,
           ].join("\n")
         }
         if (isDeepStrictEqual(prior, parsedNext.data)) {
-          return `No changes: goal "${parsed.goal_id}" already has the canonical final visual evidence acceptance.\nCurrent: ${formatGoalSnapshot(prior)}`
+          return `No changes: goal "${parsed.goal_id}" already has the canonical final visual feedback acceptance.\nCurrent: ${formatGoalSnapshot(prior)}`
         }
         collector.goals[idx] = parsedNext.data
-        return `OK: final visual evidence acceptance registered on goal "${parsed.goal_id}".\nCurrent: ${formatGoalSnapshot(parsedNext.data)}`
+        return `OK: final visual feedback acceptance registered on goal "${parsed.goal_id}".\nCurrent: ${formatGoalSnapshot(parsedNext.data)}`
       },
     }),
 
@@ -1186,7 +1184,7 @@ export function createArchitectOutputTools(input: {
         "from a prior run). Supply only the fields you want to change. Unknown " +
         "ids are rejected — use register_goal if you intend a brand-new goal. " +
         "A modified goal keeps its stable G number; the next implementation " +
-        "attempt increments V. Architect-visible acceptance scorer schema does not expose script_ref; use inline shell, llm_judge, prebuilt visual-evidence-bundle, or contract_audit.",
+        "attempt increments V. Architect-visible acceptance scorer schema does not expose script_ref; use inline shell, llm_judge, prebuilt visual-feedback-verification, or contract_audit.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Existing goal id to modify."),
         updates: ArchitectGoalContractUpdateSchema,
