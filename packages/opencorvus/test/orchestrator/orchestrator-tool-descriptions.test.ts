@@ -92,8 +92,12 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("expert-squad tools are scheduler-owned visible skill loading", () => {
     expect(tools.select_expert_squad.description).toContain("active expert squad prompt profile")
     expect(tools.select_expert_squad.description).toContain("root session config overlay")
+    expect(tools.select_expert_squad.description).toContain("future Orchestrator wakes")
+    expect(tools.select_expert_squad.description).toContain("scheduler capability")
     expect(tools.select_expert_squad.description).toContain("does not dispatch work")
+    expect(tools.select_expert_squad.description).toContain("current model call")
     expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")
+    expect(tools.select_expert_squad.description).not.toContain("change tools")
     const profileID = tools.select_expert_squad.inputSchema!.shape.profile_id as { description?: string }
     expect(profileID.description).toContain("frontend-innovate")
 

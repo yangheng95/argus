@@ -73,6 +73,22 @@ export namespace AgentToolPool {
     "read_context",
   ] as const
 
+  const ORCHESTRATOR_SCHEDULER_ROLE_BASE_TOOL_IDS = [
+    "select_expert_squad",
+    "skill",
+    "question",
+    "read_context",
+    "query_failed_goals",
+    "complete_task",
+    "fail_task",
+    "cancel_task",
+    "retry_task",
+    "wait",
+    "inject_operator_message",
+    "respond_agent_coordination",
+    "cancel_subagent",
+  ] as const
+
   function unique(input: readonly string[]): string[] {
     return [...new Set(input)]
   }
@@ -259,6 +275,10 @@ export namespace AgentToolPool {
 
   export function customDefault(): ToolPoolAssignment {
     return pool({ global: customDefaultGlobal })
+  }
+
+  export function orchestratorSchedulerRoleBaseToolIDs(): string[] {
+    return unique(ORCHESTRATOR_SCHEDULER_ROLE_BASE_TOOL_IDS)
   }
 
   export function normalize(input: Partial<ToolPoolAssignment> | undefined): ToolPoolAssignment {

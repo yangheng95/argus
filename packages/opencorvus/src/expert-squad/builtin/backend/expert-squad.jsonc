@@ -7,7 +7,25 @@
   "readme": "README.md",
   "capability_projection": {
     "scheduler": {
-      "role_base": true
+      "role_base": true,
+      "built_in_tool_ids": [
+        "analyze_intent",
+        "requirements",
+        "architect",
+        "deep_research",
+        "workload_analysis",
+        "build",
+        "integrity",
+        "fact_check",
+        "explore",
+        "add_goal",
+        "modify_goal",
+        "complete_goal",
+        "delete_goal",
+        "propose_task",
+        "refine",
+        "bash"
+      ]
     },
     "agents": {
       "coding": {
@@ -41,6 +59,9 @@
         "role_base": true
       },
       "fact-check": {
+        "role_base": true
+      },
+      "goal-workload-analyst": {
         "role_base": true
       },
       "integrity": {

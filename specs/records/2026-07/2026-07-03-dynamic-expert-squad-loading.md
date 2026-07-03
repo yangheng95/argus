@@ -1223,3 +1223,158 @@ Implementation review loop 13:
   - package capability refs remain inert across SkillMount, SystemPrompt skills, SkillTool, ToolRegistry, MCP, and Orchestrator exact tools;
   - the omitted `projectDirectory` resolver path is not a fallback for failed project loading because project-present calls still surface discovery and collision errors.
 - Non-blocking cleanup candidate carried forward: old sync `PromptProfile` helper APIs remain for built-in-only static tests, but production `src` call sites now use `PromptProfileResolver`. Removing or narrowing those helpers should be a later built-in test cleanup, not mixed into phase 6 runtime resolver delivery.
+
+Phase 7A Recall, 2026-07-04:
+
+### User Request
+
+- Continue implementing and testing the dynamic expert-squad architecture.
+- Use independent agents for adversarial implementation/review cooperation.
+- Preserve the original architecture goal: dynamic clear-text `.opencorvus` expert-squad packages with explicit IDs, package/folder loading, per-agent prompts, skills, tools, MCP definitions, and runtime union of profile-exclusive configuration with the currently supported OpenCorvus collection.
+
+### Acceptance Criteria For This Slice
+
+- Orchestrator exact runtime tools for every wake are projected from the active expert squad's `capability_projection.scheduler`.
+- `general` exposes only the scheduler role-base selector/control surface and no domain workflow, shell, browser-preview, goal-edit, or proposal tools.
+- Non-general built-in expert squads explicitly author the scheduler workflow tools they need in manifest `built_in_tool_ids`; they do not rely on `AgentToolPool.roleAssignments.orchestrator` as an implicit maximum catalog.
+- Project package `capability_projection.scheduler.built_in_tool_ids` is honored for Orchestrator exact runtime tools when `prompt_profile.active` points to that project package ID.
+- Projection happens before `toolGuard`, `enableMap`, and `SessionPrompt.setSessionRuntimeContract`.
+- Unknown projected built-in tool IDs, missing raw tool implementations, and unknown active profile IDs fail visibly; there is no fallback to the old full Orchestrator tool table.
+- SkillMount, SkillTool, SystemPrompt skills, ToolRegistry custom tools, worker runtime contracts, and MCP remain explicitly out of Phase 7A and must not be claimed as projected.
+
+### Hard Constraints
+
+- `role_base` is not `AgentToolPool.roleAssignments.orchestrator`; it is an explicit OpenCorvus-owned scheduler minimum.
+- No fallback/compat/double-source/gate behavior.
+- Do not restart or refresh running OpenCorvus/overlay processes.
+- Do not create a worktree, do not use `git reset`, and do not stage unrelated dirty direct-build/Visual-QA files.
+- Code changes require focused tests; docs change must preserve `specs/` as the only plan source.
+
+### Sources Read
+
+- `AGENTS.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/SKILL.md`
+- `C:/Users/chuan/.codex/skills/opencorvus-expert-squad-creator/references/open-corvus-expert-squad-checklist.md`
+- `specs/records/2026-07/2026-07-03-dynamic-expert-squad-loading.md`
+- `specs/records/2026-07/2026-07-03-expert-squad-capability-profile.md`
+- `packages/opencorvus/src/expert-squad/registry.ts`
+- `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts`
+- `packages/opencorvus/src/expert-squad/builtin/*/expert-squad.jsonc`
+- `packages/opencorvus/src/expert-squad/builtin/index.ts`
+- `packages/opencorvus/src/agent/tool-pool-contract.ts`
+- `packages/opencorvus/src/agent/role-contract.ts`
+- `packages/opencorvus/src/orchestrator/agent.ts`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/src/session/loop.ts`
+- `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts`
+- `packages/opencorvus/test/fixture/expert-squad.ts`
+- `packages/opencorvus/test/agent/agent.test.ts`
+
+### Repository Search Evidence
+
+- `rg -n "capability_projection|role_base|built_in_tool_ids|projectedWorkflowTools|PromptProfileResolver|createOrchestratorTools|setSessionRuntimeContract|includeMcpTools|toolGuard|enableMap" packages/opencorvus/src packages/opencorvus/test specs`
+- `rg -n "SkillMount\\.resolve|SystemPrompt\\.skills|SkillTool|MCP\\.tools|serverTools|callTool|serverPrompts|serverResources" packages/opencorvus/src packages/opencorvus/test specs`
+- `rg -n "const tools =|skill:|question:|wait:|bash:|browser_preview:" packages/opencorvus/src/orchestrator/tools.ts`
+- `rg -n "PromptProfile\\.builtIns|builtInPromptProfiles|loadedBuiltInPackages|builtInPackageSources" packages/opencorvus/src packages/opencorvus/test`
+- `rg -n "interruptTaskLoop|wake|schedule.*wake|TaskLoop|select_expert_squad" packages/opencorvus/src/orchestrator packages/opencorvus/test/orchestrator packages/opencorvus/test/agent -g "*.ts"`
+
+### Independent Agent Feedback
+
+- Franklin, Dewey, and Beauvoir were started for read-only review of Orchestrator tools, SkillMount/SkillTool/SystemPrompt, and MCP projection surfaces.
+- Beauvoir returned MCP review feedback:
+  - MCP projection must not be implemented as a partial `MCP.tools()` filter.
+  - Every MCP production path must share one identity: project ID plus complete canonical MCP server ref, with typed refs adding `/tool/<name>`, `/prompt/<name>`, or `/resource/<name>`.
+  - The affected MCP paths include status, connect, disconnect, auth, token status/removal, tools, prompts, resources, server proxy lists, server proxy calls, `callTool`, `getPrompt`, `readResource`, session MCP injection, HTTP MCP routes, experimental resource routes, command palette prompt reads, and Orchestrator-side Figma MCP materialization.
+  - Package MCP definitions must be materialized only inside the active projection scope and must not be copied into `Config.mcp`.
+  - Phase 7A therefore must not touch MCP runtime behavior; MCP remains a later all-entry-point slice with active-scope positive tests and inactive-scope negative tests.
+- Franklin returned Orchestrator/worker review feedback:
+  - `PromptProfileResolver` should be the single active capability entry point.
+  - `AgentToolPool` must stay a static maximum declaration and validation catalog, not a dynamic runtime source.
+  - Orchestrator projection belongs between raw tool construction and `toolGuard` / `enableMap` / exact runtime contract installation.
+  - `select_expert_squad` still needs a later visible continuation wake because one LLM call cannot mutate its own active tool table.
+  - Worker dispatch authorization and `WorkerTurnDescriptor` projection identity/hash are required later; Phase 7A must not claim them.
+- Dewey returned SkillMount/SkillTool/SystemPrompt review feedback:
+  - Package production skills must not be registered into global `Skill.all()`.
+  - Skill projection should materialize selector metadata, ordinary default skills, and active package production skills from one resolved capability surface.
+  - `SkillMount.resolve()`, `SkillTool`, `SystemPrompt.skills()`, `/skill/mounts`, SDK/OpenAPI, and overlay session scope must be updated together in a later skill-surface slice.
+  - Package skill name conflicts must fail fast; do not rename or silently override.
+- All three independent reviews agree that Phase 7A must stay limited to Orchestrator scheduler built-in tool projection and must not imply MCP, package skill, custom package tool, worker runtime, or continuation-wake completion.
+
+Phase 7A planned boundary, 2026-07-04:
+
+- Add one active scheduler projection resolver in the expert-squad prompt-profile domain. It resolves:
+  - active expert squad ID;
+  - whether the active package is built-in or project-backed;
+  - the manifest scheduler projection;
+  - expanded scheduler built-in tool IDs;
+  - a stable projection hash for the scheduler projection.
+- Keep `PromptProfile.builtIns` as the synchronous built-in prompt-only API. The new runtime projection path uses embedded `loadedBuiltInPackages` and project `ExpertSquadRegistry.loadPackage()` instead of the flattened prompt-only map.
+- Add one scheduler role-base constant/function for the Orchestrator minimum lifecycle and selector surface:
+  - `select_expert_squad`
+  - `skill`
+  - `question`
+  - `read_context`
+  - `query_failed_goals`
+  - `complete_task`
+  - `fail_task`
+  - `cancel_task`
+  - `retry_task`
+  - `wait`
+  - `inject_operator_message`
+  - `respond_agent_coordination`
+  - `cancel_subagent`
+- `general` keeps only `role_base: true`; tests pin that this expands to the exact list above and excludes `build`, `requirements`, `architect`, `frontend_design`, `frontend_research`, `visual_qa`, `integrity`, `deep_research`, `fact_check`, `workload_analysis`, `analyze_intent`, `explore`, `add_goal`, `modify_goal`, `complete_goal`, `delete_goal`, `refine`, `propose_task`, `browser_preview`, and `bash`.
+- Add explicit scheduler `built_in_tool_ids` to built-in non-general manifests:
+  - frontend replica/automation: frontend workflow tools plus lifecycle/control tools required by those squads.
+  - frontend innovate: design/research workflow tools plus lifecycle/control tools required by that squad.
+  - backend/algorithm: backend/algorithm workflow tools without frontend-only workflow tools.
+- Use the resolver inside `Orchestrator.processTask()` before `createOrchestratorTools()`, `toolGuard()`, `enableMap`, and `SessionPrompt.setSessionRuntimeContract()`.
+- `createOrchestratorTools()` remains the raw canonical built-in Orchestrator tool factory. Phase 7A projects the returned map before `toolGuard()` and exact runtime contract installation. If the projected list names a tool absent from the raw map, the wake fails visibly.
+- `SessionRuntimeContract.tools` becomes the proof of the active scheduler capability for this slice. `includeMcpTools` is set to `false` for this exact Orchestrator contract until MCP projection explicitly adds scoped MCP tools to the projected map.
+- `select_expert_squad` visible continuation wake remains Phase 7B. Phase 7A only guarantees that any subsequent Orchestrator wake reads `prompt_profile.active` and installs the matching projected exact tool table.
+- Worker runtime projection, SkillMount/SkillTool/SystemPrompt skill projection, package custom tool loading, and MCP projection remain pending and must keep the existing negative tests proving project package refs do not leak through those surfaces.
+
+Phase 7A implementation inventory:
+
+| Surface | Planned action |
+| --- | --- |
+| `packages/opencorvus/src/expert-squad/prompt-profile-resolver.ts` | Add active package resolution and scheduler projection expansion/hash. |
+| `packages/opencorvus/src/agent/tool-pool-contract.ts` | Add the explicit Orchestrator scheduler role-base tool list; do not reuse the full Orchestrator assignment. |
+| Built-in `expert-squad.jsonc` manifests | Add explicit scheduler `built_in_tool_ids` for non-general expert squads. |
+| `packages/opencorvus/src/orchestrator/agent.ts` | Resolve active scheduler projection for the task root session, project tools before `toolGuard`, build `enableMap` from projected keys, and install only projected tools into the exact runtime contract. |
+| `packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts` | Cover built-in general/frontend/backend/algorithm projection and project package scheduler projection. |
+| `packages/opencorvus/test/agent/agent.test.ts` or focused Orchestrator test | Cover exact runtime tool projection expectations without claiming skill/MCP/worker projection. |
+
+Phase 7A review questions for independent agents:
+
+- Does the projection resolver have any alternate active-profile source besides `prompt_profile.active`?
+- Does any Orchestrator path still install the unprojected full tool table into an exact runtime contract?
+- Do built-in manifest tool lists match the agent roles each squad advertises, without accidentally exposing unrelated domain workflow tools?
+- Does any Phase 7A wording imply SkillMount, SkillTool, worker toolkits, custom package tools, or MCP are already projected?
+
+Phase 7A post-implementation independent review feedback, 2026-07-04:
+
+- Hume and Dirac reviewed the first Phase 7A implementation as read-only adversarial reviewers.
+- Shared blocker: the first test set only proved resolver helper projection and source-text ordering in `orchestrator/agent.ts`; it did not execute an Orchestrator wake and inspect the installed `SessionRuntimeContract.tools`. The source-order test must be replaced or supplemented by a real `Orchestrator.processTask()` runtime-contract assertion.
+- Shared blocker: built-in manifest coverage was incomplete. The tests covered `general`, `frontend-replica`, and `backend`, but did not pin `frontend-automation-debug`, `frontend-innovate`, or `algorithm`.
+- Dirac blocker: `frontend-automation-debug` declares `frontend-design` and `frontend-research` agents but omitted `frontend_design` and `frontend_research` from scheduler `built_in_tool_ids`; that conflicts with the Phase 7A planned boundary requiring frontend replica/automation squads to include frontend workflow tools.
+- Dirac blocker: the `general` role-base test used `AgentToolPool.orchestratorSchedulerRoleBaseToolIDs()` as its oracle, so it could not detect accidental shrinkage of the explicit 13-tool scheduler minimum.
+- Required correction: pin the role-base list as a literal test expectation, cover every built-in scheduler manifest, run `Orchestrator.processTask()` with captured runtime contracts for active built-in and project profiles, and keep package tools/MCP inactive in Phase 7A.
+
+Phase 7A final validation results, 2026-07-04:
+
+- `bun test --timeout 60000 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`: pass, 10 tests.
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/tools.test.ts -t "respond_agent_coordination redispatch recovers a pending integrity action after attempt persistence"`: pass, 1 focused test. This validates current dirty working-tree integrity recovery behavior but is not part of the Phase 7A staged diff.
+- `bun test --timeout 60000 packages/opencorvus/test/expert-squad/prompt-profile-resolver.test.ts packages/opencorvus/test/expert-squad/registry.test.ts packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`: pass, 45 tests.
+- `bun test --timeout 60000 packages/opencorvus/test/agent/agent.test.ts -t "orchestrator tool pool covers every self-built orchestrator tool"`: pass, 1 focused test.
+- `bun test --timeout 60000 packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts -t "expert-squad tools are scheduler-owned visible skill loading"`: pass, 1 focused test.
+- `bun test packages/opencorvus/test/script/historical-docs-links.test.ts`: pass, 19 tests.
+- `bun test packages/opencorvus/test/script/document-health.test.ts`: pass, 46 tests.
+- `bun run --cwd packages/opencorvus typecheck`: pass.
+- `git diff --check`: pass.
+
+Phase 7A self-review result:
+
+- Hume and Dirac blockers were resolved by adding the missing `frontend-automation-debug` frontend workflow tools, replacing the source-order proof with `packages/opencorvus/test/orchestrator/scheduler-capability-projection.test.ts`, pinning literal scheduler role-base expectations, and covering all non-general built-in scheduler manifests.
+- The implemented Orchestrator runtime test captures the installed `SessionRuntimeContract.tools` during `Orchestrator.processTask()` for `general`, `frontend-automation-debug`, and project package `project-replica`; it proves MCP/package custom tools remain inactive in Phase 7A.
+- Remaining scope is explicit future work: select continuation wake, worker runtime projection, SkillMount/SkillTool/SystemPrompt projection, package custom tools, and MCP projection.

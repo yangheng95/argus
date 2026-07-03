@@ -694,8 +694,18 @@ export namespace Orchestrator {
       agentSessionID = agentSession.id
       agentSessionInfo = agentSession
 
-      // 3. Create tools (agentSessionID passed so tool sessions become children)
-      const { tools } = createOrchestratorTools({
+      // 3. Resolve the active expert-squad scheduler projection, then create
+      //    and project the exact tool table before guard/enable/runtime setup.
+      const profileScope = task.session_id ? { sessionID: task.session_id } : { taskID: task.id }
+      const [schedulerConfig, schedulerProjectDirectory] = await Promise.all([
+        EffectiveConfig.effective(profileScope),
+        EffectiveConfig.directory(profileScope),
+      ])
+      const schedulerCapability = await PromptProfileResolver.resolveSchedulerCapability({
+        projectDirectory: schedulerProjectDirectory,
+        config: schedulerConfig,
+      })
+      const { tools: rawTools } = createOrchestratorTools({
         taskID,
         agentSessionID: agentSession.id,
         signal: ctrl.signal,
@@ -703,6 +713,7 @@ export namespace Orchestrator {
         workflowState,
         operatorMessage: event?.operatorMessage,
       })
+      const tools = PromptProfileResolver.projectOrchestratorTools(rawTools, schedulerCapability)
       const guard = toolGuard(tools)
       const enableMap: Record<string, boolean> = Object.fromEntries(
         Object.keys(guard.tools).map((name) => [name, true]),
@@ -797,6 +808,9 @@ export namespace Orchestrator {
         sessionID: agentSession.id,
         model: `${model.providerID}/${model.id}`,
         toolCount: Object.keys(tools).length,
+        rawToolCount: Object.keys(rawTools).length,
+        promptProfileID: schedulerCapability.promptProfileID,
+        projectionHash: schedulerCapability.projectionHash,
       })
 
       // Abort hooks translate external interrupts to SessionPrompt.cancel on
@@ -877,6 +891,7 @@ export namespace Orchestrator {
             installedAt: Date.now(),
           },
           tools: guard.tools as any,
+          includeMcpTools: false,
           system: appendUserMessage ? undefined : runtimeSystem,
           systemMode: appendUserMessage ? undefined : "complete",
           runOnce: !appendUserMessage,

@@ -12,7 +12,27 @@
   },
   "capability_projection": {
     "scheduler": {
-      "role_base": true
+      "role_base": true,
+      "built_in_tool_ids": [
+        "analyze_intent",
+        "requirements",
+        "architect",
+        "frontend_research",
+        "frontend_design",
+        "workload_analysis",
+        "build",
+        "visual_qa",
+        "integrity",
+        "explore",
+        "add_goal",
+        "modify_goal",
+        "complete_goal",
+        "delete_goal",
+        "propose_task",
+        "refine",
+        "browser_preview",
+        "bash"
+      ]
     },
     "agents": {
       "coding": {
@@ -43,6 +63,9 @@
         "role_base": true
       },
       "frontend-research": {
+        "role_base": true
+      },
+      "goal-workload-analyst": {
         "role_base": true
       },
       "build": {

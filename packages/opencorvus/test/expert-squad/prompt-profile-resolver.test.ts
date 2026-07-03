@@ -1,8 +1,71 @@
 import { describe, expect, test } from "bun:test"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { Config } from "../../src/config/config"
 import { PromptProfileResolver } from "../../src/expert-squad/prompt-profile-resolver"
+import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { PROJECT_EXPERT_SQUAD_ID, writeProjectExpertSquadPackage } from "../fixture/expert-squad"
 import { tmpdir } from "../fixture/fixture"
+
+const expectedSchedulerRoleBaseToolIDs = [
+  "select_expert_squad",
+  "skill",
+  "question",
+  "read_context",
+  "query_failed_goals",
+  "complete_task",
+  "fail_task",
+  "cancel_task",
+  "retry_task",
+  "wait",
+  "inject_operator_message",
+  "respond_agent_coordination",
+  "cancel_subagent",
+] as const
+
+const builtInSchedulerExpectations = [
+  {
+    profileID: "frontend-replica",
+    includes: ["frontend_research", "frontend_design", "visual_qa", "workload_analysis", "browser_preview", "bash"],
+    excludes: ["deep_research", "fact_check"],
+  },
+  {
+    profileID: "frontend-automation-debug",
+    includes: [
+      "frontend_research",
+      "frontend_design",
+      "visual_qa",
+      "workload_analysis",
+      "fact_check",
+      "browser_preview",
+      "bash",
+    ],
+    excludes: ["deep_research"],
+  },
+  {
+    profileID: "frontend-innovate",
+    includes: [
+      "frontend_research",
+      "frontend_design",
+      "deep_research",
+      "visual_qa",
+      "workload_analysis",
+      "fact_check",
+      "browser_preview",
+      "bash",
+    ],
+    excludes: [],
+  },
+  {
+    profileID: "backend",
+    includes: ["deep_research", "fact_check", "workload_analysis", "build", "bash"],
+    excludes: ["frontend_design", "frontend_research", "visual_qa", "browser_preview"],
+  },
+  {
+    profileID: "algorithm",
+    includes: ["deep_research", "fact_check", "workload_analysis", "build", "bash"],
+    excludes: ["frontend_design", "frontend_research", "visual_qa", "browser_preview"],
+  },
+] as const
 
 describe("PromptProfileResolver", () => {
   test("loads project package profiles into the catalog and composes package overlays", async () => {
@@ -63,4 +126,124 @@ describe("PromptProfileResolver", () => {
       /collides with a built-in expert squad id/,
     )
   })
+
+  test("resolves general scheduler capability to the explicit role-base tool set", async () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "general" } })
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({ config })
+
+    expect(AgentToolPool.orchestratorSchedulerRoleBaseToolIDs()).toEqual([...expectedSchedulerRoleBaseToolIDs])
+    expect(capability.promptProfileID).toBe("general")
+    expect(capability.builtIn).toBe(true)
+    expect(capability.builtInToolIDs).toEqual([...expectedSchedulerRoleBaseToolIDs])
+    expect(capability.projectedWorkflowTools).toEqual([])
+    expect(capability.includeMcpTools).toBe(false)
+    expect(capability.projectionHash).toMatch(/^[a-f0-9]{64}$/)
+
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_general_projection",
+      agentSessionID: "ses_general_projection",
+    })
+    const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+    expect(Object.keys(projectedTools)).toEqual([...expectedSchedulerRoleBaseToolIDs])
+    for (const hidden of [
+      "build",
+      "requirements",
+      "architect",
+      "frontend_design",
+      "frontend_research",
+      "visual_qa",
+      "integrity",
+      "deep_research",
+      "fact_check",
+      "workload_analysis",
+      "analyze_intent",
+      "explore",
+      "add_goal",
+      "modify_goal",
+      "complete_goal",
+      "delete_goal",
+      "refine",
+      "propose_task",
+      "browser_preview",
+      "bash",
+    ]) {
+      expect(Object.hasOwn(projectedTools, hidden), `general must not expose ${hidden}`).toBe(false)
+    }
+  })
+
+  test("resolves every non-general built-in scheduler capability from manifest tool lists", async () => {
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_builtin_projection",
+      agentSessionID: "ses_builtin_projection",
+    })
+
+    for (const expectation of builtInSchedulerExpectations) {
+      const capability = await PromptProfileResolver.resolveSchedulerCapability({
+        config: Config.Info.parse({ prompt_profile: { active: expectation.profileID } }),
+      })
+      const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+
+      expect(capability.promptProfileID).toBe(expectation.profileID)
+      expect(capability.builtIn).toBe(true)
+      expect(capability.builtInToolIDs.slice(0, expectedSchedulerRoleBaseToolIDs.length)).toEqual([
+        ...expectedSchedulerRoleBaseToolIDs,
+      ])
+      expect(Object.keys(projectedTools)).toEqual(capability.builtInToolIDs)
+      for (const toolID of expectation.includes) {
+        expect(capability.builtInToolIDs, `${expectation.profileID} should expose ${toolID}`).toContain(toolID)
+        expect(Object.hasOwn(projectedTools, toolID), `${expectation.profileID} should project ${toolID}`).toBe(true)
+      }
+      for (const toolID of expectation.excludes) {
+        expect(capability.builtInToolIDs, `${expectation.profileID} should not expose ${toolID}`).not.toContain(toolID)
+        expect(Object.hasOwn(projectedTools, toolID), `${expectation.profileID} should not project ${toolID}`).toBe(
+          false,
+        )
+      }
+    }
+  })
+
+  test("resolves project package scheduler projection without activating package tool or MCP refs", async () => {
+    await using project = await tmpdir({ git: true })
+    await writeProjectExpertSquadPackage(project.path)
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      projectDirectory: project.path,
+      config: Config.Info.parse({ prompt_profile: { active: PROJECT_EXPERT_SQUAD_ID } }),
+    })
+
+    expect(capability.builtIn).toBe(false)
+    expect(capability.promptProfileID).toBe(PROJECT_EXPERT_SQUAD_ID)
+    expect(capability.builtInToolIDs).toContain("build")
+    expect(capability.builtInToolIDs).toContain("select_expert_squad")
+    expect(capability.scheduler.package_tool_refs).toContain(`${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)
+    expect(capability.scheduler.package_mcp_server_refs).toContain(
+      `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/package-browser`,
+    )
+    expect(capability.includeMcpTools).toBe(false)
+
+    const { tools: rawTools } = createOrchestratorTools({
+      taskID: "tsk_project_projection",
+      agentSessionID: "ses_project_projection",
+    })
+    const projectedTools = PromptProfileResolver.projectOrchestratorTools(rawTools, capability)
+    expect(Object.hasOwn(projectedTools, "build")).toBe(true)
+    expect(Object.hasOwn(projectedTools, `${PROJECT_EXPERT_SQUAD_ID}/orchestrator/source-evidence`)).toBe(false)
+    expect(Object.hasOwn(projectedTools, "package-browser")).toBe(false)
+  })
+
+  test("fails visibly when a projected built-in Orchestrator tool has no raw implementation", async () => {
+    const capability = await PromptProfileResolver.resolveSchedulerCapability({
+      config: Config.Info.parse({ prompt_profile: { active: "general" } }),
+    })
+    const { tools } = createOrchestratorTools({
+      taskID: "tsk_missing_projection",
+      agentSessionID: "ses_missing_projection",
+    })
+    const rawTools: Record<string, (typeof tools)[keyof typeof tools]> = { ...tools }
+    delete rawTools.skill
+
+    expect(() => PromptProfileResolver.projectOrchestratorTools(rawTools, capability)).toThrow(
+      /projects Orchestrator tool "skill"/,
+    )
+  })
+
 })

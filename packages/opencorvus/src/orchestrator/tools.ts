@@ -7825,8 +7825,8 @@ export function createOrchestratorTools(input: {
     select_expert_squad: tool({
       description:
         "Select the active expert squad prompt profile for this task's root session. " +
-        "This writes only `prompt_profile.active` to the root session config overlay, so future Orchestrator wakes and dispatched agents compose prompts from that expert squad. " +
-        "It does not dispatch work, reroute the workflow, change models, change tools, mutate per-agent prompt fields, or infer the profile from keywords.",
+        "This writes only `prompt_profile.active` to the root session config overlay, so future Orchestrator wakes and dispatched agents compose prompts and scheduler capability from that expert squad. " +
+        "It does not dispatch work, reroute the workflow, change models, mutate per-agent prompt fields, infer the profile from keywords, or change the tool table available in this current model call.",
       inputSchema: z
         .object({
           profile_id: PromptProfileIDSchema.describe(
@@ -7857,7 +7857,7 @@ export function createOrchestratorTools(input: {
           `- previous: ${before}`,
           `- active: ${profile_id}`,
           `- reason: ${reason}`,
-          "This change affects future prompt composition through the root session overlay only.",
+          "This change affects future prompt composition and scheduler capability projection through the root session overlay only.",
         ].join("\n")
       },
     }),
