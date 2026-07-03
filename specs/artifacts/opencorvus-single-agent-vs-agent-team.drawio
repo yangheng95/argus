@@ -77,8 +77,8 @@
         <mxCell id="lane-team" value="3. Agent Team Layer" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#d7dee8;fontFamily=Microsoft YaHei;fontSize=13;fontStyle=1;fontColor=#52606d;align=left;verticalAlign=middle;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="600" y="476" width="1064" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="prompt-overlay" value="专家团 / PromptProfile Overlay：只改变领域 prompt，不改变工具、模型、工作流、MCP 或 executor" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#fdba74;fontFamily=Microsoft YaHei;fontSize=12;fontStyle=1;fontColor=#9a3412;align=center;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="666" y="496" width="930" height="32" as="geometry" />
+        <mxCell id="prompt-overlay" value="专家团 / PromptProfile 积木：装配领域 prompt + scheduler capability projection；model / executor 独立，选档必须可见" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#fdba74;fontFamily=Microsoft YaHei;fontSize=12;fontStyle=1;fontColor=#9a3412;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="666" y="490" width="930" height="44" as="geometry" />
         </mxCell>
         <mxCell id="agent-group-1" value="意图 / 需求 / 架构&#xa;Intent Analysis · Requirements · Architect" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#86efac;fontFamily=Microsoft YaHei;fontSize=12;fontStyle=1;fontColor=#166534;align=center;verticalAlign=middle;lineHeight=1.35;" vertex="1" parent="1">
           <mxGeometry x="660" y="552" width="280" height="74" as="geometry" />

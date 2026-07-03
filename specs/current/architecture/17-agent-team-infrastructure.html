@@ -623,7 +623,7 @@
           <h1 id="page-title">OpenCorvus Agent Team 基建架构图</h1>
           <p class="lead">
             一张图读懂这套基建：目标统一入站 → Orchestrator 唯一调度 → 14 个 Agent 角色在独立 worktree 并行作业 → 一切沉淀为可审计证据。
-            这套调度脊柱、角色家族与数据底座<b>刻意保持通用</b>——<b>专家团只换一层领域 prompt</b>，同一组并行 agent team 即可承载众多业务，而不分叉调度。
+            这套调度脊柱、角色家族与数据底座<b>刻意保持通用</b>——<b>专家团像一块 PromptProfile 积木</b>，把领域 prompt 与调度能力投影装到同一基座上，而不分叉调度。
           </p>
         </div>
         <aside class="executive-note" aria-label="阅读方式">
@@ -649,7 +649,7 @@
         <div class="metric">
           <em>6</em>
           <b>专家团</b>
-          <span>PromptProfile 内置档，换一层领域 prompt 承载不同业务。</span>
+          <span>PromptProfile 内置档，装配 prompt overlays 与 scheduler capability。</span>
         </div>
         <div class="metric">
           <em>2</em>
@@ -675,7 +675,7 @@
           <title id="svg-title">OpenCorvus Agent Team operating map</title>
           <desc id="svg-desc">
             A clickable map: mission ingress, the Orchestrator-led operating layer with the 14-role agent family,
-            the swappable expert-squad prompt overlay, the verification loop, and the evidence base plus four
+            the expert-squad PromptProfile building block, the verification loop, and the evidence base plus four
             extension axes.
           </desc>
           <defs>
@@ -689,7 +689,7 @@
 
           <text x="40" y="46" class="svg-h">Agent Team Operating Map</text>
           <text x="40" y="68" class="svg-sub">
-            目标进入 → Orchestrator 唯一调度 → 14 角色并行作业 → 证据底座；专家团换一层领域 prompt，同一基建承载众多业务。每个节点可点击。
+            目标进入 → Orchestrator 唯一调度 → 14 角色并行作业 → 证据底座；专家团以 PromptProfile 积木装配 prompt 与调度能力。每个节点可点击。
           </text>
 
           <rect x="24" y="92" width="1592" height="158" rx="22" fill="#ffffff" stroke="#d9ded7" />
@@ -728,7 +728,7 @@
 
           <!-- ===== Plane 02 · operating layer ===== -->
           <text x="52" y="316" class="plane-label">02 · Agent Team 作业层</text>
-          <text x="52" y="336" class="plane-note">Orchestrator 读全量事实，调度同一组并行 Agent Team；专家团只换 prompt overlay，因此平台可承载不同业务。</text>
+          <text x="52" y="336" class="plane-note">Orchestrator 读全量事实，调度同一组并行 Agent Team；专家团积木投影领域 prompt 与可见调度能力。</text>
 
           <g class="hot" data-detail="orchestrator" tabindex="0" role="button" aria-label="Orchestrator 细节">
             <rect x="72" y="360" width="274" height="176" rx="18" fill="#243447" stroke="#526576" stroke-width="1.5" />
@@ -752,11 +752,11 @@
 
           <rect x="410" y="360" width="844" height="366" rx="20" fill="#fbfbf8" stroke="#d9ded7" />
           <text x="436" y="392" class="plane-label">通用 Agent Team 平台面</text>
-          <text x="436" y="414" class="plane-note">同一组角色并行取证、实现、复核；业务差异由上方专家团 overlay 注入到 prompt。</text>
+          <text x="436" y="414" class="plane-note">同一组角色并行取证、实现、复核；业务差异由上方 PromptProfile 积木投影。</text>
 
           <rect x="436" y="438" width="792" height="94" rx="16" fill="#f2e8dc" stroke="#c89b68" />
-          <text x="460" y="466" class="band-label">Expert Squads · PromptProfile overlay</text>
-          <text x="460" y="490" class="node-copy">换一层领域 prompt，覆盖下方整个 Agent Team；不改调度 / tools / model / MCP。</text>
+          <text x="460" y="466" class="band-label">Expert Squads · PromptProfile building block</text>
+          <text x="460" y="490" class="node-copy">每档装配 prompt overlays + scheduler capability projection；选择路径必须可见。</text>
           <g class="hot" data-detail="squad-frontend-replica" tabindex="0" role="button" aria-label="Frontend Replica 专家团">
             <rect x="460" y="504" width="138" height="22" rx="7" fill="#ffffff" stroke="#c89b68" />
             <text x="470" y="519" class="chip-text">frontend-replica ★</text>
@@ -894,21 +894,21 @@
           <span><i style="background: #e7edf1"></i>Scope / 证据 agent</span>
           <span><i style="background: #e7efe6"></i>执行（build → executor）</span>
           <span><i style="background: #ece9f1"></i>复核 / 验证</span>
-          <span><i style="background: #f2e8dc"></i>专家团 / A2A / handoff</span>
+          <span><i style="background: #f2e8dc"></i>专家团积木 / A2A / handoff</span>
           <span><i style="background: #ffffff"></i>工作流 / 扩展轴</span>
           <span style="color: var(--copper); font-weight: 700">点击任意节点展开代码级细节 ›</span>
         </div>
       </section>
 
       <section class="executive-map" aria-labelledby="wiring-title" style="margin-top: 18px">
-        <h2 id="wiring-title" hidden>专家团装配管线 · Expert Squad Wiring</h2>
-        <span class="map-hint">点击任意环节展开细节</span>
-        <svg class="map-svg" viewBox="0 0 1640 560" role="img" aria-labelledby="wiring-svg-title wiring-svg-desc">
-          <title id="wiring-svg-title">Expert squad wiring pipeline</title>
+        <h2 id="wiring-title" hidden>专家团积木装配图 · Expert Squad Building Blocks</h2>
+        <span class="map-hint">点击任意积木展开边界</span>
+        <svg class="map-svg" viewBox="0 0 1640 640" role="img" aria-labelledby="wiring-svg-title wiring-svg-desc">
+          <title id="wiring-svg-title">Expert squad building blocks</title>
           <desc id="wiring-svg-desc">
-            Four stages: the PromptProfile catalog, the Orchestrator's visible squad decision, the single
-            root-session overlay write, and per-agent session composition where only the prompt arm reads the
-            squad while tools, agent, model, and MCP stay unchanged.
+            A building-block diagram: visible selection writes the active PromptProfile ID, then the selected
+            PromptProfile block contributes role prompt overlays and a scheduler capability projection onto the
+            same OpenCorvus infrastructure base.
           </desc>
           <defs>
             <marker id="warrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -919,86 +919,88 @@
             </marker>
           </defs>
 
-          <text x="40" y="44" class="svg-h">专家团装配管线 · Expert Squad Wiring</text>
+          <text x="40" y="44" class="svg-h">专家团积木装配图 · Expert Squad Building Blocks</text>
           <text x="40" y="66" class="svg-sub">
-            专家团 = PromptProfile。Orchestrator 可见地选档 → 只写一处 root session overlay → 各 agent 在 session 组装时只热插 prompt 这一层；tool / agent / model / MCP 全部不变。
+            一块专家团 = 一块 PromptProfile：可见选择后，在同一 OpenCorvus 基座上同时装配 prompt overlays 与 scheduler capability projection。
           </text>
 
-          <rect x="24" y="92" width="1592" height="420" rx="22" fill="#ffffff" stroke="#d9ded7" />
-          <text x="58" y="126" class="group-label">① 专家团目录</text>
-          <text x="430" y="154" class="group-label">② Orchestrator 可见决策</text>
-          <text x="768" y="154" class="group-label">③ 注册 · 唯一写入</text>
-          <text x="1128" y="126" class="group-label">④ Agent session 组装</text>
+          <rect x="24" y="92" width="1592" height="500" rx="22" fill="#ffffff" stroke="#d9ded7" />
+          <text x="70" y="126" class="group-label">① 可见选择</text>
+          <text x="520" y="126" class="group-label">② PromptProfile 积木</text>
+          <text x="520" y="330" class="group-label">③ 单一写入点</text>
+          <text x="70" y="486" class="group-label">④ OpenCorvus 基建底座</text>
 
-          <!-- Stage 1: catalog -->
-          <g class="hot" data-detail="wiring-catalog" tabindex="0" role="button" aria-label="专家团目录细节">
-            <rect x="56" y="148" width="300" height="236" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
-            <text x="80" y="182" class="pillar-title">PromptProfile.builtIns</text>
-            <text x="80" y="214" class="node-copy">frontend-replica ★</text>
-            <text x="80" y="240" class="node-copy">frontend-innovate</text>
-            <text x="80" y="266" class="node-copy">backend · algorithm</text>
-            <text x="80" y="292" class="node-copy">frontend-automation-debug</text>
-            <text x="80" y="318" class="node-copy">general（无 overlay）</text>
-            <line x1="80" y1="340" x2="332" y2="340" stroke="#d9ded7" />
-            <text x="80" y="364" class="quiet-copy">每档 = { agentID → prompt overlay }</text>
+          <g class="hot" data-detail="wiring-select" tabindex="0" role="button" aria-label="可见专家团选择细节">
+            <rect x="70" y="150" width="360" height="138" rx="18" fill="#ffffff" stroke="#d9ded7" />
+            <text x="94" y="184" class="pillar-title">Visible selection</text>
+            <text x="94" y="218" class="node-copy">skill evidence → select_expert_squad(id, reason)</text>
+            <text x="94" y="248" class="quiet-copy">无 host 关键字路由 · 无隐藏分支</text>
+            <text x="94" y="270" class="quiet-copy">当前 LLM tool table 不会同轮突变</text>
           </g>
+
           <g class="hot" data-detail="wiring-skill-discovery" tabindex="0" role="button" aria-label="mounted 专家团 skill 细节">
-            <rect x="56" y="402" width="300" height="64" rx="16" fill="#e7edf1" stroke="#b9c7d1" />
-            <text x="80" y="428" class="node-title">Mounted 专家团 skills</text>
-            <text x="80" y="450" class="quiet-copy">供 Orchestrator 检索后再 select_expert_squad</text>
+            <rect x="70" y="316" width="360" height="96" rx="18" fill="#e7edf1" stroke="#b9c7d1" />
+            <text x="94" y="350" class="node-title">Mounted selector skills</text>
+            <text x="94" y="380" class="quiet-copy">只给 Orchestrator 做选档证据读取</text>
           </g>
 
-          <!-- Stage 2: decision -->
-          <g class="hot" data-detail="wiring-select" tabindex="0" role="button" aria-label="select_expert_squad 细节">
-            <rect x="426" y="184" width="276" height="206" rx="17" fill="#ffffff" stroke="#d9ded7" />
-            <text x="450" y="218" class="pillar-title">Orchestrator 选档</text>
-            <text x="450" y="254" class="node-copy">skill：读取 mounted 指引</text>
-            <text x="450" y="284" class="node-copy">读请求证据，推理用哪档</text>
-            <text x="450" y="314" class="node-copy">select_expert_squad(id, reason)</text>
-            <line x1="450" y1="340" x2="678" y2="340" stroke="#d9ded7" />
-            <text x="450" y="366" class="quiet-copy">非关键字路由 · 不自动 dispatch</text>
+          <g class="hot" data-detail="wiring-catalog" tabindex="0" role="button" aria-label="PromptProfile 专家团积木细节">
+            <rect x="520" y="150" width="340" height="160" rx="18" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
+            <rect x="576" y="128" width="80" height="32" rx="10" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
+            <rect x="718" y="128" width="80" height="32" rx="10" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
+            <text x="544" y="184" class="pillar-title" fill="#8a5a2b">PromptProfile.builtIns</text>
+            <text x="544" y="218" class="node-copy">frontend-replica · frontend-innovate</text>
+            <text x="544" y="246" class="node-copy">backend · algorithm · automation-debug</text>
+            <text x="544" y="276" class="quiet-copy">selected by prompt_profile.active</text>
           </g>
 
-          <!-- Stage 3: registration -->
+          <g class="hot" data-detail="wiring-prompt-arm" tabindex="0" role="button" aria-label="prompt overlay 积木细节">
+            <rect x="936" y="132" width="258" height="178" rx="18" fill="#f2e8dc" stroke="#c89b68" />
+            <rect x="984" y="112" width="58" height="28" rx="9" fill="#f2e8dc" stroke="#c89b68" />
+            <text x="960" y="170" class="pillar-title" fill="#8a5a2b">Block A · PROMPT</text>
+            <text x="960" y="206" class="node-copy">base core</text>
+            <text x="960" y="232" class="node-copy">+ profile.agents[role]</text>
+            <text x="960" y="258" class="node-copy">+ user append</text>
+            <text x="960" y="286" class="quiet-copy">changes role reasoning text</text>
+          </g>
+
+          <g class="hot" data-detail="wiring-tool-arm" tabindex="0" role="button" aria-label="scheduler capability projection 积木细节">
+            <rect x="1238" y="132" width="302" height="178" rx="18" fill="#e7efe6" stroke="#aebfae" />
+            <rect x="1294" y="112" width="58" height="28" rx="9" fill="#e7efe6" stroke="#aebfae" />
+            <text x="1262" y="170" class="pillar-title">Block B · CAPABILITY</text>
+            <text x="1262" y="206" class="node-copy">tool_ids · selector/production skills</text>
+            <text x="1262" y="232" class="node-copy">projected agents · include_mcp_tools</text>
+            <text x="1262" y="258" class="node-copy">projection_hash</text>
+            <text x="1262" y="286" class="quiet-copy">installs next exact runtime contract</text>
+          </g>
+
           <g class="hot" data-detail="wiring-overlay" tabindex="0" role="button" aria-label="root session overlay 细节">
-            <rect x="766" y="184" width="300" height="206" rx="17" fill="#f2e8dc" stroke="#c89b68" stroke-width="1.8" />
-            <text x="790" y="218" class="pillar-title">root session overlay</text>
-            <text x="790" y="256" class="node-copy" fill="#8a5a2b">prompt_profile.active = &lt;id&gt;</text>
-            <text x="790" y="282" class="quiet-copy">Session.mergeConfigOverlay(root)</text>
-            <line x1="790" y1="310" x2="1040" y2="310" stroke="#dfcbb5" />
-            <text x="790" y="338" class="quiet-copy">不 dispatch · 不改 workflow</text>
-            <text x="790" y="362" class="quiet-copy">不改 model · 不改 tools</text>
+            <rect x="520" y="352" width="500" height="90" rx="18" fill="#fbfbf8" stroke="#d9ded7" />
+            <text x="544" y="386" class="pillar-title">root session overlay</text>
+            <text x="544" y="416" class="node-copy" fill="#8a5a2b">single write: prompt_profile.active = &lt;profile_id&gt;</text>
+            <text x="820" y="416" class="quiet-copy">next wake resolves prompt + capability</text>
           </g>
 
-          <!-- Stage 4: composition, 3 arms -->
-          <g class="hot" data-detail="wiring-prompt-arm" tabindex="0" role="button" aria-label="PROMPT 组装臂细节">
-            <rect x="1120" y="148" width="454" height="122" rx="17" fill="#f2e8dc" stroke="#c89b68" />
-            <text x="1144" y="182" class="pillar-title" fill="#8a5a2b">PROMPT · 唯一受专家团驱动</text>
-            <text x="1144" y="216" class="node-copy">base core ⊕ profile.agents[agentID] ⊕ userAppend</text>
-            <text x="1144" y="244" class="quiet-copy">composeAgentPrompt → effective system prompt</text>
-          </g>
-          <g class="hot" data-detail="wiring-tool-arm" tabindex="0" role="button" aria-label="TOOLS 解析臂细节">
-            <rect x="1120" y="292" width="454" height="80" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
-            <text x="1144" y="324" class="pillar-title">TOOLS · 不受专家团影响</text>
-            <text x="1144" y="352" class="quiet-copy">AgentToolPool → ToolRegistry.tools(model, agent, config)</text>
-          </g>
-          <g class="hot" data-detail="wiring-model-arm" tabindex="0" role="button" aria-label="AGENT/MODEL/MCP 不变细节">
-            <rect x="1120" y="392" width="454" height="80" rx="17" fill="#fbfbf8" stroke="#d9ded7" />
-            <text x="1144" y="424" class="pillar-title">AGENT / MODEL / MCP / WORKFLOW · 不变</text>
-            <text x="1144" y="452" class="quiet-copy">这些轴各有独立来源，不读取 expert squad。</text>
+          <g class="hot" data-detail="wiring-model-arm" tabindex="0" role="button" aria-label="OpenCorvus 基建底座细节">
+            <rect x="70" y="506" width="1470" height="58" rx="18" fill="#e7edf1" stroke="#b9c7d1" />
+            <text x="94" y="540" class="pillar-title">OpenCorvus infrastructure base</text>
+            <text x="380" y="540" class="node-copy">Orchestrator spine · AgentRoleContract · AgentToolPool max catalog · SkillMount · engine_* evidence · ExecutorRegistry · explicit MCP flag</text>
           </g>
 
-          <!-- arrows -->
-          <path d="M356 268 L426 268" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
-          <path d="M356 432 C396 432 392 306 426 286" fill="none" stroke="#8a5a2b" stroke-width="1.6" stroke-dasharray="2 5" marker-end="url(#warrow-c)" />
-          <path d="M702 286 L766 286" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
-          <path d="M1066 286 C1092 270 1094 222 1120 206" fill="none" stroke="#8a5a2b" stroke-width="2.2" marker-end="url(#warrow-c)" />
-          <text x="1064" y="264" class="flow-caption">only prompt assembly changes</text>
+          <path d="M430 220 L520 220" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
+          <path d="M430 364 L520 396" fill="none" stroke="#526576" stroke-width="2.2" marker-end="url(#warrow)" />
+          <path d="M770 352 L770 310" fill="none" stroke="#8a5a2b" stroke-width="2" stroke-dasharray="2 5" marker-end="url(#warrow-c)" />
+          <path d="M860 220 L936 220" fill="none" stroke="#8a5a2b" stroke-width="2.2" marker-end="url(#warrow-c)" />
+          <path d="M860 240 C1000 338 1132 338 1238 240" fill="none" stroke="#486b4b" stroke-width="2.2" marker-end="url(#warrow)" />
+          <path d="M1065 310 L1065 506" fill="none" stroke="#8a5a2b" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#warrow-c)" />
+          <path d="M1389 310 L1389 506" fill="none" stroke="#486b4b" stroke-width="1.8" marker-end="url(#warrow)" />
+          <text x="1086" y="472" class="flow-caption">role prompt composition</text>
+          <text x="1284" y="472" class="flow-caption">projected tool / skill / agent surface</text>
         </svg>
 
         <div class="map-legend" aria-label="结论">
           <span style="color: var(--copper); font-weight: 700">
-            换专家团 = 只热插 PROMPT 这一层；TOOLS / AGENT / MODEL / MCP / WORKFLOW 全部不变 → 同一通用基建承载众多业务。
+            换专家团 = 换一块 PromptProfile 积木：PROMPT overlays + scheduler capability projection；model / executor 不被选档工具改写，MCP 暴露必须来自显式 capability。
           </span>
         </div>
       </section>
@@ -1308,15 +1310,15 @@
             <div class="kv"><div><b>入口</b><span>Build / General 通过 task tool 派生</span></div></div>`
         },
         "squad-frontend-replica": {
-          kicker: "Expert Squad · DEFAULT", title: "Frontend Replica",
-          src: "src/agent/prompt-profile.ts · DEFAULT_PROMPT_PROFILE_ID",
-          html: `<p>参照复刻、网页复制、视觉证据与设计系统聚焦的专家团；<b>默认 active profile</b>。</p>
+          kicker: "Expert Squad", title: "Frontend Replica",
+          src: "src/agent/prompt-profile.ts · PromptProfile.builtIns",
+          html: `<p>参照复刻、网页复制、视觉证据与设计系统聚焦的专家团。</p>
             <ul>
               <li>聚焦桌面源信息架构、模块顺序、密度、状态与可见 parity。</li>
               <li>除非 operator 明确要求多端迁移，否则不引入 tablet / mobile 作用域。</li>
               <li>build 用 <code>browser_preview_reference_regions</code> 取证、<code>browser_preview_compare_scroll_slices</code> 做 visual_diff。</li>
             </ul>
-            <p><b>它只是 prompt overlay</b>：覆盖 14 个 agent 的领域 prompt，不改 workflow / routing / MCP / model / 工具池。</p>`
+            <p>在 2026-07-03 capability-profile design 中，它是一块 PromptProfile 积木：既提供 role-scoped prompt overlays，也定义该专家团的 scheduler capability projection。当前页面是图例更新，不等同于 runtime 实现验收。</p>`
         },
         "squad-frontend-innovate": {
           kicker: "Expert Squad", title: "Frontend Innovate",
@@ -1358,8 +1360,8 @@
         "squad-general": {
           kicker: "Expert Squad", title: "General",
           src: "src/agent/prompt-profile.ts",
-          html: `<p>无领域 overlay 的基线档。保留通用行为，不向任何 agent 注入专家 prompt——用于不需要领域聚焦的任务。</p>
-            <p>专家团切换走可见路径：<code>config.prompt_profile.active</code> 或 Orchestrator 的 <code>select_expert_squad</code> 技能，不是 host 端关键词路由；project 自定义 profile 不能覆盖内置档。</p>`
+          html: `<p>设计目标是薄 general：保留选择、提问、读取上下文、生命周期控制等最小调度能力，不默认暴露领域 workflow dispatch surface。</p>
+            <p>专家团切换走可见路径：<code>config.prompt_profile.active</code> 或 Orchestrator 的 <code>select_expert_squad</code> 工具，不是 host 端关键词路由；project 自定义 profile 不能覆盖内置档。</p>`
         },
         "axis-executor": {
           kicker: "扩展轴", title: "Executor — 执行器",
@@ -1446,27 +1448,27 @@
             </ul>`
         },
         "wiring-catalog": {
-          kicker: "专家团装配 · ① 目录", title: "PromptProfile.builtIns",
+          kicker: "专家团积木 · ② 目录", title: "PromptProfile.builtIns",
           src: "src/agent/prompt-profile.ts",
-          html: `<p>专家团目录是一组 <b>PromptProfile</b>。每档的核心就是一个映射：</p>
-            <div class="kv"><div><b>结构</b><span>{ label, description, agents: { agentID → prompt overlay } }</span></div></div>
-            <p>内置档：frontend-replica（默认）· frontend-innovate · backend · algorithm · frontend-automation-debug · general（空 overlay）。</p>
+          html: `<p>专家团目录是一组 <b>PromptProfile</b>。新的积木模型要求它同时拥有 prompt overlays 与 capability projection，不能让 UI、SkillMount 或 Orchestrator 各造一套规则。</p>
+            <div class="kv"><div><b>Prompt</b><span>{ agents: { agentID → prompt overlay } }</span></div>
+            <div><b>Capability</b><span>{ scheduler: tool_ids / skill_names / include_mcp_tools }</span></div></div>
+            <p>内置档：frontend-replica · frontend-innovate · backend · algorithm · frontend-automation-debug · general。</p>
             <h4>关键</h4>
             <ul>
               <li>不同档的 <code>agents</code> 键不同——即覆盖<b>不同的 agent 子集</b>；不在映射里的 agent 拿基线 prompt。</li>
-              <li>目录里<b>只有 prompt 文本</b>，没有 tool、没有 model、没有 MCP、没有 workflow。</li>
+              <li>scheduler capability 是从 active PromptProfile 派生出的可见工具 / skill / agent 面，不是 host 端隐藏路由。</li>
               <li>project 自定义 profile 不能覆盖内置档（<code>validateConfig</code> 报错）。</li>
             </ul>`
         },
         "wiring-skill-discovery": {
-          kicker: "专家团装配 · ① 决策输入", title: "Mounted 专家团 skills",
+          kicker: "专家团积木 · ① 决策输入", title: "Mounted selector skills",
           src: "src/skill/builtin/*-expert-squad.md · orchestrator/tools.ts (skill)",
-          html: `<p>少数专家团带一份 mounted Orchestrator <code>SKILL.md</code>（frontend-replica / frontend-innovate / frontend-automation-debug）。</p>
-            <p>Orchestrator 的 <code>skill</code> 工具是<b>scheduler-only 的检索/加载面</b>：用来在 <code>select_expert_squad</code> 之前查看请求匹配到的专家团指引；它不加载生产 / research / 实现类 skill。</p>
-            <p>这让选档是<b>证据驱动</b>的可见推理，而不是 host 端关键词匹配。</p>`
+          html: `<p>selector skill 是 Orchestrator 可见的选档证据面：它帮助模型读取专家团适用条件，再决定是否调用 <code>select_expert_squad</code>。</p>
+            <p>它不替代生产 workflow skill，也不通过关键词匹配自动装配专家团。active profile 后续能看到哪些 production skills，必须来自同一个 PromptProfile capability projection。</p>`
         },
         "wiring-select": {
-          kicker: "专家团装配 · ② 决策", title: "select_expert_squad",
+          kicker: "专家团积木 · ① 可见选择", title: "select_expert_squad",
           src: "src/orchestrator/tools.ts",
           html: `<p>Orchestrator 选档的<b>唯一入口</b>，是一次可见的 tool 调用。</p>
             <h4>它做什么</h4>
@@ -1475,22 +1477,21 @@
               <li>把 <code>{ prompt_profile: { active: profile_id } }</code> 写入 root session config overlay。</li>
               <li>要求填写 <code>reason</code>：为何从下一轮起该任务用这档。</li>
             </ul>
-            <h4>它明确不做（tool 描述原文）</h4>
-            <p>does not dispatch work, reroute the workflow, change models, change tools, mutate per-agent prompt fields, or infer the profile from keywords.</p>`
+            <p>同一 LLM 调用的工具表已经固定；因此能力投影必须在下一次 Orchestrator wake 重新安装，不能假装同轮新增工具。</p>`
         },
         "wiring-overlay": {
-          kicker: "专家团装配 · ③ 注册", title: "root session overlay（唯一写入点）",
+          kicker: "专家团积木 · ③ 注册", title: "root session overlay（唯一写入点）",
           src: "Session.mergeConfigOverlay · src/config/effective.ts",
           html: `<p>整个专家团切换<b>只改这一处状态</b>：root session 的 config overlay 里的 <code>prompt_profile.active</code>。</p>
             <div class="kv">
               <div><b>写入</b><span>prompt_profile.active = &lt;profile_id&gt;</span></div>
               <div><b>作用域</b><span>该 task 的 root session（及其后续派生）</span></div>
-              <div><b>生效时机</b><span>未来的 Orchestrator wake 与被 dispatch 的 agent 组装 prompt 时</span></div>
+              <div><b>生效时机</b><span>下一次 Orchestrator wake 解析 prompt + capability projection</span></div>
             </div>
-            <p>没有第二处注册：workflow / model / tools / MCP / 逐 agent prompt 字段都不被这次写入触碰。这正是「可换业务、不分叉调度」的实现根因。</p>`
+            <p>这里不写 tools、permissions、model、workflow 或逐 agent prompt 字段；这些有效面都必须从 active PromptProfile 派生，避免双源。</p>`
         },
         "wiring-prompt-arm": {
-          kicker: "专家团装配 · ④ 组装", title: "PROMPT 臂（受专家团驱动）",
+          kicker: "专家团积木 · Block A", title: "PROMPT overlays",
           src: "src/agent/runner.ts · PromptProfile.composeAgentPrompt",
           html: `<p>每个被 dispatch 的 agent 在 session 组装时，<b>有效 system prompt</b> 由三段拼接：</p>
             <div class="kv">
@@ -1498,30 +1499,30 @@
               <div><b>overlay</b><span>overlayFor(agentID) = active profile.agents[agentID]（专家团驱动）</span></div>
               <div><b>append</b><span>用户 / effective agent 的 prompt_append</span></div>
             </div>
-            <p>拼接后再过 <code>appendNonExecutorSourceBoundary</code>。这是专家团唯一改变 runtime 行为的地方——<b>只有 prompt 这一层</b>。</p>
+            <p>拼接后再过 <code>appendNonExecutorSourceBoundary</code>。这是专家团积木的 prompt 半边，只负责改变角色推理文本。</p>
             <p>若该 agent 不在 profile 的 <code>agents</code> 映射里，overlay 为空，它就跑基线 prompt。</p>`
         },
         "wiring-tool-arm": {
-          kicker: "专家团装配 · ④ 组装", title: "TOOLS 臂（不受专家团影响）",
-          src: "src/agent/tool-pool-contract.ts · src/tool/registry.ts",
-          html: `<p>工具可见性走<b>独立于专家团</b>的 canonical 管线：</p>
+          kicker: "专家团积木 · Block B", title: "Scheduler capability projection",
+          src: "PromptProfile capability projection · Orchestrator exact runtime contract",
+          html: `<p>能力投影是专家团积木的 scheduler 半边：active PromptProfile 派生当前 Orchestrator 能看见的工具、selector skills、production skills、projected agents 与 <code>include_mcp_tools</code>。</p>
             <ul>
-              <li><code>AgentToolPool</code> 赋值：<code>global</code> + <code>private</code> 两个显式列表。</li>
-              <li><code>ToolRegistry.tools(model, agent, config)</code> 加载全局 → 追加 private → 用 <code>visibleToolIDs</code> 收口。</li>
+              <li><code>tool_ids</code> 投影 Orchestrator exact runtime contract。</li>
+              <li><code>selector_skill_names</code> 与 <code>production_skill_names</code> 派生 skill 可见面。</li>
+              <li><code>projection_hash</code> 让 continuation / retry 不会被后续 profile 变化静默重解释。</li>
             </ul>
-            <p>切换专家团不会增删任何 tool。built-in agent 工具池也不可经 <code>opencorvus.jsonc</code> 配置，prompt 与 permission 都无法制造第二来源。</p>`
+            <p><code>AgentToolPool</code> 仍是最大声明目录，不等同于 active effective surface。</p>`
         },
         "wiring-model-arm": {
-          kicker: "专家团装配 · ④ 组装", title: "AGENT / MODEL / MCP / WORKFLOW（不变）",
-          src: "role-contract.ts · mcp/ · engine/workflow.ts",
-          html: `<p>这些轴各有独立来源，<b>都不读专家团</b>：</p>
+          kicker: "专家团积木 · ④ 基座", title: "OpenCorvus infrastructure base",
+          src: "AgentRoleContract · SkillMount · engine_* · ExecutorRegistry · MCP",
+          html: `<p>专家团积木装到同一套 OpenCorvus 基座上；基座负责通用调度、角色契约、证据沉淀、执行器与协议扩展。</p>
             <ul>
-              <li><b>agent / role</b>：<code>AgentRoleContract</code> 决定职责、工具面、协作边界。</li>
-              <li><b>model</b>：由 provider / 配置决定，select_expert_squad 不改。</li>
-              <li><b>MCP servers</b>：<code>src/mcp/</code> 的 client/server 接入，与 profile 无关。</li>
-              <li><b>workflow</b>：<code>WorkflowRegistry</code> 的 direct / pipeline hint，与 profile 无关。</li>
+              <li><b>model / executor</b>：由 provider / config / <code>ExecutorRegistry</code> 决定，不由 <code>select_expert_squad</code> 改写。</li>
+              <li><b>MCP</b>（Model Context Protocol）：是否暴露给 Orchestrator 必须是 explicit capability，而不是隐式默认。</li>
+              <li><b>workflow hints</b>：仍是 Orchestrator 读取的建议，不是 host 状态机。</li>
             </ul>
-            <p>结论：专家团只热插 prompt 一层，其余保持通用——同一基建因此能并行承载众多业务。</p>`
+            <p>因此可复用的是基建底座，变化的是 active PromptProfile 的两个投影面。</p>`
         }
       };
 

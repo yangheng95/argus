@@ -1,5 +1,6 @@
 # July 2026 Records
 
+- [2026-07-03-expert-squad-building-block-legend.md](2026-07-03-expert-squad-building-block-legend.md) records the diagram/legend update that replaces stale prompt-only expert-squad wording with a building-block view of PromptProfile prompt overlays plus scheduler capability projection on the OpenCorvus infrastructure base.
 - [2026-07-03-multi-task-storage-namespace-consensus.md](2026-07-03-multi-task-storage-namespace-consensus.md) records the implemented Phase 1 repair for same-directory storage namespace boundaries, durable `build_session_contract.input_evidence`, Build retry ownership, and the future `artifact_file_ref` direction.
 - [2026-07-03-no-diff-source-row-goal-repair.md](2026-07-03-no-diff-source-row-goal-repair.md) records the repair for frontend replica source-row goals and `completed/no_project_diff` Build attempts being consumed as delivered dependencies.
 - [2026-07-03-attachment-replay-lifecycle-root-repair.md](2026-07-03-attachment-replay-lifecycle-root-repair.md) records the root repair for recurring missing attachment images across durable owner GC, Build retry replay, nested tool-result screenshots, and project/session identity binding.
