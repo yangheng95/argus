@@ -1,5 +1,7 @@
 # July 2026 Records
 
+- [2026-07-03-multi-task-storage-namespace-consensus.md](2026-07-03-multi-task-storage-namespace-consensus.md) records the draft consensus design for same-directory multi-task storage namespaces, typed attachment ownership, and durable Build input evidence pending independent review.
+- [2026-07-03-no-diff-source-row-goal-repair.md](2026-07-03-no-diff-source-row-goal-repair.md) records the repair for frontend replica source-row goals and `completed/no_project_diff` Build attempts being consumed as delivered dependencies.
 - [2026-07-03-attachment-replay-lifecycle-root-repair.md](2026-07-03-attachment-replay-lifecycle-root-repair.md) records the root repair for recurring missing attachment images across durable owner GC, Build retry replay, nested tool-result screenshots, and project/session identity binding.
 - [2026-07-03-project-exact-worktree-identity-convergence.md](2026-07-03-project-exact-worktree-identity-convergence.md) records the exact-worktree duplicate project identity convergence repair for config-load failures caused by split task/session and memory namespaces.
 - [2026-07-02-frontend-replica-workflow-goal-discipline.md](2026-07-02-frontend-replica-workflow-goal-discipline.md) records the frontend-replica expert-squad skill update that makes webpage replicas workflow tasks, prevents unnecessary reruns of already executed agents outside retry / Build / Integrity / Visual QA, and defaults unspecified clone decomposition to one component per goal with at least 10 goals.
