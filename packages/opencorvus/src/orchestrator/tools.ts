@@ -78,6 +78,11 @@ import {
 } from "@/frontend-design/design-resource-manifest"
 import { hasBuildEvidence, type BuildEvidenceFile, type BuildEvidencePack } from "@/build/evidence-pack"
 import {
+  bindBuildInputEvidenceManifest,
+  composeBuildInputEvidenceManifest,
+  type BuildInputEvidenceManifest,
+} from "@/build/evidence-manifest"
+import {
   findNonStaleFrontendResearchBriefs,
   renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
@@ -13139,6 +13144,7 @@ export function createOrchestratorTools(input: {
           const { Worktree } = await import("@/worktree")
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
+          let inputEvidenceManifest: BuildInputEvidenceManifest | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
           let callerOwnedBuildWorkDir: string | undefined
           let existingBuildSessionID: string | undefined
@@ -13387,6 +13393,12 @@ export function createOrchestratorTools(input: {
               includePreviousOutput:
                 retryEntries.length > 0 || Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
             })
+            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
+              projectID: task.project_id,
+              taskID: task.id,
+              goalID: goal.id,
+              evidencePack,
+            })
 
             // Goal Workload Analyst brief for this goal (spec §6B). Injected
             // only when the latest workload artifact targets the active
@@ -13419,6 +13431,7 @@ export function createOrchestratorTools(input: {
               retryFeedback,
               acceptanceFeedback,
               evidencePack,
+              inputEvidenceManifest,
               workloadBrief,
             }
           } else {
@@ -13439,6 +13452,11 @@ export function createOrchestratorTools(input: {
             const evidencePack = await composeBuildEvidencePack({
               task,
               includePreviousOutput: Boolean(acceptanceFeedback) || Boolean(visualQaFeedback),
+            })
+            inputEvidenceManifest = await composeBuildInputEvidenceManifest({
+              projectID: task.project_id,
+              taskID: task.id,
+              evidencePack,
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             if (selectedWorktreeUsage === "current_project") {
@@ -13471,6 +13489,7 @@ export function createOrchestratorTools(input: {
                     visualQaFeedback,
                     acceptanceFeedback,
                     evidencePack,
+                    inputEvidenceManifest,
                   }
                 : undefined
           }
@@ -13520,6 +13539,12 @@ export function createOrchestratorTools(input: {
             const artifactID = Identifier.ascending("artifact")
             const activePlan = findActivePlanForTask(taskID)
             const graphArtifact = findLatestArchitectContractGraphArtifact(taskID)
+            const contractInputEvidence = inputEvidenceManifest
+              ? bindBuildInputEvidenceManifest(inputEvidenceManifest, {
+                  sessionID: input.sessionID,
+                  goalRunID: input.goalRunID,
+                })
+              : undefined
             const sourceArtifactIDs = [activePlan?.spec_snapshot_id, activePlan?.id, graphArtifact?.id].filter(
               (item): item is string => typeof item === "string" && item.length > 0,
             )
@@ -13541,6 +13566,7 @@ export function createOrchestratorTools(input: {
               },
               collaboration_goals_snapshot: context?.collaborationGoals ?? [],
               requirements_snapshot: context?.requirements ?? [],
+              input_evidence: contractInputEvidence ?? null,
               source_artifact_ids: sourceArtifactIDs,
               digest: createHash("sha256")
                 .update(
@@ -13548,6 +13574,7 @@ export function createOrchestratorTools(input: {
                     goal: target,
                     collaborationGoals: context?.collaborationGoals ?? [],
                     requirements: context?.requirements ?? [],
+                    inputEvidence: contractInputEvidence ?? null,
                     sourceArtifactIDs,
                   }),
                 )

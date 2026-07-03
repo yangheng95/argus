@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "path"
 import sharp from "sharp"
 
 import { BuildAgent, repairManagedBuildSessionStagedFileParts } from "../../src/build/agent"
+import type { BuildEvidencePack } from "../../src/build/evidence-pack"
+import { composeBuildInputEvidenceManifest } from "../../src/build/evidence-manifest"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import type { CodingProvider, CodingRunInfo, CodingResumeInfo } from "../../src/executor/contract"
 import { persistExecutorSessionRef } from "../../src/executor/session-ref"
@@ -108,6 +110,14 @@ function seedTask(input: {
       })
       .run(),
   )
+}
+
+async function composeTestInputEvidenceManifest(taskID: string, evidencePack: BuildEvidencePack) {
+  return await composeBuildInputEvidenceManifest({
+    projectID: Instance.project.id,
+    taskID,
+    evidencePack,
+  })
 }
 
 function captureCodingProvider(captured: { run?: CodingRunInfo; resume?: CodingResumeInfo }): CodingProvider {
@@ -281,39 +291,101 @@ describe("BuildAgent managed worktree runtime", () => {
         ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
           model: "test-model",
         })
-
-        await BuildAgent.run({
-          task: task!,
-          parentSessionID: rootSession.id,
-          target: {
-            kind: "request",
-            text: "verify evidence pack prompt",
-          },
-          context: {
-            evidencePack: {
-              targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
-              previousOutputs: [
-                {
-                  ...previousRef,
-                  filename: "previous-output.png",
-                  intent: "rendered_output",
-                  source: "rendered_output",
-                },
-              ],
+        const evidencePack: BuildEvidencePack = {
+          targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
+          previousOutputs: [
+            {
+              ...previousRef,
+              filename: "previous-output.png",
+              intent: "rendered_output",
+              source: "rendered_output",
             },
-          },
-        })
+          ],
+        }
+        const inputEvidenceManifest = await composeTestInputEvidenceManifest(taskID, evidencePack)
 
-        const prompt = captured.run?.prompt ?? ""
-        expect(prompt).toContain("## Visual Reference Contract")
-        expect(prompt).toContain("target-reference.png")
-        const contractOnly = prompt.slice(0, prompt.indexOf("## Build Evidence Pack"))
-        expect(contractOnly).not.toContain("previous-output.png")
-        expect(prompt).toContain("### Previous Build Output Evidence")
-        expect(prompt).toContain("previous-output.png")
-        expect(prompt).toContain("## Staged Reference Files")
-        expect(prompt).toContain("references/target-reference.png")
-        expect(prompt).toContain("references/previous-output.png")
+        const stageToWorktree = AttachmentStore.stageToWorktree
+        const stageSpy = spyOn(AttachmentStore, "stageToWorktree").mockImplementation(stageToWorktree)
+        try {
+          await BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            target: {
+              kind: "request",
+              text: "verify evidence pack prompt",
+            },
+            context: {
+              evidencePack,
+              inputEvidenceManifest,
+            },
+          })
+
+          expect(stageSpy).toHaveBeenCalledTimes(1)
+          expect(stageSpy.mock.calls[0]?.[0]).toBe(task!.project_id)
+          const prompt = captured.run?.prompt ?? ""
+          expect(prompt).toContain("## Visual Reference Contract")
+          expect(prompt).toContain("target-reference.png")
+          const contractOnly = prompt.slice(0, prompt.indexOf("## Build Evidence Pack"))
+          expect(contractOnly).not.toContain("previous-output.png")
+          expect(prompt).toContain("### Previous Build Output Evidence")
+          expect(prompt).toContain("previous-output.png")
+          expect(prompt).toContain("## Staged Reference Files")
+          expect(prompt).toContain("references/target-reference.png")
+          expect(prompt).toContain("references/previous-output.png")
+        } finally {
+          stageSpy.mockRestore()
+        }
+      },
+    })
+  }, 30_000)
+
+  test("build rejects an evidence pack without a validated input manifest", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const suffix = Date.now().toString(36)
+        const taskID = `tsk_external_evidence_no_stage_${suffix}`
+        const rootSession = await Session.create({
+          kind: "orchestrator",
+          title: "External evidence no stage root",
+          directory: tmp.path,
+        })
+        const targetRef = await AttachmentStore.write(
+          Instance.project.id,
+          await pngImage(16, 16),
+          "image/png",
+          "target-reference.png",
+        )
+        seedTask({ projectID: Instance.project.id, taskID, sessionID: rootSession.id, executor: "codex" })
+        const task = findTask(taskID)
+        expect(task).toBeTruthy()
+        const captured: { run?: CodingRunInfo; resume?: CodingResumeInfo } = {}
+        ExecutorRegistry.registerCoding("codex", captureCodingProvider(captured), {
+          model: "test-model",
+        })
+        const workDir = path.join(tmp.path, "external-evidence-no-stage")
+        await fs.mkdir(workDir, { recursive: true })
+        const evidencePack: BuildEvidencePack = {
+          targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
+        }
+
+        await expect(
+          BuildAgent.run({
+            task: task!,
+            parentSessionID: rootSession.id,
+            target: {
+              kind: "request",
+              text: "verify evidence staging is strict",
+            },
+            context: {
+              evidencePack,
+            },
+            workDir,
+          }),
+        ).rejects.toThrow("evidencePack requires validated inputEvidenceManifest")
+        expect(captured.run).toBeUndefined()
       },
     })
   }, 30_000)
@@ -346,6 +418,10 @@ describe("BuildAgent managed worktree runtime", () => {
         })
         const workDir = path.join(tmp.path, "external-evidence-no-stage")
         await fs.mkdir(workDir, { recursive: true })
+        const evidencePack: BuildEvidencePack = {
+          targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
+        }
+        const inputEvidenceManifest = await composeTestInputEvidenceManifest(taskID, evidencePack)
 
         await expect(
           BuildAgent.run({
@@ -356,9 +432,8 @@ describe("BuildAgent managed worktree runtime", () => {
               text: "verify evidence staging is strict",
             },
             context: {
-              evidencePack: {
-                targetReferences: [{ ...targetRef, intent: "visual_reference", source: "test" }],
-              },
+              evidencePack,
+              inputEvidenceManifest,
             },
             workDir,
           }),

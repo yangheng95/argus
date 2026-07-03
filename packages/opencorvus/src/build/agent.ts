@@ -103,6 +103,7 @@ import {
   renderBuildEvidenceRoleSections,
   type BuildEvidencePack,
 } from "./evidence-pack"
+import { buildEvidencePackFromInputManifest, type BuildInputEvidenceManifest } from "./evidence-manifest"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
@@ -675,6 +676,10 @@ export namespace BuildAgent {
      *  Target references, prior outputs, and comparison artifacts keep
      *  separate roles all the way to prompt construction. */
     evidencePack?: BuildEvidencePack
+    /** Validated immutable Build input evidence manifest composed before
+     *  session creation. Build stages and provider-bound file parts from this
+     *  manifest, never from ambient project state. */
+    inputEvidenceManifest?: BuildInputEvidenceManifest
     /** This goal's Goal Workload Analyst brief, injected only when it matches
      *  the active architect snapshot. Scopes the goal BEFORE implementation
      *  (anti premature-minimization): countable work surface, underestimation
@@ -975,10 +980,15 @@ export namespace BuildAgent {
         ? { ...input.context, projectDir: input.context.projectDir ?? Instance.project.worktree }
         : undefined
       const evidencePack = retryingExistingBuildSession ? undefined : promptContext?.evidencePack
-      const evidenceEntries = buildEvidenceEntries(evidencePack)
-      const targetReferences = buildEvidenceTargetReferences(evidencePack)
-      const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(evidencePack)
-      const requiredVisualQaDiagnosticRefs = buildEvidenceVisualQaDiagnosticRefs(evidencePack)
+      const inputEvidenceManifest = retryingExistingBuildSession ? undefined : promptContext?.inputEvidenceManifest
+      if (evidencePack && !inputEvidenceManifest) {
+        throw new Error("BuildAgent.run: evidencePack requires validated inputEvidenceManifest before staging")
+      }
+      const validatedEvidencePack = buildEvidencePackFromInputManifest(inputEvidenceManifest)
+      const evidenceEntries = buildEvidenceEntries(validatedEvidencePack)
+      const targetReferences = buildEvidenceTargetReferences(validatedEvidencePack)
+      const requiredVisualQaAnnotationRefs = buildEvidenceVisualQaAnnotationRefs(validatedEvidencePack)
+      const requiredVisualQaDiagnosticRefs = buildEvidenceVisualQaDiagnosticRefs(validatedEvidencePack)
       const buildPromptText = () =>
         input.existingSessionID
           ? buildRetryFeedbackPrompt(input.target, promptContext, input.task.id)
@@ -995,7 +1005,7 @@ export namespace BuildAgent {
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
       if (!retryingExistingBuildSession && ownsWorktree && worktreeDir && evidenceEntries.length > 0) {
         try {
-          stagedAttachments = await AttachmentStore.stageToWorktree(Instance.project.id, evidenceEntries, worktreeDir)
+          stagedAttachments = await AttachmentStore.stageToWorktree(input.task.project_id, evidenceEntries, worktreeDir)
           if (stagedAttachments.length > 0) {
             log.info("build agent: staged evidence into worktree references/", {
               taskID: input.task.id,
@@ -1030,7 +1040,7 @@ export namespace BuildAgent {
           })
         }
       }
-      const evidenceRoleSections = renderBuildEvidenceRoleSections(evidencePack)
+      const evidenceRoleSections = renderBuildEvidenceRoleSections(validatedEvidencePack)
       const buildUserPartsFn =
         evidenceEntries.length > 0
           ? async () => {

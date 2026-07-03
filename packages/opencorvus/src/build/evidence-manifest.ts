@@ -1,5 +1,11 @@
 import { AttachmentStore } from "@/storage/attachment-store"
-import { buildEvidenceEntries, type BuildEvidenceEntry, type BuildEvidencePack, type BuildEvidenceRole } from "./evidence-pack"
+import {
+  buildEvidenceEntries,
+  type BuildEvidenceEntry,
+  type BuildEvidenceFile,
+  type BuildEvidencePack,
+  type BuildEvidenceRole,
+} from "./evidence-pack"
 
 export interface BuildInputEvidenceManifestEntry {
   role: BuildEvidenceRole
@@ -185,4 +191,59 @@ export async function composeBuildInputEvidenceManifest(input: {
     ...(input.sessionID ? { session_id: input.sessionID } : {}),
     entries,
   }
+}
+
+export function bindBuildInputEvidenceManifest(
+  manifest: BuildInputEvidenceManifest,
+  input: { sessionID: string; goalRunID?: string },
+): BuildInputEvidenceManifest {
+  return {
+    ...manifest,
+    session_id: input.sessionID,
+    ...(input.goalRunID ? { goal_run_id: input.goalRunID } : {}),
+  }
+}
+
+function fileFromManifestEntry(entry: BuildInputEvidenceManifestEntry): BuildEvidenceFile {
+  return {
+    url: entry.legacy_attachment_url,
+    mime: entry.mime,
+    sha: entry.sha,
+    size: entry.size,
+    ...(entry.filename ? { filename: entry.filename } : {}),
+    ...(entry.intent ? { intent: entry.intent } : {}),
+    ...(entry.source ? { source: entry.source } : {}),
+    scope: {
+      kind: entry.source_goal_run_id ? "goal_run" : entry.source_goal_id ? "goal" : "task",
+      ...(entry.source_task_id ? { taskID: entry.source_task_id } : {}),
+      ...(entry.source_goal_id ? { goalID: entry.source_goal_id } : {}),
+      ...(entry.source_goal_run_id ? { goalRunID: entry.source_goal_run_id } : {}),
+    },
+  }
+}
+
+export function buildEvidencePackFromInputManifest(manifest: BuildInputEvidenceManifest | undefined): BuildEvidencePack | undefined {
+  if (!manifest || manifest.entries.length === 0) return undefined
+  const pack: BuildEvidencePack = {}
+  for (const entry of manifest.entries) {
+    const file = fileFromManifestEntry(entry)
+    switch (entry.role) {
+      case "target_reference":
+        pack.targetReferences = [...(pack.targetReferences ?? []), file]
+        break
+      case "previous_output":
+        pack.previousOutputs = [...(pack.previousOutputs ?? []), file]
+        break
+      case "comparison_artifact":
+        pack.comparisonArtifacts = [...(pack.comparisonArtifacts ?? []), file]
+        break
+      case "visual_qa_annotation":
+        pack.visualQaAnnotations = [...(pack.visualQaAnnotations ?? []), file]
+        break
+      case "visual_qa_diagnostic":
+        pack.visualQaDiagnostics = [...(pack.visualQaDiagnostics ?? []), file]
+        break
+    }
+  }
+  return pack
 }

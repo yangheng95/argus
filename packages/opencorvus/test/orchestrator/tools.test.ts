@@ -14903,6 +14903,218 @@ describe("orchestrator tools", () => {
     })
   }, 15000)
 
+  test("goal build session contract records validated input evidence manifest", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_goal_input_evidence_${stamp}`
+    const goalID = `gol_goal_input_evidence_${stamp}`
+    const buildSessionID = `ses_goal_input_evidence_${stamp}`
+    let capturedInput: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal input evidence contract test" })
+        const targetRef = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "goal-input-reference.png",
+        )
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal input evidence contract test",
+          taskTitle: "Goal input evidence contract task",
+          request: "Build a goal with task-owned visual evidence.",
+          goalTitle: "Input evidence goal",
+          goalSlug: "input-evidence-goal",
+          objective: "Use task-owned visual evidence for this goal build.",
+          now,
+          insertProject: false,
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...targetRef, intent: "visual_reference", source: "task-attachment" }],
+            } as any)
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        buildAgentRunImpl = async (input: any) => {
+          capturedInput = input
+          await markBuildSlotAcquired(input, buildSessionID)
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal consumed validated input evidence.",
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Used validated visual evidence.",
+                  reason: "Input evidence manifest was present.",
+                },
+              ],
+              tests: [],
+              commit_ref: "inputevidence1",
+            },
+            sessionID: buildSessionID,
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            reason: "Verify Build input evidence contract persistence.",
+          },
+          buildToolOptions("goal_input_evidence"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(goalID, "passed")
+        expect(capturedInput.context.inputEvidenceManifest).toMatchObject({
+          version: 1,
+          project_id: Instance.project.id,
+          task_id: taskID,
+          goal_id: goalID,
+          entries: [
+            {
+              role: "target_reference",
+              project_id: Instance.project.id,
+              legacy_attachment_url: targetRef.url,
+              intent: "visual_reference",
+              source: "task-attachment",
+            },
+          ],
+        })
+        const contractArtifact = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "build_session_contract")))
+            .get(),
+        )
+        const payload = contractArtifact?.payload as any
+        expect(payload.input_evidence).toMatchObject({
+          version: 1,
+          project_id: Instance.project.id,
+          task_id: taskID,
+          goal_id: goalID,
+          session_id: buildSessionID,
+        })
+        expect(payload.input_evidence.entries).toHaveLength(1)
+        expect(payload.input_evidence.entries[0]).toMatchObject({
+          role: "target_reference",
+          project_id: Instance.project.id,
+          source_task_id: taskID,
+          legacy_attachment_url: targetRef.url,
+          sha: targetRef.sha,
+          mime: targetRef.mime,
+          size: targetRef.size,
+        })
+      },
+    })
+  }, 15000)
+
+  test("direct build rejects foreign input evidence before BuildAgent.run", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+    await using foreignTmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_direct_foreign_input_evidence_${stamp}`
+    const goalID = `gol_direct_foreign_input_evidence_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    let foreignRef: AttachmentStore.Reference | undefined
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: foreignTmp.path,
+      fn: async () => {
+        foreignRef = await AttachmentStore.write(
+          Instance.project.id,
+          Buffer.from(minimalPngBytes()),
+          "image/png",
+          "foreign-input-reference.png",
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        if (!foreignRef) throw new Error("foreign reference was not created")
+        const parent = await Session.create({ kind: "root", title: "direct foreign input evidence test" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Direct foreign input evidence test",
+          taskTitle: "Direct foreign input evidence task",
+          request: "Direct build should reject foreign visual evidence.",
+          goalTitle: "Foreign input evidence guard",
+          goalSlug: "foreign-input-evidence-guard",
+          objective: "Reject evidence from another project before BuildAgent.run.",
+          now,
+          insertProject: false,
+        })
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({
+              attachments: [{ ...foreignRef, intent: "visual_reference", source: "task-attachment" }],
+            } as any)
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+        buildAgentRunImpl = async () => {
+          buildCalls += 1
+          throw new Error("BuildAgent.run must not start for foreign input evidence")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        await expect(
+          tools.build.execute(
+            {
+              request: "Repair implementation using task evidence.",
+              reason: "Validate direct build input evidence owner.",
+              directBuildIntent: "modify_files",
+            },
+            buildToolOptions("direct_foreign_input_evidence"),
+          ),
+        ).rejects.toThrow("belongs to project")
+        expect(buildCalls).toBe(0)
+      },
+    })
+  }, 15000)
+
   test("goal build receives sibling contract graph without leaking sibling fidelity scope", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
