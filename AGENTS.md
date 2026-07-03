@@ -34,6 +34,8 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **3.1（分析深思熟虑细则 — 2026-06-20）**：分析失败或调度混乱时，禁止把最后一个表层状态（例如 cancelled / aborted / timeout / tool failed）当作根因。必须先分层还原：用户原始要求、调度决策序列、真实 tool call / session / artifact / decision-log 证据、代码职责边界、历史方案约束与矛盾点；再给出“可观察现象 → 直接触发点 → 深层设计/提示词/数据流原因 → 为什么之前路径没有根治”的因果链。证据不足时必须明确标注未知，不得用猜测填补。
 
+**3.2（命名/标题不是因果证据 — 2026-07-03）**：调试 goal、task、artifact、message、session 时，实体标题、slug、label、命名模式（例如 `source row` / `visual source row`）只能作为分类线索，不能直接写成故障原因。必须用 terminal error、tool input/output、decision-log、artifact payload、依赖图、diff/commit 事实或代码路径证明“为什么失败”和“为什么该命名导致失败”。证据不足时只能写“疑似建模问题 / 未证明”，禁止把命名相似性包装成直接原因或必然原因。
+
 **4.** 不要只关注特定的 Agent、LLM 等的问题，由于继承和多态的特性，任何一个问题都可能是系统性的。你需要从整体上分析问题，找到根本原因，而不是只修复表面症状。
 
 **4.1（dispatcher 输入缺失信号）**：当 agent 收到的任务缺少上游约定的 XML（Extensible Markup Language，可扩展标记语言）块时，那是上游 dispatcher 信息丢失的**结构化信号**——查 dispatcher（orchestrator / build wrapper / integrity caller 等）而非 agent 自己。修 dispatcher 的 input 构造或 prompt template，**不要**改 agent prompt 让它"宽容"这种缺失（rule 6.1 — 这是 prompt-over-host 的反向应用，agent 已经在做对的事）。
@@ -209,6 +211,48 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 - `project_id` 是后端存储、权限和运行时证据的命名空间，不等同于用户语义里的项目数量。
 - 如果产品需要同一目录下多个用户可见项目，必须建模为显式用户层实体；禁止通过改写 `.git/opencorvus` marker 或制造同一 worktree 的多个 `project_id` 来冒充用户项目。
 - 调试 404 时必须说清楚是“用户项目/任务不存在”，还是“当前请求命中的 `project_id` 命名空间与记录所属命名空间不一致”。
+
+### 6.6 Remote 服务版本更新
+
+**42（remote 服务 baseline 包更新 — 2026-07-03）.** 当用户要求“更新 remote 服务版本 / 打包后上传 / 上传 baseline tgz（tar gzip 压缩包）”时，必须按下面流程执行，禁止反复同步、禁止把 WSL（Windows Subsystem for Linux，用于在 Windows 上运行 Linux 用户态环境）构建产物混入源码同步。
+
+- Windows host 仍然是唯一源码准源。先在 host 工作区确认当前代码状态，再只做一次 host 到 WSL 源码同步：先 dry-run 检查冲突，再 apply 一次。除非 dry-run 明确发现冲突且用户要求改变准源，否则不要循环 dry-run / apply。
+- 同步命令使用 `script/sync-host-wsl.ps1`，示例：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -WslRoot /home/<wsl-user>/myhexin-local/opecorvus
+powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -WslRoot /home/<wsl-user>/myhexin-local/opecorvus -Apply
+```
+
+- 如果用户明确说“以当前版本代码为准”，且 dry-run 只显示 WSL 侧临时改动或构建残留，不要把 WSL 当准源；需要覆盖 WSL 冲突时只能显式使用 `-PreferHostForConflicts` 或 `-PreferHostForWslChanges`，并在回复中说明覆盖依据。
+- 打包必须在 WSL 内执行，不能在 Windows host 直接跑 Linux 包构建：
+
+```powershell
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'cd /home/<wsl-user>/myhexin-local/opecorvus && bun run package:linux-binary'
+```
+
+- baseline 上传包的准路径是 WSL 内 `packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus-bundle.tar.gz`。普通 x64 包路径是 `packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus-bundle.tar.gz`，不要把两者混淆；remote 服务默认上传 baseline 包。
+- 打包后至少验证 baseline 可执行文件版本和 archive 可读性：
+
+```powershell
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'cd /home/<wsl-user>/myhexin-local/opecorvus && packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus --version && tar -tzf packages/opencorvus/dist/binary/opencorvus-linux-x64-baseline/opencorvus-bundle.tar.gz >/dev/null'
+```
+
+- 复制回 Windows 只复制最终 archive，不再跑源码同步，也不要复制整个 `dist/`。示例：
+
+```powershell
+New-Item -ItemType Directory -Force -Path packages\opencorvus\dist\binary\opencorvus-linux-x64-baseline | Out-Null
+Copy-Item -LiteralPath "\\wsl.localhost\Ubuntu-24.04\home\<wsl-user>\myhexin-local\opecorvus\packages\opencorvus\dist\binary\opencorvus-linux-x64-baseline\opencorvus-bundle.tar.gz" -Destination "packages\opencorvus\dist\binary\opencorvus-linux-x64-baseline\opencorvus-bundle.tar.gz" -Force
+```
+
+- 上传 remote 服务使用 `POST http://mirror.myhexin.com/opencorvus-admin/upload`，multipart form 字段名必须是 `file`，文件类型使用 `application/gzip`。PowerShell 中必须调用 `curl.exe`，避免落到 `Invoke-WebRequest` alias：
+
+```powershell
+curl.exe -fS -X POST -F "file=@C:\Users\chuan\myhexin-local\opecorvus\packages\opencorvus\dist\binary\opencorvus-linux-x64-baseline\opencorvus-bundle.tar.gz;type=application/gzip" http://mirror.myhexin.com/opencorvus-admin/upload
+```
+
+- 如果用户要求 Postman / Newman 验证，可以使用同样的 multipart 字段生成临时 collection，再运行 `newman run`。成功标准是 HTTP 200，响应 JSON 包含 `status: "success"`，并且 `service_restarted` 与 `service_running` 为 `true`；如果响应缺少这些字段，必须报告实际响应，不得宣称 remote 已更新成功。
+- 回复用户时必须列出：一次同步报告目录、WSL 打包命令结果、baseline archive 的 Windows 路径、上传 HTTP 状态和响应摘要。若上传成功但没有可用的 remote health / version 查询接口，只能说“上传接口返回已重启并运行”，不能编造远端版本已验证。
 
 ---
 

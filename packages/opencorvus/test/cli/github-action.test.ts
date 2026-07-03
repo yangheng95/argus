@@ -246,4 +246,13 @@ describe("summarizeGitHubActionResponse", () => {
       expect(summaryIndex).toBeGreaterThanOrEqual(0)
     }
   })
+
+  test("creates a full session info object for prompt byte materialization", () => {
+    const source = fs.readFileSync(path.resolve(import.meta.dir, "../../src/cli/cmd/github.ts"), "utf8")
+
+    expect(source).toContain("let session: Session.Info")
+    expect(source).toContain("session = await Session.createNext({")
+    expect(source).toContain("directory: Instance.directory")
+    expect(source).toContain("byteMaterializationProjectID: session.projectID")
+  })
 })
